@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 	"time"
 
@@ -15,16 +14,16 @@ import (
 
 // ServerManager manages the HTTP server lifecycle
 type ServerManager struct {
-	appConfig *config.AppConfig
-	server    *server.Server
-	pidFile   string
+	appConfig  *config.AppConfig
+	server     *server.Server
+	pidManager *config.PIDManager
 }
 
 // NewServerManager creates a new server manager
 func NewServerManager(appConfig *config.AppConfig) *ServerManager {
 	return &ServerManager{
-		appConfig: appConfig,
-		pidFile:   filepath.Join(os.TempDir(), "tingly-server.pid"),
+		appConfig:  appConfig,
+		pidManager: config.NewPIDManager(),
 	}
 }
 
@@ -46,43 +45,51 @@ func (sm *ServerManager) Start(port int) error {
 	sm.server = server.NewServer(sm.appConfig)
 
 	// Create PID file
-	pid := os.Getpid()
-	if err := os.WriteFile(sm.pidFile, []byte(fmt.Sprintf("%d", pid)), 0644); err != nil {
+	if err := sm.pidManager.CreatePIDFile(); err != nil {
 		return fmt.Errorf("failed to create PID file: %w", err)
 	}
 
-	// Start server in goroutine
-	go func() {
-		if err := sm.server.Start(sm.appConfig.GetServerPort()); err != nil {
-			fmt.Printf("Server error: %v\n", err)
-			sm.Cleanup()
-		}
-	}()
+	// Start server synchronously (blocking)
+	fmt.Printf("Starting server on port %d...\n", sm.appConfig.GetServerPort())
 
 	// Setup signal handling for graceful shutdown
-	go func() {
-		sigChan := make(chan os.Signal, 1)
-		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-		<-sigChan
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-		fmt.Println("\nReceived shutdown signal")
-		sm.Stop()
+	// Start server in goroutine
+	serverErr := make(chan error, 1)
+	go func() {
+		serverErr <- sm.server.Start(sm.appConfig.GetServerPort())
 	}()
 
-	return nil
+	// Wait for either server error or shutdown signal
+	select {
+	case err := <-serverErr:
+		// Server stopped with error
+		sm.Cleanup()
+		return fmt.Errorf("server stopped unexpectedly: %w", err)
+	case <-sigChan:
+		// Received shutdown signal
+		fmt.Println("\nReceived shutdown signal")
+		return sm.Stop()
+	}
 }
 
 // Stop stops the server gracefully
 func (sm *ServerManager) Stop() error {
 	if sm.server == nil {
+		sm.Cleanup()
 		return nil
 	}
 
+	fmt.Println("Stopping server...")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := sm.server.Stop(ctx); err != nil {
 		fmt.Printf("Error stopping server: %v\n", err)
+	} else {
+		fmt.Println("Server stopped successfully")
 	}
 
 	sm.Cleanup()
@@ -91,18 +98,10 @@ func (sm *ServerManager) Stop() error {
 
 // Cleanup removes PID file
 func (sm *ServerManager) Cleanup() {
-	if sm.pidFile != "" {
-		os.Remove(sm.pidFile)
-	}
+	sm.pidManager.RemovePIDFile()
 }
 
 // IsRunning checks if the server is currently running
 func (sm *ServerManager) IsRunning() bool {
-	if _, err := os.Stat(sm.pidFile); os.IsNotExist(err) {
-		return false
-	}
-
-	// In a real implementation, we would check if the PID is actually running
-	// For now, just check if the file exists
-	return true
+	return sm.pidManager.IsRunning()
 }

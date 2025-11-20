@@ -14,11 +14,12 @@ import (
 
 // Server represents the HTTP server
 type Server struct {
-	config     *config.AppConfig
-	jwtManager *auth.JWTManager
-	router     *gin.Engine
-	httpServer *http.Server
-	watcher    *config.ConfigWatcher
+	config        *config.AppConfig
+	jwtManager    *auth.JWTManager
+	router        *gin.Engine
+	httpServer    *http.Server
+	watcher       *config.ConfigWatcher
+	modelManager  *config.ModelManager
 }
 
 // NewServer creates a new HTTP server instance
@@ -26,10 +27,18 @@ func NewServer(appConfig *config.AppConfig) *Server {
 	// Set Gin mode
 	gin.SetMode(gin.ReleaseMode)
 
+	// Initialize model manager
+	modelManager, err := config.NewModelManager()
+	if err != nil {
+		log.Printf("Warning: Failed to initialize model manager: %v", err)
+		modelManager = nil
+	}
+
 	server := &Server{
-		config:     appConfig,
-		jwtManager: auth.NewJWTManager(appConfig.GetJWTSecret()),
-		router:     gin.New(),
+		config:       appConfig,
+		jwtManager:   auth.NewJWTManager(appConfig.GetJWTSecret()),
+		router:       gin.New(),
+		modelManager: modelManager,
 	}
 
 	// Setup middleware
@@ -89,17 +98,20 @@ func (s *Server) setupMiddleware() {
 // setupRoutes configures server routes
 func (s *Server) setupRoutes() {
 	// Health check endpoint
-	s.router.GET("/health", s.healthCheck)
+	s.router.GET("/health", s.HealthCheck)
+
+	// Models endpoint
+	s.router.GET("/v1/models", s.ListModels)
 
 	// API v1 group
 	v1 := s.router.Group("/v1")
 	{
 		// Chat completions endpoint (OpenAI compatible)
-		v1.POST("/chat/completions", s.authenticateMiddleware(), s.chatCompletions)
+		v1.POST("/chat/completions", s.AuthenticateMiddleware(), s.ChatCompletions)
 	}
 
 	// Token generation endpoint
-	s.router.POST("/token", s.generateToken)
+	s.router.POST("/token", s.GenerateToken)
 }
 
 // Start starts the HTTP server
@@ -124,6 +136,21 @@ func (s *Server) Start(port int) error {
 	fmt.Printf("API endpoint: http://localhost:%d/v1/chat/completions\n", port)
 
 	return s.httpServer.ListenAndServe()
+}
+
+// GetRouter returns the Gin router for testing purposes
+func (s *Server) GetRouter() *gin.Engine {
+	return s.router
+}
+
+// GetModelManager returns the model manager for testing purposes
+func (s *Server) GetModelManager() *config.ModelManager {
+	return s.modelManager
+}
+
+// SetModelManager sets the model manager for testing purposes
+func (s *Server) SetModelManager(modelManager *config.ModelManager) {
+	s.modelManager = modelManager
 }
 
 // Stop gracefully stops the HTTP server
