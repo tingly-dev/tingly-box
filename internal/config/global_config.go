@@ -11,9 +11,10 @@ import (
 
 // GlobalConfig represents the global configuration
 type GlobalConfig struct {
-	DefaultProvider  string `yaml:"default_provider"`
-	DefaultModel     string `yaml:"default_model"`
-	DefaultModelName string `yaml:"default_model_name"` // The "tingly" value
+	DefaultProvider string `yaml:"default_provider"`
+	DefaultModel    string `yaml:"default_model"`
+	RequestModel    string `yaml:"request_model"`  // The "tingly" value
+	ResponseModel   string `yaml:"response_model"` // Response model configuration
 	mutex           sync.RWMutex
 	configFile      string
 }
@@ -23,8 +24,8 @@ func NewGlobalConfig() (*GlobalConfig, error) {
 	configFile := "config/global_config.yaml"
 
 	config := &GlobalConfig{
-		DefaultModelName: "tingly",
-		configFile:       configFile,
+		RequestModel: "tingly",
+		configFile:   configFile,
 	}
 
 	// Load existing config if exists
@@ -80,12 +81,21 @@ func (gc *GlobalConfig) SetDefaultModel(model string) error {
 	return gc.save()
 }
 
-// SetDefaultModelName sets the default model name (the "tingly" value)
-func (gc *GlobalConfig) SetDefaultModelName(modelName string) error {
+// SetRequestModel sets the request model name (the "tingly" value)
+func (gc *GlobalConfig) SetRequestModel(modelName string) error {
 	gc.mutex.Lock()
 	defer gc.mutex.Unlock()
 
-	gc.DefaultModelName = modelName
+	gc.RequestModel = modelName
+	return gc.save()
+}
+
+// SetResponseModel sets the response model configuration
+func (gc *GlobalConfig) SetResponseModel(modelName string) error {
+	gc.mutex.Lock()
+	defer gc.mutex.Unlock()
+
+	gc.ResponseModel = modelName
 	return gc.save()
 }
 
@@ -105,20 +115,28 @@ func (gc *GlobalConfig) GetDefaultModel() string {
 	return gc.DefaultModel
 }
 
-// GetDefaultModelName returns the default model name
-func (gc *GlobalConfig) GetDefaultModelName() string {
+// GetRequestModel returns the request model name
+func (gc *GlobalConfig) GetRequestModel() string {
 	gc.mutex.RLock()
 	defer gc.mutex.RUnlock()
 
-	return gc.DefaultModelName
+	return gc.RequestModel
+}
+
+// GetResponseModel returns the response model configuration
+func (gc *GlobalConfig) GetResponseModel() string {
+	gc.mutex.RLock()
+	defer gc.mutex.RUnlock()
+
+	return gc.ResponseModel
 }
 
 // GetDefaults returns all default values
-func (gc *GlobalConfig) GetDefaults() (provider, model, modelName string) {
+func (gc *GlobalConfig) GetDefaults() (provider, model, requestModel, responseModel string) {
 	gc.mutex.RLock()
 	defer gc.mutex.RUnlock()
 
-	return gc.DefaultProvider, gc.DefaultModel, gc.DefaultModelName
+	return gc.DefaultProvider, gc.DefaultModel, gc.RequestModel, gc.ResponseModel
 }
 
 // HasDefaults checks if defaults are configured
@@ -129,10 +147,10 @@ func (gc *GlobalConfig) HasDefaults() bool {
 	return gc.DefaultProvider != "" && gc.DefaultModel != ""
 }
 
-// IsDefaultModelName checks if the given model name is the default model name
-func (gc *GlobalConfig) IsDefaultModelName(modelName string) bool {
+// IsRequestModel checks if the given model name is the request model name
+func (gc *GlobalConfig) IsRequestModel(modelName string) bool {
 	gc.mutex.RLock()
 	defer gc.mutex.RUnlock()
 
-	return modelName == gc.DefaultModelName
+	return modelName == gc.RequestModel
 }

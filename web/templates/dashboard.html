@@ -376,7 +376,7 @@
                 <h2>🎯 Default Model Configuration</h2>
                 <div class="config-section">
                     <div class="form-group">
-                        <label for="defaultModelName">Default Model Name</label>
+                        <label for="defaultModelName">Request Model Name</label>
                         <input
                             type="text"
                             id="defaultModelName"
@@ -386,6 +386,20 @@
                         >
                         <small style="color: #666; margin-top: 5px; display: block;">When requests use this model name,
                             the default provider and model will be used</small>
+                    </div>
+                </div>
+                <div class="config-section">
+                    <div class="form-group">
+                        <label for="responseModelName">Response Model</label>
+                        <input
+                            type="text"
+                            id="responseModelName"
+                            class="form-control"
+                            placeholder=""
+                            value=""
+                        >
+                        <small style="color: #666; margin-top: 5px; display: block;">Model to use for response processing
+                            (optional - leave empty for default behavior)</small>
                     </div>
                 </div>
                 <div class="config-section">
@@ -706,7 +720,8 @@
             const result = await fetchUIAPI('/defaults');
             if (result.success) {
                 const defaults = result.data;
-                document.getElementById('defaultModelName').value = defaults.defaultModelName || 'tingly';
+                document.getElementById('defaultModelName').value = defaults.requestModel || 'tingly';
+                document.getElementById('responseModelName').value = defaults.responseModel || '';
 
                 // Load providers for dropdown
                 await loadProvidersForDropdown();
@@ -825,7 +840,8 @@
             const payload = {
                 defaultProvider: providerName,
                 defaultModel: currentDefaults.data.defaultModel || '',
-                defaultModelName: currentDefaults.data.defaultModelName || 'tingly'
+                requestModel: currentDefaults.data.requestModel || 'tingly',
+                responseModel: currentDefaults.data.responseModel || ''
             };
 
             const result = await fetchUIAPI('/defaults', {
@@ -865,12 +881,13 @@
 
         // Save defaults
         async function saveDefaults() {
-            const defaultModelName = document.getElementById('defaultModelName').value;
+            const requestModel = document.getElementById('defaultModelName').value;
+            const responseModel = document.getElementById('responseModelName').value;
             const defaultProvider = document.getElementById('defaultProviderSelect').value;
             const defaultModel = document.getElementById('defaultModelSelect').value;
 
-            if (!defaultModelName) {
-                showMessage('Default model name is required', 'error');
+            if (!requestModel) {
+                showMessage('Request model name is required', 'error');
                 return;
             }
 
@@ -880,7 +897,8 @@
             }
 
             const payload = {
-                defaultModelName,
+                requestModel,
+                responseModel,
                 defaultProvider,
                 defaultModel
             };

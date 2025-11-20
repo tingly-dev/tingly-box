@@ -279,7 +279,34 @@ func (s *Server) forwardRequest(provider *config.Provider, req *ChatCompletionRe
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
+	// Check if Response model is configured and modify the model field
+	if err := s.applyResponseModel(&chatResp); err != nil {
+		return nil, fmt.Errorf("failed to apply response model: %w", err)
+	}
+
 	return &chatResp, nil
+}
+
+// applyResponseModel applies the configured response model to the chat completion response
+func (s *Server) applyResponseModel(response *ChatCompletionResponse) error {
+	// Get global configuration
+	globalConfig := s.config.GetGlobalConfig()
+	if globalConfig == nil {
+		// No global config available, return without modification
+		return nil
+	}
+
+	// Get the configured response model
+	responseModel := globalConfig.GetResponseModel()
+	if responseModel == "" {
+		// No response model configured, return without modification
+		return nil
+	}
+
+	// Modify the model field in the response
+	response.Model = responseModel
+
+	return nil
 }
 
 // ListModels handles the /v1/models endpoint (OpenAI compatible)
@@ -407,9 +434,9 @@ func (s *Server) authenticateMiddleware() gin.HandlerFunc {
 
 // DetermineProviderAndModel resolves the model name and finds the appropriate provider
 func (s *Server) DetermineProviderAndModel(modelName string) (*config.Provider, *config.ModelDefinition, error) {
-	// Check if this is the default model name first
+	// Check if this is the request model name first
 	globalConfig := s.config.GetGlobalConfig()
-	if globalConfig != nil && globalConfig.IsDefaultModelName(modelName) {
+	if globalConfig != nil && globalConfig.IsRequestModel(modelName) {
 		// Use default provider and model
 		defaultProvider, defaultModel := globalConfig.GetDefaultProvider(), globalConfig.GetDefaultModel()
 		if defaultProvider != "" && defaultModel != "" {

@@ -274,13 +274,14 @@ func (wui *WebUI) GetDefaults(c *gin.Context) {
 		return
 	}
 
-	defaultProvider, defaultModel, defaultModelName := globalConfig.GetDefaults()
+	defaultProvider, defaultModel, requestModel, responseModel := globalConfig.GetDefaults()
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"defaultProvider":  defaultProvider,
-			"defaultModel":     defaultModel,
-			"defaultModelName": defaultModelName,
+			"defaultProvider": defaultProvider,
+			"defaultModel":    defaultModel,
+			"requestModel":    requestModel,
+			"responseModel":   responseModel,
 		},
 	})
 }
@@ -330,9 +331,10 @@ func (wui *WebUI) GenerateToken(c *gin.Context) {
 
 func (wui *WebUI) SetDefaults(c *gin.Context) {
 	var req struct {
-		DefaultProvider  string `json:"defaultProvider"`
-		DefaultModel     string `json:"defaultModel"`
-		DefaultModelName string `json:"defaultModelName"`
+		DefaultProvider string `json:"defaultProvider"`
+		DefaultModel    string `json:"defaultModel"`
+		RequestModel    string `json:"requestModel"`
+		ResponseModel   string `json:"responseModel"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -373,8 +375,18 @@ func (wui *WebUI) SetDefaults(c *gin.Context) {
 		}
 	}
 
-	if req.DefaultModelName != "" {
-		if err := globalConfig.SetDefaultModelName(req.DefaultModelName); err != nil {
+	if req.RequestModel != "" {
+		if err := globalConfig.SetRequestModel(req.RequestModel); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   err.Error(),
+			})
+			return
+		}
+	}
+
+	if req.ResponseModel != "" {
+		if err := globalConfig.SetResponseModel(req.ResponseModel); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
 				"error":   err.Error(),
@@ -385,9 +397,10 @@ func (wui *WebUI) SetDefaults(c *gin.Context) {
 
 	if wui.logger != nil {
 		wui.logger.LogAction(memory.ActionUpdateDefaults, map[string]interface{}{
-			"default_provider":   req.DefaultProvider,
-			"default_model":      req.DefaultModel,
-			"default_model_name": req.DefaultModelName,
+			"default_provider": req.DefaultProvider,
+			"default_model":    req.DefaultModel,
+			"request_model":    req.RequestModel,
+			"response_model":   req.ResponseModel,
 		}, true, "Global defaults updated via web interface")
 	}
 
