@@ -20,6 +20,31 @@ type MockProviderServer struct {
 	lastRequest map[string]interface{}
 }
 
+// CreateMockChatCompletionResponse creates a mock chat completion response that matches OpenAI format
+func CreateMockChatCompletionResponse(id, model, content string) map[string]interface{} {
+	return map[string]interface{}{
+		"id":      id,
+		"object":  "chat.completion",
+		"created": time.Now().Unix(),
+		"model":   model,
+		"choices": []map[string]interface{}{
+			{
+				"index": 0,
+				"message": map[string]interface{}{
+					"role":    "assistant",
+					"content": content,
+				},
+				"finish_reason": "stop",
+			},
+		},
+		"usage": map[string]interface{}{
+			"prompt_tokens":     10,
+			"completion_tokens": 5,
+			"total_tokens":      15,
+		},
+	}
+}
+
 // MockResponse defines a mock response configuration
 type MockResponse struct {
 	StatusCode int
@@ -67,27 +92,7 @@ func (m *MockProviderServer) handleChatCompletions(w http.ResponseWriter, r *htt
 		// Default successful response
 		response = MockResponse{
 			StatusCode: 200,
-			Body: server.ChatCompletionResponse{
-				ID:      "chatcmpl-mock",
-				Object:  "chat.completion",
-				Created: time.Now().Unix(),
-				Model:   "gpt-3.5-turbo",
-				Choices: []server.ChatCompletionChoice{
-					{
-						Index: 0,
-						Message: server.ChatCompletionMessage{
-							Role:    "assistant",
-							Content: "Mock response from provider",
-						},
-						FinishReason: "stop",
-					},
-				},
-				Usage: server.ChatCompletionUsage{
-					PromptTokens:     10,
-					CompletionTokens: 5,
-					TotalTokens:      15,
-				},
-			},
+			Body:       CreateMockChatCompletionResponse("chatcmpl-mock", "gpt-3.5-turbo", "Mock response from provider"),
 		}
 	}
 
@@ -178,25 +183,25 @@ func NewMockProviderTestSuite(t *testing.T) *MockProviderTestSuite {
 // TestSuccessfulRequest tests a successful chat completion request
 func (suite *MockProviderTestSuite) TestSuccessfulRequest() {
 	// Configure mock response
-	mockResponse := server.ChatCompletionResponse{
-		ID:      "chatcmpl-test123",
-		Object:  "chat.completion",
-		Created: time.Now().Unix(),
-		Model:   "gpt-3.5-turbo",
-		Choices: []server.ChatCompletionChoice{
+	mockResponse := map[string]interface{}{
+		"id":      "chatcmpl-test123",
+		"object":  "chat.completion",
+		"created": time.Now().Unix(),
+		"model":   "gpt-3.5-turbo",
+		"choices": []map[string]interface{}{
 			{
-				Index: 0,
-				Message: server.ChatCompletionMessage{
-					Role:    "assistant",
-					Content: "Hello! This is a test response.",
+				"index": 0,
+				"message": map[string]interface{}{
+					"role":    "assistant",
+					"content": "Hello! This is a test response.",
 				},
-				FinishReason: "stop",
+				"finish_reason": "stop",
 			},
 		},
-		Usage: server.ChatCompletionUsage{
-			PromptTokens:     12,
-			CompletionTokens: 8,
-			TotalTokens:      20,
+		"usage": map[string]interface{}{
+			"prompt_tokens":     12,
+			"completion_tokens": 8,
+			"total_tokens":      20,
 		},
 	}
 
@@ -221,12 +226,25 @@ func (suite *MockProviderTestSuite) TestSuccessfulRequest() {
 	assert.Equal(suite.t, 200, w.Code)
 	assert.Equal(suite.t, 1, suite.mockServer.GetCallCount("/v1/chat/completions"))
 
-	var response server.ChatCompletionResponse
+	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	assert.NoError(suite.t, err)
-	assert.Equal(suite.t, "chatcmpl-test123", response.ID)
-	assert.Equal(suite.t, "Hello! This is a test response.", response.Choices[0].Message.Content)
-	assert.Equal(suite.t, 20, response.Usage.TotalTokens)
+	assert.Equal(suite.t, "chatcmpl-test123", response["id"])
+
+	choices, ok := response["choices"].([]interface{})
+	assert.True(suite.t, ok)
+	assert.Len(suite.t, choices, 1)
+
+	firstChoice, ok := choices[0].(map[string]interface{})
+	assert.True(suite.t, ok)
+
+	message, ok := firstChoice["message"].(map[string]interface{})
+	assert.True(suite.t, ok)
+	assert.Equal(suite.t, "Hello! This is a test response.", message["content"])
+
+	usage, ok := response["usage"].(map[string]interface{})
+	assert.True(suite.t, ok)
+	assert.Equal(suite.t, float64(20), usage["total_tokens"]) // JSON numbers are float64
 }
 
 // TestProviderError tests error handling from provider
@@ -264,22 +282,7 @@ func (suite *MockProviderTestSuite) TestNetworkTimeout() {
 	suite.mockServer.SetResponse("/v1/chat/completions", MockResponse{
 		StatusCode: 200,
 		Delay:      2 * time.Second, // Longer than client timeout
-		Body: server.ChatCompletionResponse{
-			ID:      "chatcmpl-timeout",
-			Object:  "chat.completion",
-			Created: time.Now().Unix(),
-			Model:   "gpt-3.5-turbo",
-			Choices: []server.ChatCompletionChoice{
-				{
-					Index: 0,
-					Message: server.ChatCompletionMessage{
-						Role:    "assistant",
-						Content: "Delayed response",
-					},
-					FinishReason: "stop",
-				},
-			},
-		},
+		Body:       CreateMockChatCompletionResponse("chatcmpl-timeout", "gpt-3.5-turbo", "Delayed response"),
 	})
 
 	// Create test request
@@ -328,22 +331,7 @@ func (suite *MockProviderTestSuite) TestRequestForwarding() {
 	// Configure mock response
 	suite.mockServer.SetResponse("/v1/chat/completions", MockResponse{
 		StatusCode: 200,
-		Body: server.ChatCompletionResponse{
-			ID:      "chatcmpl-forward-test",
-			Object:  "chat.completion",
-			Created: time.Now().Unix(),
-			Model:   "gpt-3.5-turbo",
-			Choices: []server.ChatCompletionChoice{
-				{
-					Index: 0,
-					Message: server.ChatCompletionMessage{
-						Role:    "assistant",
-						Content: "Forwarded request response",
-					},
-					FinishReason: "stop",
-				},
-			},
-		},
+		Body:       CreateMockChatCompletionResponse("chatcmpl-forward-test", "gpt-3.5-turbo", "Forwarded request response"),
 	})
 
 	// Create test request with specific parameters
@@ -353,7 +341,7 @@ func (suite *MockProviderTestSuite) TestRequestForwarding() {
 			{"role": "system", "content": "You are a helpful assistant."},
 			{"role": "user", "content": "Hello!"},
 		},
-		"stream": false,
+		"stream":      false,
 		"temperature": 0.7,
 	}
 

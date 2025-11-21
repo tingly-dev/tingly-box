@@ -1,10 +1,9 @@
 package server
 
 import (
-	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -12,45 +11,11 @@ import (
 	"tingly-box/internal/config"
 
 	"github.com/gin-gonic/gin"
+	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/option"
 )
 
-// ChatCompletionRequest represents OpenAI chat completion request
-type ChatCompletionRequest struct {
-	Model    string                  `json:"model"`
-	Messages []ChatCompletionMessage `json:"messages"`
-	Stream   bool                    `json:"stream,omitempty"`
-	Provider string                  `json:"provider,omitempty"`
-}
-
-// ChatCompletionMessage represents a chat message
-type ChatCompletionMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-// ChatCompletionResponse represents OpenAI chat completion response
-type ChatCompletionResponse struct {
-	ID      string                 `json:"id"`
-	Object  string                 `json:"object"`
-	Created int64                  `json:"created"`
-	Model   string                 `json:"model"`
-	Choices []ChatCompletionChoice `json:"choices"`
-	Usage   ChatCompletionUsage    `json:"usage"`
-}
-
-// ChatCompletionChoice represents a completion choice
-type ChatCompletionChoice struct {
-	Index        int                   `json:"index"`
-	Message      ChatCompletionMessage `json:"message"`
-	FinishReason string                `json:"finish_reason"`
-}
-
-// ChatCompletionUsage represents token usage information
-type ChatCompletionUsage struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
-	TotalTokens      int `json:"total_tokens"`
-}
+type RequestWrapper = openai.ChatCompletionNewParams
 
 // ErrorResponse represents an error response
 type ErrorResponse struct {
@@ -107,7 +72,7 @@ func (s *Server) GenerateToken(c *gin.Context) {
 
 // ChatCompletions handles OpenAI-compatible chat completion requests
 func (s *Server) ChatCompletions(c *gin.Context) {
-	var req ChatCompletionRequest
+	var req RequestWrapper
 
 	// Parse request body
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -170,13 +135,43 @@ func (s *Server) ChatCompletions(c *gin.Context) {
 		return
 	}
 
-	//// Update response with original model name for client compatibility
-	//if modelDef != nil {
-	//	response.Model = modelDef.Name
-	//}
+	// Handle response model modification at JSON level
+	globalConfig := s.config.GetGlobalConfig()
+	responseModel := ""
+	if globalConfig != nil {
+		responseModel = globalConfig.GetResponseModel()
+	}
 
-	// Return response
-	c.JSON(http.StatusOK, response)
+	// Convert response to JSON map for modification
+	responseJSON, err := json.Marshal(response)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Failed to marshal response: " + err.Error(),
+				Type:    "api_error",
+			},
+		})
+		return
+	}
+
+	var responseMap map[string]interface{}
+	if err := json.Unmarshal(responseJSON, &responseMap); err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Failed to process response: " + err.Error(),
+				Type:    "api_error",
+			},
+		})
+		return
+	}
+
+	// Update response model if configured and we have model definition
+	if responseModel != "" && modelDef != nil {
+		responseMap["model"] = modelDef.Name
+	}
+
+	// Return modified response
+	c.JSON(http.StatusOK, responseMap)
 }
 
 // determineProvider selects the appropriate provider based on model or explicit provider name
@@ -224,89 +219,25 @@ func (s *Server) determineProvider(model, explicitProvider string) (*config.Prov
 	return nil, fmt.Errorf("no enabled providers available")
 }
 
-// forwardRequest forwards the request to the selected provider
-func (s *Server) forwardRequest(provider *config.Provider, req *ChatCompletionRequest) (*ChatCompletionResponse, error) {
-	// Convert request to provider format (simplified)
-	providerReq := map[string]interface{}{
-		"model":    req.Model,
-		"messages": req.Messages,
-		"stream":   req.Stream,
-	}
+// forwardRequest forwards the request to the selected provider using OpenAI library
+func (s *Server) forwardRequest(provider *config.Provider, req *RequestWrapper) (*openai.ChatCompletion, error) {
+	// Create OpenAI client with provider configuration
+	client := openai.NewClient(
+		option.WithAPIKey(provider.Token),
+		option.WithBaseURL(provider.APIBase),
+	)
 
-	reqBody, err := json.Marshal(providerReq)
+	// Since RequestWrapper is a type alias to openai.ChatCompletionNewParams,
+	// we can directly use it as the request parameters
+	chatReq := *req
+
+	// Make the request using OpenAI library
+	chatCompletion, err := client.Chat.Completions.New(context.Background(), chatReq)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
+		return nil, fmt.Errorf("failed to create chat completion: %w", err)
 	}
 
-	// Create HTTP request to provider
-	endpoint := provider.APIBase + "/chat/completions"
-
-	httpReq, err := http.NewRequest("POST", endpoint, bytes.NewBuffer(reqBody))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// Set headers
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+provider.Token)
-
-	// Send request
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Read response
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	// Handle error responses
-	if resp.StatusCode != http.StatusOK {
-		var errorResp ErrorResponse
-		if err := json.Unmarshal(respBody, &errorResp); err != nil {
-			return nil, fmt.Errorf("provider returned error %d: %s", resp.StatusCode, string(respBody))
-		}
-		return nil, fmt.Errorf("provider error: %s", errorResp.Error.Message)
-	}
-
-	// Parse successful response
-	var chatResp ChatCompletionResponse
-	if err := json.Unmarshal(respBody, &chatResp); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	// Check if Response model is configured and modify the model field
-	if err := s.applyResponseModel(&chatResp); err != nil {
-		return nil, fmt.Errorf("failed to apply response model: %w", err)
-	}
-
-	return &chatResp, nil
-}
-
-// applyResponseModel applies the configured response model to the chat completion response
-func (s *Server) applyResponseModel(response *ChatCompletionResponse) error {
-	// Get global configuration
-	globalConfig := s.config.GetGlobalConfig()
-	if globalConfig == nil {
-		// No global config available, return without modification
-		return nil
-	}
-
-	// Get the configured response model
-	responseModel := globalConfig.GetResponseModel()
-	if responseModel == "" {
-		// No response model configured, return without modification
-		return nil
-	}
-
-	// Modify the model field in the response
-	response.Model = responseModel
-
-	return nil
+	return chatCompletion, nil
 }
 
 // ListModels handles the /v1/models endpoint (OpenAI compatible)
