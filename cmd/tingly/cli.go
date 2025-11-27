@@ -40,6 +40,7 @@ func init() {
 	rootCmd.AddCommand(cli.TokenCommand(appConfig))
 	rootCmd.AddCommand(cli.ExampleCommand(appConfig))
 	rootCmd.AddCommand(cli.ShellCommand(appConfig))
+	rootCmd.AddCommand(cli.UICommand(appConfig))
 }
 
 func main() {
