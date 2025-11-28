@@ -1,4 +1,4 @@
-import { Box, Card, CardContent, Typography } from '@mui/material';
+import { Alert, Box, Card, CardContent, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { ReactNode } from 'react';
 
@@ -14,6 +14,9 @@ interface UnifiedCardProps {
     widthUnits?: number;
     heightUnits?: number;
   };
+  // Message support
+  message?: { type: 'success' | 'error'; text: string } | null;
+  onClearMessage?: () => void;
   sx?: SxProps<Theme>;
 }
 
@@ -82,6 +85,8 @@ export const UnifiedCard = ({
   size = 'medium',
   variant = 'default',
   gridUnits,
+  message,
+  onClearMessage,
   sx = {},
 }: UnifiedCardProps) => {
   return (
@@ -119,6 +124,16 @@ export const UnifiedCard = ({
                 {subtitle}
               </Typography>
             )}
+          </Box>
+        )}
+        {message && (
+          <Box sx={{ mb: 2, flexShrink: 0 }}>
+            <Alert
+              severity={message.type}
+              onClose={onClearMessage}
+            >
+              {message.text}
+            </Alert>
           </Box>
         )}
         <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
