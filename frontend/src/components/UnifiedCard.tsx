@@ -7,7 +7,7 @@ interface UnifiedCardProps {
   subtitle?: string;
   children: ReactNode;
   // 格子倍数配置：widthUnits × heightUnits
-  size?: 'small' | 'medium' | 'large' | 'full' | 'fullw';
+  size?: 'small' | 'medium' | 'large' | 'full';
   variant?: 'default' | 'outlined' | 'elevated';
   // 自定义格子倍数
   gridUnits?: {
