@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/goccy/go-yaml"
@@ -30,7 +31,13 @@ type GlobalConfig struct {
 
 // NewGlobalConfig creates a new global configuration manager
 func NewGlobalConfig() (*GlobalConfig, error) {
-	configFile := "config/global_config.yaml"
+	// Use the same config directory as the main config
+	configDir := ".tingly-box"
+	if err := os.MkdirAll(configDir, 0700); err != nil {
+		return nil, fmt.Errorf("failed to create config directory: %w", err)
+	}
+	
+	configFile := filepath.Join(configDir, "global_config.yaml")
 
 	config := &GlobalConfig{
 		configFile: configFile,

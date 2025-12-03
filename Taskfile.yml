@@ -20,10 +20,11 @@ tasks:
 
   start:
     cmds:
-      - ./build/tingly start --ui
+      - ./build/tingly start
 
   build:
     cmds:
+      - task: ui:dist
       - |
         mkdir -p build
         go build -o ./build/tingly ./cmd/tingly
@@ -44,4 +45,4 @@ tasks:
       - |
         cd frontend; pnpm build
       - |
-        cp -R frontend/dist internal/server/web/
+        cp -R frontend/dist internal/server/web/dist
