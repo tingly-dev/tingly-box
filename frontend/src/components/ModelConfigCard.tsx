@@ -1,4 +1,4 @@
-import { Add as AddIcon, Delete as DeleteIcon, Refresh as RefreshIcon, Edit as EditIcon, Check as CheckIcon } from '@mui/icons-material';
+import { Add as AddIcon, Check as CheckIcon, Delete as DeleteIcon, Edit as EditIcon, Refresh as RefreshIcon, Save as SaveIcon } from '@mui/icons-material';
 import {
     Box,
     Button,
@@ -10,9 +10,7 @@ import {
     Select,
     Stack,
     TextField,
-    Typography,
-    Switch,
-    FormControlLabel,
+    Typography
 } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { api } from '../services/api';
@@ -286,6 +284,27 @@ const ModelConfigCard = ({
             size="full"
             message={message}
             onClearMessage={() => setMessage(null)}
+            leftAction={
+                <Button
+                    variant="contained"
+                    size="small"
+                    startIcon={<AddIcon />}
+                    onClick={addConfigRecord}
+                >
+                    Add Configuration
+                </Button>
+            }
+            rightAction={
+                <Button
+                    variant="contained"
+                    color="primary"
+                    size="small"
+                    startIcon={<SaveIcon />}
+                    onClick={handleSaveDefaults}
+                >
+                    Save
+                </Button>
+            }
         >
             <Stack spacing={3}>
                 {configRecords.map((record) => (
@@ -501,18 +520,7 @@ const ModelConfigCard = ({
                     </Box>
                 ))}
 
-                <Stack direction="row" spacing={2}>
-                    <Button variant="contained" onClick={addConfigRecord} startIcon={<AddIcon />}>
-                        Add Configuration
-                    </Button>
-                    <Button variant="contained" onClick={handleSaveDefaults}>
-                        Save All Configurations
-                    </Button>
-                    <Button variant="outlined" onClick={onLoadDefaults}>
-                        Refresh Models
-                    </Button>
-                </Stack>
-            </Stack>
+              </Stack>
         </UnifiedCard>
     );
 };

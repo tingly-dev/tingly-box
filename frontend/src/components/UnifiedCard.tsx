@@ -1,6 +1,6 @@
 import { Alert, Box, Card, CardContent, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
-import { ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 interface UnifiedCardProps {
   title?: string;
@@ -17,6 +17,9 @@ interface UnifiedCardProps {
   // Message support
   message?: { type: 'success' | 'error'; text: string } | null;
   onClearMessage?: () => void;
+  // Header actions
+  leftAction?: ReactNode;
+  rightAction?: ReactNode;
   sx?: SxProps<Theme>;
 }
 
@@ -87,6 +90,8 @@ export const UnifiedCard = ({
   gridUnits,
   message,
   onClearMessage,
+  leftAction,
+  rightAction,
   sx = {},
 }: UnifiedCardProps) => {
   return (
@@ -116,9 +121,17 @@ export const UnifiedCard = ({
       >
         {title && (
           <Box sx={{ mb: 2, flexShrink: 0 }}>
-            <Typography variant="h4" sx={{ fontWeight: 600, color: 'text.primary', mb: subtitle ? 1 : 0 }}>
-              {title}
-            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: subtitle ? 1 : 0 }}>
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="h4" sx={{ fontWeight: 600, color: 'text.primary' }}>
+                  {title}
+                </Typography>
+              </Box>
+              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                {leftAction}
+                {rightAction}
+              </Box>
+            </Box>
             {subtitle && (
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                 {subtitle}
