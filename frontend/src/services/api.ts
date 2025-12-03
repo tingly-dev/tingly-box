@@ -71,7 +71,7 @@ async function fetchServerAPI(url: string, options: RequestInit = {}): Promise<a
       return { success: false, error: 'Authentication required' };
     }
 
-    return await response.json();
+    return {success:true, data: await response.json()};
   } catch (error) {
     console.error('Server API Error:', error);
     return { success: false, error: (error as Error).message };
@@ -144,7 +144,11 @@ export const api = {
     method: 'POST',
     body: JSON.stringify({ port }),
   }),
-  generateToken: (clientId: string) => fetchServerAPI(`/api/token?client_id=${encodeURIComponent(clientId)}`),
+  generateToken: (clientId: string) => fetchServerAPI(`/api/token`, {
+    method: 'POST',
+    body: JSON.stringify({ client_id: clientId }),
+  }),
+  getToken: () => fetchServerAPI('/api/token', { method: 'GET' }),
 
   // Model API calls (OpenAI/Anthropic compatible)
   openAIChatCompletions: (data: any) => fetchModelAPI('/openai/v1/chat/completions', {

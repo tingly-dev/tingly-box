@@ -8,7 +8,7 @@ import {
     TextField,
     Typography,
 } from '@mui/material';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../services/api';
 import UnifiedCard from './UnifiedCard';
 
@@ -20,7 +20,20 @@ const ServerInfoCard = ({ currentToken }: ServerInfoCardProps) => {
     const [snackbarOpen, setSnackbarOpen] = useState(false);
     const [snackbarMessage, setSnackbarMessage] = useState('');
     const [generatedToken, setGeneratedToken] = useState<string>('');
+    const [modelToken, setModelToken] = useState<string>('');
     const [showToken, setShowToken] = useState(false);
+
+    useEffect(() => {
+        const fetchToken = async () => {
+            const result = await api.getToken();
+            if (result.success && result.data && result.data.token) {
+                setModelToken(result.data.token);
+            }
+            console.log(result)
+            console.log(modelToken)
+        };
+        fetchToken();
+    }, []);
 
     const copyToClipboard = async (text: string, label: string) => {
         try {
@@ -49,8 +62,7 @@ const ServerInfoCard = ({ currentToken }: ServerInfoCardProps) => {
     const baseUrl = import.meta.env.VITE_API_BASE_URL || window.location.origin;
     const openaiBaseUrl = `${baseUrl}/openai/v1`;
     const anthropicBaseUrl = `${baseUrl}/anthropic/v1`;
-    const currentAuthToken = localStorage.getItem('auth_token');
-    const token = generatedToken || currentToken || currentAuthToken || 'No token available';
+    const token = generatedToken || modelToken
 
     return (
         <>

@@ -144,8 +144,9 @@ const System = () => {
         if (clientId) {
             const result = await api.generateToken(clientId);
             if (result.success) {
-                navigator.clipboard.writeText(result.data.token);
-                setMessage({ type: 'success', text: 'Token copied to clipboard!' });
+                localStorage.setItem('model_auth_token', result.data.token)
+                // navigator.clipboard.writeText(result.data.token);
+                // setMessage({ type: 'success', text: 'Token copied to clipboard!' });
                 loadActivityLog();
             } else {
                 setMessage({ type: 'error', text: result.error });
