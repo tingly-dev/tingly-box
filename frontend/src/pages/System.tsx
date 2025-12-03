@@ -1,15 +1,25 @@
 import { Alert, Box, CircularProgress } from '@mui/material';
 import { useEffect, useState } from 'react';
-import CardGrid, { CardGridItem } from '../components/CardGrid';
-import UnifiedCard from '../components/UnifiedCard';
-import ServerStatusControl from '../components/ServerStatusControl';
-import ServerConfiguration from '../components/ServerConfiguration';
 import ActivityLog from '../components/ActivityLog';
+import AuthenticationCard from '../components/AuthenticationCard';
+import CardGrid, { CardGridItem } from '../components/CardGrid';
+import ProviderSelectionCard from '../components/ProviderSelectionCard';
+import ProvidersSummaryCard from '../components/ProvidersSummaryCard';
+import RecentActivityCard from '../components/RecentActivityCard';
+import ServerConfiguration from '../components/ServerConfiguration';
+import ServerStatusCard from '../components/ServerStatusCard';
+import ServerStatusControl from '../components/ServerStatusControl';
+import UnifiedCard from '../components/UnifiedCard';
 import { api } from '../services/api';
 
-const Server = () => {
+const System = () => {
     const [serverStatus, setServerStatus] = useState<any>(null);
     const [activityLog, setActivityLog] = useState<any[]>([]);
+    const [providersStatus, setProvidersStatus] = useState<any>(null);
+    const [recentActivity, setRecentActivity] = useState<any[]>([]);
+    const [defaults, setDefaults] = useState<any>({});
+    const [providers, setProviders] = useState<any[]>([]);
+    const [providerModels, setProviderModels] = useState<any>({});
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [loading, setLoading] = useState(true);
 
@@ -32,7 +42,14 @@ const Server = () => {
 
     const loadAllData = async () => {
         setLoading(true);
-        await Promise.all([loadServerStatus(), loadActivityLog()]);
+        await Promise.all([
+            loadServerStatus(),
+            loadActivityLog(),
+            loadProvidersStatus(),
+            loadRecentActivity(),
+            loadDefaults(),
+            loadProviderSelectionPanel(),
+        ]);
         setLoading(false);
     };
 
@@ -47,6 +64,43 @@ const Server = () => {
         const result = await api.getHistory(50);
         if (result.success) {
             setActivityLog(result.data);
+        }
+    };
+
+    const loadProvidersStatus = async () => {
+        const result = await api.getProviders();
+        if (result.success) {
+            setProvidersStatus(result.data);
+        }
+    };
+
+    const loadRecentActivity = async () => {
+        const result = await api.getHistory(5);
+        if (result.success) {
+            setRecentActivity(result.data);
+        }
+    };
+
+    const loadDefaults = async () => {
+        const result = await api.getDefaults();
+        if (result.success) {
+            setDefaults(result.data);
+        }
+    };
+
+    const loadProviderSelectionPanel = async () => {
+        const [providersResult, modelsResult, defaultsResult] = await Promise.all([
+            api.getProviders(),
+            api.getProviderModels(),
+            api.getDefaults(),
+        ]);
+
+        if (providersResult.success && modelsResult.success) {
+            setProviders(providersResult.data);
+            setProviderModels(modelsResult.data);
+            if (defaultsResult.success) {
+                setDefaults(defaultsResult.data);
+            }
         }
     };
 
@@ -115,6 +169,49 @@ const Server = () => {
         setActivityLog([]);
     };
 
+    // This handler is kept for backward compatibility
+    // The main configuration management is now done through ModelConfigCard
+    const setDefaultProviderHandler = async (providerName: string) => {
+        const currentDefaults = await api.getDefaults();
+        if (!currentDefaults.success) {
+            setMessage({ type: 'error', text: 'Failed to get current defaults' });
+            return;
+        }
+
+        // Update the default RequestConfig with the selected provider
+        const requestConfigs = currentDefaults.data.request_configs || [];
+        if (requestConfigs.length === 0) {
+            setMessage({
+                type: 'error',
+                text: 'No request configurations found. Please use the Model Configuration card to add one.'
+            });
+            return;
+        }
+
+        const payload = {
+            request_configs: requestConfigs,
+        };
+
+        const result = await api.setDefaults(payload);
+        if (result.success) {
+            setMessage({ type: 'success', text: `Set ${providerName} as default provider` });
+            await loadProviderSelectionPanel();
+            await loadDefaults();
+        } else {
+            setMessage({ type: 'error', text: result.error });
+        }
+    };
+
+    const fetchProviderModels = async (providerName: string) => {
+        const result = await api.getProviderModelsByName(providerName);
+        if (result.success) {
+            setMessage({ type: 'success', text: `Successfully fetched models for ${providerName}` });
+            await loadProviderSelectionPanel();
+        } else {
+            setMessage({ type: 'error', text: `Failed to fetch models: ${result.error}` });
+        }
+    };
+
     if (loading) {
         return (
             <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
@@ -156,6 +253,14 @@ const Server = () => {
                     </UnifiedCard>
                 </CardGridItem>
 
+                {/* Server Status Card */}
+                <CardGridItem xs={12} md={6}>
+                    <ServerStatusCard
+                        serverStatus={serverStatus}
+                        onLoadServerStatus={loadServerStatus}
+                    />
+                </CardGridItem>
+
                 {/* Configuration */}
                 <CardGridItem xs={12} md={6}>
                     <UnifiedCard
@@ -173,6 +278,32 @@ const Server = () => {
                             <div>Loading...</div>
                         )}
                     </UnifiedCard>
+                </CardGridItem>
+
+                {/* Provider Selection */}
+                <CardGridItem xs={12} md={6}>
+                    <ProviderSelectionCard
+                        providers={providers}
+                        defaults={defaults}
+                        providerModels={providerModels}
+                        onSetDefault={setDefaultProviderHandler}
+                        onFetchModels={fetchProviderModels}
+                    />
+                </CardGridItem>
+
+                {/* Providers Summary */}
+                <CardGridItem xs={12} md={6}>
+                    <ProvidersSummaryCard providersStatus={providersStatus} />
+                </CardGridItem>
+
+                {/* Authentication */}
+                <CardGridItem xs={12} md={6}>
+                    <AuthenticationCard />
+                </CardGridItem>
+
+                {/* Recent Activity */}
+                <CardGridItem xs={12} md={6}>
+                    <RecentActivityCard recentActivity={recentActivity} />
                 </CardGridItem>
 
                 {/* Activity Log */}
@@ -194,4 +325,4 @@ const Server = () => {
     );
 };
 
-export default Server;
+export default System;

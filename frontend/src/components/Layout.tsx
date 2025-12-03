@@ -43,7 +43,7 @@ const Layout = ({ children }: LayoutProps) => {
   const menuItems = [
     { path: '/', label: 'Dashboard', icon: <DashboardIcon /> },
     { path: '/providers', label: 'Providers', icon: <CloudIcon /> },
-    { path: '/server', label: 'Server', icon: <SettingsIcon /> },
+    { path: '/system', label: 'System', icon: <SettingsIcon /> },
     { path: '/history', label: 'History', icon: <HistoryIcon /> },
   ];
 

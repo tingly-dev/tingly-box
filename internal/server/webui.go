@@ -105,7 +105,7 @@ func (wui *WebUI) setupRoutes() {
 		ui.GET("/", wui.Dashboard)
 		ui.GET("/dashboard", wui.Dashboard)
 		ui.GET("/providers", wui.ProvidersPage)
-		ui.GET("/server", wui.ServerPage)
+		ui.GET("/system", wui.SystemPage)
 		ui.GET("/history", wui.HistoryPage)
 	}
 
@@ -230,7 +230,7 @@ func (wui *WebUI) ProvidersPage(c *gin.Context) {
 	}
 }
 
-func (wui *WebUI) ServerPage(c *gin.Context) {
+func (wui *WebUI) SystemPage(c *gin.Context) {
 	if wui.assets != nil {
 		wui.assets.HTML(c, "index.html", nil)
 	} else {
@@ -252,20 +252,20 @@ func (wui *WebUI) GetProviders(c *gin.Context) {
 
 	// Mask tokens for security
 	maskedProviders := make([]struct {
-		Name      string `json:"name"`
-		APIBase   string `json:"api_base"`
+		Name       string `json:"name"`
+		APIBase    string `json:"api_base"`
 		APIVersion string `json:"api_version"`
-		Token     string `json:"token"`
-		Enabled   bool   `json:"enabled"`
+		Token      string `json:"token"`
+		Enabled    bool   `json:"enabled"`
 	}, len(providers))
 
 	for i, provider := range providers {
 		maskedProviders[i] = struct {
-			Name      string `json:"name"`
-			APIBase   string `json:"api_base"`
+			Name       string `json:"name"`
+			APIBase    string `json:"api_base"`
 			APIVersion string `json:"api_version"`
-			Token     string `json:"token"`
-			Enabled   bool   `json:"enabled"`
+			Token      string `json:"token"`
+			Enabled    bool   `json:"enabled"`
 		}{
 			Name:       provider.Name,
 			APIBase:    provider.APIBase,
