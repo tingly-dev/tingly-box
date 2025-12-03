@@ -8,10 +8,14 @@ import {
     DialogContent,
     DialogTitle,
     FormControlLabel,
+    InputLabel,
+    MenuItem,
+    Select,
     Stack,
     Switch,
     TextField,
     Typography,
+    FormControl,
 } from '@mui/material';
 import { Add } from '@mui/icons-material';
 import { useEffect, useState } from 'react';
@@ -28,6 +32,7 @@ const Providers = () => {
     // Add provider form
     const [providerName, setProviderName] = useState('');
     const [providerApiBase, setProviderApiBase] = useState('');
+    const [providerApiVersion, setProviderApiVersion] = useState('openai');
     const [providerToken, setProviderToken] = useState('');
 
     // Add dialog
@@ -38,6 +43,7 @@ const Providers = () => {
     const [editingProvider, setEditingProvider] = useState<any>(null);
     const [editName, setEditName] = useState('');
     const [editApiBase, setEditApiBase] = useState('');
+    const [editApiVersion, setEditApiVersion] = useState('openai');
     const [editToken, setEditToken] = useState('');
     const [editEnabled, setEditEnabled] = useState(true);
 
@@ -48,6 +54,7 @@ const Providers = () => {
     const handleAddProviderClick = () => {
         setProviderName('');
         setProviderApiBase('');
+        setProviderApiVersion('openai');
         setProviderToken('');
         setAddDialogOpen(true);
     };
@@ -69,6 +76,7 @@ const Providers = () => {
         const providerData = {
             name: providerName,
             api_base: providerApiBase,
+            api_version: providerApiVersion,
             token: providerToken,
         };
 
@@ -82,6 +90,7 @@ const Providers = () => {
             setMessage({ type: 'success', text: 'Provider added successfully!' });
             setProviderName('');
             setProviderApiBase('');
+            setProviderApiVersion('openai');
             setProviderToken('');
             setAddDialogOpen(false);
             loadProviders();
@@ -128,6 +137,7 @@ const Providers = () => {
             setEditingProvider(provider);
             setEditName(provider.name);
             setEditApiBase(provider.api_base);
+            setEditApiVersion(provider.api_version || 'openai');
             setEditToken('');
             setEditEnabled(provider.enabled);
             setEditDialogOpen(true);
@@ -143,6 +153,7 @@ const Providers = () => {
         const providerData: any = {
             name: editName,
             api_base: editApiBase,
+            api_version: editApiVersion,
             enabled: editEnabled,
         };
 
@@ -271,6 +282,18 @@ const Providers = () => {
                                 required
                                 placeholder="e.g., https://api.openai.com/v1"
                             />
+                            <FormControl fullWidth>
+                                <InputLabel id="api-version-label">API Version</InputLabel>
+                                <Select
+                                    labelId="api-version-label"
+                                    value={providerApiVersion}
+                                    label="API Version"
+                                    onChange={(e) => setProviderApiVersion(e.target.value)}
+                                >
+                                    <MenuItem value="openai">OpenAI</MenuItem>
+                                    <MenuItem value="anthropic">Anthropic</MenuItem>
+                                </Select>
+                            </FormControl>
                             <TextField
                                 fullWidth
                                 label="API Token"
@@ -309,6 +332,18 @@ const Providers = () => {
                                 onChange={(e) => setEditApiBase(e.target.value)}
                                 required
                             />
+                            <FormControl fullWidth>
+                                <InputLabel id="edit-api-version-label">API Version</InputLabel>
+                                <Select
+                                    labelId="edit-api-version-label"
+                                    value={editApiVersion}
+                                    label="API Version"
+                                    onChange={(e) => setEditApiVersion(e.target.value)}
+                                >
+                                    <MenuItem value="openai">OpenAI</MenuItem>
+                                    <MenuItem value="anthropic">Anthropic</MenuItem>
+                                </Select>
+                            </FormControl>
                             <TextField
                                 fullWidth
                                 label="API Token"

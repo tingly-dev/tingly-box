@@ -1,4 +1,4 @@
-import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { Add as AddIcon, Delete as DeleteIcon, Refresh as RefreshIcon, Edit as EditIcon, Check as CheckIcon } from '@mui/icons-material';
 import {
     Box,
     Button,
@@ -11,6 +11,8 @@ import {
     Stack,
     TextField,
     Typography,
+    Switch,
+    FormControlLabel,
 } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { api } from '../services/api';
@@ -20,6 +22,7 @@ interface ConfigProvider {
     id: string;
     provider: string;
     model: string;
+    isManualInput?: boolean;
 }
 
 interface ConfigRecord {
@@ -35,6 +38,7 @@ interface ModelConfigCardProps {
     providerModels: any;
     onLoadDefaults: () => Promise<void>;
     onLoadProviderSelectionPanel: () => Promise<void>;
+    onFetchModels: (providerName: string) => Promise<void>;
 }
 
 const ModelConfigCard = ({
@@ -43,6 +47,7 @@ const ModelConfigCard = ({
     providerModels,
     onLoadDefaults,
     onLoadProviderSelectionPanel,
+    onFetchModels,
 }: ModelConfigCardProps) => {
     const [configRecords, setConfigRecords] = useState<ConfigRecord[]>([]);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -73,6 +78,7 @@ const ModelConfigCard = ({
                             provider: config.provider,
                             model: config.default_model || '',
                             responseModel: config.response_model || '',
+                            isManualInput: false,
                         });
                     }
 
@@ -115,6 +121,7 @@ const ModelConfigCard = ({
                                 id: `provider-${Date.now()}`,
                                 provider: defaults.defaultProvider,
                                 model: defaults.defaultModel || '',
+                                isManualInput: false,
                             },
                         ]
                         : [],
@@ -164,7 +171,7 @@ const ModelConfigCard = ({
                         ...record,
                         providers: [
                             ...record.providers,
-                            { id: generateId(), provider: '', model: '' },
+                            { id: generateId(), provider: '', model: '', isManualInput: false },
                         ],
                     }
                     : record
@@ -186,7 +193,7 @@ const ModelConfigCard = ({
         recordId: string,
         providerId: string,
         field: keyof ConfigProvider,
-        value: string
+        value: string | boolean
     ) => {
         setConfigRecords(
             configRecords.map((record) =>
@@ -200,6 +207,17 @@ const ModelConfigCard = ({
                     : record
             )
         );
+    };
+
+    const handleRefreshProviderModels = async (providerName: string) => {
+        if (!providerName) return;
+
+        try {
+            await onFetchModels(providerName);
+            setMessage({ type: 'success', text: `Successfully refreshed models for ${providerName}` });
+        } catch (error) {
+            setMessage({ type: 'error', text: `Failed to refresh models for ${providerName}: ${error}` });
+        }
     };
 
     const handleSaveDefaults = async () => {
@@ -383,34 +401,87 @@ const ModelConfigCard = ({
                                                     </Select>
                                                 </FormControl>
 
-                                                <FormControl
-                                                    sx={{ flex: 1 }}
-                                                    size="small"
-                                                    disabled={!provider.provider}
-                                                >
-                                                    <InputLabel>Model</InputLabel>
-                                                    <Select
-                                                        value={provider.model}
-                                                        onChange={(e) =>
-                                                            updateProvider(
-                                                                record.id,
-                                                                provider.id,
-                                                                'model',
-                                                                e.target.value
-                                                            )
-                                                        }
-                                                        label="Model"
+                                                {provider.isManualInput ? (
+                                                    <FormControl sx={{ flex: 1 }} size="small">
+                                                        <TextField
+                                                            label="Model (Manual)"
+                                                            value={provider.model}
+                                                            onChange={(e) =>
+                                                                updateProvider(
+                                                                    record.id,
+                                                                    provider.id,
+                                                                    'model',
+                                                                    e.target.value
+                                                                )
+                                                            }
+                                                            placeholder="Enter model name manually"
+                                                            fullWidth
+                                                            size="small"
+                                                        />
+                                                    </FormControl>
+                                                ) : (
+                                                    <FormControl
+                                                        sx={{ flex: 1 }}
+                                                        size="small"
+                                                        disabled={!provider.provider}
                                                     >
-                                                        <MenuItem value="">Select</MenuItem>
-                                                        {providerModels[provider.provider]?.models.map(
-                                                            (model: string) => (
-                                                                <MenuItem key={model} value={model}>
-                                                                    {model}
+                                                        <InputLabel>Model</InputLabel>
+                                                        <Select
+                                                            value={provider.model}
+                                                            onChange={(e) =>
+                                                                updateProvider(
+                                                                    record.id,
+                                                                    provider.id,
+                                                                    'model',
+                                                                    e.target.value
+                                                                )
+                                                            }
+                                                            label="Model"
+                                                        >
+                                                            <MenuItem value="">Select</MenuItem>
+                                                            {/* Show current model if it exists and is not in the API list */}
+                                                            {provider.model && !providerModels[provider.provider]?.models.includes(provider.model) && (
+                                                                <MenuItem key="current-manual" value={provider.model}>
+                                                                    {provider.model} (custom)
                                                                 </MenuItem>
-                                                            )
-                                                        )}
-                                                    </Select>
-                                                </FormControl>
+                                                            )}
+                                                            {/* Show models from API */}
+                                                            {providerModels[provider.provider]?.models.map(
+                                                                (model: string) => (
+                                                                    <MenuItem key={model} value={model}>
+                                                                        {model}
+                                                                    </MenuItem>
+                                                                )
+                                                            )}
+                                                        </Select>
+                                                    </FormControl>
+                                                )}
+
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={() => handleRefreshProviderModels(provider.provider)}
+                                                    disabled={!provider.provider}
+                                                    title="Refresh models"
+                                                    sx={{ p: 0.5 }}
+                                                >
+                                                    <RefreshIcon fontSize="small" />
+                                                </IconButton>
+
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={() =>
+                                                        updateProvider(
+                                                            record.id,
+                                                            provider.id,
+                                                            'isManualInput',
+                                                            !provider.isManualInput
+                                                        )
+                                                    }
+                                                    title={provider.isManualInput ? "Switch to dropdown" : "Switch to manual input"}
+                                                    sx={{ p: 0.5 }}
+                                                >
+                                                    {provider.isManualInput ? <CheckIcon fontSize="small" /> : <EditIcon fontSize="small" />}
+                                                </IconButton>
 
                                                 <IconButton
                                                     size="small"

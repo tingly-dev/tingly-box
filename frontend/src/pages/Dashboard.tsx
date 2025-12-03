@@ -157,6 +157,7 @@ const Dashboard = () => {
                         providerModels={providerModels}
                         onLoadDefaults={loadDefaults}
                         onLoadProviderSelectionPanel={loadProviderSelectionPanel}
+                        onFetchModels={fetchProviderModels}
                     />
                 </CardGridItem>
 

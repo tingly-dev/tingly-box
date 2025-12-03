@@ -11,6 +11,7 @@ export interface Provider {
     name: string;
     enabled: boolean;
     api_base: string;
+    api_version: string; // "openai" or "anthropic", defaults to "openai"
     token?: string;
 }
 
@@ -196,6 +197,14 @@ const ProviderCard = ({
                     </Typography>
                     <Typography variant="caption" sx={{ fontFamily: 'monospace', backgroundColor: 'grey.100', p: 0.5, borderRadius: 1, display: 'block', wordBreak: 'break-all' }}>
                         {provider.api_base}
+                    </Typography>
+                </Box>
+                <Box>
+                    <Typography variant="caption" color="text.secondary" gutterBottom>
+                        API Version
+                    </Typography>
+                    <Typography variant="caption" sx={{ fontFamily: 'monospace', backgroundColor: 'grey.100', p: 0.5, borderRadius: 1, display: 'block' }}>
+                        {provider.api_version || 'openai'}
                     </Typography>
                 </Box>
                 <Box>
