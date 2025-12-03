@@ -11,7 +11,7 @@ on:
       createRelease:
         description: 'Create GitHub Release'
         required: false
-        default: 'false'
+        default: false
         type: boolean
       releaseVersion:
         description: 'Release version (e.g., v1.0.0)'
