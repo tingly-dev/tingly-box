@@ -261,54 +261,6 @@ const System = () => {
                 </CardGridItem>
 
 
-                {/* Providers - Consolidated */}
-                <CardGridItem xs={12} md={6}>
-                    <UnifiedCard
-                        title="Providers Management"
-                        subtitle={`Total: ${providersStatus ? providersStatus.length : 0} providers | Enabled: ${providersStatus ? providersStatus.filter((p: any) => p.enabled).length : 0}`}
-                        size="large"
-                    >
-                        <Stack spacing={2}>
-                            <Box sx={{ maxHeight: 250, overflowY: 'auto' }}>
-                                {providers.length > 0 ? (
-                                    <CardGrid>
-                                        {providers.map((provider) => {
-                                            const isDefault = defaults.defaultProvider === provider.name;
-                                            return (
-                                                <CardGridItem xs={12} sm={6} key={provider.name}>
-                                                    <ProviderCard
-                                                        provider={provider}
-                                                        variant="simple"
-                                                        isDefault={isDefault}
-                                                        providerModels={providerModels}
-                                                        onSetDefault={setDefaultProviderHandler}
-                                                        onFetchModels={fetchProviderModels}
-                                                    />
-                                                </CardGridItem>
-                                            );
-                                        })}
-                                    </CardGrid>
-                                ) : (
-                                    <Box textAlign="center" py={3}>
-                                        <Typography variant="body2" color="text.secondary">
-                                            No providers configured yet
-                                        </Typography>
-                                    </Box>
-                                )}
-                            </Box>
-
-                            <Button
-                                variant="contained"
-                                onClick={() => window.location.href = '/providers'}
-                            >
-                                Manage Providers
-                            </Button>
-                        </Stack>
-                    </UnifiedCard>
-                </CardGridItem>
-
-
-
                 {/* Activity Log - Enhanced */}
                 <CardGridItem xs={12}>
                     <UnifiedCard
