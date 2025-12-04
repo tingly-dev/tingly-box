@@ -11,7 +11,6 @@ import {
     Autocomplete,
     Box,
     Card,
-    CardActionArea,
     CardContent,
     InputAdornment,
     Stack,
@@ -316,50 +315,68 @@ export const SingleProviderSelect = ({
                                 </Typography>
                                 <Box
                                     sx={{
-                                        display: 'flex',
-                                        gap: 1,
-                                        flexWrap: 'wrap',
-                                        mb: 3,
+                                        display: 'grid',
+                                        gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+                                        gap: 0.8,
+                                        mb: 2,
                                     }}
                                 >
                                     {starModels.map((starModel) => {
                                         const isModelSelected = isProviderSelected && selectedModel === starModel;
                                         return (
-                                            <Box key={starModel}>
-                                                <Card
-                                                    sx={{
-                                                        width: 180,
-                                                        height: 90,
-                                                        border: isModelSelected ? 3 : 2,
-                                                        borderColor: isModelSelected ? 'primary.main' : 'warning.main',
-                                                        borderRadius: 2,
-                                                        backgroundColor: isModelSelected ? 'primary.100' : 'warning.50',
-                                                        cursor: 'pointer',
-                                                        transition: 'all 0.2s ease-in-out',
-                                                        boxShadow: isModelSelected ? 4 : 1,
-                                                        transform: isModelSelected ? 'scale(1.02)' : 'scale(1)',
-                                                        '&:hover': {
-                                                            borderColor: 'primary.main',
-                                                            boxShadow: 3,
-                                                            transform: 'scale(1.02)',
-                                                        },
-                                                    }}
-                                                    onClick={() => handleModelSelect(starModel)}
-                                                >
-                                                    <CardActionArea sx={{ height: '100%' }}>
-                                                        <CardContent sx={{ textAlign: 'center', py: 1 }}>
-                                                            <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.875rem', lineHeight: 1.2 }}>
-                                                                {starModel.length > 20 ? `${starModel.substring(0, 20)}...` : starModel}
-                                                            </Typography>
-                                                            {isModelSelected && (
-                                                                <Box sx={{ mt: 0.5 }}>
-                                                                    <CheckCircle color="primary" sx={{ fontSize: 20 }} />
-                                                                </Box>
-                                                            )}
-                                                        </CardContent>
-                                                    </CardActionArea>
-                                                </Card>
-                                            </Box>
+                                            <Card
+                                                key={starModel}
+                                                sx={{
+                                                    width: '100%',
+                                                    height: 60,
+                                                    border: 1,
+                                                    borderColor: isModelSelected ? 'primary.main' : 'warning.main',
+                                                    borderRadius: 1.5,
+                                                    backgroundColor: isModelSelected ? 'primary.50' : 'warning.50',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s ease-in-out',
+                                                    position: 'relative',
+                                                    '&:hover': {
+                                                        backgroundColor: isModelSelected ? 'primary.100' : 'warning.100',
+                                                        boxShadow: 1,
+                                                    },
+                                                }}
+                                                onClick={() => handleModelSelect(starModel)}
+                                            >
+                                                <CardContent sx={{
+                                                    textAlign: 'center',
+                                                    py: 1,
+                                                    px: 0.8,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    height: '100%'
+                                                }}>
+                                                    <Typography
+                                                        variant="body2"
+                                                        sx={{
+                                                            fontWeight: 500,
+                                                            fontSize: '0.75rem',
+                                                            lineHeight: 1.3,
+                                                            wordBreak: 'break-word',
+                                                            textAlign: 'center'
+                                                        }}
+                                                    >
+                                                        {starModel}
+                                                    </Typography>
+                                                    {isModelSelected && (
+                                                        <CheckCircle
+                                                            color="primary"
+                                                            sx={{
+                                                                position: 'absolute',
+                                                                top: 4,
+                                                                right: 4,
+                                                                fontSize: 16
+                                                            }}
+                                                        />
+                                                    )}
+                                                </CardContent>
+                                            </Card>
                                         );
                                     })}
                                 </Box>
@@ -374,8 +391,8 @@ export const SingleProviderSelect = ({
                             <Box
                                 sx={{
                                     display: 'grid',
-                                    gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-                                    gap: 1,
+                                    gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+                                    gap: 0.8,
                                 }}
                             >
                                 {pagination.models.map((model) => {
@@ -386,41 +403,68 @@ export const SingleProviderSelect = ({
                                         <Card
                                             key={model}
                                             sx={{
-                                                width: 180,
-                                                height: 90,
-                                                border: isModelSelected ? 3 : 2,
+                                                width: '100%',
+                                                height: 60,
+                                                border: 1,
                                                 borderColor: isModelSelected ? 'primary.main' : 'grey.300',
-                                                borderRadius: 2,
-                                                backgroundColor: isModelSelected ? 'primary.100' : 'background.paper',
+                                                borderRadius: 1.5,
+                                                backgroundColor: isModelSelected ? 'primary.50' : 'background.paper',
                                                 cursor: 'pointer',
                                                 transition: 'all 0.2s ease-in-out',
                                                 position: 'relative',
-                                                boxShadow: isModelSelected ? 4 : 1,
-                                                transform: isModelSelected ? 'scale(1.02)' : 'scale(1)',
                                                 '&:hover': {
-                                                    borderColor: 'primary.main',
-                                                    boxShadow: 3,
-                                                    transform: 'scale(1.02)',
+                                                    backgroundColor: isModelSelected ? 'primary.100' : 'grey.50',
+                                                    boxShadow: 1,
                                                 },
                                             }}
                                             onClick={() => handleModelSelect(model)}
                                         >
-                                            <CardActionArea sx={{ height: '100%' }}>
-                                                <CardContent sx={{ textAlign: 'center', py: 1 }}>
-                                                    <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.875rem', lineHeight: 1.2 }}>
-                                                        {model.length > 20 ? `${model.substring(0, 20)}...` : model}
-                                                    </Typography>
-                                                    {isModelSelected && (
-                                                        <Box sx={{ mt: 0.5 }}>
-                                                            <CheckCircle color="primary" sx={{ fontSize: 20 }} />
-                                                        </Box>
-                                                    )}
-                                                </CardContent>
-                                            </CardActionArea>
+                                            <CardContent sx={{
+                                                textAlign: 'center',
+                                                py: 1,
+                                                px: 0.8,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                height: '100%'
+                                            }}>
+                                                <Typography
+                                                    variant="body2"
+                                                    sx={{
+                                                        fontWeight: 500,
+                                                        fontSize: '0.75rem',
+                                                        lineHeight: 1.3,
+                                                        wordBreak: 'break-word',
+                                                        textAlign: 'center'
+                                                    }}
+                                                >
+                                                    {model}
+                                                </Typography>
+                                                {isModelSelected && (
+                                                    <CheckCircle
+                                                        color="primary"
+                                                        sx={{
+                                                            position: 'absolute',
+                                                            top: 4,
+                                                            right: 4,
+                                                            fontSize: 16
+                                                        }}
+                                                    />
+                                                )}
+                                            </CardContent>
                                             {isStarred && (
-                                                <Box sx={{ position: 'absolute', top: 4, right: 4 }}>
-                                                    <Typography variant="caption" color="warning.main">★</Typography>
-                                                </Box>
+                                                <Typography
+                                                    variant="caption"
+                                                    color="warning.main"
+                                                    sx={{
+                                                        position: 'absolute',
+                                                        top: 4,
+                                                        left: 4,
+                                                        fontSize: '0.75rem'
+                                                    }}
+                                                >
+                                                    ★
+                                                </Typography>
                                             )}
                                         </Card>
                                     );

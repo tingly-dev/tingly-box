@@ -38,6 +38,7 @@ const Dashboard = () => {
     const [generatedToken, setGeneratedToken] = useState<string>('');
     const [modelToken, setModelToken] = useState<string>('');
     const [showTokenModal, setShowTokenModal] = useState(false);
+    const [llmModel, setLLMModel] = useState<string>("tingly");
 
     // Banner state for provider/model selection
     const [showBanner, setShowBanner] = useState(false);
@@ -49,31 +50,6 @@ const Dashboard = () => {
         loadToken();
     }, []);
 
-    // Auto-expand provider and navigate to model page when selections change
-    useEffect(() => {
-        if (selectedOption?.provider) {
-            // Auto-expand the selected provider if not already expanded
-            setExpandedProviders(prev =>
-                prev.includes(selectedOption.provider) ? prev : [...prev, selectedOption.provider]
-            );
-
-            // Auto-navigate to the page containing the selected model
-            if (selectedOption?.model) {
-                const allModels = providerModels?.[selectedOption.provider]?.models || [];
-                const modelIndex = allModels.indexOf(selectedOption.model);
-
-                // Only navigate if the model exists in the provider's model list
-                if (modelIndex !== -1) {
-                    const MODELS_PER_PAGE = 15;
-                    const targetPage = Math.floor(modelIndex / MODELS_PER_PAGE) + 1;
-                    setCurrentPage(prev => ({
-                        ...prev,
-                        [selectedOption.provider]: targetPage
-                    }));
-                }
-            }
-        }
-    }, [selectedOption, providerModels]);
 
     const loadToken = async () => {
         const result = await api.getToken();
@@ -176,11 +152,6 @@ const Dashboard = () => {
         setBannerProvider(provider.name);
         setBannerModel(model);
         setShowBanner(true);
-
-        // Ensure the selected provider is expanded
-        if (!expandedProviders.includes(provider.name)) {
-            setExpandedProviders(prev => [...prev, provider.name]);
-        }
     };
 
     const handleExpandToggle = (providerName: string, expanded: boolean) => {
@@ -240,6 +211,7 @@ const Dashboard = () => {
                 >
                     <AlertTitle>Active Provider & Model</AlertTitle>
                     <Typography variant="body2">
+                        <strong>Request:</strong> {llmModel} {" -> "}
                         <strong>Provider:</strong> {bannerProvider} | <strong>Model:</strong> {bannerModel}
                     </Typography>
                 </Alert>
@@ -385,18 +357,46 @@ const Dashboard = () => {
                                         </IconButton>
                                     </Tooltip>
                                     <IconButton
+                                        onClick={generateToken}
+                                        size="small"
+                                        title="Generate New Token"
+                                    >
+                                        <RefreshIcon fontSize="small" />
+                                    </IconButton>
+                                    <IconButton
                                         onClick={() => copyToClipboard(token, 'API Token')}
                                         size="small"
                                         title="Copy Token"
                                     >
                                         <CopyIcon fontSize="small" />
                                     </IconButton>
+                                </Stack>
+                            </Box>
+
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography variant="body2" color="text.secondary" sx={{ minWidth: 60 }}>
+                                    LLM Model:
+                                </Typography>
+                                <Typography
+                                    variant="body2"
+                                    sx={{
+                                        fontFamily: 'monospace',
+                                        fontSize: '0.8rem',
+                                        color: 'text.secondary',
+                                        letterSpacing: '2px',
+                                        flex: 1,
+                                        minWidth: 0
+                                    }}
+                                >
+                                    tingly
+                                </Typography>
+                                <Stack direction="row" spacing={0.2}>
                                     <IconButton
-                                        onClick={generateToken}
+                                        onClick={() => copyToClipboard(token, 'API Token')}
                                         size="small"
-                                        title="Generate New Token"
+                                        title="Copy Token"
                                     >
-                                        <RefreshIcon fontSize="small" />
+                                        <CopyIcon fontSize="small" />
                                     </IconButton>
                                 </Stack>
                             </Box>
@@ -404,26 +404,25 @@ const Dashboard = () => {
                     </Grid>
 
                     <Grid size={{ xs: 12, md: 12 }}>
-                        <Box>
-                            <Stack spacing={2}>
-                                {providers.map((provider: any) => (
-                                    <SingleProviderSelect
-                                        key={provider.name}
-                                        provider={provider}
-                                        providerModels={providerModels}
-                                        selectedProvider={selectedOption?.provider}
-                                        selectedModel={selectedOption?.model}
-                                        isExpanded={expandedProviders.includes(provider.name)}
-                                        searchTerms={searchTerms}
-                                        currentPage={currentPage}
-                                        onModelSelect={handleModelSelect}
-                                        onExpandToggle={handleExpandToggle}
-                                        onSearchChange={handleSearchChange}
-                                        onPageChange={handlePageChange}
-                                    />
-                                ))}
-                            </Stack>
-                        </Box>
+                        {/* Providers Quick Settings */}
+                        <Stack spacing={2}>
+                            {providers.map((provider: any) => (
+                                <SingleProviderSelect
+                                    key={provider.name}
+                                    provider={provider}
+                                    providerModels={providerModels}
+                                    selectedProvider={selectedOption?.provider}
+                                    selectedModel={selectedOption?.model}
+                                    isExpanded={expandedProviders.includes(provider.name)}
+                                    searchTerms={searchTerms}
+                                    currentPage={currentPage}
+                                    onModelSelect={handleModelSelect}
+                                    onExpandToggle={handleExpandToggle}
+                                    onSearchChange={handleSearchChange}
+                                    onPageChange={handlePageChange}
+                                />
+                            ))}
+                        </Stack>
                     </Grid>
                 </Grid>
 
@@ -467,12 +466,6 @@ const Dashboard = () => {
                 </DialogContent>
             </Dialog>
 
-            {/* Providers Quick Settings */}
-            <UnifiedCard
-
-            >
-
-            </UnifiedCard>
 
             <Snackbar
                 open={snackbarOpen}
