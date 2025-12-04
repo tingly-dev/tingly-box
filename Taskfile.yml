@@ -45,7 +45,7 @@ tasks:
       - |
         cd frontend; pnpm build
       - |
-        cp -R frontend/dist internal/server/web/dist
+        cp -R frontend/dist/* internal/server/web/dist/
 
   dist:
     desc: Build cross-platform distributions for Windows, Linux, and macOS
