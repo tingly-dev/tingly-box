@@ -25,10 +25,14 @@ tasks:
   build:
     cmds:
       - task: ui:dist
+      - task: go:build
+
+  go:build:
+    cmds:
       - |
         mkdir -p build
         go build -o ./build/tingly ./cmd/tingly
-
+  
   dev:
     cmds:
       - task: ui:dist
