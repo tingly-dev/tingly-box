@@ -3,7 +3,6 @@ import { Alert, Box, Button, CircularProgress, IconButton, Stack, Typography } f
 import { useEffect, useState } from 'react';
 import ActivityLog from '../components/ActivityLog';
 import CardGrid, { CardGridItem } from '../components/CardGrid';
-import ProviderCard from '../components/ProviderCard';
 import ServerStatusControl from '../components/ServerStatusControl';
 import UnifiedCard from '../components/UnifiedCard';
 import { api } from '../services/api';
