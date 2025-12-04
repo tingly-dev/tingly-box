@@ -59,7 +59,7 @@ jobs:
         working-directory: ./frontend
 
       - name: Build frontend
-        run: pnpm build && mkdir -p ../internal/server/web/dist &&cp -R dist ../internal/server/web/dist
+        run: pnpm build && mkdir -p ../internal/server/web/dist && cp -R dist/* ../internal/server/web/dist/
         working-directory: ./frontend
 
       - name: Build Go binary (Linux)
@@ -177,9 +177,6 @@ jobs:
           mkdir -p dist/$ARCHIVE_NAME
           cp ./build/tingly-$PLATFORM dist/$ARCHIVE_NAME/tingly
           chmod +x dist/$ARCHIVE_NAME/tingly
-
-          # Include web frontend
-          cp -r internal/server/web dist/$ARCHIVE_NAME/
 
           # Create Info.plist for macOS
           cat > dist/$ARCHIVE_NAME/Info.plist << 'EOF'
