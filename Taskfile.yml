@@ -111,17 +111,18 @@ tasks:
         # echo "- tingly-{{.VERSION}}-darwin-universal.tar.gz"
 
   release:
-    desc: Create and push git tag from Version.txt to trigger CI release
+    desc: Create and push git tag with version passed as parameter. run as 'VERSION=v0.0.9 task release'
     cmds:
       - |
-        # Check if Version.txt exists
-        if [ ! -f "Version.txt" ]; then
-          echo "Error: Version.txt not found!"
+        # Get version from parameter
+        VERSION="${VERSION:-}"
+
+        # Check if version is provided
+        if [ -z "$VERSION" ]; then
+          echo "Error: VERSION parameter is required!"
+          echo "Usage: VERSION=v0.0.9 task release"
           exit 1
         fi
-
-        # Read version from file and trim whitespace
-        VERSION=$(cat Version.txt | tr -d '\n\r ')
 
         # Validate version format
         if [[ ! $VERSION =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -133,7 +134,7 @@ tasks:
         # Check if tag already exists
         if git tag | grep -q "^${VERSION}$"; then
           echo "Error: Tag $VERSION already exists!"
-          echo "Choose a new version in Version.txt"
+          echo "Choose a new version and try again"
           exit 1
         fi
 

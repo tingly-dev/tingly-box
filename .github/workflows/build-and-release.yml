@@ -59,7 +59,7 @@ jobs:
         working-directory: ./frontend
 
       - name: Build frontend
-        run: pnpm build && mkdir -p ../internal/server/web/dist &&cp -R dist ../internal/server/web/dist
+        run: pnpm build && mkdir -p ../internal/server/web/dist && cp -R dist/* ../internal/server/web/dist/
         working-directory: ./frontend
 
       - name: Build Go binary (Linux)
@@ -189,6 +189,8 @@ jobs:
           echo "Installing Tingly to $INSTALL_DIR..."
           sudo cp tingly $INSTALL_DIR/
           sudo chmod +x $INSTALL_DIR/tingly
+          # Remove macOS quarantine attribute to prevent security warnings
+          sudo xattr -d com.apple.quarantine $INSTALL_DIR/tingly 2>/dev/null || true
           echo "Tingly installed successfully!"
           tingly --version
           EOF
@@ -298,7 +300,7 @@ jobs:
           if [ -d "packages-macos-amd64" ]; then
             cd packages-macos-amd64
             if [ -f "tingly-macos-amd64.zip" ]; then
-              unzip -o -q tingly-macos-amd64.zip
+              unzip -o -q tingly-macos-amd64.zip || true
               cp tingly-macos-amd64/tingly ../dist-npm/bin/tingly-macos-amd64
             fi
             cd ..
@@ -307,7 +309,7 @@ jobs:
           if [ -d "packages-macos-arm64" ]; then
             cd packages-macos-arm64
             if [ -f "tingly-macos-arm64.zip" ]; then
-              unzip -o -q tingly-macos-arm64.zip
+              unzip -o -q tingly-macos-arm64.zip || true
               cp tingly-macos-arm64/tingly ../dist-npm/bin/tingly-macos-arm64
             fi
             cd ..
@@ -317,10 +319,8 @@ jobs:
           if [ -d "packages-windows-amd64" ]; then
             cd packages-windows-amd64
             if [ -f "tingly-windows-amd64.zip" ]; then
-              unzip -o -q tingly-windows-amd64.zip
-              if [ -f "tingly-windows-amd64/tingly.exe" ]; then
-                cp tingly-windows-amd64/tingly.exe ../dist-npm/bin/tingly-windows-amd64.exe
-              fi
+              unzip -o -q tingly-windows-amd64.zip || true
+              cp tingly-windows-amd64/tingly.exe ../dist-npm/bin/tingly-windows-amd64.exe
             fi
             cd ..
           fi
@@ -328,10 +328,8 @@ jobs:
           if [ -d "packages-windows-arm64" ]; then
             cd packages-windows-arm64
             if [ -f "tingly-windows-arm64.zip" ]; then
-              unzip -o -q tingly-windows-arm64.zip
-              if [ -f "tingly-windows-arm64/tingly.exe" ]; then
-                cp tingly-windows-arm64/tingly.exe ../dist-npm/bin/tingly-windows-arm64.exe
-              fi
+              unzip -o -q tingly-windows-arm64.zip || true
+              cp tingly-windows-arm64/tingly.exe ../dist-npm/bin/tingly-windows-arm64.exe
             fi
             cd ..
           fi
@@ -491,7 +489,8 @@ jobs:
           retention-days: 30
 
   release:
-    needs: [create-packages, create-npm-distribution]
+    # needs: [create-packages, create-npm-distribution]
+    needs: [create-packages]
     runs-on: ubuntu-latest
     if: |
       startsWith(github.ref, 'refs/tags/v') ||
@@ -537,12 +536,13 @@ jobs:
           git log --pretty=format:"- %s" $(git describe --tags --abbrev=0 HEAD^)..HEAD >> release-notes.md 2>/dev/null || echo "- Initial release" >> release-notes.md
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: release/*
           body_path: release-notes.md
           draft: false
           prerelease: false
+          omit_source: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
