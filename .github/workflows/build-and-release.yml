@@ -543,6 +543,7 @@ jobs:
           body_path: release-notes.md
           draft: false
           prerelease: false
+          omit_source: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
