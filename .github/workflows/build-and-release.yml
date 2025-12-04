@@ -136,6 +136,9 @@ jobs:
           cp ./build/tingly-$PLATFORM dist/$ARCHIVE_NAME/tingly
           chmod +x dist/$ARCHIVE_NAME/tingly
 
+          # Include web frontend
+          cp -r internal/server/web dist/$ARCHIVE_NAME/
+
           # Create a simple install script
           cat > dist/$ARCHIVE_NAME/install.sh << 'EOF'
           #!/bin/bash
@@ -161,6 +164,9 @@ jobs:
           mkdir -p dist/$ARCHIVE_NAME
           cp ./build/tingly-$PLATFORM dist/$ARCHIVE_NAME/tingly
           chmod +x dist/$ARCHIVE_NAME/tingly
+
+          # Include web frontend
+          cp -r internal/server/web dist/$ARCHIVE_NAME/
 
           # Create Info.plist for macOS
           cat > dist/$ARCHIVE_NAME/Info.plist << 'EOF'
@@ -189,6 +195,8 @@ jobs:
           echo "Installing Tingly to $INSTALL_DIR..."
           sudo cp tingly $INSTALL_DIR/
           sudo chmod +x $INSTALL_DIR/tingly
+          # Remove macOS quarantine attribute to prevent security warnings
+          sudo xattr -d com.apple.quarantine $INSTALL_DIR/tingly 2>/dev/null || true
           echo "Tingly installed successfully!"
           tingly --version
           EOF
@@ -206,6 +214,9 @@ jobs:
           $ARCHIVE_NAME = "tingly-$PLATFORM"
           New-Item -ItemType Directory -Path "dist/$ARCHIVE_NAME" -Force
           Copy-Item "./build/tingly-$PLATFORM.exe" "dist/$ARCHIVE_NAME/tingly.exe"
+
+          # Include web frontend
+          Copy-Item -Recurse "internal/server/web" "dist/$ARCHIVE_NAME/"
 
           # Create batch install script using PowerShell here-string
           $installScript = @"
