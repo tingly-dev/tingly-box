@@ -87,6 +87,13 @@ jobs:
           path: ./build/
           retention-days: 7
 
+      - name: Upload web frontend
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-frontend
+          path: ./internal/server/web/
+          retention-days: 7
+
   create-packages:
     needs: build
     runs-on: ${{ matrix.os }}
@@ -121,6 +128,12 @@ jobs:
         with:
           name: binaries
           path: ./build
+
+      - name: Download web frontend
+        uses: actions/download-artifact@v4
+        with:
+          name: web-frontend
+          path: ./internal/server/web
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
