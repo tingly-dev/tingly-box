@@ -1,39 +1,64 @@
-import { Box, Button, CircularProgress } from '@mui/material';
+import { ContentCopy as CopyIcon, Info as InfoIcon, Refresh as RefreshIcon, Terminal as TerminalIcon } from '@mui/icons-material';
+import {
+    Alert,
+    AlertTitle,
+    Box,
+    Button,
+    CircularProgress,
+    Dialog,
+    DialogContent,
+    DialogTitle,
+    Grid,
+    IconButton,
+    Snackbar,
+    Stack,
+    Tooltip,
+    Typography,
+} from '@mui/material';
 import { useEffect, useState } from 'react';
-import CardGrid, { CardGridItem } from '../components/CardGrid';
 import ProviderSelect from '../components/ProviderSelect';
-import ServerInfoCard from '../components/ServerInfoCard';
 import UnifiedCard from '../components/UnifiedCard';
 import { api } from '../services/api';
 
 const Dashboard = () => {
-    const [serverStatus, setServerStatus] = useState<any>(null);
     const [providers, setProviders] = useState<any[]>([]);
     const [defaults, setDefaults] = useState<any>({});
     const [providerModels, setProviderModels] = useState<any>({});
     const [loading, setLoading] = useState(true);
-    const [selectedOption, setSelectedOption] = useState<any>({ provider: "", model: "" })
+    const [selectedOption, setSelectedOption] = useState<any>({ provider: "", model: "" });
+
+    // Server info states
+    const [snackbarOpen, setSnackbarOpen] = useState(false);
+    const [snackbarMessage, setSnackbarMessage] = useState('');
+    const [generatedToken, setGeneratedToken] = useState<string>('');
+    const [modelToken, setModelToken] = useState<string>('');
+    const [showTokenModal, setShowTokenModal] = useState(false);
+
+    // Banner state for provider/model selection
+    const [showBanner, setShowBanner] = useState(false);
+    const [bannerProvider, setBannerProvider] = useState<string>('');
+    const [bannerModel, setBannerModel] = useState<string>('');
 
     useEffect(() => {
         loadAllData();
+        loadToken();
     }, []);
+
+    const loadToken = async () => {
+        const result = await api.getToken();
+        if (result.success && result.data && result.data.token) {
+            setModelToken(result.data.token);
+        }
+    };
 
     const loadAllData = async () => {
         setLoading(true);
         await Promise.all([
-            loadServerStatus(),
             loadProviders(),
             loadDefaults(),
             loadProviderModels(),
         ]);
         setLoading(false);
-    };
-
-    const loadServerStatus = async () => {
-        const result = await api.getStatus();
-        if (result.success) {
-            setServerStatus(result.data);
-        }
     };
 
     const loadProviders = async () => {
@@ -87,6 +112,30 @@ const Dashboard = () => {
         }
     };
 
+    // Server info handlers
+    const copyToClipboard = async (text: string, label: string) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            setSnackbarMessage(`${label} copied to clipboard!`);
+            setSnackbarOpen(true);
+        } catch (err) {
+            setSnackbarMessage('Failed to copy to clipboard');
+            setSnackbarOpen(true);
+        }
+    };
+
+    const generateToken = async () => {
+        const clientId = 'web';
+        const result = await api.generateToken(clientId);
+        if (result.success) {
+            setGeneratedToken(result.data.token);
+            copyToClipboard(result.data.token, 'Token');
+        } else {
+            setSnackbarMessage(`Failed to generate token: ${result.error}`);
+            setSnackbarOpen(true);
+        }
+    };
+
     if (loading) {
         return (
             <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
@@ -95,43 +144,264 @@ const Dashboard = () => {
         );
     }
 
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || window.location.origin;
+    const openaiBaseUrl = `${baseUrl}/openai/v1`;
+    const anthropicBaseUrl = `${baseUrl}/anthropic/v1`;
+    const token = generatedToken || modelToken;
+
     return (
         <Box>
-            <CardGrid>
-                {/* Server Information Header */}
-                <CardGridItem xs={12}>
-                    <ServerInfoCard serverStatus={serverStatus} />
-                </CardGridItem>
-
-                {/* Providers Quick Settings */}
-                <CardGridItem xs={12} md={6}>
-                    <UnifiedCard
-                        title="Providers Management"
-                        subtitle={`Total: ${providers.length} providers | Enabled: ${providers.filter((p: any) => p.enabled).length}`}
-                        size="full"
-                        rightAction={
-                            <Box>
-                                <Button
-                                    variant="contained"
-                                    onClick={() => window.location.href = '/providers'}
-                                >
-                                    Manage Providers
-                                </Button>
-                            </Box>
+            {/* Provider/Model Selection Banner */}
+            {showBanner && (
+                <Alert
+                    severity="info"
+                    icon={<InfoIcon />}
+                    sx={{
+                        mb: 2,
+                        '& .MuiAlert-message': {
+                            width: '100%'
                         }
-                    >
-                        <ProviderSelect
-                            providers={providers}
-                            providerModels={providerModels}
-                            onSelected={(option) => {
-                                setSelectedOption(option)
-                            }}
-                            selectedProvider={selectedOption?.provider}
-                            selectedModel={selectedOption?.model}
-                        />
-                    </UnifiedCard>
-                </CardGridItem>
-            </CardGrid>
+                    }}
+                    action={
+                        <IconButton
+                            aria-label="close"
+                            color="inherit"
+                            size="small"
+                            onClick={() => setShowBanner(false)}
+                        >
+                            ×
+                        </IconButton>
+                    }
+                >
+                    <AlertTitle>Active Provider & Model</AlertTitle>
+                    <Typography variant="body2">
+                        <strong>Provider:</strong> {bannerProvider} | <strong>Model:</strong> {bannerModel}
+                    </Typography>
+                </Alert>
+            )}
+
+            {/* Server Information Header */}
+            <UnifiedCard size="header" width="100%">
+                <Grid container spacing={2}>
+                    <Grid size={{ xs: 12, md: 6 }}>
+                        <Stack spacing={1}>
+                            {/* <Typography variant="h6" color="primary" fontWeight={600}>
+                                API Endpoints
+                            </Typography> */}
+
+                            {/* OpenAI Row */}
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography variant="body2" color="text.secondary" sx={{ minWidth: 80 }}>
+                                    OpenAI Base URL:
+                                </Typography>
+                                <Typography
+                                    variant="body2"
+                                    sx={{
+                                        fontFamily: 'monospace',
+                                        fontSize: '0.7rem',
+                                        color: 'primary.main',
+                                        flex: 1,
+                                        minWidth: 0
+                                    }}
+                                >
+                                    {baseUrl}/openai/v1
+                                </Typography>
+                                <Stack direction="row" spacing={0.2}>
+                                    <IconButton
+                                        onClick={() => copyToClipboard(openaiBaseUrl, 'OpenAI Base URL')}
+                                        size="small"
+                                        title="Copy OpenAI Base URL"
+                                    >
+                                        <CopyIcon fontSize="small" />
+                                    </IconButton>
+                                    <IconButton
+                                        onClick={() => {
+                                            const openaiCurl = `curl -X POST "${openaiBaseUrl}/chat/completions" -H "Authorization: Bearer ${token}" -H "Content-Type: application/json" -d '{"messages": [{"role": "user", "content": "Hello!"}]}'`;
+                                            copyToClipboard(openaiCurl, 'OpenAI cURL command');
+                                        }}
+                                        size="small"
+                                        title="Copy OpenAI cURL Example"
+                                    >
+                                        <TerminalIcon fontSize="small" />
+                                    </IconButton>
+                                </Stack>
+                            </Box>
+
+                            {/* Anthropic Row */}
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography variant="body2" color="text.secondary" sx={{ minWidth: 80 }}>
+                                    Anthropic Base URL:
+                                </Typography>
+                                <Typography
+                                    variant="body2"
+                                    sx={{
+                                        fontFamily: 'monospace',
+                                        fontSize: '0.7rem',
+                                        color: 'primary.main',
+                                        flex: 1,
+                                        minWidth: 0
+                                    }}
+                                >
+                                    {baseUrl}/anthropic
+                                </Typography>
+                                <Stack direction="row" spacing={0.2}>
+                                    <IconButton
+                                        onClick={() => copyToClipboard(anthropicBaseUrl, 'Anthropic Base URL')}
+                                        size="small"
+                                        title="Copy Anthropic Base URL"
+                                    >
+                                        <CopyIcon fontSize="small" />
+                                    </IconButton>
+                                    <IconButton
+                                        onClick={() => {
+                                            const anthropicCurl = `curl -X POST "${anthropicBaseUrl}/messages" -H "Authorization: Bearer ${token}" -H "Content-Type: application/json" -d '{"messages": [{"role": "user", "content": "Hello!"}], "max_tokens": 100}'`;
+                                            copyToClipboard(anthropicCurl, 'Anthropic cURL command');
+                                        }}
+                                        size="small"
+                                        title="Copy Anthropic cURL Example"
+                                    >
+                                        <TerminalIcon fontSize="small" />
+                                    </IconButton>
+                                </Stack>
+                            </Box>
+                        </Stack>
+                    </Grid>
+
+                    <Grid size={{ xs: 12, md: 6 }}>
+                        <Stack spacing={1}>
+                            {/* <Typography variant="h6" color="primary" fontWeight={600}>
+                                Authentication
+                            </Typography> */}
+
+                            {/* Token Row */}
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography variant="body2" color="text.secondary" sx={{ minWidth: 60 }}>
+                                    LLM Token:
+                                </Typography>
+                                <Typography
+                                    variant="body2"
+                                    sx={{
+                                        fontFamily: 'monospace',
+                                        fontSize: '0.8rem',
+                                        color: 'text.secondary',
+                                        letterSpacing: '2px',
+                                        flex: 1,
+                                        minWidth: 0
+                                    }}
+                                >
+                                    ••••••••••••••••
+                                </Typography>
+                                <Stack direction="row" spacing={0.2}>
+                                    <Tooltip title="View Token">
+                                        <IconButton
+                                            onClick={() => setShowTokenModal(true)}
+                                            size="small"
+                                            title="View Token"
+                                        >
+                                            <Typography variant="caption">
+                                                👁️
+                                            </Typography>
+                                        </IconButton>
+                                    </Tooltip>
+                                    <IconButton
+                                        onClick={() => copyToClipboard(token, 'API Token')}
+                                        size="small"
+                                        title="Copy Token"
+                                    >
+                                        <CopyIcon fontSize="small" />
+                                    </IconButton>
+                                    <IconButton
+                                        onClick={generateToken}
+                                        size="small"
+                                        title="Generate New Token"
+                                    >
+                                        <RefreshIcon fontSize="small" />
+                                    </IconButton>
+                                </Stack>
+                            </Box>
+                        </Stack>
+                    </Grid>
+                </Grid>
+            </UnifiedCard>
+
+            {/* Token Modal */}
+            <Dialog
+                open={showTokenModal}
+                onClose={() => setShowTokenModal(false)}
+                maxWidth="md"
+                fullWidth
+            >
+                <DialogTitle>API Token</DialogTitle>
+                <DialogContent>
+                    <Box sx={{ mb: 2 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                            Your authentication token:
+                        </Typography>
+                        <Box sx={{
+                            p: 2,
+                            bgcolor: 'grey.100',
+                            borderRadius: 1,
+                            fontFamily: 'monospace',
+                            fontSize: '0.85rem',
+                            wordBreak: 'break-all',
+                            border: '1px solid',
+                            borderColor: 'grey.300'
+                        }}>
+                            {token}
+                        </Box>
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Button
+                            variant="outlined"
+                            onClick={() => copyToClipboard(token, 'API Token')}
+                            startIcon={<CopyIcon fontSize="small" />}
+                        >
+                            Copy Token
+                        </Button>
+                    </Box>
+                </DialogContent>
+            </Dialog>
+
+            {/* Providers Quick Settings */}
+            <UnifiedCard
+                title="Switch Provider & Model"
+                subtitle={`Total: ${providers.length} providers | Enabled: ${providers.filter((p: any) => p.enabled).length}`}
+                size="full"
+                width="100%"
+                rightAction={
+                    <Box>
+                        <Button
+                            variant="contained"
+                            onClick={() => window.location.href = '/providers'}
+                        >
+                            Manage Providers
+                        </Button>
+                    </Box>
+                }
+            >
+                <ProviderSelect
+                    providers={providers}
+                    providerModels={providerModels}
+                    onSelected={(option) => {
+                        setSelectedOption(option);
+                        // Show banner with selected provider and model info
+                        if (option && option.provider && option.model) {
+                            setBannerProvider(option.provider);
+                            setBannerModel(option.model);
+                            setShowBanner(true);
+                        }
+                    }}
+                    selectedProvider={selectedOption?.provider}
+                    selectedModel={selectedOption?.model}
+                />
+            </UnifiedCard>
+
+            <Snackbar
+                open={snackbarOpen}
+                autoHideDuration={3000}
+                onClose={() => setSnackbarOpen(false)}
+                message={snackbarMessage}
+            />
         </Box>
     );
 };
