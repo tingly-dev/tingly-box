@@ -322,7 +322,7 @@ jobs:
           if [ -d "packages-macos-amd64" ]; then
             cd packages-macos-amd64
             if [ -f "tingly-macos-amd64.zip" ]; then
-              unzip -o -q tingly-macos-amd64.zip
+              unzip -o -q tingly-macos-amd64.zip || true
               cp tingly-macos-amd64/tingly ../dist-npm/bin/tingly-macos-amd64
             fi
             cd ..
@@ -331,7 +331,7 @@ jobs:
           if [ -d "packages-macos-arm64" ]; then
             cd packages-macos-arm64
             if [ -f "tingly-macos-arm64.zip" ]; then
-              unzip -o -q tingly-macos-arm64.zip
+              unzip -o -q tingly-macos-arm64.zip || true
               cp tingly-macos-arm64/tingly ../dist-npm/bin/tingly-macos-arm64
             fi
             cd ..
@@ -341,10 +341,8 @@ jobs:
           if [ -d "packages-windows-amd64" ]; then
             cd packages-windows-amd64
             if [ -f "tingly-windows-amd64.zip" ]; then
-              unzip -o -q tingly-windows-amd64.zip
-              if [ -f "tingly-windows-amd64/tingly.exe" ]; then
-                cp tingly-windows-amd64/tingly.exe ../dist-npm/bin/tingly-windows-amd64.exe
-              fi
+              unzip -o -q tingly-windows-amd64.zip || true
+              cp tingly-windows-amd64/tingly.exe ../dist-npm/bin/tingly-windows-amd64.exe
             fi
             cd ..
           fi
@@ -352,10 +350,8 @@ jobs:
           if [ -d "packages-windows-arm64" ]; then
             cd packages-windows-arm64
             if [ -f "tingly-windows-arm64.zip" ]; then
-              unzip -o -q tingly-windows-arm64.zip
-              if [ -f "tingly-windows-arm64/tingly.exe" ]; then
-                cp tingly-windows-arm64/tingly.exe ../dist-npm/bin/tingly-windows-arm64.exe
-              fi
+              unzip -o -q tingly-windows-arm64.zip || true
+              cp tingly-windows-arm64/tingly.exe ../dist-npm/bin/tingly-windows-arm64.exe
             fi
             cd ..
           fi
