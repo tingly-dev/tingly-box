@@ -1,15 +1,15 @@
-import { Cancel, CheckCircle, Delete, Edit, Visibility, ContentCopy } from '@mui/icons-material';
+import { Cancel, CheckCircle, ContentCopy, Delete, Edit, Visibility } from '@mui/icons-material';
 import {
     Box,
     Chip,
-    IconButton,
-    Stack,
-    Typography,
-    Switch,
     FormControlLabel,
-    Tooltip,
+    IconButton,
     Menu,
     MenuItem,
+    Stack,
+    Switch,
+    Tooltip,
+    Typography,
 } from '@mui/material';
 import { useState } from 'react';
 
@@ -24,6 +24,8 @@ export interface Provider {
 export interface ProviderModelsData {
     [providerName: string]: {
         models: string[];
+        star_models?: string[];
+        last_updated?: string;
     };
 }
 

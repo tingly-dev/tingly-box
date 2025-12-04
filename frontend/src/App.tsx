@@ -7,6 +7,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import Providers from './pages/Providers';
+import Rule from './pages/Rule';
 import System from './pages/System';
 import theme from './theme';
 
@@ -27,6 +28,7 @@ function App() {
                                             <Route path="/" element={<Dashboard />} />
                                             <Route path="/dashboard" element={<Dashboard />} />
                                             <Route path="/providers" element={<Providers />} />
+                                            <Route path="/rules" element={<Rule />} />
                                             <Route path="/system" element={<System />} />
                                             {/* <Route path="/history" element={<History />} /> */}
                                         </Routes>

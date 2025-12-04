@@ -67,8 +67,8 @@ const ServerInfoCard = ({ currentToken }: ServerInfoCardProps) => {
     return (
         <>
             <UnifiedCard
-                title="Server Information"
-                subtitle="Quick access to server endpoints and credentials"
+                // title="Server Information"
+                // subtitle="Quick access to server endpoints and credentials"
                 size="header"
             >
                 <Box>
