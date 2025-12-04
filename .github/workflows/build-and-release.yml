@@ -341,10 +341,14 @@ jobs:
           if [ -d "packages-windows-amd64" ]; then
             cd packages-windows-amd64
             if [ -f "tingly-windows-amd64.zip" ]; then
-              unzip -o -q tingly-windows-amd64.zip
-              if [ -f "tingly-windows-amd64/tingly.exe" ]; then
-                cp tingly-windows-amd64/tingly.exe ../dist-npm/bin/tingly-windows-amd64.exe
-              fi
+              # Extract to a temp dir to avoid path separator issues
+              mkdir -p temp-win-amd64
+              cd temp-win-amd64
+              unzip -o -q ../tingly-windows-amd64.zip
+              # Find the exe file in the extracted structure
+              find . -name "tingly.exe" -type f -exec cp {} ../tingly-windows-amd64.exe \; 2>/dev/null || true
+              cd ..
+              rm -rf temp-win-amd64
             fi
             cd ..
           fi
@@ -352,10 +356,14 @@ jobs:
           if [ -d "packages-windows-arm64" ]; then
             cd packages-windows-arm64
             if [ -f "tingly-windows-arm64.zip" ]; then
-              unzip -o -q tingly-windows-arm64.zip
-              if [ -f "tingly-windows-arm64/tingly.exe" ]; then
-                cp tingly-windows-arm64/tingly.exe ../dist-npm/bin/tingly-windows-arm64.exe
-              fi
+              # Extract to a temp dir to avoid path separator issues
+              mkdir -p temp-win-arm64
+              cd temp-win-arm64
+              unzip -o -q ../tingly-windows-arm64.zip
+              # Find the exe file in the extracted structure
+              find . -name "tingly.exe" -type f -exec cp {} ../tingly-windows-arm64.exe \; 2>/dev/null || true
+              cd ..
+              rm -rf temp-win-arm64
             fi
             cd ..
           fi
