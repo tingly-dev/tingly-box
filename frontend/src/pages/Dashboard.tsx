@@ -17,7 +17,8 @@ import {
 } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { ProviderDialog } from '../components/ProviderDialog';
-import { SingleProviderSelect } from '../components/ProviderSelect';
+import { ProviderSelect } from '../components/ProviderSelect';
+import ProviderSelectTab, { type ProviderSelectTabOption } from "../components/ProviderSelectTab.tsx";
 import UnifiedCard from '../components/UnifiedCard';
 import { api } from '../services/api';
 
@@ -162,6 +163,26 @@ const Dashboard = () => {
         setShowBanner(true);
     };
 
+    const handleRefresh = async (provider: any) => {
+        console.log("Refreshing models for", provider.name);
+        try {
+            const result = await api.getProviderModelsByName(provider.name);
+            if (result.success) {
+                await loadProviders();
+                await loadProviderModels();
+                setSnackbarMessage(`Models for ${provider.name} refreshed successfully!`);
+                setSnackbarOpen(true);
+            } else {
+                setSnackbarMessage(`Failed to refresh models for ${provider.name}`);
+                setSnackbarOpen(true);
+            }
+        } catch (error) {
+            console.error("Error refreshing models:", error);
+            setSnackbarMessage(`Error refreshing models for ${provider.name}`);
+            setSnackbarOpen(true);
+        }
+    };
+
     const handleExpandToggle = (providerName: string, expanded: boolean) => {
         if (expanded) {
             setExpandedProviders(prev => [...prev, providerName]);
@@ -231,35 +252,7 @@ const Dashboard = () => {
 
     return (
         <Box >
-            {/* Provider/Model Selection Banner */}
-            {showBanner && (
-                <Alert
-                    severity="info"
-                    icon={<InfoIcon />}
-                    sx={{
-                        mb: 2,
-                        '& .MuiAlert-message': {
-                            width: '100%'
-                        }
-                    }}
-                    action={
-                        <IconButton
-                            aria-label="close"
-                            color="inherit"
-                            size="small"
-                            onClick={() => setShowBanner(false)}
-                        >
-                            ×
-                        </IconButton>
-                    }
-                >
-                    <AlertTitle>Active Provider & Model</AlertTitle>
-                    <Typography variant="body2">
-                        <strong>Request:</strong> {llmModel} {" -> "}
-                        <strong>Provider:</strong> {bannerProvider} | <strong>Model:</strong> {bannerModel}
-                    </Typography>
-                </Alert>
-            )}
+
 
             {/* Server Information Header */}
             <UnifiedCard
@@ -267,6 +260,7 @@ const Dashboard = () => {
                 subtitle={`Total: ${providers.length} providers | Enabled: ${providers.filter((p: any) => p.enabled).length}`}
                 size="full"
                 width="100%"
+                height="100%"
                 rightAction={
                     <Box>
                         <Button
@@ -279,6 +273,7 @@ const Dashboard = () => {
                 }
 
             >
+
                 <Grid container spacing={2}>
                     <Grid size={{ xs: 12, md: 6 }}>
                         <Stack spacing={1}>
@@ -439,13 +434,46 @@ const Dashboard = () => {
                         </Stack>
                     </Grid>
 
+                    <Grid size={{ xs: 12, md: 12 }}>
+                        {/* Provider/Model Selection Banner */}
+                        {showBanner && (
+                            <Alert
+                                severity="info"
+                                icon={<InfoIcon />}
+                                sx={{
+                                    mb: 2,
+                                    '& .MuiAlert-message': {
+                                        width: '100%'
+                                    }
+                                }}
+                                action={
+                                    <IconButton
+                                        aria-label="close"
+                                        color="inherit"
+                                        size="small"
+                                        onClick={() => setShowBanner(false)}
+                                    >
+                                        ×
+                                    </IconButton>
+                                }
+                            >
+                                <AlertTitle>Active Provider & Model</AlertTitle>
+                                <Typography variant="body2">
+                                    <strong>Request:</strong> {llmModel} {" -> "}
+                                    <strong>Provider:</strong> {bannerProvider} | <strong>Model:</strong> {bannerModel}
+                                </Typography>
+                            </Alert>
+                        )}
+
+                    </Grid>
+
                     {providers.length > 0 ? (
 
                         <Grid size={{ xs: 12, md: 12 }}>
                             {/* Providers Quick Settings */}
-                            <Stack spacing={2}>
+                            {/* <Stack spacing={2}>
                                 {providers.map((provider: any) => (
-                                    <SingleProviderSelect
+                                    <ProviderSelect
                                         key={provider.name}
                                         provider={provider}
                                         providerModels={providerModels}
@@ -460,6 +488,16 @@ const Dashboard = () => {
                                         onPageChange={handlePageChange}
                                     />
                                 ))}
+                            </Stack> */}
+                            <Stack spacing={2}>
+                                <ProviderSelectTab
+                                    providers={providers}
+                                    providerModels={providerModels}
+                                    selectedProvider={selectedOption?.provider}
+                                    selectedModel={selectedOption?.model}
+                                    onSelected={(opt: ProviderSelectTabOption) => handleModelSelect(opt.provider, opt.model || "")}
+                                    onRefresh={handleRefresh}
+                                />
                             </Stack>
                         </Grid>
                     ) : (

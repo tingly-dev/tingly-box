@@ -41,7 +41,7 @@ interface SingleProviderSelectProps {
 
 const MODELS_PER_PAGE = 15;
 
-export const SingleProviderSelect = ({
+export const ProviderSelect = ({
     provider,
     providerModels,
     selectedProvider,
@@ -336,9 +336,10 @@ export const SingleProviderSelect = ({
                                                     cursor: 'pointer',
                                                     transition: 'all 0.2s ease-in-out',
                                                     position: 'relative',
+                                                    boxShadow: isModelSelected ? 2 : 0,
                                                     '&:hover': {
                                                         backgroundColor: isModelSelected ? 'primary.100' : 'warning.100',
-                                                        boxShadow: 1,
+                                                        boxShadow: 2,
                                                     },
                                                 }}
                                                 onClick={() => handleModelSelect(starModel)}
@@ -412,9 +413,10 @@ export const SingleProviderSelect = ({
                                                 cursor: 'pointer',
                                                 transition: 'all 0.2s ease-in-out',
                                                 position: 'relative',
+                                                boxShadow: isModelSelected ? 2 : 0,
                                                 '&:hover': {
                                                     backgroundColor: isModelSelected ? 'primary.100' : 'grey.50',
-                                                    boxShadow: 1,
+                                                    boxShadow: 2,
                                                 },
                                             }}
                                             onClick={() => handleModelSelect(model)}
@@ -486,41 +488,3 @@ export const SingleProviderSelect = ({
     );
 };
 
-// Export for backward compatibility, but now it's just the composition logic
-interface ProviderSelectProps {
-    providers: Provider[];
-    providerModels?: ProviderModelsData;
-    onSelected?: (option: ProviderSelectOption) => void;
-    selectedProvider?: string;
-    selectedModel?: string;
-}
-
-export default function ProviderSelect({
-    providers,
-    providerModels,
-    onSelected,
-    selectedProvider,
-    selectedModel,
-}: ProviderSelectProps) {
-    // This component is deprecated - composition logic should be moved to Dashboard
-    // Keeping for backward compatibility only
-    return (
-        <Stack spacing={2}>
-            {providers.map((provider) => (
-                <SingleProviderSelect
-                    key={provider.name}
-                    provider={provider}
-                    providerModels={providerModels}
-                    selectedProvider={selectedProvider}
-                    selectedModel={selectedModel}
-                    isExpanded={selectedProvider === provider.name}
-                    onModelSelect={(provider, model) => {
-                        if (onSelected) {
-                            onSelected({ provider: provider.name, model });
-                        }
-                    }}
-                />
-            ))}
-        </Stack>
-    );
-}
