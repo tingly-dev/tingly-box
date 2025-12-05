@@ -15,12 +15,12 @@
         "@mui/material": "^7.3.5",
         "@types/react": "^19.2.7",
         "@wailsio/runtime": "latest",
-        "react": "^19.2.0",
-        "react-dom": "^19.2.0",
-        "react-router-dom": "^7.9.6"
+        "react": "^19.2.1",
+        "react-dom": "^19.2.1",
+        "react-router-dom": "^7.10.1"
     },
     "devDependencies": {
         "@vitejs/plugin-react-swc": "^4.2.2",
-        "vite": "^5.4.21"
+        "vite": "^7.2.6"
     }
 }
