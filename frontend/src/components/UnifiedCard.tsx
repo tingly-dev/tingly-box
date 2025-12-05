@@ -18,6 +18,8 @@ interface UnifiedCardProps {
   };
   // 自定义宽度，如果提供则优先使用
   width?: number | string;
+  // 自定义高度，如果提供则优先使用
+  height?: number | string;
   // Message support
   message?: { type: 'success' | 'error'; text: string } | null;
   onClearMessage?: () => void;
@@ -76,7 +78,8 @@ const presetCardDimensions = {
 const getCardDimensions = (
   size: 'small' | 'medium' | 'large' | 'full' | 'header',
   customGridUnits?: { widthUnits?: number; heightUnits?: number },
-  customWidth?: number | string
+  customWidth?: number | string,
+  customHeight?: number | string
 ) => {
   const preset = presetCardDimensions[size];
 
@@ -85,10 +88,12 @@ const getCardDimensions = (
     ? customWidth
     : (customGridUnits?.widthUnits || preset.widthUnits) * BASE_UNIT;
 
-  // 如果有自定义高度，使用自定义高度，否则使用最小高度
-  const height = customGridUnits?.heightUnits
-    ? customGridUnits.heightUnits * BASE_UNIT
-    : preset.minHeightUnits * BASE_UNIT;
+  // 如果提供了自定义高度，优先使用自定义高度
+  const height = customHeight !== undefined
+    ? customHeight
+    : customGridUnits?.heightUnits
+      ? customGridUnits.heightUnits * BASE_UNIT
+      : preset.minHeightUnits * BASE_UNIT;
 
   return {
     width,
@@ -119,6 +124,7 @@ export const UnifiedCard = ({
   variant = 'default',
   gridUnits,
   width,
+  height,
   message,
   onClearMessage,
   leftAction,
@@ -221,7 +227,7 @@ export const UnifiedCard = ({
   return (
     <Card
       sx={{
-        ...getCardDimensions(size, gridUnits, width),
+        ...getCardDimensions(size, gridUnits, width, height),
         ...cardVariants[variant],
         borderRadius: 2,
         border: '1px solid',
