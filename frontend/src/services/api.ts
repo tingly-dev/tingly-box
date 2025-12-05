@@ -109,7 +109,11 @@ export const api = {
   getStatus: () => fetchUIAPI('/status'),
   getProviders: () => fetchUIAPI('/providers'),
   getProviderModels: () => fetchUIAPI('/provider-models'),
-  getProviderModelsByName: (name: string) => fetchUIAPI(`/provider-models/${name}`),
+  getProviderModelsByName: (name: string) => fetchUIAPI(
+      `/provider-models/${name}`, {
+          method: 'POST',
+      }
+  ),
   getDefaults: () => fetchUIAPI('/defaults'),
   setDefaults: (data: any) => fetchUIAPI('/defaults', {
     method: 'POST',
