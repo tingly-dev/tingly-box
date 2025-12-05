@@ -54,7 +54,7 @@ func NewAppConfig() (*AppConfig, error) {
 	// }
 
 	// configDir := filepath.Join(homeDir, ".tingly-box")
-	configDir := ".tingly-box"
+	configDir := GetTinglyConfDir()
 	if err := os.MkdirAll(configDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create config directory: %w", err)
 	}

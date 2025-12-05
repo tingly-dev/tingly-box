@@ -33,7 +33,7 @@ type ModelManager struct {
 // NewModelManager creates a new model manager
 func NewModelManager() (*ModelManager, error) {
 	mm := &ModelManager{
-		configFile: filepath.Join("config", "model.yaml"),
+		configFile: filepath.Join(GetModelsDir(), "model.yaml"),
 		modelMap:   make(map[string]*ModelDefinition),
 		aliasMap:   make(map[string]*ModelDefinition),
 	}
