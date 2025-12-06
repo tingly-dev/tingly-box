@@ -1,21 +1,13 @@
-import {
-    Alert,
-    Box,
-    CircularProgress,
-    Typography,
-    Button,
-    ToggleButton,
-    ToggleButtonGroup,
-    Stack,
-} from '@mui/material';
-import { Add, ViewModule, TableChart } from '@mui/icons-material';
+import { Add, TableChart, ViewModule } from '@mui/icons-material';
+import { Box, Button, Stack, ToggleButton, ToggleButtonGroup, Typography, } from '@mui/material';
 import { useEffect, useState } from 'react';
+import AddProviderDialog from '../components/AddProviderDialog';
 import CardGrid, { CardGridItem } from '../components/CardGrid';
-import UnifiedCard from '../components/UnifiedCard';
+import EditProviderDialog from '../components/EditProviderDialog';
+import { PageLayout } from '../components/PageLayout';
 import ProviderCard from '../components/ProviderCard';
 import ProviderTable from '../components/ProviderTable';
-import AddProviderDialog from '../components/AddProviderDialog';
-import EditProviderDialog from '../components/EditProviderDialog';
+import UnifiedCard from '../components/UnifiedCard';
 import { api } from '../services/api';
 
 const Providers = () => {
@@ -160,121 +152,99 @@ const Providers = () => {
         }
     };
 
-    if (loading) {
-        return (
-            <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-                <CircularProgress />
-            </Box>
-        );
-    }
-
     return (
-        <Box>
-            {message && (
-                <Alert
-                    severity={message.type}
-                    sx={{ mb: 2 }}
-                    onClose={() => setMessage(null)}
+        <PageLayout loading={loading} message={message} onClearMessage={() => setMessage(null)}>
+            {providers.length > 0 && (
+                <UnifiedCard
+                    title="Current Providers"
+                    subtitle={providers.length > 0 ? `Managing ${providers.length} provider(s)` : "No providers configured yet"}
+                    size="full"
+                    rightAction={
+                        <Stack direction="row" spacing={1} alignItems="center">
+                            <ToggleButtonGroup
+                                value={viewMode}
+                                exclusive
+                                onChange={(_, newMode) => newMode && setViewMode(newMode)}
+                                size="small"
+                                sx={{ mr: 1 }}
+                            >
+                                <ToggleButton value="card" sx={{ px: 1, py: 0.5 }}>
+                                    <ViewModule fontSize="small" />
+                                </ToggleButton>
+                                <ToggleButton value="table" sx={{ px: 1, py: 0.5 }}>
+                                    <TableChart fontSize="small" />
+                                </ToggleButton>
+                            </ToggleButtonGroup>
+                            <Button
+                                variant="contained"
+                                startIcon={<Add />}
+                                onClick={handleAddProviderClick}
+                                size="small"
+                            >
+                                Add Provider
+                            </Button>
+                        </Stack>
+                    }
                 >
-                    {message.text}
-                </Alert>
+                    {providers.length > 0 ? (
+                        <Box sx={{ flex: 1 }}>
+                            {viewMode === 'card' ? (
+                                <CardGrid>
+                                    {providers.map((provider) => (
+                                        <CardGridItem xs={12} sm={6} md={4} lg={3} key={provider.name}>
+                                            <ProviderCard
+                                                provider={provider}
+                                                variant="detailed"
+                                                onEdit={handleEditProvider}
+                                                onToggle={handleToggleProvider}
+                                                onDelete={handleDeleteProvider}
+                                            />
+                                        </CardGridItem>
+                                    ))}
+                                </CardGrid>
+                            ) : (
+                                <ProviderTable
+                                    providers={providers}
+                                    onEdit={handleEditProvider}
+                                    onToggle={handleToggleProvider}
+                                    onDelete={handleDeleteProvider}
+                                />
+                            )}
+                        </Box>
+                    ) : (
+                        <Box textAlign="center" py={5}>
+                            <Typography variant="h6" color="text.secondary" gutterBottom>
+                                No Providers Configured
+                            </Typography>
+                            <Typography color="text.secondary">
+                                Add your first AI provider using the form below to get started.
+                            </Typography>
+                        </Box>
+                    )}
+                </UnifiedCard>
             )}
 
-            <CardGrid>
-                <CardGridItem xs={12}>
-                    <UnifiedCard
-                        title="Current Providers"
-                        subtitle={providers.length > 0 ? `Managing ${providers.length} provider(s)` : "No providers configured yet"}
-                        size="full"
-                        rightAction={
-                            <Stack direction="row" spacing={1} alignItems="center">
-                                <ToggleButtonGroup
-                                    value={viewMode}
-                                    exclusive
-                                    onChange={(_, newMode) => newMode && setViewMode(newMode)}
-                                    size="small"
-                                    sx={{ mr: 1 }}
-                                >
-                                    <ToggleButton value="card" sx={{ px: 1, py: 0.5 }}>
-                                        <ViewModule fontSize="small" />
-                                    </ToggleButton>
-                                    <ToggleButton value="table" sx={{ px: 1, py: 0.5 }}>
-                                        <TableChart fontSize="small" />
-                                    </ToggleButton>
-                                </ToggleButtonGroup>
-                                <Button
-                                    variant="contained"
-                                    startIcon={<Add />}
-                                    onClick={handleAddProviderClick}
-                                    size="small"
-                                >
-                                    Add Provider
-                                </Button>
-                            </Stack>
-                        }
-                    >
-                        {providers.length > 0 ? (
-                            <Box sx={{ flex: 1 }}>
-                                {viewMode === 'card' ? (
-                                    <CardGrid>
-                                        {providers.map((provider) => (
-                                            <CardGridItem xs={12} sm={6} md={4} lg={3} key={provider.name}>
-                                                <ProviderCard
-                                                    provider={provider}
-                                                    variant="detailed"
-                                                    onEdit={handleEditProvider}
-                                                    onToggle={handleToggleProvider}
-                                                    onDelete={handleDeleteProvider}
-                                                />
-                                            </CardGridItem>
-                                        ))}
-                                    </CardGrid>
-                                ) : (
-                                    <ProviderTable
-                                        providers={providers}
-                                        onEdit={handleEditProvider}
-                                        onToggle={handleToggleProvider}
-                                        onDelete={handleDeleteProvider}
-                                    />
-                                )}
-                            </Box>
-                        ) : (
-                            <Box textAlign="center" py={5}>
-                                <Typography variant="h6" color="text.secondary" gutterBottom>
-                                    No Providers Configured
-                                </Typography>
-                                <Typography color="text.secondary">
-                                    Add your first AI provider using the form below to get started.
-                                </Typography>
-                            </Box>
-                        )}
-                    </UnifiedCard>
-                </CardGridItem>
-
-                {providers.length === 0 && (
-                    <CardGridItem xs={12}>
-                        <UnifiedCard
-                            title="No Providers Configured"
-                            subtitle="Get started by adding your first AI provider"
-                            size="large"
+            {providers.length === 0 && (
+                <UnifiedCard
+                    title="No Providers Configured"
+                    subtitle="Get started by adding your first AI provider"
+                    size="large"
+                >
+                    <Box textAlign="center" py={3}>
+                        <Typography color="text.secondary" gutterBottom>
+                            Click the + button on any card to add a new provider
+                        </Typography>
+                        <Button
+                            variant="contained"
+                            startIcon={<Add />}
+                            onClick={() => setAddDialogOpen(true)}
+                            sx={{ mt: 2 }}
                         >
-                            <Box textAlign="center" py={3}>
-                                <Typography color="text.secondary" gutterBottom>
-                                    Click the + button on any card to add a new provider
-                                </Typography>
-                                <Button
-                                    variant="contained"
-                                    startIcon={<Add />}
-                                    onClick={() => setAddDialogOpen(true)}
-                                    sx={{ mt: 2 }}
-                                >
-                                    Add Your First Provider
-                                </Button>
-                            </Box>
-                        </UnifiedCard>
-                    </CardGridItem>
-                )}
-            </CardGrid>
+                            Add Your First Provider
+                        </Button>
+                    </Box>
+                </UnifiedCard>
+            )}
 
             {/* Add Dialog */}
             <AddProviderDialog
@@ -307,7 +277,7 @@ const Providers = () => {
                 editEnabled={editEnabled}
                 onEditEnabledChange={setEditEnabled}
             />
-        </Box>
+        </PageLayout>
     );
 };
 

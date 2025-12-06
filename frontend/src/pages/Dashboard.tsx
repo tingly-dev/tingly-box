@@ -1,10 +1,15 @@
-import { Add as AddIcon, ContentCopy as CopyIcon, Info as InfoIcon, Refresh as RefreshIcon, Terminal as TerminalIcon } from '@mui/icons-material';
+import {
+    Add as AddIcon,
+    ContentCopy as CopyIcon,
+    Info as InfoIcon,
+    Refresh as RefreshIcon,
+    Terminal as TerminalIcon
+} from '@mui/icons-material';
 import {
     Alert,
     AlertTitle,
     Box,
     Button,
-    CircularProgress,
     Dialog,
     DialogContent,
     DialogTitle,
@@ -17,9 +22,9 @@ import {
 } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { ProviderDialog } from '../components/ProviderDialog';
-import { ProviderSelect } from '../components/ProviderSelect';
 import ProviderSelectTab, { type ProviderSelectTabOption } from "../components/ProviderSelectTab.tsx";
 import UnifiedCard from '../components/UnifiedCard';
+import { PageLayout } from '../components/PageLayout';
 import { api } from '../services/api';
 
 const Dashboard = () => {
@@ -237,22 +242,13 @@ const Dashboard = () => {
         }
     };
 
-    if (loading) {
-        return (
-            <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-                <CircularProgress />
-            </Box>
-        );
-    }
-
     const baseUrl = import.meta.env.VITE_API_BASE_URL || window.location.origin;
     const openaiBaseUrl = `${baseUrl}/openai/v1`;
     const anthropicBaseUrl = `${baseUrl}/anthropic/v1`;
     const token = generatedToken || modelToken;
 
     return (
-        <Box >
-
+        <PageLayout loading={loading}>
 
             {/* Server Information Header */}
             <UnifiedCard
@@ -522,10 +518,13 @@ const Dashboard = () => {
                             <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>
                                 No Providers Available
                             </Typography>
-                            <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
-                                Get started by adding your first AI provider. You can connect to OpenAI, Anthropic, or any compatible API endpoint.
+                            <Typography variant="body1" color="text.secondary"
+                                        sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
+                                Get started by adding your first AI provider. You can connect to OpenAI, Anthropic, or
+                                any compatible API endpoint.
                             </Typography>
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 4, maxWidth: 400, mx: 'auto' }}>
+                            <Typography variant="body2" color="text.secondary"
+                                        sx={{ mb: 4, maxWidth: 400, mx: 'auto' }}>
                                 <strong>Steps to get started:</strong><br />
                                 1. Click the + button to add a provider<br />
                                 2. Configure your API credentials<br />
@@ -603,7 +602,7 @@ const Dashboard = () => {
                 onClose={() => setSnackbarOpen(false)}
                 message={snackbarMessage}
             />
-        </Box>
+        </PageLayout>
     );
 };
 

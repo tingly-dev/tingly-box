@@ -1,14 +1,15 @@
 import Refresh from '@mui/icons-material/Refresh';
-import { Alert, Box, CircularProgress, IconButton, Typography } from '@mui/material';
+import { Box, IconButton, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
-import CardGrid, { CardGridItem } from '../components/CardGrid';
+import CardGrid from '../components/CardGrid';
 import ServerStatusControl from '../components/ServerStatusControl';
 import UnifiedCard from '../components/UnifiedCard';
+import { PageLayout } from '../components/PageLayout';
 import { api } from '../services/api';
 
 const System = () => {
     const [serverStatus, setServerStatus] = useState<any>(null);
-      const [providersStatus, setProvidersStatus] = useState<any>(null);
+    const [providersStatus, setProvidersStatus] = useState<any>(null);
     const [defaults, setDefaults] = useState<any>({});
     const [providers, setProviders] = useState<any[]>([]);
     const [providerModels, setProviderModels] = useState<any>({});
@@ -129,13 +130,13 @@ const System = () => {
                 localStorage.setItem('model_auth_token', result.data.token)
                 // navigator.clipboard.writeText(result.data.token);
                 // setMessage({ type: 'success', text: 'Token copied to clipboard!' });
-                          } else {
+            } else {
                 setMessage({ type: 'error', text: result.error });
             }
         }
     };
 
-    
+
     // This handler is kept for backward compatibility
     // The main configuration management is now done through ModelConfigCard
     const setDefaultProviderHandler = async (providerName: string) => {
@@ -179,68 +180,46 @@ const System = () => {
         }
     };
 
-    if (loading) {
-        return (
-            <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-                <CircularProgress />
-            </Box>
-        );
-    }
-
     return (
-        <Box>
-            {message && (
-                <Alert
-                    severity={message.type}
-                    sx={{ mb: 2 }}
-                    onClose={() => setMessage(null)}
-                >
-                    {message.text}
-                </Alert>
-            )}
-
+        <PageLayout loading={loading} message={message} onClearMessage={() => setMessage(null)}>
             <CardGrid>
                 {/* Server Status - Consolidated */}
-                <CardGridItem xs={12} md={6}>
-                    <UnifiedCard
-                        title="Server Status & Control"
-                        subtitle={serverStatus ? (serverStatus.server_running ? "Server is running" : "Server is stopped") : "Loading..."}
-                        size="large"
-                        rightAction={
-                            <IconButton onClick={loadServerStatus} size="small" title="Refresh Status">
-                                <Refresh />
-                            </IconButton>
-                        }
-                    >
-                        {serverStatus ? (
-                            <>
-                                <ServerStatusControl
-                                    serverStatus={serverStatus}
-                                    onStartServer={handleStartServer}
-                                    onStopServer={handleStopServer}
-                                    onRestartServer={handleRestartServer}
-                                    onGenerateToken={handleGenerateToken}
-                                />
-                                {serverStatus.request_count !== undefined && (
-                                    <Box sx={{ mt: 2, p: 2, backgroundColor: 'grey.50', borderRadius: 2 }}>
-                                        <Typography variant="body2" color="text.secondary" gutterBottom>
-                                            Total Requests
-                                        </Typography>
-                                        <Typography variant="h6" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                                            {serverStatus.request_count}
-                                        </Typography>
-                                    </Box>
-                                )}
-                            </>
-                        ) : (
-                            <div>Loading...</div>
-                        )}
-                    </UnifiedCard>
-                </CardGridItem>
-
-
-              </CardGrid>
-        </Box>
+                <UnifiedCard
+                    title="Server Status & Control"
+                    subtitle={serverStatus ? (serverStatus.server_running ? "Server is running" : "Server is stopped") : "Loading..."}
+                    size="large"
+                    rightAction={
+                        <IconButton onClick={loadServerStatus} size="small" title="Refresh Status">
+                            <Refresh />
+                        </IconButton>
+                    }
+                >
+                    {serverStatus ? (
+                        <>
+                            <ServerStatusControl
+                                serverStatus={serverStatus}
+                                onStartServer={handleStartServer}
+                                onStopServer={handleStopServer}
+                                onRestartServer={handleRestartServer}
+                                onGenerateToken={handleGenerateToken}
+                            />
+                            {serverStatus.request_count !== undefined && (
+                                <Box sx={{ mt: 2, p: 2, backgroundColor: 'grey.50', borderRadius: 2 }}>
+                                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                                        Total Requests
+                                    </Typography>
+                                    <Typography variant="h6" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                                        {serverStatus.request_count}
+                                    </Typography>
+                                </Box>
+                            )}
+                        </>
+                    ) : (
+                        <div>Loading...</div>
+                    )}
+                </UnifiedCard>
+            </CardGrid>
+        </PageLayout>
     );
 };
 

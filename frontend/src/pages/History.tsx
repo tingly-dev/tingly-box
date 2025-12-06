@@ -1,12 +1,10 @@
-import { Box, CircularProgress, Button, Stack } from '@mui/material';
+import { Stack } from '@mui/material';
 import { useCallback, useEffect, useState } from 'react';
-import CardGrid, { CardGridItem } from '../components/CardGrid';
+import CardGrid from '../components/CardGrid';
 import UnifiedCard from '../components/UnifiedCard';
-import HistoryFilters from '../components/HistoryFilters';
 import HistoryStats from '../components/HistoryStats';
-import HistoryTable from '../components/HistoryTable';
 import ActivityLog from '../components/ActivityLog';
-import { api } from '../services/api';
+import { PageLayout } from '../components/PageLayout';
 
 const History = () => {
     const [allHistory, setAllHistory] = useState<any[]>([]);
@@ -166,16 +164,8 @@ const History = () => {
         URL.revokeObjectURL(url);
     };
 
-    if (loading) {
-        return (
-            <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-                <CircularProgress />
-            </Box>
-        );
-    }
-
     return (
-        <Box>
+        <PageLayout loading={loading}>
             <CardGrid>
                 {/* Filter and Export Controls */}
                 {/* <CardGridItem xs={12}>
@@ -205,21 +195,19 @@ const History = () => {
                 <HistoryStats stats={stats} />
 
                 {/* Activity Log - Enhanced */}
-                <CardGridItem xs={12}>
-                    <UnifiedCard
-                        title="Activity Log & History"
-                        subtitle={`${activityLog.length} recent activity entries`}
-                        size="large"
-                    >
-                        <Stack spacing={2}>
-                            <ActivityLog
-                                activityLog={activityLog}
-                                onLoadActivityLog={loadActivityLog}
-                                onClearLog={clearLog}
-                            />
-                        </Stack>
-                    </UnifiedCard>
-                </CardGridItem>
+                <UnifiedCard
+                    title="Activity Log & History"
+                    subtitle={`${activityLog.length} recent activity entries`}
+                    size="full"
+                >
+                    <Stack spacing={2}>
+                        <ActivityLog
+                            activityLog={activityLog}
+                            onLoadActivityLog={loadActivityLog}
+                            onClearLog={clearLog}
+                        />
+                    </Stack>
+                </UnifiedCard>
 
                 {/* History Table */}
                 {/* <CardGridItem xs={12}>
@@ -237,7 +225,7 @@ const History = () => {
                     </UnifiedCard>
                 </CardGridItem> */}
             </CardGrid>
-        </Box>
+        </PageLayout>
     );
 };
 
