@@ -1,5 +1,5 @@
 import { Add, TableChart, ViewModule } from '@mui/icons-material';
-import { Box, Button, Stack, ToggleButton, ToggleButtonGroup, Typography, } from '@mui/material';
+import { Alert, Box, Button, Snackbar, Stack, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import AddProviderDialog from '../components/AddProviderDialog';
 import CardGrid, { CardGridItem } from '../components/CardGrid';
@@ -13,7 +13,11 @@ import { api } from '../services/api';
 const Providers = () => {
     const [providers, setProviders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [snackbar, setSnackbar] = useState<{
+        open: boolean;
+        message: string;
+        severity: 'success' | 'error';
+    }>({ open: false, message: '', severity: 'success' });
     const [viewMode, setViewMode] = useState<'card' | 'table'>('table');
 
     // Add provider form
@@ -38,6 +42,10 @@ const Providers = () => {
         loadProviders();
     }, []);
 
+    const showNotification = (message: string, severity: 'success' | 'error') => {
+        setSnackbar({ open: true, message, severity });
+    };
+
     const handleAddProviderClick = () => {
         setProviderName('');
         setProviderApiBase('');
@@ -52,7 +60,7 @@ const Providers = () => {
         if (result.success) {
             setProviders(result.data);
         } else {
-            setMessage({ type: 'error', text: `Failed to load providers: ${result.error}` });
+            showNotification(`Failed to load providers: ${result.error}`, 'error');
         }
         setLoading(false);
     };
@@ -70,7 +78,7 @@ const Providers = () => {
         const result = await api.addProvider(providerData);
 
         if (result.success) {
-            setMessage({ type: 'success', text: 'Provider added successfully!' });
+            showNotification('Provider added successfully!', 'success');
             setProviderName('');
             setProviderApiBase('');
             setProviderApiVersion('openai');
@@ -78,7 +86,7 @@ const Providers = () => {
             setAddDialogOpen(false);
             loadProviders();
         } else {
-            setMessage({ type: 'error', text: `Failed to add provider: ${result.error}` });
+            showNotification(`Failed to add provider: ${result.error}`, 'error');
         }
     };
 
@@ -90,10 +98,10 @@ const Providers = () => {
         const result = await api.deleteProvider(name);
 
         if (result.success) {
-            setMessage({ type: 'success', text: 'Provider deleted successfully!' });
+            showNotification('Provider deleted successfully!', 'success');
             loadProviders();
         } else {
-            setMessage({ type: 'error', text: `Failed to delete provider: ${result.error}` });
+            showNotification(`Failed to delete provider: ${result.error}`, 'error');
         }
     };
 
@@ -101,10 +109,10 @@ const Providers = () => {
         const result = await api.toggleProvider(name);
 
         if (result.success) {
-            setMessage({ type: 'success', text: result.message });
+            showNotification(result.message, 'success');
             loadProviders();
         } else {
-            setMessage({ type: 'error', text: `Failed to toggle provider: ${result.error}` });
+            showNotification(`Failed to toggle provider: ${result.error}`, 'error');
         }
     };
 
@@ -121,7 +129,7 @@ const Providers = () => {
             setEditEnabled(provider.enabled);
             setEditDialogOpen(true);
         } else {
-            setMessage({ type: 'error', text: `Failed to load provider details: ${result.error}` });
+            showNotification(`Failed to load provider details: ${result.error}`, 'error');
         }
     };
 
@@ -143,17 +151,17 @@ const Providers = () => {
         const result = await api.updateProvider(editingProvider.name, providerData);
 
         if (result.success) {
-            setMessage({ type: 'success', text: 'Provider updated successfully!' });
+            showNotification('Provider updated successfully!', 'success');
             setEditDialogOpen(false);
             setEditingProvider(null);
             loadProviders();
         } else {
-            setMessage({ type: 'error', text: `Failed to update provider: ${result.error}` });
+            showNotification(`Failed to update provider: ${result.error}`, 'error');
         }
     };
 
     return (
-        <PageLayout loading={loading} message={message} onClearMessage={() => setMessage(null)}>
+        <PageLayout loading={loading}>
             {providers.length > 0 && (
                 <UnifiedCard
                     title="Current Providers"
@@ -277,6 +285,23 @@ const Providers = () => {
                 editEnabled={editEnabled}
                 onEditEnabledChange={setEditEnabled}
             />
+
+            {/* Snackbar for notifications */}
+            <Snackbar
+                open={snackbar.open}
+                autoHideDuration={6000}
+                onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            >
+                <Alert
+                    onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+                    severity={snackbar.severity}
+                    variant="filled"
+                    sx={{ width: '100%' }}
+                >
+                    {snackbar.message}
+                </Alert>
+            </Snackbar>
         </PageLayout>
     );
 };
