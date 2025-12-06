@@ -87,13 +87,13 @@ const presetCardDimensions = {
   },
   medium: {
     width: '50%',  // 50% 宽度（相对于父容器）
-    height: '50%', // 50% 高度（相对于父容器）
+    height: '100%', // 50% 高度（相对于父容器）
     hasFixedHeight: true,
   },
   large: {
     width: '100%', // 自适应父容器最大宽度
     minHeightUnits: 10, // 最小高度 400px
-    hasFixedHeight: false,
+    hasFixedHeight: true,
   },
   full: {
     width: '100%', // 自适应父容器最大宽度
