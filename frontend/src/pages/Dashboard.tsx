@@ -360,7 +360,7 @@ const Dashboard = () => {
                             {/* Token Row */}
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <Typography variant="body2" color="text.secondary" sx={{ minWidth: 60 }}>
-                                    LLM Token:
+                                    LLM API KEY:
                                 </Typography>
                                 <Typography
                                     variant="body2"
@@ -406,7 +406,7 @@ const Dashboard = () => {
 
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <Typography variant="body2" color="text.secondary" sx={{ minWidth: 60 }}>
-                                    LLM Model:
+                                    LLM API Model:
                                 </Typography>
                                 <Typography
                                     variant="body2"
