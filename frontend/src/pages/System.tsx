@@ -1,8 +1,7 @@
-import Refresh from '@mui/icons-material/Refresh';
-import { Box, IconButton, Typography } from '@mui/material';
+import { Cancel, CheckCircle, Key, PlayArrow, RestartAlt, Stop, Refresh as RefreshIcon } from '@mui/icons-material';
+import { Button, IconButton, Stack, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import CardGrid from '../components/CardGrid';
-import ServerStatusControl from '../components/ServerStatusControl';
 import UnifiedCard from '../components/UnifiedCard';
 import { PageLayout } from '../components/PageLayout';
 import { api } from '../services/api';
@@ -186,34 +185,92 @@ const System = () => {
                 {/* Server Status - Consolidated */}
                 <UnifiedCard
                     title="Server Status & Control"
-                    subtitle={serverStatus ? (serverStatus.server_running ? "Server is running" : "Server is stopped") : "Loading..."}
-                    size="large"
+                    size="full"
                     rightAction={
-                        <IconButton onClick={loadServerStatus} size="small" title="Refresh Status">
-                            <Refresh />
-                        </IconButton>
+                        <Stack direction="row" spacing={1}>
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                startIcon={<Key />}
+                                onClick={handleGenerateToken}
+                                title="Generate Token"
+                            >
+                                Token
+                            </Button>
+                            <Button
+                                variant="contained"
+                                color="success"
+                                size="small"
+                                startIcon={<PlayArrow />}
+                                onClick={handleStartServer}
+                                disabled={serverStatus?.server_running}
+                                title="Start Server"
+                            >
+                                Start
+                            </Button>
+                            <Button
+                                variant="contained"
+                                color="error"
+                                size="small"
+                                startIcon={<Stop />}
+                                onClick={handleStopServer}
+                                disabled={!serverStatus?.server_running}
+                                title="Stop Server"
+                            >
+                                Stop
+                            </Button>
+                            <Button
+                                variant="contained"
+                                size="small"
+                                startIcon={<RestartAlt />}
+                                onClick={handleRestartServer}
+                                title="Restart Server"
+                            >
+                                Restart
+                            </Button>
+                            <IconButton onClick={loadServerStatus} size="small" title="Refresh Status">
+                                <RefreshIcon />
+                            </IconButton>
+                        </Stack>
                     }
                 >
                     {serverStatus ? (
-                        <>
-                            <ServerStatusControl
-                                serverStatus={serverStatus}
-                                onStartServer={handleStartServer}
-                                onStopServer={handleStopServer}
-                                onRestartServer={handleRestartServer}
-                                onGenerateToken={handleGenerateToken}
-                            />
-                            {serverStatus.request_count !== undefined && (
-                                <Box sx={{ mt: 2, p: 2, backgroundColor: 'grey.50', borderRadius: 2 }}>
-                                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                                        Total Requests
+                        <Stack spacing={3}>
+                            {/* Status Information */}
+                            <Stack spacing={1}>
+                                <Stack direction="row" alignItems="center" spacing={1}>
+                                    {serverStatus.server_running ? (
+                                        <CheckCircle color="success" />
+                                    ) : (
+                                        <Cancel color="error" />
+                                    )}
+                                    <Typography variant="h6">
+                                        Status: {serverStatus.server_running ? 'Running' : 'Stopped'}
                                     </Typography>
-                                    <Typography variant="h6" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                                        {serverStatus.request_count}
+                                </Stack>
+                                <Typography variant="body2" color="text.secondary">
+                                    <strong>Port:</strong> {serverStatus.port}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    <strong>Providers:</strong> {serverStatus.providers_enabled}/{serverStatus.providers_total}
+                                </Typography>
+                                {serverStatus.uptime && (
+                                    <Typography variant="body2" color="text.secondary">
+                                        <strong>Uptime:</strong> {serverStatus.uptime}
                                     </Typography>
-                                </Box>
-                            )}
-                        </>
+                                )}
+                                {serverStatus.last_updated && (
+                                    <Typography variant="body2" color="text.secondary">
+                                        <strong>Last Updated:</strong> {serverStatus.last_updated}
+                                    </Typography>
+                                )}
+                                {serverStatus.request_count !== undefined && (
+                                    <Typography variant="body2" color="text.secondary">
+                                        <strong>Total Requests:</strong> {serverStatus.request_count}
+                                    </Typography>
+                                )}
+                            </Stack>
+                        </Stack>
                     ) : (
                         <div>Loading...</div>
                     )}
