@@ -355,7 +355,11 @@ export default function ProviderSelectTab({
                             )}
 
                             {/* All Models Section */}
-                            <Box>
+                            <Box
+                                sx={{
+                                    minHeight: 300, // Minimum height to prevent layout shifts
+                                }}
+                            >
                                 <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
                                     All Models ({pagination.totalModels})
                                 </Typography>
