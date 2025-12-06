@@ -4,12 +4,16 @@ import {
     CircularProgress,
     Typography,
     Button,
+    ToggleButton,
+    ToggleButtonGroup,
+    Stack,
 } from '@mui/material';
-import { Add } from '@mui/icons-material';
+import { Add, ViewModule, TableChart } from '@mui/icons-material';
 import { useEffect, useState } from 'react';
 import CardGrid, { CardGridItem } from '../components/CardGrid';
 import UnifiedCard from '../components/UnifiedCard';
 import ProviderCard from '../components/ProviderCard';
+import ProviderTable from '../components/ProviderTable';
 import AddProviderDialog from '../components/AddProviderDialog';
 import EditProviderDialog from '../components/EditProviderDialog';
 import { api } from '../services/api';
@@ -18,6 +22,7 @@ const Providers = () => {
     const [providers, setProviders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [viewMode, setViewMode] = useState<'card' | 'table'>('table');
 
     // Add provider form
     const [providerName, setProviderName] = useState('');
@@ -182,31 +187,56 @@ const Providers = () => {
                         subtitle={providers.length > 0 ? `Managing ${providers.length} provider(s)` : "No providers configured yet"}
                         size="full"
                         rightAction={
-                            <Button
-                                variant="contained"
-                                startIcon={<Add />}
-                                onClick={handleAddProviderClick}
-                                size="small"
-                            >
-                                Add Provider
-                            </Button>
+                            <Stack direction="row" spacing={1} alignItems="center">
+                                <ToggleButtonGroup
+                                    value={viewMode}
+                                    exclusive
+                                    onChange={(_, newMode) => newMode && setViewMode(newMode)}
+                                    size="small"
+                                    sx={{ mr: 1 }}
+                                >
+                                    <ToggleButton value="card" sx={{ px: 1, py: 0.5 }}>
+                                        <ViewModule fontSize="small" />
+                                    </ToggleButton>
+                                    <ToggleButton value="table" sx={{ px: 1, py: 0.5 }}>
+                                        <TableChart fontSize="small" />
+                                    </ToggleButton>
+                                </ToggleButtonGroup>
+                                <Button
+                                    variant="contained"
+                                    startIcon={<Add />}
+                                    onClick={handleAddProviderClick}
+                                    size="small"
+                                >
+                                    Add Provider
+                                </Button>
+                            </Stack>
                         }
                     >
                         {providers.length > 0 ? (
                             <Box sx={{ flex: 1 }}>
-                                <CardGrid>
-                                    {providers.map((provider) => (
-                                        <CardGridItem xs={12} sm={6} md={4} lg={3} key={provider.name}>
-                                            <ProviderCard
-                                                provider={provider}
-                                                variant="detailed"
-                                                onEdit={handleEditProvider}
-                                                onToggle={handleToggleProvider}
-                                                onDelete={handleDeleteProvider}
-                                            />
-                                        </CardGridItem>
-                                    ))}
-                                </CardGrid>
+                                {viewMode === 'card' ? (
+                                    <CardGrid>
+                                        {providers.map((provider) => (
+                                            <CardGridItem xs={12} sm={6} md={4} lg={3} key={provider.name}>
+                                                <ProviderCard
+                                                    provider={provider}
+                                                    variant="detailed"
+                                                    onEdit={handleEditProvider}
+                                                    onToggle={handleToggleProvider}
+                                                    onDelete={handleDeleteProvider}
+                                                />
+                                            </CardGridItem>
+                                        ))}
+                                    </CardGrid>
+                                ) : (
+                                    <ProviderTable
+                                        providers={providers}
+                                        onEdit={handleEditProvider}
+                                        onToggle={handleToggleProvider}
+                                        onDelete={handleDeleteProvider}
+                                    />
+                                )}
                             </Box>
                         ) : (
                             <Box textAlign="center" py={5}>
