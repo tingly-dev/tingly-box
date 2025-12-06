@@ -318,8 +318,8 @@ const Rule = () => {
     return (
         <PageLayout loading={loading} message={message} onClearMessage={() => setMessage(null)}>
             <UnifiedCard
-                title="Model Configuration"
-                subtitle="Configure model providers and settings"
+                title="Request Rule Configuration"
+                subtitle="Configure api request to models"
                 size="full"
                 rightAction={
                     <>
@@ -382,7 +382,7 @@ const Rule = () => {
                                 <Box sx={{ gridColumn: '2', gridRow: '1' }}>
                                     <Stack direction="row" justifyContent="space-between" alignItems="center">
                                         <Typography variant="subtitle2">
-                                            Providers ({record.providers.length})
+                                            Models ({record.providers.length})
                                         </Typography>
                                         <Button
                                             startIcon={<AddIcon />}
@@ -390,7 +390,7 @@ const Rule = () => {
                                             variant="outlined"
                                             size="small"
                                         >
-                                            Add Provider
+                                            Add Model
                                         </Button>
                                     </Stack>
                                 </Box>
