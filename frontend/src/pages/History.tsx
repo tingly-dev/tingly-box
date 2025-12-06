@@ -1,16 +1,18 @@
-import { Box, CircularProgress } from '@mui/material';
+import { Box, CircularProgress, Button, Stack } from '@mui/material';
 import { useCallback, useEffect, useState } from 'react';
 import CardGrid, { CardGridItem } from '../components/CardGrid';
 import UnifiedCard from '../components/UnifiedCard';
 import HistoryFilters from '../components/HistoryFilters';
 import HistoryStats from '../components/HistoryStats';
 import HistoryTable from '../components/HistoryTable';
+import ActivityLog from '../components/ActivityLog';
 import { api } from '../services/api';
 
 const History = () => {
     const [allHistory, setAllHistory] = useState<any[]>([]);
     const [filteredHistory, setFilteredHistory] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [activityLog, setActivityLog] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
 
     // Filter state
     const [searchTerm, setSearchTerm] = useState('');
@@ -19,7 +21,7 @@ const History = () => {
 
     // Auto refresh state
     const [autoRefresh, setAutoRefresh] = useState(false);
-    const [refreshInterval, setRefreshInterval] = useState(30000); // 30 seconds
+    const [refreshInterval, setRefreshInterval] = useState(60000); // 30 seconds
 
     // Stats
     const [stats, setStats] = useState({
@@ -71,19 +73,31 @@ const History = () => {
     }, [allHistory, searchTerm, filterType, filterStatus]);
 
     const loadHistory = useCallback(async () => {
-        setLoading(true);
-        const result = await api.getHistory(200);
-        if (result.success) {
-            setAllHistory(result.data);
-            updateStats(result.data);
-            applyFilters();
-        }
-        setLoading(false);
+        // setLoading(true);
+        // const result = await api.getHistory(200);
+        // if (result.success) {
+        //     setAllHistory(result.data);
+        //     updateStats(result.data);
+        //     applyFilters();
+        // }
+        // setLoading(false);
     }, [updateStats, applyFilters]);
+
+    const loadActivityLog = async () => {
+        // const result = await api.getHistory(50);
+        // if (result.success) {
+        //     setActivityLog(result.data);
+        // }
+    };
+
+    const clearLog = () => {
+        setActivityLog([]);
+    };
 
     // Initial load and filter updates
     useEffect(() => {
         loadHistory();
+        loadActivityLog();
     }, [loadHistory]);
 
     useEffect(() => {
@@ -164,7 +178,7 @@ const History = () => {
         <Box>
             <CardGrid>
                 {/* Filter and Export Controls */}
-                <CardGridItem xs={12}>
+                {/* <CardGridItem xs={12}>
                     <UnifiedCard
                         title="Filters & Controls"
                         subtitle="Search, filter, and export history data"
@@ -185,13 +199,30 @@ const History = () => {
                             onRefreshIntervalChange={setRefreshInterval}
                         />
                     </UnifiedCard>
-                </CardGridItem>
+                </CardGridItem> */}
 
                 {/* Statistics */}
                 <HistoryStats stats={stats} />
 
-                {/* History Table */}
+                {/* Activity Log - Enhanced */}
                 <CardGridItem xs={12}>
+                    <UnifiedCard
+                        title="Activity Log & History"
+                        subtitle={`${activityLog.length} recent activity entries`}
+                        size="large"
+                    >
+                        <Stack spacing={2}>
+                            <ActivityLog
+                                activityLog={activityLog}
+                                onLoadActivityLog={loadActivityLog}
+                                onClearLog={clearLog}
+                            />
+                        </Stack>
+                    </UnifiedCard>
+                </CardGridItem>
+
+                {/* History Table */}
+                {/* <CardGridItem xs={12}>
                     <UnifiedCard
                         title="History Table"
                         subtitle={`${filteredHistory.length} filtered entries`}
@@ -204,7 +235,7 @@ const History = () => {
                             onExportTXT={handleExportTXT}
                         />
                     </UnifiedCard>
-                </CardGridItem>
+                </CardGridItem> */}
             </CardGrid>
         </Box>
     );

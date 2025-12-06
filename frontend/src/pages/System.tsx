@@ -1,7 +1,6 @@
 import Refresh from '@mui/icons-material/Refresh';
-import { Alert, Box, Button, CircularProgress, IconButton, Stack, Typography } from '@mui/material';
+import { Alert, Box, CircularProgress, IconButton, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
-import ActivityLog from '../components/ActivityLog';
 import CardGrid, { CardGridItem } from '../components/CardGrid';
 import ServerStatusControl from '../components/ServerStatusControl';
 import UnifiedCard from '../components/UnifiedCard';
@@ -9,8 +8,7 @@ import { api } from '../services/api';
 
 const System = () => {
     const [serverStatus, setServerStatus] = useState<any>(null);
-    const [activityLog, setActivityLog] = useState<any[]>([]);
-    const [providersStatus, setProvidersStatus] = useState<any>(null);
+      const [providersStatus, setProvidersStatus] = useState<any>(null);
     const [defaults, setDefaults] = useState<any>({});
     const [providers, setProviders] = useState<any[]>([]);
     const [providerModels, setProviderModels] = useState<any>({});
@@ -24,13 +22,8 @@ const System = () => {
             loadServerStatus();
         }, 30000);
 
-        const logInterval = setInterval(() => {
-            loadActivityLog();
-        }, 10000);
-
         return () => {
             clearInterval(statusInterval);
-            clearInterval(logInterval);
         };
     }, []);
 
@@ -38,7 +31,6 @@ const System = () => {
         setLoading(true);
         await Promise.all([
             loadServerStatus(),
-            loadActivityLog(),
             loadProvidersStatus(),
             loadDefaults(),
             loadProviderSelectionPanel(),
@@ -53,12 +45,6 @@ const System = () => {
         }
     };
 
-    const loadActivityLog = async () => {
-        const result = await api.getHistory(50);
-        if (result.success) {
-            setActivityLog(result.data);
-        }
-    };
 
     const loadProvidersStatus = async () => {
         const result = await api.getProviders();
@@ -99,7 +85,6 @@ const System = () => {
                 setMessage({ type: 'success', text: result.message });
                 setTimeout(() => {
                     loadServerStatus();
-                    loadActivityLog();
                 }, 1000);
             } else {
                 setMessage({ type: 'error', text: result.error });
@@ -114,7 +99,6 @@ const System = () => {
                 setMessage({ type: 'success', text: result.message });
                 setTimeout(() => {
                     loadServerStatus();
-                    loadActivityLog();
                 }, 1000);
             } else {
                 setMessage({ type: 'error', text: result.error });
@@ -130,7 +114,6 @@ const System = () => {
                 setMessage({ type: 'success', text: result.message });
                 setTimeout(() => {
                     loadServerStatus();
-                    loadActivityLog();
                 }, 1000);
             } else {
                 setMessage({ type: 'error', text: result.error });
@@ -146,17 +129,13 @@ const System = () => {
                 localStorage.setItem('model_auth_token', result.data.token)
                 // navigator.clipboard.writeText(result.data.token);
                 // setMessage({ type: 'success', text: 'Token copied to clipboard!' });
-                loadActivityLog();
-            } else {
+                          } else {
                 setMessage({ type: 'error', text: result.error });
             }
         }
     };
 
-    const clearLog = () => {
-        setActivityLog([]);
-    };
-
+    
     // This handler is kept for backward compatibility
     // The main configuration management is now done through ModelConfigCard
     const setDefaultProviderHandler = async (providerName: string) => {
@@ -260,30 +239,7 @@ const System = () => {
                 </CardGridItem>
 
 
-                {/* Activity Log - Enhanced */}
-                <CardGridItem xs={12}>
-                    <UnifiedCard
-                        title="Activity Log & History"
-                        subtitle={`${activityLog.length} recent activity entries`}
-                        size="large"
-                    >
-                        <Stack spacing={2}>
-                            <Button
-                                variant="outlined"
-                                onClick={() => window.location.href = '/history'}
-                                sx={{ mb: 1 }}
-                            >
-                                View Full History
-                            </Button>
-                            <ActivityLog
-                                activityLog={activityLog}
-                                onLoadActivityLog={loadActivityLog}
-                                onClearLog={clearLog}
-                            />
-                        </Stack>
-                    </UnifiedCard>
-                </CardGridItem>
-            </CardGrid>
+              </CardGrid>
         </Box>
     );
 };
