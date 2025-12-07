@@ -7,51 +7,89 @@ vars:
   VERSION: ""
   BUILD_DIR: build
   DIST_DIR: build/dist
-
-  APP_NAME: "myapp"
+  
+  APP_NAME: "tingly-obx"
   BIN_DIR: "bin"
   VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
+
+includes:
+  common: ./build/Taskfile.yml
+  windows: ./build/windows/Taskfile.yml
+  darwin: ./build/darwin/Taskfile.yml
+  linux: ./build/linux/Taskfile.yml
 
 tasks:
   default:
     cmds:
       - echo "{{.GREETING}}"
     silent: true
-
+  
+  wails:build:
+    summary: Builds the application
+    cmds:
+      - task: "{{OS}}:build"
+  
+  wails:package:
+    summary: Packages a production build of the application
+    cmds:
+      - task: "{{OS}}:package"
+  
+  wails:run:
+    summary: Runs the application
+    cmds:
+      - task: "{{OS}}:run"
+  
+  wails:dev:
+    summary: Runs the application in development mode
+    cmds:
+      - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
+  
+  wails:dist:
+    cmds:
+      - |
+        cd frontend
+        pnpm run build:dev
+  
+  
   start:
     cmds:
       - task: go:build
       - ./build/tingly start
-
-  build:
+  
+  all:build:
     cmds:
       - task: ui:dist
       - task: go:build
-
+  
   go:build:
     cmds:
       - |
         mkdir -p build
         go build -o ./build/tingly ./cmd/tingly
   
-  dev:
+  all:dev:
     cmds:
       - task: ui:dist
       - |
         go run ./cmd/tingly start
-
+  
   ui:dev:
     cmds:
       - |
         cd frontend; pnpm dev
-
+  
   ui:dist:
     cmds:
       - |
         cd frontend; pnpm build
       - |
         cp -R frontend/dist/* internal/server/web/dist/
-
+  
+  gui:build:
+    cmds:
+      - |
+        go build -buildvcs=false -gcflags=all="-l" -o bin/tingly-box ./wails3
+  
   dist:
     desc: Build cross-platform distributions for Windows, Linux, and macOS
     cmds:
@@ -114,40 +152,40 @@ tasks:
         # echo "- tingly-{{.VERSION}}-darwin-amd64.tar.gz"
         # echo "- tingly-{{.VERSION}}-darwin-arm64.tar.gz"
         # echo "- tingly-{{.VERSION}}-darwin-universal.tar.gz"
-
+  
   release:
     desc: Create and push git tag with version passed as parameter. run as 'VERSION=v0.0.9 task release'
     cmds:
       - |
         # Get version from parameter
         VERSION="${VERSION:-}"
-
+        
         # Check if version is provided
         if [ -z "$VERSION" ]; then
           echo "Error: VERSION parameter is required!"
           echo "Usage: VERSION=v0.0.9 task release"
           exit 1
         fi
-
+        
         # Validate version format
         if [[ ! $VERSION =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
           echo "Error: Invalid version format: $VERSION"
           echo "Expected format: v1.2.3"
           exit 1
         fi
-
+        
         # Check if tag already exists
         if git tag | grep -q "^${VERSION}$"; then
           echo "Error: Tag $VERSION already exists!"
           echo "Choose a new version and try again"
           exit 1
         fi
-
+        
         # Create and push tag
         echo "Creating tag $VERSION..."
         git tag "$VERSION"
-
+        
         echo "Pushing tag to origin..."
         git push origin "$VERSION"
-
+        
         echo "✅ Distribution started! CI will now build and release."
