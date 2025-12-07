@@ -127,6 +127,62 @@ func TestFinalIntegration(t *testing.T) {
 
 			assert.Equal(t, 400, w.Code)
 		})
+
+		// Test 7: Anthropic messages endpoint with authentication
+		t.Run("Anthropic_Messages_With_Auth", func(t *testing.T) {
+			requestBody := map[string]interface{}{
+				"model": "claude-3-sonnet",
+				"messages": []map[string]string{
+					{"role": "user", "content": "Hello from Anthropic!"},
+				},
+			}
+
+			// Get model token for authentication
+			globalConfig := ts.appConfig.GetGlobalConfig()
+			modelToken := globalConfig.GetModelToken()
+
+			req, _ := http.NewRequest("POST", "/anthropic/v1/messages", CreateJSONBody(requestBody))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", "Bearer "+modelToken)
+			w := httptest.NewRecorder()
+			ts.ginEngine.ServeHTTP(w, req)
+
+			// Should process the request (may fail at provider level but routing works)
+			assert.True(t, w.Code == 200 || w.Code == 400 || w.Code == 500)
+		})
+
+		// Test 8: Anthropic messages endpoint without authentication
+		t.Run("Anthropic_Messages_Without_Auth", func(t *testing.T) {
+			requestBody := map[string]interface{}{
+				"model": "claude-3-sonnet",
+				"messages": []map[string]string{
+					{"role": "user", "content": "Hello from Anthropic!"},
+				},
+			}
+
+			req, _ := http.NewRequest("POST", "/anthropic/v1/messages", CreateJSONBody(requestBody))
+			req.Header.Set("Content-Type", "application/json")
+			// No Authorization header
+			w := httptest.NewRecorder()
+			ts.ginEngine.ServeHTTP(w, req)
+
+			assert.Equal(t, 401, w.Code)
+		})
+
+		// Test 9: Anthropic models endpoint
+		t.Run("Anthropic_Models_Endpoint", func(t *testing.T) {
+			// Get model token for authentication
+			globalConfig := ts.appConfig.GetGlobalConfig()
+			modelToken := globalConfig.GetModelToken()
+
+			req, _ := http.NewRequest("GET", "/anthropic/v1/models", nil)
+			req.Header.Set("Authorization", "Bearer "+modelToken)
+			w := httptest.NewRecorder()
+			ts.ginEngine.ServeHTTP(w, req)
+
+			// Should succeed or fail gracefully
+			assert.True(t, w.Code == 200 || w.Code == 400 || w.Code == 500)
+		})
 	})
 
 	t.Run("Mock_Provider_Integration", func(t *testing.T) {
