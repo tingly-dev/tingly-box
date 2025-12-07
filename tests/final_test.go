@@ -37,8 +37,13 @@ func TestFinalIntegration(t *testing.T) {
 				"client_id": "test-client",
 			}
 
-			req, _ := http.NewRequest("POST", "/token", CreateJSONBody(requestBody))
+			// Get user token for authentication
+			globalConfig := ts.appConfig.GetGlobalConfig()
+			userToken := globalConfig.GetUserToken()
+
+			req, _ := http.NewRequest("POST", "/api/token", CreateJSONBody(requestBody))
 			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", "Bearer "+userToken)
 			w := httptest.NewRecorder()
 			ts.ginEngine.ServeHTTP(w, req)
 
@@ -69,9 +74,13 @@ func TestFinalIntegration(t *testing.T) {
 				},
 			}
 
-			req, _ := http.NewRequest("POST", "/v1/chat/completions", CreateJSONBody(requestBody))
+			// Get model token for authentication
+			globalConfig := ts.appConfig.GetGlobalConfig()
+			modelToken := globalConfig.GetModelToken()
+
+			req, _ := http.NewRequest("POST", "/openai/v1/chat/completions", CreateJSONBody(requestBody))
 			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("Authorization", "Bearer valid-test-token")
+			req.Header.Set("Authorization", "Bearer "+modelToken)
 			w := httptest.NewRecorder()
 			ts.ginEngine.ServeHTTP(w, req)
 
@@ -88,7 +97,7 @@ func TestFinalIntegration(t *testing.T) {
 				},
 			}
 
-			req, _ := http.NewRequest("POST", "/v1/chat/completions", CreateJSONBody(requestBody))
+			req, _ := http.NewRequest("POST", "/openai/v1/chat/completions", CreateJSONBody(requestBody))
 			req.Header.Set("Content-Type", "application/json")
 			// No Authorization header
 			w := httptest.NewRecorder()
@@ -106,9 +115,13 @@ func TestFinalIntegration(t *testing.T) {
 				// Missing "model" field
 			}
 
-			req, _ := http.NewRequest("POST", "/v1/chat/completions", CreateJSONBody(requestBody))
+			// Get model token for authentication
+			globalConfig := ts.appConfig.GetGlobalConfig()
+			modelToken := globalConfig.GetModelToken()
+
+			req, _ := http.NewRequest("POST", "/openai/v1/chat/completions", CreateJSONBody(requestBody))
 			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("Authorization", "Bearer valid-test-token")
+			req.Header.Set("Authorization", "Bearer "+modelToken)
 			w := httptest.NewRecorder()
 			ts.ginEngine.ServeHTTP(w, req)
 
@@ -202,7 +215,7 @@ func TestFinalIntegration(t *testing.T) {
 			assert.NotNil(t, lastRequest)
 			assert.Equal(t, "test-model", lastRequest["model"])
 			assert.Equal(t, 0.7, lastRequest["temperature"])
-			assert.Equal(t, 100, lastRequest["max_tokens"])
+			assert.Equal(t, float64(100), lastRequest["max_tokens"])
 		})
 
 		// Test error handling
