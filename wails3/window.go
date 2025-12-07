@@ -21,21 +21,18 @@ func useWindows(a *application.App) {
 	// 'BackgroundColour' is the background colour of the window.
 	// 'URL' is the URL that will be loaded into the webview.
 	WindowMain = a.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name:                     WindowMainName,
-		Title:                    AppName,
-		MinWidth:                 1024,
-		MinHeight:                640,
-		Width:                    1024,
-		Height:                   640,
-		BackgroundColour:         application.NewRGB(27, 38, 54),
-		ContentProtectionEnabled: true,
-		URL:                      "/",
+		Name:             WindowMainName,
+		Title:            AppName,
+		BackgroundColour: application.NewRGB(27, 38, 54),
+		URL:              "/",
 		Mac: application.MacWindow{
-			InvisibleTitleBarHeight: 50,
-			Backdrop:                application.MacBackdropTranslucent,
-			TitleBar:                application.MacTitleBarHiddenInset,
+			Backdrop: application.MacBackdropTranslucent,
+			TitleBar: application.MacTitleBarDefault,
 		},
 	})
+
+	// Set window to maximized after creation
+	WindowMain.Maximise()
 	WindowMain.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
 		event.Cancel()
 		WindowMain.Hide()

@@ -1,11 +1,13 @@
 package main
 
 import (
-	"runtime"
+	_ "embed"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
-	"github.com/wailsapp/wails/v3/pkg/icons"
 )
+
+//go:embed assets/icon.icns
+var icon []byte
 
 var (
 	SystemTray           *application.SystemTray
@@ -14,16 +16,16 @@ var (
 	SystrayMenuExit      *application.MenuItem
 )
 
-func useSystray(a *application.App) {
+func useSystray(app *application.App) {
 	// Create the SystemTray menu
-	SystrayMenu = a.Menu.New()
+	SystrayMenu = app.Menu.New()
 
 	// Dashboard menu item
 	SystrayMenuDashboard = SystrayMenu.
 		Add("Dashboard").
 		OnClick(func(ctx *application.Context) {
-			// Open dashboard URL - adjust this to your dashboard URL
-			a.Browser.OpenURL("http://localhost:8080")
+			// Show main window
+			WindowMain.Show()
 		})
 
 	SystrayMenu.AddSeparator()
@@ -32,24 +34,18 @@ func useSystray(a *application.App) {
 	SystrayMenuExit = SystrayMenu.
 		Add("Exit").
 		OnClick(func(ctx *application.Context) {
-			a.Quit()
+			app.Quit()
 		})
 
 	// Create SystemTray
-	SystemTray = a.SystemTray.New().
+	SystemTray = app.SystemTray.New().
 		SetMenu(SystrayMenu).
 		OnRightClick(func() {
 			SystemTray.OpenMenu()
 		})
 
-	// Support for template icons on macOS
-	if runtime.GOOS == "darwin" {
-		SystemTray.SetTemplateIcon(icons.SystrayMacTemplate)
-	} else {
-		// Support for light/dark mode icons
-		SystemTray.SetDarkModeIcon(icons.SystrayDark)
-		SystemTray.SetIcon(icons.SystrayLight)
-	}
+	// Use custom icon
+	SystemTray.SetIcon(icon)
 
-	SystemTray.AttachWindow(WindowMain).WindowOffset(5)
+	//SystemTray.AttachWindow(WindowMain).WindowOffset(5)
 }
