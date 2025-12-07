@@ -1,18 +1,21 @@
 package main
 
 import (
+	"runtime"
+
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/icons"
 )
 
 var (
-	Systray              *application.SystemTray
+	SystemTray           *application.SystemTray
 	SystrayMenu          *application.Menu
 	SystrayMenuDashboard *application.MenuItem
 	SystrayMenuExit      *application.MenuItem
 )
 
 func useSystray(a *application.App) {
-	// Create the systray menu
+	// Create the SystemTray menu
 	SystrayMenu = a.Menu.New()
 
 	// Dashboard menu item
@@ -32,10 +35,21 @@ func useSystray(a *application.App) {
 			a.Quit()
 		})
 
-	// Create systray
-	Systray = a.SystemTray.New().
+	// Create SystemTray
+	SystemTray = a.SystemTray.New().
 		SetMenu(SystrayMenu).
 		OnRightClick(func() {
-			Systray.OpenMenu()
+			SystemTray.OpenMenu()
 		})
+
+	// Support for template icons on macOS
+	if runtime.GOOS == "darwin" {
+		SystemTray.SetTemplateIcon(icons.SystrayMacTemplate)
+	} else {
+		// Support for light/dark mode icons
+		SystemTray.SetDarkModeIcon(icons.SystrayDark)
+		SystemTray.SetIcon(icons.SystrayLight)
+	}
+
+	SystemTray.AttachWindow(WindowMain).WindowOffset(5)
 }
