@@ -1,11 +1,12 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"strings"
 	"time"
-	services2 "tingly-box/wails3/services"
+	"tingly-box/wails3/services"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -19,7 +20,11 @@ var App *application.App
 
 func newApp() *application.App {
 	// Create UI service
-	uiService, err := services2.NewUIService()
+	uiService, err := services.NewUIService()
+	if err != nil {
+		log.Fatalf("Failed to create UI service: %v", err)
+	}
+	err = uiService.Start(context.Background(), 8080)
 	if err != nil {
 		log.Fatalf("Failed to create UI service: %v", err)
 	}
@@ -29,13 +34,13 @@ func newApp() *application.App {
 	// 'Assets' configures the asset server with the 'FS' variable pointing to the frontend files.
 	// 'Services' is a list of Go struct instances. The frontend has access to the methods of these instances.
 	// 'Mac' options tailor the application when running an macOS.
-	ginEngine := uiService.GetGin()
+	ginEngine := uiService.GetGinEngine()
 	embdHandler := application.AssetFileServerFS(assets)
 	app := application.New(application.Options{
 		Name:        AppName,
 		Description: AppDescription,
 		Services: []application.Service{
-			application.NewService(&services2.GreetService{}),
+			application.NewService(&services.GreetService{}),
 			application.NewService(uiService),
 		},
 		Assets: application.AssetOptions{
@@ -78,6 +83,5 @@ func newApp() *application.App {
 			EncryptionKey: [32]byte([]byte("Ml!Zjj@Lfw#Wqq$Wxb%Mjy^&*()_+1234567890-=")[:32]),
 		},
 	})
-
 	return app
 }
