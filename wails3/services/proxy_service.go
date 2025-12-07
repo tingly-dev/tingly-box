@@ -4,9 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"tingly-box/internal/config"
@@ -17,8 +14,8 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// UIService manages the web UI and HTTP server functionality
-type UIService struct {
+// ProxyService manages the web UI and HTTP server functionality
+type ProxyService struct {
 	appConfig     *config.AppConfig
 	serverManager *utils.ServerManager
 	httpServer    *server.Server
@@ -28,28 +25,29 @@ type UIService struct {
 }
 
 // NewUIService creates a new UI service instance
-func NewUIService() (*UIService, error) {
+func NewUIService() (*ProxyService, error) {
 	appConfig, err := config.NewAppConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create app config: %w", err)
 	}
 
-	enableUI := true
-	appConfig.SetServerPort(8080)
-	//port := appConfig.GetServerPort()
+	serverManager := utils.NewServerManagerWithOptions(appConfig, true)
 
-	serverManager := utils.NewServerManagerWithOptions(appConfig, enableUI)
-
-	res := &UIService{
+	res := &ProxyService{
 		appConfig:     appConfig,
 		serverManager: serverManager,
 		shutdownChan:  make(chan struct{}),
 		isRunning:     false,
 	}
 
+	return res, nil
+}
+
+// Start starts the UI service
+func (s *ProxyService) Start(ctx context.Context, port int) error {
 	waitStart := make(chan any)
 	go func() {
-		err := res.Start(context.Background())
+		err := s.serverManager.StartWithPort(port)
 		if err != nil {
 			panic(err)
 		}
@@ -57,32 +55,11 @@ func NewUIService() (*UIService, error) {
 	}()
 	<-waitStart
 
-	return res, nil
-}
-
-// Start starts the UI service
-func (s *UIService) Start(ctx context.Context) error {
-	if s.isRunning {
-		return fmt.Errorf("UI service is already running")
-	}
-
-	port := s.appConfig.GetServerPort()
-	fmt.Printf("Starting UI service on port %d\n", port)
-
-	// Setup signal handling for graceful shutdown
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	err := s.serverManager.Setup(8080)
-
-	go s.serverManager.Start()
-
-	s.isRunning = true
-	return err
+	return nil
 }
 
 // Stop stops the UI service gracefully
-func (s *UIService) Stop() error {
+func (s *ProxyService) Stop() error {
 	if !s.isRunning {
 		return nil
 	}
@@ -97,18 +74,18 @@ func (s *UIService) Stop() error {
 	return err
 }
 
-func (s *UIService) GetGin() *gin.Engine {
-	return s.serverManager.GetGin()
+func (s *ProxyService) GetGinEngine() *gin.Engine {
+	return s.serverManager.GetGinEngine()
 }
 
 // ServeHTTP implements the http.Handler interface
-func (s *UIService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (s *ProxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// All requests go to the Gin router
 	s.serverManager.ServeHTTP(w, r)
 }
 
 // ServiceStartup is called when the service starts
-func (s *UIService) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
+func (s *ProxyService) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
 	// Store the application instance for later use
 	s.app = application.Get()
 
@@ -130,7 +107,7 @@ func (s *UIService) ServiceStartup(ctx context.Context, options application.Serv
 }
 
 // ServiceShutdown is called when the service shuts down
-func (s *UIService) ServiceShutdown(ctx context.Context) error {
+func (s *ProxyService) ServiceShutdown(ctx context.Context) error {
 	// Clean up resources if needed
 	return nil
 }
