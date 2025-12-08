@@ -21,7 +21,7 @@ import {
     Paper,
 } from '@mui/material';
 import { useState } from 'react';
-import { Provider, ProviderModelsData } from './ProviderCard';
+import type { Provider, ProviderModelsData } from './ProviderCard';
 
 interface ProviderTableProps {
     providers: Provider[];
