@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -182,6 +183,62 @@ func TestFinalIntegration(t *testing.T) {
 
 			// Should succeed or fail gracefully
 			assert.True(t, w.Code == 200 || w.Code == 400 || w.Code == 500)
+		})
+
+		// Test 10: Providers endpoint with authentication
+		t.Run("Providers_Endpoint_With_Auth", func(t *testing.T) {
+			// Get user token for authentication
+			globalConfig := ts.appConfig.GetGlobalConfig()
+			userToken := globalConfig.GetUserToken()
+
+			req, _ := http.NewRequest("GET", "/api/providers", nil)
+			req.Header.Set("Authorization", "Bearer "+userToken)
+			w := httptest.NewRecorder()
+			ts.ginEngine.ServeHTTP(w, req)
+
+			// Should succeed or fail gracefully
+			assert.True(t, w.Code == 200)
+		})
+
+		// Test 11: Providers endpoint without authentication
+		t.Run("Providers_Endpoint_Without_Auth", func(t *testing.T) {
+			req, _ := http.NewRequest("GET", "/api/providers", nil)
+			// No Authorization header
+			w := httptest.NewRecorder()
+			ts.ginEngine.ServeHTTP(w, req)
+
+			assert.Equal(t, 401, w.Code)
+		})
+
+		// Test 12: Provider-Models endpoint with authentication, you should copy .tingly-box/config.json to tests/.tingly-box/
+		t.Run("Provider_Models_Endpoint_With_Auth", func(t *testing.T) {
+			// Get user token for authentication
+			globalConfig := ts.appConfig.GetGlobalConfig()
+			userToken := globalConfig.GetUserToken()
+
+			// Test both anthropic and glm providers
+			for _, providerName := range []string{"anthropic", "glm"} {
+				t.Run(providerName, func(t *testing.T) {
+					req, _ := http.NewRequest("POST", "/api/provider-models/"+providerName, nil)
+					req.Header.Set("Authorization", "Bearer "+userToken)
+					w := httptest.NewRecorder()
+					ts.ginEngine.ServeHTTP(w, req)
+
+					// Should succeed or fail gracefully
+					assert.True(t, w.Code == 200)
+					assert.True(t, strings.Contains(w.Body.String(), providerName))
+				})
+			}
+		})
+
+		// Test 13: Provider-Models endpoint without authentication
+		t.Run("Provider_Models_Endpoint_Without_Auth", func(t *testing.T) {
+			req, _ := http.NewRequest("GET", "/api/provider-models", nil)
+			// No Authorization header
+			w := httptest.NewRecorder()
+			ts.ginEngine.ServeHTTP(w, req)
+
+			assert.Equal(t, 401, w.Code)
 		})
 	})
 

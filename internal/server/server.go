@@ -26,6 +26,7 @@ type Server struct {
 	watcher      *config.ConfigWatcher
 	modelManager *config.ModelManager
 	webUI        *WebUI
+	useWebUI     bool
 	memoryLogger *memory.MemoryLogger
 }
 
@@ -89,16 +90,13 @@ func NewServerWithOptions(appConfig *config.AppConfig, enableUI bool) *Server {
 		memoryLogger = nil
 	}
 
-	// Initialize Web UI
-	webUI := NewWebUI(enableUI, appConfig, memoryLogger)
-
 	server := &Server{
 		config:       appConfig,
 		jwtManager:   auth.NewJWTManager(appConfig.GetJWTSecret()),
 		router:       gin.New(),
 		modelManager: modelManager,
-		webUI:        webUI,
 		memoryLogger: memoryLogger,
+		useWebUI:     enableUI,
 	}
 
 	// Setup middleware
@@ -221,8 +219,8 @@ func (s *Server) setupRoutes() {
 	}
 
 	// Integrate Web UI routes if enabled
-	if s.webUI != nil && s.webUI.IsEnabled() {
-		s.webUI.SetupRoutesOnServer(s.router)
+	if s.useWebUI {
+		useWebUI(s)
 
 		// Token generation endpoint (for UI and management)
 		s.router.POST("/api/token", s.UserAuth(), s.GenerateToken)
@@ -249,10 +247,17 @@ func (s *Server) Start(port int) error {
 	}
 
 	fmt.Printf("Starting server on port %d\n", port)
-	fmt.Printf("OpenAI v1 API endpoint: http://localhost:%d/openai/v1/chat/completions\n", port)
-	fmt.Printf("Anthropic v1 API endpoint: http://localhost:%d/anthropic/v1/messages\n", port)
-	fmt.Printf("Legacy API endpoint: http://localhost:%d/v1/chat/completions\n", port)
-	fmt.Printf("Web UI: http://localhost:%d/dashboard\n", port)
+	fmt.Printf("OpenAI v1 Chat API endpoint: http://localhost:%d/openai/v1/chat/completions\n", port)
+	fmt.Printf("Anthropic v1 Message API endpoint: http://localhost:%d/anthropic/v1/messages\n", port)
+
+	// Get user token for Web UI URL
+	globalConfig := s.config.GetGlobalConfig()
+	webUIURL := fmt.Sprintf("http://localhost:%d/dashboard", port)
+	if globalConfig != nil && globalConfig.HasUserToken() {
+		userToken := globalConfig.GetUserToken()
+		webUIURL = fmt.Sprintf("http://localhost:%d/dashboard?user_auth_token=%s", port, userToken)
+	}
+	fmt.Printf("Web UI: %s\n", webUIURL)
 
 	return s.httpServer.ListenAndServe()
 }

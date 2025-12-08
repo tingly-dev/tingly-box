@@ -23,7 +23,7 @@ const Providers = () => {
     // Add provider form
     const [providerName, setProviderName] = useState('');
     const [providerApiBase, setProviderApiBase] = useState('');
-    const [providerApiVersion, setProviderApiVersion] = useState('openai');
+    const [providerApiStyle, setProviderApiStyle] = useState('openai');
     const [providerToken, setProviderToken] = useState('');
 
     // Add dialog
@@ -34,7 +34,7 @@ const Providers = () => {
     const [editingProvider, setEditingProvider] = useState<any>(null);
     const [editName, setEditName] = useState('');
     const [editApiBase, setEditApiBase] = useState('');
-    const [editApiVersion, setEditApiVersion] = useState('openai');
+    const [editApiStyle, setEditApiStyle] = useState('openai');
     const [editToken, setEditToken] = useState('');
     const [editEnabled, setEditEnabled] = useState(true);
 
@@ -49,7 +49,7 @@ const Providers = () => {
     const handleAddProviderClick = () => {
         setProviderName('');
         setProviderApiBase('');
-        setProviderApiVersion('openai');
+        setProviderApiStyle('openai');
         setProviderToken('');
         setAddDialogOpen(true);
     };
@@ -71,7 +71,7 @@ const Providers = () => {
         const providerData = {
             name: providerName,
             api_base: providerApiBase,
-            api_version: providerApiVersion,
+            api_style: providerApiStyle,
             token: providerToken,
         };
 
@@ -81,7 +81,7 @@ const Providers = () => {
             showNotification('Provider added successfully!', 'success');
             setProviderName('');
             setProviderApiBase('');
-            setProviderApiVersion('openai');
+            setProviderApiStyle('openai');
             setProviderToken('');
             setAddDialogOpen(false);
             loadProviders();
@@ -124,7 +124,7 @@ const Providers = () => {
             setEditingProvider(provider);
             setEditName(provider.name);
             setEditApiBase(provider.api_base);
-            setEditApiVersion(provider.api_version || 'openai');
+            setEditApiStyle(provider.api_style || 'openai');
             setEditToken('');
             setEditEnabled(provider.enabled);
             setEditDialogOpen(true);
@@ -140,7 +140,7 @@ const Providers = () => {
         const providerData: any = {
             name: editName,
             api_base: editApiBase,
-            api_version: editApiVersion,
+            api_style: editApiStyle,
             enabled: editEnabled,
         };
 
@@ -263,8 +263,8 @@ const Providers = () => {
                 onProviderNameChange={setProviderName}
                 providerApiBase={providerApiBase}
                 onProviderApiBaseChange={setProviderApiBase}
-                providerApiVersion={providerApiVersion}
-                onProviderApiVersionChange={setProviderApiVersion}
+                providerApiStyle={providerApiStyle}
+                onProviderApiStyleChange={setProviderApiStyle}
                 providerToken={providerToken}
                 onProviderTokenChange={setProviderToken}
             />
@@ -278,8 +278,8 @@ const Providers = () => {
                 onEditNameChange={setEditName}
                 editApiBase={editApiBase}
                 onEditApiBaseChange={setEditApiBase}
-                editApiVersion={editApiVersion}
-                onEditApiVersionChange={setEditApiVersion}
+                editApiStyle={editApiStyle}
+                onEditApiStyleChange={setEditApiStyle}
                 editToken={editToken}
                 onEditTokenChange={setEditToken}
                 editEnabled={editEnabled}

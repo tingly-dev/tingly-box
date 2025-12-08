@@ -20,6 +20,7 @@ tasks:
 
   start:
     cmds:
+      - task: go:build
       - ./build/tingly start
 
   build:

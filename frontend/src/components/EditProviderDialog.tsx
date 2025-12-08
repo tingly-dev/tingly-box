@@ -22,8 +22,8 @@ interface EditProviderDialogProps {
     onEditNameChange: (value: string) => void;
     editApiBase: string;
     onEditApiBaseChange: (value: string) => void;
-    editApiVersion: string;
-    onEditApiVersionChange: (value: string) => void;
+    editApiStyle: string;
+    onEditApiStyleChange: (value: string) => void;
     editToken: string;
     onEditTokenChange: (value: string) => void;
     editEnabled: boolean;
@@ -38,8 +38,8 @@ const EditProviderDialog = ({
     onEditNameChange,
     editApiBase,
     onEditApiBaseChange,
-    editApiVersion,
-    onEditApiVersionChange,
+    editApiStyle,
+    onEditApiStyleChange,
     editToken,
     onEditTokenChange,
     editEnabled,
@@ -66,12 +66,12 @@ const EditProviderDialog = ({
                             required
                         />
                         <FormControl fullWidth>
-                            <InputLabel id="edit-api-version-label">API Version</InputLabel>
+                            <InputLabel id="edit-api-style-label">API Style</InputLabel>
                             <Select
-                                labelId="edit-api-version-label"
-                                value={editApiVersion}
-                                label="API Version"
-                                onChange={(e) => onEditApiVersionChange(e.target.value)}
+                                labelId="edit-api-style-label"
+                                value={editApiStyle}
+                                label="API Style"
+                                onChange={(e) => onEditApiStyleChange(e.target.value)}
                             >
                                 <MenuItem value="openai">OpenAI</MenuItem>
                                 <MenuItem value="anthropic">Anthropic</MenuItem>
