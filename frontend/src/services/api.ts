@@ -203,6 +203,14 @@ export const api = {
   listOpenAIModels: () => fetchModelAPI('/openai/v1/models'),
   listAnthropicModels: () => fetchModelAPI('/anthropic/v1/models'),
 
+  // Rules API
+  getRules: () => fetchUIAPI('/rules'),
+  getRule: (name: string) => fetchUIAPI(`/rules/${name}`),
+  updateRule: (name: string, data: any) => fetchUIAPI(`/rules/${name}`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+
   // Token management
   setUserToken: (token: string) => {
     localStorage.setItem('user_auth_token', token);
