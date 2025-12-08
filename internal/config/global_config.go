@@ -32,11 +32,11 @@ type GlobalConfig struct {
 // NewGlobalConfig creates a new global configuration manager
 func NewGlobalConfig() (*GlobalConfig, error) {
 	// Use the same config directory as the main config
-	configDir := ".tingly-box"
+	configDir := GetTinglyConfDir()
 	if err := os.MkdirAll(configDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create config directory: %w", err)
 	}
-	
+
 	configFile := filepath.Join(configDir, "global_config.yaml")
 
 	config := &GlobalConfig{

@@ -1,6 +1,6 @@
 import { CardGrid, CardGridItem } from './CardGrid';
 import UnifiedCard from './UnifiedCard';
-import { Typography } from '@mui/material';
+import { Typography, Box } from '@mui/material';
 
 interface HistoryStatsProps {
     stats: {
@@ -13,55 +13,45 @@ interface HistoryStatsProps {
 
 const HistoryStats = ({ stats }: HistoryStatsProps) => {
     return (
-        <>
-            <CardGridItem xs={12} sm={6} md={3}>
-                <UnifiedCard
-                    title="Total Actions"
-                    subtitle={`${stats.total} total entries`}
-                    size="small"
-                >
-                    <Typography variant="h3" color="primary" sx={{ textAlign: 'center' }}>
+        <UnifiedCard
+            size="header"
+            width="100%"
+            title="Statistics Overview" subtitle="Overall action statistics">
+            <Box sx={{ display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap', gap: 3 }}>
+                <Box sx={{ textAlign: 'center', minWidth: 100 }}>
+                    <Typography variant="h4" color="primary" sx={{ fontWeight: 'bold' }}>
                         {stats.total}
                     </Typography>
-                </UnifiedCard>
-            </CardGridItem>
-
-            <CardGridItem xs={12} sm={6} md={3}>
-                <UnifiedCard
-                    title="Successful"
-                    subtitle={`${stats.success} successful actions`}
-                    size="small"
-                >
-                    <Typography variant="h3" color="success.main" sx={{ textAlign: 'center' }}>
+                    <Typography variant="body2" color="text.secondary">
+                        Total
+                    </Typography>
+                </Box>
+                <Box sx={{ textAlign: 'center', minWidth: 100 }}>
+                    <Typography variant="h4" color="success.main" sx={{ fontWeight: 'bold' }}>
                         {stats.success}
                     </Typography>
-                </UnifiedCard>
-            </CardGridItem>
-
-            <CardGridItem xs={12} sm={6} md={3}>
-                <UnifiedCard
-                    title="Failed"
-                    subtitle={`${stats.error} failed actions`}
-                    size="small"
-                >
-                    <Typography variant="h3" color="error.main" sx={{ textAlign: 'center' }}>
+                    <Typography variant="body2" color="text.secondary">
+                        Successful
+                    </Typography>
+                </Box>
+                <Box sx={{ textAlign: 'center', minWidth: 100 }}>
+                    <Typography variant="h4" color="error.main" sx={{ fontWeight: 'bold' }}>
                         {stats.error}
                     </Typography>
-                </UnifiedCard>
-            </CardGridItem>
-
-            <CardGridItem xs={12} sm={6} md={3}>
-                <UnifiedCard
-                    title="Today"
-                    subtitle={`${stats.today} actions today`}
-                    size="small"
-                >
-                    <Typography variant="h3" color="info.main" sx={{ textAlign: 'center' }}>
+                    <Typography variant="body2" color="text.secondary">
+                        Failed
+                    </Typography>
+                </Box>
+                <Box sx={{ textAlign: 'center', minWidth: 100 }}>
+                    <Typography variant="h4" color="info.main" sx={{ fontWeight: 'bold' }}>
                         {stats.today}
                     </Typography>
-                </UnifiedCard>
-            </CardGridItem>
-        </>
+                    <Typography variant="body2" color="text.secondary">
+                        Today
+                    </Typography>
+                </Box>
+            </Box>
+        </UnifiedCard>
     );
 };
 

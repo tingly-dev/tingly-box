@@ -1,15 +1,13 @@
-import Refresh from '@mui/icons-material/Refresh';
-import { Alert, Box, Button, CircularProgress, IconButton, Stack, Typography } from '@mui/material';
+import { Cancel, CheckCircle, Key, PlayArrow, RestartAlt, Stop, Refresh as RefreshIcon } from '@mui/icons-material';
+import { Button, IconButton, Stack, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
-import ActivityLog from '../components/ActivityLog';
-import CardGrid, { CardGridItem } from '../components/CardGrid';
-import ServerStatusControl from '../components/ServerStatusControl';
+import CardGrid from '../components/CardGrid';
 import UnifiedCard from '../components/UnifiedCard';
+import { PageLayout } from '../components/PageLayout';
 import { api } from '../services/api';
 
 const System = () => {
     const [serverStatus, setServerStatus] = useState<any>(null);
-    const [activityLog, setActivityLog] = useState<any[]>([]);
     const [providersStatus, setProvidersStatus] = useState<any>(null);
     const [defaults, setDefaults] = useState<any>({});
     const [providers, setProviders] = useState<any[]>([]);
@@ -24,13 +22,8 @@ const System = () => {
             loadServerStatus();
         }, 30000);
 
-        const logInterval = setInterval(() => {
-            loadActivityLog();
-        }, 10000);
-
         return () => {
             clearInterval(statusInterval);
-            clearInterval(logInterval);
         };
     }, []);
 
@@ -38,7 +31,6 @@ const System = () => {
         setLoading(true);
         await Promise.all([
             loadServerStatus(),
-            loadActivityLog(),
             loadProvidersStatus(),
             loadDefaults(),
             loadProviderSelectionPanel(),
@@ -53,12 +45,6 @@ const System = () => {
         }
     };
 
-    const loadActivityLog = async () => {
-        const result = await api.getHistory(50);
-        if (result.success) {
-            setActivityLog(result.data);
-        }
-    };
 
     const loadProvidersStatus = async () => {
         const result = await api.getProviders();
@@ -99,7 +85,6 @@ const System = () => {
                 setMessage({ type: 'success', text: result.message });
                 setTimeout(() => {
                     loadServerStatus();
-                    loadActivityLog();
                 }, 1000);
             } else {
                 setMessage({ type: 'error', text: result.error });
@@ -114,7 +99,6 @@ const System = () => {
                 setMessage({ type: 'success', text: result.message });
                 setTimeout(() => {
                     loadServerStatus();
-                    loadActivityLog();
                 }, 1000);
             } else {
                 setMessage({ type: 'error', text: result.error });
@@ -130,7 +114,6 @@ const System = () => {
                 setMessage({ type: 'success', text: result.message });
                 setTimeout(() => {
                     loadServerStatus();
-                    loadActivityLog();
                 }, 1000);
             } else {
                 setMessage({ type: 'error', text: result.error });
@@ -146,16 +129,12 @@ const System = () => {
                 localStorage.setItem('model_auth_token', result.data.token)
                 // navigator.clipboard.writeText(result.data.token);
                 // setMessage({ type: 'success', text: 'Token copied to clipboard!' });
-                loadActivityLog();
             } else {
                 setMessage({ type: 'error', text: result.error });
             }
         }
     };
 
-    const clearLog = () => {
-        setActivityLog([]);
-    };
 
     // This handler is kept for backward compatibility
     // The main configuration management is now done through ModelConfigCard
@@ -200,91 +179,104 @@ const System = () => {
         }
     };
 
-    if (loading) {
-        return (
-            <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-                <CircularProgress />
-            </Box>
-        );
-    }
-
     return (
-        <Box>
-            {message && (
-                <Alert
-                    severity={message.type}
-                    sx={{ mb: 2 }}
-                    onClose={() => setMessage(null)}
-                >
-                    {message.text}
-                </Alert>
-            )}
-
+        <PageLayout loading={loading} message={message} onClearMessage={() => setMessage(null)}>
             <CardGrid>
                 {/* Server Status - Consolidated */}
-                <CardGridItem xs={12} md={6}>
-                    <UnifiedCard
-                        title="Server Status & Control"
-                        subtitle={serverStatus ? (serverStatus.server_running ? "Server is running" : "Server is stopped") : "Loading..."}
-                        size="large"
-                        rightAction={
-                            <IconButton onClick={loadServerStatus} size="small" title="Refresh Status">
-                                <Refresh />
-                            </IconButton>
-                        }
-                    >
-                        {serverStatus ? (
-                            <>
-                                <ServerStatusControl
-                                    serverStatus={serverStatus}
-                                    onStartServer={handleStartServer}
-                                    onStopServer={handleStopServer}
-                                    onRestartServer={handleRestartServer}
-                                    onGenerateToken={handleGenerateToken}
-                                />
-                                {serverStatus.request_count !== undefined && (
-                                    <Box sx={{ mt: 2, p: 2, backgroundColor: 'grey.50', borderRadius: 2 }}>
-                                        <Typography variant="body2" color="text.secondary" gutterBottom>
-                                            Total Requests
-                                        </Typography>
-                                        <Typography variant="h6" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                                            {serverStatus.request_count}
-                                        </Typography>
-                                    </Box>
-                                )}
-                            </>
-                        ) : (
-                            <div>Loading...</div>
-                        )}
-                    </UnifiedCard>
-                </CardGridItem>
-
-
-                {/* Activity Log - Enhanced */}
-                <CardGridItem xs={12}>
-                    <UnifiedCard
-                        title="Activity Log & History"
-                        subtitle={`${activityLog.length} recent activity entries`}
-                        size="large"
-                    >
-                        <Stack spacing={2}>
+                <UnifiedCard
+                    title="Server Status & Control"
+                    size="full"
+                    rightAction={
+                        <Stack direction="row" spacing={1}>
                             <Button
                                 variant="outlined"
-                                onClick={() => window.location.href = '/history'}
-                                sx={{ mb: 1 }}
+                                size="small"
+                                startIcon={<Key />}
+                                onClick={handleGenerateToken}
+                                title="Generate Token"
                             >
-                                View Full History
+                                Token
                             </Button>
-                            <ActivityLog
-                                activityLog={activityLog}
-                                onLoadActivityLog={loadActivityLog}
-                                onClearLog={clearLog}
-                            />
+                            <Button
+                                variant="contained"
+                                color="success"
+                                size="small"
+                                startIcon={<PlayArrow />}
+                                onClick={handleStartServer}
+                                disabled={serverStatus?.server_running}
+                                title="Start Server"
+                            >
+                                Start
+                            </Button>
+                            <Button
+                                variant="contained"
+                                color="error"
+                                size="small"
+                                startIcon={<Stop />}
+                                onClick={handleStopServer}
+                                disabled={!serverStatus?.server_running}
+                                title="Stop Server"
+                            >
+                                Stop
+                            </Button>
+                            <Button
+                                variant="contained"
+                                size="small"
+                                startIcon={<RestartAlt />}
+                                onClick={handleRestartServer}
+                                title="Restart Server"
+                            >
+                                Restart
+                            </Button>
+                            <IconButton onClick={loadServerStatus} size="small" title="Refresh Status">
+                                <RefreshIcon />
+                            </IconButton>
                         </Stack>
-                    </UnifiedCard>
-                </CardGridItem>
+                    }
+                >
+                    {serverStatus ? (
+                        <Stack spacing={3}>
+                            {/* Status Information */}
+                            <Stack spacing={1}>
+                                <Stack direction="row" alignItems="center" spacing={1}>
+                                    {serverStatus.server_running ? (
+                                        <CheckCircle color="success" />
+                                    ) : (
+                                        <Cancel color="error" />
+                                    )}
+                                    <Typography variant="h6">
+                                        Status: {serverStatus.server_running ? 'Running' : 'Stopped'}
+                                    </Typography>
+                                </Stack>
+                                <Typography variant="body2" color="text.secondary">
+                                    <strong>Port:</strong> {serverStatus.port}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    <strong>Providers:</strong> {serverStatus.providers_enabled}/{serverStatus.providers_total}
+                                </Typography>
+                                {serverStatus.uptime && (
+                                    <Typography variant="body2" color="text.secondary">
+                                        <strong>Uptime:</strong> {serverStatus.uptime}
+                                    </Typography>
+                                )}
+                                {serverStatus.last_updated && (
+                                    <Typography variant="body2" color="text.secondary">
+                                        <strong>Last Updated:</strong> {serverStatus.last_updated}
+                                    </Typography>
+                                )}
+                                {serverStatus.request_count !== undefined && (
+                                    <Typography variant="body2" color="text.secondary">
+                                        <strong>Total Requests:</strong> {serverStatus.request_count}
+                                    </Typography>
+                                )}
+                            </Stack>
+                        </Stack>
+                    ) : (
+                        <div>Loading...</div>
+                    )}
+                </UnifiedCard>
             </CardGrid>
-        </Box>
+        </PageLayout>
     );
 };
 

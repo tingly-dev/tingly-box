@@ -162,9 +162,14 @@ func RequestLoggerMiddleware() gin.HandlerFunc {
 		start := time.Now()
 
 		var buf bytes.Buffer
-		tee := io.TeeReader(c.Request.Body, &buf)
-		body, _ := ioutil.ReadAll(tee)
-		c.Request.Body = ioutil.NopCloser(&buf)
+		var body []byte
+
+		// Only read body if it exists (for POST/PUT requests)
+		if c.Request.Body != nil {
+			tee := io.TeeReader(c.Request.Body, &buf)
+			body, _ = ioutil.ReadAll(tee)
+			c.Request.Body = ioutil.NopCloser(&buf)
+		}
 
 		// Log details after the request is processed
 		duration := time.Since(start)

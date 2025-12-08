@@ -3,6 +3,7 @@ module tingly-box
 go 1.25.3
 
 require (
+	github.com/anthropics/anthropic-sdk-go v1.19.0
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/gin-gonic/gin v1.11.0
 	github.com/goccy/go-yaml v1.18.0
@@ -46,7 +47,6 @@ require (
 )
 
 require (
-	github.com/anthropics/anthropic-sdk-go v1.19.0 // indirect
 	github.com/bytedance/sonic v1.14.0 // indirect
 	github.com/bytedance/sonic/loader v0.3.0 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect

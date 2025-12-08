@@ -1,24 +1,29 @@
-import { Add as AddIcon, ContentCopy as CopyIcon, Info as InfoIcon, Refresh as RefreshIcon, Terminal as TerminalIcon } from '@mui/icons-material';
+import {
+    Add as AddIcon,
+    ContentCopy as CopyIcon,
+    Refresh as RefreshIcon,
+    Terminal as TerminalIcon
+} from '@mui/icons-material';
 import {
     Alert,
     AlertTitle,
     Box,
     Button,
-    CircularProgress,
     Dialog,
     DialogContent,
     DialogTitle,
     Grid,
     IconButton,
-    Snackbar,
     Stack,
     Tooltip,
     Typography
 } from '@mui/material';
-import { useEffect, useState } from 'react';
+import { Info as InfoIcon } from '@mui/icons-material';
+import React, { useEffect, useState } from 'react';
 import { ProviderDialog } from '../components/ProviderDialog';
-import { SingleProviderSelect } from '../components/ProviderSelect';
+import ProviderSelectTab, { type ProviderSelectTabOption } from "../components/ProviderSelectTab.tsx";
 import UnifiedCard from '../components/UnifiedCard';
+import { PageLayout } from '../components/PageLayout';
 import { api } from '../services/api';
 
 const Dashboard = () => {
@@ -34,17 +39,66 @@ const Dashboard = () => {
     const [currentPage, setCurrentPage] = useState<{ [key: string]: number }>({});
 
     // Server info states
-    const [snackbarOpen, setSnackbarOpen] = useState(false);
-    const [snackbarMessage, setSnackbarMessage] = useState('');
     const [generatedToken, setGeneratedToken] = useState<string>('');
     const [modelToken, setModelToken] = useState<string>('');
     const [showTokenModal, setShowTokenModal] = useState(false);
     const [llmModel, setLLMModel] = useState<string>("tingly");
 
     // Banner state for provider/model selection
-    const [showBanner, setShowBanner] = useState(false);
     const [bannerProvider, setBannerProvider] = useState<string>('');
     const [bannerModel, setBannerModel] = useState<string>('');
+    const [showBanner, setShowBanner] = useState(false);
+
+    // Unified notification state
+    const [notification, setNotification] = useState<{
+        open: boolean;
+        message?: string;
+        severity?: 'success' | 'info' | 'warning' | 'error';
+        customContent?: React.ReactNode;
+        onClose?: () => void;
+    }>({ open: false });
+
+    // Helper function to show notifications
+    const showNotification = (message: string, severity: 'success' | 'info' | 'warning' | 'error' = 'info') => {
+        setNotification({
+            open: true,
+            message,
+            severity,
+            onClose: () => setNotification(prev => ({ ...prev, open: false }))
+        });
+    };
+
+    // Helper function to show banner notification
+    const showBannerNotification = () => {
+        if (showBanner && bannerProvider && bannerModel) {
+            setNotification({
+                open: true,
+                customContent: (
+                    <>
+                        <AlertTitle>Active Provider & Model</AlertTitle>
+                        <Typography variant="body2">
+                            <strong>Request:</strong> {llmModel} {" -> "}
+                            <strong>Provider:</strong> {bannerProvider} | <strong>Model:</strong> {bannerModel}
+                        </Typography>
+                    </>
+                ),
+                severity: 'info',
+                onClose: () => {
+                    setShowBanner(false);
+                    setNotification(prev => ({ ...prev, open: false }));
+                }
+            });
+        }
+    };
+
+    // Show banner notification when banner should be displayed
+    React.useEffect(() => {
+        if (showBanner) {
+            showBannerNotification();
+        } else {
+            setNotification(prev => ({ ...prev, open: false }));
+        }
+    }, [showBanner, bannerProvider, bannerModel, llmModel]);
 
     // Add provider dialog state
     const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -131,11 +185,9 @@ const Dashboard = () => {
     const copyToClipboard = async (text: string, label: string) => {
         try {
             await navigator.clipboard.writeText(text);
-            setSnackbarMessage(`${label} copied to clipboard!`);
-            setSnackbarOpen(true);
+            showNotification(`${label} copied to clipboard!`, 'success');
         } catch (err) {
-            setSnackbarMessage('Failed to copy to clipboard');
-            setSnackbarOpen(true);
+            showNotification('Failed to copy to clipboard', 'error');
         }
     };
 
@@ -146,8 +198,7 @@ const Dashboard = () => {
             setGeneratedToken(result.data.token);
             copyToClipboard(result.data.token, 'Token');
         } else {
-            setSnackbarMessage(`Failed to generate token: ${result.error}`);
-            setSnackbarOpen(true);
+            showNotification(`Failed to generate token: ${result.error}`, 'error');
         }
     };
 
@@ -160,6 +211,23 @@ const Dashboard = () => {
         setBannerProvider(provider.name);
         setBannerModel(model);
         setShowBanner(true);
+    };
+
+    const handleRefresh = async (provider: any) => {
+        console.log("Refreshing models for", provider.name);
+        try {
+            const result = await api.getProviderModelsByName(provider.name);
+            if (result.success) {
+                await loadProviders();
+                await loadProviderModels();
+                showNotification(`Models for ${provider.name} refreshed successfully!`, 'success');
+            } else {
+                showNotification(`Failed to refresh models for ${provider.name}`, 'error');
+            }
+        } catch (error) {
+            console.error("Error refreshing models:", error);
+            showNotification(`Error refreshing models for ${provider.name}`, 'error');
+        }
     };
 
     const handleExpandToggle = (providerName: string, expanded: boolean) => {
@@ -202,8 +270,7 @@ const Dashboard = () => {
         const result = await api.addProvider(providerData);
 
         if (result.success) {
-            setSnackbarMessage('Provider added successfully!');
-            setSnackbarOpen(true);
+            showNotification('Provider added successfully!', 'success');
             setProviderName('');
             setProviderApiBase('');
             setProviderApiVersion('openai');
@@ -211,18 +278,9 @@ const Dashboard = () => {
             setAddDialogOpen(false);
             await loadProviders();
         } else {
-            setSnackbarMessage(`Failed to add provider: ${result.error}`);
-            setSnackbarOpen(true);
+            showNotification(`Failed to add provider: ${result.error}`, 'error');
         }
     };
-
-    if (loading) {
-        return (
-            <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-                <CircularProgress />
-            </Box>
-        );
-    }
 
     const baseUrl = import.meta.env.VITE_API_BASE_URL || window.location.origin;
     const openaiBaseUrl = `${baseUrl}/openai/v1`;
@@ -230,43 +288,16 @@ const Dashboard = () => {
     const token = generatedToken || modelToken;
 
     return (
-        <Box >
-            {/* Provider/Model Selection Banner */}
-            {showBanner && (
-                <Alert
-                    severity="info"
-                    icon={<InfoIcon />}
-                    sx={{
-                        mb: 2,
-                        '& .MuiAlert-message': {
-                            width: '100%'
-                        }
-                    }}
-                    action={
-                        <IconButton
-                            aria-label="close"
-                            color="inherit"
-                            size="small"
-                            onClick={() => setShowBanner(false)}
-                        >
-                            ×
-                        </IconButton>
-                    }
-                >
-                    <AlertTitle>Active Provider & Model</AlertTitle>
-                    <Typography variant="body2">
-                        <strong>Request:</strong> {llmModel} {" -> "}
-                        <strong>Provider:</strong> {bannerProvider} | <strong>Model:</strong> {bannerModel}
-                    </Typography>
-                </Alert>
-            )}
+        <PageLayout
+            loading={loading}
+            notification={notification}
+        >
 
             {/* Server Information Header */}
             <UnifiedCard
                 title="Switch Provider & Model"
                 subtitle={`Total: ${providers.length} providers | Enabled: ${providers.filter((p: any) => p.enabled).length}`}
                 size="full"
-                width="100%"
                 rightAction={
                     <Box>
                         <Button
@@ -279,6 +310,7 @@ const Dashboard = () => {
                 }
 
             >
+
                 <Grid container spacing={2}>
                     <Grid size={{ xs: 12, md: 6 }}>
                         <Stack spacing={1}>
@@ -365,7 +397,7 @@ const Dashboard = () => {
                             {/* Token Row */}
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <Typography variant="body2" color="text.secondary" sx={{ minWidth: 60 }}>
-                                    LLM Token:
+                                    LLM API KEY:
                                 </Typography>
                                 <Typography
                                     variant="body2"
@@ -411,7 +443,7 @@ const Dashboard = () => {
 
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <Typography variant="body2" color="text.secondary" sx={{ minWidth: 60 }}>
-                                    LLM Model:
+                                    LLM API Model:
                                 </Typography>
                                 <Typography
                                     variant="body2"
@@ -439,13 +471,14 @@ const Dashboard = () => {
                         </Stack>
                     </Grid>
 
+  
                     {providers.length > 0 ? (
 
                         <Grid size={{ xs: 12, md: 12 }}>
                             {/* Providers Quick Settings */}
-                            <Stack spacing={2}>
+                            {/* <Stack spacing={2}>
                                 {providers.map((provider: any) => (
-                                    <SingleProviderSelect
+                                    <ProviderSelect
                                         key={provider.name}
                                         provider={provider}
                                         providerModels={providerModels}
@@ -460,6 +493,16 @@ const Dashboard = () => {
                                         onPageChange={handlePageChange}
                                     />
                                 ))}
+                            </Stack> */}
+                            <Stack spacing={2}>
+                                <ProviderSelectTab
+                                    providers={providers}
+                                    providerModels={providerModels}
+                                    selectedProvider={selectedOption?.provider}
+                                    selectedModel={selectedOption?.model}
+                                    onSelected={(opt: ProviderSelectTabOption) => handleModelSelect(opt.provider, opt.model || "")}
+                                    onRefresh={handleRefresh}
+                                />
                             </Stack>
                         </Grid>
                     ) : (
@@ -484,10 +527,13 @@ const Dashboard = () => {
                             <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>
                                 No Providers Available
                             </Typography>
-                            <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
-                                Get started by adding your first AI provider. You can connect to OpenAI, Anthropic, or any compatible API endpoint.
+                            <Typography variant="body1" color="text.secondary"
+                                        sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
+                                Get started by adding your first AI provider. You can connect to OpenAI, Anthropic, or
+                                any compatible API endpoint.
                             </Typography>
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 4, maxWidth: 400, mx: 'auto' }}>
+                            <Typography variant="body2" color="text.secondary"
+                                        sx={{ mb: 4, maxWidth: 400, mx: 'auto' }}>
                                 <strong>Steps to get started:</strong><br />
                                 1. Click the + button to add a provider<br />
                                 2. Configure your API credentials<br />
@@ -558,14 +604,7 @@ const Dashboard = () => {
                 providerToken={providerToken}
                 onProviderTokenChange={setProviderToken}
             />
-
-            <Snackbar
-                open={snackbarOpen}
-                autoHideDuration={3000}
-                onClose={() => setSnackbarOpen(false)}
-                message={snackbarMessage}
-            />
-        </Box>
+        </PageLayout>
     );
 };
 
