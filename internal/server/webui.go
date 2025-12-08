@@ -46,7 +46,7 @@ func GetGlobalServer() *Server {
 }
 
 // NewWebUI creates a new web UI manager
-func NewWebUI(enabled bool, appConfig *config.AppConfig, logger *memory.MemoryLogger) *WebUI {
+func NewWebUI(enabled bool, appConfig *config.AppConfig, logger *memory.MemoryLogger, router *gin.Engine) *WebUI {
 	if !enabled {
 		return &WebUI{enabled: false}
 	}
@@ -63,63 +63,20 @@ func NewWebUI(enabled bool, appConfig *config.AppConfig, logger *memory.MemoryLo
 		enabled: true,
 		config:  appConfig,
 		logger:  logger,
-		router:  gin.New(),
+		router:  router,
 		assets:  assets,
 	}
 
-	wui.setupRoutes()
 	return wui
 }
 
-// setupRoutes configures web UI routes
-func (wui *WebUI) setupRoutes() {
+// useAPIEndpoints configures API routes for web UI
+func (wui *WebUI) useAPIEndpoints(engine *gin.Engine) {
 	if !wui.enabled {
 		return
 	}
 
-	// Middleware
-	wui.router.Use(gin.Logger())
-	wui.router.Use(gin.Recovery())
-
-	wui.router.Use(func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization")
-	})
-
-	// Static files and templates - try embedded assets first, fallback to filesystem
-	if wui.assets != nil {
-		log.Printf("Using embedded assets")
-		wui.assets.SetupStaticRoutes(wui.router)
-	} else {
-		panic("No UI resources")
-	}
-
-	// Dashboard endpoints
-	wui.router.GET("/", wui.Dashboard)
-	wui.router.GET("/dashboard", wui.Dashboard)
-
-	// UI page routes
-	ui := wui.router.Group("/ui")
-	{
-		ui.GET("/", wui.Dashboard)
-		ui.GET("/dashboard", wui.Dashboard)
-		ui.GET("/providers", wui.ProvidersPage)
-		ui.GET("/system", wui.SystemPage)
-		ui.GET("/history", wui.HistoryPage)
-	}
-
-	// API routes (for web UI functionality)
-	wui.setupAPIRoutes()
-}
-
-// setupAPIRoutes configures API routes for web UI
-func (wui *WebUI) setupAPIRoutes() {
-	if !wui.enabled {
-		return
-	}
-
-	api := wui.router.Group("/api")
+	api := engine.Group("/api")
 	api.Use(wui.authMiddleware()) // Apply authentication to all API routes
 	{
 		// Providers management
@@ -155,50 +112,46 @@ func (wui *WebUI) GetRouter() *gin.Engine {
 	return wui.router
 }
 
-// SetupRoutesOnServer sets up WebUI routes and templates on the main server router
-func (wui *WebUI) SetupRoutesOnServer(mainRouter *gin.Engine) {
+func useWebUI(engine *Server) {
+	ui := NewWebUI(true, engine.config, engine.memoryLogger, engine.router)
+	ui.UseUIEndpoints()
+}
+
+// UseUIEndpoints sets up WebUI routes and templates on the main server router
+func (wui *WebUI) UseUIEndpoints() {
 	if !wui.enabled {
 		return
 	}
 
-	// Load templates and static files on the main router - try embedded first
-	if wui.assets != nil {
-		log.Printf("Using embedded assets on main server")
-		wui.assets.SetupStaticRoutes(mainRouter)
-	} else {
-		panic("No UI resources")
-	}
+	// Middleware
+	wui.router.Use(gin.Logger())
+	wui.router.Use(gin.Recovery())
 
-	// Add dashboard routes to main router
-	mainRouter.GET("/dashboard", wui.Dashboard)
+	wui.router.Use(func(c *gin.Context) {
+		c.Header("Access-Control-Allow-Origin", "*")
+		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization")
+	})
 
-	// Add API routes for web UI functionality on main router
-	api := mainRouter.Group("/api")
-	api.Use(wui.authMiddleware()) // Apply authentication to all API routes
+	// Dashboard endpoints
+	//wui.router.GET("/", wui.Dashboard)
+	wui.router.GET("/dashboard", wui.Dashboard)
+
+	// UI page routes
+	ui := wui.router.Group("/ui")
 	{
-		// Providers management
-		api.GET("/providers", wui.GetProviders)
-		api.GET("/providers/:name", wui.GetProvider)
-		api.POST("/providers", wui.AddProvider)
-		api.PUT("/providers/:name", wui.UpdateProvider)
-		api.POST("/providers/:name/toggle", wui.ToggleProvider)
-		api.DELETE("/providers/:name", wui.DeleteProvider)
-
-		// Server management
-		api.GET("/status", wui.GetStatus)
-		api.POST("/server/start", wui.StartServer)
-		api.POST("/server/stop", wui.StopServer)
-		api.POST("/server/restart", wui.RestartServer)
-
-		// History
-		api.GET("/history", wui.GetHistory)
-
-		// Defaults and provider models
-		api.GET("/defaults", wui.GetDefaults)
-		api.POST("/defaults", wui.SetDefaults)
-		api.GET("/provider-models", wui.GetProviderModels)
-		api.POST("/provider-models/:name", wui.FetchProviderModels)
+		ui.GET("/", wui.Dashboard)
+		ui.GET("/dashboard", wui.Dashboard)
+		ui.GET("/providers", wui.ProvidersPage)
+		ui.GET("/system", wui.SystemPage)
+		ui.GET("/history", wui.HistoryPage)
 	}
+
+	// API routes (for web UI functionality)
+	wui.useAPIEndpoints(wui.router)
+
+	// Static files and templates - try embedded assets first, fallback to filesystem
+	wui.useStaticEndpoints(wui.router)
 }
 
 // IsEnabled returns whether web UI is enabled
@@ -913,6 +866,16 @@ func (wui *WebUI) authMiddleware() gin.HandlerFunc {
 		}
 
 		c.Next()
+	}
+}
+
+func (wui *WebUI) useStaticEndpoints(engine *gin.Engine) {
+	// Load templates and static files on the main router - try embedded first
+	if wui.assets != nil {
+		log.Printf("Using embedded assets on main server")
+		wui.assets.SetupStaticRoutes(engine)
+	} else {
+		panic("No UI resources")
 	}
 }
 
