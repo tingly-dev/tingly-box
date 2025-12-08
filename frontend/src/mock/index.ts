@@ -145,6 +145,73 @@ export default [
         }
     },
     {
+        url: '/api/probe',
+        method: 'post',
+        response: () => {
+            // Get the current rule configuration
+            const currentRule = mockRules.tingly;
+
+            // Simulate a request that would be sent
+            const mockRequest = {
+                messages: [
+                    {
+                        role: "user",
+                        content: "hi"
+                    }
+                ],
+                model: currentRule.model,
+                max_tokens: 100,
+                temperature: 0.7
+            };
+
+            // Simulate different responses based on the provider
+            const mockResponses = {
+                openai: "Hello! I'm your AI assistant powered by OpenAI. How can I help you today? This is a mock response confirming that your rule configuration is working correctly.",
+                anthropic: "Hi there! I'm your AI assistant powered by Anthropic. I'm responding to your simple 'hi' message to validate that your rule configuration is functioning properly.",
+                default: "Hello! This is a mock response from the probe API, confirming that your rule configuration with provider '${currentRule.provider}' and model '${currentRule.model}' is working correctly."
+            };
+
+            const mockResponse = mockResponses[currentRule.provider as keyof typeof mockResponses] ||
+                                mockResponses.default.replace('${currentRule.provider}', currentRule.provider).replace('${currentRule.model}', currentRule.model);
+
+            // Add some processing time simulation
+            const processingTime = Math.floor(Math.random() * 1000) + 500; // 500-1500ms
+
+            return {
+                success: true,
+                data: {
+                    request: {
+                        ...mockRequest,
+                        provider: currentRule.provider,
+                        timestamp: new Date().toISOString(),
+                        processing_time_ms: processingTime
+                    },
+                    response: {
+                        content: mockResponse,
+                        model: currentRule.model,
+                        provider: currentRule.provider,
+                        usage: {
+                            prompt_tokens: 10,
+                            completion_tokens: 25,
+                            total_tokens: 35
+                        },
+                        finish_reason: "stop"
+                    },
+                    rule_tested: {
+                        name: "tingly",
+                        provider: currentRule.provider,
+                        model: currentRule.model,
+                        timestamp: new Date().toISOString()
+                    },
+                    test_result: {
+                        success: true,
+                        message: "Rule configuration is valid and working correctly"
+                    }
+                }
+            };
+        }
+    },
+    {
         url: '/api/status',
         method: 'get',
         response: () => ({
