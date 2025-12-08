@@ -5,7 +5,6 @@ import {
     Terminal as TerminalIcon
 } from '@mui/icons-material';
 import {
-    Alert,
     AlertTitle,
     Box,
     Button,
@@ -18,17 +17,17 @@ import {
     Tooltip,
     Typography
 } from '@mui/material';
-import { Info as InfoIcon } from '@mui/icons-material';
 import React, { useEffect, useState } from 'react';
+import { PageLayout } from '../components/PageLayout';
 import { ProviderDialog } from '../components/ProviderDialog';
 import ProviderSelectTab, { type ProviderSelectTabOption } from "../components/ProviderSelectTab.tsx";
 import UnifiedCard from '../components/UnifiedCard';
-import { PageLayout } from '../components/PageLayout';
 import { api } from '../services/api';
 
 const Dashboard = () => {
     const [providers, setProviders] = useState<any[]>([]);
     const [defaults, setDefaults] = useState<any>({});
+    const [rules, setRules] = useState<any>({});
     const [providerModels, setProviderModels] = useState<any>({});
     const [loading, setLoading] = useState(true);
     const [selectedOption, setSelectedOption] = useState<any>({ provider: "", model: "" });
@@ -112,6 +111,16 @@ const Dashboard = () => {
         loadToken();
     }, []);
 
+    // Update selected option when rules are loaded
+    useEffect(() => {
+        if (rules.tingly) {
+            setSelectedOption({
+                provider: rules.tingly.provider,
+                model: rules.tingly.model
+            });
+        }
+    }, [rules]);
+
 
     const loadToken = async () => {
         const result = await api.getToken();
@@ -125,6 +134,7 @@ const Dashboard = () => {
         await Promise.all([
             loadProviders(),
             loadDefaults(),
+            loadRules(),
             loadProviderModels(),
         ]);
         setLoading(false);
@@ -143,6 +153,14 @@ const Dashboard = () => {
             setDefaults(result.data);
         }
     };
+
+    const loadRules = async () => {
+        const result = await api.getRules();
+        if (result.success) {
+            setRules(result.data);
+        }
+    };
+
 
     const loadProviderModels = async () => {
         const result = await api.getProviderModels();
@@ -203,14 +221,31 @@ const Dashboard = () => {
     };
 
     // Composition handlers for provider select
-    const handleModelSelect = (provider: any, model: string) => {
+    const handleModelSelect = async (provider: any, model: string) => {
         console.log("on select", provider, model);
         setSelectedOption({ provider: provider.name, model: model });
 
-        // Show banner with selected provider and model info
-        setBannerProvider(provider.name);
-        setBannerModel(model);
-        setShowBanner(true);
+        try {
+            // Update the "tingly" rule with the selected provider and model
+            const ruleData = {
+                provider: provider.name,
+                model: model,
+            };
+
+            const result = await api.updateRule('tingly', ruleData);
+            if (result.success) {
+                // Show banner with selected provider and model info
+                setBannerProvider(provider.name);
+                setBannerModel(model);
+                setShowBanner(true);
+                showNotification(`Successfully updated tingly rule to use ${provider.name}:${model}`, 'success');
+            } else {
+                showNotification(`Failed to update tingly rule: ${result.error}`, 'error');
+            }
+        } catch (error) {
+            console.error("Error updating tingly rule:", error);
+            showNotification(`Error updating tingly rule for ${provider.name}`, 'error');
+        }
     };
 
     const handleRefresh = async (provider: any) => {
@@ -471,7 +506,7 @@ const Dashboard = () => {
                         </Stack>
                     </Grid>
 
-  
+
                     {providers.length > 0 ? (
 
                         <Grid size={{ xs: 12, md: 12 }}>
@@ -528,12 +563,12 @@ const Dashboard = () => {
                                 No Providers Available
                             </Typography>
                             <Typography variant="body1" color="text.secondary"
-                                        sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
+                                sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
                                 Get started by adding your first AI provider. You can connect to OpenAI, Anthropic, or
                                 any compatible API endpoint.
                             </Typography>
                             <Typography variant="body2" color="text.secondary"
-                                        sx={{ mb: 4, maxWidth: 400, mx: 'auto' }}>
+                                sx={{ mb: 4, maxWidth: 400, mx: 'auto' }}>
                                 <strong>Steps to get started:</strong><br />
                                 1. Click the + button to add a provider<br />
                                 2. Configure your API credentials<br />
