@@ -493,7 +493,7 @@ func handleSystemInfo(logger *memory.MemoryLogger) {
 
 	fmt.Println("\n🔧 Configuration:")
 	homeDir, _ := os.UserHomeDir()
-	fmt.Printf("  Config File: %s/.tingly-box/config.enc\n", homeDir)
+	fmt.Printf("  Config File: %s/%s/config.enc\n", homeDir, config.ConfigDirName)
 }
 
 // handleGenerateExample generates and displays API example

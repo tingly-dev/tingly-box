@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"tingly-box/internal/config"
 	"tingly-box/internal/server"
 )
 
@@ -87,7 +88,7 @@ func (m *MockProviderServer) handleChatCompletions(w http.ResponseWriter, r *htt
 		m.lastRequest[endpoint] = reqBody
 	}
 
-	response, exists := m.responses["chat/completions"]
+	response, exists := m.responses[endpoint]
 	if !exists {
 		// Default successful response
 		response = MockResponse{
@@ -172,7 +173,13 @@ func NewMockProviderTestSuite(t *testing.T) *MockProviderTestSuite {
 	providerName := "mock-provider"
 
 	// Add provider through the config
-	err := suite.testServer.config.AddProvider(providerName, suite.mockServer.GetURL(), "mock-token")
+	provider := &config.Provider{
+		Name:    providerName,
+		APIBase: suite.mockServer.GetURL(),
+		Token:   "mock-token",
+		Enabled: true,
+	}
+	err := suite.testServer.config.AddProvider(provider)
 	if err != nil {
 		suite.t.Fatalf("Failed to add mock provider: %v", err)
 	}

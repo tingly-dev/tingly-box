@@ -1,8 +1,8 @@
-import { Alert, Box, Card, CardContent, IconButton, Tooltip, Typography } from '@mui/material';
-import { Pause, PlayArrow, Refresh } from '@mui/icons-material';
+import { Alert, Box, Card, CardContent, IconButton, Tooltip, Typography, Fade } from '@mui/material';
+import { Pause, PlayArrow, Refresh, KeyboardArrowUp, KeyboardArrowDown } from '@mui/icons-material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import type { ReactNode } from 'react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 
 interface UnifiedCardProps {
   title?: string;
@@ -18,6 +18,8 @@ interface UnifiedCardProps {
   };
   // 自定义宽度，如果提供则优先使用
   width?: number | string;
+  // 自定义高度，如果提供则优先使用
+  height?: number | string;
   // Message support
   message?: { type: 'success' | 'error'; text: string } | null;
   onClearMessage?: () => void;
@@ -32,6 +34,11 @@ interface UnifiedCardProps {
   scrollPaused?: boolean;
   scrollContentHeight?: number;
   onScrollToggle?: (paused: boolean) => void;
+  // Enhanced scrolling options
+  showScrollIndicator?: boolean;
+  showScrollButtons?: boolean;
+  scrollThrottle?: boolean;
+  enableSmoothScroll?: boolean;
 }
 
 // 基本格子尺寸单位（像素）
@@ -44,55 +51,104 @@ const scrollSpeeds = {
   fast: 200,
 };
 
-// 预设的格子倍数系统 - 使用最小高度而不是固定高度
+// Scroll throttling utility
+const throttle = <T extends (...args: any[]) => void>(
+  func: T,
+  delay: number
+): ((...args: Parameters<T>) => void) => {
+  let timeoutId: number | null = null;
+  let lastExecTime = 0;
+
+  return (...args: Parameters<T>) => {
+    const currentTime = Date.now();
+
+    if (currentTime - lastExecTime > delay) {
+      func(...args);
+      lastExecTime = currentTime;
+    } else {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      timeoutId = setTimeout(() => {
+        func(...args);
+        lastExecTime = Date.now();
+        timeoutId = null;
+      }, delay - (currentTime - lastExecTime)) as unknown as number;
+    }
+  };
+};
+
+// 预设的格子倍数系统 - 使用相对尺寸和自适应布局
 const presetCardDimensions = {
   small: {
-    widthUnits: 8,  // 320px
-    minHeightUnits: 6, // 最小高度 240px
+    width: '25%',  // 25% 宽度（相对于父容器）
+    height: '50%', // 50% 高度（相对于父容器）
+    hasFixedHeight: true,
   },
   medium: {
-    widthUnits: 8,  // 320px
-    minHeightUnits: 8, // 最小高度 320px
+    width: '50%',  // 50% 宽度（相对于父容器）
+    height: '100%', // 50% 高度（相对于父容器）
+    hasFixedHeight: true,
   },
   large: {
-    widthUnits: 12,  // 520px
+    width: '100%', // 自适应父容器最大宽度
     minHeightUnits: 10, // 最小高度 400px
+    hasFixedHeight: true,
   },
   full: {
-    widthUnits: 28, // 520px
-    minHeightUnits: 24, // 最小高度 480px
+    width: '100%', // 自适应父容器最大宽度
+    height: '100%', // 自适应父容器最大高度
+    hasFixedHeight: true,
   },
   header: {
-    widthUnits: 28, // 520px
+    width: '100%', // 自适应父容器最大宽度
     minHeightUnits: 4, // 最小高度 320px
+    hasFixedHeight: false,
   },
-  fullw:{
-    widthUnits: 28, // 520px
-    minHeightUnits: 12, // 最小高度 480px
-  }
 };
 
 // 计算卡片尺寸的函数
 const getCardDimensions = (
   size: 'small' | 'medium' | 'large' | 'full' | 'header',
   customGridUnits?: { widthUnits?: number; heightUnits?: number },
-  customWidth?: number | string
+  customWidth?: number | string,
+  customHeight?: number | string
 ) => {
-  const preset = presetCardDimensions[size];
+  const preset = presetCardDimensions[size] as any;
 
   // 如果提供了自定义宽度，优先使用自定义宽度
   const width = customWidth !== undefined
     ? customWidth
-    : (customGridUnits?.widthUnits || preset.widthUnits) * BASE_UNIT;
+    : customGridUnits?.widthUnits
+      ? customGridUnits.widthUnits * BASE_UNIT
+      : preset.width;
 
-  // 如果有自定义高度，使用自定义高度，否则使用最小高度
-  const height = customGridUnits?.heightUnits
-    ? customGridUnits.heightUnits * BASE_UNIT
-    : preset.minHeightUnits * BASE_UNIT;
+  // 如果提供了自定义高度，优先使用自定义高度
+  let height: string | number;
+  if (customHeight !== undefined) {
+    height = customHeight;
+  } else if (customGridUnits?.heightUnits) {
+    height = customGridUnits.heightUnits * BASE_UNIT;
+  } else {
+    // 根据预设尺寸设置高度
+    switch (size) {
+      case 'small':
+      case 'medium':
+      case 'full':
+        height = preset.height;
+        break;
+      case 'large':
+      case 'header':
+        height = preset.minHeightUnits ? preset.minHeightUnits * BASE_UNIT : 'auto';
+        break;
+      default:
+        height = 'auto';
+    }
+  }
 
   return {
     width,
-    height: height,
+    height,
     display: 'flex',
     flexDirection: 'column' as const,
   };
@@ -119,6 +175,7 @@ export const UnifiedCard = ({
   variant = 'default',
   gridUnits,
   width,
+  height,
   message,
   onClearMessage,
   leftAction,
@@ -130,10 +187,17 @@ export const UnifiedCard = ({
   scrollPaused = false,
   scrollContentHeight,
   onScrollToggle,
+  showScrollIndicator = true,
+  showScrollButtons = true,
+  scrollThrottle = true,
+  enableSmoothScroll = true,
 }: UnifiedCardProps) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<number | undefined>();
   const lastTimeRef = useRef<number>(0);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
+  const [isScrollable, setIsScrollable] = useState(false);
 
   useEffect(() => {
     if (!autoScroll || scrollPaused || !scrollContainerRef.current) {
@@ -199,6 +263,56 @@ export const UnifiedCard = ({
     };
   }, [autoScroll, scrollPaused, scrollSpeed, scrollDirection]);
 
+  // Check scrollability and update scroll indicators
+  const checkScrollability = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const hasVerticalScroll = container.scrollHeight > container.clientHeight;
+    const hasHorizontalScroll = container.scrollWidth > container.clientWidth;
+    const isScrollableContent = hasVerticalScroll || hasHorizontalScroll;
+
+    setIsScrollable(isScrollableContent);
+
+    // Update scroll button visibility
+    if (showScrollButtons && hasVerticalScroll) {
+      setShowScrollTop(container.scrollTop > 50);
+      setShowScrollBottom(container.scrollTop < container.scrollHeight - container.clientHeight - 50);
+    }
+  }, [showScrollButtons]);
+
+  // Throttled scroll handler
+  const handleScroll = useCallback(
+    scrollThrottle
+      ? throttle(checkScrollability, 16) // ~60fps
+      : checkScrollability,
+    [scrollThrottle, checkScrollability]
+  );
+
+  // Monitor scroll changes
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    // Initial check
+    checkScrollability();
+
+    // Add scroll listener
+    container.addEventListener('scroll', handleScroll, { passive: true });
+
+    // Resize observer for content changes
+    const resizeObserver = new ResizeObserver(() => {
+      checkScrollability();
+    });
+    resizeObserver.observe(container);
+    resizeObserver.observe(container.firstElementChild || container);
+
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      resizeObserver.disconnect();
+    };
+  }, [handleScroll, checkScrollability]);
+
   const handleScrollToggle = () => {
     onScrollToggle?.(!scrollPaused);
   };
@@ -218,10 +332,29 @@ export const UnifiedCard = ({
       }
     }
   };
+
+  const scrollToTop = () => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({
+        top: 0,
+        behavior: enableSmoothScroll ? 'smooth' : 'auto'
+      });
+    }
+  };
+
+  const scrollToBottom = () => {
+    if (scrollContainerRef.current) {
+      const container = scrollContainerRef.current;
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: enableSmoothScroll ? 'smooth' : 'auto'
+      });
+    }
+  };
   return (
     <Card
       sx={{
-        ...getCardDimensions(size, gridUnits, width),
+        ...getCardDimensions(size, gridUnits, width, height),
         ...cardVariants[variant],
         borderRadius: 2,
         border: '1px solid',
@@ -320,30 +453,149 @@ export const UnifiedCard = ({
               sx={{
                 flex: 1,
                 overflow: 'auto',
-                scrollBehavior: 'smooth',
+                scrollBehavior: enableSmoothScroll ? 'smooth' : 'auto',
                 height: scrollContentHeight || '100%',
+                position: 'relative',
+                // Enhanced scrollbar styling
                 '&::-webkit-scrollbar': {
-                  width: '6px',
-                  height: '6px',
+                  width: '8px',
+                  height: '8px',
                 },
                 '&::-webkit-scrollbar-track': {
-                  background: 'transparent',
+                  background: 'rgba(0, 0, 0, 0.05)',
+                  borderRadius: '4px',
                 },
                 '&::-webkit-scrollbar-thumb': {
-                  background: 'rgba(0, 0, 0, 0.3)',
-                  borderRadius: '3px',
+                  background: 'rgba(0, 0, 0, 0.2)',
+                  borderRadius: '4px',
+                  transition: 'background 0.2s ease',
                 },
                 '&::-webkit-scrollbar-thumb:hover': {
-                  background: 'rgba(0, 0, 0, 0.5)',
+                  background: 'rgba(0, 0, 0, 0.4)',
                 },
+                '&::-webkit-scrollbar-corner': {
+                  background: 'transparent',
+                },
+                // Firefox scrollbar styling
+                scrollbarWidth: 'thin',
+                scrollbarColor: 'rgba(0, 0, 0, 0.2) rgba(0, 0, 0, 0.05)',
               }}
               onClick={handleScrollToggle}
               style={{ cursor: onScrollToggle ? 'pointer' : 'default' }}
             >
               {children}
+              {/* Scroll indicators */}
+              {showScrollIndicator && isScrollable && (
+                <>
+                  {/* Top scroll indicator */}
+                  <Fade in={showScrollTop}>
+                    <Box
+                      sx={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        height: '20px',
+                        background: 'linear-gradient(to bottom, rgba(0,0,0,0.1), transparent)',
+                        pointerEvents: 'none',
+                        zIndex: 1,
+                      }}
+                    />
+                  </Fade>
+                  {/* Bottom scroll indicator */}
+                  <Fade in={showScrollBottom}>
+                    <Box
+                      sx={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: '20px',
+                        background: 'linear-gradient(to top, rgba(0,0,0,0.1), transparent)',
+                        pointerEvents: 'none',
+                        zIndex: 1,
+                      }}
+                    />
+                  </Fade>
+                </>
+              )}
+              {/* Scroll navigation buttons */}
+              {showScrollButtons && isScrollable && (
+                <>
+                  <Fade in={showScrollTop}>
+                    <Tooltip title="Scroll to top">
+                      <IconButton
+                        size="small"
+                        onClick={scrollToTop}
+                        sx={{
+                          position: 'absolute',
+                          top: 8,
+                          right: 8,
+                          backgroundColor: 'background.paper',
+                          boxShadow: 2,
+                          zIndex: 2,
+                          '&:hover': {
+                            backgroundColor: 'background.default',
+                          },
+                        }}
+                      >
+                        <KeyboardArrowUp fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Fade>
+                  <Fade in={showScrollBottom}>
+                    <Tooltip title="Scroll to bottom">
+                      <IconButton
+                        size="small"
+                        onClick={scrollToBottom}
+                        sx={{
+                          position: 'absolute',
+                          bottom: 8,
+                          right: 8,
+                          backgroundColor: 'background.paper',
+                          boxShadow: 2,
+                          zIndex: 2,
+                          '&:hover': {
+                            backgroundColor: 'background.default',
+                          },
+                        }}
+                      >
+                        <KeyboardArrowDown fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Fade>
+                </>
+              )}
             </Box>
           ) : (
-            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+            <Box
+              sx={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                position: 'relative',
+                overflow: 'auto',
+                // Enhanced scrollbar styling for non-auto-scroll mode
+                '&::-webkit-scrollbar': {
+                  width: '8px',
+                  height: '8px',
+                },
+                '&::-webkit-scrollbar-track': {
+                  background: 'rgba(0, 0, 0, 0.05)',
+                  borderRadius: '4px',
+                },
+                '&::-webkit-scrollbar-thumb': {
+                  background: 'rgba(0, 0, 0, 0.2)',
+                  borderRadius: '4px',
+                  transition: 'background 0.2s ease',
+                },
+                '&::-webkit-scrollbar-thumb:hover': {
+                  background: 'rgba(0, 0, 0, 0.4)',
+                },
+                scrollbarWidth: 'thin',
+                scrollbarColor: 'rgba(0, 0, 0, 0.2) rgba(0, 0, 0, 0.05)',
+              }}
+            >
               {children}
             </Box>
           )}

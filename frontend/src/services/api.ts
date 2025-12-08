@@ -107,9 +107,50 @@ async function fetchModelAPI(url: string, options: RequestInit = {}): Promise<an
 export const api = {
   // Status endpoints
   getStatus: () => fetchUIAPI('/status'),
-  getProviders: () => fetchUIAPI('/providers'),
-  getProviderModels: () => fetchUIAPI('/provider-models'),
-  getProviderModelsByName: (name: string) => fetchUIAPI(`/provider-models/${name}`),
+  getProviders: async () => {
+    const result = await fetchUIAPI('/providers');
+    if (result.success && result.data) {
+      // Sort providers alphabetically by name to reduce UI changes
+      result.data.sort((a: any, b: any) => a.name.localeCompare(b.name));
+    }
+    return result;
+  },
+  getProviderModels: async () => {
+    const result = await fetchUIAPI('/provider-models');
+    if (result.success && result.data) {
+      // Sort models within each provider alphabetically by model name
+      Object.keys(result.data).forEach(providerName => {
+        if (Array.isArray(result.data[providerName])) {
+          result.data[providerName].sort((a: any, b: any) =>
+            (a.model || a.name || '').localeCompare(b.model || b.name || '')
+          );
+        }
+      });
+      // Sort provider keys alphabetically for consistent ordering
+      const sortedData: any = {};
+      Object.keys(result.data)
+        .sort((a, b) => a.localeCompare(b))
+        .forEach(providerName => {
+          sortedData[providerName] = result.data[providerName];
+        });
+      result.data = sortedData;
+    }
+    return result;
+  },
+  getProviderModelsByName: async (name: string) => {
+    const result = await fetchUIAPI(`/provider-models/${name}`, {
+      method: 'POST',
+    });
+    if (result.success && result.data) {
+      // Sort models alphabetically by model name to reduce UI changes
+      if (Array.isArray(result.data)) {
+        result.data.sort((a: any, b: any) =>
+          (a.model || a.name || '').localeCompare(b.model || b.name || '')
+        );
+      }
+    }
+    return result;
+  },
   getDefaults: () => fetchUIAPI('/defaults'),
   setDefaults: (data: any) => fetchUIAPI('/defaults', {
     method: 'POST',

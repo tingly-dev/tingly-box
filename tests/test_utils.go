@@ -57,11 +57,17 @@ func (ts *TestServer) AddTestProviders(t *testing.T) {
 		token   string
 	}{
 		{"openai", "https://api.openai.com/v1", "sk-test-openai"},
-	{"alibaba", "https://dashscope.aliyuncs.com/compatible-mode/v1", "sk-test-alibaba"},
+		{"alibaba", "https://dashscope.aliyuncs.com/compatible-mode/v1", "sk-test-alibaba"},
 	}
 
 	for _, p := range providers {
-		if err := ts.appConfig.AddProvider(p.name, p.apiBase, p.token); err != nil {
+		provider := &config.Provider{
+			Name:    p.name,
+			APIBase: p.apiBase,
+			Token:   p.token,
+			Enabled: true,
+		}
+		if err := ts.appConfig.AddProvider(provider); err != nil {
 			t.Fatalf("Failed to add provider %s: %v", p.name, err)
 		}
 	}
@@ -115,9 +121,9 @@ func MockModelManager(t *testing.T) *config.ModelManager {
 // CreateTestChatRequest creates a test chat completion request
 func CreateTestChatRequest(model string, messages []map[string]string) map[string]interface{} {
 	return map[string]interface{}{
-		"model": model,
+		"model":    model,
 		"messages": messages,
-		"stream": false,
+		"stream":   false,
 	}
 }
 

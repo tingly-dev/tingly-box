@@ -1,4 +1,11 @@
-import { Add as AddIcon, Check as CheckIcon, Delete as DeleteIcon, Edit as EditIcon, Refresh as RefreshIcon, Save as SaveIcon } from '@mui/icons-material';
+import {
+    Add as AddIcon,
+    Check as CheckIcon,
+    Delete as DeleteIcon,
+    Edit as EditIcon,
+    Refresh as RefreshIcon,
+    Save as SaveIcon
+} from '@mui/icons-material';
 import {
     Box,
     Button,
@@ -14,8 +21,9 @@ import {
     Typography
 } from '@mui/material';
 import { useEffect, useState } from 'react';
-import { api } from '../services/api';
+import { PageLayout } from '../components/PageLayout';
 import UnifiedCard from '../components/UnifiedCard';
+import { api } from '../services/api';
 
 interface ConfigProvider {
     id: string;
@@ -307,201 +315,152 @@ const Rule = () => {
         }
     };
 
-    if (loading) {
-        return (
-            <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-                <Typography>Loading...</Typography>
-            </Box>
-        );
-    }
-
     return (
-        <UnifiedCard
-            title="Model Configuration"
-            subtitle="Configure model providers and settings"
-            size="full"
-            message={message}
-            onClearMessage={() => setMessage(null)}
-            rightAction={
-                <>
-                    <Button
-                        variant="contained"
-                        size="small"
-                        startIcon={<AddIcon />}
-                        onClick={addConfigRecord}
-                    >
-                        Add Configuration
-                    </Button>
-                    <Button
-                        variant="contained"
-                        color="primary"
-                        size="small"
-                        startIcon={<SaveIcon />}
-                        onClick={handleSaveDefaults}
-                    >
-                        Save
-                    </Button>
-                </>
-            }
-        >
-            <Stack spacing={3}>
-                {configRecords.map((record) => (
-                    <Box
-                        key={record.id}
-                        sx={{
-                            p: 2,
-                            border: '1px solid',
-                            borderColor: 'divider',
-                            borderRadius: 1,
-                            bgcolor: 'background.paper',
-                        }}
-                    >
+        <PageLayout loading={loading} message={message} onClearMessage={() => setMessage(null)}>
+            <UnifiedCard
+                title="Request Rule Configuration"
+                subtitle="Configure api request to models"
+                size="full"
+                rightAction={
+                    <>
+                        <Button
+                            variant="contained"
+                            size="small"
+                            startIcon={<AddIcon />}
+                            onClick={addConfigRecord}
+                        >
+                            Add Configuration
+                        </Button>
+                        <Button
+                            variant="contained"
+                            color="primary"
+                            size="small"
+                            startIcon={<SaveIcon />}
+                            onClick={handleSaveDefaults}
+                        >
+                            Save
+                        </Button>
+                    </>
+                }
+            >
+                <Stack spacing={3}>
+                    {configRecords.map((record) => (
                         <Box
+                            key={record.id}
                             sx={{
-                                display: 'grid',
-                                gridTemplateColumns: '1fr 1.5fr',
-                                gap: 4,
+                                p: 2,
+                                border: '1px solid',
+                                borderColor: 'divider',
+                                borderRadius: 1,
+                                bgcolor: 'background.paper',
                             }}
                         >
-                            {/* Row 1: Headers */}
-                            <Box sx={{ gridColumn: '1', gridRow: '1' }}>
-                                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                    <Typography variant="subtitle2">
-                                        Request
-                                    </Typography>
+                            <Box
+                                sx={{
+                                    display: 'grid',
+                                    gridTemplateColumns: '1fr 1.5fr',
+                                    gap: 4,
+                                }}
+                            >
+                                {/* Row 1: Headers */}
+                                <Box sx={{ gridColumn: '1', gridRow: '1' }}>
+                                    <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                        <Typography variant="subtitle2">
+                                            Request
+                                        </Typography>
 
-                                    <Button
-                                        startIcon={<DeleteIcon />}
-                                        onClick={() => deleteConfigRecord(record.id)}
-                                        variant="outlined"
-                                        size="small"
-                                    >
-                                        Delete
-                                    </Button>
-                                </Stack>
-                            </Box>
-                            <Box sx={{ gridColumn: '2', gridRow: '1' }}>
-                                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                    <Typography variant="subtitle2">
-                                        Providers ({record.providers.length})
-                                    </Typography>
-                                    <Button
-                                        startIcon={<AddIcon />}
-                                        onClick={() => addProvider(record.id)}
-                                        variant="outlined"
-                                        size="small"
-                                    >
-                                        Add Provider
-                                    </Button>
-                                </Stack>
-                            </Box>
-
-                            {/* Row 2: Request Input Fields */}
-                            <Box sx={{ gridColumn: '1', gridRow: '2' }}>
-                                <Stack spacing={1.5}>
-                                    <Stack direction="row" spacing={1.5} alignItems="center">
-                                        <FormControl sx={{ flex: 1 }} size="small">
-                                            <TextField
-                                                label="Request Model"
-                                                value={record.requestModel}
-                                                onChange={(e) =>
-                                                    updateConfigRecord(record.id, 'requestModel', e.target.value)
-                                                }
-                                                helperText="Model name"
-                                                fullWidth
-                                                size="small"
-                                            />
-                                        </FormControl>
-                                        <FormControl sx={{ flex: 1 }} size="small">
-
-                                            <TextField
-                                                label="Response Model"
-                                                value={record.responseModel}
-                                                onChange={(e) =>
-                                                    updateConfigRecord(record.id, 'responseModel', e.target.value)
-                                                }
-                                                helperText="Empty for as-is"
-                                                fullWidth
-                                                size="small"
-                                            />
-                                        </FormControl>
+                                        <Button
+                                            startIcon={<DeleteIcon />}
+                                            onClick={() => deleteConfigRecord(record.id)}
+                                            variant="outlined"
+                                            size="small"
+                                        >
+                                            Delete
+                                        </Button>
                                     </Stack>
-                                </Stack>
-                            </Box>
+                                </Box>
+                                <Box sx={{ gridColumn: '2', gridRow: '1' }}>
+                                    <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                        <Typography variant="subtitle2">
+                                            Models ({record.providers.length})
+                                        </Typography>
+                                        <Button
+                                            startIcon={<AddIcon />}
+                                            onClick={() => addProvider(record.id)}
+                                            variant="outlined"
+                                            size="small"
+                                        >
+                                            Add Model
+                                        </Button>
+                                    </Stack>
+                                </Box>
 
-                            {/* Row 3+: Provider Configurations (one row per provider) */}
-                            <Box sx={{ gridColumn: '2', gridRow: '2' }}>
-                                <Stack spacing={1.5}>
-                                    {record.providers.map((provider) => (
-                                        <>
-                                            <Stack direction="row" spacing={1.5} alignItems="center">
-                                                <FormControl sx={{ flex: 1 }} size="small">
-                                                    <InputLabel>Provider</InputLabel>
-                                                    <Select
-                                                        value={provider.provider}
-                                                        onChange={(e) =>
-                                                            updateProvider(
-                                                                record.id,
-                                                                provider.id,
-                                                                'provider',
-                                                                e.target.value
-                                                            )
-                                                        }
-                                                        label="Provider"
-                                                    >
-                                                        <MenuItem value="">Select</MenuItem>
-                                                        {providers.map((p) => (
-                                                            <MenuItem key={p.name} value={p.name}>
-                                                                {p.name}
-                                                            </MenuItem>
-                                                        ))}
-                                                    </Select>
-                                                </FormControl>
+                                {/* Row 2: Request Input Fields */}
+                                <Box sx={{ gridColumn: '1', gridRow: '2' }}>
+                                    <Stack spacing={1.5}>
+                                        <Stack direction="row" spacing={1.5} alignItems="center">
+                                            <FormControl sx={{ flex: 1 }} size="small">
+                                                <TextField
+                                                    label="Request Model"
+                                                    value={record.requestModel}
+                                                    onChange={(e) =>
+                                                        updateConfigRecord(record.id, 'requestModel', e.target.value)
+                                                    }
+                                                    helperText="Model name"
+                                                    fullWidth
+                                                    size="small"
+                                                />
+                                            </FormControl>
+                                            <FormControl sx={{ flex: 1 }} size="small">
 
-                                                {provider.isManualInput ? (
+                                                <TextField
+                                                    label="Response Model"
+                                                    value={record.responseModel}
+                                                    onChange={(e) =>
+                                                        updateConfigRecord(record.id, 'responseModel', e.target.value)
+                                                    }
+                                                    helperText="Empty for as-is"
+                                                    fullWidth
+                                                    size="small"
+                                                />
+                                            </FormControl>
+                                        </Stack>
+                                    </Stack>
+                                </Box>
+
+                                {/* Row 3+: Provider Configurations (one row per provider) */}
+                                <Box sx={{ gridColumn: '2', gridRow: '2' }}>
+                                    <Stack spacing={1.5}>
+                                        {record.providers.map((provider) => (
+                                            <>
+                                                <Stack direction="row" spacing={1.5} alignItems="center">
                                                     <FormControl sx={{ flex: 1 }} size="small">
-                                                        <TextField
-                                                            label="Model (Manual)"
-                                                            value={provider.model}
+                                                        <InputLabel>Provider</InputLabel>
+                                                        <Select
+                                                            value={provider.provider}
                                                             onChange={(e) =>
                                                                 updateProvider(
                                                                     record.id,
                                                                     provider.id,
-                                                                    'model',
+                                                                    'provider',
                                                                     e.target.value
                                                                 )
                                                             }
-                                                            placeholder="Enter model name manually"
-                                                            fullWidth
-                                                            size="small"
-                                                            InputProps={{
-                                                                endAdornment: (
-                                                                    <InputAdornment position="end">
-                                                                        <IconButton
-                                                                            size="small"
-                                                                            onClick={() =>
-                                                                                updateProvider(
-                                                                                    record.id,
-                                                                                    provider.id,
-                                                                                    'isManualInput',
-                                                                                    false
-                                                                                )
-                                                                            }
-                                                                            title="Switch to dropdown"
-                                                                            edge="end"
-                                                                        >
-                                                                            <CheckIcon fontSize="small" />
-                                                                        </IconButton>
-                                                                    </InputAdornment>
-                                                                ),
-                                                            }}
-                                                        />
+                                                            label="Provider"
+                                                        >
+                                                            <MenuItem value="">Select</MenuItem>
+                                                            {providers.map((p) => (
+                                                                <MenuItem key={p.name} value={p.name}>
+                                                                    {p.name}
+                                                                </MenuItem>
+                                                            ))}
+                                                        </Select>
                                                     </FormControl>
-                                                ) : (
-                                                    <Box sx={{ flex: 1, position: 'relative' }}>
-                                                        <FormControl size="small" disabled={!provider.provider} fullWidth>
-                                                            <InputLabel>Model</InputLabel>
-                                                            <Select
+
+                                                    {provider.isManualInput ? (
+                                                        <FormControl sx={{ flex: 1 }} size="small">
+                                                            <TextField
+                                                                label="Model (Manual)"
                                                                 value={provider.model}
                                                                 onChange={(e) =>
                                                                     updateProvider(
@@ -511,98 +470,141 @@ const Rule = () => {
                                                                         e.target.value
                                                                     )
                                                                 }
-                                                                label="Model"
-                                                                sx={{
-                                                                    '& .MuiOutlinedInput-notchedOutline': {
-                                                                        paddingRight: '110px', // Make room for buttons
-                                                                    },
+                                                                placeholder="Enter model name manually"
+                                                                fullWidth
+                                                                size="small"
+                                                                InputProps={{
+                                                                    endAdornment: (
+                                                                        <InputAdornment position="end">
+                                                                            <IconButton
+                                                                                size="small"
+                                                                                onClick={() =>
+                                                                                    updateProvider(
+                                                                                        record.id,
+                                                                                        provider.id,
+                                                                                        'isManualInput',
+                                                                                        false
+                                                                                    )
+                                                                                }
+                                                                                title="Switch to dropdown"
+                                                                                edge="end"
+                                                                            >
+                                                                                <CheckIcon fontSize="small" />
+                                                                            </IconButton>
+                                                                        </InputAdornment>
+                                                                    ),
                                                                 }}
-                                                            >
-                                                                <MenuItem value="">Select</MenuItem>
-                                                                {/* Show current model if it exists and is not in the API list */}
-                                                                {provider.model && !providerModels[provider.provider]?.models.includes(provider.model) && (
-                                                                    <MenuItem key="current-manual" value={provider.model}>
-                                                                        {provider.model} (custom)
-                                                                    </MenuItem>
-                                                                )}
-                                                                {/* Show models from API */}
-                                                                {providerModels[provider.provider]?.models.map(
-                                                                    (model: string) => (
-                                                                        <MenuItem key={model} value={model}>
-                                                                            {model}
-                                                                        </MenuItem>
-                                                                    )
-                                                                )}
-                                                            </Select>
+                                                            />
                                                         </FormControl>
-                                                        <Box
-                                                            sx={{
-                                                                position: 'absolute',
-                                                                right: 8,
-                                                                top: '50%',
-                                                                transform: 'translateY(-50%)',
-                                                                display: 'flex',
-                                                                gap: 0.5,
-                                                                bgcolor: 'background.paper',
-                                                                borderRadius: 1,
-                                                                padding: '2px',
-                                                                pointerEvents: 'auto',
-                                                            }}
-                                                        >
-                                                            <IconButton
-                                                                size="small"
-                                                                onClick={() => handleRefreshProviderModels(provider.provider)}
-                                                                disabled={!provider.provider}
-                                                                title="Refresh models"
+                                                    ) : (
+                                                        <Box sx={{ flex: 1, position: 'relative' }}>
+                                                            <FormControl size="small" disabled={!provider.provider}
+                                                                         fullWidth>
+                                                                <InputLabel>Model</InputLabel>
+                                                                <Select
+                                                                    value={provider.model}
+                                                                    onChange={(e) =>
+                                                                        updateProvider(
+                                                                            record.id,
+                                                                            provider.id,
+                                                                            'model',
+                                                                            e.target.value
+                                                                        )
+                                                                    }
+                                                                    label="Model"
+                                                                    sx={{
+                                                                        '& .MuiOutlinedInput-notchedOutline': {
+                                                                            paddingRight: '110px', // Make room for buttons
+                                                                        },
+                                                                    }}
+                                                                >
+                                                                    <MenuItem value="">Select</MenuItem>
+                                                                    {/* Show current model if it exists and is not in the API list */}
+                                                                    {provider.model && !providerModels[provider.provider]?.models.includes(provider.model) && (
+                                                                        <MenuItem key="current-manual"
+                                                                                  value={provider.model}>
+                                                                            {provider.model} (custom)
+                                                                        </MenuItem>
+                                                                    )}
+                                                                    {/* Show models from API */}
+                                                                    {providerModels[provider.provider]?.models.map(
+                                                                        (model: string) => (
+                                                                            <MenuItem key={model} value={model}>
+                                                                                {model}
+                                                                            </MenuItem>
+                                                                        )
+                                                                    )}
+                                                                </Select>
+                                                            </FormControl>
+                                                            <Box
                                                                 sx={{
-                                                                    padding: '4px',
-                                                                    '&:hover': { bgcolor: 'action.hover' }
+                                                                    position: 'absolute',
+                                                                    right: 8,
+                                                                    top: '50%',
+                                                                    transform: 'translateY(-50%)',
+                                                                    display: 'flex',
+                                                                    gap: 0.5,
+                                                                    bgcolor: 'background.paper',
+                                                                    borderRadius: 1,
+                                                                    padding: '2px',
+                                                                    pointerEvents: 'auto',
                                                                 }}
                                                             >
-                                                                <RefreshIcon fontSize="small" />
-                                                            </IconButton>
-                                                            <IconButton
-                                                                size="small"
-                                                                onClick={() =>
-                                                                    updateProvider(
-                                                                        record.id,
-                                                                        provider.id,
-                                                                        'isManualInput',
-                                                                        true
-                                                                    )
-                                                                }
-                                                                title="Switch to manual input"
-                                                                sx={{
-                                                                    padding: '4px',
-                                                                    '&:hover': { bgcolor: 'action.hover' }
-                                                                }}
-                                                            >
-                                                                <EditIcon fontSize="small" />
-                                                            </IconButton>
-                                                          </Box>
-                                                    </Box>
-                                                )}
+                                                                <IconButton
+                                                                    size="small"
+                                                                    onClick={() => handleRefreshProviderModels(provider.provider)}
+                                                                    disabled={!provider.provider}
+                                                                    title="Refresh models"
+                                                                    sx={{
+                                                                        padding: '4px',
+                                                                        '&:hover': { bgcolor: 'action.hover' }
+                                                                    }}
+                                                                >
+                                                                    <RefreshIcon fontSize="small" />
+                                                                </IconButton>
+                                                                <IconButton
+                                                                    size="small"
+                                                                    onClick={() =>
+                                                                        updateProvider(
+                                                                            record.id,
+                                                                            provider.id,
+                                                                            'isManualInput',
+                                                                            true
+                                                                        )
+                                                                    }
+                                                                    title="Switch to manual input"
+                                                                    sx={{
+                                                                        padding: '4px',
+                                                                        '&:hover': { bgcolor: 'action.hover' }
+                                                                    }}
+                                                                >
+                                                                    <EditIcon fontSize="small" />
+                                                                </IconButton>
+                                                            </Box>
+                                                        </Box>
+                                                    )}
 
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={() => deleteProvider(record.id, provider.id)}
-                                                    color="error"
-                                                    sx={{ p: 0.5 }}
-                                                >
-                                                    <DeleteIcon fontSize="small" />
-                                                </IconButton>
-                                            </Stack>
-                                            <Divider sx={{ mt: 1.5 }} />
-                                        </>
-                                    ))}
-                                </Stack>
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={() => deleteProvider(record.id, provider.id)}
+                                                        color="error"
+                                                        sx={{ p: 0.5 }}
+                                                    >
+                                                        <DeleteIcon fontSize="small" />
+                                                    </IconButton>
+                                                </Stack>
+                                                <Divider sx={{ mt: 1.5 }} />
+                                            </>
+                                        ))}
+                                    </Stack>
+                                </Box>
                             </Box>
                         </Box>
-                    </Box>
-                ))}
+                    ))}
 
-            </Stack>
-        </UnifiedCard>
+                </Stack>
+            </UnifiedCard>
+        </PageLayout>
     );
 };
 
