@@ -199,26 +199,26 @@ func (wui *WebUI) GetProviders(c *gin.Context) {
 
 	// Mask tokens for security
 	maskedProviders := make([]struct {
-		Name       string `json:"name"`
-		APIBase    string `json:"api_base"`
-		APIVersion string `json:"api_version"`
-		Token      string `json:"token"`
-		Enabled    bool   `json:"enabled"`
+		Name     string `json:"name"`
+		APIBase  string `json:"api_base"`
+		APIStyle string `json:"api_style"`
+		Token    string `json:"token"`
+		Enabled  bool   `json:"enabled"`
 	}, len(providers))
 
 	for i, provider := range providers {
 		maskedProviders[i] = struct {
-			Name       string `json:"name"`
-			APIBase    string `json:"api_base"`
-			APIVersion string `json:"api_version"`
-			Token      string `json:"token"`
-			Enabled    bool   `json:"enabled"`
+			Name     string `json:"name"`
+			APIBase  string `json:"api_base"`
+			APIStyle string `json:"api_style"`
+			Token    string `json:"token"`
+			Enabled  bool   `json:"enabled"`
 		}{
-			Name:       provider.Name,
-			APIBase:    provider.APIBase,
-			APIVersion: provider.APIVersion,
-			Token:      maskToken(provider.Token),
-			Enabled:    provider.Enabled,
+			Name:     provider.Name,
+			APIBase:  provider.APIBase,
+			APIStyle: string(provider.APIStyle),
+			Token:    maskToken(provider.Token),
+			Enabled:  provider.Enabled,
 		}
 	}
 
@@ -300,11 +300,11 @@ func (wui *WebUI) GetDefaults(c *gin.Context) {
 // AddProvider adds a new provider
 func (wui *WebUI) AddProvider(c *gin.Context) {
 	var req struct {
-		Name       string `json:"name" binding:"required"`
-		APIBase    string `json:"api_base" binding:"required"`
-		APIVersion string `json:"api_version"`
-		Token      string `json:"token" binding:"required"`
-		Enabled    bool   `json:"enabled"`
+		Name     string `json:"name" binding:"required"`
+		APIBase  string `json:"api_base" binding:"required"`
+		APIStyle string `json:"api_style"`
+		Token    string `json:"token" binding:"required"`
+		Enabled  bool   `json:"enabled"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -320,17 +320,17 @@ func (wui *WebUI) AddProvider(c *gin.Context) {
 		req.Enabled = true
 	}
 
-	// Set default API version if not provided
-	if req.APIVersion == "" {
-		req.APIVersion = "openai"
+	// Set default API style if not provided
+	if req.APIStyle == "" {
+		req.APIStyle = "openai"
 	}
 
 	provider := &config.Provider{
-		Name:       req.Name,
-		APIBase:    req.APIBase,
-		APIVersion: req.APIVersion,
-		Token:      req.Token,
-		Enabled:    req.Enabled,
+		Name:     req.Name,
+		APIBase:  req.APIBase,
+		APIStyle: config.APIStyle(req.APIStyle),
+		Token:    req.Token,
+		Enabled:  req.Enabled,
 	}
 
 	err := wui.config.AddProvider(provider)
@@ -413,11 +413,11 @@ func (wui *WebUI) UpdateProvider(c *gin.Context) {
 	}
 
 	var req struct {
-		NewName    *string `json:"name,omitempty"`
-		APIBase    *string `json:"api_base,omitempty"`
-		APIVersion *string `json:"api_version,omitempty"`
-		Token      *string `json:"token,omitempty"`
-		Enabled    *bool   `json:"enabled,omitempty"`
+		NewName  *string `json:"name,omitempty"`
+		APIBase  *string `json:"api_base,omitempty"`
+		APIStyle *string `json:"api_style,omitempty"`
+		Token    *string `json:"token,omitempty"`
+		Enabled  *bool   `json:"enabled,omitempty"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -445,8 +445,8 @@ func (wui *WebUI) UpdateProvider(c *gin.Context) {
 	if req.APIBase != nil {
 		provider.APIBase = *req.APIBase
 	}
-	if req.APIVersion != nil {
-		provider.APIVersion = *req.APIVersion
+	if req.APIStyle != nil {
+		provider.APIStyle = config.APIStyle(*req.APIStyle)
 	}
 	// Only update token if it's provided and not empty
 	if req.Token != nil && *req.Token != "" {
@@ -480,17 +480,17 @@ func (wui *WebUI) UpdateProvider(c *gin.Context) {
 
 	// Return masked provider data
 	responseProvider := struct {
-		Name       string `json:"name"`
-		APIBase    string `json:"api_base"`
-		APIVersion string `json:"api_version"`
-		Token      string `json:"token"`
-		Enabled    bool   `json:"enabled"`
+		Name     string `json:"name"`
+		APIBase  string `json:"api_base"`
+		APIStyle string `json:"api_style"`
+		Token    string `json:"token"`
+		Enabled  bool   `json:"enabled"`
 	}{
-		Name:       provider.Name,
-		APIBase:    provider.APIBase,
-		APIVersion: provider.APIVersion,
-		Token:      maskToken(provider.Token),
-		Enabled:    provider.Enabled,
+		Name:     provider.Name,
+		APIBase:  provider.APIBase,
+		APIStyle: string(provider.APIStyle),
+		Token:    maskToken(provider.Token),
+		Enabled:  provider.Enabled,
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -524,17 +524,17 @@ func (wui *WebUI) GetProvider(c *gin.Context) {
 	maskedToken := maskToken(provider.Token)
 
 	responseProvider := struct {
-		Name       string `json:"name"`
-		APIBase    string `json:"api_base"`
-		APIVersion string `json:"api_version"`
-		Token      string `json:"token"`
-		Enabled    bool   `json:"enabled"`
+		Name     string `json:"name"`
+		APIBase  string `json:"api_base"`
+		APIStyle string `json:"api_style"`
+		Token    string `json:"token"`
+		Enabled  bool   `json:"enabled"`
 	}{
-		Name:       provider.Name,
-		APIBase:    provider.APIBase,
-		APIVersion: provider.APIVersion,
-		Token:      maskedToken,
-		Enabled:    provider.Enabled,
+		Name:     provider.Name,
+		APIBase:  provider.APIBase,
+		APIStyle: string(provider.APIStyle),
+		Token:    maskedToken,
+		Enabled:  provider.Enabled,
 	}
 
 	c.JSON(http.StatusOK, gin.H{

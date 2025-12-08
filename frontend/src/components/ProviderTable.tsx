@@ -228,7 +228,7 @@ const ProviderTable = ({
                                         fontFamily: 'monospace'
                                     }}
                                 >
-                                    {provider.api_version || 'openai'}
+                                    {provider.api_style || 'openai'}
                                 </Typography>
                             </TableCell>
 

@@ -20,8 +20,8 @@ interface ProviderDialogProps {
     onProviderNameChange: (value: string) => void;
     providerApiBase: string;
     onProviderApiBaseChange: (value: string) => void;
-    providerApiVersion: string;
-    onProviderApiVersionChange: (value: string) => void;
+    providerApiStyle: string;
+    onProviderApiStyleChange: (value: string) => void;
     providerToken: string;
     onProviderTokenChange: (value: string) => void;
     title?: string;
@@ -36,8 +36,8 @@ export const ProviderDialog = ({
     onProviderNameChange,
     providerApiBase,
     onProviderApiBaseChange,
-    providerApiVersion,
-    onProviderApiVersionChange,
+    providerApiStyle,
+    onProviderApiStyleChange,
     providerToken,
     onProviderTokenChange,
     title = "Add New Provider",
@@ -67,12 +67,12 @@ export const ProviderDialog = ({
                             placeholder="e.g., https://api.openai.com/v1"
                         />
                         <FormControl fullWidth>
-                            <InputLabel id="api-version-label">API Version</InputLabel>
+                            <InputLabel id="api-style-label">API Style</InputLabel>
                             <Select
-                                labelId="api-version-label"
-                                value={providerApiVersion}
-                                label="API Version"
-                                onChange={(e) => onProviderApiVersionChange(e.target.value)}
+                                labelId="api-style-label"
+                                value={providerApiStyle}
+                                label="API Style"
+                                onChange={(e) => onProviderApiStyleChange(e.target.value)}
                             >
                                 <MenuItem value="openai">OpenAI</MenuItem>
                                 <MenuItem value="anthropic">Anthropic</MenuItem>

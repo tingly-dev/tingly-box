@@ -104,7 +104,7 @@ const Dashboard = () => {
     const [addDialogOpen, setAddDialogOpen] = useState(false);
     const [providerName, setProviderName] = useState('');
     const [providerApiBase, setProviderApiBase] = useState('');
-    const [providerApiVersion, setProviderApiVersion] = useState('openai');
+    const [providerApiStyle, setProviderApiStyle] = useState('openai');
     const [providerToken, setProviderToken] = useState('');
 
     useEffect(() => {
@@ -252,7 +252,7 @@ const Dashboard = () => {
     const handleAddProviderClick = () => {
         setProviderName('');
         setProviderApiBase('');
-        setProviderApiVersion('openai');
+        setProviderApiStyle('openai');
         setProviderToken('');
         setAddDialogOpen(true);
     };
@@ -263,7 +263,7 @@ const Dashboard = () => {
         const providerData = {
             name: providerName,
             api_base: providerApiBase,
-            api_version: providerApiVersion,
+            api_style: providerApiStyle,
             token: providerToken,
         };
 
@@ -273,7 +273,7 @@ const Dashboard = () => {
             showNotification('Provider added successfully!', 'success');
             setProviderName('');
             setProviderApiBase('');
-            setProviderApiVersion('openai');
+            setProviderApiStyle('openai');
             setProviderToken('');
             setAddDialogOpen(false);
             await loadProviders();
@@ -599,8 +599,8 @@ const Dashboard = () => {
                 onProviderNameChange={setProviderName}
                 providerApiBase={providerApiBase}
                 onProviderApiBaseChange={setProviderApiBase}
-                providerApiVersion={providerApiVersion}
-                onProviderApiVersionChange={setProviderApiVersion}
+                providerApiStyle={providerApiStyle}
+                onProviderApiStyleChange={setProviderApiStyle}
                 providerToken={providerToken}
                 onProviderTokenChange={setProviderToken}
             />

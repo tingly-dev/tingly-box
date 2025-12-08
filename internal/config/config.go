@@ -19,13 +19,21 @@ import (
 	"time"
 )
 
+// APIStyle represents the API style/version for a provider
+type APIStyle string
+
+const (
+	APIStyleOpenAI    APIStyle = "openai"
+	APIStyleAnthropic APIStyle = "anthropic"
+)
+
 // Provider represents an AI model provider configuration
 type Provider struct {
-	Name       string `json:"name"`
-	APIBase    string `json:"api_base"`
-	APIVersion string `json:"api_version"` // "openai" or "anthropic", defaults to "openai"
-	Token      string `json:"token"`
-	Enabled    bool   `json:"enabled"`
+	Name     string   `json:"name"`
+	APIBase  string   `json:"api_base"`
+	APIStyle APIStyle `json:"api_style"` // "openai" or "anthropic", defaults to "openai"
+	Token    string   `json:"token"`
+	Enabled  bool     `json:"enabled"`
 }
 
 // Config represents the application configuration
@@ -153,11 +161,11 @@ func (ac *AppConfig) AddProviderByName(name, apiBase, token string) error {
 	}
 
 	ac.config.Providers[name] = &Provider{
-		Name:       name,
-		APIBase:    apiBase,
-		APIVersion: "openai", // default to openai
-		Token:      token,
-		Enabled:    true,
+		Name:     name,
+		APIBase:  apiBase,
+		APIStyle: APIStyleOpenAI, // default to openai
+		Token:    token,
+		Enabled:  true,
 	}
 
 	return ac.Save()
@@ -441,7 +449,23 @@ func (ac *AppConfig) FetchAndSaveProviderModels(providerName string) error {
 // getProviderModelsFromAPI fetches models from provider API via real HTTP requests
 func (ac *AppConfig) getProviderModelsFromAPI(provider *Provider) []string {
 	// Construct the models endpoint URL
-	modelsURL, err := url.Parse(strings.TrimSuffix(provider.APIBase, "/") + "/models")
+	// For Anthropic-style providers, ensure they have a version suffix
+	apiBase := strings.TrimSuffix(provider.APIBase, "/")
+	if provider.APIStyle == APIStyleAnthropic {
+		// Check if already has version suffix like /v1, /v2, etc.
+		matches := strings.Split(apiBase, "/")
+		if len(matches) > 0 {
+			last := matches[len(matches)-1]
+			// If no version suffix, add v1
+			if !strings.HasPrefix(last, "v") {
+				apiBase = apiBase + "/v1"
+			}
+		} else {
+			// If split failed, just add v1
+			apiBase = apiBase + "/v1"
+		}
+	}
+	modelsURL, err := url.Parse(apiBase + "/models")
 	if err != nil {
 		fmt.Printf("Failed to parse models URL for provider %s: %v\n", provider.Name, err)
 		return []string{}

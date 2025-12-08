@@ -70,8 +70,8 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		openaiReq.Model = modelDef.Model
 	}
 
-	// Check provider's API version to decide which path to take
-	apiVersion := provider.APIVersion
+	// Check provider's API style to decide which path to take
+	apiVersion := string(provider.APIStyle)
 	if apiVersion == "" {
 		apiVersion = "openai" // default to openai
 	}
