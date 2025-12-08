@@ -3,7 +3,9 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host",
+    "dev:mock": "cp .env.mock .env.development && vite --host",
+    "dev:real": "cp .env.production .env.development && vite --host",
     "build:dev": "vite build --minify false --mode development",
     "build": "vite build --mode production",
     "preview": "vite preview"
@@ -21,6 +23,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react-swc": "^4.2.2",
-    "vite": "^7.2.7"
+    "vite": "^7.2.7",
+    "vite-plugin-mock": "^3.0.2"
   }
 }
