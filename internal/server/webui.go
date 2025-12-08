@@ -160,11 +160,19 @@ func (wui *WebUI) IsEnabled() bool {
 
 // Page Handlers (exported for server integration)
 func (wui *WebUI) Dashboard(c *gin.Context) {
+	// Get user_auth_token from query parameter
+	userAuthToken := c.Query("user_auth_token")
+
+	// Prepare template data
+	templateData := gin.H{}
+	if userAuthToken != "" {
+		templateData["user_auth_token"] = userAuthToken
+	}
+
 	if wui.assets != nil {
-		wui.assets.HTML(c, "index.html", nil)
+		wui.assets.HTML(c, "index.html", templateData)
 	} else {
 		panic("No UI resources")
-
 	}
 }
 

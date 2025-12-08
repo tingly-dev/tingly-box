@@ -247,10 +247,17 @@ func (s *Server) Start(port int) error {
 	}
 
 	fmt.Printf("Starting server on port %d\n", port)
-	fmt.Printf("OpenAI v1 API endpoint: http://localhost:%d/openai/v1/chat/completions\n", port)
-	fmt.Printf("Anthropic v1 API endpoint: http://localhost:%d/anthropic/v1/messages\n", port)
-	fmt.Printf("Legacy API endpoint: http://localhost:%d/v1/chat/completions\n", port)
-	fmt.Printf("Web UI: http://localhost:%d/dashboard\n", port)
+	fmt.Printf("OpenAI v1 Chat API endpoint: http://localhost:%d/openai/v1/chat/completions\n", port)
+	fmt.Printf("Anthropic v1 Message API endpoint: http://localhost:%d/anthropic/v1/messages\n", port)
+
+	// Get user token for Web UI URL
+	globalConfig := s.config.GetGlobalConfig()
+	webUIURL := fmt.Sprintf("http://localhost:%d/dashboard", port)
+	if globalConfig != nil && globalConfig.HasUserToken() {
+		userToken := globalConfig.GetUserToken()
+		webUIURL = fmt.Sprintf("http://localhost:%d/dashboard?user_auth_token=%s", port, userToken)
+	}
+	fmt.Printf("Web UI: %s\n", webUIURL)
 
 	return s.httpServer.ListenAndServe()
 }
