@@ -20,11 +20,11 @@ var App *application.App
 
 func newApp() *application.App {
 	// Create UI service
-	uiService, err := services.NewUIService()
+	uiService, err := services.NewUIService(8080)
 	if err != nil {
 		log.Fatalf("Failed to create UI service: %v", err)
 	}
-	err = uiService.Start(context.Background(), 8080)
+	err = uiService.Start(context.Background())
 	if err != nil {
 		log.Fatalf("Failed to create UI service: %v", err)
 	}

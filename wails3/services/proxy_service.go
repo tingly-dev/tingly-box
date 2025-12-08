@@ -25,13 +25,14 @@ type ProxyService struct {
 }
 
 // NewUIService creates a new UI service instance
-func NewUIService() (*ProxyService, error) {
+func NewUIService(port int) (*ProxyService, error) {
 	appConfig, err := config.NewAppConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create app config: %w", err)
 	}
 
 	serverManager := utils.NewServerManagerWithOptions(appConfig, true)
+	serverManager.Setup(port)
 
 	res := &ProxyService{
 		appConfig:     appConfig,
@@ -44,16 +45,16 @@ func NewUIService() (*ProxyService, error) {
 }
 
 // Start starts the UI service
-func (s *ProxyService) Start(ctx context.Context, port int) error {
+func (s *ProxyService) Start(ctx context.Context) error {
 	waitStart := make(chan any)
 	go func() {
-		err := s.serverManager.StartWithPort(port)
+		err := s.serverManager.Start()
 		if err != nil {
 			panic(err)
 		}
 		close(waitStart)
 	}()
-	<-waitStart
+	//<-waitStart
 
 	return nil
 }

@@ -3,6 +3,7 @@ package utils
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -10,6 +11,8 @@ import (
 
 	"tingly-box/internal/config"
 	"tingly-box/internal/server"
+
+	"github.com/gin-gonic/gin"
 )
 
 // ServerManager manages the HTTP server lifecycle
@@ -34,8 +37,17 @@ func NewServerManagerWithOptions(appConfig *config.AppConfig, enableUI bool) *Se
 	}
 }
 
-// Start starts the server
-func (sm *ServerManager) Start(port int) error {
+func (sm *ServerManager) GetGinEngine() *gin.Engine {
+	return sm.server.GetRouter()
+}
+
+func (sm *ServerManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// All requests go to the Gin router
+	sm.server.GetRouter().ServeHTTP(w, r)
+}
+
+// Setup creates and configures the server without starting it
+func (sm *ServerManager) Setup(port int) error {
 	// Check if already running
 	if sm.IsRunning() {
 		return fmt.Errorf("server is already running")
@@ -54,6 +66,20 @@ func (sm *ServerManager) Start(port int) error {
 	// Set global server instance for web UI control
 	server.SetGlobalServer(sm.server)
 
+	return nil
+}
+
+// Start starts the server (requires Setup to be called first)
+func (sm *ServerManager) Start() error {
+	if sm.server == nil {
+		return fmt.Errorf("server not initialized, call Setup() first")
+	}
+
+	// Check if already running
+	if sm.IsRunning() {
+		return fmt.Errorf("server is already running")
+	}
+
 	// Create PID file
 	if err := sm.pidManager.CreatePIDFile(); err != nil {
 		return fmt.Errorf("failed to create PID file: %w", err)
@@ -66,23 +92,15 @@ func (sm *ServerManager) Start(port int) error {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// Start server in goroutine
-	serverErr := make(chan error, 1)
-	go func() {
-		serverErr <- sm.server.Start(sm.appConfig.GetServerPort())
-	}()
+	return sm.server.Start(sm.appConfig.GetServerPort())
+}
 
-	// Wait for either server error or shutdown signal
-	select {
-	case err := <-serverErr:
-		// Server stopped with error
-		sm.Cleanup()
-		return fmt.Errorf("server stopped unexpectedly: %w", err)
-	case <-sigChan:
-		// Received shutdown signal
-		fmt.Println("\nReceived shutdown signal")
-		return sm.Stop()
+// StartWithPort sets up and starts the server in one call (legacy behavior)
+func (sm *ServerManager) StartWithPort(port int) error {
+	if err := sm.Setup(port); err != nil {
+		return err
 	}
+	return sm.Start()
 }
 
 // Stop stops the server gracefully
