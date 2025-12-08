@@ -257,7 +257,7 @@ func handleServerManagement(appConfig *config.AppConfig, reader *bufio.Reader, l
 			}
 		}
 
-		if err := serverManager.Start(port); err != nil {
+		if err := serverManager.Start(); err != nil {
 			fmt.Printf("❌ Failed to start server: %v\n", err)
 			if logger != nil {
 				logger.LogAction(memory.ActionStartServer, map[string]interface{}{
@@ -314,7 +314,7 @@ func handleServerManagement(appConfig *config.AppConfig, reader *bufio.Reader, l
 		}
 
 		newServerManager := utils.NewServerManager(appConfig)
-		if err := newServerManager.Start(port); err != nil {
+		if err := newServerManager.Start(); err != nil {
 			fmt.Printf("❌ Failed to restart server: %v\n", err)
 			if logger != nil {
 				logger.LogAction(memory.ActionRestartServer, map[string]interface{}{

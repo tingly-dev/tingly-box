@@ -43,7 +43,7 @@ The server will handle request routing to configured AI providers.`,
 			// Start server in goroutine to keep it non-blocking
 			serverErr := make(chan error, 1)
 			go func() {
-				serverErr <- serverManager.Start(port)
+				serverErr <- serverManager.Start()
 			}()
 
 			// Wait for either server error, shutdown signal, or web UI stop request
@@ -167,7 +167,7 @@ The restart is graceful - ongoing requests will be completed before shutdown.`,
 
 			// Start server with new configuration
 			fmt.Println("Starting server...")
-			if err := newServerManager.Start(port); err != nil {
+			if err := newServerManager.Start(); err != nil {
 				return fmt.Errorf("failed to start server: %w", err)
 			}
 
