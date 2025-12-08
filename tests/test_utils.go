@@ -9,11 +9,12 @@ import (
 	"os"
 	"testing"
 
+	"tingly-box/internal/config"
+	"tingly-box/internal/server"
+
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-yaml"
 	"github.com/stretchr/testify/assert"
-	"tingly-box/internal/config"
-	"tingly-box/internal/server"
 )
 
 // TestServer represents a test server wrapper
@@ -23,6 +24,20 @@ type TestServer struct {
 	config       *config.AppConfig
 	server       *server.Server
 	ginEngine    *gin.Engine
+}
+
+// NewTestServer creates a new test server with custom config directory
+func NewTestServerWithConfigDir(t *testing.T, configDir string) *TestServer {
+	if err := os.MkdirAll(configDir, 0700); err != nil {
+		t.Fatalf("Failed to create config directory %s: %v", configDir, err)
+	}
+
+	appConfig, err := config.NewAppConfigWithConfigDir(configDir)
+	if err != nil {
+		t.Fatalf("Failed to create app config: %v", err)
+	}
+
+	return createTestServer(t, appConfig)
 }
 
 // NewTestServer creates a new test server
@@ -37,6 +52,12 @@ func NewTestServer(t *testing.T) *TestServer {
 	if err != nil {
 		t.Fatalf("Failed to create app config: %v", err)
 	}
+
+	return createTestServer(t, appConfig)
+}
+
+// createTestServer creates a test server with the given appConfig
+func createTestServer(t *testing.T, appConfig *config.AppConfig) *TestServer {
 
 	modelManager, err := config.NewModelManager()
 	if err != nil {
@@ -200,5 +221,5 @@ func CaptureRequest(handler gin.HandlerFunc) (*http.Request, map[string]interfac
 
 // Cleanup removes test files
 func Cleanup() {
-	os.RemoveAll("config/test_models.yaml")
+	os.RemoveAll("tests/.tingly-box")
 }

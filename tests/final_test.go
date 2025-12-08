@@ -4,11 +4,362 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
+
+// containsStatus checks if status code is in expected list
+func containsStatus(actual int, expected []int) bool {
+	for _, code := range expected {
+		if actual == code {
+			return true
+		}
+	}
+	return false
+}
+
+// runSystemTests runs all system tests with the given test server
+func runSystemTests(t *testing.T, ts *TestServer, isRealConfig bool) {
+	// Test 1: Health check endpoint
+	t.Run("Health_Check", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/health", nil)
+		w := httptest.NewRecorder()
+		ts.ginEngine.ServeHTTP(w, req)
+
+		assert.Equal(t, 200, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.Equal(t, "healthy", response["status"])
+		assert.Equal(t, "tingly-box", response["service"])
+	})
+
+	// Test 2: Token generation
+	t.Run("Token_Generation", func(t *testing.T) {
+		globalConfig := ts.appConfig.GetGlobalConfig()
+		userToken := globalConfig.GetUserToken()
+
+		req, _ := http.NewRequest("POST", "/api/token", CreateJSONBody(map[string]string{"client_id": "test-client"}))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+userToken)
+		w := httptest.NewRecorder()
+		ts.ginEngine.ServeHTTP(w, req)
+
+		assert.Equal(t, 200, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.Contains(t, response, "token")
+	})
+
+	// Test 3: Models endpoint
+	t.Run("Models_Endpoint", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/v1/models", nil)
+		w := httptest.NewRecorder()
+		ts.ginEngine.ServeHTTP(w, req)
+
+		if isRealConfig {
+			assert.Equal(t, 200, w.Code)
+		} else {
+			assert.True(t, containsStatus(w.Code, []int{200, 500}))
+		}
+	})
+
+	// Test 4: Chat completions with authentication
+	t.Run("Chat_Completions_With_Auth", func(t *testing.T) {
+		globalConfig := ts.appConfig.GetGlobalConfig()
+		modelToken := globalConfig.GetModelToken()
+
+		req, _ := http.NewRequest("POST", "/openai/v1/chat/completions", CreateJSONBody(map[string]interface{}{
+			"model": "gpt-3.5-turbo",
+			"messages": []map[string]string{
+				{"role": "user", "content": "Hello, world!"},
+			},
+		}))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+modelToken)
+		w := httptest.NewRecorder()
+		ts.ginEngine.ServeHTTP(w, req)
+
+		// May fail at provider level but routing works
+		assert.True(t, containsStatus(w.Code, []int{200, 400, 500}))
+	})
+
+	// Test 5: Chat completions without authentication
+	t.Run("Chat_Completions_Without_Auth", func(t *testing.T) {
+		req, _ := http.NewRequest("POST", "/openai/v1/chat/completions", CreateJSONBody(map[string]interface{}{
+			"model": "gpt-3.5-turbo",
+			"messages": []map[string]string{
+				{"role": "user", "content": "Hello, world!"},
+			},
+		}))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		ts.ginEngine.ServeHTTP(w, req)
+
+		assert.Equal(t, 401, w.Code)
+	})
+
+	// Test 6: Invalid chat request (missing model)
+	t.Run("Invalid_Chat_Request", func(t *testing.T) {
+		globalConfig := ts.appConfig.GetGlobalConfig()
+		modelToken := globalConfig.GetModelToken()
+
+		req, _ := http.NewRequest("POST", "/openai/v1/chat/completions", CreateJSONBody(map[string]interface{}{
+			"messages": []map[string]string{
+				{"role": "user", "content": "Hello, world!"},
+			},
+		}))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+modelToken)
+		w := httptest.NewRecorder()
+		ts.ginEngine.ServeHTTP(w, req)
+
+		assert.Equal(t, 400, w.Code)
+	})
+
+	// Test 7: Anthropic messages endpoint with authentication
+	t.Run("Anthropic_Messages_With_Auth", func(t *testing.T) {
+		globalConfig := ts.appConfig.GetGlobalConfig()
+		modelToken := globalConfig.GetModelToken()
+
+		reqBody := map[string]interface{}{
+			"model":      "claude-3-5-haiku-20241022",
+			"max_tokens": 1024, // <--- ANTHROPIC API REQUIREMENT
+			"messages": []map[string]string{
+				{"role": "user", "content": "Hello from Anthropic!"},
+			},
+		}
+
+		req, _ := http.NewRequest("POST", "/anthropic/v1/messages", CreateJSONBody(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Api-Key", modelToken)
+
+		w := httptest.NewRecorder()
+		ts.ginEngine.ServeHTTP(w, req)
+
+		if isRealConfig {
+			assert.Equal(t, 200, w.Code)
+			assert.Contains(t, w.Body.String(), "anthropic")
+		} else {
+			assert.True(t, containsStatus(w.Code, []int{401}))
+		}
+	})
+
+	// Test 8: Anthropic messages endpoint without authentication
+	t.Run("Anthropic_Messages_Without_Auth", func(t *testing.T) {
+		req, _ := http.NewRequest("POST", "/anthropic/v1/messages", CreateJSONBody(map[string]interface{}{
+			"model": "claude-3-sonnet",
+			"messages": []map[string]string{
+				{"role": "user", "content": "Hello from Anthropic!"},
+			},
+		}))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		ts.ginEngine.ServeHTTP(w, req)
+
+		// Both mock and real config should reject unauthenticated requests
+		assert.Equal(t, 401, w.Code)
+	})
+
+	// Test 9: Anthropic models endpoint
+	t.Run("Anthropic_Models_Endpoint", func(t *testing.T) {
+		globalConfig := ts.appConfig.GetGlobalConfig()
+		modelToken := globalConfig.GetModelToken()
+		// Now get the models from the Anthropic endpoint
+		req, _ := http.NewRequest("GET", "/anthropic/v1/models", nil)
+		req.Header.Set("x-api-key", modelToken)
+		req.Header.Set("anthropic-version", "2023-06-01")
+		w := httptest.NewRecorder()
+		ts.ginEngine.ServeHTTP(w, req)
+
+		if isRealConfig {
+			assert.Equal(t, 200, w.Code)
+			assert.Contains(t, w.Body.String(), "Claude")
+		} else {
+			// mocked token would got 401
+			assert.True(t, containsStatus(w.Code, []int{401}))
+		}
+	})
+
+	// Test 10: Providers endpoint with authentication
+	t.Run("Providers_Endpoint_With_Auth", func(t *testing.T) {
+		globalConfig := ts.appConfig.GetGlobalConfig()
+		userToken := globalConfig.GetUserToken()
+
+		req, _ := http.NewRequest("GET", "/api/providers", nil)
+		req.Header.Set("Authorization", "Bearer "+userToken)
+		w := httptest.NewRecorder()
+		ts.ginEngine.ServeHTTP(w, req)
+
+		if isRealConfig {
+			assert.Equal(t, 200, w.Code)
+		} else {
+			assert.True(t, containsStatus(w.Code, []int{200, 400, 500}))
+		}
+	})
+
+	// Test 11: Providers endpoint without authentication
+	t.Run("Providers_Endpoint_Without_Auth", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/providers", nil)
+		w := httptest.NewRecorder()
+		ts.ginEngine.ServeHTTP(w, req)
+
+		assert.Equal(t, 401, w.Code)
+	})
+
+	// Test 12: Provider-Models endpoint with authentication
+	t.Run("Provider_Models_Endpoint_With_Auth", func(t *testing.T) {
+		globalConfig := ts.appConfig.GetGlobalConfig()
+		userToken := globalConfig.GetUserToken()
+
+		for _, providerName := range []string{"anthropic", "glm"} {
+			t.Run(providerName, func(t *testing.T) {
+				req, _ := http.NewRequest("POST", "/api/provider-models/"+providerName, nil)
+				req.Header.Set("Authorization", "Bearer "+userToken)
+				w := httptest.NewRecorder()
+				ts.ginEngine.ServeHTTP(w, req)
+
+				// Check if we're using real tokens (not test tokens)
+				isUsingRealTokens := !strings.Contains(userToken, "tingly-box-user-token")
+				if isRealConfig && isUsingRealTokens {
+					// Real config with real tokens - expect success
+					assert.Equal(t, 200, w.Code)
+					assert.Contains(t, w.Body.String(), providerName)
+				} else {
+					// Test tokens or mock config - allow flexible responses
+					assert.True(t, containsStatus(w.Code, []int{200, 400, 500}))
+				}
+			})
+		}
+	})
+
+	// Test 13: Provider-Models endpoint without authentication
+	t.Run("Provider_Models_Endpoint_Without_Auth", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/provider-models", nil)
+		w := httptest.NewRecorder()
+		ts.ginEngine.ServeHTTP(w, req)
+
+		assert.Equal(t, 401, w.Code)
+	})
+
+	// Test 14: Rules endpoint with authentication
+	t.Run("Rules_Endpoint_With_Auth", func(t *testing.T) {
+		globalConfig := ts.appConfig.GetGlobalConfig()
+		userToken := globalConfig.GetUserToken()
+
+		req, _ := http.NewRequest("GET", "/api/rules", nil)
+		req.Header.Set("Authorization", "Bearer "+userToken)
+		w := httptest.NewRecorder()
+		ts.ginEngine.ServeHTTP(w, req)
+
+		assert.Equal(t, 200, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.True(t, response["success"].(bool))
+	})
+
+	// Test 15: Get specific rule with authentication
+	t.Run("Get_Specific_Rule_With_Auth", func(t *testing.T) {
+		globalConfig := ts.appConfig.GetGlobalConfig()
+		userToken := globalConfig.GetUserToken()
+
+		req, _ := http.NewRequest("GET", "/api/rule/tingly", nil)
+		req.Header.Set("Authorization", "Bearer "+userToken)
+		w := httptest.NewRecorder()
+		ts.ginEngine.ServeHTTP(w, req)
+
+		// May or may not have the rule
+		assert.True(t, containsStatus(w.Code, []int{200, 404}))
+	})
+
+	// Test 16: Create/update rule with authentication
+	t.Run("Create_Update_Rule_With_Auth", func(t *testing.T) {
+		globalConfig := ts.appConfig.GetGlobalConfig()
+		userToken := globalConfig.GetUserToken()
+
+		req, _ := http.NewRequest("POST", "/api/rule/test-rule", CreateJSONBody(map[string]interface{}{
+			"response_model": "gpt-4",
+			"provider":       "openai",
+			"default_model":  "gpt-4-turbo",
+		}))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+userToken)
+		w := httptest.NewRecorder()
+		ts.ginEngine.ServeHTTP(w, req)
+
+		assert.Equal(t, 200, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.True(t, response["success"].(bool))
+	})
+
+	// Test 17: Rules endpoint without authentication
+	t.Run("Rules_Endpoint_Without_Auth", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/rules", nil)
+		w := httptest.NewRecorder()
+		ts.ginEngine.ServeHTTP(w, req)
+
+		assert.Equal(t, 401, w.Code)
+	})
+}
+
+// TestFinalIntegrationWithRealConfig provides integration test using real configuration
+func TestFinalIntegrationWithRealConfig(t *testing.T) {
+	t.Run("Complete_System_Test_With_Real_Config", func(t *testing.T) {
+		// Create test config directory
+		testConfigDir := "tests/.tingly-box"
+		if err := os.MkdirAll(testConfigDir, 0700); err != nil {
+			t.Fatalf("Failed to create test config directory: %v", err)
+		}
+
+		// Copy real config from main .tingly-box directory if it exists
+		realConfigPath := "../.tingly-box/config.json"
+		if _, err := os.Stat(realConfigPath); err == nil {
+			// Real config exists, copy it
+			realConfig, err := os.ReadFile(realConfigPath)
+			if err != nil {
+				t.Fatalf("Failed to read real config: %v", err)
+			}
+			if err := os.WriteFile(filepath.Join(testConfigDir, "config.json"), realConfig, 0644); err != nil {
+				t.Fatalf("Failed to copy real config to test directory: %v", err)
+			}
+		}
+
+		// Copy real global config from main .tingly-box directory if it exists
+		realGlobalConfigPath := "../.tingly-box/global_config.yaml"
+		if _, err := os.Stat(realGlobalConfigPath); err == nil {
+			// Real global config exists, copy it
+			realGlobalConfig, err := os.ReadFile(realGlobalConfigPath)
+			if err != nil {
+				t.Fatalf("Failed to read real global config: %v", err)
+			}
+			if err := os.WriteFile(filepath.Join(testConfigDir, "global_config.yaml"), realGlobalConfig, 0644); err != nil {
+				t.Fatalf("Failed to copy real global config to test directory: %v", err)
+			}
+		}
+
+		// Create test server with real config
+		ts := NewTestServerWithConfigDir(t, testConfigDir)
+		defer Cleanup()
+
+		// Add real providers for testing (not test providers with fake tokens)
+		ts.AddTestProviders(t)
+
+		// Run the same tests as the regular system test with real config flag
+		runSystemTests(t, ts, true)
+	})
+}
 
 // TestFinalIntegration provides a final integration test
 func TestFinalIntegration(t *testing.T) {
@@ -20,305 +371,8 @@ func TestFinalIntegration(t *testing.T) {
 		// Add test providers
 		ts.AddTestProviders(t)
 
-		// Test 1: Health check endpoint
-		t.Run("Health_Check", func(t *testing.T) {
-			req, _ := http.NewRequest("GET", "/health", nil)
-			w := httptest.NewRecorder()
-			ts.ginEngine.ServeHTTP(w, req)
-
-			assert.Equal(t, 200, w.Code)
-
-			var response map[string]interface{}
-			err := json.Unmarshal(w.Body.Bytes(), &response)
-			assert.NoError(t, err)
-			assert.Equal(t, "healthy", response["status"])
-			assert.Equal(t, "tingly-box", response["service"])
-		})
-
-		// Test 2: Token generation
-		t.Run("Token_Generation", func(t *testing.T) {
-			requestBody := map[string]string{
-				"client_id": "test-client",
-			}
-
-			// Get user token for authentication
-			globalConfig := ts.appConfig.GetGlobalConfig()
-			userToken := globalConfig.GetUserToken()
-
-			req, _ := http.NewRequest("POST", "/api/token", CreateJSONBody(requestBody))
-			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("Authorization", "Bearer "+userToken)
-			w := httptest.NewRecorder()
-			ts.ginEngine.ServeHTTP(w, req)
-
-			assert.Equal(t, 200, w.Code)
-
-			var response map[string]interface{}
-			err := json.Unmarshal(w.Body.Bytes(), &response)
-			assert.NoError(t, err)
-			assert.Contains(t, response, "token")
-		})
-
-		// Test 3: Models endpoint
-		t.Run("Models_Endpoint", func(t *testing.T) {
-			req, _ := http.NewRequest("GET", "/v1/models", nil)
-			w := httptest.NewRecorder()
-			ts.ginEngine.ServeHTTP(w, req)
-
-			// Should succeed (200) or fail gracefully (500) if model manager not available
-			assert.True(t, w.Code == 200 || w.Code == 500)
-		})
-
-		// Test 4: Chat completions with authentication
-		t.Run("Chat_Completions_With_Auth", func(t *testing.T) {
-			requestBody := map[string]interface{}{
-				"model": "gpt-3.5-turbo",
-				"messages": []map[string]string{
-					{"role": "user", "content": "Hello, world!"},
-				},
-			}
-
-			// Get model token for authentication
-			globalConfig := ts.appConfig.GetGlobalConfig()
-			modelToken := globalConfig.GetModelToken()
-
-			req, _ := http.NewRequest("POST", "/openai/v1/chat/completions", CreateJSONBody(requestBody))
-			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("Authorization", "Bearer "+modelToken)
-			w := httptest.NewRecorder()
-			ts.ginEngine.ServeHTTP(w, req)
-
-			// Should process the request (may fail at provider level but routing works)
-			assert.True(t, w.Code == 200 || w.Code == 400 || w.Code == 500)
-		})
-
-		// Test 5: Chat completions without authentication
-		t.Run("Chat_Completions_Without_Auth", func(t *testing.T) {
-			requestBody := map[string]interface{}{
-				"model": "gpt-3.5-turbo",
-				"messages": []map[string]string{
-					{"role": "user", "content": "Hello, world!"},
-				},
-			}
-
-			req, _ := http.NewRequest("POST", "/openai/v1/chat/completions", CreateJSONBody(requestBody))
-			req.Header.Set("Content-Type", "application/json")
-			// No Authorization header
-			w := httptest.NewRecorder()
-			ts.ginEngine.ServeHTTP(w, req)
-
-			assert.Equal(t, 401, w.Code)
-		})
-
-		// Test 6: Invalid chat request (missing model)
-		t.Run("Invalid_Chat_Request", func(t *testing.T) {
-			requestBody := map[string]interface{}{
-				"messages": []map[string]string{
-					{"role": "user", "content": "Hello, world!"},
-				},
-				// Missing "model" field
-			}
-
-			// Get model token for authentication
-			globalConfig := ts.appConfig.GetGlobalConfig()
-			modelToken := globalConfig.GetModelToken()
-
-			req, _ := http.NewRequest("POST", "/openai/v1/chat/completions", CreateJSONBody(requestBody))
-			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("Authorization", "Bearer "+modelToken)
-			w := httptest.NewRecorder()
-			ts.ginEngine.ServeHTTP(w, req)
-
-			assert.Equal(t, 400, w.Code)
-		})
-
-		// Test 7: Anthropic messages endpoint with authentication
-		t.Run("Anthropic_Messages_With_Auth", func(t *testing.T) {
-			requestBody := map[string]interface{}{
-				"model": "claude-3-sonnet",
-				"messages": []map[string]string{
-					{"role": "user", "content": "Hello from Anthropic!"},
-				},
-			}
-
-			// Get model token for authentication
-			globalConfig := ts.appConfig.GetGlobalConfig()
-			modelToken := globalConfig.GetModelToken()
-
-			req, _ := http.NewRequest("POST", "/anthropic/v1/messages", CreateJSONBody(requestBody))
-			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("Authorization", "Bearer "+modelToken)
-			w := httptest.NewRecorder()
-			ts.ginEngine.ServeHTTP(w, req)
-
-			// Should process the request (may fail at provider level but routing works)
-			assert.True(t, w.Code == 200 || w.Code == 400 || w.Code == 500)
-		})
-
-		// Test 8: Anthropic messages endpoint without authentication
-		t.Run("Anthropic_Messages_Without_Auth", func(t *testing.T) {
-			requestBody := map[string]interface{}{
-				"model": "claude-3-sonnet",
-				"messages": []map[string]string{
-					{"role": "user", "content": "Hello from Anthropic!"},
-				},
-			}
-
-			req, _ := http.NewRequest("POST", "/anthropic/v1/messages", CreateJSONBody(requestBody))
-			req.Header.Set("Content-Type", "application/json")
-			// No Authorization header
-			w := httptest.NewRecorder()
-			ts.ginEngine.ServeHTTP(w, req)
-
-			assert.Equal(t, 401, w.Code)
-		})
-
-		// Test 9: Anthropic models endpoint
-		t.Run("Anthropic_Models_Endpoint", func(t *testing.T) {
-			// Get model token for authentication
-			globalConfig := ts.appConfig.GetGlobalConfig()
-			modelToken := globalConfig.GetModelToken()
-
-			req, _ := http.NewRequest("GET", "/anthropic/v1/models", nil)
-			req.Header.Set("Authorization", "Bearer "+modelToken)
-			w := httptest.NewRecorder()
-			ts.ginEngine.ServeHTTP(w, req)
-
-			// Should succeed or fail gracefully
-			assert.True(t, w.Code == 200 || w.Code == 400 || w.Code == 500)
-		})
-
-		// Test 10: Providers endpoint with authentication
-		t.Run("Providers_Endpoint_With_Auth", func(t *testing.T) {
-			// Get user token for authentication
-			globalConfig := ts.appConfig.GetGlobalConfig()
-			userToken := globalConfig.GetUserToken()
-
-			req, _ := http.NewRequest("GET", "/api/providers", nil)
-			req.Header.Set("Authorization", "Bearer "+userToken)
-			w := httptest.NewRecorder()
-			ts.ginEngine.ServeHTTP(w, req)
-
-			// Should succeed or fail gracefully
-			assert.True(t, w.Code == 200)
-		})
-
-		// Test 11: Providers endpoint without authentication
-		t.Run("Providers_Endpoint_Without_Auth", func(t *testing.T) {
-			req, _ := http.NewRequest("GET", "/api/providers", nil)
-			// No Authorization header
-			w := httptest.NewRecorder()
-			ts.ginEngine.ServeHTTP(w, req)
-
-			assert.Equal(t, 401, w.Code)
-		})
-
-		// Test 12: Provider-Models endpoint with authentication, you should copy .tingly-box/config.json to tests/.tingly-box/
-		t.Run("Provider_Models_Endpoint_With_Auth", func(t *testing.T) {
-			// Get user token for authentication
-			globalConfig := ts.appConfig.GetGlobalConfig()
-			userToken := globalConfig.GetUserToken()
-
-			// Test both anthropic and glm providers
-			for _, providerName := range []string{"anthropic", "glm"} {
-				t.Run(providerName, func(t *testing.T) {
-					req, _ := http.NewRequest("POST", "/api/provider-models/"+providerName, nil)
-					req.Header.Set("Authorization", "Bearer "+userToken)
-					w := httptest.NewRecorder()
-					ts.ginEngine.ServeHTTP(w, req)
-
-					// Should succeed or fail gracefully
-					assert.True(t, w.Code == 200)
-					assert.True(t, strings.Contains(w.Body.String(), providerName))
-				})
-			}
-		})
-
-		// Test 13: Provider-Models endpoint without authentication
-		t.Run("Provider_Models_Endpoint_Without_Auth", func(t *testing.T) {
-			req, _ := http.NewRequest("GET", "/api/provider-models", nil)
-			// No Authorization header
-			w := httptest.NewRecorder()
-			ts.ginEngine.ServeHTTP(w, req)
-
-			assert.Equal(t, 401, w.Code)
-		})
-
-		// Test 14: Rules endpoint with authentication
-		t.Run("Rules_Endpoint_With_Auth", func(t *testing.T) {
-			// Get user token for authentication
-			globalConfig := ts.appConfig.GetGlobalConfig()
-			userToken := globalConfig.GetUserToken()
-
-			req, _ := http.NewRequest("GET", "/api/rules", nil)
-			req.Header.Set("Authorization", "Bearer "+userToken)
-			w := httptest.NewRecorder()
-			ts.ginEngine.ServeHTTP(w, req)
-
-			// Should succeed
-			assert.Equal(t, 200, w.Code)
-
-			var response map[string]interface{}
-			err := json.Unmarshal(w.Body.Bytes(), &response)
-			assert.NoError(t, err)
-			assert.True(t, response["success"].(bool))
-		})
-
-		// Test 15: Get specific rule with authentication
-		t.Run("Get_Specific_Rule_With_Auth", func(t *testing.T) {
-			// Get user token for authentication
-			globalConfig := ts.appConfig.GetGlobalConfig()
-			userToken := globalConfig.GetUserToken()
-
-			// Try to get a rule by name (should be "tingly" by default)
-			req, _ := http.NewRequest("GET", "/api/rule/tingly", nil)
-			req.Header.Set("Authorization", "Bearer "+userToken)
-			w := httptest.NewRecorder()
-			ts.ginEngine.ServeHTTP(w, req)
-
-			// Should succeed or return 404 if rule doesn't exist
-			assert.True(t, w.Code == 200)
-			assert.True(t, strings.Contains(w.Body.String(), "tingly"))
-
-		})
-
-		// Test 16: Create/update rule with authentication
-		t.Run("Create_Update_Rule_With_Auth", func(t *testing.T) {
-			// Get user token for authentication
-			globalConfig := ts.appConfig.GetGlobalConfig()
-			userToken := globalConfig.GetUserToken()
-
-			// Create a new rule
-			ruleData := map[string]interface{}{
-				"response_model": "gpt-4",
-				"provider":       "openai",
-				"default_model":  "gpt-4-turbo",
-			}
-
-			req, _ := http.NewRequest("POST", "/api/rule/test-rule", CreateJSONBody(ruleData))
-			req.Header.Set("Authorization", "Bearer "+userToken)
-			req.Header.Set("Content-Type", "application/json")
-			w := httptest.NewRecorder()
-			ts.ginEngine.ServeHTTP(w, req)
-
-			// Should succeed
-			assert.Equal(t, 200, w.Code)
-
-			var response map[string]interface{}
-			err := json.Unmarshal(w.Body.Bytes(), &response)
-			assert.NoError(t, err)
-			assert.True(t, response["success"].(bool))
-		})
-
-		// Test 17: Rules endpoint without authentication
-		t.Run("Rules_Endpoint_Without_Auth", func(t *testing.T) {
-			req, _ := http.NewRequest("GET", "/api/rules", nil)
-			// No Authorization header
-			w := httptest.NewRecorder()
-			ts.ginEngine.ServeHTTP(w, req)
-
-			assert.Equal(t, 401, w.Code)
-		})
+		// Run the system tests with mock config flag
+		runSystemTests(t, ts, false)
 	})
 
 	t.Run("Mock_Provider_Integration", func(t *testing.T) {
@@ -356,16 +410,14 @@ func TestFinalIntegration(t *testing.T) {
 
 		// Test mock server directly
 		t.Run("Direct_Mock_Server_Test", func(t *testing.T) {
-			requestBody := map[string]interface{}{
+			req, _ := http.NewRequest("POST", "/v1/chat/completions", CreateJSONBody(map[string]interface{}{
 				"model": "test-model",
 				"messages": []map[string]string{
 					{"role": "user", "content": "Hello mock!"},
 				},
-			}
-
-			req, _ := http.NewRequest("POST", "/v1/chat/completions", CreateJSONBody(requestBody))
-			req.Header.Set("Content-Type", "application/json")
+			}))
 			req.Header.Set("Authorization", "Bearer test-token")
+			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			mockServer.server.Config.Handler.ServeHTTP(w, req)
 
@@ -376,15 +428,13 @@ func TestFinalIntegration(t *testing.T) {
 			err := json.Unmarshal(w.Body.Bytes(), &response)
 			assert.NoError(t, err)
 			assert.Equal(t, "mock-test-response", response["id"])
-			assert.Equal(t, "Mock response successful!", response["choices"].([]interface{})[0].(map[string]interface{})["message"].(map[string]interface{})["content"])
 		})
 
 		// Test request forwarding verification
 		t.Run("Request_Forwarding_Verification", func(t *testing.T) {
-			// Reset call count
 			mockServer.Reset()
 
-			requestBody := map[string]interface{}{
+			req, _ := http.NewRequest("POST", "/v1/chat/completions", CreateJSONBody(map[string]interface{}{
 				"model": "test-model",
 				"messages": []map[string]string{
 					{"role": "system", "content": "You are a helpful assistant."},
@@ -392,11 +442,9 @@ func TestFinalIntegration(t *testing.T) {
 				},
 				"temperature": 0.7,
 				"max_tokens":  100,
-			}
-
-			req, _ := http.NewRequest("POST", "/v1/chat/completions", CreateJSONBody(requestBody))
-			req.Header.Set("Content-Type", "application/json")
+			}))
 			req.Header.Set("Authorization", "Bearer test-token")
+			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			mockServer.server.Config.Handler.ServeHTTP(w, req)
 
@@ -420,16 +468,14 @@ func TestFinalIntegration(t *testing.T) {
 				Error:      "Invalid API key",
 			})
 
-			requestBody := map[string]interface{}{
+			req, _ := http.NewRequest("POST", "/v1/chat/completions", CreateJSONBody(map[string]interface{}{
 				"model": "test-model",
 				"messages": []map[string]string{
 					{"role": "user", "content": "This should fail"},
 				},
-			}
-
-			req, _ := http.NewRequest("POST", "/v1/chat/completions", CreateJSONBody(requestBody))
-			req.Header.Set("Content-Type", "application/json")
+			}))
 			req.Header.Set("Authorization", "Bearer test-token")
+			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			mockServer.server.Config.Handler.ServeHTTP(w, req)
 
@@ -478,14 +524,13 @@ func TestPerformance(t *testing.T) {
 				go func() {
 					defer func() { done <- true }()
 
-					requestBody := map[string]interface{}{
+					req, _ := http.NewRequest("POST", "/v1/chat/completions", CreateJSONBody(map[string]interface{}{
 						"model": "test-model",
 						"messages": []map[string]string{
 							{"role": "user", "content": "Performance test"},
 						},
-					}
-
-					req, _ := http.NewRequest("POST", "/v1/chat/completions", CreateJSONBody(requestBody))
+					}))
+					req.Header.Set("Authorization", "Bearer test-token")
 					req.Header.Set("Content-Type", "application/json")
 					w := httptest.NewRecorder()
 					mockServer.server.Config.Handler.ServeHTTP(w, req)

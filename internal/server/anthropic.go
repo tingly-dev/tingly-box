@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -127,7 +128,7 @@ func (s *Server) AnthropicModels(c *gin.Context) {
 	models := s.modelManager.GetAllModels()
 
 	// Convert to Anthropic-compatible format
-	var anthropicModels []AnthropicModel
+	anthropicModels := make([]AnthropicModel, 0)
 	for _, model := range models {
 		anthropicModel := AnthropicModel{
 			ID:           model.Name,
@@ -208,7 +209,7 @@ func (s *Server) forwardAnthropicRequest(provider *config.Provider, req *Anthrop
 	if strings.HasSuffix(apiBase, "/v1") {
 		apiBase = apiBase[:len(apiBase)-3]
 	}
-
+	log.Printf("Anthropic API Base: %s, Token Length: %d", apiBase, len(provider.Token))
 	// Create Anthropic client
 	client := anthropic.NewClient(
 		option.WithAPIKey(provider.Token),
