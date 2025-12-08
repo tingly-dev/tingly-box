@@ -45,7 +45,7 @@ func TestEmbeddedAssets(t *testing.T) {
 
 func TestWebUIWithEmbeddedAssets(t *testing.T) {
 	// Test WebUI with embedded assets
-	wui := NewWebUI(true, nil, nil)
+	wui := NewWebUI(true, nil, nil, nil)
 	assert.NotNil(t, wui)
 	assert.True(t, wui.IsEnabled())
 	assert.NotNil(t, wui.GetRouter())
@@ -53,7 +53,7 @@ func TestWebUIWithEmbeddedAssets(t *testing.T) {
 
 func TestWebUIDisabled(t *testing.T) {
 	// Test WebUI when disabled
-	wui := NewWebUI(false, nil, nil)
+	wui := NewWebUI(false, nil, nil, nil)
 	assert.NotNil(t, wui)
 	assert.False(t, wui.IsEnabled())
 	assert.Nil(t, wui.GetRouter())
