@@ -27,6 +27,12 @@ type TestServer struct {
 
 // NewTestServer creates a new test server
 func NewTestServer(t *testing.T) *TestServer {
+	// Create test config directory
+	configDir := ".tingly-box"
+	if err := os.MkdirAll(configDir, 0700); err != nil {
+		t.Fatalf("Failed to create test config directory: %v", err)
+	}
+
 	appConfig, err := config.NewAppConfig()
 	if err != nil {
 		t.Fatalf("Failed to create app config: %v", err)
@@ -58,6 +64,8 @@ func (ts *TestServer) AddTestProviders(t *testing.T) {
 	}{
 		{"openai", "https://api.openai.com/v1", "sk-test-openai"},
 		{"alibaba", "https://dashscope.aliyuncs.com/compatible-mode/v1", "sk-test-alibaba"},
+		{"anthropic", "https://api.anthropic.com", "sk-test-anthropic"},
+		{"glm", "https://open.bigmodel.cn/api/paas/v4", "sk-test-glm"},
 	}
 
 	for _, p := range providers {

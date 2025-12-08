@@ -315,7 +315,7 @@ func (s *Server) DetermineProviderAndModel(modelName string) (*config.Provider, 
 	// Check if this is the request model name first
 	globalConfig := s.config.GetGlobalConfig()
 	if globalConfig != nil && globalConfig.IsRequestModel(modelName) {
-		// Get the RequestConfig for this specific request model
+		// Get the Rule for this specific request model
 		reqConfig := globalConfig.GetRequestConfigByRequestModel(modelName)
 		if reqConfig != nil && reqConfig.Provider != "" && reqConfig.DefaultModel != "" {
 			// Find provider configuration
