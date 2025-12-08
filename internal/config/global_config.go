@@ -38,6 +38,15 @@ func NewGlobalConfig() (*GlobalConfig, error) {
 		return nil, fmt.Errorf("config directory is empty")
 	}
 
+	return NewGlobalConfigWithConfigDir(configDir)
+}
+
+// NewGlobalConfigWithConfigDir creates a new global configuration manager with a custom config directory
+func NewGlobalConfigWithConfigDir(configDir string) (*GlobalConfig, error) {
+	if configDir == "" {
+		return nil, fmt.Errorf("config directory is empty")
+	}
+
 	if err := os.MkdirAll(configDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create config directory: %w", err)
 	}

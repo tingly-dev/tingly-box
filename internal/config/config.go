@@ -67,6 +67,15 @@ func NewAppConfig() (*AppConfig, error) {
 		return nil, fmt.Errorf("failed to create config directory: %w", err)
 	}
 
+	return NewAppConfigWithConfigDir(configDir)
+}
+
+// NewAppConfigWithConfigDir creates a new AppConfig with a custom config directory
+func NewAppConfigWithConfigDir(configDir string) (*AppConfig, error) {
+	if err := os.MkdirAll(configDir, 0700); err != nil {
+		return nil, fmt.Errorf("failed to create config directory: %w", err)
+	}
+
 	configFile := filepath.Join(configDir, "config.json")
 	ac := &AppConfig{
 		configFile: configFile,
@@ -101,8 +110,8 @@ func NewAppConfig() (*AppConfig, error) {
 		}
 	}
 
-	// Initialize global config
-	globalConfig, err := NewGlobalConfig()
+	// Initialize global config (use same directory as app config)
+	globalConfig, err := NewGlobalConfigWithConfigDir(configDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize global config: %w", err)
 	}
@@ -478,9 +487,14 @@ func (ac *AppConfig) getProviderModelsFromAPI(provider *Provider) []string {
 		return []string{}
 	}
 
-	// Set headers
-	req.Header.Set("Authorization", "Bearer "+provider.Token)
-	req.Header.Set("Content-Type", "application/json")
+	// Set headers based on provider style
+	if provider.APIStyle == APIStyleAnthropic {
+		req.Header.Set("x-api-key", provider.Token)
+		req.Header.Set("anthropic-version", "2023-06-01")
+	} else {
+		req.Header.Set("Authorization", "Bearer "+provider.Token)
+		req.Header.Set("Content-Type", "application/json")
+	}
 
 	// Make the request with timeout
 	client := &http.Client{
