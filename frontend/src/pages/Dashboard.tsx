@@ -20,6 +20,7 @@ import {
 import React, { useEffect, useState } from 'react';
 import { PageLayout } from '../components/PageLayout';
 import { ProviderDialog } from '../components/ProviderDialog';
+import Probe from '../components/Probe';
 import ProviderSelectTab, { type ProviderSelectTabOption } from "../components/ProviderSelectTab.tsx";
 import UnifiedCard from '../components/UnifiedCard';
 import { api } from '../services/api';
@@ -639,6 +640,11 @@ const Dashboard = () => {
                 providerToken={providerToken}
                 onProviderTokenChange={setProviderToken}
             />
+
+            {/* Probe Component */}
+           
+                <Probe />
+           
         </PageLayout>
     );
 };
