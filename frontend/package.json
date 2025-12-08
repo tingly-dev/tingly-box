@@ -1,26 +1,26 @@
 {
-    "name": "frontend",
-    "private": true,
-    "version": "0.0.0",
-    "scripts": {
-        "dev": "vite",
-        "build": "vite build",
-        "build:dev": "vite build --minify false --mode development",
-        "preview": "vite preview"
-    },
-    "dependencies": {
-        "@emotion/react": "^11.14.0",
-        "@emotion/styled": "^11.14.1",
-        "@mui/icons-material": "^7.3.5",
-        "@mui/material": "^7.3.5",
-        "@types/react": "^19.2.7",
-        "@wailsio/runtime": "latest",
-        "react": "^19.2.1",
-        "react-dom": "^19.2.1",
-        "react-router-dom": "^7.10.1"
-    },
-    "devDependencies": {
-        "@vitejs/plugin-react-swc": "^4.2.2",
-        "vite": "^7.2.6"
-    }
+  "name": "frontend",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "vite",
+    "build:dev": "vite build --minify false --mode development",
+    "build": "vite build --mode production",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^7.3.6",
+    "@mui/material": "^7.3.6",
+    "@types/react": "^19.2.7",
+    "@wailsio/runtime": "latest",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
+    "react-router-dom": "^7.10.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react-swc": "^4.2.2",
+    "vite": "^7.2.7"
+  }
 }
