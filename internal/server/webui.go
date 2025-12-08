@@ -93,6 +93,11 @@ func (wui *WebUI) useAPIEndpoints(engine *gin.Engine) {
 		api.POST("/server/stop", wui.StopServer)
 		api.POST("/server/restart", wui.RestartServer)
 
+		// Rule management
+		api.GET("/rules", wui.GetRules)
+		api.GET("/rule/:name", wui.GetRule)
+		api.POST("/rule/:name", wui.SetRule)
+
 		// History
 		api.GET("/history", wui.GetHistory)
 
@@ -284,7 +289,7 @@ func (wui *WebUI) GetDefaults(c *gin.Context) {
 	requestConfigs := globalConfig.GetRequestConfigs()
 	defaultRequestID := globalConfig.GetDefaultRequestID()
 
-	// Convert RequestConfigs to response format
+	// Convert Rules to response format
 	responseConfigs := make([]map[string]interface{}, len(requestConfigs))
 	for i, rc := range requestConfigs {
 		responseConfigs[i] = map[string]interface{}{
@@ -300,6 +305,157 @@ func (wui *WebUI) GetDefaults(c *gin.Context) {
 		"data": gin.H{
 			"request_configs":    responseConfigs,
 			"default_request_id": defaultRequestID,
+		},
+	})
+}
+
+// GetRules returns all rules
+func (wui *WebUI) GetRules(c *gin.Context) {
+	globalConfig := wui.config.GetGlobalConfig()
+	if globalConfig == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Global config not available",
+		})
+		return
+	}
+
+	rules := globalConfig.GetRequestConfigs()
+	defaultRequestID := globalConfig.GetDefaultRequestID()
+
+	// Convert Rules to response format
+	responseRules := make([]map[string]interface{}, len(rules))
+	for i, rule := range rules {
+		responseRules[i] = map[string]interface{}{
+			"request_model":  rule.RequestModel,
+			"response_model": rule.ResponseModel,
+			"provider":       rule.Provider,
+			"default_model":  rule.DefaultModel,
+			"active":         rule.Active,
+			"is_default":     i == defaultRequestID,
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    responseRules,
+	})
+}
+
+// GetRule returns a specific rule by name
+func (wui *WebUI) GetRule(c *gin.Context) {
+	ruleName := c.Param("name")
+	if ruleName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Rule name is required",
+		})
+		return
+	}
+
+	globalConfig := wui.config.GetGlobalConfig()
+	if globalConfig == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Global config not available",
+		})
+		return
+	}
+
+	rule := globalConfig.GetRequestConfigByRequestModel(ruleName)
+	if rule == nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"error":   "Rule not found",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": map[string]interface{}{
+			"request_model":  rule.RequestModel,
+			"response_model": rule.ResponseModel,
+			"provider":       rule.Provider,
+			"default_model":  rule.DefaultModel,
+			"active":         rule.Active,
+		},
+	})
+}
+
+// SetRule creates or updates a rule
+func (wui *WebUI) SetRule(c *gin.Context) {
+	ruleName := c.Param("name")
+	if ruleName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Rule name is required",
+		})
+		return
+	}
+
+	var req struct {
+		ResponseModel string `json:"response_model"`
+		Provider      string `json:"provider"`
+		DefaultModel  string `json:"default_model"`
+		Active        bool   `json:"active"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// Set default active to true if not provided
+	if !req.Active {
+		req.Active = true
+	}
+
+	globalConfig := wui.config.GetGlobalConfig()
+	if globalConfig == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Global config not available",
+		})
+		return
+	}
+
+	// Create or update the rule
+	rule := config.Rule{
+		RequestModel:  ruleName,
+		ResponseModel: req.ResponseModel,
+		Provider:      req.Provider,
+		DefaultModel:  req.DefaultModel,
+		Active:        req.Active,
+	}
+
+	if err := globalConfig.SetDefaultRequestConfig(rule); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to save rule: " + err.Error(),
+		})
+		return
+	}
+
+	// Log the action
+	if wui.logger != nil {
+		wui.logger.LogAction(memory.ActionUpdateProvider, map[string]interface{}{
+			"name": ruleName,
+		}, true, fmt.Sprintf("Rule %s updated successfully", ruleName))
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Rule saved successfully",
+		"data": map[string]interface{}{
+			"request_model":  rule.RequestModel,
+			"response_model": rule.ResponseModel,
+			"provider":       rule.Provider,
+			"default_model":  rule.DefaultModel,
+			"active":         rule.Active,
 		},
 	})
 }
@@ -696,7 +852,7 @@ func (wui *WebUI) GenerateToken(c *gin.Context) {
 
 func (wui *WebUI) SetDefaults(c *gin.Context) {
 	var req struct {
-		RequestConfigs []config.RequestConfig `json:"request_configs"`
+		RequestConfigs []config.Rule `json:"request_configs"`
 	}
 
 	// Body
@@ -720,7 +876,7 @@ func (wui *WebUI) SetDefaults(c *gin.Context) {
 		return
 	}
 
-	// Update RequestConfigs if provided
+	// Update Rules if provided
 	if req.RequestConfigs != nil {
 		if err := globalConfig.SetRequestConfigs(req.RequestConfigs); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{

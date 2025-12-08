@@ -17,6 +17,9 @@ func TestFinalIntegration(t *testing.T) {
 		ts := NewTestServer(t)
 		defer Cleanup()
 
+		// Add test providers
+		ts.AddTestProviders(t)
+
 		// Test 1: Health check endpoint
 		t.Run("Health_Check", func(t *testing.T) {
 			req, _ := http.NewRequest("GET", "/health", nil)
@@ -234,6 +237,82 @@ func TestFinalIntegration(t *testing.T) {
 		// Test 13: Provider-Models endpoint without authentication
 		t.Run("Provider_Models_Endpoint_Without_Auth", func(t *testing.T) {
 			req, _ := http.NewRequest("GET", "/api/provider-models", nil)
+			// No Authorization header
+			w := httptest.NewRecorder()
+			ts.ginEngine.ServeHTTP(w, req)
+
+			assert.Equal(t, 401, w.Code)
+		})
+
+		// Test 14: Rules endpoint with authentication
+		t.Run("Rules_Endpoint_With_Auth", func(t *testing.T) {
+			// Get user token for authentication
+			globalConfig := ts.appConfig.GetGlobalConfig()
+			userToken := globalConfig.GetUserToken()
+
+			req, _ := http.NewRequest("GET", "/api/rules", nil)
+			req.Header.Set("Authorization", "Bearer "+userToken)
+			w := httptest.NewRecorder()
+			ts.ginEngine.ServeHTTP(w, req)
+
+			// Should succeed
+			assert.Equal(t, 200, w.Code)
+
+			var response map[string]interface{}
+			err := json.Unmarshal(w.Body.Bytes(), &response)
+			assert.NoError(t, err)
+			assert.True(t, response["success"].(bool))
+		})
+
+		// Test 15: Get specific rule with authentication
+		t.Run("Get_Specific_Rule_With_Auth", func(t *testing.T) {
+			// Get user token for authentication
+			globalConfig := ts.appConfig.GetGlobalConfig()
+			userToken := globalConfig.GetUserToken()
+
+			// Try to get a rule by name (should be "tingly" by default)
+			req, _ := http.NewRequest("GET", "/api/rule/tingly", nil)
+			req.Header.Set("Authorization", "Bearer "+userToken)
+			w := httptest.NewRecorder()
+			ts.ginEngine.ServeHTTP(w, req)
+
+			// Should succeed or return 404 if rule doesn't exist
+			assert.True(t, w.Code == 200)
+			assert.True(t, strings.Contains(w.Body.String(), "tingly"))
+
+		})
+
+		// Test 16: Create/update rule with authentication
+		t.Run("Create_Update_Rule_With_Auth", func(t *testing.T) {
+			// Get user token for authentication
+			globalConfig := ts.appConfig.GetGlobalConfig()
+			userToken := globalConfig.GetUserToken()
+
+			// Create a new rule
+			ruleData := map[string]interface{}{
+				"response_model": "gpt-4",
+				"provider":       "openai",
+				"default_model":  "gpt-4-turbo",
+			}
+
+			req, _ := http.NewRequest("POST", "/api/rule/test-rule", CreateJSONBody(ruleData))
+			req.Header.Set("Authorization", "Bearer "+userToken)
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			ts.ginEngine.ServeHTTP(w, req)
+
+			// Should succeed
+			assert.Equal(t, 200, w.Code)
+
+			var response map[string]interface{}
+			err := json.Unmarshal(w.Body.Bytes(), &response)
+			assert.NoError(t, err)
+			assert.True(t, response["success"].(bool))
+		})
+
+		// Test 17: Rules endpoint without authentication
+		t.Run("Rules_Endpoint_Without_Auth", func(t *testing.T) {
+			req, _ := http.NewRequest("GET", "/api/rules", nil)
 			// No Authorization header
 			w := httptest.NewRecorder()
 			ts.ginEngine.ServeHTTP(w, req)

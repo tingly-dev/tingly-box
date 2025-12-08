@@ -10,50 +10,59 @@ import (
 	"github.com/goccy/go-yaml"
 )
 
-// RequestConfig represents a request/response configuration with provider and default model
-type RequestConfig struct {
+// Rule represents a request/response configuration with provider and default model
+type Rule struct {
 	RequestModel  string `yaml:"request_model" json:"request_model"`   // The "tingly" value
 	ResponseModel string `yaml:"response_model" json:"response_model"` // Response model configuration
 	Provider      string `yaml:"provider" json:"provider"`             // Provider for this request config
 	DefaultModel  string `yaml:"default_model" json:"default_model"`   // Default model for the provider
+	Active        bool   `yaml:"active" json:"active"`                 // Whether this rule is active (default: true)
 }
 
 // GlobalConfig represents the global configuration
 type GlobalConfig struct {
-	RequestConfigs   []RequestConfig `yaml:"request_configs" json:"request_configs"`       // List of request configurations
-	DefaultRequestID int             `yaml:"default_request_id" json:"default_request_id"` // Index of the default RequestConfig
-	UserToken        string          `yaml:"user_token" json:"user_token"`                 // User token for UI and control API authentication
-	ModelToken       string          `yaml:"model_token" json:"model_token"`               // Model token for OpenAI and Anthropic API authentication
-	EncryptProviders bool            `yaml:"encrypt_providers" json:"encrypt_providers"`   // Whether to encrypt provider info (default false)
+	Rules            []Rule `yaml:"rules" json:"rules"`                           // List of request configurations
+	DefaultRequestID int    `yaml:"default_request_id" json:"default_request_id"` // Index of the default Rule
+	UserToken        string `yaml:"user_token" json:"user_token"`                 // User token for UI and control API authentication
+	ModelToken       string `yaml:"model_token" json:"model_token"`               // Model token for OpenAI and Anthropic API authentication
+	EncryptProviders bool   `yaml:"encrypt_providers" json:"encrypt_providers"`   // Whether to encrypt provider info (default false)
 	mutex            sync.RWMutex
-	configFile       string
+	ConfigFile       string `yaml:"-"` // Not serialized to YAML (exported to preserve field)
 }
 
 // NewGlobalConfig creates a new global configuration manager
 func NewGlobalConfig() (*GlobalConfig, error) {
 	// Use the same config directory as the main config
 	configDir := GetTinglyConfDir()
+	if configDir == "" {
+		return nil, fmt.Errorf("config directory is empty")
+	}
+
 	if err := os.MkdirAll(configDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create config directory: %w", err)
 	}
 
 	configFile := filepath.Join(configDir, "global_config.yaml")
+	if configFile == "" {
+		return nil, fmt.Errorf("config file path is empty")
+	}
 
 	config := &GlobalConfig{
-		configFile: configFile,
+		ConfigFile: configFile,
 	}
 
 	// Load existing config if exists
 	if err := config.load(); err != nil {
 		// If file doesn't exist, create default config
 		if os.IsNotExist(err) {
-			// Create a default RequestConfig
-			config.RequestConfigs = []RequestConfig{
+			// Create a default Rule
+			config.Rules = []Rule{
 				{
 					RequestModel:  "tingly",
 					ResponseModel: "",
 					Provider:      "",
 					DefaultModel:  "",
+					Active:        true,
 				},
 			}
 			config.DefaultRequestID = 0
@@ -93,64 +102,77 @@ func NewGlobalConfig() (*GlobalConfig, error) {
 
 // load loads the global configuration from file
 func (gc *GlobalConfig) load() error {
-	data, err := ioutil.ReadFile(gc.configFile)
+	// Store the config file path before unmarshaling
+	configFile := gc.ConfigFile
+
+	data, err := ioutil.ReadFile(configFile)
 	if err != nil {
 		return err
 	}
 
-	return yaml.Unmarshal(data, gc)
+	if err := yaml.Unmarshal(data, gc); err != nil {
+		return err
+	}
+
+	// Restore the config file path after unmarshaling
+	gc.ConfigFile = configFile
+
+	return nil
 }
 
 // save saves the global configuration to file
 func (gc *GlobalConfig) save() error {
+	if gc.ConfigFile == "" {
+		return fmt.Errorf("ConfigFile is empty")
+	}
 	data, err := yaml.Marshal(gc)
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(gc.configFile, data, 0644)
+	return os.WriteFile(gc.ConfigFile, data, 0644)
 }
 
-// SetDefaultRequestConfig updates the default RequestConfig
-func (gc *GlobalConfig) SetDefaultRequestConfig(reqConfig RequestConfig) error {
+// SetDefaultRequestConfig updates the default Rule
+func (gc *GlobalConfig) SetDefaultRequestConfig(reqConfig Rule) error {
 	gc.mutex.Lock()
 	defer gc.mutex.Unlock()
 
 	// Find existing config with same request model
-	for i, rc := range gc.RequestConfigs {
+	for i, rc := range gc.Rules {
 		if rc.RequestModel == reqConfig.RequestModel {
-			gc.RequestConfigs[i] = reqConfig
+			gc.Rules[i] = reqConfig
 			return gc.save()
 		}
 	}
 
 	// If not found, append new config
-	gc.RequestConfigs = append(gc.RequestConfigs, reqConfig)
-	gc.DefaultRequestID = len(gc.RequestConfigs) - 1
+	gc.Rules = append(gc.Rules, reqConfig)
+	gc.DefaultRequestID = len(gc.Rules) - 1
 	return gc.save()
 }
 
-// AddRequestConfig adds a new RequestConfig
-func (gc *GlobalConfig) AddRequestConfig(reqConfig RequestConfig) error {
+// AddRequestConfig adds a new Rule
+func (gc *GlobalConfig) AddRequestConfig(reqConfig Rule) error {
 	gc.mutex.Lock()
 	defer gc.mutex.Unlock()
 
-	gc.RequestConfigs = append(gc.RequestConfigs, reqConfig)
+	gc.Rules = append(gc.Rules, reqConfig)
 	return gc.save()
 }
 
-// GetDefaultRequestConfig returns the default RequestConfig
-func (gc *GlobalConfig) GetDefaultRequestConfig() *RequestConfig {
+// GetDefaultRequestConfig returns the default Rule
+func (gc *GlobalConfig) GetDefaultRequestConfig() *Rule {
 	gc.mutex.RLock()
 	defer gc.mutex.RUnlock()
 
-	if gc.DefaultRequestID >= 0 && gc.DefaultRequestID < len(gc.RequestConfigs) {
-		return &gc.RequestConfigs[gc.DefaultRequestID]
+	if gc.DefaultRequestID >= 0 && gc.DefaultRequestID < len(gc.Rules) {
+		return &gc.Rules[gc.DefaultRequestID]
 	}
 	return nil
 }
 
-// SetDefaultRequestID sets the index of the default RequestConfig
+// SetDefaultRequestID sets the index of the default Rule
 func (gc *GlobalConfig) SetDefaultRequestID(id int) error {
 	gc.mutex.Lock()
 	defer gc.mutex.Unlock()
@@ -159,15 +181,15 @@ func (gc *GlobalConfig) SetDefaultRequestID(id int) error {
 	return gc.save()
 }
 
-// GetRequestConfigs returns all RequestConfigs
-func (gc *GlobalConfig) GetRequestConfigs() []RequestConfig {
+// GetRequestConfigs returns all Rules
+func (gc *GlobalConfig) GetRequestConfigs() []Rule {
 	gc.mutex.RLock()
 	defer gc.mutex.RUnlock()
 
-	return gc.RequestConfigs
+	return gc.Rules
 }
 
-// GetDefaultRequestID returns the index of the default RequestConfig
+// GetDefaultRequestID returns the index of the default Rule
 func (gc *GlobalConfig) GetDefaultRequestID() int {
 	gc.mutex.RLock()
 	defer gc.mutex.RUnlock()
@@ -180,7 +202,7 @@ func (gc *GlobalConfig) IsRequestModel(modelName string) bool {
 	gc.mutex.RLock()
 	defer gc.mutex.RUnlock()
 
-	for _, rc := range gc.RequestConfigs {
+	for _, rc := range gc.Rules {
 		if rc.RequestModel == modelName {
 			return true
 		}
@@ -188,12 +210,12 @@ func (gc *GlobalConfig) IsRequestModel(modelName string) bool {
 	return false
 }
 
-// GetRequestConfigByRequestModel returns the RequestConfig for the given request model name
-func (gc *GlobalConfig) GetRequestConfigByRequestModel(modelName string) *RequestConfig {
+// GetRequestConfigByRequestModel returns the Rule for the given request model name
+func (gc *GlobalConfig) GetRequestConfigByRequestModel(modelName string) *Rule {
 	gc.mutex.RLock()
 	defer gc.mutex.RUnlock()
 
-	for _, rc := range gc.RequestConfigs {
+	for _, rc := range gc.Rules {
 		if rc.RequestModel == modelName {
 			return &rc
 		}
@@ -201,139 +223,139 @@ func (gc *GlobalConfig) GetRequestConfigByRequestModel(modelName string) *Reques
 	return nil
 }
 
-// SetRequestConfigs updates all RequestConfigs
-func (gc *GlobalConfig) SetRequestConfigs(requestConfigs []RequestConfig) error {
+// SetRequestConfigs updates all Rules
+func (gc *GlobalConfig) SetRequestConfigs(requestConfigs []Rule) error {
 	gc.mutex.Lock()
 	defer gc.mutex.Unlock()
 
-	gc.RequestConfigs = requestConfigs
+	gc.Rules = requestConfigs
 
 	return gc.save()
 }
 
-// UpdateRequestConfigAt updates the RequestConfig at the given index
-func (gc *GlobalConfig) UpdateRequestConfigAt(index int, reqConfig RequestConfig) error {
+// UpdateRequestConfigAt updates the Rule at the given index
+func (gc *GlobalConfig) UpdateRequestConfigAt(index int, reqConfig Rule) error {
 	gc.mutex.Lock()
 	defer gc.mutex.Unlock()
 
-	if index < 0 || index >= len(gc.RequestConfigs) {
-		return fmt.Errorf("index %d is out of bounds for RequestConfigs (length %d)", index, len(gc.RequestConfigs))
+	if index < 0 || index >= len(gc.Rules) {
+		return fmt.Errorf("index %d is out of bounds for Rules (length %d)", index, len(gc.Rules))
 	}
 
-	gc.RequestConfigs[index] = reqConfig
+	gc.Rules[index] = reqConfig
 	return gc.save()
 }
 
-// RemoveRequestConfig removes the RequestConfig at the given index
+// RemoveRequestConfig removes the Rule at the given index
 func (gc *GlobalConfig) RemoveRequestConfig(index int) error {
 	gc.mutex.Lock()
 	defer gc.mutex.Unlock()
 
-	if index < 0 || index >= len(gc.RequestConfigs) {
-		return fmt.Errorf("index %d is out of bounds for RequestConfigs (length %d)", index, len(gc.RequestConfigs))
+	if index < 0 || index >= len(gc.Rules) {
+		return fmt.Errorf("index %d is out of bounds for Rules (length %d)", index, len(gc.Rules))
 	}
 
-	gc.RequestConfigs = append(gc.RequestConfigs[:index], gc.RequestConfigs[index+1:]...)
+	gc.Rules = append(gc.Rules[:index], gc.Rules[index+1:]...)
 
 	// Adjust DefaultRequestID after removal
-	if len(gc.RequestConfigs) == 0 {
+	if len(gc.Rules) == 0 {
 		gc.DefaultRequestID = -1
-	} else if gc.DefaultRequestID >= len(gc.RequestConfigs) {
-		gc.DefaultRequestID = len(gc.RequestConfigs) - 1
+	} else if gc.DefaultRequestID >= len(gc.Rules) {
+		gc.DefaultRequestID = len(gc.Rules) - 1
 	}
 
 	return gc.save()
 }
 
-// Legacy compatibility methods - these now operate on the default RequestConfig
+// Legacy compatibility methods - these now operate on the default Rule
 
-// SetDefaultProvider sets the provider for the default RequestConfig
+// SetDefaultProvider sets the provider for the default Rule
 func (gc *GlobalConfig) SetDefaultProvider(provider string) error {
 	gc.mutex.Lock()
 	defer gc.mutex.Unlock()
 
-	if gc.DefaultRequestID >= 0 && gc.DefaultRequestID < len(gc.RequestConfigs) {
-		gc.RequestConfigs[gc.DefaultRequestID].Provider = provider
+	if gc.DefaultRequestID >= 0 && gc.DefaultRequestID < len(gc.Rules) {
+		gc.Rules[gc.DefaultRequestID].Provider = provider
 		return gc.save()
 	}
-	return fmt.Errorf("no default RequestConfig available")
+	return fmt.Errorf("no default Rule available")
 }
 
-// SetDefaultModel sets the default model for the default RequestConfig
+// SetDefaultModel sets the default model for the default Rule
 func (gc *GlobalConfig) SetDefaultModel(model string) error {
 	gc.mutex.Lock()
 	defer gc.mutex.Unlock()
 
-	if gc.DefaultRequestID >= 0 && gc.DefaultRequestID < len(gc.RequestConfigs) {
-		gc.RequestConfigs[gc.DefaultRequestID].DefaultModel = model
+	if gc.DefaultRequestID >= 0 && gc.DefaultRequestID < len(gc.Rules) {
+		gc.Rules[gc.DefaultRequestID].DefaultModel = model
 		return gc.save()
 	}
-	return fmt.Errorf("no default RequestConfig available")
+	return fmt.Errorf("no default Rule available")
 }
 
-// GetDefaultProvider returns the provider from the default RequestConfig
+// GetDefaultProvider returns the provider from the default Rule
 func (gc *GlobalConfig) GetDefaultProvider() string {
 	gc.mutex.RLock()
 	defer gc.mutex.RUnlock()
 
-	if gc.DefaultRequestID >= 0 && gc.DefaultRequestID < len(gc.RequestConfigs) {
-		return gc.RequestConfigs[gc.DefaultRequestID].Provider
+	if gc.DefaultRequestID >= 0 && gc.DefaultRequestID < len(gc.Rules) {
+		return gc.Rules[gc.DefaultRequestID].Provider
 	}
 	return ""
 }
 
-// GetDefaultModel returns the default model from the default RequestConfig
+// GetDefaultModel returns the default model from the default Rule
 func (gc *GlobalConfig) GetDefaultModel() string {
 	gc.mutex.RLock()
 	defer gc.mutex.RUnlock()
 
-	if gc.DefaultRequestID >= 0 && gc.DefaultRequestID < len(gc.RequestConfigs) {
-		return gc.RequestConfigs[gc.DefaultRequestID].DefaultModel
+	if gc.DefaultRequestID >= 0 && gc.DefaultRequestID < len(gc.Rules) {
+		return gc.Rules[gc.DefaultRequestID].DefaultModel
 	}
 	return ""
 }
 
-// GetRequestModel returns the request model from the default RequestConfig
+// GetRequestModel returns the request model from the default Rule
 func (gc *GlobalConfig) GetRequestModel() string {
 	gc.mutex.RLock()
 	defer gc.mutex.RUnlock()
 
-	if gc.DefaultRequestID >= 0 && gc.DefaultRequestID < len(gc.RequestConfigs) {
-		return gc.RequestConfigs[gc.DefaultRequestID].RequestModel
+	if gc.DefaultRequestID >= 0 && gc.DefaultRequestID < len(gc.Rules) {
+		return gc.Rules[gc.DefaultRequestID].RequestModel
 	}
 	return ""
 }
 
-// GetResponseModel returns the response model from the default RequestConfig
+// GetResponseModel returns the response model from the default Rule
 func (gc *GlobalConfig) GetResponseModel() string {
 	gc.mutex.RLock()
 	defer gc.mutex.RUnlock()
 
-	if gc.DefaultRequestID >= 0 && gc.DefaultRequestID < len(gc.RequestConfigs) {
-		return gc.RequestConfigs[gc.DefaultRequestID].ResponseModel
+	if gc.DefaultRequestID >= 0 && gc.DefaultRequestID < len(gc.Rules) {
+		return gc.Rules[gc.DefaultRequestID].ResponseModel
 	}
 	return ""
 }
 
-// GetDefaults returns all default values from the default RequestConfig
+// GetDefaults returns all default values from the default Rule
 func (gc *GlobalConfig) GetDefaults() (provider, model, requestModel, responseModel string) {
 	gc.mutex.RLock()
 	defer gc.mutex.RUnlock()
 
-	if gc.DefaultRequestID >= 0 && gc.DefaultRequestID < len(gc.RequestConfigs) {
-		rc := gc.RequestConfigs[gc.DefaultRequestID]
+	if gc.DefaultRequestID >= 0 && gc.DefaultRequestID < len(gc.Rules) {
+		rc := gc.Rules[gc.DefaultRequestID]
 		return rc.Provider, rc.DefaultModel, rc.RequestModel, rc.ResponseModel
 	}
 	return "", "", "", ""
 }
 
-// HasDefaults checks if the default RequestConfig has required values
+// HasDefaults checks if the default Rule has required values
 func (gc *GlobalConfig) HasDefaults() bool {
 	gc.mutex.RLock()
 	defer gc.mutex.RUnlock()
 
-	if gc.DefaultRequestID >= 0 && gc.DefaultRequestID < len(gc.RequestConfigs) {
-		rc := gc.RequestConfigs[gc.DefaultRequestID]
+	if gc.DefaultRequestID >= 0 && gc.DefaultRequestID < len(gc.Rules) {
+		rc := gc.Rules[gc.DefaultRequestID]
 		return rc.Provider != "" && rc.DefaultModel != ""
 	}
 	return false
