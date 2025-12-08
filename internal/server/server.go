@@ -26,6 +26,7 @@ type Server struct {
 	watcher      *config.ConfigWatcher
 	modelManager *config.ModelManager
 	webUI        *WebUI
+	useWebUI     bool
 	memoryLogger *memory.MemoryLogger
 }
 
@@ -89,16 +90,13 @@ func NewServerWithOptions(appConfig *config.AppConfig, enableUI bool) *Server {
 		memoryLogger = nil
 	}
 
-	// Initialize Web UI
-	webUI := NewWebUI(enableUI, appConfig, memoryLogger)
-
 	server := &Server{
 		config:       appConfig,
 		jwtManager:   auth.NewJWTManager(appConfig.GetJWTSecret()),
 		router:       gin.New(),
 		modelManager: modelManager,
-		webUI:        webUI,
 		memoryLogger: memoryLogger,
+		useWebUI:     enableUI,
 	}
 
 	// Setup middleware
@@ -221,8 +219,8 @@ func (s *Server) setupRoutes() {
 	}
 
 	// Integrate Web UI routes if enabled
-	if s.webUI != nil && s.webUI.IsEnabled() {
-		s.webUI.SetupRoutesOnServer(s.router)
+	if s.useWebUI {
+		useWebUI(s)
 
 		// Token generation endpoint (for UI and management)
 		s.router.POST("/api/token", s.UserAuth(), s.GenerateToken)
