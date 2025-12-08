@@ -114,11 +114,11 @@ func (wui *WebUI) GetRouter() *gin.Engine {
 
 func useWebUI(engine *Server) {
 	ui := NewWebUI(true, engine.config, engine.memoryLogger, engine.router)
-	ui.UseUIEndpoints()
+	ui.Init()
 }
 
-// UseUIEndpoints sets up WebUI routes and templates on the main server router
-func (wui *WebUI) UseUIEndpoints() {
+// Init sets up WebUI routes and templates on the main server router
+func (wui *WebUI) Init() {
 	if !wui.enabled {
 		return
 	}
@@ -134,7 +134,6 @@ func (wui *WebUI) UseUIEndpoints() {
 	})
 
 	// Dashboard endpoints
-	//wui.router.GET("/", wui.Dashboard)
 	wui.router.GET("/dashboard", wui.Dashboard)
 
 	// UI page routes
