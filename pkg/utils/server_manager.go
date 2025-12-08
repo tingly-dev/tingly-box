@@ -25,16 +25,20 @@ type ServerManager struct {
 
 // NewServerManager creates a new server manager with UI enabled by default
 func NewServerManager(appConfig *config.AppConfig) *ServerManager {
-	return NewServerManagerWithOptions(appConfig, true)
+	res := NewServerManagerWithOptions(appConfig, true)
+	res.Setup(appConfig.GetServerPort())
+	return res
 }
 
 // NewServerManagerWithOptions creates a new server manager with UI option
 func NewServerManagerWithOptions(appConfig *config.AppConfig, enableUI bool) *ServerManager {
-	return &ServerManager{
+	res := &ServerManager{
 		appConfig:  appConfig,
 		pidManager: config.NewPIDManager(),
 		enableUI:   enableUI,
 	}
+	res.Setup(appConfig.GetServerPort())
+	return res
 }
 
 func (sm *ServerManager) GetGinEngine() *gin.Engine {
