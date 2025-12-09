@@ -310,23 +310,35 @@ func (s *Server) AuthenticateMiddleware() gin.HandlerFunc {
 	return s.UserAuth()
 }
 
-// DetermineProviderAndModel resolves the model name and finds the appropriate provider
+// DetermineProviderAndModel resolves the model name and finds the appropriate provider using load balancing
 func (s *Server) DetermineProviderAndModel(modelName string) (*config.Provider, *config.Rule, error) {
 	// Check if this is the request model name first
 	c := s.config
 	if c != nil && c.IsRequestModel(modelName) {
 		// Get the Rule for this specific request model
 		rule := c.GetRequestConfigByRequestModel(modelName)
-		if rule != nil && rule.Active && rule.Provider != "" && rule.DefaultModel != "" {
-			// Find provider configuration
+		if rule != nil && rule.Active {
+			// Use the load balancer to select service
+			selectedService, err := s.loadBalancer.SelectService(rule)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to select service: %w", err)
+			}
+
+			if selectedService == nil {
+				return nil, nil, fmt.Errorf("no available service for request model '%s'", modelName)
+			}
+
+			// Find the provider configuration for the selected service
 			providers := s.config.ListProviders()
 			for _, p := range providers {
-				if p.Enabled && p.Name == rule.Provider {
-					// Create a mock model definition for the default model
+				if p.Enabled && p.Name == selectedService.Provider {
+					// Update the current service index for the rule
+					s.loadBalancer.UpdateServiceIndex(rule, selectedService)
 					return p, rule, nil
 				}
 			}
-			return nil, nil, fmt.Errorf("provider '%s' is not enabled", rule.Provider)
+
+			return nil, nil, fmt.Errorf("provider '%s' is not enabled", selectedService.Provider)
 		}
 		return nil, nil, fmt.Errorf("provider or model not configured for request model '%s'", modelName)
 	}

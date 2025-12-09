@@ -19,14 +19,17 @@ import (
 
 // Server represents the HTTP server
 type Server struct {
-	config       *config.Config
-	jwtManager   *auth.JWTManager
-	router       *gin.Engine
-	httpServer   *http.Server
-	watcher      *config.ConfigWatcher
-	webUI        *WebUI
-	useWebUI     bool
-	memoryLogger *memory.MemoryLogger
+	config          *config.Config
+	jwtManager      *auth.JWTManager
+	router          *gin.Engine
+	httpServer      *http.Server
+	watcher         *config.ConfigWatcher
+	webUI           *WebUI
+	useWebUI        bool
+	memoryLogger    *memory.MemoryLogger
+	statsMW         *StatsMiddleware
+	loadBalancer    *LoadBalancer
+	loadBalancerAPI *LoadBalancerAPI
 }
 
 // NewServer creates a new HTTP server instance
@@ -81,6 +84,7 @@ func NewServerWithOptions(cfg *config.Config, enableUI bool) *Server {
 		memoryLogger = nil
 	}
 
+	// Create server struct first
 	server := &Server{
 		config:       cfg,
 		jwtManager:   jwtManager,
@@ -88,6 +92,20 @@ func NewServerWithOptions(cfg *config.Config, enableUI bool) *Server {
 		memoryLogger: memoryLogger,
 		useWebUI:     enableUI,
 	}
+
+	// Initialize statistics middleware with server reference
+	statsMW := NewStatsMiddleware(server)
+
+	// Initialize load balancer
+	loadBalancer := NewLoadBalancer(statsMW, cfg)
+
+	// Initialize load balancer API
+	loadBalancerAPI := NewLoadBalancerAPI(loadBalancer, cfg)
+
+	// Update server with dependencies
+	server.statsMW = statsMW
+	server.loadBalancer = loadBalancer
+	server.loadBalancerAPI = loadBalancerAPI
 
 	// Setup middleware
 	server.setupMiddleware()
@@ -130,6 +148,9 @@ func (s *Server) setupMiddleware() {
 	// Recovery middleware
 	s.router.Use(gin.Recovery())
 
+	// Statistics middleware for load balancing
+	s.router.Use(s.statsMW.Middleware())
+
 	// CORS middleware
 	s.router.Use(func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")
@@ -161,7 +182,7 @@ func RequestLoggerMiddleware() gin.HandlerFunc {
 
 		// Log details after the request is processed
 		duration := time.Since(start)
-		fmt.Printf("Method: %s | Path: %s | Status: %d | Headers: %v | Body: %s | Duration: %v\n",
+		fmt.Printf("Method: %s | Path: %s | Status: %v | Headers: %v | Body: %s | Duration: %v\n",
 			c.Request.Method,
 			c.Request.URL.Path,
 			c.Request.Header,
@@ -199,6 +220,14 @@ func (s *Server) setupRoutes() {
 		anthropicV1.POST("/messages", s.ModelAuth(), s.AnthropicMessages)
 		// Models endpoint (Anthropic compatible)
 		//anthropicV1.GET("/models", s.ModelAuth(), s.AnthropicModels)
+	}
+
+	// API routes for load balancer management
+	api := s.router.Group("/api")
+	api.Use(s.UserAuth()) // Require user authentication for management APIs
+	{
+		// Load balancer API routes
+		s.loadBalancerAPI.RegisterRoutes(api.Group(""))
 	}
 
 	// Integrate Web UI routes if enabled
