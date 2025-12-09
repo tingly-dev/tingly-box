@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -329,45 +327,10 @@ func runSystemTests(t *testing.T, ts *TestServer, isRealConfig bool) {
 // TestFinalIntegrationWithRealConfig provides integration test using real configuration
 func TestFinalIntegrationWithRealConfig(t *testing.T) {
 	t.Run("Complete_System_Test_With_Real_Config", func(t *testing.T) {
-		// Create test config directory
-		testConfigDir := "tests/.tingly-box"
-		if err := os.MkdirAll(testConfigDir, 0700); err != nil {
-			t.Fatalf("Failed to create test config directory: %v", err)
-		}
-
-		// Copy real config from main .tingly-box directory if it exists
-		realConfigPath := "../../../.tingly-box/config.json"
-		if _, err := os.Stat(realConfigPath); err == nil {
-			// Real config exists, copy it
-			realConfig, err := os.ReadFile(realConfigPath)
-			if err != nil {
-				t.Fatalf("Failed to read real config: %v", err)
-			}
-			if err := os.WriteFile(filepath.Join(testConfigDir, "config.json"), realConfig, 0644); err != nil {
-				t.Fatalf("Failed to copy real config to test directory: %v", err)
-			}
-		}
-
-		// Copy real global config from main .tingly-box directory if it exists
-		realGlobalConfigPath := "../../../.tingly-box/global_config.yaml"
-		if _, err := os.Stat(realGlobalConfigPath); err == nil {
-			// Real global config exists, copy it
-			realGlobalConfig, err := os.ReadFile(realGlobalConfigPath)
-			if err != nil {
-				t.Fatalf("Failed to read real global config: %v", err)
-			}
-			if err := os.WriteFile(filepath.Join(testConfigDir, "global_config.yaml"), realGlobalConfig, 0644); err != nil {
-				t.Fatalf("Failed to copy real global config to test directory: %v", err)
-			}
-		}
-
+		testConfigDir := "../../../../.tingly-box"
 		// Create test server with real config
 		ts := NewTestServerWithConfigDir(t, testConfigDir)
 		defer Cleanup()
-
-		// Add real providers for testing (not test providers with fake tokens)
-		ts.AddTestProviders(t)
-
 		// Run the same tests as the regular system test with real config flag
 		runSystemTests(t, ts, true)
 	})
