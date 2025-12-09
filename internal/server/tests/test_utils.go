@@ -15,7 +15,6 @@ import (
 	"tingly-box/internal/server"
 
 	"github.com/gin-gonic/gin"
-	"github.com/goccy/go-yaml"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -61,7 +60,7 @@ func NewTestServer(t *testing.T) *TestServer {
 // createTestServer creates a test server with the given appConfig
 func createTestServer(t *testing.T, appConfig *config.AppConfig) *TestServer {
 	// Create server instance but don't start it
-	httpServer := server.NewServer(appConfig)
+	httpServer := server.NewServer(appConfig.GetGlobalConfig())
 
 	return &TestServer{
 		appConfig:       appConfig,
@@ -110,51 +109,6 @@ func (ts *TestServer) GetProviderToken(providerName string, isRealConfig bool) s
 	// Use global model token for mock config
 	globalConfig := ts.appConfig.GetGlobalConfig()
 	return globalConfig.GetModelToken()
-}
-
-// MockProviderManager creates a mock model manager for testing
-func MockProviderManager(t *testing.T) *config.ProviderManager {
-	// Create temporary config file for testing
-	configFile := "config/test_models.yaml"
-	defaultConfig := config.ModelConfig{
-		Models: []config.ModelDefinition{
-			{
-				Name:        "test-model",
-				Provider:    "test-provider",
-				APIBase:     "https://api.test.com/v1",
-				Model:       "test-model-actual",
-				Aliases:     []string{"test", "mock"},
-				Description: "Test model for unit tests",
-				Category:    "chat",
-			},
-			{
-				Name:        "gpt-3.5-turbo",
-				Provider:    "openai",
-				APIBase:     "https://api.openai.com/v1",
-				Model:       "gpt-3.5-turbo",
-				Aliases:     []string{"chatgpt"},
-				Description: "OpenAI GPT-3.5 Turbo",
-				Category:    "chat",
-			},
-		},
-	}
-
-	data, err := yaml.Marshal(defaultConfig)
-	if err != nil {
-		t.Fatalf("Failed to marshal test config: %v", err)
-	}
-
-	if err := os.WriteFile(configFile, data, 0644); err != nil {
-		t.Fatalf("Failed to write test config file: %v", err)
-	}
-
-	// Create model manager with test config
-	providerManager, err := config.NewProviderManager(config.GetModelsDir())
-	if err != nil {
-		t.Fatalf("Failed to create model manager: %v", err)
-	}
-
-	return providerManager
 }
 
 // CreateTestChatRequest creates a test chat completion request

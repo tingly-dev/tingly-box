@@ -5,8 +5,6 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"time"
-
 	"tingly-box/internal/config"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -16,9 +14,9 @@ import (
 
 // AnthropicMessages handles Anthropic v1 messages API requests
 func (s *Server) AnthropicMessages(c *gin.Context) {
-	var rawReq AnthropicMessagesRequest
+	var req AnthropicMessagesRequest
 	// Parse request body
-	if err := c.ShouldBindJSON(&rawReq); err != nil {
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Invalid request body: " + err.Error(),
@@ -29,7 +27,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 	}
 
 	// Validate required fields
-	if rawReq.Model == "" {
+	if req.Model == "" {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Model is required",
@@ -39,7 +37,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		return
 	}
 
-	if len(rawReq.Messages) == 0 {
+	if len(req.Messages) == 0 {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "At least one message is required",
@@ -50,7 +48,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 	}
 
 	// Determine provider and model based on request
-	provider, modelDef, err := s.DetermineProviderAndModel(rawReq.Model)
+	provider, rule, err := s.DetermineProviderAndModel(req.Model)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -61,9 +59,9 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		return
 	}
 
-	// Update request with actual model name if we have model definition
-	if modelDef != nil {
-		rawReq.Model = modelDef.Model
+	// Update request with actual model name
+	if rule != nil && rule.DefaultModel != "" {
+		req.Model = rule.DefaultModel
 	}
 
 	// Check provider's API style to decide which path to take
@@ -74,7 +72,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 
 	if apiStyle == "anthropic" {
 		// Use direct Anthropic SDK call
-		anthropicResp, err := s.forwardAnthropicRequest(provider, &rawReq)
+		anthropicResp, err := s.forwardAnthropicRequest(provider, &req)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, ErrorResponse{
 				Error: ErrorDetail{
@@ -88,7 +86,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		return
 	} else {
 		// Use OpenAI conversion path (default behavior)
-		openaiReq := s.convertAnthropicToOpenAI(&rawReq)
+		openaiReq := s.convertAnthropicToOpenAI(&req)
 		response, err := s.forwardOpenAIRequest(provider, openaiReq)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, ErrorResponse{
@@ -100,46 +98,20 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 			return
 		}
 		// Convert OpenAI response back to Anthropic format
-		anthropicResp := s.convertOpenAIToAnthropic(response, rawReq.Model)
+		anthropicResp := s.convertOpenAIToAnthropic(response, req.Model)
 		c.JSON(http.StatusOK, anthropicResp)
 	}
 }
 
 // AnthropicModels handles Anthropic v1 models endpoint
 func (s *Server) AnthropicModels(c *gin.Context) {
-	if s.providerManager == nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Model manager not available",
-				Type:    "internal_error",
-			},
-		})
-		return
-	}
-
-	models := s.providerManager.GetAllModels()
-
-	// Convert to Anthropic-compatible format
-	anthropicModels := make([]AnthropicModel, 0)
-	for _, model := range models {
-		anthropicModel := AnthropicModel{
-			ID:           model.Name,
-			Object:       "model",
-			Created:      time.Now().Unix(),
-			DisplayName:  model.Name,
-			Type:         "chat",
-			MaxTokens:    100000, // Default value, should be configurable
-			Capabilities: []string{"text"},
-		}
-
-		anthropicModels = append(anthropicModels, anthropicModel)
-	}
-
-	response := AnthropicModelsResponse{
-		Data: anthropicModels,
-	}
-
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusInternalServerError, ErrorResponse{
+		Error: ErrorDetail{
+			Message: "Model manager not available",
+			Type:    "internal_error",
+		},
+	})
+	return
 }
 
 // Anthropic request/response structures
