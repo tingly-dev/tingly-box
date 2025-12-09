@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react-swc'
 import { viteMockServe } from 'vite-plugin-mock'
 
 // Check if we should use mock data
-const useMock = process.env.USE_MOCK === 'true' || process.env.NODE_ENV === 'development'
+const useMock = process.env.USE_MOCK === 'true'
 
 // https://vite.dev/config/
 export default defineConfig({
