@@ -102,12 +102,19 @@ func (s *Server) ChatCompletions(c *gin.Context) {
 		return
 	}
 
-	// Handle response model modification at JSON level
+	// Get the actual model name to use
+	actualModel := req.Model
 	responseModel := ""
-	if rule != nil {
-		req.Model = rule.DefaultModel
+	if rule != nil && len(rule.Services) > 0 {
+		// Use the first service's model as default
+		actualModel = rule.Services[0].Model
+		req.Model = actualModel
 		responseModel = rule.ResponseModel
 	}
+
+	// Set provider and model information in context for statistics middleware
+	c.Set("provider", provider.Name)
+	c.Set("model", actualModel)
 
 	// Handle streaming or non-streaming request
 	if isStreaming {

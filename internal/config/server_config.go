@@ -74,8 +74,7 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 				{
 					RequestModel:  "tingly",
 					ResponseModel: "",
-					Provider:      "",
-					DefaultModel:  "",
+					Services:      []Service{}, // Empty services initially
 					Active:        true,
 				},
 			}
@@ -285,6 +284,21 @@ func (c *Config) UpdateRequestConfigAt(index int, reqConfig Rule) error {
 	return c.save()
 }
 
+// UpdateRequestConfigByRequestModel updates a Rule by its request model name
+func (c *Config) UpdateRequestConfigByRequestModel(requestModel string, reqConfig Rule) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for i, rule := range c.Rules {
+		if rule.RequestModel == requestModel {
+			c.Rules[i] = reqConfig
+			return c.save()
+		}
+	}
+
+	return fmt.Errorf("rule with request model '%s' not found", requestModel)
+}
+
 // RemoveRequestConfig removes the Rule at the given index
 func (c *Config) RemoveRequestConfig(index int) error {
 	c.mu.Lock()
@@ -304,54 +318,6 @@ func (c *Config) RemoveRequestConfig(index int) error {
 	}
 
 	return c.save()
-}
-
-// Legacy compatibility methods - these now operate on the default Rule
-
-// SetDefaultProvider sets the provider for the default Rule
-func (c *Config) SetDefaultProvider(provider string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.DefaultRequestID >= 0 && c.DefaultRequestID < len(c.Rules) {
-		c.Rules[c.DefaultRequestID].Provider = provider
-		return c.save()
-	}
-	return fmt.Errorf("no default Rule available")
-}
-
-// SetDefaultModel sets the default model for the default Rule
-func (c *Config) SetDefaultModel(model string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.DefaultRequestID >= 0 && c.DefaultRequestID < len(c.Rules) {
-		c.Rules[c.DefaultRequestID].DefaultModel = model
-		return c.save()
-	}
-	return fmt.Errorf("no default Rule available")
-}
-
-// GetDefaultProvider returns the provider from the default Rule
-func (c *Config) GetDefaultProvider() string {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	if c.DefaultRequestID >= 0 && c.DefaultRequestID < len(c.Rules) {
-		return c.Rules[c.DefaultRequestID].Provider
-	}
-	return ""
-}
-
-// GetDefaultModel returns the default model from the default Rule
-func (c *Config) GetDefaultModel() string {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	if c.DefaultRequestID >= 0 && c.DefaultRequestID < len(c.Rules) {
-		return c.Rules[c.DefaultRequestID].DefaultModel
-	}
-	return ""
 }
 
 // GetRequestModel returns the request model from the default Rule
@@ -377,27 +343,15 @@ func (c *Config) GetResponseModel() string {
 }
 
 // GetDefaults returns all default values from the default Rule
-func (c *Config) GetDefaults() (provider, model, requestModel, responseModel string) {
+func (c *Config) GetDefaults() (requestModel, responseModel string) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	if c.DefaultRequestID >= 0 && c.DefaultRequestID < len(c.Rules) {
 		rc := c.Rules[c.DefaultRequestID]
-		return rc.Provider, rc.DefaultModel, rc.RequestModel, rc.ResponseModel
+		return rc.RequestModel, rc.ResponseModel
 	}
-	return "", "", "", ""
-}
-
-// HasDefaults checks if the default Rule has required values
-func (c *Config) HasDefaults() bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	if c.DefaultRequestID >= 0 && c.DefaultRequestID < len(c.Rules) {
-		rc := c.Rules[c.DefaultRequestID]
-		return rc.Provider != "" && rc.DefaultModel != ""
-	}
-	return false
+	return "", ""
 }
 
 // SetUserToken sets the user token for UI and control API

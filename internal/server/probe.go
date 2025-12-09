@@ -33,7 +33,7 @@ func probeWithOpenAI(c *gin.Context, rule config.Rule, provider *config.Provider
 
 	// Create chat completion request using OpenAI SDK
 	chatRequest := &openai.ChatCompletionNewParams{
-		Model: rule.DefaultModel,
+		Model: rule.GetDefaultModel(), // Use empty stats for probe testing
 		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage("hi"),
 		},
@@ -110,7 +110,7 @@ func probeWithAnthropic(c *gin.Context, rule config.Rule, provider *config.Provi
 
 	// Create message request using Anthropic SDK
 	messageRequest := anthropic.MessageNewParams{
-		Model: anthropic.Model(rule.DefaultModel),
+		Model: anthropic.Model(rule.GetDefaultModel()), // Use empty stats for probe testing
 		Messages: []anthropic.MessageParam{
 			anthropic.NewUserMessage(anthropic.NewTextBlock("hi")),
 		},
@@ -182,10 +182,10 @@ func probe(c *gin.Context, rule config.Rule, provider *config.Provider) {
 				"content": "hi",
 			},
 		},
-		"model":       rule.DefaultModel,
+		"model":       rule.GetDefaultModel(), // Use empty stats for probe testing
 		"max_tokens":  100,
 		"temperature": 0.7,
-		"provider":    rule.Provider,
+		"provider":    rule.GetDefaultProvider(), // Use empty stats for probe testing
 		"timestamp":   startTime.Format(time.RFC3339),
 	}
 
@@ -194,19 +194,19 @@ func probe(c *gin.Context, rule config.Rule, provider *config.Provider) {
 			"success": false,
 			"error": gin.H{
 				"code":    "PROVIDER_NOT_FOUND",
-				"message": fmt.Sprintf("Provider '%s' not found or disabled", rule.Provider),
+				"message": fmt.Sprintf("Provider '%s' not found or disabled", rule.GetDefaultProvider()),
 			},
 			"data": gin.H{
 				"request": mockRequest,
 				"rule_tested": gin.H{
 					"name":      rule.RequestModel,
-					"provider":  rule.Provider,
-					"model":     rule.DefaultModel,
+					"provider":  rule.GetDefaultProvider(),
+					"model":     rule.GetDefaultModel(),
 					"timestamp": time.Now().Format(time.RFC3339),
 				},
 				"test_result": gin.H{
 					"success": false,
-					"message": fmt.Sprintf("Provider '%s' is not enabled or configured", rule.Provider),
+					"message": fmt.Sprintf("Provider '%s' is not enabled or configured", rule.GetDefaultProvider()),
 				},
 			},
 		})
@@ -253,8 +253,8 @@ func probe(c *gin.Context, rule config.Rule, provider *config.Provider) {
 				"code":    errorCode,
 				"message": errorMessage,
 				"details": gin.H{
-					"provider":           rule.Provider,
-					"model":              rule.DefaultModel,
+					"provider":           rule.GetDefaultProvider(),
+					"model":              rule.GetDefaultModel(),
 					"timestamp":          time.Now().Format(time.RFC3339),
 					"processing_time_ms": processingTime,
 				},
@@ -263,8 +263,8 @@ func probe(c *gin.Context, rule config.Rule, provider *config.Provider) {
 				"request": mockRequest,
 				"response": gin.H{
 					"content":  nil,
-					"model":    rule.DefaultModel,
-					"provider": rule.Provider,
+					"model":    rule.GetDefaultModel(),
+					"provider": rule.GetDefaultProvider(),
 					"usage": gin.H{
 						"prompt_tokens":     0,
 						"completion_tokens": 0,
@@ -275,8 +275,8 @@ func probe(c *gin.Context, rule config.Rule, provider *config.Provider) {
 				},
 				"rule_tested": gin.H{
 					"name":      rule.RequestModel,
-					"provider":  rule.Provider,
-					"model":     rule.DefaultModel,
+					"provider":  rule.GetDefaultProvider(),
+					"model":     rule.GetDefaultModel(),
 					"timestamp": time.Now().Format(time.RFC3339),
 				},
 				"test_result": gin.H{
@@ -299,8 +299,8 @@ func probe(c *gin.Context, rule config.Rule, provider *config.Provider) {
 			"request": mockRequest,
 			"response": gin.H{
 				"content":  responseContent,
-				"model":    rule.DefaultModel,
-				"provider": rule.Provider,
+				"model":    rule.GetDefaultModel(),
+				"provider": rule.GetDefaultProvider(),
 				"usage": gin.H{
 					"prompt_tokens":     tokenUsage.PromptTokens,
 					"completion_tokens": tokenUsage.CompletionTokens,
@@ -310,8 +310,8 @@ func probe(c *gin.Context, rule config.Rule, provider *config.Provider) {
 			},
 			"rule_tested": gin.H{
 				"name":      rule.RequestModel,
-				"provider":  rule.Provider,
-				"model":     rule.DefaultModel,
+				"provider":  rule.GetDefaultProvider(),
+				"model":     rule.GetDefaultModel(),
 				"timestamp": time.Now().Format(time.RFC3339),
 			},
 			"test_result": gin.H{

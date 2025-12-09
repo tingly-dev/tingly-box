@@ -59,10 +59,17 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		return
 	}
 
-	// Update request with actual model name
-	if rule != nil && rule.DefaultModel != "" {
-		req.Model = rule.DefaultModel
+	// Get the actual model name to use
+	actualModel := req.Model
+	if rule != nil && len(rule.Services) > 0 {
+		// Use the first service's model as default
+		actualModel = rule.Services[0].Model
+		req.Model = actualModel
 	}
+
+	// Set provider and model information in context for statistics middleware
+	c.Set("provider", provider.Name)
+	c.Set("model", actualModel)
 
 	// Check provider's API style to decide which path to take
 	apiStyle := string(provider.APIStyle)
