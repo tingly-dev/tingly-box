@@ -12,15 +12,13 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/gin-gonic/gin"
-	"github.com/openai/openai-go/v3"
 )
 
 // AnthropicMessages handles Anthropic v1 messages API requests
 func (s *Server) AnthropicMessages(c *gin.Context) {
-	var anthropicReq AnthropicMessagesRequest
-
+	var rawReq AnthropicMessagesRequest
 	// Parse request body
-	if err := c.ShouldBindJSON(&anthropicReq); err != nil {
+	if err := c.ShouldBindJSON(&rawReq); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Invalid request body: " + err.Error(),
@@ -31,7 +29,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 	}
 
 	// Validate required fields
-	if anthropicReq.Model == "" {
+	if rawReq.Model == "" {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Model is required",
@@ -41,7 +39,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		return
 	}
 
-	if len(anthropicReq.Messages) == 0 {
+	if len(rawReq.Messages) == 0 {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "At least one message is required",
@@ -51,11 +49,8 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		return
 	}
 
-	// Convert Anthropic request to OpenAI format for internal processing
-	openaiReq := s.convertAnthropicToOpenAI(&anthropicReq)
-
 	// Determine provider and model based on request
-	provider, modelDef, err := s.DetermineProviderAndModel(openaiReq.Model)
+	provider, modelDef, err := s.DetermineProviderAndModel(rawReq.Model)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -68,20 +63,18 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 
 	// Update request with actual model name if we have model definition
 	if modelDef != nil {
-		openaiReq.Model = modelDef.Model
+		rawReq.Model = modelDef.Model
 	}
 
 	// Check provider's API style to decide which path to take
-	apiVersion := string(provider.APIStyle)
-	if apiVersion == "" {
-		apiVersion = "openai" // default to openai
+	apiStyle := string(provider.APIStyle)
+	if apiStyle == "" {
+		apiStyle = "openai" // default to openai
 	}
 
-	var response *openai.ChatCompletion
-
-	if apiVersion == "anthropic" {
+	if apiStyle == "anthropic" {
 		// Use direct Anthropic SDK call
-		anthropicResp, err := s.forwardAnthropicRequest(provider, &anthropicReq)
+		anthropicResp, err := s.forwardAnthropicRequest(provider, &rawReq)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, ErrorResponse{
 				Error: ErrorDetail{
@@ -93,24 +86,23 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		}
 		c.JSON(http.StatusOK, anthropicResp)
 		return
+	} else {
+		// Use OpenAI conversion path (default behavior)
+		openaiReq := s.convertAnthropicToOpenAI(&rawReq)
+		response, err := s.forwardOpenAIRequest(provider, openaiReq)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Error: ErrorDetail{
+					Message: "Failed to forward request: " + err.Error(),
+					Type:    "api_error",
+				},
+			})
+			return
+		}
+		// Convert OpenAI response back to Anthropic format
+		anthropicResp := s.convertOpenAIToAnthropic(response, rawReq.Model)
+		c.JSON(http.StatusOK, anthropicResp)
 	}
-
-	// Use OpenAI conversion path (default behavior)
-	response, err = s.forwardOpenAIRequest(provider, openaiReq)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Failed to forward request: " + err.Error(),
-				Type:    "api_error",
-			},
-		})
-		return
-	}
-
-	// Convert OpenAI response back to Anthropic format
-	anthropicResp := s.convertOpenAIToAnthropic(response, anthropicReq.Model)
-
-	c.JSON(http.StatusOK, anthropicResp)
 }
 
 // AnthropicModels handles Anthropic v1 models endpoint

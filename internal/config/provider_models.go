@@ -27,8 +27,7 @@ type ProviderModelManager struct {
 }
 
 // NewProviderModelManager creates a new provider model manager
-func NewProviderModelManager() (*ProviderModelManager, error) {
-	configDir := GetModelsDir()
+func NewProviderModelManager(configDir string) (*ProviderModelManager, error) {
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create models directory: %w", err)
 	}

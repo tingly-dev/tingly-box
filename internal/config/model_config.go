@@ -31,9 +31,9 @@ type ModelManager struct {
 }
 
 // NewModelManager creates a new model manager
-func NewModelManager() (*ModelManager, error) {
+func NewModelManager(configDir string) (*ModelManager, error) {
 	mm := &ModelManager{
-		configFile: filepath.Join(GetModelsDir(), "config.json"),
+		configFile: filepath.Join(configDir, "config.json"),
 		modelMap:   make(map[string]*ModelDefinition),
 		aliasMap:   make(map[string]*ModelDefinition),
 	}

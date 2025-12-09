@@ -60,18 +60,12 @@ func NewTestServer(t *testing.T) *TestServer {
 
 // createTestServer creates a test server with the given appConfig
 func createTestServer(t *testing.T, appConfig *config.AppConfig) *TestServer {
-
-	modelManager, err := config.NewModelManager()
-	if err != nil {
-		t.Fatalf("Failed to create model manager: %v", err)
-	}
-
 	// Create server instance but don't start it
 	httpServer := server.NewServer(appConfig)
 
 	return &TestServer{
 		appConfig:    appConfig,
-		modelManager: modelManager,
+		modelManager: httpServer.GetModelManager(),
 		config:       appConfig,
 		server:       httpServer,
 		ginEngine:    httpServer.GetRouter(), // Use the server's router
@@ -102,6 +96,20 @@ func (ts *TestServer) AddTestProviders(t *testing.T) {
 			t.Fatalf("Failed to add provider %s: %v", p.name, err)
 		}
 	}
+}
+
+// GetProviderToken returns the appropriate token for Anthropic API requests
+func (ts *TestServer) GetProviderToken(providerName string, isRealConfig bool) string {
+	if isRealConfig {
+		// Use Anthropic provider token for real config
+		provider, err := ts.appConfig.GetProvider(providerName)
+		if err == nil {
+			return provider.Token
+		}
+	}
+	// Use global model token for mock config
+	globalConfig := ts.appConfig.GetGlobalConfig()
+	return globalConfig.GetModelToken()
 }
 
 // MockModelManager creates a mock model manager for testing
@@ -141,7 +149,7 @@ func MockModelManager(t *testing.T) *config.ModelManager {
 	}
 
 	// Create model manager with test config
-	modelManager, err := config.NewModelManager()
+	modelManager, err := config.NewModelManager(config.GetModelsDir())
 	if err != nil {
 		t.Fatalf("Failed to create model manager: %v", err)
 	}

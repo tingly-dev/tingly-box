@@ -118,7 +118,7 @@ func NewAppConfigWithConfigDir(configDir string) (*AppConfig, error) {
 	ac.globalConfig = globalConfig
 
 	// Initialize provider model manager
-	providerModelManager, err := NewProviderModelManager()
+	providerModelManager, err := NewProviderModelManager(filepath.Join(configDir, ModelsDirName))
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize provider model manager: %w", err)
 	}

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -127,23 +126,10 @@ func runSystemTests(t *testing.T, ts *TestServer, isRealConfig bool) {
 	// Test 7: Anthropic messages endpoint with authentication
 	t.Run("Anthropic_Messages_With_Auth", func(t *testing.T) {
 		globalConfig := ts.appConfig.GetGlobalConfig()
-		var modelToken string
-		if isRealConfig {
-			// Use Anthropic provider token
-			provider, err := ts.appConfig.GetProvider("anthropic")
-			if err != nil {
-				modelToken = ""
-			} else {
-				modelToken = provider.Token
-			}
-		} else {
-			// Use global model token for mock config
-			modelToken = globalConfig.GetModelToken()
-		}
-
+		modelToken := globalConfig.GetModelToken()
 		reqBody := map[string]interface{}{
-			"model":      "claude-3-5-haiku-20241022",
-			"max_tokens": 1024, // <--- ANTHROPIC API REQUIREMENT
+			"model":      "tingly",
+			"max_tokens": 1024,
 			"messages": []map[string]string{
 				{"role": "user", "content": "Hello from Anthropic!"},
 			},
@@ -151,14 +137,14 @@ func runSystemTests(t *testing.T, ts *TestServer, isRealConfig bool) {
 
 		req, _ := http.NewRequest("POST", "/anthropic/v1/messages", CreateJSONBody(reqBody))
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("X-Api-Key", modelToken)
+		req.Header.Set("Authorization", "Bearer "+modelToken)
 
 		w := httptest.NewRecorder()
 		ts.ginEngine.ServeHTTP(w, req)
 
 		if isRealConfig {
 			assert.Equal(t, 200, w.Code)
-			assert.Contains(t, w.Body.String(), "anthropic")
+			assert.Contains(t, w.Body.String(), "Hello")
 		} else {
 			assert.True(t, containsStatus(w.Code, []int{401}))
 		}
@@ -167,7 +153,7 @@ func runSystemTests(t *testing.T, ts *TestServer, isRealConfig bool) {
 	// Test 8: Anthropic messages endpoint without authentication
 	t.Run("Anthropic_Messages_Without_Auth", func(t *testing.T) {
 		req, _ := http.NewRequest("POST", "/anthropic/v1/messages", CreateJSONBody(map[string]interface{}{
-			"model": "claude-3-sonnet",
+			"model": "tingly",
 			"messages": []map[string]string{
 				{"role": "user", "content": "Hello from Anthropic!"},
 			},
@@ -183,11 +169,10 @@ func runSystemTests(t *testing.T, ts *TestServer, isRealConfig bool) {
 	// Test 9: Anthropic models endpoint
 	t.Run("Anthropic_Models_Endpoint", func(t *testing.T) {
 		globalConfig := ts.appConfig.GetGlobalConfig()
-		modelToken := globalConfig.GetModelToken()
-		// Now get the models from the Anthropic endpoint
+		modelToken := globalConfig.GetModelToken() // Now get the models from the Anthropic endpoint
 		req, _ := http.NewRequest("GET", "/anthropic/v1/models", nil)
-		req.Header.Set("x-api-key", modelToken)
-		req.Header.Set("anthropic-version", "2023-06-01")
+		req.Header.Set("Authorization", "Bearer "+modelToken)
+		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		ts.ginEngine.ServeHTTP(w, req)
 
@@ -334,41 +319,8 @@ func TestFinalIntegrationWithRealConfig(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to find go mod root: %v", err)
 		}
-
-		// Create test config directory
-		testConfigDir := filepath.Join(root, ".tingly-box")
-		if err := os.MkdirAll(testConfigDir, 0700); err != nil {
-			t.Fatalf("Failed to create test config directory: %v", err)
-		}
-
-		// Copy real config from main .tingly-box directory if it exists
-		realConfigPath := filepath.Join(root, ".tingly-box/config.json")
-		if _, err := os.Stat(realConfigPath); err == nil {
-			// Real config exists, copy it
-			realConfig, err := os.ReadFile(realConfigPath)
-			if err != nil {
-				t.Fatalf("Failed to read real config: %v", err)
-			}
-			if err := os.WriteFile(filepath.Join(testConfigDir, "config.json"), realConfig, 0644); err != nil {
-				t.Fatalf("Failed to copy real config to test directory: %v", err)
-			}
-		}
-
-		// Copy real global config from main .tingly-box directory if it exists
-		realGlobalConfigPath := filepath.Join(root, ".tingly-box/global_config.yaml")
-		if _, err := os.Stat(realGlobalConfigPath); err == nil {
-			// Real global config exists, copy it
-			realGlobalConfig, err := os.ReadFile(realGlobalConfigPath)
-			if err != nil {
-				t.Fatalf("Failed to read real global config: %v", err)
-			}
-			if err := os.WriteFile(filepath.Join(testConfigDir, "global_config.yaml"), realGlobalConfig, 0644); err != nil {
-				t.Fatalf("Failed to copy real global config to test directory: %v", err)
-			}
-		}
-
-		// Create test server with real config
-		ts := NewTestServerWithConfigDir(t, testConfigDir)
+		realConfigDir := filepath.Join(root, ".tingly-box")
+		ts := NewTestServerWithConfigDir(t, realConfigDir)
 		defer Cleanup()
 		// Run the same tests as the regular system test with real config flag
 		runSystemTests(t, ts, true)
