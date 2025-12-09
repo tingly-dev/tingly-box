@@ -127,7 +127,19 @@ func runSystemTests(t *testing.T, ts *TestServer, isRealConfig bool) {
 	// Test 7: Anthropic messages endpoint with authentication
 	t.Run("Anthropic_Messages_With_Auth", func(t *testing.T) {
 		globalConfig := ts.appConfig.GetGlobalConfig()
-		modelToken := globalConfig.GetModelToken()
+		var modelToken string
+		if isRealConfig {
+			// Use Anthropic provider token
+			provider, err := ts.appConfig.GetProvider("anthropic")
+			if err != nil {
+				modelToken = ""
+			} else {
+				modelToken = provider.Token
+			}
+		} else {
+			// Use global model token for mock config
+			modelToken = globalConfig.GetModelToken()
+		}
 
 		reqBody := map[string]interface{}{
 			"model":      "claude-3-5-haiku-20241022",
@@ -324,7 +336,7 @@ func TestFinalIntegrationWithRealConfig(t *testing.T) {
 		}
 
 		// Copy real config from main .tingly-box directory if it exists
-		realConfigPath := "../.tingly-box/config.json"
+		realConfigPath := "../../../.tingly-box/config.json"
 		if _, err := os.Stat(realConfigPath); err == nil {
 			// Real config exists, copy it
 			realConfig, err := os.ReadFile(realConfigPath)
@@ -337,7 +349,7 @@ func TestFinalIntegrationWithRealConfig(t *testing.T) {
 		}
 
 		// Copy real global config from main .tingly-box directory if it exists
-		realGlobalConfigPath := "../.tingly-box/global_config.yaml"
+		realGlobalConfigPath := "../../../.tingly-box/global_config.yaml"
 		if _, err := os.Stat(realGlobalConfigPath); err == nil {
 			// Real global config exists, copy it
 			realGlobalConfig, err := os.ReadFile(realGlobalConfigPath)
