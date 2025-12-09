@@ -179,7 +179,7 @@ func (wui *WebUI) ProbeRule(c *gin.Context) {
 	}
 
 	// Get the first rule or create a default one for testing
-	globalConfig := wui.config.GetGlobalConfig()
+	globalConfig := wui.config
 	if globalConfig == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
