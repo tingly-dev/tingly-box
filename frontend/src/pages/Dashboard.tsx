@@ -19,31 +19,27 @@ import {
 } from '@mui/material';
 import React, { useEffect, useState } from 'react';
 import { PageLayout } from '../components/PageLayout';
-import { ProviderDialog } from '../components/ProviderDialog';
 import Probe from '../components/Probe';
+import { ProviderDialog } from '../components/ProviderDialog';
 import ProviderSelectTab, { type ProviderSelectTabOption } from "../components/ProviderSelectTab.tsx";
 import UnifiedCard from '../components/UnifiedCard';
 import { api } from '../services/api';
 
+const defaultRule = "tingly"
+
+
 const Dashboard = () => {
     const [providers, setProviders] = useState<any[]>([]);
-    const [defaults, setDefaults] = useState<any>({});
-    const [rules, setRules] = useState<any>({});
+    const [rule, setRule] = useState<any>({});
     const [providerModels, setProviderModels] = useState<any>({});
     const [loading, setLoading] = useState(true);
     const [selectedOption, setSelectedOption] = useState<any>({ provider: "", model: "" });
-
-    // Composition state for provider select
-    const [expandedProviders, setExpandedProviders] = useState<string[]>([]);
-    const [searchTerms, setSearchTerms] = useState<{ [key: string]: string }>({});
-    const [currentPage, setCurrentPage] = useState<{ [key: string]: number }>({});
 
     // Server info states
     const [generatedToken, setGeneratedToken] = useState<string>('');
     const [modelToken, setModelToken] = useState<string>('');
     const [showTokenModal, setShowTokenModal] = useState(false);
-    const [llmModel, setLLMModel] = useState<string>("tingly");
-
+  
     // Banner state for provider/model selection
     const [bannerProvider, setBannerProvider] = useState<string>('');
     const [bannerModel, setBannerModel] = useState<string>('');
@@ -77,7 +73,7 @@ const Dashboard = () => {
                     <>
                         <AlertTitle>Active Provider & Model</AlertTitle>
                         <Typography variant="body2">
-                            <strong>Request:</strong> {llmModel} {" -> "}
+                            <strong>Request:</strong> tingly {" -> "}
                             <strong>Provider:</strong> {bannerProvider} | <strong>Model:</strong> {bannerModel}
                         </Typography>
                     </>
@@ -98,7 +94,7 @@ const Dashboard = () => {
         } else {
             setNotification(prev => ({ ...prev, open: false }));
         }
-    }, [showBanner, bannerProvider, bannerModel, llmModel]);
+    }, [showBanner, bannerProvider, bannerModel]);
 
     // Add provider dialog state
     const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -108,20 +104,17 @@ const Dashboard = () => {
     const [providerToken, setProviderToken] = useState('');
 
     useEffect(() => {
-        loadAllData();
+        loadData();
         loadToken();
     }, []);
 
     // Update selected option when rules are loaded
     useEffect(() => {
-        if (rules.tingly) {
-            setSelectedOption({
-                provider: rules.tingly.provider,
-                model: rules.tingly.model
-            });
-        }
-    }, [rules]);
-
+        setSelectedOption({
+            provider: rule.provider,
+            model: rule.default_model
+        });
+    }, [rule]);
 
     const loadToken = async () => {
         const result = await api.getToken();
@@ -130,13 +123,12 @@ const Dashboard = () => {
         }
     };
 
-    const loadAllData = async () => {
+    const loadData = async () => {
         setLoading(true);
         await Promise.all([
             loadProviders(),
-            loadDefaults(),
-            loadRules(),
             loadProviderModels(),
+            loadRule(),
         ]);
         setLoading(false);
     };
@@ -148,55 +140,47 @@ const Dashboard = () => {
         }
     };
 
-    const loadDefaults = async () => {
-        const result = await api.getDefaults();
+    const loadRule = async () => {
+        const result = await api.getRule(defaultRule);
         if (result.success) {
-            setDefaults(result.data);
+            setRule(result.data);
+        } else {
+            // If the 'tingly' rule doesn't exist, create a default one
+                        await createDefaultTinglyRule();
         }
     };
 
-    const loadRules = async () => {
-        const result = await api.getRules();
-        if (result.success) {
-            setRules(result.data);
+    const createDefaultTinglyRule = async () => {
+        try {
+            // Create a default rule with empty provider and model
+            // This will be filled when user selects a provider and model
+            const defaultRuleData = {
+                provider: "",
+                default_model: "",
+            };
+
+            const result = await api.updateRule(defaultRule, defaultRuleData);
+            if (result.success) {
+                                // Reload the rule after creating it
+                const reloadResult = await api.getRule(defaultRule);
+                if (reloadResult.success) {
+                    setRule(reloadResult.data);
+                }
+            } else {
+                console.error(`Failed to create default '${defaultRule}' rule:`, result.error);
+                // Show notification to user about the failure
+                showNotification(`Failed to create default rule: ${result.error}`, 'error');
+            }
+        } catch (error) {
+            console.error(`Error creating default '${defaultRule}' rule:`, error);
+            showNotification(`Error creating default rule`, 'error');
         }
     };
-
 
     const loadProviderModels = async () => {
         const result = await api.getProviderModels();
         if (result.success) {
             setProviderModels(result.data);
-        }
-    };
-
-    const setDefaultProviderHandler = async (_providerName: string) => {
-        const currentDefaults = await api.getDefaults();
-        if (!currentDefaults.success) {
-            return;
-        }
-
-        // Update the default RequestConfig with the selected provider
-        const requestConfigs = currentDefaults.data.request_configs || [];
-        if (requestConfigs.length === 0) {
-            return;
-        }
-
-        const payload = {
-            request_configs: requestConfigs,
-        };
-
-        const result = await api.setDefaults(payload);
-        if (result.success) {
-            await loadDefaults();
-        }
-    };
-
-    const fetchProviderModels = async (_providerName: string) => {
-        const result = await api.getProviderModelsByName(_providerName);
-        if (result.success) {
-            await loadProviders();
-            await loadProviderModels();
         }
     };
 
@@ -223,14 +207,13 @@ const Dashboard = () => {
 
     // Composition handlers for provider select
     const handleModelSelect = async (provider: any, model: string) => {
-        console.log("on select", provider, model);
         setSelectedOption({ provider: provider.name, model: model });
 
         try {
             // Update the "tingly" rule with the selected provider and model
             const ruleData = {
                 provider: provider.name,
-                model: model,
+                default_model: model,
             };
 
             const result = await api.updateRule('tingly', ruleData);
@@ -249,8 +232,7 @@ const Dashboard = () => {
         }
     };
 
-    const handleRefresh = async (provider: any) => {
-        console.log("Refreshing models for", provider.name);
+    const handleModelRefresh = async (provider: any) => {
         try {
             const result = await api.getProviderModelsByName(provider.name);
             if (result.success) {
@@ -264,24 +246,6 @@ const Dashboard = () => {
             console.error("Error refreshing models:", error);
             showNotification(`Error refreshing models for ${provider.name}`, 'error');
         }
-    };
-
-    const handleExpandToggle = (providerName: string, expanded: boolean) => {
-        if (expanded) {
-            setExpandedProviders(prev => [...prev, providerName]);
-        } else {
-            setExpandedProviders(prev => prev.filter(name => name !== providerName));
-        }
-    };
-
-    const handleSearchChange = (providerName: string, searchTerm: string) => {
-        setSearchTerms(prev => ({ ...prev, [providerName]: searchTerm }));
-        // Reset to first page when searching
-        setCurrentPage(prev => ({ ...prev, [providerName]: 1 }));
-    };
-
-    const handlePageChange = (providerName: string, page: number) => {
-        setCurrentPage(prev => ({ ...prev, [providerName]: page }));
     };
 
     // Provider dialog handlers
@@ -344,7 +308,6 @@ const Dashboard = () => {
                         </Button>
                     </Box>
                 }
-
             >
 
                 <Grid container spacing={2}>
@@ -511,25 +474,6 @@ const Dashboard = () => {
                     {providers.length > 0 ? (
 
                         <Grid size={{ xs: 12, md: 12 }}>
-                            {/* Providers Quick Settings */}
-                            {/* <Stack spacing={2}>
-                                {providers.map((provider: any) => (
-                                    <ProviderSelect
-                                        key={provider.name}
-                                        provider={provider}
-                                        providerModels={providerModels}
-                                        selectedProvider={selectedOption?.provider}
-                                        selectedModel={selectedOption?.model}
-                                        isExpanded={expandedProviders.includes(provider.name)}
-                                        searchTerms={searchTerms}
-                                        currentPage={currentPage}
-                                        onModelSelect={handleModelSelect}
-                                        onExpandToggle={handleExpandToggle}
-                                        onSearchChange={handleSearchChange}
-                                        onPageChange={handlePageChange}
-                                    />
-                                ))}
-                            </Stack> */}
                             <Stack spacing={2}>
                                 <ProviderSelectTab
                                     providers={providers}
@@ -537,7 +481,7 @@ const Dashboard = () => {
                                     selectedProvider={selectedOption?.provider}
                                     selectedModel={selectedOption?.model}
                                     onSelected={(opt: ProviderSelectTabOption) => handleModelSelect(opt.provider, opt.model || "")}
-                                    onRefresh={handleRefresh}
+                                    onRefresh={handleModelRefresh}
                                 />
                             </Stack>
                         </Grid>
@@ -642,9 +586,9 @@ const Dashboard = () => {
             />
 
             {/* Probe Component */}
-           
-                <Probe />
-           
+
+            <Probe rule="tingly" provider={selectedOption.provider} model={selectedOption.model} />
+
         </PageLayout>
     );
 };
