@@ -13,7 +13,7 @@ import (
 
 // ConfigWatcher monitors configuration changes and triggers reloads
 type ConfigWatcher struct {
-	config      *AppConfig
+	config      *Config
 	watcher     *fsnotify.Watcher
 	callbacks   []func(*Config)
 	stopCh      chan struct{}
@@ -23,7 +23,7 @@ type ConfigWatcher struct {
 }
 
 // NewConfigWatcher creates a new configuration watcher
-func NewConfigWatcher(config *AppConfig) (*ConfigWatcher, error) {
+func NewConfigWatcher(config *Config) (*ConfigWatcher, error) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create file watcher: %w", err)
@@ -55,18 +55,31 @@ func (cw *ConfigWatcher) Start() error {
 		return fmt.Errorf("watcher is already running")
 	}
 
+	// Get config file path (Config uses ConfigFile)
+	configFile := cw.config.ConfigFile
+
+	// Also watch for provider config file (if it exists separately)
+	configDir := filepath.Dir(configFile)
+	providerConfigFile := filepath.Join(configDir, "config.json")
+
 	// Get initial modification time
-	if stat, err := os.Stat(cw.config.configFile); err == nil {
+	if stat, err := os.Stat(configFile); err == nil {
 		cw.lastModTime = stat.ModTime()
 	}
 
-	// Add config file to watcher
-	if err := cw.watcher.Add(cw.config.configFile); err != nil {
-		return fmt.Errorf("failed to watch config file: %w", err)
+	// Add Config file to watcher
+	if err := cw.watcher.Add(configFile); err != nil {
+		return fmt.Errorf("failed to watch global config file: %w", err)
+	}
+
+	// Also watch provider config file if it exists
+	if _, err := os.Stat(providerConfigFile); err == nil {
+		if err := cw.watcher.Add(providerConfigFile); err != nil {
+			return fmt.Errorf("failed to watch provider config file: %w", err)
+		}
 	}
 
 	// Also watch the directory for file creation/rename
-	configDir := filepath.Dir(cw.config.configFile)
 	if err := cw.watcher.Add(configDir); err != nil {
 		return fmt.Errorf("failed to watch config directory: %w", err)
 	}
@@ -129,15 +142,23 @@ func (cw *ConfigWatcher) watchLoop() {
 	}
 }
 
-// isConfigEvent checks if an event is related to our config file
+// isConfigEvent checks if an event is related to our config files
 func (cw *ConfigWatcher) isConfigEvent(event fsnotify.Event) bool {
-	// Direct config file events
-	if event.Name == cw.config.configFile {
+	configFile := cw.config.ConfigFile
+	configDir := filepath.Dir(configFile)
+	providerConfigFile := filepath.Join(configDir, "config.json")
+
+	// Direct config file events (Config)
+	if event.Name == configFile {
+		return event.Op&(fsnotify.Write|fsnotify.Create) != 0
+	}
+
+	// Provider config file events
+	if event.Name == providerConfigFile {
 		return event.Op&(fsnotify.Write|fsnotify.Create) != 0
 	}
 
 	// Check if it's a create/rename event in the config directory
-	configDir := filepath.Dir(cw.config.configFile)
 	if filepath.Dir(event.Name) == configDir {
 		return event.Op&(fsnotify.Create|fsnotify.Rename) != 0
 	}
@@ -147,8 +168,20 @@ func (cw *ConfigWatcher) isConfigEvent(event fsnotify.Event) bool {
 
 // handleConfigChange processes configuration changes
 func (cw *ConfigWatcher) handleConfigChange(event fsnotify.Event) {
-	// Check if file actually changed (avoid reloads on metadata changes)
-	if stat, err := os.Stat(cw.config.configFile); err == nil {
+	configFile := cw.config.ConfigFile
+	configDir := filepath.Dir(configFile)
+	providerConfigFile := filepath.Join(configDir, "config.json")
+
+	// Determine which file changed and check if it actually changed
+	var checkFile string
+	if event.Name == configFile || event.Name == providerConfigFile {
+		checkFile = event.Name
+	} else {
+		// Directory event, check the main config file
+		checkFile = configFile
+	}
+
+	if stat, err := os.Stat(checkFile); err == nil {
 		if !stat.ModTime().After(cw.lastModTime) {
 			return
 		}
@@ -158,10 +191,17 @@ func (cw *ConfigWatcher) handleConfigChange(event fsnotify.Event) {
 		return
 	}
 
-	// Reload configuration
-	if err := cw.config.Load(); err != nil {
+	// Reload configuration (reload Config)
+	if err := cw.config.load(); err != nil {
 		log.Printf("Failed to reload configuration: %v", err)
 		return
+	}
+
+	// Create a Config struct for callbacks (for backward compatibility)
+	config := &Config{
+		Providers:  cw.config.Providers,
+		ServerPort: cw.config.ServerPort,
+		JWTSecret:  cw.config.JWTSecret,
 	}
 
 	// Notify callbacks
@@ -171,7 +211,7 @@ func (cw *ConfigWatcher) handleConfigChange(event fsnotify.Event) {
 	cw.mu.RUnlock()
 
 	for _, callback := range callbacks {
-		callback(cw.config.config)
+		callback(config)
 	}
 
 	log.Println("Configuration reloaded successfully")
@@ -179,5 +219,5 @@ func (cw *ConfigWatcher) handleConfigChange(event fsnotify.Event) {
 
 // TriggerReload manually triggers a configuration reload
 func (cw *ConfigWatcher) TriggerReload() error {
-	return cw.config.Load()
+	return cw.config.load()
 }
