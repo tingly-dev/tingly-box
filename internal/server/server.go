@@ -77,7 +77,7 @@ func NewServerWithOptions(appConfig *config.AppConfig, enableUI bool) *Server {
 	}
 
 	// Initialize model manager
-	modelManager, err := config.NewModelManager()
+	modelManager, err := config.NewModelManager(config.GetModelsDir())
 	if err != nil {
 		log.Printf("Warning: Failed to initialize model manager: %v", err)
 		modelManager = nil
