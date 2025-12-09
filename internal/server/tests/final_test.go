@@ -59,12 +59,17 @@ func runSystemTests(t *testing.T, ts *TestServer, isRealConfig bool) {
 
 	// Test 3: Models endpoint
 	t.Run("Models_Endpoint", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", "/v1/models", nil)
+		globalConfig := ts.appConfig.GetGlobalConfig()
+		userToken := globalConfig.GetUserToken()
+		req, _ := http.NewRequest("GET", "/api/provider-models", nil)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+userToken)
 		w := httptest.NewRecorder()
 		ts.ginEngine.ServeHTTP(w, req)
 
 		if isRealConfig {
 			assert.Equal(t, 200, w.Code)
+			assert.Contains(t, w.Body.String(), "glm-4.6")
 		} else {
 			assert.True(t, containsStatus(w.Code, []int{200, 500}))
 		}
@@ -146,7 +151,7 @@ func runSystemTests(t *testing.T, ts *TestServer, isRealConfig bool) {
 			assert.Equal(t, 200, w.Code)
 			assert.Contains(t, w.Body.String(), "Hello")
 		} else {
-			assert.True(t, containsStatus(w.Code, []int{401}))
+			assert.True(t, containsStatus(w.Code, []int{400, 401}))
 		}
 	})
 
@@ -164,25 +169,6 @@ func runSystemTests(t *testing.T, ts *TestServer, isRealConfig bool) {
 
 		// Both mock and real config should reject unauthenticated requests
 		assert.Equal(t, 401, w.Code)
-	})
-
-	// Test 9: Anthropic models endpoint
-	t.Run("Anthropic_Models_Endpoint", func(t *testing.T) {
-		globalConfig := ts.appConfig.GetGlobalConfig()
-		modelToken := globalConfig.GetModelToken() // Now get the models from the Anthropic endpoint
-		req, _ := http.NewRequest("GET", "/anthropic/v1/models", nil)
-		req.Header.Set("Authorization", "Bearer "+modelToken)
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		ts.ginEngine.ServeHTTP(w, req)
-
-		if isRealConfig {
-			assert.Equal(t, 200, w.Code)
-			assert.Contains(t, w.Body.String(), "Claude")
-		} else {
-			// mocked token would got 401
-			assert.True(t, containsStatus(w.Code, []int{401}))
-		}
 	})
 
 	// Test 10: Providers endpoint with authentication

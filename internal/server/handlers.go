@@ -317,7 +317,7 @@ func (s *Server) DetermineProviderAndModel(modelName string) (*config.Provider, 
 	if c != nil && c.IsRequestModel(modelName) {
 		// Get the Rule for this specific request model
 		rule := c.GetRequestConfigByRequestModel(modelName)
-		if rule != nil && rule.Provider != "" && rule.DefaultModel != "" {
+		if rule != nil && rule.Active && rule.Provider != "" && rule.DefaultModel != "" {
 			// Find provider configuration
 			providers := s.config.ListProviders()
 			for _, p := range providers {
