@@ -3,6 +3,8 @@ import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
+import EditIcon from '@mui/icons-material/Edit';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import {
     Box,
     Card,
@@ -13,6 +15,11 @@ import {
     Tabs,
     TextField,
     Typography,
+    Button,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
 } from '@mui/material';
 import IconButton from '@mui/material/IconButton';
 import React, { useState } from 'react';
@@ -31,6 +38,7 @@ interface ProviderSelectTabProps {
     activeTab?: number;
     onSelected?: (option: ProviderSelectTabOption) => void;
     onRefresh?: (provider: Provider) => void;
+    onCustomModelSave?: (provider: Provider, customModel: string) => void;
 }
 
 const MODELS_PER_PAGE = 7*4;
@@ -76,13 +84,20 @@ export default function ProviderSelectTab({
     activeTab: externalActiveTab,
     onSelected,
     onRefresh,
+    onCustomModelSave,
 }: ProviderSelectTabProps) {
     const [internalCurrentTab, setInternalCurrentTab] = useState(0);
+    const [isInitialized, setIsInitialized] = useState(false);
 
     // Use external activeTab if provided, otherwise use internal state
     const currentTab = externalActiveTab !== undefined ? externalActiveTab : internalCurrentTab;
     const [searchTerms, setSearchTerms] = useState<{ [key: string]: string }>({});
     const [currentPage, setCurrentPage] = useState<{ [key: string]: number }>({});
+    const [customModelDialog, setCustomModelDialog] = useState<{ open: boolean; provider: Provider | null; value: string }>({
+        open: false,
+        provider: null,
+        value: ''
+    });
 
     const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
         if (externalActiveTab === undefined) {
@@ -123,6 +138,40 @@ export default function ProviderSelectTab({
         setCurrentPage(prev => ({ ...prev, [providerName]: page }));
     };
 
+  const handleCustomModelEdit = (provider: Provider, currentValue?: string) => {
+        setCustomModelDialog({
+            open: true,
+            provider,
+            value: currentValue || ''
+        });
+    };
+
+    const handleCustomModelSave = () => {
+        const customModel = customModelDialog.value?.trim();
+        if (customModel && customModelDialog.provider) {
+            // Save custom model to persistence
+            if (onCustomModelSave) {
+                onCustomModelSave(customModelDialog.provider, customModel);
+            }
+            // Select the custom model
+            if (onSelected) {
+                onSelected({ provider: customModelDialog.provider, model: customModel });
+            }
+        }
+        setCustomModelDialog({ open: false, provider: null, value: '' });
+    };
+
+    const handleCustomModelCancel = () => {
+        setCustomModelDialog({ open: false, provider: null, value: '' });
+    };
+
+    const isCustomModel = (model: string, provider: Provider) => {
+        const models = providerModels?.[provider.name]?.models || [];
+        const starModels = providerModels?.[provider.name]?.star_models || [];
+        const customModel = providerModels?.[provider.name]?.custom_model;
+        return !models.includes(model) && !starModels.includes(model) && model !== '' && model !== customModel;
+    };
+
     const getFilteredModels = (provider: Provider) => {
         const models = providerModels?.[provider.name]?.models || [];
         const searchTerm = searchTerms[provider.name] || '';
@@ -147,25 +196,36 @@ export default function ProviderSelectTab({
         };
     };
 
-    // Auto-navigate to selected model on component mount
+    // Auto-switch to selected provider tab and navigate to selected model on component mount (only once)
     React.useEffect(() => {
-        if (selectedProvider && selectedModel) {
-            const targetProvider = (providers || []).filter(provider => provider.enabled)[currentTab];
-            if (targetProvider && targetProvider.name === selectedProvider) {
-                const models = providerModels?.[targetProvider.name]?.models || [];
-                const modelIndex = models.indexOf(selectedModel);
+        if (!isInitialized && selectedProvider) {
+            const enabledProviders = (providers || []).filter(provider => provider.enabled);
+            const targetProviderIndex = enabledProviders.findIndex(provider => provider.name === selectedProvider);
 
-                if (modelIndex !== -1) {
-                    const targetPage = Math.floor(modelIndex / MODELS_PER_PAGE) + 1;
-                    const currentPageForProvider = currentPage[targetProvider.name] || 1;
+            // Auto-switch to the selected provider's tab
+            if (targetProviderIndex !== -1) {
+                if (externalActiveTab === undefined) {
+                    setInternalCurrentTab(targetProviderIndex);
+                }
 
-                    if (currentPageForProvider !== targetPage) {
+                // Auto-navigate to selected model if also provided
+                if (selectedModel) {
+                    const targetProvider = enabledProviders[targetProviderIndex];
+                    const models = providerModels?.[targetProvider.name]?.models || [];
+                    const modelIndex = models.indexOf(selectedModel);
+
+                    if (modelIndex !== -1) {
+                        const targetPage = Math.floor(modelIndex / MODELS_PER_PAGE) + 1;
+
                         setCurrentPage(prev => ({ ...prev, [targetProvider.name]: targetPage }));
                     }
                 }
             }
+
+            // Mark as initialized to prevent further automatic switching
+            setIsInitialized(true);
         }
-    }, []); // Only run once on mount
+    }, [isInitialized, selectedProvider, selectedModel, providers, providerModels, externalActiveTab]); // Include dependencies
 
     return (
         <Box sx={{ width: '100%' }}>
@@ -354,6 +414,7 @@ export default function ProviderSelectTab({
                                 </Box>
                             )}
 
+                            
                             {/* All Models Section */}
                             <Box
                                 sx={{
@@ -363,14 +424,222 @@ export default function ProviderSelectTab({
                                 <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
                                     All Models ({pagination.totalModels})
                                 </Typography>
-                                {pagination.totalModels > 0 ? (
-                                    <Box
+                                <Box
                                         sx={{
                                             display: 'grid',
                                             gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
                                             gap: 0.8,
                                         }}
                                     >
+                                        {/* Add Custom Model Card */}
+                                        <Card
+                                            key="add-custom-model"
+                                            sx={{
+                                                width: '100%',
+                                                height: 60,
+                                                border: 1,
+                                                borderColor: 'primary.main',
+                                                borderRadius: 1.5,
+                                                backgroundColor: 'primary.50',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s ease-in-out',
+                                                position: 'relative',
+                                                boxShadow: 0,
+                                                borderStyle: 'dashed',
+                                                '&:hover': {
+                                                    backgroundColor: 'primary.100',
+                                                    boxShadow: 2,
+                                                },
+                                            }}
+                                            onClick={() => handleCustomModelEdit(provider)}
+                                        >
+                                            <CardContent sx={{
+                                                textAlign: 'center',
+                                                py: 1,
+                                                px: 0.8,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                height: '100%'
+                                            }}>
+                                                <Stack direction="row" alignItems="center" spacing={1}>
+                                                    <AddCircleOutlineIcon
+                                                        color="primary"
+                                                        sx={{ fontSize: 20 }}
+                                                    />
+                                                    <Typography
+                                                        variant="body2"
+                                                        sx={{
+                                                            fontWeight: 500,
+                                                            fontSize: '0.75rem',
+                                                            lineHeight: 1.3,
+                                                            color: 'primary.main',
+                                                        }}
+                                                    >
+                                                        Custom Model
+                                                    </Typography>
+                                                </Stack>
+                                            </CardContent>
+                                        </Card>
+
+                                        {/* Persisted custom model card */}
+                                        {providerModels?.[provider.name]?.custom_model && (
+                                            <Card
+                                                key="persisted-custom-model"
+                                                sx={{
+                                                    width: '100%',
+                                                    height: 60,
+                                                    border: 1,
+                                                    borderColor: 'primary.main',
+                                                    borderRadius: 1.5,
+                                                    backgroundColor: 'primary.50',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s ease-in-out',
+                                                    position: 'relative',
+                                                    boxShadow: 0,
+                                                    '&:hover': {
+                                                        backgroundColor: 'primary.100',
+                                                        boxShadow: 2,
+                                                    },
+                                                }}
+                                                onClick={() => {
+                                                    const customModel = providerModels?.[provider.name]?.custom_model;
+                                                    if (customModel && onSelected) {
+                                                        onSelected({ provider, model: customModel });
+                                                    }
+                                                }}
+                                            >
+                                                <CardContent sx={{
+                                                    textAlign: 'center',
+                                                    py: 1,
+                                                    px: 0.8,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    height: '100%',
+                                                    position: 'relative'
+                                                }}>
+                                                    <Typography
+                                                        variant="body2"
+                                                        sx={{
+                                                            fontWeight: 500,
+                                                            fontSize: '0.75rem',
+                                                            lineHeight: 1.3,
+                                                            wordBreak: 'break-word',
+                                                            textAlign: 'center'
+                                                        }}
+                                                    >
+                                                        {providerModels?.[provider.name]?.custom_model}
+                                                    </Typography>
+                                                    {isProviderSelected && selectedModel === providerModels?.[provider.name]?.custom_model && (
+                                                        <CheckCircle
+                                                            color="primary"
+                                                            sx={{
+                                                                position: 'absolute',
+                                                                top: 4,
+                                                                right: 4,
+                                                                fontSize: 16
+                                                            }}
+                                                        />
+                                                    )}
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleCustomModelEdit(provider, providerModels?.[provider.name]?.custom_model);
+                                                        }}
+                                                        sx={{
+                                                            position: 'absolute',
+                                                            bottom: 4,
+                                                            right: 4,
+                                                            p: 0.5,
+                                                            backgroundColor: 'background.paper',
+                                                            '&:hover': {
+                                                                backgroundColor: 'grey.100',
+                                                            }
+                                                        }}
+                                                    >
+                                                        <EditIcon fontSize="small" />
+                                                    </IconButton>
+                                                </CardContent>
+                                            </Card>
+                                        )}
+
+                                        {/* Currently selected custom model card (not persisted) */}
+                                        {isProviderSelected && selectedModel && isCustomModel(selectedModel, provider) && (
+                                            <Card
+                                                key="selected-custom-model"
+                                                sx={{
+                                                    width: '100%',
+                                                    height: 60,
+                                                    border: 1,
+                                                    borderColor: 'primary.main',
+                                                    borderRadius: 1.5,
+                                                    backgroundColor: 'primary.50',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s ease-in-out',
+                                                    position: 'relative',
+                                                    boxShadow: 2,
+                                                    '&:hover': {
+                                                        backgroundColor: 'primary.100',
+                                                        boxShadow: 2,
+                                                    },
+                                                }}
+                                            >
+                                                <CardContent sx={{
+                                                    textAlign: 'center',
+                                                    py: 1,
+                                                    px: 0.8,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    height: '100%',
+                                                    position: 'relative'
+                                                }}>
+                                                    <Typography
+                                                        variant="body2"
+                                                        sx={{
+                                                            fontWeight: 500,
+                                                            fontSize: '0.75rem',
+                                                            lineHeight: 1.3,
+                                                            wordBreak: 'break-word',
+                                                            textAlign: 'center'
+                                                        }}
+                                                    >
+                                                        {selectedModel}
+                                                    </Typography>
+                                                    <CheckCircle
+                                                        color="primary"
+                                                        sx={{
+                                                            position: 'absolute',
+                                                            top: 4,
+                                                            right: 4,
+                                                            fontSize: 16
+                                                        }}
+                                                    />
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleCustomModelEdit(provider, selectedModel);
+                                                        }}
+                                                        sx={{
+                                                            position: 'absolute',
+                                                            bottom: 4,
+                                                            right: 4,
+                                                            p: 0.5,
+                                                            backgroundColor: 'background.paper',
+                                                            '&:hover': {
+                                                                backgroundColor: 'grey.100',
+                                                            }
+                                                        }}
+                                                    >
+                                                        <EditIcon fontSize="small" />
+                                                    </IconButton>
+                                                </CardContent>
+                                            </Card>
+                                        )}
+
                                         {pagination.models.map((model) => {
                                             const isModelSelected = isProviderSelected && selectedModel === model;
                                             const isStarred = starModels.includes(model);
@@ -447,7 +716,7 @@ export default function ProviderSelectTab({
                                             );
                                         })}
                                     </Box>
-                                ) : (
+                                {pagination.totalModels === 0 && (
                                     <Box sx={{ textAlign: 'center', py: 4 }}>
                                         <Typography variant="body2" color="text.secondary">
                                             No models found matching "{searchTerms[provider.name] || ''}"
@@ -459,6 +728,48 @@ export default function ProviderSelectTab({
                     </TabPanel>
                 );
             })}
+
+            {/* Custom Model Dialog */}
+            <Dialog
+                open={customModelDialog.open}
+                onClose={handleCustomModelCancel}
+                maxWidth="sm"
+                fullWidth
+            >
+                <DialogTitle>
+                    {customModelDialog.value ? 'Edit Custom Model' : 'Add Custom Model'}
+                </DialogTitle>
+                <DialogContent>
+                    <TextField
+                        autoFocus
+                        margin="dense"
+                        label="Model Name"
+                        fullWidth
+                        variant="outlined"
+                        value={customModelDialog.value}
+                        onChange={(e) => setCustomModelDialog(prev => ({ ...prev, value: e.target.value }))}
+                        placeholder="Enter custom model name..."
+                        sx={{
+                            mt: 1,
+                            '& .MuiOutlinedInput-root': {
+                                borderRadius: 1.5,
+                            }
+                        }}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleCustomModelCancel}>
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={handleCustomModelSave}
+                        variant="contained"
+                        disabled={!customModelDialog.value?.trim()}
+                    >
+                        {customModelDialog.value ? 'Update' : 'Add'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 }
