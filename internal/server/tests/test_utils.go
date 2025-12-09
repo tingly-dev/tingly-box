@@ -21,11 +21,11 @@ import (
 
 // TestServer represents a test server wrapper
 type TestServer struct {
-	appConfig    *config.AppConfig
-	modelManager *config.ModelManager
-	config       *config.AppConfig
-	server       *server.Server
-	ginEngine    *gin.Engine
+	appConfig       *config.AppConfig
+	providerManager *config.ProviderManager
+	config          *config.AppConfig
+	server          *server.Server
+	ginEngine       *gin.Engine
 }
 
 // NewTestServer creates a new test server with custom config directory
@@ -64,11 +64,11 @@ func createTestServer(t *testing.T, appConfig *config.AppConfig) *TestServer {
 	httpServer := server.NewServer(appConfig)
 
 	return &TestServer{
-		appConfig:    appConfig,
-		modelManager: httpServer.GetModelManager(),
-		config:       appConfig,
-		server:       httpServer,
-		ginEngine:    httpServer.GetRouter(), // Use the server's router
+		appConfig:       appConfig,
+		providerManager: httpServer.GetProviderManager(),
+		config:          appConfig,
+		server:          httpServer,
+		ginEngine:       httpServer.GetRouter(), // Use the server's router
 	}
 }
 
@@ -112,8 +112,8 @@ func (ts *TestServer) GetProviderToken(providerName string, isRealConfig bool) s
 	return globalConfig.GetModelToken()
 }
 
-// MockModelManager creates a mock model manager for testing
-func MockModelManager(t *testing.T) *config.ModelManager {
+// MockProviderManager creates a mock model manager for testing
+func MockProviderManager(t *testing.T) *config.ProviderManager {
 	// Create temporary config file for testing
 	configFile := "config/test_models.yaml"
 	defaultConfig := config.ModelConfig{
@@ -149,12 +149,12 @@ func MockModelManager(t *testing.T) *config.ModelManager {
 	}
 
 	// Create model manager with test config
-	modelManager, err := config.NewModelManager(config.GetModelsDir())
+	providerManager, err := config.NewProviderManager(config.GetModelsDir())
 	if err != nil {
 		t.Fatalf("Failed to create model manager: %v", err)
 	}
 
-	return modelManager
+	return providerManager
 }
 
 // CreateTestChatRequest creates a test chat completion request
