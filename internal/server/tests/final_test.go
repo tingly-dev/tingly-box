@@ -149,7 +149,9 @@ func runSystemTests(t *testing.T, ts *TestServer, isRealConfig bool) {
 
 		if isRealConfig {
 			assert.Equal(t, 200, w.Code)
-			assert.Contains(t, w.Body.String(), "Hello")
+			assert.Contains(t, w.Body.String(), "content")
+			assert.Contains(t, w.Body.String(), "role")
+
 		} else {
 			assert.True(t, containsStatus(w.Code, []int{400, 401}))
 		}
