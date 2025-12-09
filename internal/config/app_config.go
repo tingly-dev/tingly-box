@@ -110,111 +110,32 @@ func (ac *AppConfig) initEncryption() error {
 
 // AddProviderByName adds a new AI provider configuration by name, API base, and token
 func (ac *AppConfig) AddProviderByName(name, apiBase, token string) error {
-	ac.mu.Lock()
-	defer ac.mu.Unlock()
-
-	if name == "" {
-		return errors.New("provider name cannot be empty")
-	}
-	if apiBase == "" {
-		return errors.New("API base URL cannot be empty")
-	}
-	if token == "" {
-		return errors.New("API token cannot be empty")
-	}
-
-	ac.config.Providers[name] = &Provider{
-		Name:     name,
-		APIBase:  apiBase,
-		APIStyle: APIStyleOpenAI, // default to openai
-		Token:    token,
-		Enabled:  true,
-	}
-
-	return ac.Save()
+	return ac.config.AddProviderByName(name, apiBase, token)
 }
 
 // GetProvider returns a provider by name
 func (ac *AppConfig) GetProvider(name string) (*Provider, error) {
-	ac.mu.RLock()
-	defer ac.mu.RUnlock()
-
-	provider, exists := ac.config.Providers[name]
-	if !exists {
-		return nil, fmt.Errorf("provider '%s' not found", name)
-	}
-
-	return provider, nil
+	return ac.config.GetProvider(name)
 }
 
 // ListProviders returns all providers
 func (ac *AppConfig) ListProviders() []*Provider {
-	ac.mu.RLock()
-	defer ac.mu.RUnlock()
-
-	providers := make([]*Provider, 0, len(ac.config.Providers))
-	for _, provider := range ac.config.Providers {
-		providers = append(providers, provider)
-	}
-
-	return providers
+	return ac.config.ListProviders()
 }
 
 // AddProvider adds a new provider using Provider struct
 func (ac *AppConfig) AddProvider(provider *Provider) error {
-	ac.mu.Lock()
-	defer ac.mu.Unlock()
-
-	if provider.Name == "" {
-		return errors.New("provider name cannot be empty")
-	}
-	if provider.APIBase == "" {
-		return errors.New("API base URL cannot be empty")
-	}
-	if provider.Token == "" {
-		return errors.New("API token cannot be empty")
-	}
-
-	ac.config.Providers[provider.Name] = provider
-
-	return ac.Save()
+	return ac.config.AddProvider(provider)
 }
 
 // UpdateProvider updates an existing provider
 func (ac *AppConfig) UpdateProvider(originalName string, provider *Provider) error {
-	ac.mu.Lock()
-	defer ac.mu.Unlock()
-
-	if _, exists := ac.config.Providers[originalName]; !exists {
-		return fmt.Errorf("provider '%s' not found", originalName)
-	}
-
-	// If name is being changed, remove the old entry and add new one
-	if originalName != provider.Name {
-		delete(ac.config.Providers, originalName)
-	}
-
-	ac.config.Providers[provider.Name] = provider
-
-	return ac.Save()
-}
-
-// RemoveProvider removes a provider by name (alias for DeleteProvider)
-func (ac *AppConfig) RemoveProvider(name string) error {
-	return ac.DeleteProvider(name)
+	return ac.config.UpdateProvider(originalName, provider)
 }
 
 // DeleteProvider removes a provider by name
 func (ac *AppConfig) DeleteProvider(name string) error {
-	ac.mu.Lock()
-	defer ac.mu.Unlock()
-
-	if _, exists := ac.config.Providers[name]; !exists {
-		return fmt.Errorf("provider '%s' not found", name)
-	}
-
-	delete(ac.config.Providers, name)
-	return ac.Save()
+	return ac.config.DeleteProvider(name)
 }
 
 // Save saves the configuration to file, with optional encryption based on global config
@@ -357,11 +278,7 @@ func (ac *AppConfig) GetJWTSecret() string {
 
 // SetServerPort updates the server port
 func (ac *AppConfig) SetServerPort(port int) error {
-	ac.mu.Lock()
-	defer ac.mu.Unlock()
-
-	ac.config.ServerPort = port
-	return ac.Save()
+	return ac.config.SetServerPort(port)
 }
 
 // GetGlobalConfig returns the global configuration manager
