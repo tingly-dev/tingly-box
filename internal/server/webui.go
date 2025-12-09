@@ -106,6 +106,9 @@ func (wui *WebUI) useAPIEndpoints(engine *gin.Engine) {
 		api.POST("/defaults", wui.SetDefaults)
 		api.GET("/provider-models", wui.GetProviderModels)
 		api.POST("/provider-models/:name", wui.FetchProviderModels)
+
+		// Probe endpoint for testing rule configurations
+		api.POST("/probe", wui.ProbeRule)
 	}
 }
 
@@ -161,6 +164,45 @@ func (wui *WebUI) Init() {
 // IsEnabled returns whether web UI is enabled
 func (wui *WebUI) IsEnabled() bool {
 	return wui.enabled
+}
+
+// ProbeRule tests a rule configuration by sending a sample request to the configured provider
+func (wui *WebUI) ProbeRule(c *gin.Context) {
+
+	var rule config.Rule
+	if err := c.ShouldBindJSON(&rule); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// Get the first rule or create a default one for testing
+	globalConfig := wui.config.GetGlobalConfig()
+	if globalConfig == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code":    "CONFIG_UNAVAILABLE",
+				"message": "Global config not available",
+			},
+		})
+		return
+	}
+
+	// Find the provider for this rule
+	providers := wui.config.ListProviders()
+	var testProvider *config.Provider
+
+	for _, provider := range providers {
+		if provider.Enabled && provider.Name == rule.Provider {
+			testProvider = provider
+			break
+		}
+	}
+
+	probe(c, rule, testProvider)
 }
 
 // Page Handlers (exported for server integration)
