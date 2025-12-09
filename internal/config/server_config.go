@@ -27,7 +27,8 @@ type Config struct {
 	Providers  map[string]*Provider `json:"providers"`
 	ServerPort int                  `json:"server_port"`
 	JWTSecret  string               `json:"jwt_secret"`
-	ConfigFile string               `yaml:"-"` // Not serialized to YAML (exported to preserve field)
+
+	ConfigFile string `yaml:"-" json:"-"` // Not serialized to YAML (exported to preserve field)
 
 	modelManager *ModelListManager
 
