@@ -1,17 +1,22 @@
 import {
     CheckCircle as CheckIcon,
     Error as ErrorIcon,
-    Refresh as RefreshIcon,
-    PlayArrow as TestIcon
+    ExpandMore as ExpandMoreIcon,
+    PlayArrow as TestIcon,
+    Timer as TimerIcon,
+    Token as TokenIcon
 } from '@mui/icons-material';
 import {
+    Accordion,
+    AccordionDetails,
+    AccordionSummary,
     Alert,
     Box,
     Button,
     Chip,
     CircularProgress,
-    Divider,
     LinearProgress,
+    Paper,
     Stack,
     Typography,
     useTheme
@@ -60,18 +65,19 @@ interface ProbeResponse {
     } | string;
 }
 
-const Probe = () => {
+const Probe = ({ rule, provider, model }) => {
     const theme = useTheme();
     const [isProbing, setIsProbing] = useState(false);
     const [probeResult, setProbeResult] = useState<ProbeResponse | null>(null);
+    const [detailsExpanded, setDetailsExpanded] = useState(false);
 
     const handleProbe = async () => {
         setIsProbing(true);
         setProbeResult(null);
 
         try {
-            const result = await api.probeRule();
-
+            console.log(rule, provider, model)
+            const result = await api.probeRule(rule, provider, model);
             setProbeResult(result);
         } catch (error) {
             console.error('Probe error:', error);
@@ -89,173 +95,229 @@ const Probe = () => {
             title="Configuration Probe"
             subtitle="Test rule validation with a sample request"
             size="full"
+            rightAction={
+                <Button
+                    variant="contained"
+                    startIcon={isProbing ? <CircularProgress size={16} color="inherit" /> : <TestIcon />}
+                    onClick={handleProbe}
+                    disabled={isProbing}
+                    sx={{ minWidth: 140 }}
+                >
+                    {isProbing ? 'Testing...' : 'Run Test'}
+                </Button>
+            }
         >
-            <Box sx={{ width: '100%', maxWidth: 800 }}>
-                <Stack spacing={3}>
-
-                    {/* Action Button */}
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Button
-                            variant="contained"
-                            startIcon={isProbing ? <CircularProgress size={16} color="inherit" /> : <TestIcon />}
-                            onClick={handleProbe}
-                            disabled={isProbing}
-                            sx={{ minWidth: 140 }}
-                        >
-                            {isProbing ? 'Testing...' : 'Run Test'}
-                        </Button>
-
-                        {probeResult && (
-                            <Button
-                                variant="text"
-                                startIcon={<RefreshIcon />}
-                                onClick={() => {
-                                    setProbeResult(null);
-                                    handleProbe();
+            <Box sx={{ width: '100%', maxWidth: 900 }}>
+                {/* Combined Action and Details Section */}
+                {probeResult && !isProbing ? (
+                    <Box>
+                        {/* Status and Metrics */}
+                        <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            {/* Status and Metrics in top right */}
+                            <Paper
+                                elevation={0}
+                                variant="outlined"
+                                sx={{
+                                    p: 2,
+                                    borderRadius: 2,
+                                    width: '100%',
+                                    border: `1px solid ${probeResult.success ? theme.palette.success.main : theme.palette.error.main}30`,
+                                    bgcolor: `${probeResult.success ? theme.palette.success.main : theme.palette.error.main}04`
                                 }}
-                                disabled={isProbing}
-                                size="small"
                             >
-                                Retry
-                            </Button>
-                        )}
-                    </Box>
-
-                    {/* Loading State */}
-                    {isProbing && (
-                        <Box>
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                                Running configuration test...
-                            </Typography>
-                            <LinearProgress sx={{ height: 2, borderRadius: 1 }} />
+                                <Stack direction="row" alignItems="center" spacing={2}>
+                                    <Box>
+                                        {probeResult.success ?
+                                            <CheckIcon sx={{ color: theme.palette.success.main, fontSize: 24 }} /> :
+                                            <ErrorIcon sx={{ color: theme.palette.error.main, fontSize: 24 }} />
+                                        }
+                                    </Box>
+                                    <Stack spacing={1}>
+                                        <Typography variant="subtitle2" fontWeight={600} color="text.primary">
+                                            {probeResult.success ? 'Success' : 'Failed'}
+                                        </Typography>
+                                        {probeResult.data && (
+                                            <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'nowrap' }}>
+                                                {probeResult.data.rule_tested && (
+                                                    <Chip
+                                                        label={probeResult.data.rule_tested.provider}
+                                                        size="small"
+                                                        variant="filled"
+                                                        color="primary"
+                                                        sx={{ fontFamily: 'monospace', fontSize: '0.6rem', height: 18, minWidth: 'auto' }}
+                                                    />
+                                                )}
+                                                {probeResult.data.rule_tested && (
+                                                    <Chip
+                                                        label={probeResult.data.rule_tested.model}
+                                                        size="small"
+                                                        variant="outlined"
+                                                        sx={{ fontFamily: 'monospace', fontSize: '0.6rem', height: 18, minWidth: 'auto' }}
+                                                    />
+                                                )}
+                                                <Stack direction="row" alignItems="center" spacing={0.3}>
+                                                    <TimerIcon sx={{ fontSize: 11, color: 'text.secondary' }} />
+                                                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', whiteSpace: 'nowrap' }}>
+                                                        {probeResult.data.request?.processing_time_ms || 0}ms
+                                                    </Typography>
+                                                </Stack>
+                                                <Stack direction="row" alignItems="center" spacing={0.3}>
+                                                    <TokenIcon sx={{ fontSize: 11, color: 'text.secondary' }} />
+                                                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', whiteSpace: 'nowrap' }}>
+                                                        {probeResult.data.response?.usage?.total_tokens || 0}t
+                                                    </Typography>
+                                                </Stack>
+                                            </Stack>
+                                        )}
+                                    </Stack>
+                                </Stack>
+                            </Paper>
                         </Box>
-                    )}
 
-                    {/* Results */}
-                    {probeResult && !isProbing && (
-                        <Alert
-                            severity={probeResult.success ? 'success' : 'error'}
-                            variant="outlined"
-                            sx={{
-                                borderRadius: 2,
-                                border: `1px solid ${probeResult.success ? theme.palette.success.main : theme.palette.error.main}20`,
-                                bgcolor: `${probeResult.success ? theme.palette.success.main : theme.palette.error.main}08`
-                            }}
-                        >
-                            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
-                                {probeResult.success ? <CheckIcon color="success" /> : <ErrorIcon color="error" />}
-                                <Typography variant="subtitle2" fontWeight={600}>
-                                    {probeResult.success ? 'Test Successful' : 'Test Failed'}
-                                </Typography>
-                            </Stack>
-
-                            {probeResult.data?.rule_tested && (
-                                <Box sx={{ mb: 2 }}>
-                                    <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
-                                        Configuration Tested:
+                        {/* Collapsible Request & Response Details */}
+                        {probeResult.data && (
+                            <Accordion
+                                expanded={detailsExpanded}
+                                onChange={(_, isExpanded) => setDetailsExpanded(isExpanded)}
+                                disableGutters
+                                elevation={0}
+                                sx={{
+                                    '&:before': { display: 'none' },
+                                    border: `1px solid ${theme.palette.divider}`,
+                                    borderRadius: 2,
+                                    overflow: 'hidden'
+                                }}
+                            >
+                                <AccordionSummary
+                                    expandIcon={<ExpandMoreIcon />}
+                                    sx={{
+                                        px: 2,
+                                        py: 1.5,
+                                        bgcolor: 'grey.50',
+                                        '&:hover': { bgcolor: 'grey.100' }
+                                    }}
+                                >
+                                    <Typography variant="subtitle2" fontWeight={500}>
+                                        Request & Response Details
                                     </Typography>
-                                    <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
-                                        <Chip
-                                            label={probeResult.data.rule_tested.provider}
-                                            size="small"
-                                            variant="outlined"
-                                            sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}
-                                        />
-                                        <Chip
-                                            label={probeResult.data.rule_tested.model}
-                                            size="small"
-                                            color="primary"
-                                            variant="outlined"
-                                            sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}
-                                        />
-                                    </Stack>
-                                </Box>
-                            )}
-
-                            {probeResult.data ? (
-                                <>
-                                    <Divider sx={{ my: 2 }} />
-
-                                    {/* Request Details */}
-                                    <Box sx={{ mb: 2 }}>
-                                        <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
-                                            📤 Request Sent:
-                                        </Typography>
-                                        <Box sx={{
-                                            p: 2,
-                                            bgcolor: 'grey.50',
-                                            borderRadius: 1.5,
-                                            fontFamily: 'monospace',
-                                            fontSize: '0.8rem',
-                                            color: 'text.primary',
-                                            border: `1px solid ${theme.palette.divider}`,
-                                            maxHeight: 120,
-                                            overflow: 'auto'
-                                        }}>
-                                            {probeResult.data.request.messages[0]?.content}
-                                        </Box>
-                                    </Box>
-
-                                    {/* Response Details */}
-                                    <Box sx={{ mb: 2 }}>
-                                        <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
-                                            📥 Response {probeResult.success ? 'Received' : 'Status'}:
-                                        </Typography>
-                                        <Box sx={{
-                                            p: 2,
-                                            bgcolor: probeResult.success ? 'grey.50' : 'error.50',
-                                            borderRadius: 1.5,
-                                            fontFamily: 'monospace',
-                                            fontSize: '0.8rem',
-                                            color: 'text.primary',
-                                            border: `1px solid ${probeResult.success ? theme.palette.divider : theme.palette.error.main}30`,
-                                            maxHeight: 120,
-                                            overflow: 'auto'
-                                        }}>
-                                            {probeResult.data.response.content || probeResult.data.response.error || 'No response content'}
-                                        </Box>
-                                    </Box>
-
-                                    {/* Test Metrics */}
-                                    <Stack direction="row" spacing={3} sx={{ flexWrap: 'wrap' }}>
-                                        <Typography variant="caption" color="text.secondary">
-                                            ⏱️ {probeResult.data.request.processing_time_ms}ms
-                                        </Typography>
-                                        <Typography variant="caption" color="text.secondary">
-                                            🔢 {probeResult.data.response.usage.total_tokens} tokens
-                                            ({probeResult.data.response.usage.prompt_tokens}→{probeResult.data.response.usage.completion_tokens})
-                                        </Typography>
-                                        <Typography variant="caption" color="text.secondary">
-                                            {probeResult.success ? '✅' : '❌'} {probeResult.data.response.finish_reason}
-                                        </Typography>
-                                    </Stack>
-
-                                    {/* Error Message for Failed Tests */}
-                                    {!probeResult.success && (
-                                        <Box sx={{ mt: 2 }}>
-                                            <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
-                                                ❌ Error Details:
+                                </AccordionSummary>
+                                <AccordionDetails sx={{ p: 0 }}>
+                                    <Box>
+                                        {/* Request */}
+                                        <Box sx={{ p: 2, bgcolor: 'background.paper' }}>
+                                            <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, color: 'primary.main' }}>
+                                                Request
                                             </Typography>
-                                            <Alert severity="error" variant="outlined" sx={{ borderRadius: 1.5 }}>
-                                                <Typography variant="body2">
-                                                    {typeof probeResult.error === 'string'
-                                                        ? probeResult.error
-                                                        : probeResult.error?.message || probeResult.data.test_result.message}
-                                                </Typography>
-                                            </Alert>
+                                            <Paper
+                                                variant="outlined"
+                                                sx={{
+                                                    p: 2,
+                                                    fontFamily: 'monospace',
+                                                    fontSize: '0.8rem',
+                                                    bgcolor: 'grey.50',
+                                                    maxHeight: 200,
+                                                    overflow: 'auto',
+                                                    borderRadius: 1.5
+                                                }}
+                                            >
+                                                {probeResult.data.request?.messages?.[0]?.content || 'No request content'}
+                                            </Paper>
                                         </Box>
-                                    )}
-                                </>
-                            ) : (
-                                <Typography variant="body2" color="error.main">
+
+                                        {/* Response */}
+                                        <Box sx={{ p: 2, bgcolor: probeResult.success ? 'success.50' : 'error.50' }}>
+                                            <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, color: probeResult.success ? 'success.dark' : 'error.dark' }}>
+                                                Response
+                                            </Typography>
+                                            <Paper
+                                                variant="outlined"
+                                                sx={{
+                                                    p: 2,
+                                                    fontFamily: 'monospace',
+                                                    fontSize: '0.8rem',
+                                                    bgcolor: 'background.paper',
+                                                    maxHeight: 200,
+                                                    overflow: 'auto',
+                                                    borderRadius: 1.5,
+                                                    borderColor: probeResult.success ? 'success.light' : 'error.light'
+                                                }}
+                                            >
+                                                {probeResult.data.response?.content || probeResult.data.response?.error || 'No response content'}
+                                            </Paper>
+                                        </Box>
+
+                                        {/* Additional Info */}
+                                        <Stack direction="row" spacing={3} sx={{ p: 2, borderTop: `1px solid ${theme.palette.divider}` }}>
+                                            <Box>
+                                                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
+                                                    Finish Reason
+                                                </Typography>
+                                                <Stack direction="row" spacing={2} sx={{ mt: 0.5 }}>
+                                                    <Typography variant="body2" sx={{
+                                                        fontSize: '0.8rem', fontFamily: 'monospace'
+                                                    }}>
+                                                        {probeResult.data.response?.finish_reason || 'unknown'}
+                                                    </Typography>
+                                                </Stack>
+                                            </Box>
+                                            <Box>
+                                                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
+                                                    Token Usage
+                                                </Typography>
+                                                <Stack direction="row" spacing={2} sx={{ mt: 0.5 }}>
+                                                    <Typography variant="body2" sx={{ fontSize: '0.8rem', fontFamily: 'monospace' }}>
+                                                        Prompt: {probeResult.data.response?.usage?.prompt_tokens || 0}
+                                                    </Typography>
+                                                    <Typography variant="body2" sx={{ fontSize: '0.8rem', fontFamily: 'monospace' }}>
+                                                        Completion: {probeResult.data.response?.usage?.completion_tokens || 0}
+                                                    </Typography>
+                                                    <Typography variant="body2" sx={{ fontSize: '0.8rem', fontFamily: 'monospace' }}>
+                                                        Total: {probeResult.data.response?.usage?.total_tokens || 0}
+                                                    </Typography>
+                                                </Stack>
+                                            </Box>
+                                        </Stack>
+                                    </Box>
+                                </AccordionDetails>
+                            </Accordion>
+                        )}
+
+                        {/* Error Details */}
+                        {!probeResult.success && probeResult.error && (
+                            <Alert
+                                severity="error"
+                                variant="outlined"
+                                sx={{
+                                    mt: 2,
+                                    borderRadius: 2,
+                                    '& .MuiAlert-message': { width: '100%' }
+                                }}
+                            >
+                                <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
+                                    Error Details
+                                </Typography>
+                                <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
                                     {typeof probeResult.error === 'string'
                                         ? probeResult.error
-                                        : probeResult.error?.message || 'Unknown error occurred'}
+                                        : probeResult.error?.message || probeResult.data?.test_result?.message || 'Unknown error occurred'}
                                 </Typography>
-                            )}
-                        </Alert>
-                    )}
-                </Stack>
+                            </Alert>
+                        )}
+                    </Box>
+                ) : (
+                    /* Initial State or Loading State */
+                    <Box sx={{ textAlign: 'center', py: 8 }}>
+
+                        {isProbing && (
+                            <Box sx={{ mt: 3 }}>
+                                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                                    Running configuration test...
+                                </Typography>
+                                <LinearProgress sx={{ height: 6, borderRadius: 3 }} />
+                            </Box>
+                        )}
+                    </Box>
+                )}
             </Box>
         </UnifiedCard>
     );
