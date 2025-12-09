@@ -63,11 +63,10 @@ func createTestServer(t *testing.T, appConfig *config.AppConfig) *TestServer {
 	httpServer := server.NewServer(appConfig.GetGlobalConfig())
 
 	return &TestServer{
-		appConfig:       appConfig,
-		providerManager: httpServer.GetProviderManager(),
-		config:          appConfig,
-		server:          httpServer,
-		ginEngine:       httpServer.GetRouter(), // Use the server's router
+		appConfig: appConfig,
+		config:    appConfig,
+		server:    httpServer,
+		ginEngine: httpServer.GetRouter(), // Use the server's router
 	}
 }
 

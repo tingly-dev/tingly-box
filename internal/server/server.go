@@ -19,15 +19,14 @@ import (
 
 // Server represents the HTTP server
 type Server struct {
-	config          *config.Config
-	providerManager *config.ProviderManager
-	jwtManager      *auth.JWTManager
-	router          *gin.Engine
-	httpServer      *http.Server
-	watcher         *config.ConfigWatcher
-	webUI           *WebUI
-	useWebUI        bool
-	memoryLogger    *memory.MemoryLogger
+	config       *config.Config
+	jwtManager   *auth.JWTManager
+	router       *gin.Engine
+	httpServer   *http.Server
+	watcher      *config.ConfigWatcher
+	webUI        *WebUI
+	useWebUI     bool
+	memoryLogger *memory.MemoryLogger
 }
 
 // NewServer creates a new HTTP server instance
@@ -75,13 +74,6 @@ func NewServerWithOptions(cfg *config.Config, enableUI bool) *Server {
 		log.Printf("Using existing model token from global config")
 	}
 
-	// Initialize model manager
-	providerManager, err := config.NewProviderManager(config.GetModelsDir())
-	if err != nil {
-		log.Printf("Warning: Failed to initialize model manager: %v", err)
-		providerManager = nil
-	}
-
 	// Initialize memory logger
 	memoryLogger, err := memory.NewMemoryLogger()
 	if err != nil {
@@ -90,12 +82,11 @@ func NewServerWithOptions(cfg *config.Config, enableUI bool) *Server {
 	}
 
 	server := &Server{
-		config:          cfg,
-		jwtManager:      jwtManager,
-		router:          gin.New(),
-		providerManager: providerManager,
-		memoryLogger:    memoryLogger,
-		useWebUI:        enableUI,
+		config:       cfg,
+		jwtManager:   jwtManager,
+		router:       gin.New(),
+		memoryLogger: memoryLogger,
+		useWebUI:     enableUI,
 	}
 
 	// Setup middleware
@@ -256,16 +247,6 @@ func (s *Server) Start(port int) error {
 // GetRouter returns the Gin router for testing purposes
 func (s *Server) GetRouter() *gin.Engine {
 	return s.router
-}
-
-// GetProviderManager returns the provider manager for testing purposes
-func (s *Server) GetProviderManager() *config.ProviderManager {
-	return s.providerManager
-}
-
-// SetProviderManager sets the provider manager for testing purposes
-func (s *Server) SetProviderManager(providerManager *config.ProviderManager) {
-	s.providerManager = providerManager
 }
 
 // Stop gracefully stops the HTTP server
