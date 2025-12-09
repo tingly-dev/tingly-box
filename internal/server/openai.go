@@ -3,8 +3,8 @@ package server
 import (
 	"encoding/json"
 	"net/http"
-	"tingly-box/internal/config"
 	"time"
+	"tingly-box/internal/config"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -190,7 +190,7 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *config.Prov
 
 // ListModels handles the /v1/models endpoint (OpenAI compatible)
 func (s *Server) ListModels(c *gin.Context) {
-	if s.modelManager == nil {
+	if s.providerManager == nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Model manager not available",
@@ -200,7 +200,7 @@ func (s *Server) ListModels(c *gin.Context) {
 		return
 	}
 
-	models := s.modelManager.GetAllModels()
+	models := s.providerManager.GetAllModels()
 
 	// Convert to OpenAI-compatible format
 	var openaiModels []map[string]interface{}

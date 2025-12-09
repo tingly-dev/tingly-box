@@ -19,15 +19,15 @@ import (
 
 // Server represents the HTTP server
 type Server struct {
-	config       *config.AppConfig
-	jwtManager   *auth.JWTManager
-	router       *gin.Engine
-	httpServer   *http.Server
-	watcher      *config.ConfigWatcher
-	modelManager *config.ModelManager
-	webUI        *WebUI
-	useWebUI     bool
-	memoryLogger *memory.MemoryLogger
+	config          *config.AppConfig
+	jwtManager      *auth.JWTManager
+	router          *gin.Engine
+	httpServer      *http.Server
+	watcher         *config.ConfigWatcher
+	providerManager *config.ProviderManager
+	webUI           *WebUI
+	useWebUI        bool
+	memoryLogger    *memory.MemoryLogger
 }
 
 // NewServer creates a new HTTP server instance
@@ -77,10 +77,10 @@ func NewServerWithOptions(appConfig *config.AppConfig, enableUI bool) *Server {
 	}
 
 	// Initialize model manager
-	modelManager, err := config.NewModelManager(config.GetModelsDir())
+	providerManager, err := config.NewProviderManager(config.GetModelsDir())
 	if err != nil {
 		log.Printf("Warning: Failed to initialize model manager: %v", err)
-		modelManager = nil
+		providerManager = nil
 	}
 
 	// Initialize memory logger
@@ -91,12 +91,12 @@ func NewServerWithOptions(appConfig *config.AppConfig, enableUI bool) *Server {
 	}
 
 	server := &Server{
-		config:       appConfig,
-		jwtManager:   auth.NewJWTManager(appConfig.GetJWTSecret()),
-		router:       gin.New(),
-		modelManager: modelManager,
-		memoryLogger: memoryLogger,
-		useWebUI:     enableUI,
+		config:          appConfig,
+		jwtManager:      auth.NewJWTManager(appConfig.GetJWTSecret()),
+		router:          gin.New(),
+		providerManager: providerManager,
+		memoryLogger:    memoryLogger,
+		useWebUI:        enableUI,
 	}
 
 	// Setup middleware
@@ -267,14 +267,14 @@ func (s *Server) GetRouter() *gin.Engine {
 	return s.router
 }
 
-// GetModelManager returns the model manager for testing purposes
-func (s *Server) GetModelManager() *config.ModelManager {
-	return s.modelManager
+// GetProviderManager returns the provider manager for testing purposes
+func (s *Server) GetProviderManager() *config.ProviderManager {
+	return s.providerManager
 }
 
-// SetModelManager sets the model manager for testing purposes
-func (s *Server) SetModelManager(modelManager *config.ModelManager) {
-	s.modelManager = modelManager
+// SetProviderManager sets the provider manager for testing purposes
+func (s *Server) SetProviderManager(providerManager *config.ProviderManager) {
+	s.providerManager = providerManager
 }
 
 // Stop gracefully stops the HTTP server

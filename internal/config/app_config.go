@@ -51,7 +51,7 @@ type AppConfig struct {
 	gcm                  cipher.AEAD
 	mu                   sync.RWMutex
 	globalConfig         *GlobalConfig
-	providerModelManager *ProviderModelManager
+	providerModelManager *ModelListManager
 }
 
 // NewAppConfig creates a new application configuration
@@ -434,7 +434,7 @@ func (ac *AppConfig) GetGlobalConfig() *GlobalConfig {
 }
 
 // GetProviderModelManager returns the provider model manager
-func (ac *AppConfig) GetProviderModelManager() *ProviderModelManager {
+func (ac *AppConfig) GetProviderModelManager() *ModelListManager {
 	return ac.providerModelManager
 }
 

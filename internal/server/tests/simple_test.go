@@ -17,7 +17,7 @@ func TestBasicFunctionality(t *testing.T) {
 
 		assert.NotNil(t, ts.server)
 		assert.NotNil(t, ts.ginEngine)
-		assert.NotNil(t, ts.modelManager)
+		assert.NotNil(t, ts.providerManager)
 	})
 
 	t.Run("Models_Endpoint", func(t *testing.T) {

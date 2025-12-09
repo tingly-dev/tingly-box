@@ -11,30 +11,30 @@ import (
 	"github.com/goccy/go-yaml"
 )
 
-// ProviderModels represents the models available for a specific provider
-type ProviderModels struct {
+// ModelList represents the models available for a specific provider
+type ModelList struct {
 	Provider    string   `yaml:"provider"`
 	APIBase     string   `yaml:"api_base"`
 	Models      []string `yaml:"models"`
 	LastUpdated string   `yaml:"last_updated"`
 }
 
-// ProviderModelManager manages models for different providers
-type ProviderModelManager struct {
+// ModelListManager manages models for different providers
+type ModelListManager struct {
 	configDir string
-	models    map[string]*ProviderModels // key: provider name
+	models    map[string]*ModelList // key: provider name
 	mutex     sync.RWMutex
 }
 
 // NewProviderModelManager creates a new provider model manager
-func NewProviderModelManager(configDir string) (*ProviderModelManager, error) {
+func NewProviderModelManager(configDir string) (*ModelListManager, error) {
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create models directory: %w", err)
 	}
 
-	manager := &ProviderModelManager{
+	manager := &ModelListManager{
 		configDir: configDir,
-		models:    make(map[string]*ProviderModels),
+		models:    make(map[string]*ModelList),
 	}
 
 	// Load existing provider models
@@ -46,8 +46,8 @@ func NewProviderModelManager(configDir string) (*ProviderModelManager, error) {
 }
 
 // loadAllModels loads all provider model files from config directory
-func (pm *ProviderModelManager) loadAllModels() error {
-	files, err := ioutil.ReadDir(pm.configDir)
+func (mm *ModelListManager) loadAllModels() error {
+	files, err := ioutil.ReadDir(mm.configDir)
 	if err != nil {
 		return err
 	}
@@ -62,7 +62,7 @@ func (pm *ProviderModelManager) loadAllModels() error {
 		}
 
 		providerName := file.Name()[len("provider_") : len(file.Name())-len(".yaml")]
-		if err := pm.loadProviderModels(providerName); err != nil {
+		if err := mm.loadProviderModels(providerName); err != nil {
 			// Log error but continue loading other providers
 			fmt.Printf("Warning: failed to load models for provider %s: %v\n", providerName, err)
 		}
@@ -72,8 +72,8 @@ func (pm *ProviderModelManager) loadAllModels() error {
 }
 
 // loadProviderModels loads models for a specific provider
-func (pm *ProviderModelManager) loadProviderModels(providerName string) error {
-	filename := filepath.Join(pm.configDir, fmt.Sprintf("provider_%s.yaml", providerName))
+func (mm *ModelListManager) loadProviderModels(providerName string) error {
+	filename := filepath.Join(mm.configDir, fmt.Sprintf("provider_%s.yaml", providerName))
 
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
@@ -83,21 +83,21 @@ func (pm *ProviderModelManager) loadProviderModels(providerName string) error {
 		return err
 	}
 
-	var providerModels ProviderModels
+	var providerModels ModelList
 	if err := yaml.Unmarshal(data, &providerModels); err != nil {
 		return err
 	}
 
-	pm.mutex.Lock()
-	pm.models[providerName] = &providerModels
-	pm.mutex.Unlock()
+	mm.mutex.Lock()
+	mm.models[providerName] = &providerModels
+	mm.mutex.Unlock()
 
 	return nil
 }
 
 // SaveModels saves models for a provider
-func (pm *ProviderModelManager) SaveModels(providerName, apiBase string, models []string) error {
-	providerModels := &ProviderModels{
+func (mm *ModelListManager) SaveModels(providerName, apiBase string, models []string) error {
+	providerModels := &ModelList{
 		Provider:    providerName,
 		APIBase:     apiBase,
 		Models:      models,
@@ -111,25 +111,25 @@ func (pm *ProviderModelManager) SaveModels(providerName, apiBase string, models 
 	}
 
 	// Write to file
-	filename := filepath.Join(pm.configDir, fmt.Sprintf("provider_%s.yaml", providerName))
+	filename := filepath.Join(mm.configDir, fmt.Sprintf("provider_%s.yaml", providerName))
 	if err := ioutil.WriteFile(filename, data, 0644); err != nil {
 		return fmt.Errorf("failed to save provider models file: %w", err)
 	}
 
 	// Update in-memory cache
-	pm.mutex.Lock()
-	pm.models[providerName] = providerModels
-	pm.mutex.Unlock()
+	mm.mutex.Lock()
+	mm.models[providerName] = providerModels
+	mm.mutex.Unlock()
 
 	return nil
 }
 
 // GetModels returns models for a provider
-func (pm *ProviderModelManager) GetModels(providerName string) []string {
-	pm.mutex.RLock()
-	defer pm.mutex.RUnlock()
+func (mm *ModelListManager) GetModels(providerName string) []string {
+	mm.mutex.RLock()
+	defer mm.mutex.RUnlock()
 
-	if providerModels, exists := pm.models[providerName]; exists {
+	if providerModels, exists := mm.models[providerName]; exists {
 		return providerModels.Models
 	}
 
@@ -137,12 +137,12 @@ func (pm *ProviderModelManager) GetModels(providerName string) []string {
 }
 
 // GetAllProviders returns all provider names that have models
-func (pm *ProviderModelManager) GetAllProviders() []string {
-	pm.mutex.RLock()
-	defer pm.mutex.RUnlock()
+func (mm *ModelListManager) GetAllProviders() []string {
+	mm.mutex.RLock()
+	defer mm.mutex.RUnlock()
 
 	var providers []string
-	for name := range pm.models {
+	for name := range mm.models {
 		providers = append(providers, name)
 	}
 
@@ -150,17 +150,17 @@ func (pm *ProviderModelManager) GetAllProviders() []string {
 }
 
 // HasModels checks if a provider has models cached
-func (pm *ProviderModelManager) HasModels(providerName string) bool {
-	pm.mutex.RLock()
-	defer pm.mutex.RUnlock()
+func (mm *ModelListManager) HasModels(providerName string) bool {
+	mm.mutex.RLock()
+	defer mm.mutex.RUnlock()
 
-	_, exists := pm.models[providerName]
+	_, exists := mm.models[providerName]
 	return exists
 }
 
 // RemoveProvider removes a provider's models
-func (pm *ProviderModelManager) RemoveProvider(providerName string) error {
-	filename := filepath.Join(pm.configDir, fmt.Sprintf("provider_%s.yaml", providerName))
+func (mm *ModelListManager) RemoveProvider(providerName string) error {
+	filename := filepath.Join(mm.configDir, fmt.Sprintf("provider_%s.yaml", providerName))
 
 	// Remove file
 	if err := os.Remove(filename); err != nil && !os.IsNotExist(err) {
@@ -168,19 +168,19 @@ func (pm *ProviderModelManager) RemoveProvider(providerName string) error {
 	}
 
 	// Remove from memory
-	pm.mutex.Lock()
-	delete(pm.models, providerName)
-	pm.mutex.Unlock()
+	mm.mutex.Lock()
+	delete(mm.models, providerName)
+	mm.mutex.Unlock()
 
 	return nil
 }
 
 // GetProviderInfo returns basic info about a provider
-func (pm *ProviderModelManager) GetProviderInfo(providerName string) (apiBase string, lastUpdated string, exists bool) {
-	pm.mutex.RLock()
-	defer pm.mutex.RUnlock()
+func (mm *ModelListManager) GetProviderInfo(providerName string) (apiBase string, lastUpdated string, exists bool) {
+	mm.mutex.RLock()
+	defer mm.mutex.RUnlock()
 
-	if providerModels, exists := pm.models[providerName]; exists {
+	if providerModels, exists := mm.models[providerName]; exists {
 		return providerModels.APIBase, providerModels.LastUpdated, true
 	}
 

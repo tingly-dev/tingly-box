@@ -22,17 +22,17 @@ type ModelDefinition struct {
 	Category    string   `yaml:"category"`    // Category (e.g., "chat", "completion", "embedding")
 }
 
-// ModelManager manages model configuration and matching
-type ModelManager struct {
+// ProviderManager manages model configuration and matching
+type ProviderManager struct {
 	config     ModelConfig
 	modelMap   map[string]*ModelDefinition // name -> model definition
 	aliasMap   map[string]*ModelDefinition // alias -> model definition
 	configFile string
 }
 
-// NewModelManager creates a new model manager
-func NewModelManager(configDir string) (*ModelManager, error) {
-	mm := &ModelManager{
+// NewProviderManager creates a new model manager
+func NewProviderManager(configDir string) (*ProviderManager, error) {
+	mm := &ProviderManager{
 		configFile: filepath.Join(configDir, "config.json"),
 		modelMap:   make(map[string]*ModelDefinition),
 		aliasMap:   make(map[string]*ModelDefinition),
@@ -46,34 +46,34 @@ func NewModelManager(configDir string) (*ModelManager, error) {
 }
 
 // loadConfig loads the model configuration from YAML file
-func (mm *ModelManager) loadConfig() error {
+func (pm *ProviderManager) loadConfig() error {
 
 	// Build maps for fast lookup
-	mm.buildMaps()
+	pm.buildMaps()
 
 	return nil
 }
 
 // buildMaps creates lookup maps for model names and aliases
-func (mm *ModelManager) buildMaps() {
-	mm.modelMap = make(map[string]*ModelDefinition)
-	mm.aliasMap = make(map[string]*ModelDefinition)
+func (pm *ProviderManager) buildMaps() {
+	pm.modelMap = make(map[string]*ModelDefinition)
+	pm.aliasMap = make(map[string]*ModelDefinition)
 
-	for i := range mm.config.Models {
-		model := &mm.config.Models[i]
+	for i := range pm.config.Models {
+		model := &pm.config.Models[i]
 
 		// Add primary name
-		mm.modelMap[strings.ToLower(model.Name)] = model
+		pm.modelMap[strings.ToLower(model.Name)] = model
 
 		// Add aliases
 		for _, alias := range model.Aliases {
-			mm.aliasMap[strings.ToLower(alias)] = model
+			pm.aliasMap[strings.ToLower(alias)] = model
 		}
 	}
 }
 
 // FindModel finds a model definition by name or alias
-func (mm *ModelManager) FindModel(nameOrAlias string) (*ModelDefinition, error) {
+func (pm *ProviderManager) FindModel(nameOrAlias string) (*ModelDefinition, error) {
 	if nameOrAlias == "" {
 		return nil, fmt.Errorf("model name cannot be empty")
 	}
@@ -82,32 +82,32 @@ func (mm *ModelManager) FindModel(nameOrAlias string) (*ModelDefinition, error) 
 	lowerName := strings.ToLower(nameOrAlias)
 
 	// Check primary names
-	if model, exists := mm.modelMap[lowerName]; exists {
+	if model, exists := pm.modelMap[lowerName]; exists {
 		return model, nil
 	}
 
 	// Check aliases
-	if model, exists := mm.aliasMap[lowerName]; exists {
+	if model, exists := pm.aliasMap[lowerName]; exists {
 		return model, nil
 	}
 
 	// Try partial match for fuzzy matching
-	return mm.fuzzyFindModel(lowerName)
+	return pm.fuzzyFindModel(lowerName)
 }
 
 // fuzzyFindModel tries to find a model using partial matching
-func (mm *ModelManager) fuzzyFindModel(name string) (*ModelDefinition, error) {
+func (pm *ProviderManager) fuzzyFindModel(name string) (*ModelDefinition, error) {
 	var matches []ModelDefinition
 
 	// Search in primary names
-	for _, model := range mm.modelMap {
+	for _, model := range pm.modelMap {
 		if strings.Contains(strings.ToLower(model.Name), name) {
 			matches = append(matches, *model)
 		}
 	}
 
 	// Search in aliases
-	for alias, model := range mm.aliasMap {
+	for alias, model := range pm.aliasMap {
 		if strings.Contains(alias, name) {
 			matches = append(matches, *model)
 		}
@@ -129,16 +129,16 @@ func (mm *ModelManager) fuzzyFindModel(name string) (*ModelDefinition, error) {
 }
 
 // GetAllModels returns all available models
-func (mm *ModelManager) GetAllModels() []ModelDefinition {
-	return mm.config.Models
+func (pm *ProviderManager) GetAllModels() []ModelDefinition {
+	return pm.config.Models
 }
 
 // GetModelsByProvider returns models filtered by provider
-func (mm *ModelManager) GetModelsByProvider(provider string) []ModelDefinition {
+func (pm *ProviderManager) GetModelsByProvider(provider string) []ModelDefinition {
 	var models []ModelDefinition
 	provider = strings.ToLower(provider)
 
-	for _, model := range mm.config.Models {
+	for _, model := range pm.config.Models {
 		if strings.ToLower(model.Provider) == provider {
 			models = append(models, model)
 		}
@@ -148,11 +148,11 @@ func (mm *ModelManager) GetModelsByProvider(provider string) []ModelDefinition {
 }
 
 // GetModelsByCategory returns models filtered by category
-func (mm *ModelManager) GetModelsByCategory(category string) []ModelDefinition {
+func (pm *ProviderManager) GetModelsByCategory(category string) []ModelDefinition {
 	var models []ModelDefinition
 	category = strings.ToLower(category)
 
-	for _, model := range mm.config.Models {
+	for _, model := range pm.config.Models {
 		if strings.ToLower(model.Category) == category {
 			models = append(models, model)
 		}
@@ -162,6 +162,6 @@ func (mm *ModelManager) GetModelsByCategory(category string) []ModelDefinition {
 }
 
 // ReloadConfig reloads the configuration from file
-func (mm *ModelManager) ReloadConfig() error {
-	return mm.loadConfig()
+func (pm *ProviderManager) ReloadConfig() error {
+	return pm.loadConfig()
 }

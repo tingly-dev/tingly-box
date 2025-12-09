@@ -336,14 +336,14 @@ func (s *Server) DetermineProviderAndModel(modelName string) (*config.Provider, 
 		return nil, nil, fmt.Errorf("provider or model not configured for request model '%s'", modelName)
 	}
 
-	if s.modelManager == nil {
+	if s.providerManager == nil {
 		// Fallback to old logic if model manager is not available
 		provider, err := s.determineProviderFallback(modelName)
 		return provider, nil, err
 	}
 
 	// Find model definition
-	modelDef, err := s.modelManager.FindModel(modelName)
+	modelDef, err := s.providerManager.FindModel(modelName)
 	if err != nil {
 		return nil, nil, fmt.Errorf("model not found: %w", err)
 	}
