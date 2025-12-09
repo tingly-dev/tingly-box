@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,6 +20,7 @@ type MockProviderServer struct {
 	responses   map[string]MockResponse
 	callCount   map[string]int
 	lastRequest map[string]interface{}
+	mutex       sync.RWMutex
 }
 
 // CreateMockChatCompletionResponse creates a mock chat completion response that matches OpenAI format
@@ -80,12 +82,17 @@ func (m *MockProviderServer) SetResponse(endpoint string, response MockResponse)
 // handleChatCompletions handles mock chat completion requests
 func (m *MockProviderServer) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	endpoint := strings.TrimPrefix(r.URL.Path, "/")
+
+	m.mutex.Lock()
 	m.callCount[endpoint]++
+	m.mutex.Unlock()
 
 	// Parse request for debugging
 	var reqBody map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&reqBody); err == nil {
+		m.mutex.Lock()
 		m.lastRequest[endpoint] = reqBody
+		m.mutex.Unlock()
 	}
 
 	response, exists := m.responses[endpoint]
@@ -125,11 +132,16 @@ func (m *MockProviderServer) GetURL() string {
 
 // GetCallCount returns the number of calls to an endpoint
 func (m *MockProviderServer) GetCallCount(endpoint string) int {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
 	return m.callCount[strings.TrimPrefix(endpoint, "/")]
 }
 
 // GetLastRequest returns the last request body for an endpoint
 func (m *MockProviderServer) GetLastRequest(endpoint string) map[string]interface{} {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
 	request, exists := m.lastRequest[strings.TrimPrefix(endpoint, "/")]
 	if !exists {
 		return nil
@@ -147,6 +159,8 @@ func (m *MockProviderServer) Close() {
 
 // Reset resets call counts and request history
 func (m *MockProviderServer) Reset() {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 	m.callCount = make(map[string]int)
 	m.lastRequest = make(map[string]interface{})
 }
