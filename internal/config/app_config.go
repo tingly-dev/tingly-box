@@ -48,11 +48,6 @@ func NewAppConfigWithConfigDir(configDir string) (*AppConfig, error) {
 	configFile := filepath.Join(configDir, "config.json")
 	ac := &AppConfig{
 		configFile: configFile,
-		config: &Config{
-			Providers:  make(map[string]*Provider),
-			ServerPort: 8080,
-			JWTSecret:  generateSecret(),
-		},
 	}
 
 	// Initialize encryption
