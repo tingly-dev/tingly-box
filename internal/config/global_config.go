@@ -13,8 +13,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/goccy/go-yaml"
 )
 
 // Config represents the global configuration
@@ -57,7 +55,7 @@ func NewConfigWithConfigDir(configDir string) (*Config, error) {
 		return nil, fmt.Errorf("failed to create cfg directory: %w", err)
 	}
 
-	configFile := filepath.Join(configDir, "global_config.yaml")
+	configFile := filepath.Join(configDir, "config.json")
 	if configFile == "" {
 		return nil, fmt.Errorf("cfg file path is empty")
 	}
@@ -150,7 +148,7 @@ func (c *Config) load() error {
 		return err
 	}
 
-	if err := yaml.Unmarshal(data, c); err != nil {
+	if err := json.Unmarshal(data, c); err != nil {
 		return err
 	}
 
@@ -165,7 +163,7 @@ func (c *Config) save() error {
 	if c.ConfigFile == "" {
 		return fmt.Errorf("ConfigFile is empty")
 	}
-	data, err := yaml.Marshal(c)
+	data, err := json.Marshal(c)
 	if err != nil {
 		return err
 	}
