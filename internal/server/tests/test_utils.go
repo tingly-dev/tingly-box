@@ -3,10 +3,12 @@ package tests
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"tingly-box/internal/config"
@@ -222,4 +224,19 @@ func CaptureRequest(handler gin.HandlerFunc) (*http.Request, map[string]interfac
 // Cleanup removes test files
 func Cleanup() {
 	os.RemoveAll("tests/.tingly-box")
+}
+
+func FindGoModRoot() (string, error) {
+	dir, _ := os.Getwd()
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir, nil
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", fmt.Errorf("go.mod not found")
+		}
+		dir = parent
+	}
 }
