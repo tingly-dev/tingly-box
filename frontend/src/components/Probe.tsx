@@ -31,7 +31,7 @@ interface ProbeResponse {
             messages: Array<{ role: string; content: string }>;
         };
         response: {
-            content: string;
+            content: string | null;
             model: string;
             provider: string;
             usage: {
@@ -40,6 +40,7 @@ interface ProbeResponse {
                 total_tokens: number;
             };
             finish_reason: string;
+            error?: string;
         };
         rule_tested: {
             name: string;
@@ -52,7 +53,11 @@ interface ProbeResponse {
             message: string;
         };
     };
-    error?: string;
+    error?: {
+        code: string;
+        message: string;
+        details?: any;
+    } | string;
 }
 
 const Probe = () => {
@@ -67,17 +72,7 @@ const Probe = () => {
         try {
             const result = await api.probeRule();
 
-            if (result.success) {
-                setProbeResult({
-                    success: true,
-                    data: result.data
-                });
-            } else {
-                setProbeResult({
-                    success: false,
-                    error: result.error || 'Unknown error occurred'
-                });
-            }
+            setProbeResult(result);
         } catch (error) {
             console.error('Probe error:', error);
             setProbeResult({
@@ -154,7 +149,7 @@ const Probe = () => {
                                 </Typography>
                             </Stack>
 
-                            {probeResult.data && probeResult.data.rule_tested && (
+                            {probeResult.data?.rule_tested && (
                                 <Box sx={{ mb: 2 }}>
                                     <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
                                         Configuration Tested:
@@ -177,7 +172,7 @@ const Probe = () => {
                                 </Box>
                             )}
 
-                            {probeResult.success && probeResult.data ? (
+                            {probeResult.data ? (
                                 <>
                                     <Divider sx={{ my: 2 }} />
 
@@ -204,20 +199,20 @@ const Probe = () => {
                                     {/* Response Details */}
                                     <Box sx={{ mb: 2 }}>
                                         <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
-                                            📥 Response Received:
+                                            📥 Response {probeResult.success ? 'Received' : 'Status'}:
                                         </Typography>
                                         <Box sx={{
                                             p: 2,
-                                            bgcolor: 'grey.50',
+                                            bgcolor: probeResult.success ? 'grey.50' : 'error.50',
                                             borderRadius: 1.5,
                                             fontFamily: 'monospace',
                                             fontSize: '0.8rem',
                                             color: 'text.primary',
-                                            border: `1px solid ${theme.palette.divider}`,
+                                            border: `1px solid ${probeResult.success ? theme.palette.divider : theme.palette.error.main}30`,
                                             maxHeight: 120,
                                             overflow: 'auto'
                                         }}>
-                                            {probeResult.data.response.content}
+                                            {probeResult.data.response.content || probeResult.data.response.error || 'No response content'}
                                         </Box>
                                     </Box>
 
@@ -231,13 +226,31 @@ const Probe = () => {
                                             ({probeResult.data.response.usage.prompt_tokens}→{probeResult.data.response.usage.completion_tokens})
                                         </Typography>
                                         <Typography variant="caption" color="text.secondary">
-                                            ✅ {probeResult.data.response.finish_reason}
+                                            {probeResult.success ? '✅' : '❌'} {probeResult.data.response.finish_reason}
                                         </Typography>
                                     </Stack>
+
+                                    {/* Error Message for Failed Tests */}
+                                    {!probeResult.success && (
+                                        <Box sx={{ mt: 2 }}>
+                                            <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
+                                                ❌ Error Details:
+                                            </Typography>
+                                            <Alert severity="error" variant="outlined" sx={{ borderRadius: 1.5 }}>
+                                                <Typography variant="body2">
+                                                    {typeof probeResult.error === 'string'
+                                                        ? probeResult.error
+                                                        : probeResult.error?.message || probeResult.data.test_result.message}
+                                                </Typography>
+                                            </Alert>
+                                        </Box>
+                                    )}
                                 </>
                             ) : (
                                 <Typography variant="body2" color="error.main">
-                                    {probeResult.error}
+                                    {typeof probeResult.error === 'string'
+                                        ? probeResult.error
+                                        : probeResult.error?.message || 'Unknown error occurred'}
                                 </Typography>
                             )}
                         </Alert>
