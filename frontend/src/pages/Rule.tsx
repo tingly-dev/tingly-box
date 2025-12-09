@@ -54,14 +54,14 @@ const Rule = () => {
     const loadAllData = async () => {
         setLoading(true);
         await Promise.all([
-            loadDefaults(),
+            loadRules(),
             loadProviderSelectionPanel(),
         ]);
         setLoading(false);
     };
 
-    const loadDefaults = async () => {
-        const result = await api.getDefaults();
+    const loadRules = async () => {
+        const result = await api.getRules();
         if (result.success) {
             setDefaults(result.data);
         }
@@ -499,7 +499,7 @@ const Rule = () => {
                                                     ) : (
                                                         <Box sx={{ flex: 1, position: 'relative' }}>
                                                             <FormControl size="small" disabled={!provider.provider}
-                                                                         fullWidth>
+                                                                fullWidth>
                                                                 <InputLabel>Model</InputLabel>
                                                                 <Select
                                                                     value={provider.model}
@@ -522,7 +522,7 @@ const Rule = () => {
                                                                     {/* Show current model if it exists and is not in the API list */}
                                                                     {provider.model && !providerModels[provider.provider]?.models.includes(provider.model) && (
                                                                         <MenuItem key="current-manual"
-                                                                                  value={provider.model}>
+                                                                            value={provider.model}>
                                                                             {provider.model} (custom)
                                                                         </MenuItem>
                                                                     )}
