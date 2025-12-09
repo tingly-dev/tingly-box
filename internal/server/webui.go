@@ -26,7 +26,7 @@ var (
 type WebUI struct {
 	enabled bool
 	router  *gin.Engine
-	config  *config.AppConfig
+	config  *config.Config
 	logger  *memory.MemoryLogger
 	assets  *EmbeddedAssets
 }
@@ -46,7 +46,7 @@ func GetGlobalServer() *Server {
 }
 
 // NewWebUI creates a new web UI manager
-func NewWebUI(enabled bool, appConfig *config.AppConfig, logger *memory.MemoryLogger, router *gin.Engine) *WebUI {
+func NewWebUI(enabled bool, cfg *config.Config, logger *memory.MemoryLogger, router *gin.Engine) *WebUI {
 	if !enabled {
 		return &WebUI{enabled: false}
 	}
@@ -61,7 +61,7 @@ func NewWebUI(enabled bool, appConfig *config.AppConfig, logger *memory.MemoryLo
 	gin.SetMode(gin.ReleaseMode)
 	wui := &WebUI{
 		enabled: true,
-		config:  appConfig,
+		config:  cfg,
 		logger:  logger,
 		router:  router,
 		assets:  assets,
@@ -277,8 +277,8 @@ func (wui *WebUI) GetHistory(c *gin.Context) {
 }
 
 func (wui *WebUI) GetDefaults(c *gin.Context) {
-	globalConfig := wui.config.GetGlobalConfig()
-	if globalConfig == nil {
+	cfg := wui.config
+	if cfg == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Global config not available",
@@ -286,8 +286,8 @@ func (wui *WebUI) GetDefaults(c *gin.Context) {
 		return
 	}
 
-	requestConfigs := globalConfig.GetRequestConfigs()
-	defaultRequestID := globalConfig.GetDefaultRequestID()
+	requestConfigs := cfg.GetRequestConfigs()
+	defaultRequestID := cfg.GetDefaultRequestID()
 
 	// Convert Rules to response format
 	responseConfigs := make([]map[string]interface{}, len(requestConfigs))
@@ -311,8 +311,8 @@ func (wui *WebUI) GetDefaults(c *gin.Context) {
 
 // GetRules returns all rules
 func (wui *WebUI) GetRules(c *gin.Context) {
-	globalConfig := wui.config.GetGlobalConfig()
-	if globalConfig == nil {
+	cfg := wui.config
+	if cfg == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Global config not available",
@@ -320,8 +320,8 @@ func (wui *WebUI) GetRules(c *gin.Context) {
 		return
 	}
 
-	rules := globalConfig.GetRequestConfigs()
-	defaultRequestID := globalConfig.GetDefaultRequestID()
+	rules := cfg.GetRequestConfigs()
+	defaultRequestID := cfg.GetDefaultRequestID()
 
 	// Convert Rules to response format
 	responseRules := make([]map[string]interface{}, len(rules))
@@ -353,8 +353,8 @@ func (wui *WebUI) GetRule(c *gin.Context) {
 		return
 	}
 
-	globalConfig := wui.config.GetGlobalConfig()
-	if globalConfig == nil {
+	cfg := wui.config
+	if cfg == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Global config not available",
@@ -362,7 +362,7 @@ func (wui *WebUI) GetRule(c *gin.Context) {
 		return
 	}
 
-	rule := globalConfig.GetRequestConfigByRequestModel(ruleName)
+	rule := cfg.GetRequestConfigByRequestModel(ruleName)
 	if rule == nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,
@@ -414,8 +414,8 @@ func (wui *WebUI) SetRule(c *gin.Context) {
 		req.Active = true
 	}
 
-	globalConfig := wui.config.GetGlobalConfig()
-	if globalConfig == nil {
+	cfg := wui.config
+	if cfg == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Global config not available",
@@ -432,7 +432,7 @@ func (wui *WebUI) SetRule(c *gin.Context) {
 		Active:        req.Active,
 	}
 
-	if err := globalConfig.SetDefaultRequestConfig(rule); err != nil {
+	if err := cfg.SetDefaultRequestConfig(rule); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Failed to save rule: " + err.Error(),
@@ -537,7 +537,7 @@ func (wui *WebUI) DeleteProvider(c *gin.Context) {
 		return
 	}
 
-	err := wui.config.RemoveProvider(providerName)
+	err := wui.config.DeleteProvider(providerName)
 	if err != nil {
 		if wui.logger != nil {
 			wui.logger.LogAction(memory.ActionDeleteProvider, map[string]interface{}{
@@ -867,8 +867,8 @@ func (wui *WebUI) SetDefaults(c *gin.Context) {
 		return
 	}
 
-	globalConfig := wui.config.GetGlobalConfig()
-	if globalConfig == nil {
+	cfg := wui.config
+	if cfg == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Global config not available",
@@ -878,7 +878,7 @@ func (wui *WebUI) SetDefaults(c *gin.Context) {
 
 	// Update Rules if provided
 	if req.RequestConfigs != nil {
-		if err := globalConfig.SetRequestConfigs(req.RequestConfigs); err != nil {
+		if err := cfg.SetRequestConfigs(req.RequestConfigs); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
 				"error":   fmt.Sprintf("Failed to update request configs: %v", err),
@@ -933,8 +933,8 @@ func (wui *WebUI) FetchProviderModels(c *gin.Context) {
 	}
 
 	// Get the updated models
-	providerModelManager := wui.config.GetProviderModelManager()
-	models := providerModelManager.GetModels(providerName)
+	modelManager := wui.config.GetModelManager()
+	models := modelManager.GetModels(providerName)
 
 	if wui.logger != nil {
 		wui.logger.LogAction(memory.ActionFetchModels, map[string]interface{}{
@@ -951,7 +951,7 @@ func (wui *WebUI) FetchProviderModels(c *gin.Context) {
 }
 
 func (wui *WebUI) GetProviderModels(c *gin.Context) {
-	providerModelManager := wui.config.GetProviderModelManager()
+	providerModelManager := wui.config.GetModelManager()
 	if providerModelManager == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -984,8 +984,8 @@ func (wui *WebUI) GetProviderModels(c *gin.Context) {
 func (wui *WebUI) authMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get the auth token from global config
-		globalConfig := wui.config.GetGlobalConfig()
-		if globalConfig == nil {
+		cfg := wui.config
+		if cfg == nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
 				"error":   "Global config not available",
@@ -994,7 +994,7 @@ func (wui *WebUI) authMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		expectedToken := globalConfig.GetUserToken()
+		expectedToken := cfg.GetUserToken()
 		if expectedToken == "" {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,

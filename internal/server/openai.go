@@ -3,7 +3,6 @@ package server
 import (
 	"encoding/json"
 	"net/http"
-	"time"
 	"tingly-box/internal/config"
 
 	"github.com/gin-gonic/gin"
@@ -92,7 +91,7 @@ func (s *Server) ChatCompletions(c *gin.Context) {
 	}
 
 	// Determine provider and model based on request
-	provider, modelDef, err := s.DetermineProviderAndModel(req.Model)
+	provider, rule, err := s.DetermineProviderAndModel(req.Model)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -103,19 +102,11 @@ func (s *Server) ChatCompletions(c *gin.Context) {
 		return
 	}
 
-	// Update request with actual model name if we have model definition
-	if modelDef != nil {
-		req.Model = modelDef.Model
-	}
-
 	// Handle response model modification at JSON level
-	globalConfig := s.config.GetGlobalConfig()
 	responseModel := ""
-	if globalConfig != nil {
-		responseModel = globalConfig.GetResponseModel()
-	}
-	if responseModel == "" {
-		responseModel = req.Model
+	if rule != nil {
+		req.Model = rule.DefaultModel
+		responseModel = rule.ResponseModel
 	}
 
 	// Handle streaming or non-streaming request
@@ -190,63 +181,11 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *config.Prov
 
 // ListModels handles the /v1/models endpoint (OpenAI compatible)
 func (s *Server) ListModels(c *gin.Context) {
-	if s.providerManager == nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Model manager not available",
-				Type:    "internal_error",
-			},
-		})
-		return
-	}
-
-	models := s.providerManager.GetAllModels()
-
-	// Convert to OpenAI-compatible format
-	var openaiModels []map[string]interface{}
-	for _, model := range models {
-		openaiModel := map[string]interface{}{
-			"id":       model.Name,
-			"object":   "model",
-			"created":  time.Now().Unix(), // In a real implementation, use actual creation date
-			"owned_by": "tingly-box",
-		}
-
-		// Add permission information
-		var permissions []string
-		if model.Category == "chat" {
-			permissions = append(permissions, "chat.completions")
-		}
-
-		openaiModel["permission"] = permissions
-
-		// Add aliases as metadata
-		if len(model.Aliases) > 0 {
-			openaiModel["metadata"] = map[string]interface{}{
-				"provider":     model.Provider,
-				"api_base":     model.APIBase,
-				"actual_model": model.Model,
-				"aliases":      model.Aliases,
-				"description":  model.Description,
-				"category":     model.Category,
-			}
-		} else {
-			openaiModel["metadata"] = map[string]interface{}{
-				"provider":     model.Provider,
-				"api_base":     model.APIBase,
-				"actual_model": model.Model,
-				"description":  model.Description,
-				"category":     model.Category,
-			}
-		}
-
-		openaiModels = append(openaiModels, openaiModel)
-	}
-
-	response := map[string]interface{}{
-		"object": "list",
-		"data":   openaiModels,
-	}
-
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusInternalServerError, ErrorResponse{
+		Error: ErrorDetail{
+			Message: "Model manager not available",
+			Type:    "internal_error",
+		},
+	})
+	return
 }

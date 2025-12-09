@@ -19,38 +19,37 @@ import (
 
 // Server represents the HTTP server
 type Server struct {
-	config          *config.AppConfig
+	config          *config.Config
+	providerManager *config.ProviderManager
 	jwtManager      *auth.JWTManager
 	router          *gin.Engine
 	httpServer      *http.Server
 	watcher         *config.ConfigWatcher
-	providerManager *config.ProviderManager
 	webUI           *WebUI
 	useWebUI        bool
 	memoryLogger    *memory.MemoryLogger
 }
 
 // NewServer creates a new HTTP server instance
-func NewServer(appConfig *config.AppConfig) *Server {
-	return NewServerWithOptions(appConfig, true)
+func NewServer(cfg *config.Config) *Server {
+	return NewServerWithOptions(cfg, true)
 }
 
 // NewServerWithOptions creates a new HTTP server with UI option
-func NewServerWithOptions(appConfig *config.AppConfig, enableUI bool) *Server {
+func NewServerWithOptions(cfg *config.Config, enableUI bool) *Server {
 	// Set Gin mode
 	gin.SetMode(gin.ReleaseMode)
 
 	// Check and generate tokens if needed
-	globalConfig := appConfig.GetGlobalConfig()
-	jwtManager := auth.NewJWTManager(appConfig.GetJWTSecret())
+	jwtManager := auth.NewJWTManager(cfg.GetJWTSecret())
 
-	if !globalConfig.HasUserToken() {
+	if !cfg.HasUserToken() {
 		log.Println("No user token found in global config, generating new user token...")
 		apiKey, err := jwtManager.GenerateAPIKey("user")
 		if err != nil {
 			log.Printf("Failed to generate user API key: %v", err)
 		} else {
-			if err := globalConfig.SetUserToken(apiKey); err != nil {
+			if err := cfg.SetUserToken(apiKey); err != nil {
 				log.Printf("Failed to save generated user token: %v", err)
 			} else {
 				log.Printf("Generated and saved new user API token: %s", apiKey)
@@ -60,13 +59,13 @@ func NewServerWithOptions(appConfig *config.AppConfig, enableUI bool) *Server {
 		log.Printf("Using existing user token from global config")
 	}
 
-	if !globalConfig.HasModelToken() {
+	if !cfg.HasModelToken() {
 		log.Println("No model token found in global config, generating new model token...")
 		apiKey, err := jwtManager.GenerateAPIKey("model")
 		if err != nil {
 			log.Printf("Failed to generate model API key: %v", err)
 		} else {
-			if err := globalConfig.SetModelToken(apiKey); err != nil {
+			if err := cfg.SetModelToken(apiKey); err != nil {
 				log.Printf("Failed to save generated model token: %v", err)
 			} else {
 				log.Printf("Generated and saved new model API token: %s", apiKey)
@@ -91,8 +90,8 @@ func NewServerWithOptions(appConfig *config.AppConfig, enableUI bool) *Server {
 	}
 
 	server := &Server{
-		config:          appConfig,
-		jwtManager:      auth.NewJWTManager(appConfig.GetJWTSecret()),
+		config:          cfg,
+		jwtManager:      jwtManager,
 		router:          gin.New(),
 		providerManager: providerManager,
 		memoryLogger:    memoryLogger,
@@ -251,10 +250,9 @@ func (s *Server) Start(port int) error {
 	fmt.Printf("Anthropic v1 Message API endpoint: http://localhost:%d/anthropic/v1/messages\n", port)
 
 	// Get user token for Web UI URL
-	globalConfig := s.config.GetGlobalConfig()
 	webUIURL := fmt.Sprintf("http://localhost:%d/dashboard", port)
-	if globalConfig != nil && globalConfig.HasUserToken() {
-		userToken := globalConfig.GetUserToken()
+	if s.config.HasUserToken() {
+		userToken := s.config.GetUserToken()
 		webUIURL = fmt.Sprintf("http://localhost:%d/dashboard?user_auth_token=%s", port, userToken)
 	}
 	fmt.Printf("Web UI: %s\n", webUIURL)

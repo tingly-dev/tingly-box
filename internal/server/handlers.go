@@ -60,7 +60,7 @@ func (s *Server) GenerateToken(c *gin.Context) {
 		return
 	}
 
-	err = s.config.GetGlobalConfig().SetModelToken(token)
+	err = s.config.SetModelToken(token)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{
@@ -79,7 +79,7 @@ func (s *Server) GenerateToken(c *gin.Context) {
 
 // GetToken handles token retrieval requests - generates a token if it doesn't exist
 func (s *Server) GetToken(c *gin.Context) {
-	globalConfig := s.config.GetGlobalConfig()
+	globalConfig := s.config
 
 	// Check if token already exists
 	if globalConfig != nil && globalConfig.HasModelToken() {
@@ -199,7 +199,7 @@ func (s *Server) UserAuth() gin.HandlerFunc {
 		token := tokenParts[1]
 
 		// Check against global config user token first
-		globalConfig := s.config.GetGlobalConfig()
+		globalConfig := s.config
 		if globalConfig != nil && globalConfig.HasUserToken() {
 			configToken := globalConfig.GetUserToken()
 
@@ -267,7 +267,7 @@ func (s *Server) ModelAuth() gin.HandlerFunc {
 		token := tokenParts[1]
 
 		// Check against global config model token first
-		globalConfig := s.config.GetGlobalConfig()
+		globalConfig := s.config
 		if globalConfig != nil && globalConfig.HasModelToken() {
 			configToken := globalConfig.GetModelToken()
 
@@ -311,68 +311,27 @@ func (s *Server) AuthenticateMiddleware() gin.HandlerFunc {
 }
 
 // DetermineProviderAndModel resolves the model name and finds the appropriate provider
-func (s *Server) DetermineProviderAndModel(modelName string) (*config.Provider, *config.ModelDefinition, error) {
+func (s *Server) DetermineProviderAndModel(modelName string) (*config.Provider, *config.Rule, error) {
 	// Check if this is the request model name first
-	globalConfig := s.config.GetGlobalConfig()
-	if globalConfig != nil && globalConfig.IsRequestModel(modelName) {
+	c := s.config
+	if c != nil && c.IsRequestModel(modelName) {
 		// Get the Rule for this specific request model
-		reqConfig := globalConfig.GetRequestConfigByRequestModel(modelName)
-		if reqConfig != nil && reqConfig.Provider != "" && reqConfig.DefaultModel != "" {
+		rule := c.GetRequestConfigByRequestModel(modelName)
+		if rule != nil && rule.Provider != "" && rule.DefaultModel != "" {
 			// Find provider configuration
 			providers := s.config.ListProviders()
 			for _, p := range providers {
-				if p.Enabled && p.Name == reqConfig.Provider {
+				if p.Enabled && p.Name == rule.Provider {
 					// Create a mock model definition for the default model
-					modelDef := &config.ModelDefinition{
-						Name:     reqConfig.DefaultModel,
-						Provider: reqConfig.Provider,
-						Model:    reqConfig.DefaultModel,
-					}
-					return p, modelDef, nil
+					return p, rule, nil
 				}
 			}
-			return nil, nil, fmt.Errorf("provider '%s' is not enabled", reqConfig.Provider)
+			return nil, nil, fmt.Errorf("provider '%s' is not enabled", rule.Provider)
 		}
 		return nil, nil, fmt.Errorf("provider or model not configured for request model '%s'", modelName)
 	}
 
-	if s.providerManager == nil {
-		// Fallback to old logic if model manager is not available
-		provider, err := s.determineProviderFallback(modelName)
-		return provider, nil, err
-	}
-
-	// Find model definition
-	modelDef, err := s.providerManager.FindModel(modelName)
-	if err != nil {
-		return nil, nil, fmt.Errorf("model not found: %w", err)
-	}
-
-	// Find provider configuration
-	providers := s.config.ListProviders()
-	var provider *config.Provider
-	for _, p := range providers {
-		if p.Enabled && strings.Contains(p.APIBase, modelDef.APIBase) {
-			provider = p
-			break
-		}
-	}
-
-	if provider == nil {
-		// Try to match by provider name
-		for _, p := range providers {
-			if p.Enabled && p.Name == modelDef.Provider {
-				provider = p
-				break
-			}
-		}
-	}
-
-	if provider == nil {
-		return nil, modelDef, fmt.Errorf("no enabled provider found for model '%s' (provider: %s)", modelName, modelDef.Provider)
-	}
-
-	return provider, modelDef, nil
+	return nil, nil, fmt.Errorf("provider or model not configured for request model '%s'", modelName)
 }
 
 // determineProviderFallback is the fallback logic for provider determination
