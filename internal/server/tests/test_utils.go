@@ -20,11 +20,10 @@ import (
 
 // TestServer represents a test server wrapper
 type TestServer struct {
-	appConfig       *config.AppConfig
-	providerManager *config.ProviderManager
-	config          *config.AppConfig
-	server          *server.Server
-	ginEngine       *gin.Engine
+	appConfig *config.AppConfig
+	config    *config.AppConfig
+	server    *server.Server
+	ginEngine *gin.Engine
 }
 
 // NewTestServer creates a new test server with custom config directory
