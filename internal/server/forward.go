@@ -22,7 +22,7 @@ func (s *Server) forwardOpenAIRequest(provider *config.Provider, req *RequestWra
 		option.WithAPIKey(provider.Token),
 		option.WithBaseURL(provider.APIBase),
 	)
-	logrus.Infof("provider: %s", provider)
+	logrus.Infof("provider: %s", provider.Name)
 
 	// Since RequestWrapper is a type alias to openai.ChatCompletionNewParams,
 	// we can directly use it as the request parameters
@@ -114,7 +114,7 @@ func (s *Server) forwardOpenAIStreamRequest(provider *config.Provider, req *Requ
 		option.WithAPIKey(provider.Token),
 		option.WithBaseURL(provider.APIBase),
 	)
-	logrus.Infof("provider: %s (streaming)", provider)
+	logrus.Infof("provider: %s (streaming)", provider.Name)
 
 	// Since RequestWrapper is a type alias to openai.ChatCompletionNewParams,
 	// we can directly use it as the request parameters
@@ -181,11 +181,11 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 
 		// Build delta map - include all fields, JSON marshaling will handle empty values
 		delta := map[string]interface{}{
-			"role":         choice.Delta.Role,
-			"content":      choice.Delta.Content,
-			"refusal":      choice.Delta.Refusal,
+			"role":          choice.Delta.Role,
+			"content":       choice.Delta.Content,
+			"refusal":       choice.Delta.Refusal,
 			"function_call": choice.Delta.FunctionCall,
-			"tool_calls":   choice.Delta.ToolCalls,
+			"tool_calls":    choice.Delta.ToolCalls,
 		}
 
 		// Prepare the chunk in OpenAI format

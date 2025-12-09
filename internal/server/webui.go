@@ -196,7 +196,7 @@ func (wui *WebUI) ProbeRule(c *gin.Context) {
 	var testProvider *config.Provider
 
 	for _, provider := range providers {
-		if provider.Enabled && provider.Name == rule.Provider {
+		if provider.Enabled && provider.Name == rule.GetDefaultProvider() {
 			testProvider = provider
 			break
 		}
@@ -337,8 +337,8 @@ func (wui *WebUI) GetDefaults(c *gin.Context) {
 		responseConfigs[i] = map[string]interface{}{
 			"request_model":  rc.RequestModel,
 			"response_model": rc.ResponseModel,
-			"provider":       rc.Provider,
-			"default_model":  rc.DefaultModel,
+			"provider":       rc.GetDefaultProvider(),
+			"default_model":  rc.GetDefaultModel(),
 		}
 	}
 
@@ -371,8 +371,8 @@ func (wui *WebUI) GetRules(c *gin.Context) {
 		responseRules[i] = map[string]interface{}{
 			"request_model":  rule.RequestModel,
 			"response_model": rule.ResponseModel,
-			"provider":       rule.Provider,
-			"default_model":  rule.DefaultModel,
+			"provider":       rule.GetDefaultProvider(),
+			"default_model":  rule.GetDefaultModel(),
 			"active":         rule.Active,
 			"is_default":     i == defaultRequestID,
 		}
@@ -418,8 +418,8 @@ func (wui *WebUI) GetRule(c *gin.Context) {
 		"data": map[string]interface{}{
 			"request_model":  rule.RequestModel,
 			"response_model": rule.ResponseModel,
-			"provider":       rule.Provider,
-			"default_model":  rule.DefaultModel,
+			"provider":       rule.GetDefaultProvider(),
+			"default_model":  rule.GetDefaultModel(),
 			"active":         rule.Active,
 		},
 	})
@@ -465,13 +465,20 @@ func (wui *WebUI) SetRule(c *gin.Context) {
 		return
 	}
 
-	// Create or update the rule
+	// Create or update the rule with a single service from the provider and model
 	rule := config.Rule{
 		RequestModel:  ruleName,
 		ResponseModel: req.ResponseModel,
-		Provider:      req.Provider,
-		DefaultModel:  req.DefaultModel,
-		Active:        req.Active,
+		Services: []config.Service{
+			{
+				Provider:   req.Provider,
+				Model:      req.DefaultModel,
+				Weight:     1,
+				Active:     true,
+				TimeWindow: 300,
+			},
+		},
+		Active: req.Active,
 	}
 
 	if err := cfg.SetDefaultRequestConfig(rule); err != nil {
@@ -495,8 +502,8 @@ func (wui *WebUI) SetRule(c *gin.Context) {
 		"data": map[string]interface{}{
 			"request_model":  rule.RequestModel,
 			"response_model": rule.ResponseModel,
-			"provider":       rule.Provider,
-			"default_model":  rule.DefaultModel,
+			"provider":       rule.GetDefaultProvider(),
+			"default_model":  rule.GetDefaultModel(),
 			"active":         rule.Active,
 		},
 	})
