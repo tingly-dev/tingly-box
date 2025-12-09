@@ -190,7 +190,7 @@ func (s *Server) setupRoutes() {
 	s.router.GET("/health", s.HealthCheck)
 
 	// Models endpoint
-	s.router.GET("/v1/models", s.ListModels)
+	//s.router.GET("/v1/models", s.ListModels)
 
 	// OpenAI v1 API group
 	openaiV1 := s.router.Group("/openai/v1")
@@ -198,7 +198,7 @@ func (s *Server) setupRoutes() {
 		// Chat completions endpoint (OpenAI compatible)
 		openaiV1.POST("/chat/completions", s.ModelAuth(), s.OpenAIChatCompletions)
 		// Models endpoint (OpenAI compatible)
-		openaiV1.GET("/models", s.ModelAuth(), s.ListModels)
+		//openaiV1.GET("/models", s.ModelAuth(), s.ListModels)
 	}
 
 	// Anthropic v1 API group
@@ -207,14 +207,7 @@ func (s *Server) setupRoutes() {
 		// Chat completions endpoint (Anthropic compatible)
 		anthropicV1.POST("/messages", s.ModelAuth(), s.AnthropicMessages)
 		// Models endpoint (Anthropic compatible)
-		anthropicV1.GET("/models", s.ModelAuth(), s.AnthropicModels)
-	}
-
-	// Legacy API v1 group for backward compatibility
-	v1 := s.router.Group("/v1")
-	{
-		// Chat completions endpoint (OpenAI compatible)
-		v1.POST("/chat/completions", s.ModelAuth(), s.ChatCompletions)
+		//anthropicV1.GET("/models", s.ModelAuth(), s.AnthropicModels)
 	}
 
 	// Integrate Web UI routes if enabled
