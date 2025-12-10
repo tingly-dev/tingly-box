@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
@@ -21,14 +23,14 @@ func useWindows(a *application.App) {
 	// 'BackgroundColour' is the background colour of the window.
 	// 'URL' is the URL that will be loaded into the webview.
 	WindowMain = a.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name:             WindowMainName,
-		Title:            AppName,
-		BackgroundColour: application.NewRGB(27, 38, 54),
-		URL:              "/",
+		Name:  WindowMainName,
+		Title: AppName,
 		Mac: application.MacWindow{
 			Backdrop: application.MacBackdropTranslucent,
 			TitleBar: application.MacTitleBarDefault,
 		},
+		BackgroundColour: application.NewRGB(27, 38, 54),
+		URL:              fmt.Sprintf("/?user_auth_token=%s", uiService.GetUserAuthToken()),
 	})
 
 	// Set window to maximized after creation

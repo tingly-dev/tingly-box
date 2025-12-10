@@ -87,6 +87,8 @@ func (s *ProxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // ServiceStartup is called when the service starts
 func (s *ProxyService) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
+	s.Start(ctx)
+
 	// Store the application instance for later use
 	s.app = application.Get()
 
@@ -111,4 +113,8 @@ func (s *ProxyService) ServiceStartup(ctx context.Context, options application.S
 func (s *ProxyService) ServiceShutdown(ctx context.Context) error {
 	// Clean up resources if needed
 	return nil
+}
+
+func (s *ProxyService) GetUserAuthToken() string {
+	return s.appConfig.GetGlobalConfig().GetUserToken()
 }
