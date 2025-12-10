@@ -13,7 +13,8 @@ vars:
   BUILD_DIR: build
   DIST_DIR: build/dist
   
-  APP_NAME: "model-box"
+  APP_NAME: "ModelBox"
+  BIN_NAME: "model-box"
   BIN_DIR: "bin"
   VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
 
