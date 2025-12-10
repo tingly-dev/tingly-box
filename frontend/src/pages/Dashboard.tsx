@@ -39,7 +39,7 @@ const Dashboard = () => {
     const [generatedToken, setGeneratedToken] = useState<string>('');
     const [modelToken, setModelToken] = useState<string>('');
     const [showTokenModal, setShowTokenModal] = useState(false);
-  
+
     // Banner state for provider/model selection
     const [bannerProvider, setBannerProvider] = useState<string>('');
     const [bannerModel, setBannerModel] = useState<string>('');
@@ -110,10 +110,18 @@ const Dashboard = () => {
 
     // Update selected option when rules are loaded
     useEffect(() => {
-        setSelectedOption({
-            provider: rule.provider,
-            model: rule.default_model
-        });
+        if (rule && rule.services && rule.services.length > 0) {
+            const firstService = rule.services[0];
+            setSelectedOption({
+                provider: firstService.provider,
+                model: firstService.model
+            });
+        } else {
+            setSelectedOption({
+                provider: '',
+                model: ''
+            });
+        }
     }, [rule]);
 
     const loadToken = async () => {
@@ -146,22 +154,25 @@ const Dashboard = () => {
             setRule(result.data);
         } else {
             // If the 'tingly' rule doesn't exist, create a default one
-                        await createDefaultTinglyRule();
+            await createDefaultTinglyRule();
         }
     };
 
     const createDefaultTinglyRule = async () => {
         try {
-            // Create a default rule with empty provider and model
+            // Create a default rule with empty services
             // This will be filled when user selects a provider and model
             const defaultRuleData = {
-                provider: "",
-                default_model: "",
+                response_model: undefined,
+                services: [],
             };
 
-            const result = await api.updateRule(defaultRule, defaultRuleData);
+            const result = await api.createRule({
+                name: defaultRule,
+                ...defaultRuleData
+            });
             if (result.success) {
-                                // Reload the rule after creating it
+                // Reload the rule after creating it
                 const reloadResult = await api.getRule(defaultRule);
                 if (reloadResult.success) {
                     setRule(reloadResult.data);
@@ -212,8 +223,16 @@ const Dashboard = () => {
         try {
             // Update the "tingly" rule with the selected provider and model
             const ruleData = {
-                provider: provider.name,
-                default_model: model,
+                request_model: defaultRule,
+                services: [
+                    {
+                        provider: provider.name,
+                        model: model,
+                        weight: 0,
+                        active: true,
+                        time_window: 0,
+                    }
+                ],
             };
 
             const result = await api.updateRule('tingly', ruleData);
@@ -223,6 +242,11 @@ const Dashboard = () => {
                 setBannerModel(model);
                 setShowBanner(true);
                 showNotification(`Successfully updated tingly rule to use ${provider.name}:${model}`, 'success');
+                // Reload rule to get updated data
+                const reloadResult = await api.getRule('tingly');
+                if (reloadResult.success) {
+                    setRule(reloadResult.data);
+                }
             } else {
                 showNotification(`Failed to update tingly rule: ${result.error}`, 'error');
             }

@@ -30,6 +30,9 @@ interface ConfigProvider {
     provider: string;
     model: string;
     isManualInput?: boolean;
+    weight?: number;
+    active?: boolean;
+    time_window?: number;
 }
 
 interface ConfigRecord {
@@ -40,12 +43,13 @@ interface ConfigRecord {
 }
 
 const Rule = () => {
-    const [defaults, setDefaults] = useState<any>({});
+    const [rules, setRules] = useState<any>({});
     const [providers, setProviders] = useState<any[]>([]);
     const [providerModels, setProviderModels] = useState<any>({});
     const [configRecords, setConfigRecords] = useState<ConfigRecord[]>([]);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [loading, setLoading] = useState(true);
+    const [savingRecords, setSavingRecords] = useState<Set<string>>(new Set());
 
     useEffect(() => {
         loadAllData();
@@ -63,111 +67,137 @@ const Rule = () => {
     const loadRules = async () => {
         const result = await api.getRules();
         if (result.success) {
-            setDefaults(result.data);
+            console.log('Loaded rules data:', result.data);
+            setRules(result.data);
         }
     };
 
     const loadProviderSelectionPanel = async () => {
-        const [providersResult, modelsResult, defaultsResult] = await Promise.all([
+        const [providersResult, modelsResult, rulesResult] = await Promise.all([
             api.getProviders(),
             api.getProviderModels(),
-            api.getDefaults(),
+            api.getRules(),
         ]);
 
         if (providersResult.success && modelsResult.success) {
             setProviders(providersResult.data);
             setProviderModels(modelsResult.data);
-            if (defaultsResult.success) {
-                setDefaults(defaultsResult.data);
+            if (rulesResult.success) {
+                setRules(rulesResult.data);
             }
         }
     };
 
     useEffect(() => {
-        if (defaults) {
-            // Handle new data structure with request_configs
-            const requestConfigs = defaults.request_configs || [];
-
-            if (requestConfigs.length > 0) {
-                // Group configs by request_model
-                const groupedByRequestModel = requestConfigs.reduce((acc: any, config: any) => {
-                    const requestModel = config.request_model || 'tingly';
-                    if (!acc[requestModel]) {
-                        acc[requestModel] = {
-                            id: `record-${Date.now()}-${Math.random()}`,
-                            requestModel,
-                            responseModel: config.response_model || '',
-                            providers: [],
-                            responseModels: config.response_model ? [config.response_model] : [],
-                        };
-                    }
-
-                    // Add provider to the group if it exists
-                    if (config.provider) {
-                        acc[requestModel].providers.push({
-                            id: `provider-${Date.now()}-${Math.random()}`,
-                            provider: config.provider,
-                            model: config.default_model || '',
-                            responseModel: config.response_model || '',
-                            isManualInput: false,
-                        });
-                    }
-
-                    return acc;
-                }, {});
-
-                // Convert grouped object to array of records
-                const records: ConfigRecord[] = Object.values(groupedByRequestModel).map((record: any) => {
-                    // Check if all providers have the same responseModel
-                    const uniqueResponseModels = [...new Set(record.responseModels)] as string[];
-                    const finalResponseModel: string = uniqueResponseModels.length === 1
-                        ? uniqueResponseModels[0]
-                        : '';
-
-                    // Remove responseModels and responseModel from providers before returning
-                    const providers = record.providers.map((p: any) => ({
-                        id: p.id,
-                        provider: p.provider,
-                        model: p.model,
-                    }));
-
+        console.log('Rules state changed:', rules);
+        if (rules && Array.isArray(rules)) {
+            // Handle new rule structure
+            if (rules.length > 0) {
+                const records: ConfigRecord[] = rules.map((rule: any) => {
+                    console.log('Processing rule:', rule);
                     return {
-                        id: record.id,
-                        requestModel: record.requestModel,
-                        responseModel: finalResponseModel,
-                        providers,
+                        id: `record-${rule.request_model || Date.now()}-${Math.random()}`,
+                        requestModel: rule.request_model || '',  // Don't use default 'tingly' when request_model is empty
+                        responseModel: rule.response_model || '',
+                        providers: rule.services ? rule.services.map((service: any) => ({
+                            id: `provider-${Date.now()}-${Math.random()}`,
+                            provider: service.provider || '',
+                            model: service.model || '',
+                            isManualInput: false,
+                            weight: service.weight || 0,
+                            active: service.active !== undefined ? service.active : true,
+                            time_window: service.time_window || 0,
+                        })) : [],
                     };
                 });
-
+                console.log('Mapped config records:', records);
                 setConfigRecords(records);
             } else {
-                // Fallback to old structure for backward compatibility
-                const initialRecord: ConfigRecord = {
-                    id: `record-${Date.now()}`,
-                    requestModel: defaults.requestModel || 'tingly',
-                    responseModel: defaults.responseModel || '',
-                    providers: defaults.defaultProvider
-                        ? [
-                            {
-                                id: `provider-${Date.now()}`,
-                                provider: defaults.defaultProvider,
-                                model: defaults.defaultModel || '',
-                                isManualInput: false,
-                            },
-                        ]
-                        : [],
-                };
-                setConfigRecords([initialRecord]);
+                // No rules exist, don't create any records
+                setConfigRecords([]);
             }
+        } else if (rules === null || rules === undefined) {
+            // Data not loaded yet, don't create any records
+            setConfigRecords([]);
         }
-    }, [defaults]);
+    }, [rules]);
 
     const generateId = () => `id-${Date.now()}-${Math.random()}`;
+
+    const handleSaveSingleRule = async (record: ConfigRecord) => {
+        if (!record.requestModel) {
+            setMessage({
+                type: 'error',
+                text: `Request model name is required`,
+            });
+            return;
+        }
+
+        for (const provider of record.providers) {
+            if (provider.provider && !provider.model) {
+                setMessage({
+                    type: 'error',
+                    text: `Please select a model for provider ${provider.provider}`,
+                });
+                return;
+            }
+        }
+
+        const ruleName = record.requestModel;
+
+        // Add to saving set
+        setSavingRecords(prev => new Set(prev).add(record.id));
+
+        try {
+            // Create rule data with services
+            const ruleData = {
+                response_model: record.responseModel || undefined,
+                services: record.providers.map(provider => ({
+                    provider: provider.provider,
+                    model: provider.model,
+                    weight: provider.weight || 0,
+                    active: provider.active !== undefined ? provider.active : true,
+                    time_window: provider.time_window || 0,
+                })),
+            };
+
+            // Check if rule exists and update or create
+            const existingRule = await api.getRule(ruleName);
+
+            let result;
+            if (existingRule.success) {
+                // Update existing rule
+                result = await api.updateRule(ruleName, ruleData);
+            } else {
+                // Create new rule
+                result = await api.createRule({
+                    name: ruleName,
+                    ...ruleData,
+                });
+            }
+
+            if (result.success) {
+                setMessage({ type: 'success', text: `Rule "${ruleName}" saved successfully` });
+                await loadRules();
+            } else {
+                setMessage({ type: 'error', text: `Failed to save rule "${ruleName}": ${result.error || 'Unknown error'}` });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: `Error saving rule "${ruleName}": ${error}` });
+        } finally {
+            // Remove from saving set
+            setSavingRecords(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(record.id);
+                return newSet;
+            });
+        }
+    };
 
     const addConfigRecord = () => {
         const newRecord: ConfigRecord = {
             id: generateId(),
-            requestModel: 'tingly',
+            requestModel: '',
             responseModel: '',
             providers: [
                 {
@@ -181,9 +211,7 @@ const Rule = () => {
     };
 
     const deleteConfigRecord = (recordId: string) => {
-        if (configRecords.length > 1) {
-            setConfigRecords(configRecords.filter((record) => record.id !== recordId));
-        }
+        setConfigRecords(configRecords.filter((record) => record.id !== recordId));
     };
 
     const updateConfigRecord = (recordId: string, field: keyof ConfigRecord, value: any) => {
@@ -231,9 +259,19 @@ const Rule = () => {
                 record.id === recordId
                     ? {
                         ...record,
-                        providers: record.providers.map((p) =>
-                            p.id === providerId ? { ...p, [field]: value } : p
-                        ),
+                        providers: record.providers.map((p) => {
+                            if (p.id === providerId) {
+                                const updatedProvider = { ...p, [field]: value };
+
+                                // If provider is changing, reset model to empty (Select option)
+                                if (field === 'provider') {
+                                    updatedProvider.model = '';
+                                }
+
+                                return updatedProvider;
+                            }
+                            return p;
+                        }),
                     }
                     : record
             )
@@ -256,7 +294,7 @@ const Rule = () => {
         }
     };
 
-    const handleSaveDefaults = async () => {
+    const handleSaveAll = async () => {
         if (configRecords.length === 0) {
             setMessage({ type: 'error', text: 'No configuration records to save' });
             return;
@@ -283,40 +321,59 @@ const Rule = () => {
             }
         }
 
-        // Convert config records to request_configs format
-        const requestConfigs = configRecords.flatMap(record => {
-            // For simplicity, use the first provider if exists
-            console.log(record)
-            return record.providers.map(it => {
-                return {
-                    request_model: record.requestModel,
-                    response_model: record.responseModel,
-                    provider: it.provider,
-                    default_model: it.model,
-                }
-            })
-        });
-
-        const payload = {
-            request_configs: requestConfigs,
-        };
-
+        // Convert config records to rule format
+        // Each record will become a rule with services
         try {
-            console.log("payload", payload)
-            const result = await api.setDefaults(payload);
-            if (result.success) {
-                setMessage({ type: 'success', text: 'Configurations saved successfully' });
-                await loadProviderSelectionPanel();
-            } else {
-                setMessage({ type: 'error', text: result.error || 'Failed to save configurations' });
+            for (const record of configRecords) {
+                const ruleName = record.requestModel;
+
+                // Create rule data with services
+                const ruleData = {
+                    response_model: record.responseModel || undefined,
+                    services: record.providers.map(provider => ({
+                        provider: provider.provider,
+                        model: provider.model,
+                    })),
+                };
+
+                // Check if rule exists and update or create
+                const existingRule = await api.getRule(ruleName);
+
+                let result;
+                if (existingRule.success) {
+                    // Update existing rule
+                    result = await api.updateRule(ruleName, ruleData);
+                } else {
+                    // Create new rule
+                    result = await api.createRule({
+                        name: ruleName,
+                        ...ruleData,
+                    });
+                }
+
+                if (!result.success) {
+                    setMessage({ type: 'error', text: `Failed to save rule ${ruleName}: ${result.error || 'Unknown error'}` });
+                    return;
+                }
             }
+
+            setMessage({ type: 'success', text: 'Rules saved successfully' });
+            await loadAllData();
         } catch (error) {
-            setMessage({ type: 'error', text: `Error saving configurations: ${error}` });
+            setMessage({ type: 'error', text: `Error saving rules: ${error}` });
         }
     };
 
     return (
-        <PageLayout loading={loading} message={message} onClearMessage={() => setMessage(null)}>
+        <PageLayout
+            loading={loading}
+            notification={{
+                open: !!message,
+                message: message?.text,
+                severity: message?.type,
+                onClose: () => setMessage(null)
+            }}
+        >
             <UnifiedCard
                 title="Request Rule Configuration"
                 subtitle="Configure api request to models"
@@ -329,22 +386,39 @@ const Rule = () => {
                             startIcon={<AddIcon />}
                             onClick={addConfigRecord}
                         >
-                            Add Configuration
+                            Add Rule
                         </Button>
                         <Button
                             variant="contained"
                             color="primary"
                             size="small"
                             startIcon={<SaveIcon />}
-                            onClick={handleSaveDefaults}
+                            onClick={handleSaveAll}
                         >
-                            Save
+                            Save All
                         </Button>
                     </>
                 }
             >
                 <Stack spacing={3}>
-                    {configRecords.map((record) => (
+                    {configRecords.length === 0 ? (
+                        <Box sx={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            py: 8,
+                            textAlign: 'center'
+                        }}>
+                            <Typography variant="h6" color="text.secondary" gutterBottom>
+                                No rules configured
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                Click "Add Rule" to create your first rule
+                            </Typography>
+                        </Box>
+                    ) : (
+                        configRecords.map((record) => (
                         <Box
                             key={record.id}
                             sx={{
@@ -369,20 +443,33 @@ const Rule = () => {
                                             Request
                                         </Typography>
 
-                                        <Button
-                                            startIcon={<DeleteIcon />}
-                                            onClick={() => deleteConfigRecord(record.id)}
-                                            variant="outlined"
-                                            size="small"
-                                        >
-                                            Delete
-                                        </Button>
+                                        <Stack direction="row" spacing={1}>
+                                            <Button
+                                                variant="contained"
+                                                color="primary"
+                                                size="small"
+                                                startIcon={<SaveIcon />}
+                                                onClick={() => handleSaveSingleRule(record)}
+                                                disabled={savingRecords.has(record.id)}
+                                            >
+                                                {savingRecords.has(record.id) ? 'Saving...' : 'Save'}
+                                            </Button>
+                                            <Button
+                                                startIcon={<DeleteIcon />}
+                                                onClick={() => deleteConfigRecord(record.id)}
+                                                variant="outlined"
+                                                size="small"
+                                                disabled={savingRecords.has(record.id)}
+                                            >
+                                                Delete
+                                            </Button>
+                                        </Stack>
                                     </Stack>
                                 </Box>
                                 <Box sx={{ gridColumn: '2', gridRow: '1' }}>
                                     <Stack direction="row" justifyContent="space-between" alignItems="center">
                                         <Typography variant="subtitle2">
-                                            Models ({record.providers.length})
+                                            Service ({record.providers.length})
                                         </Typography>
                                         <Button
                                             startIcon={<AddIcon />}
@@ -390,7 +477,7 @@ const Rule = () => {
                                             variant="outlined"
                                             size="small"
                                         >
-                                            Add Model
+                                            Add Service
                                         </Button>
                                     </Stack>
                                 </Box>
@@ -600,7 +687,8 @@ const Rule = () => {
                                 </Box>
                             </Box>
                         </Box>
-                    ))}
+                    )))
+                    }
 
                 </Stack>
             </UnifiedCard>
