@@ -19,12 +19,13 @@ type Provider struct {
 
 // Rule represents a request/response configuration with load balancing support
 type Rule struct {
-	RequestModel        string    `yaml:"request_model" json:"request_model"`                 // The "tingly" value
-	ResponseModel       string    `yaml:"response_model" json:"response_model"`               // Response model configuration
-	Services            []Service `yaml:"services" json:"services"`                           // Multiple services for load balancing
-	CurrentServiceIndex int       `yaml:"current_service_index" json:"current_service_index"` // Currently active service index
-	Tactic              string    `yaml:"tactic" json:"tactic"`                               // Load balancing strategy (round_robin, token_based, hybrid)
-	Active              bool      `yaml:"active" json:"active"`                               // Whether this rule is active (default: true)
+	RequestModel        string                 `yaml:"request_model" json:"request_model"`                 // The "tingly" value
+	ResponseModel       string                 `yaml:"response_model" json:"response_model"`               // Response model configuration
+	Services            []Service              `yaml:"services" json:"services"`                           // Multiple services for load balancing
+	CurrentServiceIndex int                    `yaml:"current_service_index" json:"current_service_index"` // Currently active service index
+	Tactic              string                 `yaml:"tactic" json:"tactic"`                               // Load balancing strategy (round_robin, token_based, hybrid)
+	TacticParams        map[string]interface{} `yaml:"tactic_params" json:"tactic_params,omitempty"`       // Parameters for the tactic (e.g., request_threshold, token_threshold)
+	Active              bool                   `yaml:"active" json:"active"`                               // Whether this rule is active (default: true)
 }
 
 // GetServices returns the services to use for this rule
@@ -76,7 +77,7 @@ func (r *Rule) GetSelectedService() *Service {
 
 	// Use the configured tactic to select service
 	tacticType := r.GetTacticType()
-	tactic := CreateTactic(tacticType, nil)
+	tactic := CreateTactic(tacticType, r.TacticParams)
 	if tactic != nil {
 		return tactic.SelectService(r)
 	}
