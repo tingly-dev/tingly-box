@@ -52,10 +52,10 @@ func (s *Server) UseUIEndpoints() {
 	// Dashboard endpoints
 
 	// UI page routes
-	s.router.GET("/dashboard", s.Dashboard)
-	s.router.GET("/providers", s.ProvidersPage)
-	s.router.GET("/system", s.SystemPage)
-	s.router.GET("/history", s.HistoryPage)
+	s.router.GET("/dashboard", s.UseIndex)
+	s.router.GET("/providers", s.UseIndex)
+	s.router.GET("/system", s.UseIndex)
+	s.router.GET("/history", s.UseIndex)
 
 	// API routes (for web UI functionality)
 	s.useWebAPIEndpoints(s.router)
@@ -103,41 +103,7 @@ func (s *Server) ProbeRule(c *gin.Context) {
 	probe(c, rule, testProvider)
 }
 
-// Page Handlers (exported for server integration)
-func (s *Server) Dashboard(c *gin.Context) {
-	// Get user_auth_token from query parameter
-	userAuthToken := c.Query("user_auth_token")
-
-	// Prepare template data
-	templateData := gin.H{}
-	if userAuthToken != "" {
-		templateData["user_auth_token"] = userAuthToken
-	}
-
-	if s.assets != nil {
-		s.assets.HTML(c, "index.html", templateData)
-	} else {
-		panic("No UI resources")
-	}
-}
-
-func (s *Server) ProvidersPage(c *gin.Context) {
-	if s.assets != nil {
-		s.assets.HTML(c, "index.html", nil)
-	} else {
-		panic("No UI resources")
-	}
-}
-
-func (s *Server) SystemPage(c *gin.Context) {
-	if s.assets != nil {
-		s.assets.HTML(c, "index.html", nil)
-	} else {
-		panic("No UI resources")
-	}
-}
-
-func (s *Server) HistoryPage(c *gin.Context) {
+func (s *Server) UseIndex(c *gin.Context) {
 	if s.assets != nil {
 		s.assets.HTML(c, "index.html", nil)
 	} else {
@@ -261,24 +227,10 @@ func (s *Server) GetRules(c *gin.Context) {
 	}
 
 	rules := cfg.GetRequestConfigs()
-	defaultRequestID := cfg.GetDefaultRequestID()
-
-	// Convert Rules to response format
-	responseRules := make([]map[string]interface{}, len(rules))
-	for i, rule := range rules {
-		responseRules[i] = map[string]interface{}{
-			"request_model":  rule.RequestModel,
-			"response_model": rule.ResponseModel,
-			"provider":       rule.GetDefaultProvider(),
-			"default_model":  rule.GetDefaultModel(),
-			"active":         rule.Active,
-			"is_default":     i == defaultRequestID,
-		}
-	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"data":    responseRules,
+		"data":    rules,
 	})
 }
 
@@ -334,14 +286,9 @@ func (s *Server) SetRule(c *gin.Context) {
 		return
 	}
 
-	var req struct {
-		ResponseModel string `json:"response_model"`
-		Provider      string `json:"provider"`
-		DefaultModel  string `json:"default_model"`
-		Active        bool   `json:"active"`
-	}
+	var rule config.Rule
 
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := c.ShouldBindJSON(&rule); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"error":   err.Error(),
@@ -350,8 +297,8 @@ func (s *Server) SetRule(c *gin.Context) {
 	}
 
 	// Set default active to true if not provided
-	if !req.Active {
-		req.Active = true
+	if !rule.Active {
+		rule.Active = true
 	}
 
 	cfg := s.config
@@ -361,23 +308,6 @@ func (s *Server) SetRule(c *gin.Context) {
 			"error":   "Global config not available",
 		})
 		return
-	}
-
-	// Create or update the rule with a single service from the provider and model
-	rule := config.Rule{
-		RequestModel:  ruleName,
-		ResponseModel: req.ResponseModel,
-		Services: []config.Service{
-			{
-				Provider:   req.Provider,
-				Model:      req.DefaultModel,
-				Weight:     1,
-				Active:     true,
-				TimeWindow: 300,
-			},
-		},
-		Tactic: config.TacticRoundRobin.String(), // Default to round-robin
-		Active: req.Active,
 	}
 
 	if err := cfg.SetDefaultRequestConfig(rule); err != nil {
