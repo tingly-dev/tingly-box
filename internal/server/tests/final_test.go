@@ -272,6 +272,7 @@ func runSystemTests(t *testing.T, ts *TestServer, isRealConfig bool) {
 		userToken := globalConfig.GetUserToken()
 
 		req, _ := http.NewRequest("POST", "/api/rule/test-rule", CreateJSONBody(map[string]interface{}{
+			"uuid":           "test-rule",
 			"response_model": "gpt-4",
 			"provider":       "openai",
 			"default_model":  "gpt-4-turbo",
