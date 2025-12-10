@@ -44,11 +44,9 @@ func (rr *RoundRobinTactic) SelectService(rule *Rule) *Service {
 		return nil
 	}
 
-	// Get current service
+	// Check if current service has exceeded the request threshold
 	currentIndex := rule.CurrentServiceIndex % len(activeServices)
 	currentService := activeServices[currentIndex]
-
-	// Check if current service has exceeded the request threshold
 	requests, _ := currentService.GetWindowStats()
 
 	// If current service hasn't exceeded threshold, keep using it
@@ -57,11 +55,8 @@ func (rr *RoundRobinTactic) SelectService(rule *Rule) *Service {
 	}
 
 	// Current service exceeded threshold, move to next service
-	nextIndex := (rule.CurrentServiceIndex + 1) % len(activeServices)
-	nextService := activeServices[nextIndex]
-
-	// Update the rule's current index
-	rule.CurrentServiceIndex = nextIndex
+	rule.CurrentServiceIndex = (rule.CurrentServiceIndex + 1) % len(activeServices)
+	nextService := activeServices[rule.CurrentServiceIndex]
 
 	return nextService
 }
@@ -286,7 +281,13 @@ func CreateTactic(tacticType TacticType, params map[string]interface{}) LoadBala
 	switch tacticType {
 	case TacticRoundRobin:
 		if params != nil {
-			if requestThreshold, ok := params["request_threshold"].(int64); ok && requestThreshold > 0 {
+			var requestThreshold int64
+			if rt, ok := params["request_threshold"].(int64); ok && rt > 0 {
+				requestThreshold = rt
+			} else if rt, ok := params["request_threshold"].(float64); ok && rt > 0 {
+				requestThreshold = int64(rt)
+			}
+			if requestThreshold > 0 {
 				return NewRoundRobinTactic(requestThreshold)
 			}
 		}

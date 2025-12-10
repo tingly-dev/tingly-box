@@ -311,7 +311,7 @@ func (s *Server) AuthenticateMiddleware() gin.HandlerFunc {
 }
 
 // DetermineProviderAndModel resolves the model name and finds the appropriate provider using load balancing
-func (s *Server) DetermineProviderAndModel(modelName string) (*config.Provider, *config.Rule, error) {
+func (s *Server) DetermineProviderAndModel(modelName string) (*config.Provider, *config.Service, *config.Rule, error) {
 	// Check if this is the request model name first
 	c := s.config
 	if c != nil && c.IsRequestModel(modelName) {
@@ -321,29 +321,33 @@ func (s *Server) DetermineProviderAndModel(modelName string) (*config.Provider, 
 			// Use the load balancer to select service
 			selectedService, err := s.loadBalancer.SelectService(rule)
 			if err != nil {
-				return nil, nil, fmt.Errorf("failed to select service: %w", err)
+				return nil, nil, nil, fmt.Errorf("failed to select service: %w", err)
 			}
 
 			if selectedService == nil {
-				return nil, nil, fmt.Errorf("no available service for request model '%s'", modelName)
+				return nil, nil, nil, fmt.Errorf("no available service for request model '%s'", modelName)
 			}
 
-			// Find the provider configuration for the selected service
-			providers := s.config.ListProviders()
-			for _, p := range providers {
-				if p.Enabled && p.Name == selectedService.Provider {
-					// Update the current service index for the rule
-					s.loadBalancer.UpdateServiceIndex(rule, selectedService)
-					return p, rule, nil
-				}
+			// Verify the provider exists and is enabled
+			provider, err := c.GetProvider(selectedService.Provider)
+			if err != nil {
+				return nil, nil, nil, fmt.Errorf("provider '%s' not found: %w", selectedService.Provider, err)
 			}
 
-			return nil, nil, fmt.Errorf("provider '%s' is not enabled", selectedService.Provider)
+			if !provider.Enabled {
+				return nil, nil, nil, fmt.Errorf("provider '%s' is not enabled", selectedService.Provider)
+			}
+
+			// Update the current service index for the rule
+			s.loadBalancer.UpdateServiceIndex(rule, selectedService)
+
+			// Return provider, selected service, and rule
+			return provider, selectedService, rule, nil
 		}
-		return nil, nil, fmt.Errorf("provider or model not configured for request model '%s'", modelName)
+		return nil, nil, nil, fmt.Errorf("provider or model not configured for request model '%s'", modelName)
 	}
 
-	return nil, nil, fmt.Errorf("provider or model not configured for request model '%s'", modelName)
+	return nil, nil, nil, fmt.Errorf("provider or model not configured for request model '%s'", modelName)
 }
 
 // determineProviderFallback is the fallback logic for provider determination

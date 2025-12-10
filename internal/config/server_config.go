@@ -256,9 +256,9 @@ func (c *Config) GetRequestConfigByRequestModel(modelName string) *Rule {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	for _, rc := range c.Rules {
-		if rc.RequestModel == modelName {
-			return &rc
+	for i := range c.Rules {
+		if c.Rules[i].RequestModel == modelName {
+			return &c.Rules[i]
 		}
 	}
 	return nil

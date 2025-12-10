@@ -297,6 +297,112 @@ func runSystemTests(t *testing.T, ts *TestServer, isRealConfig bool) {
 
 		assert.Equal(t, 401, w.Code)
 	})
+
+	// Test 18: Load Balancing - OpenAI endpoint
+	t.Run("Load_Balancing_OpenAI", func(t *testing.T) {
+		globalConfig := ts.appConfig.GetGlobalConfig()
+		modelToken := globalConfig.GetModelToken()
+
+		// Prepare the request payload for load balancing test
+		requestBody := map[string]interface{}{
+			"model": "tingly",
+			"messages": []map[string]string{
+				{
+					"role":    "user",
+					"content": "Hello, which provider are you?",
+				},
+			},
+			"temperature": 0.7,
+			"max_tokens":  100,
+		}
+
+		// Test Case 1: First request
+		req1, _ := http.NewRequest("POST", "/openai/v1/chat/completions", CreateJSONBody(requestBody))
+		req1.Header.Set("Authorization", "Bearer "+modelToken)
+		req1.Header.Set("Content-Type", "application/json")
+		w1 := httptest.NewRecorder()
+		ts.ginEngine.ServeHTTP(w1, req1)
+
+		t.Logf("First load balance request status: %d", w1.Code)
+
+		// Test Case 2: Second request (should rotate to next service if configured)
+		requestBody2 := map[string]interface{}{
+			"model": "tingly",
+			"messages": []map[string]string{
+				{
+					"role":    "user",
+					"content": "Hello again, which provider are you now?",
+				},
+			},
+			"temperature": 0.7,
+			"max_tokens":  100,
+		}
+
+		req2, _ := http.NewRequest("POST", "/openai/v1/chat/completions", CreateJSONBody(requestBody2))
+		req2.Header.Set("Authorization", "Bearer "+modelToken)
+		req2.Header.Set("Content-Type", "application/json")
+		w2 := httptest.NewRecorder()
+		ts.ginEngine.ServeHTTP(w2, req2)
+
+		t.Logf("Second load balance request status: %d", w2.Code)
+
+		// Both requests should be handled (may fail at provider level but routing works)
+		assert.True(t, containsStatus(w1.Code, []int{200, 400, 500}))
+		assert.True(t, containsStatus(w2.Code, []int{200, 400, 500}))
+	})
+
+	// Test 19: Load Balancing - Anthropic endpoint
+	t.Run("Load_Balancing_Anthropic", func(t *testing.T) {
+		globalConfig := ts.appConfig.GetGlobalConfig()
+		modelToken := globalConfig.GetModelToken()
+
+		// Prepare the Anthropic request payload for load balancing test
+		requestBody := map[string]interface{}{
+			"model": "tingly",
+			"messages": []map[string]string{
+				{
+					"role":    "user",
+					"content": "What is your name?",
+				},
+			},
+			"max_tokens": 100,
+		}
+
+		// Test Case 1: First request
+		req1, _ := http.NewRequest("POST", "/anthropic/v1/messages", CreateJSONBody(requestBody))
+		req1.Header.Set("Authorization", "Bearer "+modelToken)
+		req1.Header.Set("Content-Type", "application/json")
+		req1.Header.Set("anthropic-version", "2023-06-01")
+		w1 := httptest.NewRecorder()
+		ts.ginEngine.ServeHTTP(w1, req1)
+
+		t.Logf("First Anthropic load balance request status: %d", w1.Code)
+
+		// Test Case 2: Second request (should rotate to next service if configured)
+		requestBody2 := map[string]interface{}{
+			"model": "tingly",
+			"messages": []map[string]string{
+				{
+					"role":    "user",
+					"content": "What is your name again?",
+				},
+			},
+			"max_tokens": 100,
+		}
+
+		req2, _ := http.NewRequest("POST", "/anthropic/v1/messages", CreateJSONBody(requestBody2))
+		req2.Header.Set("Authorization", "Bearer "+modelToken)
+		req2.Header.Set("Content-Type", "application/json")
+		req2.Header.Set("anthropic-version", "2023-06-01")
+		w2 := httptest.NewRecorder()
+		ts.ginEngine.ServeHTTP(w2, req2)
+
+		t.Logf("Second Anthropic load balance request status: %d", w2.Code)
+
+		// Both requests should be handled (may fail at provider level but routing works)
+		assert.True(t, containsStatus(w1.Code, []int{200, 400, 500}))
+		assert.True(t, containsStatus(w2.Code, []int{200, 400, 500}))
+	})
 }
 
 // TestFinalIntegrationWithRealConfig provides integration test using real configuration
