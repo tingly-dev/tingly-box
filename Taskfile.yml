@@ -54,7 +54,12 @@ tasks:
       - |
         mkdir -p build
         go build -o ./build/tingly ./cmd/tingly
-  
+
+  go:test:
+    cmds:
+      - |
+        go test ./internal/...
+
   all:dev:
     cmds:
       - task: ui:dist

@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 	"tingly-box/internal/config"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -202,8 +203,10 @@ func (s *Server) forwardAnthropicRequest(provider *config.Provider, req *Anthrop
 	// Set model - use Anthropic SDK model type
 	params.Model = anthropic.Model(req.Model)
 
-	// Make the request using Anthropic SDK
-	message, err := client.Messages.New(context.Background(), params)
+	// Make the request using Anthropic SDK with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	message, err := client.Messages.New(ctx, params)
 	if err != nil {
 		return nil, err
 	}

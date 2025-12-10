@@ -788,3 +788,170 @@ func TestLoadBalancerFunctionality(t *testing.T) {
 		}
 	})
 }
+
+// =================================
+// Load Balancer Integration Tests with Mock Provider
+// =================================
+
+func TestLoadBalancer_WeightedRandom(t *testing.T) {
+	// Create a minimal config for testing
+	appConfig, err := config.NewAppConfigWithDir(t.TempDir())
+	require.NoError(t, err)
+
+	// Create a minimal server for stats middleware
+	srv := server.NewServer(appConfig.GetGlobalConfig())
+
+	// Create stats middleware
+	statsMW := server.NewStatsMiddleware(srv)
+	defer statsMW.Stop()
+
+	// Create load balancer and register random tactic
+	lb := server.NewLoadBalancer(statsMW, appConfig.GetGlobalConfig())
+	defer lb.Stop()
+
+	randomTactic := config.NewRandomTactic()
+	lb.RegisterTactic(config.TacticRoundRobin, randomTactic)
+
+	// Create test rule with weighted services
+	rule := &config.Rule{
+		RequestModel: "test",
+		Services: []config.Service{
+			{
+				Provider:   "provider1",
+				Model:      "model1",
+				Weight:     3, // Higher weight
+				Active:     true,
+				TimeWindow: 300,
+			},
+			{
+				Provider:   "provider2",
+				Model:      "model2",
+				Weight:     1, // Lower weight
+				Active:     true,
+				TimeWindow: 300,
+			},
+		},
+		Tactic: "round_robin", // Will use our registered random tactic
+		Active: true,
+	}
+
+	// Test weighted selection (run multiple times to see distribution)
+	provider1Count := 0
+	provider2Count := 0
+	total := 100
+
+	for i := 0; i < total; i++ {
+		service, err := lb.SelectService(rule)
+		if err != nil {
+			t.Fatalf("SelectService failed: %v", err)
+		}
+
+		if service.Provider == "provider1" {
+			provider1Count++
+		} else if service.Provider == "provider2" {
+			provider2Count++
+		}
+	}
+
+	// Check that provider1 gets roughly 3x more selections
+	// Allow some tolerance for randomness
+	if provider2Count == 0 {
+		t.Errorf("Provider2 was never selected")
+		return
+	}
+	provider1Ratio := float64(provider1Count) / float64(provider2Count)
+	if provider1Ratio < 2.0 || provider1Ratio > 4.0 {
+		t.Errorf("Expected provider1 to get ~3x more selections than provider2, got ratio %.2f (%d vs %d)",
+			provider1Ratio, provider1Count, provider2Count)
+	}
+
+	t.Logf("Distribution: provider1: %d, provider2: %d, ratio: %.2f",
+		provider1Count, provider2Count, provider1Ratio)
+}
+
+func TestLoadBalancer_WithMockProvider(t *testing.T) {
+	// Create a mock provider server for testing
+	mockServer := NewMockProviderServer()
+	defer mockServer.Close()
+
+	// Create test server with test utilities
+	ts := NewTestServer(t)
+	defer Cleanup()
+
+	// Add mock provider to test server config
+	provider := &config.Provider{
+		Name:    "mock-provider",
+		APIBase: mockServer.GetURL(),
+		Token:   "mock-token",
+		Enabled: true,
+	}
+	err := ts.config.AddProvider(provider)
+	if err != nil {
+		t.Fatalf("Failed to add mock provider: %v", err)
+	}
+
+	// Configure mock response
+	mockResponse := CreateMockChatCompletionResponse("test-123", "gpt-3.5-turbo", "Test response")
+	mockServer.SetResponse("/v1/chat/completions", MockResponse{
+		StatusCode: 200,
+		Body:       mockResponse,
+	})
+
+	// Create a rule with the mock provider
+	rule := config.Rule{
+		RequestModel: "gpt-3.5-turbo",
+		Services: []config.Service{
+			{
+				Provider:   "mock-provider",
+				Model:      "gpt-3.5-turbo",
+				Weight:     1,
+				Active:     true,
+				TimeWindow: 300,
+			},
+		},
+		Tactic: "round_robin",
+		Active: true,
+	}
+
+	// Add the rule to the config
+	err = ts.appConfig.GetGlobalConfig().AddOrUpdateRequestConfigByRequestModel(rule)
+	if err != nil {
+		t.Fatalf("Failed to add rule: %v", err)
+	}
+
+	// Create stats middleware
+	statsMW := server.NewStatsMiddleware(ts.server)
+	defer statsMW.Stop()
+
+	// Create load balancer
+	lb := server.NewLoadBalancer(statsMW, ts.appConfig.GetGlobalConfig())
+	defer lb.Stop()
+
+	// Test service selection
+	service, err := lb.SelectService(&rule)
+	if err != nil {
+		t.Fatalf("SelectService failed: %v", err)
+	}
+
+	if service == nil {
+		t.Fatal("SelectService returned nil")
+	}
+
+	if service.Provider != "mock-provider" {
+		t.Errorf("Expected provider = mock-provider, got %s", service.Provider)
+	}
+
+	// Record usage
+	lb.RecordUsage(service.Provider, service.Model, 120, 30)
+
+	// Verify stats were recorded
+	stats := lb.GetServiceStats(service.Provider, service.Model)
+	if stats == nil {
+		t.Fatal("Expected stats to be recorded")
+	}
+
+	statsCopy := stats.GetStats()
+	if statsCopy.RequestCount != 1 {
+		t.Errorf("Expected RequestCount = 1, got %d", statsCopy.RequestCount)
+	}
+}
