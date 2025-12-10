@@ -16,13 +16,8 @@ type PIDManager struct {
 // NewPIDManager creates a new PID manager
 func NewPIDManager() *PIDManager {
 	// Use current working directory for PID file
-	wd, err := os.Getwd()
-	if err != nil {
-		wd = "."
-	}
-
 	return &PIDManager{
-		pidFile: filepath.Join(wd, "tingly-server.pid"),
+		pidFile: filepath.Join(ConfigDirName, "tingly-server.pid"),
 	}
 }
 
