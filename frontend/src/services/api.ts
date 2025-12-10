@@ -200,16 +200,16 @@ export const api = {
 
     // Rules API - Updated for new rule structure with services
     getRules: () => fetchUIAPI('/rules'),
-    getRule: (name: string) => fetchUIAPI(`/rule/${name}`),
+    getRule: (uuid: string) => fetchUIAPI(`/rule/${uuid}`),
     createRule: (data: any) => fetchUIAPI('/rules', {
         method: 'POST',
         body: JSON.stringify(data),
     }),
-    updateRule: (name: string, data: any) => fetchUIAPI(`/rule/${name}`, {
+    updateRule: (uuid: string, data: any) => fetchUIAPI(`/rule/${uuid}`, {
         method: 'POST',
         body: JSON.stringify(data),
     }),
-    deleteRule: (name: string) => fetchUIAPI(`/rule/${name}`, {
+    deleteRule: (uuid: string) => fetchUIAPI(`/rule/${uuid}`, {
         method: 'DELETE',
     }),
     probeRule: (rule, provider, model) => fetchUIAPI('/probe', {

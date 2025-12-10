@@ -26,6 +26,7 @@ import UnifiedCard from '../components/UnifiedCard';
 import { api } from '../services/api';
 
 const defaultRule = "tingly"
+const defaultRuleUUID = "tingly"
 
 
 const Dashboard = () => {
@@ -223,6 +224,7 @@ const Dashboard = () => {
         try {
             // Update the "tingly" rule with the selected provider and model
             const ruleData = {
+                uuid: defaultRuleUUID,
                 request_model: defaultRule,
                 services: [
                     {
@@ -235,7 +237,19 @@ const Dashboard = () => {
                 ],
             };
 
-            const result = await api.updateRule('tingly', ruleData);
+            const existingRule = await api.getRule(defaultRuleUUID);
+            let result;
+            if (existingRule.success && existingRule.data.uuid) {
+                // Update existing rule using uuid
+                result = await api.updateRule(existingRule.data.uuid, ruleData);
+            } else {
+                // Create new rule if it doesn't exist
+                const createResult = await api.createRule({
+                    name: 'tingly',
+                    ...ruleData,
+                });
+                result = createResult;
+            }
             if (result.success) {
                 // Show banner with selected provider and model info
                 setBannerProvider(provider.name);
