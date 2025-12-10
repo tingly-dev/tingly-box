@@ -285,6 +285,11 @@ func (s *Server) GetRouter() *gin.Engine {
 	return s.router
 }
 
+// GetLoadBalancer returns the load balancer instance
+func (s *Server) GetLoadBalancer() *LoadBalancer {
+	return s.loadBalancer
+}
+
 // Stop gracefully stops the HTTP server
 func (s *Server) Stop(ctx context.Context) error {
 	if s.httpServer == nil {

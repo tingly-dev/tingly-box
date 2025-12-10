@@ -305,6 +305,23 @@ func (c *Config) UpdateRequestConfigByRequestModel(requestModel string, reqConfi
 	return fmt.Errorf("rule with request model '%s' not found", requestModel)
 }
 
+// AddOrUpdateRequestConfigByRequestModel adds a new Rule or updates an existing one by request model name
+func (c *Config) AddOrUpdateRequestConfigByRequestModel(reqConfig Rule) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for i, rule := range c.Rules {
+		if rule.RequestModel == reqConfig.RequestModel {
+			c.Rules[i] = reqConfig
+			return c.save()
+		}
+	}
+
+	// Rule not found, add new one
+	c.Rules = append(c.Rules, reqConfig)
+	return c.save()
+}
+
 // RemoveRequestConfig removes the Rule at the given index
 func (c *Config) RemoveRequestConfig(index int) error {
 	c.mu.Lock()

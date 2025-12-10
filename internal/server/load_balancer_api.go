@@ -93,9 +93,7 @@ func (api *LoadBalancerAPI) UpdateRuleTactic(c *gin.Context) {
 	}
 
 	// Validate tactic
-	tacticType := config.ParseTacticType(req.Tactic)
-	_, exists := api.loadBalancer.getTactic(tacticType)
-	if !exists {
+	if !config.IsValidTactic(req.Tactic) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported tactic: " + req.Tactic})
 		return
 	}
