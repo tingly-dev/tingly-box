@@ -22,15 +22,6 @@ var (
 	shutdownChan     = make(chan struct{}, 1)
 )
 
-// WebUI represents the web interface management
-type WebUI struct {
-	enabled bool
-	router  *gin.Engine
-	config  *config.Config
-	logger  *memory.MemoryLogger
-	assets  *EmbeddedAssets
-}
-
 // SetGlobalServer sets the global server instance for web UI control
 func SetGlobalServer(server *Server) {
 	globalServerLock.Lock()
@@ -45,129 +36,36 @@ func GetGlobalServer() *Server {
 	return globalServer
 }
 
-// NewWebUI creates a new web UI manager
-func NewWebUI(enabled bool, cfg *config.Config, logger *memory.MemoryLogger, router *gin.Engine) *WebUI {
-	if !enabled {
-		return &WebUI{enabled: false}
-	}
-
-	// Initialize embedded assets
-	assets, err := NewEmbeddedAssets()
-	if err != nil {
-		log.Printf("Failed to initialize embedded assets: %v", err)
-		// Continue without embedded assets, will fallback to file system
-	}
-
-	gin.SetMode(gin.ReleaseMode)
-	wui := &WebUI{
-		enabled: true,
-		config:  cfg,
-		logger:  logger,
-		router:  router,
-		assets:  assets,
-	}
-
-	return wui
-}
-
-// useAPIEndpoints configures API routes for web UI
-func (wui *WebUI) useAPIEndpoints(engine *gin.Engine) {
-	if !wui.enabled {
-		return
-	}
-
-	api := engine.Group("/api")
-	api.Use(wui.authMiddleware()) // Apply authentication to all API routes
-	{
-		// Providers management
-		api.GET("/providers", wui.GetProviders)
-		api.GET("/providers/:name", wui.GetProvider)
-		api.POST("/providers", wui.AddProvider)
-		api.PUT("/providers/:name", wui.UpdateProvider)
-		api.POST("/providers/:name/toggle", wui.ToggleProvider)
-		api.DELETE("/providers/:name", wui.DeleteProvider)
-
-		// Server management
-		api.GET("/status", wui.GetStatus)
-		api.POST("/server/start", wui.StartServer)
-		api.POST("/server/stop", wui.StopServer)
-		api.POST("/server/restart", wui.RestartServer)
-
-		// Rule management
-		api.GET("/rules", wui.GetRules)
-		api.GET("/rule/:name", wui.GetRule)
-		api.POST("/rule/:name", wui.SetRule)
-
-		// History
-		api.GET("/history", wui.GetHistory)
-
-		// New API endpoints for defaults and provider models
-		api.GET("/defaults", wui.GetDefaults)
-		api.POST("/defaults", wui.SetDefaults)
-		api.GET("/provider-models", wui.GetProviderModels)
-		api.POST("/provider-models/:name", wui.FetchProviderModels)
-
-		// Probe endpoint for testing rule configurations
-		api.POST("/probe", wui.ProbeRule)
-	}
-}
-
-// GetRouter returns the gin router (nil if disabled)
-func (wui *WebUI) GetRouter() *gin.Engine {
-	if !wui.enabled {
-		return nil
-	}
-	return wui.router
-}
-
-func useWebUI(engine *Server) {
-	ui := NewWebUI(true, engine.config, engine.memoryLogger, engine.router)
-	ui.Init()
-}
-
-// Init sets up WebUI routes and templates on the main server router
-func (wui *WebUI) Init() {
-	if !wui.enabled {
-		return
-	}
+// Init sets up Server routes and templates on the main server router
+func (s *Server) UseUIEndpoints() {
 
 	// Middleware
-	wui.router.Use(gin.Logger())
-	wui.router.Use(gin.Recovery())
+	s.router.Use(gin.Logger())
+	s.router.Use(gin.Recovery())
 
-	wui.router.Use(func(c *gin.Context) {
+	s.router.Use(func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization")
 	})
 
 	// Dashboard endpoints
-	wui.router.GET("/dashboard", wui.Dashboard)
 
 	// UI page routes
-	ui := wui.router.Group("/ui")
-	{
-		ui.GET("/", wui.Dashboard)
-		ui.GET("/dashboard", wui.Dashboard)
-		ui.GET("/providers", wui.ProvidersPage)
-		ui.GET("/system", wui.SystemPage)
-		ui.GET("/history", wui.HistoryPage)
-	}
+	s.router.GET("/dashboard", s.Dashboard)
+	s.router.GET("/providers", s.ProvidersPage)
+	s.router.GET("/system", s.SystemPage)
+	s.router.GET("/history", s.HistoryPage)
 
 	// API routes (for web UI functionality)
-	wui.useAPIEndpoints(wui.router)
+	s.useWebAPIEndpoints(s.router)
 
 	// Static files and templates - try embedded assets first, fallback to filesystem
-	wui.useStaticEndpoints(wui.router)
-}
-
-// IsEnabled returns whether web UI is enabled
-func (wui *WebUI) IsEnabled() bool {
-	return wui.enabled
+	s.useWebStaticEndpoints(s.router)
 }
 
 // ProbeRule tests a rule configuration by sending a sample request to the configured provider
-func (wui *WebUI) ProbeRule(c *gin.Context) {
+func (s *Server) ProbeRule(c *gin.Context) {
 
 	var rule config.Rule
 	if err := c.ShouldBindJSON(&rule); err != nil {
@@ -179,7 +77,7 @@ func (wui *WebUI) ProbeRule(c *gin.Context) {
 	}
 
 	// Get the first rule or create a default one for testing
-	globalConfig := wui.config
+	globalConfig := s.config
 	if globalConfig == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -192,7 +90,7 @@ func (wui *WebUI) ProbeRule(c *gin.Context) {
 	}
 
 	// Find the provider for this rule
-	providers := wui.config.ListProviders()
+	providers := s.config.ListProviders()
 	var testProvider *config.Provider
 
 	for _, provider := range providers {
@@ -206,7 +104,7 @@ func (wui *WebUI) ProbeRule(c *gin.Context) {
 }
 
 // Page Handlers (exported for server integration)
-func (wui *WebUI) Dashboard(c *gin.Context) {
+func (s *Server) Dashboard(c *gin.Context) {
 	// Get user_auth_token from query parameter
 	userAuthToken := c.Query("user_auth_token")
 
@@ -216,40 +114,40 @@ func (wui *WebUI) Dashboard(c *gin.Context) {
 		templateData["user_auth_token"] = userAuthToken
 	}
 
-	if wui.assets != nil {
-		wui.assets.HTML(c, "index.html", templateData)
+	if s.assets != nil {
+		s.assets.HTML(c, "index.html", templateData)
 	} else {
 		panic("No UI resources")
 	}
 }
 
-func (wui *WebUI) ProvidersPage(c *gin.Context) {
-	if wui.assets != nil {
-		wui.assets.HTML(c, "index.html", nil)
+func (s *Server) ProvidersPage(c *gin.Context) {
+	if s.assets != nil {
+		s.assets.HTML(c, "index.html", nil)
 	} else {
 		panic("No UI resources")
 	}
 }
 
-func (wui *WebUI) SystemPage(c *gin.Context) {
-	if wui.assets != nil {
-		wui.assets.HTML(c, "index.html", nil)
+func (s *Server) SystemPage(c *gin.Context) {
+	if s.assets != nil {
+		s.assets.HTML(c, "index.html", nil)
 	} else {
 		panic("No UI resources")
 	}
 }
 
-func (wui *WebUI) HistoryPage(c *gin.Context) {
-	if wui.assets != nil {
-		wui.assets.HTML(c, "index.html", nil)
+func (s *Server) HistoryPage(c *gin.Context) {
+	if s.assets != nil {
+		s.assets.HTML(c, "index.html", nil)
 	} else {
 		panic("No UI resources")
 	}
 }
 
 // API Handlers (exported for server integration)
-func (wui *WebUI) GetProviders(c *gin.Context) {
-	providers := wui.config.ListProviders()
+func (s *Server) GetProviders(c *gin.Context) {
+	providers := s.config.ListProviders()
 
 	// Mask tokens for security
 	maskedProviders := make([]struct {
@@ -282,8 +180,8 @@ func (wui *WebUI) GetProviders(c *gin.Context) {
 	})
 }
 
-func (wui *WebUI) GetStatus(c *gin.Context) {
-	providers := wui.config.ListProviders()
+func (s *Server) GetStatus(c *gin.Context) {
+	providers := s.config.ListProviders()
 	enabledCount := 0
 	for _, p := range providers {
 		if p.Enabled {
@@ -295,7 +193,7 @@ func (wui *WebUI) GetStatus(c *gin.Context) {
 		"success": true,
 		"data": gin.H{
 			"server_running":    true,
-			"port":              wui.config.GetServerPort(),
+			"port":              s.config.GetServerPort(),
 			"providers_total":   len(providers),
 			"providers_enabled": enabledCount,
 			"request_count":     0,
@@ -303,9 +201,9 @@ func (wui *WebUI) GetStatus(c *gin.Context) {
 	})
 }
 
-func (wui *WebUI) GetHistory(c *gin.Context) {
-	if wui.logger != nil {
-		history := wui.logger.GetHistory(50)
+func (s *Server) GetHistory(c *gin.Context) {
+	if s.logger != nil {
+		history := s.logger.GetHistory(50)
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
 			"data":    history,
@@ -318,8 +216,8 @@ func (wui *WebUI) GetHistory(c *gin.Context) {
 	}
 }
 
-func (wui *WebUI) GetDefaults(c *gin.Context) {
-	cfg := wui.config
+func (s *Server) GetDefaults(c *gin.Context) {
+	cfg := s.config
 	if cfg == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -352,8 +250,8 @@ func (wui *WebUI) GetDefaults(c *gin.Context) {
 }
 
 // GetRules returns all rules
-func (wui *WebUI) GetRules(c *gin.Context) {
-	cfg := wui.config
+func (s *Server) GetRules(c *gin.Context) {
+	cfg := s.config
 	if cfg == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -385,7 +283,7 @@ func (wui *WebUI) GetRules(c *gin.Context) {
 }
 
 // GetRule returns a specific rule by name
-func (wui *WebUI) GetRule(c *gin.Context) {
+func (s *Server) GetRule(c *gin.Context) {
 	ruleName := c.Param("name")
 	if ruleName == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -395,7 +293,7 @@ func (wui *WebUI) GetRule(c *gin.Context) {
 		return
 	}
 
-	cfg := wui.config
+	cfg := s.config
 	if cfg == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -426,7 +324,7 @@ func (wui *WebUI) GetRule(c *gin.Context) {
 }
 
 // SetRule creates or updates a rule
-func (wui *WebUI) SetRule(c *gin.Context) {
+func (s *Server) SetRule(c *gin.Context) {
 	ruleName := c.Param("name")
 	if ruleName == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -456,7 +354,7 @@ func (wui *WebUI) SetRule(c *gin.Context) {
 		req.Active = true
 	}
 
-	cfg := wui.config
+	cfg := s.config
 	if cfg == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -491,8 +389,8 @@ func (wui *WebUI) SetRule(c *gin.Context) {
 	}
 
 	// Log the action
-	if wui.logger != nil {
-		wui.logger.LogAction(memory.ActionUpdateProvider, map[string]interface{}{
+	if s.logger != nil {
+		s.logger.LogAction(memory.ActionUpdateProvider, map[string]interface{}{
 			"name": ruleName,
 		}, true, fmt.Sprintf("Rule %s updated successfully", ruleName))
 	}
@@ -511,7 +409,7 @@ func (wui *WebUI) SetRule(c *gin.Context) {
 }
 
 // AddProvider adds a new provider
-func (wui *WebUI) AddProvider(c *gin.Context) {
+func (s *Server) AddProvider(c *gin.Context) {
 	var req struct {
 		Name     string `json:"name" binding:"required"`
 		APIBase  string `json:"api_base" binding:"required"`
@@ -546,10 +444,10 @@ func (wui *WebUI) AddProvider(c *gin.Context) {
 		Enabled:  req.Enabled,
 	}
 
-	err := wui.config.AddProvider(provider)
+	err := s.config.AddProvider(provider)
 	if err != nil {
-		if wui.logger != nil {
-			wui.logger.LogAction(memory.ActionAddProvider, map[string]interface{}{
+		if s.logger != nil {
+			s.logger.LogAction(memory.ActionAddProvider, map[string]interface{}{
 				"name":     req.Name,
 				"api_base": req.APIBase,
 			}, false, err.Error())
@@ -562,8 +460,8 @@ func (wui *WebUI) AddProvider(c *gin.Context) {
 		return
 	}
 
-	if wui.logger != nil {
-		wui.logger.LogAction(memory.ActionAddProvider, map[string]interface{}{
+	if s.logger != nil {
+		s.logger.LogAction(memory.ActionAddProvider, map[string]interface{}{
 			"name":     req.Name,
 			"api_base": req.APIBase,
 		}, true, fmt.Sprintf("Provider %s added successfully", req.Name))
@@ -577,7 +475,7 @@ func (wui *WebUI) AddProvider(c *gin.Context) {
 }
 
 // DeleteProvider removes a provider
-func (wui *WebUI) DeleteProvider(c *gin.Context) {
+func (s *Server) DeleteProvider(c *gin.Context) {
 	providerName := c.Param("name")
 	if providerName == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -587,10 +485,10 @@ func (wui *WebUI) DeleteProvider(c *gin.Context) {
 		return
 	}
 
-	err := wui.config.DeleteProvider(providerName)
+	err := s.config.DeleteProvider(providerName)
 	if err != nil {
-		if wui.logger != nil {
-			wui.logger.LogAction(memory.ActionDeleteProvider, map[string]interface{}{
+		if s.logger != nil {
+			s.logger.LogAction(memory.ActionDeleteProvider, map[string]interface{}{
 				"name": providerName,
 			}, false, err.Error())
 		}
@@ -602,8 +500,8 @@ func (wui *WebUI) DeleteProvider(c *gin.Context) {
 		return
 	}
 
-	if wui.logger != nil {
-		wui.logger.LogAction(memory.ActionDeleteProvider, map[string]interface{}{
+	if s.logger != nil {
+		s.logger.LogAction(memory.ActionDeleteProvider, map[string]interface{}{
 			"name": providerName,
 		}, true, fmt.Sprintf("Provider %s deleted successfully", providerName))
 	}
@@ -615,7 +513,7 @@ func (wui *WebUI) DeleteProvider(c *gin.Context) {
 }
 
 // UpdateProvider updates an existing provider
-func (wui *WebUI) UpdateProvider(c *gin.Context) {
+func (s *Server) UpdateProvider(c *gin.Context) {
 	providerName := c.Param("name")
 	if providerName == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -642,7 +540,7 @@ func (wui *WebUI) UpdateProvider(c *gin.Context) {
 	}
 
 	// Get existing provider
-	provider, err := wui.config.GetProvider(providerName)
+	provider, err := s.config.GetProvider(providerName)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,
@@ -669,10 +567,10 @@ func (wui *WebUI) UpdateProvider(c *gin.Context) {
 		provider.Enabled = *req.Enabled
 	}
 
-	err = wui.config.UpdateProvider(providerName, provider)
+	err = s.config.UpdateProvider(providerName, provider)
 	if err != nil {
-		if wui.logger != nil {
-			wui.logger.LogAction(memory.ActionUpdateProvider, map[string]interface{}{
+		if s.logger != nil {
+			s.logger.LogAction(memory.ActionUpdateProvider, map[string]interface{}{
 				"name":    providerName,
 				"updates": req,
 			}, false, err.Error())
@@ -685,8 +583,8 @@ func (wui *WebUI) UpdateProvider(c *gin.Context) {
 		return
 	}
 
-	if wui.logger != nil {
-		wui.logger.LogAction(memory.ActionUpdateProvider, map[string]interface{}{
+	if s.logger != nil {
+		s.logger.LogAction(memory.ActionUpdateProvider, map[string]interface{}{
 			"name": providerName,
 		}, true, fmt.Sprintf("Provider %s updated successfully", providerName))
 	}
@@ -714,7 +612,7 @@ func (wui *WebUI) UpdateProvider(c *gin.Context) {
 }
 
 // GetProvider returns details for a specific provider (with masked token)
-func (wui *WebUI) GetProvider(c *gin.Context) {
+func (s *Server) GetProvider(c *gin.Context) {
 	providerName := c.Param("name")
 	if providerName == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -724,7 +622,7 @@ func (wui *WebUI) GetProvider(c *gin.Context) {
 		return
 	}
 
-	provider, err := wui.config.GetProvider(providerName)
+	provider, err := s.config.GetProvider(providerName)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,
@@ -757,7 +655,7 @@ func (wui *WebUI) GetProvider(c *gin.Context) {
 }
 
 // ToggleProvider enables/disables a provider
-func (wui *WebUI) ToggleProvider(c *gin.Context) {
+func (s *Server) ToggleProvider(c *gin.Context) {
 	providerName := c.Param("name")
 	if providerName == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -767,7 +665,7 @@ func (wui *WebUI) ToggleProvider(c *gin.Context) {
 		return
 	}
 
-	provider, err := wui.config.GetProvider(providerName)
+	provider, err := s.config.GetProvider(providerName)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,
@@ -779,10 +677,10 @@ func (wui *WebUI) ToggleProvider(c *gin.Context) {
 	// Toggle enabled status
 	provider.Enabled = !provider.Enabled
 
-	err = wui.config.UpdateProvider(providerName, provider)
+	err = s.config.UpdateProvider(providerName, provider)
 	if err != nil {
-		if wui.logger != nil {
-			wui.logger.LogAction(memory.ActionUpdateProvider, map[string]interface{}{
+		if s.logger != nil {
+			s.logger.LogAction(memory.ActionUpdateProvider, map[string]interface{}{
 				"name":    providerName,
 				"enabled": provider.Enabled,
 			}, false, err.Error())
@@ -800,8 +698,8 @@ func (wui *WebUI) ToggleProvider(c *gin.Context) {
 		action = "enabled"
 	}
 
-	if wui.logger != nil {
-		wui.logger.LogAction(memory.ActionUpdateProvider, map[string]interface{}{
+	if s.logger != nil {
+		s.logger.LogAction(memory.ActionUpdateProvider, map[string]interface{}{
 			"name":    providerName,
 			"enabled": provider.Enabled,
 		}, true, fmt.Sprintf("Provider %s %s successfully", providerName, action))
@@ -836,14 +734,14 @@ func maskToken(token string) string {
 	return token[:4] + strings.Repeat("*", len(token)-8) + token[len(token)-4:]
 }
 
-func (wui *WebUI) StartServer(c *gin.Context) {
+func (s *Server) StartServer(c *gin.Context) {
 	c.JSON(http.StatusNotImplemented, gin.H{
 		"success": false,
 		"error":   "Start server via web UI not supported. Please use CLI: tingly start",
 	})
 }
 
-func (wui *WebUI) StopServer(c *gin.Context) {
+func (s *Server) StopServer(c *gin.Context) {
 	// Get the global server instance
 	server := GetGlobalServer()
 	if server == nil {
@@ -867,8 +765,8 @@ func (wui *WebUI) StopServer(c *gin.Context) {
 	}
 
 	// Log the action
-	if wui.logger != nil {
-		wui.logger.LogAction(memory.ActionStopServer, map[string]interface{}{
+	if s.logger != nil {
+		s.logger.LogAction(memory.ActionStopServer, map[string]interface{}{
 			"source": "web_ui",
 		}, true, "Server stopped via web interface")
 	}
@@ -886,21 +784,14 @@ func (wui *WebUI) StopServer(c *gin.Context) {
 	})
 }
 
-func (wui *WebUI) RestartServer(c *gin.Context) {
+func (s *Server) RestartServer(c *gin.Context) {
 	c.JSON(http.StatusNotImplemented, gin.H{
 		"success": false,
 		"error":   "Restart server via web UI not supported. Please use CLI: tingly restart",
 	})
 }
 
-func (wui *WebUI) GenerateToken(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{
-		"success": false,
-		"error":   "Not implemented",
-	})
-}
-
-func (wui *WebUI) SetDefaults(c *gin.Context) {
+func (s *Server) SetDefaults(c *gin.Context) {
 	var req struct {
 		RequestConfigs []config.Rule `json:"request_configs"`
 	}
@@ -917,7 +808,7 @@ func (wui *WebUI) SetDefaults(c *gin.Context) {
 		return
 	}
 
-	cfg := wui.config
+	cfg := s.config
 	if cfg == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -937,7 +828,7 @@ func (wui *WebUI) SetDefaults(c *gin.Context) {
 		}
 	}
 
-	if wui.logger != nil {
+	if s.logger != nil {
 		logData := map[string]interface{}{
 			"request_configs_count": 0,
 		}
@@ -946,7 +837,7 @@ func (wui *WebUI) SetDefaults(c *gin.Context) {
 			logData["request_configs_count"] = len(req.RequestConfigs)
 		}
 
-		wui.logger.LogAction(memory.ActionUpdateDefaults, logData, true, "Request configs updated via web interface")
+		s.logger.LogAction(memory.ActionUpdateDefaults, logData, true, "Request configs updated via web interface")
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -955,7 +846,7 @@ func (wui *WebUI) SetDefaults(c *gin.Context) {
 	})
 }
 
-func (wui *WebUI) FetchProviderModels(c *gin.Context) {
+func (s *Server) FetchProviderModels(c *gin.Context) {
 	providerName := c.Param("name")
 
 	if providerName == "" {
@@ -967,10 +858,10 @@ func (wui *WebUI) FetchProviderModels(c *gin.Context) {
 	}
 
 	// Fetch and save models
-	err := wui.config.FetchAndSaveProviderModels(providerName)
+	err := s.config.FetchAndSaveProviderModels(providerName)
 	if err != nil {
-		if wui.logger != nil {
-			wui.logger.LogAction(memory.ActionFetchModels, map[string]interface{}{
+		if s.logger != nil {
+			s.logger.LogAction(memory.ActionFetchModels, map[string]interface{}{
 				"provider": providerName,
 			}, false, err.Error())
 		}
@@ -983,11 +874,11 @@ func (wui *WebUI) FetchProviderModels(c *gin.Context) {
 	}
 
 	// Get the updated models
-	modelManager := wui.config.GetModelManager()
+	modelManager := s.config.GetModelManager()
 	models := modelManager.GetModels(providerName)
 
-	if wui.logger != nil {
-		wui.logger.LogAction(memory.ActionFetchModels, map[string]interface{}{
+	if s.logger != nil {
+		s.logger.LogAction(memory.ActionFetchModels, map[string]interface{}{
 			"provider":     providerName,
 			"models_count": len(models),
 		}, true, fmt.Sprintf("Successfully fetched %d models for provider %s", len(models), providerName))
@@ -1000,8 +891,8 @@ func (wui *WebUI) FetchProviderModels(c *gin.Context) {
 	})
 }
 
-func (wui *WebUI) GetProviderModels(c *gin.Context) {
-	providerModelManager := wui.config.GetModelManager()
+func (s *Server) GetProviderModels(c *gin.Context) {
+	providerModelManager := s.config.GetModelManager()
 	if providerModelManager == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -1031,10 +922,10 @@ func (wui *WebUI) GetProviderModels(c *gin.Context) {
 }
 
 // authMiddleware validates the authentication token
-func (wui *WebUI) authMiddleware() gin.HandlerFunc {
+func (s *Server) authMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get the auth token from global config
-		cfg := wui.config
+		cfg := s.config
 		if cfg == nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
@@ -1082,11 +973,49 @@ func (wui *WebUI) authMiddleware() gin.HandlerFunc {
 	}
 }
 
-func (wui *WebUI) useStaticEndpoints(engine *gin.Engine) {
+// useWebAPIEndpoints configures API routes for web UI
+func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
+	api := engine.Group("/api")
+	api.Use(s.authMiddleware()) // Apply authentication to all API routes
+	{
+		// Providers management
+		api.GET("/providers", s.GetProviders)
+		api.GET("/providers/:name", s.GetProvider)
+		api.POST("/providers", s.AddProvider)
+		api.PUT("/providers/:name", s.UpdateProvider)
+		api.POST("/providers/:name/toggle", s.ToggleProvider)
+		api.DELETE("/providers/:name", s.DeleteProvider)
+
+		// Server management
+		api.GET("/status", s.GetStatus)
+		api.POST("/server/start", s.StartServer)
+		api.POST("/server/stop", s.StopServer)
+		api.POST("/server/restart", s.RestartServer)
+
+		// Rule management
+		api.GET("/rules", s.GetRules)
+		api.GET("/rule/:name", s.GetRule)
+		api.POST("/rule/:name", s.SetRule)
+
+		// History
+		api.GET("/history", s.GetHistory)
+
+		// New API endpoints for defaults and provider models
+		api.GET("/defaults", s.GetDefaults)
+		api.POST("/defaults", s.SetDefaults)
+		api.GET("/provider-models", s.GetProviderModels)
+		api.POST("/provider-models/:name", s.FetchProviderModels)
+
+		// Probe endpoint for testing rule configurations
+		api.POST("/probe", s.ProbeRule)
+	}
+}
+
+func (s *Server) useWebStaticEndpoints(engine *gin.Engine) {
 	// Load templates and static files on the main router - try embedded first
-	if wui.assets != nil {
+	if s.assets != nil {
 		log.Printf("Using embedded assets on main server")
-		wui.assets.SetupStaticRoutes(engine)
+		s.assets.SetupStaticRoutes(engine)
 	} else {
 		panic("No UI resources")
 	}

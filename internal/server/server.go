@@ -24,12 +24,12 @@ type Server struct {
 	router          *gin.Engine
 	httpServer      *http.Server
 	watcher         *config.ConfigWatcher
-	webUI           *WebUI
-	useWebUI        bool
-	memoryLogger    *memory.MemoryLogger
+	useUI           bool
+	logger          *memory.MemoryLogger
 	statsMW         *StatsMiddleware
 	loadBalancer    *LoadBalancer
 	loadBalancerAPI *LoadBalancerAPI
+	assets          *EmbeddedAssets
 }
 
 // NewServer creates a new HTTP server instance
@@ -38,7 +38,14 @@ func NewServer(cfg *config.Config) *Server {
 }
 
 // NewServerWithOptions creates a new HTTP server with UI option
-func NewServerWithOptions(cfg *config.Config, enableUI bool) *Server {
+func NewServerWithOptions(cfg *config.Config, useUI bool) *Server {
+	// Initialize embedded assets
+	assets, err := NewEmbeddedAssets()
+	if err != nil {
+		log.Printf("Failed to initialize embedded assets: %v", err)
+		// Continue without embedded assets, will fallback to file system
+	}
+
 	// Set Gin mode
 	gin.SetMode(gin.ReleaseMode)
 
@@ -86,11 +93,12 @@ func NewServerWithOptions(cfg *config.Config, enableUI bool) *Server {
 
 	// Create server struct first
 	server := &Server{
-		config:       cfg,
-		jwtManager:   jwtManager,
-		router:       gin.New(),
-		memoryLogger: memoryLogger,
-		useWebUI:     enableUI,
+		config:     cfg,
+		jwtManager: jwtManager,
+		router:     gin.New(),
+		logger:     memoryLogger,
+		useUI:      useUI,
+		assets:     assets,
 	}
 
 	// Initialize statistics middleware with server reference
@@ -231,9 +239,8 @@ func (s *Server) setupRoutes() {
 	}
 
 	// Integrate Web UI routes if enabled
-	if s.useWebUI {
-		useWebUI(s)
-
+	if s.useUI {
+		s.UseUIEndpoints()
 		// Token generation endpoint (for UI and management)
 		s.router.POST("/api/token", s.UserAuth(), s.GenerateToken)
 		s.router.GET("/api/token", s.UserAuth(), s.GetToken)
