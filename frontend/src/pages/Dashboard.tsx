@@ -454,7 +454,6 @@ const Dashboard = () => {
                                         <IconButton
                                             onClick={() => setShowTokenModal(true)}
                                             size="small"
-                                            title="View Token"
                                         >
                                             <Typography variant="caption">
                                                 👁️

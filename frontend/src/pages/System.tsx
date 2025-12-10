@@ -9,7 +9,7 @@ import { api } from '../services/api';
 const System = () => {
     const [serverStatus, setServerStatus] = useState<any>(null);
     const [providersStatus, setProvidersStatus] = useState<any>(null);
-    const [defaults, setDefaults] = useState<any>({});
+    const [rules, setRules] = useState<any>({});
     const [providers, setProviders] = useState<any[]>([]);
     const [providerModels, setProviderModels] = useState<any>({});
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -55,9 +55,9 @@ const System = () => {
 
 
     const loadDefaults = async () => {
-        const result = await api.getDefaults();
+        const result = await api.getRules();
         if (result.success) {
-            setDefaults(result.data);
+            setRules(result.data);
         }
     };
 
@@ -65,14 +65,14 @@ const System = () => {
         const [providersResult, modelsResult, defaultsResult] = await Promise.all([
             api.getProviders(),
             api.getProviderModels(),
-            api.getDefaults(),
+            api.getRules(),
         ]);
 
         if (providersResult.success && modelsResult.success) {
             setProviders(providersResult.data);
             setProviderModels(modelsResult.data);
             if (defaultsResult.success) {
-                setDefaults(defaultsResult.data);
+                setRules(defaultsResult.data);
             }
         }
     };

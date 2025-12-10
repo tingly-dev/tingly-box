@@ -1,6 +1,6 @@
 import { Grid } from '@mui/material';
 import type { GridProps } from '@mui/material';
-import { ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 interface CardGridProps extends Omit<GridProps, 'container'> {
   children: ReactNode;
