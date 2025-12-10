@@ -3,6 +3,9 @@ version: '3'
 includes:
   common: ../Taskfile.yml
 
+vars:
+  PACKAGE_PATH: ./wails3
+
 tasks:
   build:
     summary: Builds the application for Windows
@@ -17,7 +20,7 @@ tasks:
       - task: common:generate:icons
     cmds:
       - task: generate:syso
-      - go build {{.BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}}.exe
+      - go build {{.BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}}.exe {{.PACKAGE_PATH}}
       - cmd: powershell Remove-item *.syso
         platforms: [windows]
       - cmd: rm -f *.syso

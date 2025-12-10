@@ -25,8 +25,8 @@ type ProxyService struct {
 }
 
 // NewUIService creates a new UI service instance
-func NewUIService(port int) (*ProxyService, error) {
-	appConfig, err := config.NewAppConfig()
+func NewUIService(configDir string, port int) (*ProxyService, error) {
+	appConfig, err := config.NewAppConfigWithDir(configDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create app config: %w", err)
 	}
@@ -87,6 +87,8 @@ func (s *ProxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // ServiceStartup is called when the service starts
 func (s *ProxyService) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
+	s.Start(ctx)
+
 	// Store the application instance for later use
 	s.app = application.Get()
 
@@ -111,4 +113,8 @@ func (s *ProxyService) ServiceStartup(ctx context.Context, options application.S
 func (s *ProxyService) ServiceShutdown(ctx context.Context) error {
 	// Clean up resources if needed
 	return nil
+}
+
+func (s *ProxyService) GetUserAuthToken() string {
+	return s.appConfig.GetGlobalConfig().GetUserToken()
 }

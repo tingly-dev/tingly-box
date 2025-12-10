@@ -1,30 +1,29 @@
 package main
 
 import (
-	"context"
 	"log"
 	"net/http"
 	"strings"
 	"time"
+
+	"tingly-box/internal/util"
 	"tingly-box/wails3/services"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 const (
-	AppName        = "Tingly Box"
+	AppName        = "Model Box"
 	AppDescription = "A proxy server for AI model APIs with web UI"
 )
 
 var App *application.App
+var uiService *services.ProxyService
 
 func newApp() *application.App {
 	// Create UI service
-	uiService, err := services.NewUIService(8080)
-	if err != nil {
-		log.Fatalf("Failed to create UI service: %v", err)
-	}
-	err = uiService.Start(context.Background())
+	home, err := util.GetUserPath()
+	uiService, err = services.NewUIService(home, 18080)
 	if err != nil {
 		log.Fatalf("Failed to create UI service: %v", err)
 	}
@@ -41,7 +40,7 @@ func newApp() *application.App {
 		Description: AppDescription,
 		Services: []application.Service{
 			application.NewService(&services.GreetService{}),
-			application.NewService(uiService),
+			//application.NewService(uiService),
 		},
 		Assets: application.AssetOptions{
 			Middleware: func(next http.Handler) http.Handler {
@@ -68,7 +67,7 @@ func newApp() *application.App {
 		},
 		Windows: application.WindowsOptions{},
 		SingleInstance: &application.SingleInstanceOptions{
-			UniqueID: "tingly-box.single-instance",
+			UniqueID: "tingly-model-box.single-instance",
 			OnSecondInstanceLaunch: func(data application.SecondInstanceData) {
 				if WindowMain != nil {
 					WindowMain.EmitEvent("secondInstanceLaunched", data)

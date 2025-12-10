@@ -18,6 +18,7 @@ import (
 // AppConfig holds the application configuration with encrypted storage
 type AppConfig struct {
 	configFile string
+	configDir  string
 	config     *Config
 	gcm        cipher.AEAD
 	mu         sync.RWMutex
@@ -36,11 +37,11 @@ func NewAppConfig() (*AppConfig, error) {
 		return nil, fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	return NewAppConfigWithConfigDir(configDir)
+	return NewAppConfigWithDir(configDir)
 }
 
-// NewAppConfigWithConfigDir creates a new AppConfig with a custom config directory
-func NewAppConfigWithConfigDir(configDir string) (*AppConfig, error) {
+// NewAppConfigWithDir creates a new AppConfig with a custom config directory
+func NewAppConfigWithDir(configDir string) (*AppConfig, error) {
 	if err := os.MkdirAll(configDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create config directory: %w", err)
 	}
@@ -48,40 +49,45 @@ func NewAppConfigWithConfigDir(configDir string) (*AppConfig, error) {
 	configFile := filepath.Join(configDir, "config.json")
 	ac := &AppConfig{
 		configFile: configFile,
+		configDir:  configDir,
 	}
 
 	// Initialize encryption
-	if err := ac.initEncryption(); err != nil {
-		return nil, fmt.Errorf("failed to initialize encryption: %w", err)
-	}
-
-	// Load existing configuration if exists (check both encrypted and unencrypted)
-	encryptedFile := filepath.Join(configDir, "config.enc")
-	if _, err := os.Stat(encryptedFile); err == nil {
-		// Try to load from old encrypted file first and migrate to new format
-		if loadErr := ac.loadFromEncrypted(encryptedFile); loadErr != nil {
-			return nil, fmt.Errorf("failed to load existing encrypted config: %w", loadErr)
-		}
-		// Save in new format (plaintext by default)
-		if err := ac.Save(); err != nil {
-			return nil, fmt.Errorf("failed to migrate config to new format: %w", err)
-		}
-		// Remove old encrypted file after successful migration
-		os.Remove(encryptedFile)
-	} else if _, err := os.Stat(configFile); err == nil {
-		if err := ac.Load(); err != nil {
-			return nil, fmt.Errorf("failed to load existing config: %w", err)
-		}
-	}
+	//if err := ac.initEncryption(); err != nil {
+	//	return nil, fmt.Errorf("failed to initialize encryption: %w", err)
+	//}
+	//
+	//// Load existing configuration if exists (check both encrypted and unencrypted)
+	//encryptedFile := filepath.Join(configDir, "config.enc")
+	//if _, err := os.Stat(encryptedFile); err == nil {
+	//	// Try to load from old encrypted file first and migrate to new format
+	//	if loadErr := ac.loadFromEncrypted(encryptedFile); loadErr != nil {
+	//		return nil, fmt.Errorf("failed to load existing encrypted config: %w", loadErr)
+	//	}
+	//	// Save in new format (plaintext by default)
+	//	if err := ac.Save(); err != nil {
+	//		return nil, fmt.Errorf("failed to migrate config to new format: %w", err)
+	//	}
+	//	// Remove old encrypted file after successful migration
+	//	os.Remove(encryptedFile)
+	//} else if _, err := os.Stat(configFile); err == nil {
+	//	if err := ac.Load(); err != nil {
+	//		return nil, fmt.Errorf("failed to load existing config: %w", err)
+	//	}
+	//}
 
 	// Initialize global config (use same directory as app config)
-	globalConfig, err := NewConfigWithConfigDir(configDir)
+	globalConfig, err := NewConfigWithDir(configDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize global config: %w", err)
 	}
 	ac.config = globalConfig
 
 	return ac, nil
+}
+
+func (ac *AppConfig) ConfigDir() string {
+	return ac.configDir
 }
 
 // initEncryption initializes the encryption cipher

@@ -4,9 +4,9 @@
         <key>CFBundlePackageType</key>
             <string>APPL</string>
         <key>CFBundleName</key>
-            <string>My Product</string>
+            <string>Model Box</string>
         <key>CFBundleExecutable</key>
-            <string>myapp</string>
+            <string>model-box</string>
         <key>CFBundleIdentifier</key>
             <string>com.wails.myapp</string>
         <key>CFBundleVersion</key>
@@ -23,5 +23,20 @@
             <string>true</string>
         <key>NSHumanReadableCopyright</key>
             <string>© now, My Company</string>
+        <key>NSAppTransportSecurity</key>
+        <dict>
+            <key>NSAllowsLocalNetworking</key>
+            <true/>
+            <key>NSExceptionDomains</key>
+            <dict>
+                <key></key>
+                <dict>
+                    <key>NSExceptionAllowsInsecureHTTPLoads</key>
+                    <true/>
+                    <key>NSIncludesSubdomains</key>
+                    <true/>
+                </dict>
+            </dict>
+        </dict>
     </dict>
 </plist>

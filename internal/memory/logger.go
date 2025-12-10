@@ -7,21 +7,22 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+	"tingly-box/internal/util"
 )
 
 // ActionType represents the type of action performed
 type ActionType string
 
 const (
-	ActionAddProvider      ActionType = "add_provider"
-	ActionDeleteProvider   ActionType = "delete_provider"
-	ActionUpdateProvider   ActionType = "update_provider"
-	ActionStartServer      ActionType = "start_server"
-	ActionStopServer       ActionType = "stop_server"
-	ActionRestartServer    ActionType = "restart_server"
-	ActionGenerateToken    ActionType = "generate_token"
-	ActionUpdateDefaults   ActionType = "update_defaults"
-	ActionFetchModels      ActionType = "fetch_models"
+	ActionAddProvider    ActionType = "add_provider"
+	ActionDeleteProvider ActionType = "delete_provider"
+	ActionUpdateProvider ActionType = "update_provider"
+	ActionStartServer    ActionType = "start_server"
+	ActionStopServer     ActionType = "stop_server"
+	ActionRestartServer  ActionType = "restart_server"
+	ActionGenerateToken  ActionType = "generate_token"
+	ActionUpdateDefaults ActionType = "update_defaults"
+	ActionFetchModels    ActionType = "fetch_models"
 )
 
 // HistoryEntry represents a single history entry
@@ -53,7 +54,8 @@ type MemoryLogger struct {
 
 // NewMemoryLogger creates a new memory logger
 func NewMemoryLogger() (*MemoryLogger, error) {
-	memoryDir := "memory"
+	home, _ := util.GetUserPath()
+	memoryDir := filepath.Join(home, ".tingly-box", "memory")
 	if err := os.MkdirAll(memoryDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create memory directory: %w", err)
 	}

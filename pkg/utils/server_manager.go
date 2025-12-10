@@ -34,7 +34,7 @@ func NewServerManager(appConfig *config.AppConfig) *ServerManager {
 func NewServerManagerWithOptions(appConfig *config.AppConfig, enableUI bool) *ServerManager {
 	res := &ServerManager{
 		appConfig:  appConfig,
-		pidManager: config.NewPIDManager(),
+		pidManager: config.NewPIDManager(appConfig.ConfigDir()),
 		enableUI:   enableUI,
 	}
 	res.Setup(appConfig.GetServerPort())
