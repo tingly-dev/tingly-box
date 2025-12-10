@@ -76,6 +76,9 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 					ResponseModel: "",
 					Services:      []Service{}, // Empty services initially
 					Active:        true,
+					// Legacy fields for backward compatibility
+					Provider:     "",
+					DefaultModel: "",
 				},
 			}
 			cfg.DefaultRequestID = 0
@@ -256,9 +259,9 @@ func (c *Config) GetRequestConfigByRequestModel(modelName string) *Rule {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	for i := range c.Rules {
-		if c.Rules[i].RequestModel == modelName {
-			return &c.Rules[i]
+	for idx := range c.Rules {
+		if c.Rules[idx].RequestModel == modelName {
+			return &c.Rules[idx]
 		}
 	}
 	return nil
