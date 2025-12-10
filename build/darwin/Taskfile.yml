@@ -1,11 +1,11 @@
 version: '3'
 
-vars:
-  PACKAGE_PATH: ./wails3
-  
 includes:
   common: ../Taskfile.yml
 
+vars:
+  PACKAGE_PATH: ./wails3
+  
 tasks:
   build:
     summary: Creates a production build of the application

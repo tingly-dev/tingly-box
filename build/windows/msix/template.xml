@@ -28,7 +28,7 @@
                 Id="com.wails.myapp"
                 Description="My Product Description"
                 DisplayName="My Product"
-                ExecutableName="myapp"
+                ExecutableName="model-box"
                 EntryPoint="Windows.FullTrustApplication">
                 
             </Application>
