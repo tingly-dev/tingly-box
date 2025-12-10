@@ -135,50 +135,6 @@ const System = () => {
         }
     };
 
-
-    // This handler is kept for backward compatibility
-    // The main configuration management is now done through ModelConfigCard
-    const setDefaultProviderHandler = async (providerName: string) => {
-        const currentDefaults = await api.getDefaults();
-        if (!currentDefaults.success) {
-            setMessage({ type: 'error', text: 'Failed to get current defaults' });
-            return;
-        }
-
-        // Update the default RequestConfig with the selected provider
-        const requestConfigs = currentDefaults.data.request_configs || [];
-        if (requestConfigs.length === 0) {
-            setMessage({
-                type: 'error',
-                text: 'No request configurations found. Please use the Model Configuration card to add one.'
-            });
-            return;
-        }
-
-        const payload = {
-            request_configs: requestConfigs,
-        };
-
-        const result = await api.setDefaults(payload);
-        if (result.success) {
-            setMessage({ type: 'success', text: `Set ${providerName} as default provider` });
-            await loadProviderSelectionPanel();
-            await loadDefaults();
-        } else {
-            setMessage({ type: 'error', text: result.error });
-        }
-    };
-
-    const fetchProviderModels = async (providerName: string) => {
-        const result = await api.getProviderModelsByName(providerName);
-        if (result.success) {
-            setMessage({ type: 'success', text: `Successfully fetched models for ${providerName}` });
-            await loadProviderSelectionPanel();
-        } else {
-            setMessage({ type: 'error', text: `Failed to fetch models: ${result.error}` });
-        }
-    };
-
     return (
         <PageLayout loading={loading} message={message} onClearMessage={() => setMessage(null)}>
             <CardGrid>
