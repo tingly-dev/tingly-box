@@ -2,8 +2,13 @@
 
 version: '3'
 
+includes:
+  common: ./build/Taskfile.yml
+  windows: ./build/windows/Taskfile.yml
+  darwin: ./build/darwin/Taskfile.yml
+  linux: ./build/linux/Taskfile.yml
+
 vars:
-  GREETING: Hello, World!
   VERSION: ""
   BUILD_DIR: build
   DIST_DIR: build/dist
@@ -12,18 +17,7 @@ vars:
   BIN_DIR: "bin"
   VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
 
-includes:
-  common: ./build/Taskfile.yml
-  windows: ./build/windows/Taskfile.yml
-  darwin: ./build/darwin/Taskfile.yml
-  linux: ./build/linux/Taskfile.yml
-
 tasks:
-  default:
-    cmds:
-      - echo "{{.GREETING}}"
-    silent: true
-  
   wails:build:
     summary: Builds the application
     cmds:
@@ -43,13 +37,6 @@ tasks:
     summary: Runs the application in development mode
     cmds:
       - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
-  
-  wails:dist:
-    cmds:
-      - |
-        cd frontend
-        pnpm run build:dev
-  
   
   start:
     cmds:
