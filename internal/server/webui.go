@@ -478,6 +478,7 @@ func (wui *WebUI) SetRule(c *gin.Context) {
 				TimeWindow: 300,
 			},
 		},
+		Tactic: config.TacticRoundRobin.String(), // Default to round-robin
 		Active: req.Active,
 	}
 

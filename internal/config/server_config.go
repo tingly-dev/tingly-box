@@ -155,6 +155,9 @@ func (c *Config) load() error {
 	// Restore the config file path after unmarshaling
 	c.ConfigFile = configFile
 
+	// Migration: Ensure all rules have a tactic set
+	c.migrateRules()
+
 	return nil
 }
 
@@ -695,6 +698,26 @@ func (c *Config) getProviderModelsFromAPI(provider *Provider) []string {
 
 func (c *Config) GetModelManager() *ModelListManager {
 	return c.modelManager
+}
+
+// migrateRules ensures all rules have a tactic set, applying default values for migration
+func (c *Config) migrateRules() {
+	needsSave := false
+	for i := range c.Rules {
+		if c.Rules[i].Tactic == "" {
+			c.Rules[i].Tactic = TacticRoundRobin.String()
+			needsSave = true
+		}
+	}
+
+	// Save if any rules were updated
+	if needsSave {
+		// Call save without acquiring lock since this is called within load()
+		data, err := json.MarshalIndent(c, "", "  ")
+		if err == nil {
+			os.WriteFile(c.ConfigFile, data, 0644)
+		}
+	}
 }
 
 // generateSecret generates a random secret for JWT
