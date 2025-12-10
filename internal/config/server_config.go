@@ -43,11 +43,11 @@ func NewConfig() (*Config, error) {
 		return nil, fmt.Errorf("config directory is empty")
 	}
 
-	return NewConfigWithConfigDir(configDir)
+	return NewConfigWithDir(configDir)
 }
 
-// NewConfigWithConfigDir creates a new global configuration manager with a custom config directory
-func NewConfigWithConfigDir(configDir string) (*Config, error) {
+// NewConfigWithDir creates a new global configuration manager with a custom config directory
+func NewConfigWithDir(configDir string) (*Config, error) {
 	if configDir == "" {
 		return nil, fmt.Errorf("cfg directory is empty")
 	}

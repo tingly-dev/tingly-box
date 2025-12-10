@@ -32,7 +32,7 @@ func NewTestServerWithConfigDir(t *testing.T, configDir string) *TestServer {
 		t.Fatalf("Failed to create config directory %s: %v", configDir, err)
 	}
 
-	appConfig, err := config.NewAppConfigWithConfigDir(configDir)
+	appConfig, err := config.NewAppConfigWithDir(configDir)
 	if err != nil {
 		t.Fatalf("Failed to create app config: %v", err)
 	}
