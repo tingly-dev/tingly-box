@@ -265,13 +265,7 @@ func (s *Server) GetRule(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"data": map[string]interface{}{
-			"request_model":  rule.RequestModel,
-			"response_model": rule.ResponseModel,
-			"provider":       rule.GetDefaultProvider(),
-			"default_model":  rule.GetDefaultModel(),
-			"active":         rule.Active,
-		},
+		"data":    rule,
 	})
 }
 
@@ -294,11 +288,6 @@ func (s *Server) SetRule(c *gin.Context) {
 			"error":   err.Error(),
 		})
 		return
-	}
-
-	// Set default active to true if not provided
-	if !rule.Active {
-		rule.Active = true
 	}
 
 	cfg := s.config
