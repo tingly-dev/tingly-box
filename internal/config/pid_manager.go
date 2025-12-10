@@ -14,10 +14,10 @@ type PIDManager struct {
 }
 
 // NewPIDManager creates a new PID manager
-func NewPIDManager() *PIDManager {
+func NewPIDManager(configDir string) *PIDManager {
 	// Use current working directory for PID file
 	return &PIDManager{
-		pidFile: filepath.Join(ConfigDirName, "tingly-server.pid"),
+		pidFile: filepath.Join(configDir, "tingly-server.pid"),
 	}
 }
 

@@ -18,6 +18,7 @@ import (
 // AppConfig holds the application configuration with encrypted storage
 type AppConfig struct {
 	configFile string
+	configDir  string
 	config     *Config
 	gcm        cipher.AEAD
 	mu         sync.RWMutex
@@ -48,6 +49,7 @@ func NewAppConfigWithDir(configDir string) (*AppConfig, error) {
 	configFile := filepath.Join(configDir, "config.json")
 	ac := &AppConfig{
 		configFile: configFile,
+		configDir:  configDir,
 	}
 
 	// Initialize encryption
@@ -82,6 +84,10 @@ func NewAppConfigWithDir(configDir string) (*AppConfig, error) {
 	ac.config = globalConfig
 
 	return ac, nil
+}
+
+func (ac *AppConfig) ConfigDir() string {
+	return ac.configDir
 }
 
 // initEncryption initializes the encryption cipher

@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"tingly-box/internal/util"
 	"tingly-box/wails3/services"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -20,8 +22,8 @@ var uiService *services.ProxyService
 
 func newApp() *application.App {
 	// Create UI service
-	var err error
-	uiService, err = services.NewUIService(18080)
+	home, err := util.GetUserPath()
+	uiService, err = services.NewUIService(home, 18080)
 	if err != nil {
 		log.Fatalf("Failed to create UI service: %v", err)
 	}

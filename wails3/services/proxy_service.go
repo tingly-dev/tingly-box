@@ -25,8 +25,8 @@ type ProxyService struct {
 }
 
 // NewUIService creates a new UI service instance
-func NewUIService(port int) (*ProxyService, error) {
-	appConfig, err := config.NewAppConfig()
+func NewUIService(configDir string, port int) (*ProxyService, error) {
+	appConfig, err := config.NewAppConfigWithDir(configDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create app config: %w", err)
 	}
