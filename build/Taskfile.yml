@@ -22,7 +22,7 @@ tasks:
       - sh: pnpm version
         msg: "Looks like npm isn't installed. Npm is part of the Node installer: https://nodejs.org/en/download/"
     cmds:
-      - echo pnpm install
+      - pnpm install
 
   build:frontend:
     label: build:frontend (PRODUCTION={{.PRODUCTION}})
@@ -39,7 +39,10 @@ tasks:
           BUILD_FLAGS:
             ref: .BUILD_FLAGS
     cmds:
-      - pnpm run {{.BUILD_COMMAND}}
+      - |
+        pnpm run {{.BUILD_COMMAND}}
+        cp -R dist ../wails3/frontend
+        
     env:
       PRODUCTION: '{{.PRODUCTION | default "false"}}'
     vars:

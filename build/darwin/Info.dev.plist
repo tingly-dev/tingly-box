@@ -4,9 +4,9 @@
         <key>CFBundlePackageType</key>
             <string>APPL</string>
         <key>CFBundleName</key>
-            <string>My Product</string>
+            <string>Model Box</string>
         <key>CFBundleExecutable</key>
-            <string>myapp</string>
+            <string>model-box</string>
         <key>CFBundleIdentifier</key>
             <string>com.wails.myapp</string>
         <key>CFBundleVersion</key>
