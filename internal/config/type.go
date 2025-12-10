@@ -30,6 +30,9 @@ type Rule struct {
 
 // GetServices returns the services to use for this rule
 func (r *Rule) GetServices() []Service {
+	if r.Services == nil {
+		r.Services = []Service{}
+	}
 	return r.Services
 }
 

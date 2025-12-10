@@ -48,7 +48,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 	}
 
 	// Determine provider and model based on request
-	provider, rule, err := s.DetermineProviderAndModel(req.Model)
+	provider, selectedService, _, err := s.DetermineProviderAndModel(req.Model)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -59,17 +59,13 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		return
 	}
 
-	// Get the actual model name to use
-	actualModel := req.Model
-	if rule != nil && len(rule.Services) > 0 {
-		// Use the first service's model as default
-		actualModel = rule.Services[0].Model
-		req.Model = actualModel
-	}
+	// Use the selected service's model
+	actualModel := selectedService.Model
+	req.Model = actualModel
 
 	// Set provider and model information in context for statistics middleware
 	c.Set("provider", provider.Name)
-	c.Set("model", actualModel)
+	c.Set("model", selectedService.Model)
 
 	// Check provider's API style to decide which path to take
 	apiStyle := string(provider.APIStyle)
