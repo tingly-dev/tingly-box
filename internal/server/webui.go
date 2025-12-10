@@ -236,8 +236,8 @@ func (s *Server) GetRules(c *gin.Context) {
 
 // GetRule returns a specific rule by name
 func (s *Server) GetRule(c *gin.Context) {
-	ruleName := c.Param("name")
-	if ruleName == "" {
+	ruleUUID := c.Param("uuid")
+	if ruleUUID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"error":   "Rule name is required",
@@ -254,7 +254,7 @@ func (s *Server) GetRule(c *gin.Context) {
 		return
 	}
 
-	rule := cfg.GetRequestConfigByRequestModel(ruleName)
+	rule := cfg.GetRequestConfigByRequestModel(ruleUUID)
 	if rule == nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,
@@ -271,8 +271,8 @@ func (s *Server) GetRule(c *gin.Context) {
 
 // SetRule creates or updates a rule
 func (s *Server) SetRule(c *gin.Context) {
-	ruleName := c.Param("name")
-	if ruleName == "" {
+	ruleUUID := c.Param("uuid")
+	if ruleUUID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"error":   "Rule name is required",
@@ -310,8 +310,8 @@ func (s *Server) SetRule(c *gin.Context) {
 	// Log the action
 	if s.logger != nil {
 		s.logger.LogAction(memory.ActionUpdateProvider, map[string]interface{}{
-			"name": ruleName,
-		}, true, fmt.Sprintf("Rule %s updated successfully", ruleName))
+			"name": ruleUUID,
+		}, true, fmt.Sprintf("Rule %s updated successfully", ruleUUID))
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -324,6 +324,40 @@ func (s *Server) SetRule(c *gin.Context) {
 			"default_model":  rule.GetDefaultModel(),
 			"active":         rule.Active,
 		},
+	})
+}
+
+func (s *Server) DeleteRule(c *gin.Context) {
+	ruleUUID := c.Param("uuid")
+	if ruleUUID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Rule name is required",
+		})
+		return
+	}
+
+	cfg := s.config
+	if cfg == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Global config not available",
+		})
+		return
+	}
+
+	err := cfg.DeleteRule(ruleUUID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to save rule: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Rule delete successfully",
 	})
 }
 
@@ -913,8 +947,9 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 
 		// Rule management
 		api.GET("/rules", s.GetRules)
-		api.GET("/rule/:name", s.GetRule)
-		api.POST("/rule/:name", s.SetRule)
+		api.GET("/rule/:uuid", s.GetRule)
+		api.POST("/rule/:uuid", s.SetRule)
+		api.DELETE("/rule/:uuid", s.DeleteRule)
 
 		// History
 		api.GET("/history", s.GetHistory)
