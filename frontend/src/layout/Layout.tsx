@@ -135,7 +135,7 @@ const Layout = ({ children }: LayoutProps) => {
                         fontStyle: 'italic'
                     }}
                 >
-                    Live for AI Agent Dev
+                    Ready for AI Agent Dev
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <IconButton
