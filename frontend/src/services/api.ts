@@ -214,7 +214,7 @@ export const api = {
     }),
     probeRule: (rule, provider, model) => fetchUIAPI('/probe', {
         method: 'POST',
-        body: JSON.stringify({ rule, provider, default_model: model }),
+        body: JSON.stringify({ rule, provider, model: model }),
     }),
     // Service management within rules
     addServiceToRule: (ruleName: string, serviceData: any) => fetchUIAPI(`/rule/${ruleName}/services`, {

@@ -64,11 +64,17 @@ func (s *Server) UseUIEndpoints() {
 	s.useWebStaticEndpoints(s.router)
 }
 
+type ProbeRequest struct {
+	Rule     string `yaml:"rule" json:"rule"`
+	Provider string `yaml:"provider" json:"provider"`
+	Model    string `yaml:"model" json:"model"`
+}
+
 // ProbeRule tests a rule configuration by sending a sample request to the configured provider
 func (s *Server) ProbeRule(c *gin.Context) {
 
-	var rule config.Rule
-	if err := c.ShouldBindJSON(&rule); err != nil {
+	var req ProbeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"error":   err.Error(),
@@ -94,8 +100,17 @@ func (s *Server) ProbeRule(c *gin.Context) {
 	var testProvider *config.Provider
 
 	for _, provider := range providers {
-		if provider.Enabled && provider.Name == rule.GetDefaultProvider() {
+		if provider.Enabled && provider.Name == req.Provider {
 			testProvider = provider
+			break
+		}
+	}
+
+	rules := s.config.Rules
+	var rule *config.Rule
+	for _, r := range rules {
+		if r.UUID == req.Rule {
+			rule = &r
 			break
 		}
 	}
