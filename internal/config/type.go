@@ -19,6 +19,7 @@ type Provider struct {
 
 // Rule represents a request/response configuration with load balancing support
 type Rule struct {
+	UUID                string                 `json:"uuid"`
 	RequestModel        string                 `yaml:"request_model" json:"request_model"`                 // The "tingly" value
 	ResponseModel       string                 `yaml:"response_model" json:"response_model"`               // Response model configuration
 	Services            []Service              `yaml:"services" json:"services"`                           // Multiple services for load balancing
