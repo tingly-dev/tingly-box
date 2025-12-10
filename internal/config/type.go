@@ -26,13 +26,33 @@ type Rule struct {
 	Tactic              string                 `yaml:"tactic" json:"tactic"`                               // Load balancing strategy (round_robin, token_based, hybrid)
 	TacticParams        map[string]interface{} `yaml:"tactic_params" json:"tactic_params,omitempty"`       // Parameters for the tactic (e.g., request_threshold, token_threshold)
 	Active              bool                   `yaml:"active" json:"active"`                               // Whether this rule is active (default: true)
+	// Legacy fields for backward compatibility (deprecated)
+	Provider     string `yaml:"provider,omitempty" json:"provider,omitempty"`           // Legacy: provider name (deprecated)
+	DefaultModel string `yaml:"default_model,omitempty" json:"default_model,omitempty"` // Legacy: default model name (deprecated)
 }
 
 // GetServices returns the services to use for this rule
+// Migrates from legacy Provider/DefaultModel fields if Services is empty
 func (r *Rule) GetServices() []Service {
 	if r.Services == nil {
 		r.Services = []Service{}
 	}
+
+	// If Services is empty but legacy fields exist, migrate them
+	if len(r.Services) == 0 && r.Provider != "" && r.DefaultModel != "" {
+		r.Services = []Service{
+			{
+				Provider: r.Provider,
+				Model:    r.DefaultModel,
+				Weight:   1,
+				Active:   true,
+			},
+		}
+		// Clear legacy fields after migration
+		r.Provider = ""
+		r.DefaultModel = ""
+	}
+
 	return r.Services
 }
 
@@ -96,4 +116,31 @@ func (r *Rule) GetTacticType() TacticType {
 		return TacticRoundRobin
 	}
 	return ParseTacticType(r.Tactic)
+}
+
+// ToJSON prepares the rule for JSON serialization with backward compatibility
+func (r *Rule) ToJSON() interface{} {
+	// Ensure Services is populated
+	services := r.GetServices()
+
+	// Create the JSON representation
+	jsonRule := map[string]interface{}{
+		"request_model":         r.RequestModel,
+		"response_model":        r.ResponseModel,
+		"services":              services,
+		"current_service_index": r.CurrentServiceIndex,
+		"tactic":                r.Tactic,
+		"tactic_params":         r.TacticParams,
+		"active":                r.Active,
+	}
+
+	// Include legacy fields if they have values (for very old configs)
+	if r.Provider != "" {
+		jsonRule["provider"] = r.Provider
+	}
+	if r.DefaultModel != "" {
+		jsonRule["default_model"] = r.DefaultModel
+	}
+
+	return jsonRule
 }
