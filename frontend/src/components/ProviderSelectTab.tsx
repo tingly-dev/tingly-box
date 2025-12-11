@@ -41,7 +41,7 @@ interface ProviderSelectTabProps {
     onCustomModelSave?: (provider: Provider, customModel: string) => void;
 }
 
-const MODELS_PER_PAGE = 7 * 4;
+const MODELS_PER_PAGE = 7 * 4 - 1;
 
 interface TabPanelProps {
     children?: React.ReactNode;

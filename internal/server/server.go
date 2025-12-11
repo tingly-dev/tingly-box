@@ -226,6 +226,15 @@ func (s *Server) setupRoutes() {
 		//openaiV1.GET("/models", s.ModelAuth(), s.ListModels)
 	}
 
+	// OpenAI API alias (without version)
+	openai := s.router.Group("/openai")
+	{
+		// Chat completions endpoint (OpenAI compatible)
+		openai.POST("/chat/completions", s.ModelAuth(), s.OpenAIChatCompletions)
+		// Models endpoint (OpenAI compatible)
+		//openai.GET("/models", s.ModelAuth(), s.ListModels)
+	}
+
 	// Anthropic v1 API group
 	anthropicV1 := s.router.Group("/anthropic/v1")
 	{
