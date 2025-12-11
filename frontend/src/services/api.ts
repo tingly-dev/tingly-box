@@ -13,7 +13,7 @@ import {
     type ProviderResponse, type TokenResponse
 } from '../client';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/';
 
 // Get user auth token for UI and control API from localStorage
 const getUserAuthToken = (): string | null => {
