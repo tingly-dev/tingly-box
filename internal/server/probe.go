@@ -15,7 +15,7 @@ import (
 )
 
 // probeWithOpenAI handles probe requests for OpenAI-style APIs
-func probeWithOpenAI(c *gin.Context, rule config.Rule, provider *config.Provider) (string, struct {
+func probeWithOpenAI(c *gin.Context, rule *config.Rule, provider *config.Provider) (string, struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`
 	TotalTokens      int `json:"total_tokens"`
@@ -92,7 +92,7 @@ func probeWithOpenAI(c *gin.Context, rule config.Rule, provider *config.Provider
 }
 
 // probeWithAnthropic handles probe requests for Anthropic-style APIs
-func probeWithAnthropic(c *gin.Context, rule config.Rule, provider *config.Provider) (string, struct {
+func probeWithAnthropic(c *gin.Context, rule *config.Rule, provider *config.Provider) (string, struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`
 	TotalTokens      int `json:"total_tokens"`
@@ -171,8 +171,13 @@ func probeWithAnthropic(c *gin.Context, rule config.Rule, provider *config.Provi
 	return responseContent, tokenUsage, nil
 }
 
-func probe(c *gin.Context, rule config.Rule, provider *config.Provider) {
+func probe(c *gin.Context, rule *config.Rule, provider *config.Provider) {
 	startTime := time.Now()
+
+	if rule == nil {
+		c.JSON(http.StatusBadRequest, gin.H{})
+		return
+	}
 
 	// Create the mock request data that would be sent to the API
 	mockRequest := map[string]interface{}{

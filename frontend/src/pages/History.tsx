@@ -113,57 +113,6 @@ const History = () => {
         };
     }, [autoRefresh, refreshInterval, loadHistory]);
 
-    const formatAction = (action: string) => {
-        return action.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-    };
-
-    const formatDetails = (details: any) => {
-        if (!details) return 'N/A';
-        if (typeof details === 'string') return details;
-        return Object.entries(details).map(([k, v]) => `${k}: ${v}`).join(', ');
-    };
-
-    const handleExportJSON = () => {
-        const dataStr = JSON.stringify(filteredHistory, null, 2);
-        downloadFile('history.json', dataStr, 'application/json');
-    };
-
-    const handleExportCSV = () => {
-        const headers = ['Timestamp', 'Action', 'Success', 'Message', 'Details'];
-        const csvContent = [
-            headers.join(','),
-            ...filteredHistory.map(entry => [
-                new Date(entry.timestamp).toISOString(),
-                entry.action,
-                entry.success,
-                `"${entry.message.replace(/"/g, '""')}"`,
-                `"${formatDetails(entry.details).replace(/"/g, '""')}"`
-            ].join(','))
-        ].join('\n');
-
-        downloadFile('history.csv', csvContent, 'text/csv');
-    };
-
-    const handleExportTXT = () => {
-        const txtContent = filteredHistory.map(entry =>
-            `[${new Date(entry.timestamp).toLocaleString()}] ${entry.success ? 'Success' : 'Failed'}: ${entry.action}: ${entry.message}`
-        ).join('\n');
-
-        downloadFile('history.txt', txtContent, 'text/plain');
-    };
-
-    const downloadFile = (filename: string, content: string, mimeType: string) => {
-        const blob = new Blob([content], { type: mimeType });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    };
-
     return (
         <PageLayout loading={loading}>
             <CardGrid>

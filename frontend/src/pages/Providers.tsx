@@ -1,12 +1,9 @@
-import { Add, TableChart, ViewModule } from '@mui/icons-material';
-import { Alert, Box, Button, Snackbar, Stack, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
+import { Add } from '@mui/icons-material';
+import { Alert, Box, Button, Snackbar, Stack, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
-import AddProviderDialog from '../components/AddProviderDialog';
-import CardGrid, { CardGridItem } from '../components/CardGrid';
-import EditProviderDialog from '../components/EditProviderDialog';
 import { PageLayout } from '../components/PageLayout';
-import ProviderCard from '../components/ProviderCard';
 import ProviderTable from '../components/ProviderTable';
+import ProviderFormDialog, { type ProviderFormData } from '../components/ui/ProviderFormDialog';
 import UnifiedCard from '../components/UnifiedCard';
 import { api } from '../services/api';
 
@@ -18,25 +15,17 @@ const Providers = () => {
         message: string;
         severity: 'success' | 'error';
     }>({ open: false, message: '', severity: 'success' });
-    const [viewMode, setViewMode] = useState<'card' | 'table'>('table');
 
-    // Add provider form
-    const [providerName, setProviderName] = useState('');
-    const [providerApiBase, setProviderApiBase] = useState('');
-    const [providerApiStyle, setProviderApiStyle] = useState('openai');
-    const [providerToken, setProviderToken] = useState('');
-
-    // Add dialog
-    const [addDialogOpen, setAddDialogOpen] = useState(false);
-
-    // Edit dialog
-    const [editDialogOpen, setEditDialogOpen] = useState(false);
-    const [editingProvider, setEditingProvider] = useState<any>(null);
-    const [editName, setEditName] = useState('');
-    const [editApiBase, setEditApiBase] = useState('');
-    const [editApiStyle, setEditApiStyle] = useState('openai');
-    const [editToken, setEditToken] = useState('');
-    const [editEnabled, setEditEnabled] = useState(true);
+    // Dialog state
+    const [dialogOpen, setDialogOpen] = useState(false);
+    const [dialogMode, setDialogMode] = useState<'add' | 'edit'>('add');
+    const [providerFormData, setProviderFormData] = useState<ProviderFormData>({
+        name: '',
+        apiBase: '',
+        apiStyle: 'openai',
+        token: '',
+        enabled: true,
+    });
 
     useEffect(() => {
         loadProviders();
@@ -47,11 +36,15 @@ const Providers = () => {
     };
 
     const handleAddProviderClick = () => {
-        setProviderName('');
-        setProviderApiBase('');
-        setProviderApiStyle('openai');
-        setProviderToken('');
-        setAddDialogOpen(true);
+        setDialogMode('add');
+        setProviderFormData({
+            name: '',
+            apiBase: '',
+            apiStyle: 'openai',
+            token: '',
+            enabled: true,
+        });
+        setDialogOpen(true);
     };
 
     const loadProviders = async () => {
@@ -65,36 +58,34 @@ const Providers = () => {
         setLoading(false);
     };
 
-    const handleAddProvider = async (e: React.FormEvent) => {
+    const handleProviderSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
         const providerData = {
-            name: providerName,
-            api_base: providerApiBase,
-            api_style: providerApiStyle,
-            token: providerToken,
+            name: providerFormData.name,
+            api_base: providerFormData.apiBase,
+            api_style: providerFormData.apiStyle,
+            token: providerFormData.token,
+            ...(dialogMode === 'edit' && { enabled: providerFormData.enabled }),
         };
 
-        const result = await api.addProvider(providerData);
+        const result = dialogMode === 'add'
+            ? await api.addProvider(providerData)
+            : await api.updateProvider(providerFormData.name, {
+                  ...providerData,
+                  token: providerFormData.token || undefined,
+              });
 
         if (result.success) {
-            showNotification('Provider added successfully!', 'success');
-            setProviderName('');
-            setProviderApiBase('');
-            setProviderApiStyle('openai');
-            setProviderToken('');
-            setAddDialogOpen(false);
+            showNotification(`Provider ${dialogMode === 'add' ? 'added' : 'updated'} successfully!`, 'success');
+            setDialogOpen(false);
             loadProviders();
         } else {
-            showNotification(`Failed to add provider: ${result.error}`, 'error');
+            showNotification(`Failed to ${dialogMode === 'add' ? 'add' : 'update'} provider: ${result.error}`, 'error');
         }
     };
 
     const handleDeleteProvider = async (name: string) => {
-        if (!confirm(`Are you sure you want to delete provider "${name}"?`)) {
-            return;
-        }
-
         const result = await api.deleteProvider(name);
 
         if (result.success) {
@@ -121,42 +112,17 @@ const Providers = () => {
 
         if (result.success) {
             const provider = result.data;
-            setEditingProvider(provider);
-            setEditName(provider.name);
-            setEditApiBase(provider.api_base);
-            setEditApiStyle(provider.api_style || 'openai');
-            setEditToken('');
-            setEditEnabled(provider.enabled);
-            setEditDialogOpen(true);
+            setDialogMode('edit');
+            setProviderFormData({
+                name: provider.name,
+                apiBase: provider.api_base,
+                apiStyle: provider.api_style || 'openai',
+                token: '',
+                enabled: provider.enabled,
+            });
+            setDialogOpen(true);
         } else {
             showNotification(`Failed to load provider details: ${result.error}`, 'error');
-        }
-    };
-
-    const handleUpdateProvider = async (e: React.FormEvent) => {
-        e.preventDefault();
-
-        // If token is empty, don't update it
-        const providerData: any = {
-            name: editName,
-            api_base: editApiBase,
-            api_style: editApiStyle,
-            enabled: editEnabled,
-        };
-
-        if (editToken.trim() !== '') {
-            providerData.token = editToken;
-        }
-
-        const result = await api.updateProvider(editingProvider.name, providerData);
-
-        if (result.success) {
-            showNotification('Provider updated successfully!', 'success');
-            setEditDialogOpen(false);
-            setEditingProvider(null);
-            loadProviders();
-        } else {
-            showNotification(`Failed to update provider: ${result.error}`, 'error');
         }
     };
 
@@ -169,20 +135,6 @@ const Providers = () => {
                     size="full"
                     rightAction={
                         <Stack direction="row" spacing={1} alignItems="center">
-                            <ToggleButtonGroup
-                                value={viewMode}
-                                exclusive
-                                onChange={(_, newMode) => newMode && setViewMode(newMode)}
-                                size="small"
-                                sx={{ mr: 1 }}
-                            >
-                                <ToggleButton value="card" sx={{ px: 1, py: 0.5 }}>
-                                    <ViewModule fontSize="small" />
-                                </ToggleButton>
-                                <ToggleButton value="table" sx={{ px: 1, py: 0.5 }}>
-                                    <TableChart fontSize="small" />
-                                </ToggleButton>
-                            </ToggleButtonGroup>
                             <Button
                                 variant="contained"
                                 startIcon={<Add />}
@@ -196,28 +148,12 @@ const Providers = () => {
                 >
                     {providers.length > 0 ? (
                         <Box sx={{ flex: 1 }}>
-                            {viewMode === 'card' ? (
-                                <CardGrid>
-                                    {providers.map((provider) => (
-                                        <CardGridItem xs={12} sm={6} md={4} lg={3} key={provider.name}>
-                                            <ProviderCard
-                                                provider={provider}
-                                                variant="detailed"
-                                                onEdit={handleEditProvider}
-                                                onToggle={handleToggleProvider}
-                                                onDelete={handleDeleteProvider}
-                                            />
-                                        </CardGridItem>
-                                    ))}
-                                </CardGrid>
-                            ) : (
                                 <ProviderTable
                                     providers={providers}
                                     onEdit={handleEditProvider}
                                     onToggle={handleToggleProvider}
                                     onDelete={handleDeleteProvider}
                                 />
-                            )}
                         </Box>
                     ) : (
                         <Box textAlign="center" py={5}>
@@ -245,7 +181,7 @@ const Providers = () => {
                         <Button
                             variant="contained"
                             startIcon={<Add />}
-                            onClick={() => setAddDialogOpen(true)}
+                            onClick={() => setDialogOpen(true)}
                             sx={{ mt: 2 }}
                         >
                             Add Your First Provider
@@ -254,36 +190,14 @@ const Providers = () => {
                 </UnifiedCard>
             )}
 
-            {/* Add Dialog */}
-            <AddProviderDialog
-                open={addDialogOpen}
-                onClose={() => setAddDialogOpen(false)}
-                onSubmit={handleAddProvider}
-                providerName={providerName}
-                onProviderNameChange={setProviderName}
-                providerApiBase={providerApiBase}
-                onProviderApiBaseChange={setProviderApiBase}
-                providerApiStyle={providerApiStyle}
-                onProviderApiStyleChange={setProviderApiStyle}
-                providerToken={providerToken}
-                onProviderTokenChange={setProviderToken}
-            />
-
-            {/* Edit Dialog */}
-            <EditProviderDialog
-                open={editDialogOpen}
-                onClose={() => setEditDialogOpen(false)}
-                onSubmit={handleUpdateProvider}
-                editName={editName}
-                onEditNameChange={setEditName}
-                editApiBase={editApiBase}
-                onEditApiBaseChange={setEditApiBase}
-                editApiStyle={editApiStyle}
-                onEditApiStyleChange={setEditApiStyle}
-                editToken={editToken}
-                onEditTokenChange={setEditToken}
-                editEnabled={editEnabled}
-                onEditEnabledChange={setEditEnabled}
+            {/* Provider Dialog */}
+            <ProviderFormDialog
+                open={dialogOpen}
+                onClose={() => setDialogOpen(false)}
+                onSubmit={handleProviderSubmit}
+                data={providerFormData}
+                onChange={(field, value) => setProviderFormData(prev => ({ ...prev, [field]: value }))}
+                mode={dialogMode}
             />
 
             {/* Snackbar for notifications */}

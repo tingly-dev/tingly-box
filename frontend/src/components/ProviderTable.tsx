@@ -2,12 +2,12 @@ import { Cancel, CheckCircle, ContentCopy, Delete, Edit, Visibility } from '@mui
 import {
     Box,
     Button,
-    Chip,
     FormControlLabel,
     IconButton,
     Menu,
     MenuItem,
     Modal,
+    Paper,
     Stack,
     Switch,
     Table,
@@ -17,11 +17,27 @@ import {
     TableHead,
     TableRow,
     Tooltip,
-    Typography,
-    Paper,
+    Typography
 } from '@mui/material';
 import { useState } from 'react';
-import type { Provider, ProviderModelsData } from './ProviderCard';
+
+
+export interface Provider {
+    name: string;
+    enabled: boolean;
+    api_base: string;
+    api_style: string; // "openai" or "anthropic", defaults to "openai"
+    token?: string;
+}
+
+export interface ProviderModelsData {
+    [providerName: string]: {
+        models: string[];
+        star_models?: string[];
+        last_updated?: string;
+        custom_model?: string;
+    };
+}
 
 interface ProviderTableProps {
     providers: Provider[];
@@ -51,12 +67,9 @@ interface DeleteModalState {
 
 const ProviderTable = ({
     providers,
-    providerModels,
     onEdit,
     onToggle,
     onDelete,
-    onSetDefault,
-    onFetchModels,
 }: ProviderTableProps) => {
     const [tokenStates, setTokenStates] = useState<{ [key: string]: TokenMenuState }>({});
     const [tokenModal, setTokenModal] = useState<TokenModalState>({
@@ -154,11 +167,6 @@ const ProviderTable = ({
         return `${prefix}${'*'.repeat(4)}${suffix}`;
     };
 
-    const getModelsCount = (providerName: string) => {
-        const models = providerModels?.[providerName]?.models || [];
-        return models.length;
-    };
-
     return (
         <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
             <Table>
@@ -169,7 +177,6 @@ const ProviderTable = ({
                         <TableCell sx={{ fontWeight: 600, minWidth: 200 }}>API Base</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>API Version</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 150 }}>API Token</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 100 }}>Models</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Actions</TableCell>
                     </TableRow>
                 </TableHead>
@@ -279,21 +286,6 @@ const ProviderTable = ({
                                 </Stack>
                             </TableCell>
 
-                            <TableCell>
-                                <Typography variant="body2">
-                                    {getModelsCount(provider.name)} models
-                                </Typography>
-                                {onFetchModels && (
-                                    <Chip
-                                        label="Fetch Models"
-                                        size="small"
-                                        variant="outlined"
-                                        clickable
-                                        onClick={() => onFetchModels(provider.name)}
-                                        sx={{ mt: 0.5 }}
-                                    />
-                                )}
-                            </TableCell>
 
                             <TableCell>
                                 <Stack direction="row" spacing={0.5}>

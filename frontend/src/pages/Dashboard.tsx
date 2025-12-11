@@ -20,12 +20,13 @@ import {
 import React, { useEffect, useState } from 'react';
 import { PageLayout } from '../components/PageLayout';
 import Probe from '../components/Probe';
-import { ProviderDialog } from '../components/ProviderDialog';
 import ProviderSelectTab, { type ProviderSelectTabOption } from "../components/ProviderSelectTab.tsx";
 import UnifiedCard from '../components/UnifiedCard';
+import ProviderFormDialog, { type ProviderFormData } from '../components/ui/ProviderFormDialog';
 import { api } from '../services/api';
 
 const defaultRule = "tingly"
+const defaultRuleUUID = "tingly"
 
 
 const Dashboard = () => {
@@ -39,7 +40,7 @@ const Dashboard = () => {
     const [generatedToken, setGeneratedToken] = useState<string>('');
     const [modelToken, setModelToken] = useState<string>('');
     const [showTokenModal, setShowTokenModal] = useState(false);
-  
+
     // Banner state for provider/model selection
     const [bannerProvider, setBannerProvider] = useState<string>('');
     const [bannerModel, setBannerModel] = useState<string>('');
@@ -98,10 +99,12 @@ const Dashboard = () => {
 
     // Add provider dialog state
     const [addDialogOpen, setAddDialogOpen] = useState(false);
-    const [providerName, setProviderName] = useState('');
-    const [providerApiBase, setProviderApiBase] = useState('');
-    const [providerApiStyle, setProviderApiStyle] = useState('openai');
-    const [providerToken, setProviderToken] = useState('');
+    const [providerFormData, setProviderFormData] = useState<ProviderFormData>({
+        name: '',
+        apiBase: '',
+        apiStyle: 'openai',
+        token: '',
+    });
 
     useEffect(() => {
         loadData();
@@ -110,10 +113,18 @@ const Dashboard = () => {
 
     // Update selected option when rules are loaded
     useEffect(() => {
-        setSelectedOption({
-            provider: rule.provider,
-            model: rule.default_model
-        });
+        if (rule && rule.services && rule.services.length > 0) {
+            const firstService = rule.services[0];
+            setSelectedOption({
+                provider: firstService.provider,
+                model: firstService.model
+            });
+        } else {
+            setSelectedOption({
+                provider: '',
+                model: ''
+            });
+        }
     }, [rule]);
 
     const loadToken = async () => {
@@ -146,22 +157,25 @@ const Dashboard = () => {
             setRule(result.data);
         } else {
             // If the 'tingly' rule doesn't exist, create a default one
-                        await createDefaultTinglyRule();
+            await createDefaultTinglyRule();
         }
     };
 
     const createDefaultTinglyRule = async () => {
         try {
-            // Create a default rule with empty provider and model
+            // Create a default rule with empty services
             // This will be filled when user selects a provider and model
             const defaultRuleData = {
-                provider: "",
-                default_model: "",
+                response_model: undefined,
+                services: [],
             };
 
-            const result = await api.updateRule(defaultRule, defaultRuleData);
+            const result = await api.createRule({
+                name: defaultRule,
+                ...defaultRuleData
+            });
             if (result.success) {
-                                // Reload the rule after creating it
+                // Reload the rule after creating it
                 const reloadResult = await api.getRule(defaultRule);
                 if (reloadResult.success) {
                     setRule(reloadResult.data);
@@ -212,17 +226,43 @@ const Dashboard = () => {
         try {
             // Update the "tingly" rule with the selected provider and model
             const ruleData = {
-                provider: provider.name,
-                default_model: model,
+                uuid: defaultRuleUUID,
+                request_model: defaultRule,
+                services: [
+                    {
+                        provider: provider.name,
+                        model: model,
+                        weight: 0,
+                        active: true,
+                        time_window: 0,
+                    }
+                ],
             };
 
-            const result = await api.updateRule('tingly', ruleData);
+            const existingRule = await api.getRule(defaultRuleUUID);
+            let result;
+            if (existingRule.success && existingRule.data.uuid) {
+                // Update existing rule using uuid
+                result = await api.updateRule(existingRule.data.uuid, ruleData);
+            } else {
+                // Create new rule if it doesn't exist
+                const createResult = await api.createRule({
+                    name: 'tingly',
+                    ...ruleData,
+                });
+                result = createResult;
+            }
             if (result.success) {
                 // Show banner with selected provider and model info
                 setBannerProvider(provider.name);
                 setBannerModel(model);
                 setShowBanner(true);
                 showNotification(`Successfully updated tingly rule to use ${provider.name}:${model}`, 'success');
+                // Reload rule to get updated data
+                const reloadResult = await api.getRule('tingly');
+                if (reloadResult.success) {
+                    setRule(reloadResult.data);
+                }
             } else {
                 showNotification(`Failed to update tingly rule: ${result.error}`, 'error');
             }
@@ -250,31 +290,42 @@ const Dashboard = () => {
 
     // Provider dialog handlers
     const handleAddProviderClick = () => {
-        setProviderName('');
-        setProviderApiBase('');
-        setProviderApiStyle('openai');
-        setProviderToken('');
+        setProviderFormData({
+            name: '',
+            apiBase: '',
+            apiStyle: 'openai',
+            token: '',
+        });
         setAddDialogOpen(true);
+    };
+
+    const handleProviderFormChange = (field: keyof ProviderFormData, value: any) => {
+        setProviderFormData(prev => ({
+            ...prev,
+            [field]: value,
+        }));
     };
 
     const handleAddProvider = async (e: React.FormEvent) => {
         e.preventDefault();
 
         const providerData = {
-            name: providerName,
-            api_base: providerApiBase,
-            api_style: providerApiStyle,
-            token: providerToken,
+            name: providerFormData.name,
+            api_base: providerFormData.apiBase,
+            api_style: providerFormData.apiStyle,
+            token: providerFormData.token,
         };
 
         const result = await api.addProvider(providerData);
 
         if (result.success) {
             showNotification('Provider added successfully!', 'success');
-            setProviderName('');
-            setProviderApiBase('');
-            setProviderApiStyle('openai');
-            setProviderToken('');
+            setProviderFormData({
+                name: '',
+                apiBase: '',
+                apiStyle: 'openai',
+                token: '',
+            });
             setAddDialogOpen(false);
             await loadProviders();
         } else {
@@ -287,12 +338,100 @@ const Dashboard = () => {
     const anthropicBaseUrl = `${baseUrl}/anthropic/v1`;
     const token = generatedToken || modelToken;
 
+    const TokenModal = () => {
+        return (
+            <Dialog
+                open={showTokenModal}
+                onClose={() => setShowTokenModal(false)}
+                maxWidth="md"
+                fullWidth
+            >
+                <DialogTitle>API Token</DialogTitle>
+                <DialogContent>
+                    <Box sx={{ mb: 2 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                            Your authentication token:
+                        </Typography>
+                        <Box sx={{
+                            p: 2,
+                            bgcolor: 'grey.100',
+                            borderRadius: 1,
+                            fontFamily: 'monospace',
+                            fontSize: '0.85rem',
+                            wordBreak: 'break-all',
+                            border: '1px solid',
+                            borderColor: 'grey.300'
+                        }}>
+                            {token}
+                        </Box>
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Button
+                            variant="outlined"
+                            onClick={() => copyToClipboard(token, 'API Token')}
+                            startIcon={<CopyIcon fontSize="small" />}
+                        >
+                            Copy Token
+                        </Button>
+                    </Box>
+                </DialogContent>
+            </Dialog>
+
+        )
+    }
+
+    const Guiding = () => {
+        return (
+            <Box textAlign="center" py={8} width={"100%"}>
+                <IconButton
+                    size="large"
+                    onClick={handleAddProviderClick}
+                    sx={{
+                        backgroundColor: 'primary.main',
+                        color: 'white',
+                        width: 80,
+                        height: 80,
+                        mb: 3,
+                        '&:hover': {
+                            backgroundColor: 'primary.dark',
+                            transform: 'scale(1.05)',
+                        },
+                    }}
+                >
+                    <AddIcon sx={{ fontSize: 40 }} />
+                </IconButton>
+                <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>
+                    No Providers Available
+                </Typography>
+                <Typography variant="body1" color="text.secondary"
+                            sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
+                    Get started by adding your first AI provider. You can connect to OpenAI, Anthropic, or
+                    any compatible API endpoint.
+                </Typography>
+                <Typography variant="body2" color="text.secondary"
+                            sx={{ mb: 4, maxWidth: 400, mx: 'auto' }}>
+                    <strong>Steps to get started:</strong><br />
+                    1. Click the + button to add a provider<br />
+                    2. Configure your API credentials<br />
+                    3. Select your preferred model
+                </Typography>
+                <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={handleAddProviderClick}
+                    size="large"
+                >
+                    Add Your First Provider
+                </Button>
+            </Box>
+        )
+    }
+
     return (
         <PageLayout
             loading={loading}
             notification={notification}
         >
-
             {/* Server Information Header */}
             <UnifiedCard
                 title="Switch Provider & Model"
@@ -416,7 +555,6 @@ const Dashboard = () => {
                                         <IconButton
                                             onClick={() => setShowTokenModal(true)}
                                             size="small"
-                                            title="View Token"
                                         >
                                             <Typography variant="caption">
                                                 👁️
@@ -483,112 +621,31 @@ const Dashboard = () => {
                                     onSelected={(opt: ProviderSelectTabOption) => handleModelSelect(opt.provider, opt.model || "")}
                                     onRefresh={handleModelRefresh}
                                 />
+
+                                {/* Probe Component */}
+                                <Probe rule="tingly" provider={selectedOption.provider} model={selectedOption.model} />
                             </Stack>
                         </Grid>
                     ) : (
-                        <Box textAlign="center" py={8} width={"100%"}>
-                            <IconButton
-                                size="large"
-                                onClick={handleAddProviderClick}
-                                sx={{
-                                    backgroundColor: 'primary.main',
-                                    color: 'white',
-                                    width: 80,
-                                    height: 80,
-                                    mb: 3,
-                                    '&:hover': {
-                                        backgroundColor: 'primary.dark',
-                                        transform: 'scale(1.05)',
-                                    },
-                                }}
-                            >
-                                <AddIcon sx={{ fontSize: 40 }} />
-                            </IconButton>
-                            <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>
-                                No Providers Available
-                            </Typography>
-                            <Typography variant="body1" color="text.secondary"
-                                sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
-                                Get started by adding your first AI provider. You can connect to OpenAI, Anthropic, or
-                                any compatible API endpoint.
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary"
-                                sx={{ mb: 4, maxWidth: 400, mx: 'auto' }}>
-                                <strong>Steps to get started:</strong><br />
-                                1. Click the + button to add a provider<br />
-                                2. Configure your API credentials<br />
-                                3. Select your preferred model
-                            </Typography>
-                            <Button
-                                variant="contained"
-                                startIcon={<AddIcon />}
-                                onClick={handleAddProviderClick}
-                                size="large"
-                            >
-                                Add Your First Provider
-                            </Button>
-                        </Box>
+                        <Guiding></Guiding>
                     )}
+
                 </Grid>
+
             </UnifiedCard>
 
             {/* Token Modal */}
-            <Dialog
-                open={showTokenModal}
-                onClose={() => setShowTokenModal(false)}
-                maxWidth="md"
-                fullWidth
-            >
-                <DialogTitle>API Token</DialogTitle>
-                <DialogContent>
-                    <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                            Your authentication token:
-                        </Typography>
-                        <Box sx={{
-                            p: 2,
-                            bgcolor: 'grey.100',
-                            borderRadius: 1,
-                            fontFamily: 'monospace',
-                            fontSize: '0.85rem',
-                            wordBreak: 'break-all',
-                            border: '1px solid',
-                            borderColor: 'grey.300'
-                        }}>
-                            {token}
-                        </Box>
-                    </Box>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                        <Button
-                            variant="outlined"
-                            onClick={() => copyToClipboard(token, 'API Token')}
-                            startIcon={<CopyIcon fontSize="small" />}
-                        >
-                            Copy Token
-                        </Button>
-                    </Box>
-                </DialogContent>
-            </Dialog>
+            <TokenModal></TokenModal>
 
             {/* Add Provider Dialog */}
-            <ProviderDialog
+            <ProviderFormDialog
                 open={addDialogOpen}
                 onClose={() => setAddDialogOpen(false)}
                 onSubmit={handleAddProvider}
-                providerName={providerName}
-                onProviderNameChange={setProviderName}
-                providerApiBase={providerApiBase}
-                onProviderApiBaseChange={setProviderApiBase}
-                providerApiStyle={providerApiStyle}
-                onProviderApiStyleChange={setProviderApiStyle}
-                providerToken={providerToken}
-                onProviderTokenChange={setProviderToken}
+                data={providerFormData}
+                onChange={handleProviderFormChange}
+                mode="add"
             />
-
-            {/* Probe Component */}
-
-            <Probe rule="tingly" provider={selectedOption.provider} model={selectedOption.model} />
-
         </PageLayout>
     );
 };

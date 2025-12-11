@@ -151,11 +151,6 @@ export const api = {
         }
         return result;
     },
-    getDefaults: () => fetchUIAPI('/defaults'),
-    setDefaults: (data: any) => fetchUIAPI('/defaults', {
-        method: 'POST',
-        body: JSON.stringify(data),
-    }),
     getHistory: (limit?: number) => fetchUIAPI(`/history${limit ? `?limit=${limit}` : ''}`),
 
     // Provider management
@@ -203,16 +198,35 @@ export const api = {
     listOpenAIModels: () => fetchModelAPI('/openai/v1/models'),
     listAnthropicModels: () => fetchModelAPI('/anthropic/v1/models'),
 
-    // Rules API
+    // Rules API - Updated for new rule structure with services
     getRules: () => fetchUIAPI('/rules'),
-    getRule: (name: string) => fetchUIAPI(`/rule/${name}`),
-    updateRule: (name: string, data: any) => fetchUIAPI(`/rule/${name}`, {
+    getRule: (uuid: string) => fetchUIAPI(`/rule/${uuid}`),
+    createRule: (data: any) => fetchUIAPI('/rules', {
         method: 'POST',
         body: JSON.stringify(data),
     }),
+    updateRule: (uuid: string, data: any) => fetchUIAPI(`/rule/${uuid}`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+    }),
+    deleteRule: (uuid: string) => fetchUIAPI(`/rule/${uuid}`, {
+        method: 'DELETE',
+    }),
     probeRule: (rule, provider, model) => fetchUIAPI('/probe', {
         method: 'POST',
-        body: JSON.stringify({ rule, provider, default_model: model }),
+        body: JSON.stringify({ rule, provider, model: model }),
+    }),
+    // Service management within rules
+    addServiceToRule: (ruleName: string, serviceData: any) => fetchUIAPI(`/rule/${ruleName}/services`, {
+        method: 'POST',
+        body: JSON.stringify(serviceData),
+    }),
+    updateServiceInRule: (ruleName: string, serviceIndex: number, serviceData: any) => fetchUIAPI(`/rule/${ruleName}/services/${serviceIndex}`, {
+        method: 'PUT',
+        body: JSON.stringify(serviceData),
+    }),
+    deleteServiceFromRule: (ruleName: string, serviceIndex: number) => fetchUIAPI(`/rule/${ruleName}/services/${serviceIndex}`, {
+        method: 'DELETE',
     }),
 
     // Token management

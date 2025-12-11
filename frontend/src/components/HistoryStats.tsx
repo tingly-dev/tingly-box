@@ -1,6 +1,5 @@
-import { CardGrid, CardGridItem } from './CardGrid';
 import UnifiedCard from './UnifiedCard';
-import { Typography, Box } from '@mui/material';
+import {Box, Typography} from '@mui/material';
 
 interface HistoryStatsProps {
     stats: {
