@@ -240,7 +240,7 @@ func (s *Server) setupRoutes() {
 	api.Use(s.UserAuth()) // Require user authentication for management APIs
 	{
 		// Load balancer API routes
-		s.loadBalancerAPI.RegisterRoutes(api.Group(""))
+		s.loadBalancerAPI.RegisterRoutes(api.Group("/v1"))
 	}
 
 }
