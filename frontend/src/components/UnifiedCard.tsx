@@ -1,21 +1,15 @@
-import { Alert, Box, Card, CardContent, IconButton, Tooltip, Typography, Fade } from '@mui/material';
-import { Pause, PlayArrow, Refresh, KeyboardArrowUp, KeyboardArrowDown } from '@mui/icons-material';
+import { KeyboardArrowDown, KeyboardArrowUp, Pause, PlayArrow, Refresh } from '@mui/icons-material';
+import { Alert, Box, Card, CardContent, Fade, IconButton, Tooltip, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import type { ReactNode } from 'react';
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface UnifiedCardProps {
   title?: string;
   subtitle?: string;
   children: ReactNode;
-  // 格子倍数配置：widthUnits × heightUnits
   size?: 'small' | 'medium' | 'large' | 'full' | 'header';
   variant?: 'default' | 'outlined' | 'elevated';
-  // 自定义格子倍数
-  gridUnits?: {
-    widthUnits?: number;
-    heightUnits?: number;
-  };
   // 自定义宽度，如果提供则优先使用
   width?: number | string;
   // 自定义高度，如果提供则优先使用
@@ -41,8 +35,6 @@ interface UnifiedCardProps {
   enableSmoothScroll?: boolean;
 }
 
-// 基本格子尺寸单位（像素）
-const BASE_UNIT = 40;
 
 // Auto-scroll speed configuration
 const scrollSpeeds = {
@@ -78,8 +70,15 @@ const throttle = <T extends (...args: any[]) => void>(
   };
 };
 
-// 预设的格子倍数系统 - 使用相对尺寸和自适应布局
-const presetCardDimensions = {
+// 预设尺寸配置 - 使用相对尺寸和自适应布局
+interface PresetDimensions {
+  width: string;
+  height?: string;
+  minHeight?: string;
+  hasFixedHeight: boolean;
+}
+
+const presetCardDimensions: Record<string, PresetDimensions> = {
   small: {
     width: '25%',  // 25% 宽度（相对于父容器）
     height: '50%', // 50% 高度（相对于父容器）
@@ -87,12 +86,12 @@ const presetCardDimensions = {
   },
   medium: {
     width: '50%',  // 50% 宽度（相对于父容器）
-    height: '100%', // 50% 高度（相对于父容器）
+    height: '100%', // 100% 高度（相对于父容器）
     hasFixedHeight: true,
   },
   large: {
     width: '100%', // 自适应父容器最大宽度
-    minHeightUnits: 10, // 最小高度 400px
+    minHeight: '400px', // 最小高度 400px
     hasFixedHeight: true,
   },
   full: {
@@ -102,7 +101,7 @@ const presetCardDimensions = {
   },
   header: {
     width: '100%', // 自适应父容器最大宽度
-    minHeightUnits: 4, // 最小高度 320px
+    minHeight: '200px', // 最小高度 400px
     hasFixedHeight: false,
   },
 };
@@ -110,25 +109,20 @@ const presetCardDimensions = {
 // 计算卡片尺寸的函数
 const getCardDimensions = (
   size: 'small' | 'medium' | 'large' | 'full' | 'header',
-  customGridUnits?: { widthUnits?: number; heightUnits?: number },
   customWidth?: number | string,
   customHeight?: number | string
 ) => {
-  const preset = presetCardDimensions[size] as any;
+  const preset = presetCardDimensions[size];
 
   // 如果提供了自定义宽度，优先使用自定义宽度
   const width = customWidth !== undefined
     ? customWidth
-    : customGridUnits?.widthUnits
-      ? customGridUnits.widthUnits * BASE_UNIT
-      : preset.width;
+    : preset.width;
 
   // 如果提供了自定义高度，优先使用自定义高度
   let height: string | number;
   if (customHeight !== undefined) {
     height = customHeight;
-  } else if (customGridUnits?.heightUnits) {
-    height = customGridUnits.heightUnits * BASE_UNIT;
   } else {
     // 根据预设尺寸设置高度
     switch (size) {
@@ -139,7 +133,7 @@ const getCardDimensions = (
         break;
       case 'large':
       case 'header':
-        height = preset.minHeightUnits ? preset.minHeightUnits * BASE_UNIT : 'auto';
+        height = preset.minHeight || 'auto';
         break;
       default:
         height = 'auto';
@@ -173,7 +167,6 @@ export const UnifiedCard = ({
   children,
   size = 'medium',
   variant = 'default',
-  gridUnits,
   width,
   height,
   message,
@@ -354,7 +347,7 @@ export const UnifiedCard = ({
   return (
     <Card
       sx={{
-        ...getCardDimensions(size, gridUnits, width, height),
+        ...getCardDimensions(size, width, height),
         ...cardVariants[variant],
         borderRadius: 2,
         border: '1px solid',

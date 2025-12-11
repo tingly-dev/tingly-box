@@ -43,7 +43,7 @@ func runSystemTests(t *testing.T, ts *TestServer, isRealConfig bool) {
 		globalConfig := ts.appConfig.GetGlobalConfig()
 		userToken := globalConfig.GetUserToken()
 
-		req, _ := http.NewRequest("POST", "/api/token", CreateJSONBody(map[string]string{"client_id": "test-client"}))
+		req, _ := http.NewRequest("POST", "/api/v1/token", CreateJSONBody(map[string]string{"client_id": "test-client"}))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+userToken)
 		w := httptest.NewRecorder()
@@ -61,7 +61,7 @@ func runSystemTests(t *testing.T, ts *TestServer, isRealConfig bool) {
 	t.Run("Models_Endpoint", func(t *testing.T) {
 		globalConfig := ts.appConfig.GetGlobalConfig()
 		userToken := globalConfig.GetUserToken()
-		req, _ := http.NewRequest("GET", "/api/provider-models", nil)
+		req, _ := http.NewRequest("GET", "/api/v1/provider-models", nil)
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+userToken)
 		w := httptest.NewRecorder()
@@ -179,7 +179,7 @@ func runSystemTests(t *testing.T, ts *TestServer, isRealConfig bool) {
 		globalConfig := ts.appConfig.GetGlobalConfig()
 		userToken := globalConfig.GetUserToken()
 
-		req, _ := http.NewRequest("GET", "/api/providers", nil)
+		req, _ := http.NewRequest("GET", "/api/v1/providers", nil)
 		req.Header.Set("Authorization", "Bearer "+userToken)
 		w := httptest.NewRecorder()
 		ts.ginEngine.ServeHTTP(w, req)
@@ -193,7 +193,7 @@ func runSystemTests(t *testing.T, ts *TestServer, isRealConfig bool) {
 
 	// Test 11: Providers endpoint without authentication
 	t.Run("Providers_Endpoint_Without_Auth", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", "/api/providers", nil)
+		req, _ := http.NewRequest("GET", "/api/v1/providers", nil)
 		w := httptest.NewRecorder()
 		ts.ginEngine.ServeHTTP(w, req)
 
@@ -207,7 +207,7 @@ func runSystemTests(t *testing.T, ts *TestServer, isRealConfig bool) {
 
 		for _, providerName := range []string{"anthropic", "glm"} {
 			t.Run(providerName, func(t *testing.T) {
-				req, _ := http.NewRequest("POST", "/api/provider-models/"+providerName, nil)
+				req, _ := http.NewRequest("POST", "/api/v1/provider-models/"+providerName, nil)
 				req.Header.Set("Authorization", "Bearer "+userToken)
 				w := httptest.NewRecorder()
 				ts.ginEngine.ServeHTTP(w, req)
@@ -228,7 +228,7 @@ func runSystemTests(t *testing.T, ts *TestServer, isRealConfig bool) {
 
 	// Test 13: Provider-Models endpoint without authentication
 	t.Run("Provider_Models_Endpoint_Without_Auth", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", "/api/provider-models", nil)
+		req, _ := http.NewRequest("GET", "/api/v1/provider-models", nil)
 		w := httptest.NewRecorder()
 		ts.ginEngine.ServeHTTP(w, req)
 
@@ -240,7 +240,7 @@ func runSystemTests(t *testing.T, ts *TestServer, isRealConfig bool) {
 		globalConfig := ts.appConfig.GetGlobalConfig()
 		userToken := globalConfig.GetUserToken()
 
-		req, _ := http.NewRequest("GET", "/api/rules", nil)
+		req, _ := http.NewRequest("GET", "/api/v1/rules", nil)
 		req.Header.Set("Authorization", "Bearer "+userToken)
 		w := httptest.NewRecorder()
 		ts.ginEngine.ServeHTTP(w, req)
@@ -258,7 +258,7 @@ func runSystemTests(t *testing.T, ts *TestServer, isRealConfig bool) {
 		globalConfig := ts.appConfig.GetGlobalConfig()
 		userToken := globalConfig.GetUserToken()
 
-		req, _ := http.NewRequest("GET", "/api/rule/tingly", nil)
+		req, _ := http.NewRequest("GET", "/api/v1/rule/tingly", nil)
 		req.Header.Set("Authorization", "Bearer "+userToken)
 		w := httptest.NewRecorder()
 		ts.ginEngine.ServeHTTP(w, req)
@@ -272,7 +272,7 @@ func runSystemTests(t *testing.T, ts *TestServer, isRealConfig bool) {
 		globalConfig := ts.appConfig.GetGlobalConfig()
 		userToken := globalConfig.GetUserToken()
 
-		req, _ := http.NewRequest("POST", "/api/rule/test-rule", CreateJSONBody(map[string]interface{}{
+		req, _ := http.NewRequest("POST", "/api/v1/rule/test-rule", CreateJSONBody(map[string]interface{}{
 			"uuid":           "test-rule",
 			"response_model": "gpt-4",
 			"provider":       "openai",
@@ -293,7 +293,7 @@ func runSystemTests(t *testing.T, ts *TestServer, isRealConfig bool) {
 
 	// Test 17: Rules endpoint without authentication
 	t.Run("Rules_Endpoint_Without_Auth", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", "/api/rules", nil)
+		req, _ := http.NewRequest("GET", "/api/v1/rules", nil)
 		w := httptest.NewRecorder()
 		ts.ginEngine.ServeHTTP(w, req)
 

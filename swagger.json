@@ -1,0 +1,1226 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "Tingly Box API",
+    "description": "A Restful API for managing AI model providers, rules, and load balancing with automatic Swagger documentation generation.",
+    "contact": {
+      "name": "API Support",
+      "email": "support@tingly-box.com"
+    },
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    },
+    "version": "1.0.0"
+  },
+  "host": "localhost:8080",
+  "basePath": "/",
+  "schemes": [
+    "http",
+    "https"
+  ],
+  "paths": {
+    "/api/v1/defaults": {
+      "get": {
+        "tags": [
+          "defaults"
+        ],
+        "summary": "Get default request configurations",
+        "description": "Get default request configurations",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/DefaultsResponse"
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "defaults"
+        ],
+        "summary": "Set default request configurations",
+        "description": "Set default request configurations",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "request",
+            "in": "body",
+            "description": "Request body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SetDefaultsRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/SetRuleResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/history": {
+      "get": {
+        "tags": [
+          "history"
+        ],
+        "summary": "Get request history",
+        "description": "Get request history",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/HistoryResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/probe": {
+      "post": {
+        "tags": [
+          "testing"
+        ],
+        "summary": "Test a rule configuration by sending a sample request",
+        "description": "Test a rule configuration by sending a sample request",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "request",
+            "in": "body",
+            "description": "Request body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ProbeRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/RuleResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/provider-models": {
+      "get": {
+        "tags": [
+          "models"
+        ],
+        "summary": "Get all provider models",
+        "description": "Get all provider models",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ProviderModelsResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/provider-models/{name}": {
+      "post": {
+        "tags": [
+          "models"
+        ],
+        "summary": "Fetch models for a specific provider",
+        "description": "Fetch models for a specific provider",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Resource name",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/FetchProviderModelsResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/providers": {
+      "get": {
+        "tags": [
+          "providers"
+        ],
+        "summary": "Get all configured providers with masked tokens",
+        "description": "Get all configured providers with masked tokens",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ProvidersResponse"
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "providers"
+        ],
+        "summary": "Add a new provider configuration",
+        "description": "Add a new provider configuration",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "request",
+            "in": "body",
+            "description": "Request body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/AddProviderRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/AddProviderResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/providers/{name}": {
+      "get": {
+        "tags": [
+          "providers"
+        ],
+        "summary": "Get specific provider details with masked token",
+        "description": "Get specific provider details with masked token",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Resource name",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ProviderResponse"
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "providers"
+        ],
+        "summary": "Update existing provider configuration",
+        "description": "Update existing provider configuration",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Resource name",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "request",
+            "in": "body",
+            "description": "Request body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/UpdateProviderRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/UpdateProviderResponse"
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "providers"
+        ],
+        "summary": "Delete a provider configuration",
+        "description": "Delete a provider configuration",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Resource name",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/DeleteProviderResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/providers/{name}/toggle": {
+      "post": {
+        "tags": [
+          "providers"
+        ],
+        "summary": "Toggle provider enabled/disabled status",
+        "description": "Toggle provider enabled/disabled status",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Resource name",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ToggleProviderResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/rule/{uuid}": {
+      "get": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "Get specific rule by UUID",
+        "description": "Get specific rule by UUID",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "description": "Unique identifier (UUID)",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/RuleResponse"
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "Create or update a rule configuration",
+        "description": "Create or update a rule configuration",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "description": "Unique identifier (UUID)",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          },
+          {
+            "name": "request",
+            "in": "body",
+            "description": "Request body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SetRuleRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/SetRuleResponse"
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "Delete a rule configuration",
+        "description": "Delete a rule configuration",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "description": "Unique identifier (UUID)",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/DeleteRuleResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/rules": {
+      "get": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "Get all configured rules",
+        "description": "Get all configured rules",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/RulesResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/server/restart": {
+      "post": {
+        "tags": [
+          "server"
+        ],
+        "summary": "Restart the server",
+        "description": "Restart the server",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ServerActionResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/server/start": {
+      "post": {
+        "tags": [
+          "server"
+        ],
+        "summary": "Start the server",
+        "description": "Start the server",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ServerActionResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/server/stop": {
+      "post": {
+        "tags": [
+          "server"
+        ],
+        "summary": "Stop the server gracefully",
+        "description": "Stop the server gracefully",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ServerActionResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/status": {
+      "get": {
+        "tags": [
+          "server"
+        ],
+        "summary": "Get server status and statistics",
+        "description": "Get server status and statistics",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/StatusResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/token": {
+      "get": {
+        "tags": [
+          "token"
+        ],
+        "summary": "Get existing API token or generate new one",
+        "description": "Get existing API token or generate new one",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/TokenResponse"
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "token"
+        ],
+        "summary": "Generate a new API token",
+        "description": "Generate a new API token",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "request",
+            "in": "body",
+            "description": "Request body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/GenerateTokenRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/TokenResponse"
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "AddProviderRequest": {
+      "type": "object",
+      "properties": {
+        "api_base": {
+          "type": "string",
+          "description": "API base URL",
+          "example": "https://api.openai.com/v1"
+        },
+        "api_style": {
+          "type": "string",
+          "description": "API style",
+          "example": "openai"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether provider is enabled",
+          "example": true
+        },
+        "name": {
+          "type": "string",
+          "description": "Provider name",
+          "example": "openai"
+        },
+        "token": {
+          "type": "string",
+          "description": "API token",
+          "example": "sk-..."
+        }
+      },
+      "required": [
+        "name",
+        "api_base",
+        "api_style",
+        "token",
+        "enabled"
+      ]
+    },
+    "AddProviderResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "description": "Field data"
+        },
+        "message": {
+          "type": "string",
+          "description": "Field message",
+          "example": "Provider added successfully"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "message",
+        "data"
+      ]
+    },
+    "DefaultsResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "description": "Field data"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    },
+    "DeleteProviderResponse": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string",
+          "description": "Field message",
+          "example": "Provider deleted successfully"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "message"
+      ]
+    },
+    "DeleteRuleResponse": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string",
+          "description": "Field message",
+          "example": "Rule deleted successfully"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "message"
+      ]
+    },
+    "FetchProviderModelsResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "description": "Field data"
+        },
+        "message": {
+          "type": "string",
+          "description": "Field message",
+          "example": "Successfully fetched 150 models for provider openai"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "message",
+        "data"
+      ]
+    },
+    "GenerateTokenRequest": {
+      "type": "object",
+      "properties": {
+        "client_id": {
+          "type": "string",
+          "description": "Client ID for token generation",
+          "example": "user123"
+        }
+      },
+      "required": [
+        "client_id"
+      ]
+    },
+    "HistoryResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "description": "Field data"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    },
+    "ProbeRequest": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "description": "Provider name to test against",
+          "example": "openai"
+        },
+        "rule": {
+          "type": "string",
+          "description": "Rule UUID to test",
+          "example": "123e4567-e89b-12d3-a456-426614174000"
+        }
+      },
+      "required": [
+        "provider",
+        "rule"
+      ]
+    },
+    "ProviderModelsResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "description": "Field data"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    },
+    "ProviderResponse": {
+      "type": "object",
+      "properties": {
+        "api_base": {
+          "type": "string",
+          "description": "Field api_base",
+          "example": "https://api.openai.com/v1"
+        },
+        "api_style": {
+          "type": "string",
+          "description": "Field api_style",
+          "example": "openai"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Field enabled",
+          "example": true
+        },
+        "name": {
+          "type": "string",
+          "description": "Field name",
+          "example": "openai"
+        },
+        "token": {
+          "type": "string",
+          "description": "Field token",
+          "example": "sk-***...***"
+        }
+      },
+      "required": [
+        "name",
+        "api_base",
+        "api_style",
+        "token",
+        "enabled"
+      ]
+    },
+    "ProvidersResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "array",
+          "description": "Field data",
+          "items": {
+            "type": "object"
+          }
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    },
+    "RuleResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "description": "Field data"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    },
+    "RulesResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "description": "Field data"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    },
+    "ServerActionResponse": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string",
+          "description": "Field message",
+          "example": "Server stopped successfully"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "message"
+      ]
+    },
+    "SetDefaultsRequest": {
+      "type": "object",
+      "properties": {
+        "request_configs": {
+          "type": "array",
+          "description": "Field request_configs",
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      "required": [
+        "request_configs"
+      ]
+    },
+    "SetRuleRequest": {
+      "type": "object",
+      "properties": {
+        "active": {
+          "type": "boolean",
+          "description": "Field active"
+        },
+        "current_service_index": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field current_service_index"
+        },
+        "default_model": {
+          "type": "string",
+          "description": "Field default_model"
+        },
+        "provider": {
+          "type": "string",
+          "description": "Field provider"
+        },
+        "request_model": {
+          "type": "string",
+          "description": "Field request_model"
+        },
+        "response_model": {
+          "type": "string",
+          "description": "Field response_model"
+        },
+        "services": {
+          "type": "array",
+          "description": "Field services",
+          "items": {
+            "type": "object"
+          }
+        },
+        "tactic": {
+          "type": "string",
+          "description": "Field tactic"
+        },
+        "tactic_params": {
+          "type": "object",
+          "description": "Field tactic_params"
+        },
+        "uuid": {
+          "type": "string",
+          "description": "Field uuid"
+        }
+      },
+      "required": [
+        "uuid",
+        "request_model",
+        "response_model",
+        "services",
+        "current_service_index",
+        "tactic",
+        "active"
+      ]
+    },
+    "SetRuleResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "description": "Field data"
+        },
+        "message": {
+          "type": "string",
+          "description": "Field message",
+          "example": "Rule saved successfully"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "message",
+        "data"
+      ]
+    },
+    "StatusResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "description": "Field data"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    },
+    "ToggleProviderResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "description": "Field data"
+        },
+        "message": {
+          "type": "string",
+          "description": "Field message",
+          "example": "Provider openai enabled successfully"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "message",
+        "data"
+      ]
+    },
+    "TokenResponse": {
+      "type": "object",
+      "properties": {
+        "token": {
+          "type": "string",
+          "description": "Field token",
+          "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        },
+        "type": {
+          "type": "string",
+          "description": "Field type",
+          "example": "Bearer"
+        }
+      },
+      "required": [
+        "token",
+        "type"
+      ]
+    },
+    "UpdateProviderRequest": {
+      "type": "object",
+      "properties": {
+        "api_base": {
+          "type": "string",
+          "description": "New API base URL"
+        },
+        "api_style": {
+          "type": "string",
+          "description": "New API style"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "New enabled status"
+        },
+        "name": {
+          "type": "string",
+          "description": "New provider name"
+        },
+        "token": {
+          "type": "string",
+          "description": "New API token"
+        }
+      }
+    },
+    "UpdateProviderResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "description": "Field data"
+        },
+        "message": {
+          "type": "string",
+          "description": "Field message",
+          "example": "Provider updated successfully"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "message",
+        "data"
+      ]
+    }
+  },
+  "securityDefinitions": {
+    "ApiKeyAuth": {
+      "type": "apiKey",
+      "description": "API key authorization header",
+      "name": "Authorization",
+      "in": "header"
+    }
+  },
+  "tags": [
+    {
+      "name": "providers",
+      "description": "Operations related to providers"
+    },
+    {
+      "name": "server",
+      "description": "Operations related to server"
+    },
+    {
+      "name": "rules",
+      "description": "Operations related to rules"
+    },
+    {
+      "name": "testing",
+      "description": "Operations related to testing"
+    },
+    {
+      "name": "token",
+      "description": "Operations related to token"
+    },
+    {
+      "name": "history",
+      "description": "Operations related to history"
+    },
+    {
+      "name": "defaults",
+      "description": "Operations related to defaults"
+    },
+    {
+      "name": "models",
+      "description": "Operations related to models"
+    }
+  ]
+}
