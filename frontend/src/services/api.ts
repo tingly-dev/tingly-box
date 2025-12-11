@@ -9,7 +9,8 @@ import {
     RulesApi,
     ServerApi,
     TestingApi,
-    TokenApi
+    TokenApi,
+    type ProviderResponse
 } from '../client';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -171,7 +172,7 @@ export const api = {
             const result = response.data;
             if (result.success && result.data) {
                 // Sort providers alphabetically by name to reduce UI changes
-                result.data.sort((a: Provider, b: Provider) => a.name.localeCompare(b.name));
+                result.data.sort((a: ProviderResponse, b: ProviderResponse) => a.name.localeCompare(b.name));
             }
             return result;
         } catch (error: any) {
