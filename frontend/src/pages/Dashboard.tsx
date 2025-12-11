@@ -404,12 +404,12 @@ const Dashboard = () => {
                     No Providers Available
                 </Typography>
                 <Typography variant="body1" color="text.secondary"
-                            sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
+                    sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
                     Get started by adding your first AI provider. You can connect to OpenAI, Anthropic, or
                     any compatible API endpoint.
                 </Typography>
                 <Typography variant="body2" color="text.secondary"
-                            sx={{ mb: 4, maxWidth: 400, mx: 'auto' }}>
+                    sx={{ mb: 4, maxWidth: 400, mx: 'auto' }}>
                     <strong>Steps to get started:</strong><br />
                     1. Click the + button to add a provider<br />
                     2. Configure your API credentials<br />
@@ -622,8 +622,6 @@ const Dashboard = () => {
                                     onRefresh={handleModelRefresh}
                                 />
 
-                                {/* Probe Component */}
-                                <Probe rule="tingly" provider={selectedOption.provider} model={selectedOption.model} />
                             </Stack>
                         </Grid>
                     ) : (
@@ -633,6 +631,9 @@ const Dashboard = () => {
                 </Grid>
 
             </UnifiedCard>
+
+            {/* Probe Component */}
+            <Probe rule="tingly" provider={selectedOption.provider} model={selectedOption.model} />
 
             {/* Token Modal */}
             <TokenModal></TokenModal>
