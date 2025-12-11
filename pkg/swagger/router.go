@@ -105,7 +105,7 @@ func (rm *RouteManager) AddGlobalMiddleware(middleware ...gin.HandlerFunc) {
 
 // NewGroup creates a new route group
 func (rm *RouteManager) NewGroup(name, version, prefix string) *RouteGroup {
-	fullPrefix := "/" + version
+	fullPrefix := fmt.Sprintf("/%s/%s", name, version)
 	if prefix != "" {
 		fullPrefix += "/" + strings.TrimPrefix(prefix, "/")
 	}
@@ -126,7 +126,7 @@ func (rm *RouteManager) NewGroup(name, version, prefix string) *RouteGroup {
 		middleware: make([]gin.HandlerFunc, 0),
 	}
 
-	rm.groups[name+":"+version] = group
+	rm.groups[fullPrefix] = group
 	return group
 }
 
