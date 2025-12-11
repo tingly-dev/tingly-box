@@ -11,6 +11,7 @@ import (
 
 	"tingly-box/internal/config"
 	"tingly-box/internal/memory"
+	"tingly-box/pkg/swagger"
 
 	"github.com/gin-gonic/gin"
 )
@@ -920,43 +921,170 @@ func (s *Server) authMiddleware() gin.HandlerFunc {
 	}
 }
 
-// useWebAPIEndpoints configures API routes for web UI
+// GinHandlerWrapper converts gin.HandlerFunc to swagger.Handler
+type GinHandlerWrapper struct {
+	handler gin.HandlerFunc
+}
+
+func NewGinHandlerWrapper(h gin.HandlerFunc) swagger.Handler {
+	return &GinHandlerWrapper{handler: h}
+}
+
+func (w *GinHandlerWrapper) Handle(c *gin.Context) {
+	w.handler(c)
+}
+
+// useWebAPIEndpoints configures API routes for web UI using swagger manager
 func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
-	api := engine.Group("/api")
-	api.Use(s.authMiddleware()) // Apply authentication to all API routes
-	{
-		// Providers management
-		api.GET("/providers", s.GetProviders)
-		api.GET("/providers/:name", s.GetProvider)
-		api.POST("/providers", s.AddProvider)
-		api.PUT("/providers/:name", s.UpdateProvider)
-		api.POST("/providers/:name/toggle", s.ToggleProvider)
-		api.DELETE("/providers/:name", s.DeleteProvider)
+	// Create route manager
+	manager := swagger.NewRouteManager(engine)
 
-		// Server management
-		api.GET("/status", s.GetStatus)
-		api.POST("/server/start", s.StartServer)
-		api.POST("/server/stop", s.StopServer)
-		api.POST("/server/restart", s.RestartServer)
+	// Set Swagger information
+	manager.SetSwaggerInfo(swagger.SwaggerInfo{
+		Title:       "Tingly Box API",
+		Description: "A RESTful API for managing AI model providers, rules, and load balancing with automatic Swagger documentation generation.",
+		Version:     "1.0.0",
+		Host:        "localhost:15000",
+		BasePath:    "/",
+		Contact: swagger.SwaggerContact{
+			Name:  "API Support",
+			Email: "support@tingly-box.com",
+		},
+		License: swagger.SwaggerLicense{
+			Name: "MIT",
+			URL:  "https://opensource.org/licenses/MIT",
+		},
+	})
 
-		// Rule management
-		api.GET("/rules", s.GetRules)
-		api.GET("/rule/:uuid", s.GetRule)
-		api.POST("/rule/:uuid", s.SetRule)
-		api.DELETE("/rule/:uuid", s.DeleteRule)
+	// Add global middleware
+	manager.AddGlobalMiddleware(
+		func(c *gin.Context) {
+			c.Header("Access-Control-Allow-Origin", "*")
+			c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization")
 
-		// History
-		api.GET("/history", s.GetHistory)
+			if c.Request.Method == "OPTIONS" {
+				c.AbortWithStatus(204)
+				return
+			}
+			c.Next()
+		},
+	)
 
-		// New API endpoints for defaults and provider models
-		api.GET("/defaults", s.GetDefaults)
-		api.POST("/defaults", s.SetDefaults)
-		api.GET("/provider-models", s.GetProviderModels)
-		api.POST("/provider-models/:name", s.FetchProviderModels)
+	// Create authenticated API group
+	authAPI := manager.NewGroup("api", "v1", "")
+	authAPI.Router.Use(s.authMiddleware())
 
-		// Probe endpoint for testing rule configurations
-		api.POST("/probe", s.ProbeRule)
-	}
+	// Provider Management
+	authAPI.GET("/providers", NewGinHandlerWrapper(s.GetProviders),
+		swagger.WithDescription("Get all configured providers with masked tokens"),
+		swagger.WithTags("providers"),
+		swagger.WithResponseModel(ProvidersResponse{}),
+	)
+
+	authAPI.GET("/providers/:name", (s.GetProvider),
+		swagger.WithDescription("Get specific provider details with masked token"),
+		swagger.WithTags("providers"),
+	)
+
+	authAPI.POST("/providers", (s.AddProvider),
+		swagger.WithDescription("Add a new provider configuration"),
+		swagger.WithTags("providers"),
+	)
+
+	authAPI.PUT("/providers/:name", (s.UpdateProvider),
+		swagger.WithDescription("Update existing provider configuration"),
+		swagger.WithTags("providers"),
+	)
+
+	authAPI.POST("/providers/:name/toggle", (s.ToggleProvider),
+		swagger.WithDescription("Toggle provider enabled/disabled status"),
+		swagger.WithTags("providers"),
+	)
+
+	authAPI.DELETE("/providers/:name", (s.DeleteProvider),
+		swagger.WithDescription("Delete a provider configuration"),
+		swagger.WithTags("providers"),
+	)
+
+	// Server Management
+	authAPI.GET("/status", (s.GetStatus),
+		swagger.WithDescription("Get server status and statistics"),
+		swagger.WithTags("server"),
+	)
+
+	authAPI.POST("/server/start", (s.StartServer),
+		swagger.WithDescription("Start the server"),
+		swagger.WithTags("server"),
+	)
+
+	authAPI.POST("/server/stop", (s.StopServer),
+		swagger.WithDescription("Stop the server gracefully"),
+		swagger.WithTags("server"),
+	)
+
+	authAPI.POST("/server/restart", (s.RestartServer),
+		swagger.WithDescription("Restart the server"),
+		swagger.WithTags("server"),
+	)
+
+	// Rule Management
+	authAPI.GET("/rules", (s.GetRules),
+		swagger.WithDescription("Get all configured rules"),
+		swagger.WithTags("rules"),
+	)
+
+	authAPI.GET("/rule/:uuid", (s.GetRule),
+		swagger.WithDescription("Get specific rule by UUID"),
+		swagger.WithTags("rules"),
+	)
+
+	authAPI.POST("/rule/:uuid", (s.SetRule),
+		swagger.WithDescription("Create or update a rule configuration"),
+		swagger.WithTags("rules"),
+	)
+
+	authAPI.DELETE("/rule/:uuid", (s.DeleteRule),
+		swagger.WithDescription("Delete a rule configuration"),
+		swagger.WithTags("rules"),
+	)
+
+	// History
+	authAPI.GET("/history", (s.GetHistory),
+		swagger.WithDescription("Get request history"),
+		swagger.WithTags("history"),
+	)
+
+	// Defaults Management
+	authAPI.GET("/defaults", (s.GetDefaults),
+		swagger.WithDescription("Get default request configurations"),
+		swagger.WithTags("defaults"),
+	)
+
+	authAPI.POST("/defaults", (s.SetDefaults),
+		swagger.WithDescription("Set default request configurations"),
+		swagger.WithTags("defaults"),
+	)
+
+	// Provider Models Management
+	authAPI.GET("/provider-models", (s.GetProviderModels),
+		swagger.WithDescription("Get all provider models"),
+		swagger.WithTags("models"),
+	)
+
+	authAPI.POST("/provider-models/:name", (s.FetchProviderModels),
+		swagger.WithDescription("Fetch models for a specific provider"),
+		swagger.WithTags("models"),
+	)
+
+	// Probe endpoint
+	authAPI.POST("/probe", (s.ProbeRule),
+		swagger.WithDescription("Test a rule configuration by sending a sample request"),
+		swagger.WithTags("testing"),
+	)
+
+	// Setup Swagger documentation endpoint
+	manager.SetupSwaggerEndpoints()
 }
 
 func (s *Server) useWebStaticEndpoints(engine *gin.Engine) {
