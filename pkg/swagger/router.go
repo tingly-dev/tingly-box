@@ -736,6 +736,10 @@ func (rm *RouteManager) GenerateSwaggerJSON() (string, error) {
 				}
 			}
 
+			// Handle path parameters (add them first so they appear before query/body params)
+			pathParams := rm.extractPathParams(route.Path)
+			operation.Parameters = append(operation.Parameters, pathParams...)
+
 			// Handle request model
 			if route.RequestModel != nil {
 				modelName := getModelName(route.RequestModel)
@@ -840,6 +844,91 @@ func (rm *RouteManager) GenerateSwaggerJSON() (string, error) {
 	}
 
 	return string(jsonData), nil
+}
+
+// extractPathParams extracts path parameters from the URL path with intelligent type detection
+func (rm *RouteManager) extractPathParams(path string) []Parameter {
+	var params []Parameter
+
+	// Find all path parameters like :name, :uuid, etc.
+	parts := strings.Split(path, "/")
+	for _, part := range parts {
+		if strings.HasPrefix(part, ":") {
+			paramName := strings.TrimPrefix(part, ":")
+			param := Parameter{
+				Name:     paramName,
+				In:       "path",
+				Required: true,
+				Type:     "string", // Default type
+			}
+
+			// Smart type and description inference based on parameter name
+			paramLower := strings.ToLower(paramName)
+
+			switch {
+			case strings.Contains(paramLower, "uuid"):
+				param.Type = "string"
+				param.Format = "uuid"
+				param.Description = "Unique identifier (UUID)"
+
+			case strings.Contains(paramLower, "id") && !strings.Contains(paramLower, "providerid"):
+				param.Type = "string"
+				if strings.Contains(paramLower, "userid") {
+					param.Description = "User ID"
+				} else if strings.Contains(paramLower, "ruleid") {
+					param.Description = "Rule ID"
+				} else {
+					param.Description = "Resource ID"
+				}
+
+			case paramLower == "name" || strings.Contains(paramLower, "provider"):
+				param.Type = "string"
+				param.Description = "Resource name"
+
+			case strings.Contains(paramLower, "num") || strings.Contains(paramLower, "count"):
+				param.Type = "integer"
+				param.Format = "int64"
+				param.Description = "Numeric count"
+
+			case paramLower == "page":
+				param.Type = "integer"
+				param.Format = "int32"
+				param.Description = "Page number"
+
+			case paramLower == "size" || paramLower == "limit":
+				param.Type = "integer"
+				param.Format = "int32"
+				param.Description = "Page size limit"
+
+			case strings.Contains(paramLower, "timestamp") || strings.Contains(paramLower, "time"):
+				param.Type = "string"
+				param.Format = "date-time"
+				param.Description = "Timestamp"
+
+			case strings.Contains(paramLower, "date"):
+				param.Type = "string"
+				param.Format = "date"
+				param.Description = "Date"
+
+			case strings.Contains(paramLower, "email"):
+				param.Type = "string"
+				param.Format = "email"
+				param.Description = "Email address"
+
+			case strings.Contains(paramLower, "url") || strings.Contains(paramLower, "uri"):
+				param.Type = "string"
+				param.Format = "uri"
+				param.Description = "URL/URI"
+
+			default:
+				param.Description = fmt.Sprintf("Path parameter '%s'", paramName)
+			}
+
+			params = append(params, param)
+		}
+	}
+
+	return params
 }
 
 // generateQueryParameters generates query parameters from a model
