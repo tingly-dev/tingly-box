@@ -1,8 +1,8 @@
-import { KeyboardArrowDown, KeyboardArrowUp, Pause, PlayArrow, Refresh } from '@mui/icons-material';
-import { Alert, Box, Card, CardContent, Fade, IconButton, Tooltip, Typography } from '@mui/material';
+import { Pause, PlayArrow, Refresh } from '@mui/icons-material';
+import { Alert, Box, Card, CardContent, IconButton, Tooltip, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import type { ReactNode } from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 
 interface UnifiedCardProps {
   title?: string;
@@ -41,33 +41,6 @@ const scrollSpeeds = {
   slow: 50, // pixels per second
   medium: 100,
   fast: 200,
-};
-
-// Scroll throttling utility
-const throttle = <T extends (...args: any[]) => void>(
-  func: T,
-  delay: number
-): ((...args: Parameters<T>) => void) => {
-  let timeoutId: number | null = null;
-  let lastExecTime = 0;
-
-  return (...args: Parameters<T>) => {
-    const currentTime = Date.now();
-
-    if (currentTime - lastExecTime > delay) {
-      func(...args);
-      lastExecTime = currentTime;
-    } else {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-      timeoutId = setTimeout(() => {
-        func(...args);
-        lastExecTime = Date.now();
-        timeoutId = null;
-      }, delay - (currentTime - lastExecTime)) as unknown as number;
-    }
-  };
 };
 
 // 预设尺寸配置 - 使用相对尺寸和自适应布局
@@ -180,169 +153,50 @@ export const UnifiedCard = ({
   scrollPaused = false,
   scrollContentHeight,
   onScrollToggle,
-  showScrollIndicator = true,
-  showScrollButtons = true,
-  scrollThrottle = true,
-  enableSmoothScroll = true,
+  showScrollIndicator = false, // Disabled by default
+  showScrollButtons = false, // Disabled by default
+  scrollThrottle = false, // Disabled by default
+  enableSmoothScroll = false, // Disabled by default
 }: UnifiedCardProps) => {
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const animationRef = useRef<number | undefined>();
-  const lastTimeRef = useRef<number>(0);
-  const [showScrollTop, setShowScrollTop] = useState(false);
-  const [showScrollBottom, setShowScrollBottom] = useState(false);
-  const [isScrollable, setIsScrollable] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
 
+  // Auto-scroll implementation (kept for backward compatibility)
   useEffect(() => {
-    if (!autoScroll || scrollPaused || !scrollContainerRef.current) {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
-      return;
-    }
+    if (!autoScroll || scrollPaused || !contentRef.current) return;
 
-    const container = scrollContainerRef.current;
+    const container = contentRef.current;
     const speed = scrollSpeeds[scrollSpeed];
+    let animationId: number;
 
-    const animate = (currentTime: number) => {
-      if (!lastTimeRef.current) {
-        lastTimeRef.current = currentTime;
-      }
-
-      const deltaTime = (currentTime - lastTimeRef.current) / 1000; // Convert to seconds
-      lastTimeRef.current = currentTime;
-
-      const scrollAmount = speed * deltaTime;
-
+    const animate = () => {
       switch (scrollDirection) {
         case 'down':
           if (container.scrollHeight - container.scrollTop - container.clientHeight > 1) {
-            container.scrollTop += scrollAmount;
+            container.scrollTop += speed / 60; // 60fps approximation
           } else {
             container.scrollTop = 0; // Reset to top
           }
           break;
         case 'up':
           if (container.scrollTop > 0) {
-            container.scrollTop -= scrollAmount;
+            container.scrollTop -= speed / 60;
           } else {
-            container.scrollTop = container.scrollHeight - container.clientHeight; // Reset to bottom
-          }
-          break;
-        case 'right':
-          if (container.scrollWidth - container.scrollLeft - container.clientWidth > 1) {
-            container.scrollLeft += scrollAmount;
-          } else {
-            container.scrollLeft = 0; // Reset to left
-          }
-          break;
-        case 'left':
-          if (container.scrollLeft > 0) {
-            container.scrollLeft -= scrollAmount;
-          } else {
-            container.scrollLeft = container.scrollWidth - container.clientWidth; // Reset to right
+            container.scrollTop = container.scrollHeight - container.clientHeight;
           }
           break;
       }
-
-      animationRef.current = requestAnimationFrame(animate);
+      animationId = requestAnimationFrame(animate);
     };
 
-    animationRef.current = requestAnimationFrame(animate);
+    animationId = requestAnimationFrame(animate);
 
     return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
+      cancelAnimationFrame(animationId);
     };
   }, [autoScroll, scrollPaused, scrollSpeed, scrollDirection]);
 
-  // Check scrollability and update scroll indicators
-  const checkScrollability = useCallback(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-
-    const hasVerticalScroll = container.scrollHeight > container.clientHeight;
-    const hasHorizontalScroll = container.scrollWidth > container.clientWidth;
-    const isScrollableContent = hasVerticalScroll || hasHorizontalScroll;
-
-    setIsScrollable(isScrollableContent);
-
-    // Update scroll button visibility
-    if (showScrollButtons && hasVerticalScroll) {
-      setShowScrollTop(container.scrollTop > 50);
-      setShowScrollBottom(container.scrollTop < container.scrollHeight - container.clientHeight - 50);
-    }
-  }, [showScrollButtons]);
-
-  // Throttled scroll handler
-  const handleScroll = useCallback(
-    scrollThrottle
-      ? throttle(checkScrollability, 16) // ~60fps
-      : checkScrollability,
-    [scrollThrottle, checkScrollability]
-  );
-
-  // Monitor scroll changes
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-
-    // Initial check
-    checkScrollability();
-
-    // Add scroll listener
-    container.addEventListener('scroll', handleScroll, { passive: true });
-
-    // Resize observer for content changes
-    const resizeObserver = new ResizeObserver(() => {
-      checkScrollability();
-    });
-    resizeObserver.observe(container);
-    resizeObserver.observe(container.firstElementChild || container);
-
-    return () => {
-      container.removeEventListener('scroll', handleScroll);
-      resizeObserver.disconnect();
-    };
-  }, [handleScroll, checkScrollability]);
-
   const handleScrollToggle = () => {
     onScrollToggle?.(!scrollPaused);
-  };
-
-  const handleResetScroll = () => {
-    if (scrollContainerRef.current) {
-      const container = scrollContainerRef.current;
-      switch (scrollDirection) {
-        case 'up':
-        case 'down':
-          container.scrollTop = 0;
-          break;
-        case 'left':
-        case 'right':
-          container.scrollLeft = 0;
-          break;
-      }
-    }
-  };
-
-  const scrollToTop = () => {
-    if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTo({
-        top: 0,
-        behavior: enableSmoothScroll ? 'smooth' : 'auto'
-      });
-    }
-  };
-
-  const scrollToBottom = () => {
-    if (scrollContainerRef.current) {
-      const container = scrollContainerRef.current;
-      container.scrollTo({
-        top: container.scrollHeight,
-        behavior: enableSmoothScroll ? 'smooth' : 'auto'
-      });
-    }
   };
   return (
     <Card
@@ -397,7 +251,11 @@ export const UnifiedCard = ({
                     <Tooltip title="Reset scroll position">
                       <IconButton
                         size="small"
-                        onClick={handleResetScroll}
+                        onClick={() => {
+                          if (contentRef.current) {
+                            contentRef.current.scrollTop = 0;
+                          }
+                        }}
                         sx={{ color: 'text.secondary' }}
                       >
                         <Refresh />
@@ -440,158 +298,38 @@ export const UnifiedCard = ({
           </Box>
         )}
         <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative' }}>
-          {autoScroll ? (
-            <Box
-              ref={scrollContainerRef}
-              sx={{
-                flex: 1,
-                overflow: 'auto',
-                scrollBehavior: enableSmoothScroll ? 'smooth' : 'auto',
-                height: scrollContentHeight || '100%',
-                position: 'relative',
-                // Enhanced scrollbar styling
-                '&::-webkit-scrollbar': {
-                  width: '8px',
-                  height: '8px',
-                },
-                '&::-webkit-scrollbar-track': {
-                  background: 'rgba(0, 0, 0, 0.05)',
-                  borderRadius: '4px',
-                },
-                '&::-webkit-scrollbar-thumb': {
-                  background: 'rgba(0, 0, 0, 0.2)',
-                  borderRadius: '4px',
-                  transition: 'background 0.2s ease',
-                },
-                '&::-webkit-scrollbar-thumb:hover': {
-                  background: 'rgba(0, 0, 0, 0.4)',
-                },
-                '&::-webkit-scrollbar-corner': {
-                  background: 'transparent',
-                },
-                // Firefox scrollbar styling
-                scrollbarWidth: 'thin',
-                scrollbarColor: 'rgba(0, 0, 0, 0.2) rgba(0, 0, 0, 0.05)',
-              }}
-              onClick={handleScrollToggle}
-              style={{ cursor: onScrollToggle ? 'pointer' : 'default' }}
-            >
-              {children}
-              {/* Scroll indicators */}
-              {showScrollIndicator && isScrollable && (
-                <>
-                  {/* Top scroll indicator */}
-                  <Fade in={showScrollTop}>
-                    <Box
-                      sx={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        height: '20px',
-                        background: 'linear-gradient(to bottom, rgba(0,0,0,0.1), transparent)',
-                        pointerEvents: 'none',
-                        zIndex: 1,
-                      }}
-                    />
-                  </Fade>
-                  {/* Bottom scroll indicator */}
-                  <Fade in={showScrollBottom}>
-                    <Box
-                      sx={{
-                        position: 'absolute',
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        height: '20px',
-                        background: 'linear-gradient(to top, rgba(0,0,0,0.1), transparent)',
-                        pointerEvents: 'none',
-                        zIndex: 1,
-                      }}
-                    />
-                  </Fade>
-                </>
-              )}
-              {/* Scroll navigation buttons */}
-              {showScrollButtons && isScrollable && (
-                <>
-                  <Fade in={showScrollTop}>
-                    <Tooltip title="Scroll to top">
-                      <IconButton
-                        size="small"
-                        onClick={scrollToTop}
-                        sx={{
-                          position: 'absolute',
-                          top: 8,
-                          right: 8,
-                          backgroundColor: 'background.paper',
-                          boxShadow: 2,
-                          zIndex: 2,
-                          '&:hover': {
-                            backgroundColor: 'background.default',
-                          },
-                        }}
-                      >
-                        <KeyboardArrowUp fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </Fade>
-                  <Fade in={showScrollBottom}>
-                    <Tooltip title="Scroll to bottom">
-                      <IconButton
-                        size="small"
-                        onClick={scrollToBottom}
-                        sx={{
-                          position: 'absolute',
-                          bottom: 8,
-                          right: 8,
-                          backgroundColor: 'background.paper',
-                          boxShadow: 2,
-                          zIndex: 2,
-                          '&:hover': {
-                            backgroundColor: 'background.default',
-                          },
-                        }}
-                      >
-                        <KeyboardArrowDown fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </Fade>
-                </>
-              )}
-            </Box>
-          ) : (
-            <Box
-              sx={{
-                flex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                position: 'relative',
-                overflow: 'auto',
-                // Enhanced scrollbar styling for non-auto-scroll mode
-                '&::-webkit-scrollbar': {
-                  width: '8px',
-                  height: '8px',
-                },
-                '&::-webkit-scrollbar-track': {
-                  background: 'rgba(0, 0, 0, 0.05)',
-                  borderRadius: '4px',
-                },
-                '&::-webkit-scrollbar-thumb': {
-                  background: 'rgba(0, 0, 0, 0.2)',
-                  borderRadius: '4px',
-                  transition: 'background 0.2s ease',
-                },
-                '&::-webkit-scrollbar-thumb:hover': {
-                  background: 'rgba(0, 0, 0, 0.4)',
-                },
-                scrollbarWidth: 'thin',
-                scrollbarColor: 'rgba(0, 0, 0, 0.2) rgba(0, 0, 0, 0.05)',
-              }}
-            >
-              {children}
-            </Box>
-          )}
+          <Box
+            ref={contentRef}
+            sx={{
+              flex: 1,
+              overflow: 'auto',
+              height: scrollContentHeight || '100%',
+              position: 'relative',
+              // Simple scrollbar styling
+              '&::-webkit-scrollbar': {
+                width: '8px',
+                height: '8px',
+              },
+              '&::-webkit-scrollbar-track': {
+                background: 'rgba(0, 0, 0, 0.05)',
+                borderRadius: '4px',
+              },
+              '&::-webkit-scrollbar-thumb': {
+                background: 'rgba(0, 0, 0, 0.2)',
+                borderRadius: '4px',
+              },
+              '&::-webkit-scrollbar-thumb:hover': {
+                background: 'rgba(0, 0, 0, 0.3)',
+              },
+              // Firefox scrollbar
+              scrollbarWidth: 'thin',
+              scrollbarColor: 'rgba(0, 0, 0, 0.2) transparent',
+            }}
+            onClick={autoScroll ? handleScrollToggle : undefined}
+            style={{ cursor: autoScroll && onScrollToggle ? 'pointer' : 'default' }}
+          >
+            {children}
+          </Box>
         </Box>
       </CardContent>
     </Card>

@@ -41,7 +41,7 @@ export const PageLayout: React.FC<PageLayoutProps> = ({
   return (
     <Box
       position="relative"
-      overflow="scroll"
+      overflow="auto"
     >
       <Box>{children}</Box>
 
