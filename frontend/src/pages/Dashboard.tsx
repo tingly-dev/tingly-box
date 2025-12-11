@@ -185,11 +185,11 @@ const Dashboard = () => {
             } else {
                 console.error(`Failed to create default '${defaultRule}' rule:`, result.error);
                 // Show notification to user about the failure
-                showNotification(`Failed to create default rule: ${result.error}`, 'error');
+                // showNotification(`Failed to create default rule: ${result.error}`, 'error');
             }
         } catch (error) {
             console.error(`Error creating default '${defaultRule}' rule:`, error);
-            showNotification(`Error creating default rule`, 'error');
+            // showNotification(`Error creating default rule`, 'error');
         }
     };
 
@@ -338,8 +338,8 @@ const Dashboard = () => {
     };
 
     const baseUrl = import.meta.env.VITE_API_BASE_URL || window.location.origin;
-    const openaiBaseUrl = `${baseUrl}/openai/v1`;
-    const anthropicBaseUrl = `${baseUrl}/anthropic/v1`;
+    const openaiBaseUrl = `${baseUrl}/openai`;
+    const anthropicBaseUrl = `${baseUrl}/anthropic`;
     const token = generatedToken || modelToken;
 
     const TokenModal = () => {
@@ -431,28 +431,10 @@ const Dashboard = () => {
         )
     }
 
-    return (
-        <PageLayout
-            loading={loading}
-            notification={notification}
-        >
-            {/* Server Information Header */}
-            <UnifiedCard
-                title="Switch Provider & Model"
-                subtitle={`Total: ${providers.length} providers | Enabled: ${providers.filter((p: any) => p.enabled).length}`}
-                size="full"
-                rightAction={
-                    <Box>
-                        <Button
-                            variant="contained"
-                            onClick={() => window.location.href = '/providers'}
-                        >
-                            Manage Providers
-                        </Button>
-                    </Box>
-                }
-            >
 
+    const Header = () => {
+        return (
+            <>
                 <Grid container spacing={2}>
                     <Grid size={{ xs: 12, md: 6 }}>
                         <Stack spacing={1}>
@@ -471,7 +453,7 @@ const Dashboard = () => {
                                         minWidth: 0
                                     }}
                                 >
-                                    {baseUrl}/openai/v1
+                                    {baseUrl}/openai
                                 </Typography>
                                 <Stack direction="row" spacing={0.2}>
                                     <IconButton
@@ -483,7 +465,7 @@ const Dashboard = () => {
                                     </IconButton>
                                     <IconButton
                                         onClick={() => {
-                                            const openaiCurl = `curl -X POST "${openaiBaseUrl}/chat/completions" -H "Authorization: Bearer ${token}" -H "Content-Type: application/json" -d '{"messages": [{"role": "user", "content": "Hello!"}]}'`;
+                                            const openaiCurl = `curl -X POST "${openaiBaseUrl}/v1/chat/completions" -H "Authorization: Bearer ${token}" -H "Content-Type: application/json" -d '{"messages": [{"role": "user", "content": "Hello!"}]}'`;
                                             copyToClipboard(openaiCurl, 'OpenAI cURL command');
                                         }}
                                         size="small"
@@ -521,7 +503,7 @@ const Dashboard = () => {
                                     </IconButton>
                                     <IconButton
                                         onClick={() => {
-                                            const anthropicCurl = `curl -X POST "${anthropicBaseUrl}/messages" -H "Authorization: Bearer ${token}" -H "Content-Type: application/json" -d '{"messages": [{"role": "user", "content": "Hello!"}], "max_tokens": 100}'`;
+                                            const anthropicCurl = `curl -X POST "${anthropicBaseUrl}/v1/messages" -H "Authorization: Bearer ${token}" -H "Content-Type: application/json" -d '{"messages": [{"role": "user", "content": "Hello!"}], "max_tokens": 100}'`;
                                             copyToClipboard(anthropicCurl, 'Anthropic cURL command');
                                         }}
                                         size="small"
@@ -611,6 +593,33 @@ const Dashboard = () => {
                             </Box>
                         </Stack>
                     </Grid>
+                </Grid>
+            </>
+        )
+    }
+    return (
+        <PageLayout
+            loading={loading}
+            notification={notification}
+        >
+            {/* Server Information Header */}
+            <UnifiedCard
+                title="Switch Provider & Model"
+                subtitle={`Total: ${providers.length} providers | Enabled: ${providers.filter((p: any) => p.enabled).length}`}
+                size="full"
+                rightAction={
+                    <Box>
+                        <Button
+                            variant="contained"
+                            onClick={() => window.location.href = '/providers'}
+                        >
+                            Manage Providers
+                        </Button>
+                    </Box>
+                }
+            >
+                <Grid>
+                    <Header></Header>
 
 
                     {providers.length > 0 ? (
@@ -631,7 +640,6 @@ const Dashboard = () => {
                     ) : (
                         <Guiding></Guiding>
                     )}
-
                 </Grid>
 
             </UnifiedCard>
@@ -651,7 +659,7 @@ const Dashboard = () => {
                 onChange={handleProviderFormChange}
                 mode="add"
             />
-        </PageLayout>
+        </PageLayout >
     );
 };
 
