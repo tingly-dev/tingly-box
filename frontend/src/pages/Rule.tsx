@@ -4,11 +4,16 @@ import {
     Delete as DeleteIcon,
     Edit as EditIcon,
     Refresh as RefreshIcon,
-    Save as SaveIcon
+    Save as SaveIcon,
+    SmartToy as SmartToyIcon,
+    Dns as DnsIcon
 } from '@mui/icons-material';
 import {
     Box,
     Button,
+    Card,
+    CardActions,
+    CardContent,
     Divider,
     FormControl,
     IconButton,
@@ -17,13 +22,35 @@ import {
     MenuItem,
     Select,
     Stack,
+    Switch,
     TextField,
-    Typography
+    Typography,
+    Chip,
+    Tooltip
 } from '@mui/material';
+import { styled } from '@mui/material/styles';
 import { useCallback, useEffect, useState } from 'react';
 import { PageLayout } from '../components/PageLayout';
 import UnifiedCard from '../components/UnifiedCard';
 import { api } from '../services/api';
+
+const ServiceSection = styled(Box)(({ theme }) => ({
+    height: 160,
+    overflow: 'auto',
+    paddingTop: 10,
+    marginRight: -theme.spacing(1),
+    paddingRight: theme.spacing(2),
+}));
+
+const RuleCard = styled(Card)(({ theme }) => ({
+    height: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    '&:hover': {
+        borderColor: theme.palette.primary.main,
+        boxShadow: theme.shadows[1],
+    },
+}));
 
 interface ConfigProvider {
     uuid: string;
@@ -39,6 +66,7 @@ interface ConfigRecord {
     uuid: string;
     requestModel: string;
     responseModel: string;
+    active: boolean;
     providers: ConfigProvider[];
 }
 
@@ -86,6 +114,7 @@ const Rule = () => {
                 uuid: rule.uuid || crypto.randomUUID(),
                 requestModel: rule.request_model || '',
                 responseModel: rule.response_model || '',
+                active: rule.active !== undefined ? rule.active : true,
                 providers: (rule.services || []).map((service: any) => ({
                     uuid: crypto.randomUUID(),
                     provider: service.provider || '',
@@ -123,6 +152,7 @@ const Rule = () => {
                 uuid: record.uuid,
                 request_model: record.requestModel,
                 response_model: record.responseModel,
+                active: record.active,
                 services: record.providers.map(provider => ({
                     provider: provider.provider,
                     model: provider.model,
@@ -158,6 +188,7 @@ const Rule = () => {
             uuid: crypto.randomUUID(),
             requestModel: '',
             responseModel: '',
+            active: true,
             providers: [
                 {
                     uuid: crypto.randomUUID(),
@@ -243,18 +274,19 @@ const Rule = () => {
         try {
             const result = await api.getProviderModelsByName(providerName);
             if (result.success) {
-                await loadData();
+                // Update providerModels with the refreshed data
+                setProviderModels((prev: any) => ({
+                    ...prev,
+                    [providerName]: result.data
+                }));
                 setMessage({ type: 'success', text: `Successfully refreshed models for ${providerName}` });
             } else {
                 setMessage({ type: 'error', text: `Failed to refresh models for ${providerName}: ${result.error}` });
-                setTimeout(() => loadData(), 3000);
             }
         } catch (error) {
             setMessage({ type: 'error', text: `Failed to refresh models for ${providerName}: ${error}` });
-            setTimeout(() => loadData(), 3000);
         }
     };
-
 
     return (
         <PageLayout
@@ -263,6 +295,7 @@ const Rule = () => {
                 open: !!message,
                 message: message?.text,
                 severity: message?.type,
+                autoHideDuration: message?.type === 'success' ? 4000 : 6000, // Success messages close faster
                 onClose: () => setMessage(null)
             }}
         >
@@ -299,75 +332,79 @@ const Rule = () => {
                             </Typography>
                         </Box>
                     ) : (
-                        configRecords.map((record) => (
-                            <Box
-                                key={record.uuid}
-                                sx={{
-                                    p: 2,
-                                    border: '1px solid',
-                                    borderColor: 'divider',
-                                    borderRadius: 1,
-                                    bgcolor: 'background.paper',
-                                }}
-                            >
-                                <Box
+                        <Box
+                            sx={{
+                                display: 'grid',
+                                gridTemplateColumns: {
+                                    xs: '1fr',
+                                    sm: 'repeat(3, 1fr)',
+                                    lg: 'repeat(5, 1fr)',
+                                },
+                                gap: 3,
+                            }}
+                        >
+                            {configRecords.map((record) => (
+                                <RuleCard
+                                    key={record.uuid}
                                     sx={{
-                                        display: 'grid',
-                                        gridTemplateColumns: '1fr 1.5fr',
-                                        gap: 4,
+                                        border: '1px solid',
+                                        borderColor: record.active ? 'divider' : 'grey.300',
+                                        position: 'relative',
+                                        transition: 'all 0.2s ease-in-out',
+                                        '&:hover': {
+                                            borderColor: record.active ? 'primary.main' : 'grey.400',
+                                        },
+                                        ...(record.active ? {} : {
+                                            backgroundColor: 'grey.50',
+                                            '&::before': {
+                                                content: '""',
+                                                position: 'absolute',
+                                                top: 0,
+                                                left: 0,
+                                                right: 0,
+                                                bottom: 0,
+                                                backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                                                zIndex: 1,
+                                                pointerEvents: 'none',
+                                            },
+                                        }),
                                     }}
                                 >
-                                    {/* Row 1: Headers */}
-                                    <Box sx={{ gridColumn: '1', gridRow: '1' }}>
-                                        <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                            <Typography variant="subtitle2">
-                                                Request
-                                            </Typography>
-
-                                            <Stack direction="row" spacing={1}>
-                                                <Button
-                                                    variant="contained"
-                                                    color="primary"
-                                                    size="small"
-                                                    startIcon={<SaveIcon />}
-                                                    onClick={() => handleSaveRule(record)}
-                                                    disabled={savingRecords.has(record.uuid)}
-                                                >
-                                                    {savingRecords.has(record.uuid) ? 'Saving...' : 'Save'}
-                                                </Button>
-                                                <Button
-                                                    startIcon={<DeleteIcon />}
-                                                    onClick={() => deleteRule(record.uuid)}
-                                                    variant="outlined"
-                                                    size="small"
-                                                    disabled={savingRecords.has(record.uuid)}
-                                                >
-                                                    Delete
-                                                </Button>
-                                            </Stack>
-                                        </Stack>
-                                    </Box>
-                                    <Box sx={{ gridColumn: '2', gridRow: '1' }}>
-                                        <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                            <Typography variant="subtitle2">
-                                                Service ({record.providers.length})
-                                            </Typography>
-                                            <Button
-                                                startIcon={<AddIcon />}
-                                                onClick={() => addProvider(record.uuid)}
-                                                variant="outlined"
-                                                size="small"
-                                            >
-                                                Add Service
-                                            </Button>
-                                        </Stack>
-                                    </Box>
-
-                                    {/* Row 2: Request Input Fields */}
-                                    <Box sx={{ gridColumn: '1', gridRow: '2' }}>
-                                        <Stack spacing={1.5}>
-                                            <Stack direction="row" spacing={1.5} alignItems="center">
-                                                <FormControl sx={{ flex: 1 }} size="small">
+                                    <CardContent
+                                        sx={{
+                                            pb: 2,
+                                            flexGrow: 1,
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            position: 'relative',
+                                            zIndex: record.active ? 'auto' : 2,
+                                            opacity: record.active ? 1 : 0.7,
+                                            transition: 'opacity 0.2s ease-in-out',
+                                        }}
+                                    >
+                                        <Stack spacing={2} sx={{ flexGrow: 1 }}>
+                                            {/* Request Section */}
+                                            <Box>
+                                                <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1.5}>
+                                                    <Stack direction="row" alignItems="center" spacing={1}>
+                                                        <SmartToyIcon sx={{ color: 'primary.main', fontSize: 20 }} />
+                                                        <Typography variant="subtitle1" component="div" fontWeight={600}>
+                                                            Request
+                                                        </Typography>
+                                                        <Chip
+                                                            label={record.active ? 'Active' : 'Inactive'}
+                                                            color={record.active ? 'success' : 'default'}
+                                                            size="small"
+                                                        />
+                                                    </Stack>
+                                                    <Switch
+                                                        checked={record.active}
+                                                        onChange={(e) => updateConfigRecord(record.uuid, 'active', e.target.checked)}
+                                                        size="small"
+                                                        disabled={savingRecords.has(record.uuid)}
+                                                    />
+                                                </Stack>
+                                                <Stack spacing={1}>
                                                     <TextField
                                                         label="Request Model"
                                                         value={record.requestModel}
@@ -377,10 +414,8 @@ const Rule = () => {
                                                         helperText="Model name"
                                                         fullWidth
                                                         size="small"
+                                                        disabled={!record.active}
                                                     />
-                                                </FormControl>
-                                                <FormControl sx={{ flex: 1 }} size="small">
-
                                                     <TextField
                                                         label="Response Model"
                                                         value={record.responseModel}
@@ -390,186 +425,253 @@ const Rule = () => {
                                                         helperText="Empty for as-is"
                                                         fullWidth
                                                         size="small"
+                                                        disabled={!record.active}
                                                     />
-                                                </FormControl>
-                                            </Stack>
-                                        </Stack>
-                                    </Box>
+                                                </Stack>
+                                            </Box>
 
-                                    {/* Row 3+: Provider Configurations (one row per provider) */}
-                                    <Box sx={{ gridColumn: '2', gridRow: '2' }}>
-                                        <Stack spacing={1.5}>
-                                            {record.providers.map((provider) => (
-                                                <>
-                                                    <Stack direction="row" spacing={1.5} alignItems="center">
-                                                        <FormControl sx={{ flex: 1 }} size="small">
-                                                            <InputLabel>Provider</InputLabel>
-                                                            <Select
-                                                                value={provider.provider}
-                                                                onChange={(e) =>
-                                                                    updateProvider(
-                                                                        record.uuid,
-                                                                        provider.uuid,
-                                                                        'provider',
-                                                                        e.target.value
-                                                                    )
-                                                                }
-                                                                label="Provider"
-                                                            >
-                                                                <MenuItem value="">Select</MenuItem>
-                                                                {providers.map((p) => (
-                                                                    <MenuItem key={p.name} value={p.name}>
-                                                                        {p.name}
-                                                                    </MenuItem>
-                                                                ))}
-                                                            </Select>
-                                                        </FormControl>
+                                            <Divider />
 
-                                                        {provider.isManualInput ? (
-                                                            <FormControl sx={{ flex: 1 }} size="small">
-                                                                <TextField
-                                                                    label="Model (Manual)"
-                                                                    value={provider.model}
-                                                                    onChange={(e) =>
-                                                                        updateProvider(
-                                                                            record.uuid,
-                                                                            provider.uuid,
-                                                                            'model',
-                                                                            e.target.value
-                                                                        )
-                                                                    }
-                                                                    placeholder="Enter model name manually"
-                                                                    fullWidth
-                                                                    size="small"
-                                                                    InputProps={{
-                                                                        endAdornment: (
-                                                                            <InputAdornment position="end">
-                                                                                <IconButton
-                                                                                    size="small"
-                                                                                    onClick={() =>
+                                            {/* Service Section */}
+                                            <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+                                                <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1.5}>
+                                                    <Stack direction="row" alignItems="center" spacing={1}>
+                                                        <DnsIcon sx={{ color: 'secondary.main', fontSize: 20 }} />
+                                                        <Typography variant="subtitle1" component="div" fontWeight={600}>
+                                                            Services
+                                                        </Typography>
+                                                        <Chip
+                                                            label={`${record.providers.length}`}
+                                                            variant="outlined"
+                                                            size="small"
+                                                        />
+                                                    </Stack>
+                                                    <Button
+                                                        startIcon={<AddIcon sx={{ fontSize: 16 }} />}
+                                                        onClick={() => addProvider(record.uuid)}
+                                                        variant="outlined"
+                                                        size="small"
+                                                        sx={{ minWidth: 'auto', px: 1 }}
+                                                        disabled={!record.active}
+                                                    >
+                                                        Add
+                                                    </Button>
+                                                </Stack>
+
+                                                <ServiceSection>
+                                                    <Stack spacing={1}>
+                                                        {record.providers.map((provider) => (
+                                                            <Box key={provider.uuid}>
+                                                                <Stack direction="row" spacing={1} alignItems="center">
+                                                                    <FormControl sx={{ minWidth: 110 }} size="small" disabled={!record.active}>
+                                                                        <InputLabel>Provider</InputLabel>
+                                                                        <Select
+                                                                            value={provider.provider}
+                                                                            onChange={(e) =>
+                                                                                updateProvider(
+                                                                                    record.uuid,
+                                                                                    provider.uuid,
+                                                                                    'provider',
+                                                                                    e.target.value
+                                                                                )
+                                                                            }
+                                                                            label="Provider"
+                                                                            size="small"
+                                                                            disabled={!record.active}
+                                                                        >
+                                                                            <MenuItem value="">Select</MenuItem>
+                                                                            {providers.map((p) => (
+                                                                                <MenuItem key={p.name} value={p.name}>
+                                                                                    {p.name}
+                                                                                </MenuItem>
+                                                                            ))}
+                                                                        </Select>
+                                                                    </FormControl>
+
+                                                                    {provider.isManualInput ? (
+                                                                        <Box sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'flex-end' }}>
+                                                                            <TextField
+                                                                                label="Model"
+                                                                                value={provider.model}
+                                                                                onChange={(e) =>
+                                                                                    updateProvider(
+                                                                                        record.uuid,
+                                                                                        provider.uuid,
+                                                                                        'model',
+                                                                                        e.target.value
+                                                                                    )
+                                                                                }
+                                                                                placeholder="Manual"
+                                                                                size="small"
+                                                                                sx={{ flex: 1, minWidth: 0 }}
+                                                                                disabled={!record.active}
+                                                                                slotProps={{
+                                                                                    input: {
+                                                                                        endAdornment: (
+                                                                                            <InputAdornment position="end">
+                                                                                                <Tooltip title="Switch to dropdown">
+                                                                                                    <IconButton
+                                                                                                        size="small"
+                                                                                                        onClick={() =>
+                                                                                                            updateProvider(
+                                                                                                                record.uuid,
+                                                                                                                provider.uuid,
+                                                                                                                'isManualInput',
+                                                                                                                false
+                                                                                                            )
+                                                                                                        }
+                                                                                                        edge="end"
+                                                                                                        sx={{ padding: 1 }}
+                                                                                                        disabled={!record.active}
+                                                                                                    >
+                                                                                                        <CheckIcon fontSize="small" />
+                                                                                                    </IconButton>
+                                                                                                </Tooltip>
+                                                                                            </InputAdornment>
+                                                                                        ),
+                                                                                    }
+                                                                                }}
+                                                                            />
+                                                                        </Box>
+                                                                    ) : (
+                                                                        <Box sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'flex-end', gap: 0.5 }}>
+                                                                            <FormControl size="small" disabled={!provider.provider || !record.active} fullWidth sx={{ flex: 1 }}>
+                                                                                <InputLabel>Model</InputLabel>
+                                                                                <Select
+                                                                                    value={provider.model}
+                                                                                    onChange={(e) =>
                                                                                         updateProvider(
                                                                                             record.uuid,
                                                                                             provider.uuid,
-                                                                                            'isManualInput',
-                                                                                            false
+                                                                                            'model',
+                                                                                            e.target.value
                                                                                         )
                                                                                     }
-                                                                                    title="Switch to dropdown"
-                                                                                    edge="end"
+                                                                                    label="Model"
+                                                                                    size="small"
+                                                                                    disabled={!record.active}
                                                                                 >
-                                                                                    <CheckIcon fontSize="small" />
-                                                                                </IconButton>
-                                                                            </InputAdornment>
-                                                                        ),
-                                                                    }}
-                                                                />
-                                                            </FormControl>
-                                                        ) : (
-                                                            <Box sx={{ flex: 1, position: 'relative' }}>
-                                                                <FormControl size="small" disabled={!provider.provider}
-                                                                    fullWidth>
-                                                                    <InputLabel>Model</InputLabel>
-                                                                    <Select
-                                                                        value={provider.model}
-                                                                        onChange={(e) =>
-                                                                            updateProvider(
-                                                                                record.uuid,
-                                                                                provider.uuid,
-                                                                                'model',
-                                                                                e.target.value
-                                                                            )
-                                                                        }
-                                                                        label="Model"
-                                                                        sx={{
-                                                                            '& .MuiOutlinedInput-notchedOutline': {
-                                                                                paddingRight: '110px', // Make room for buttons
-                                                                            },
-                                                                        }}
-                                                                    >
-                                                                        <MenuItem value="">Select</MenuItem>
-                                                                        {/* Show current model if it exists and is not in the API list */}
-                                                                        {provider.model && !providerModels[provider.provider]?.models.includes(provider.model) && (
-                                                                            <MenuItem key="current-manual"
-                                                                                value={provider.model}>
-                                                                                {provider.model} (custom)
-                                                                            </MenuItem>
-                                                                        )}
-                                                                        {/* Show models from API */}
-                                                                        {providerModels[provider.provider]?.models.map(
-                                                                            (model: string) => (
-                                                                                <MenuItem key={model} value={model}>
-                                                                                    {model}
-                                                                                </MenuItem>
-                                                                            )
-                                                                        )}
-                                                                    </Select>
-                                                                </FormControl>
-                                                                <Box
-                                                                    sx={{
-                                                                        position: 'absolute',
-                                                                        right: 8,
-                                                                        top: '50%',
-                                                                        transform: 'translateY(-50%)',
-                                                                        display: 'flex',
-                                                                        gap: 0.5,
-                                                                        bgcolor: 'background.paper',
-                                                                        borderRadius: 1,
-                                                                        padding: '2px',
-                                                                        pointerEvents: 'auto',
-                                                                    }}
-                                                                >
-                                                                    <IconButton
-                                                                        size="small"
-                                                                        onClick={() => handleRefreshProviderModels(provider.provider)}
-                                                                        disabled={!provider.provider}
-                                                                        title="Refresh models"
-                                                                        sx={{
-                                                                            padding: '4px',
-                                                                            '&:hover': { bgcolor: 'action.hover' }
-                                                                        }}
-                                                                    >
-                                                                        <RefreshIcon fontSize="small" />
-                                                                    </IconButton>
-                                                                    <IconButton
-                                                                        size="small"
-                                                                        onClick={() =>
-                                                                            updateProvider(
-                                                                                record.uuid,
-                                                                                provider.uuid,
-                                                                                'isManualInput',
-                                                                                true
-                                                                            )
-                                                                        }
-                                                                        title="Switch to manual input"
-                                                                        sx={{
-                                                                            padding: '4px',
-                                                                            '&:hover': { bgcolor: 'action.hover' }
-                                                                        }}
-                                                                    >
-                                                                        <EditIcon fontSize="small" />
-                                                                    </IconButton>
-                                                                </Box>
-                                                            </Box>
-                                                        )}
+                                                                                    <MenuItem value="">Select</MenuItem>
+                                                                                    {provider.model && !(providerModels[provider.provider]?.models || []).includes(provider.model) && (
+                                                                                        <MenuItem key="current-manual" value={provider.model}>
+                                                                                            {provider.model} (custom)
+                                                                                        </MenuItem>
+                                                                                    )}
+                                                                                    {(providerModels[provider.provider]?.models || []).map(
+                                                                                        (model: string) => (
+                                                                                            <MenuItem key={model} value={model}>
+                                                                                                {model}
+                                                                                            </MenuItem>
+                                                                                        )
+                                                                                    )}
+                                                                                </Select>
+                                                                            </FormControl>
+                                                                            <Box sx={{ display: 'flex', gap: 0.25 }}>
+                                                                                <Tooltip title="Refresh models">
+                                                                                    <IconButton
+                                                                                        size="small"
+                                                                                        onClick={() => handleRefreshProviderModels(provider.provider)}
+                                                                                        disabled={!provider.provider || !record.active}
+                                                                                        sx={{
+                                                                                            padding: 1,
+                                                                                            '&:hover': { bgcolor: 'action.hover' }
+                                                                                        }}
+                                                                                    >
+                                                                                        <RefreshIcon fontSize="small" />
+                                                                                    </IconButton>
+                                                                                </Tooltip>
+                                                                                <Tooltip title="Switch to manual input">
+                                                                                    <IconButton
+                                                                                        size="small"
+                                                                                        onClick={() =>
+                                                                                            updateProvider(
+                                                                                                record.uuid,
+                                                                                                provider.uuid,
+                                                                                                'isManualInput',
+                                                                                                true
+                                                                                            )
+                                                                                        }
+                                                                                        disabled={!record.active}
+                                                                                        sx={{
+                                                                                            padding: 1,
+                                                                                            '&:hover': { bgcolor: 'action.hover' }
+                                                                                        }}
+                                                                                    >
+                                                                                        <EditIcon fontSize="small" />
+                                                                                    </IconButton>
+                                                                                </Tooltip>
+                                                                            </Box>
+                                                                        </Box>
+                                                                    )}
 
-                                                        <IconButton
-                                                            size="small"
-                                                            onClick={() => deleteProvider(record.uuid, provider.uuid)}
-                                                            color="error"
-                                                            sx={{ p: 0.5 }}
-                                                        >
-                                                            <DeleteIcon fontSize="small" />
-                                                        </IconButton>
+                                                                    <Tooltip title="Delete provider">
+                                                                        <IconButton
+                                                                            size="small"
+                                                                            onClick={() => deleteProvider(record.uuid, provider.uuid)}
+                                                                            color="error"
+                                                                            sx={{ padding: 0.5, flexShrink: 0 }}
+                                                                            disabled={!record.active}
+                                                                        >
+                                                                            <DeleteIcon fontSize="small" />
+                                                                        </IconButton>
+                                                                    </Tooltip>
+                                                                </Stack>
+                                                            </Box>
+                                                        ))}
                                                     </Stack>
-                                                    <Divider sx={{ mt: 1.5 }} />
-                                                </>
-                                            ))}
+                                                </ServiceSection>
+
+                                                {record.providers.length === 0 && (
+                                                    <Box
+                                                        sx={{
+                                                            display: 'flex',
+                                                            flexDirection: 'column',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            height: 200,
+                                                            textAlign: 'center',
+                                                            border: '2px dashed',
+                                                            borderColor: 'divider',
+                                                            borderRadius: 1,
+                                                        }}
+                                                    >
+                                                        <Typography variant="body2" color="text.secondary">
+                                                            No services
+                                                        </Typography>
+                                                        <Typography variant="caption" color="text.secondary">
+                                                            Click "Add" to configure
+                                                        </Typography>
+                                                    </Box>
+                                                )}
+                                            </Box>
                                         </Stack>
-                                    </Box>
-                                </Box>
-                            </Box>
-                        )))
-                    }
+                                    </CardContent>
+                                    <CardActions sx={{ px: 2, pb: 2, justifyContent: 'flex-end', gap: 1 }}>
+                                        <Button
+                                            variant="contained"
+                                            color="primary"
+                                            size="small"
+                                            startIcon={<SaveIcon />}
+                                            onClick={() => handleSaveRule(record)}
+                                            disabled={savingRecords.has(record.uuid)}
+                                        >
+                                            {savingRecords.has(record.uuid) ? 'Saving...' : 'Save'}
+                                        </Button>
+                                        <Button
+                                            startIcon={<DeleteIcon />}
+                                            onClick={() => deleteRule(record.uuid)}
+                                            variant="outlined"
+                                            size="small"
+                                            color="error"
+                                            disabled={savingRecords.has(record.uuid)}
+                                        >
+                                            Delete
+                                        </Button>
+                                    </CardActions>
+                                </RuleCard>
+                            ))}
+                        </Box>
+                    )}
 
                 </Stack>
             </UnifiedCard>
