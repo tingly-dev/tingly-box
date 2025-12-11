@@ -64,12 +64,6 @@ func (s *Server) UseUIEndpoints() {
 	s.useWebStaticEndpoints(s.router)
 }
 
-type ProbeRequest struct {
-	Rule     string `yaml:"rule" json:"rule"`
-	Provider string `yaml:"provider" json:"provider"`
-	Model    string `yaml:"model" json:"model"`
-}
-
 // ProbeRule tests a rule configuration by sending a sample request to the configured provider
 func (s *Server) ProbeRule(c *gin.Context) {
 
@@ -131,22 +125,10 @@ func (s *Server) GetProviders(c *gin.Context) {
 	providers := s.config.ListProviders()
 
 	// Mask tokens for security
-	maskedProviders := make([]struct {
-		Name     string `json:"name"`
-		APIBase  string `json:"api_base"`
-		APIStyle string `json:"api_style"`
-		Token    string `json:"token"`
-		Enabled  bool   `json:"enabled"`
-	}, len(providers))
+	maskedProviders := make([]ProviderResponse, len(providers))
 
 	for i, provider := range providers {
-		maskedProviders[i] = struct {
-			Name     string `json:"name"`
-			APIBase  string `json:"api_base"`
-			APIStyle string `json:"api_style"`
-			Token    string `json:"token"`
-			Enabled  bool   `json:"enabled"`
-		}{
+		maskedProviders[i] = ProviderResponse{
 			Name:     provider.Name,
 			APIBase:  provider.APIBase,
 			APIStyle: string(provider.APIStyle),
@@ -155,10 +137,12 @@ func (s *Server) GetProviders(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    maskedProviders,
-	})
+	response := ProvidersResponse{
+		Success: true,
+		Data:    maskedProviders,
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 func (s *Server) GetStatus(c *gin.Context) {
@@ -170,31 +154,31 @@ func (s *Server) GetStatus(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data": gin.H{
-			"server_running":    true,
-			"port":              s.config.GetServerPort(),
-			"providers_total":   len(providers),
-			"providers_enabled": enabledCount,
-			"request_count":     0,
-		},
-	})
+	response := StatusResponse{
+		Success: true,
+	}
+	response.Data.ServerRunning = true
+	response.Data.Port = s.config.GetServerPort()
+	response.Data.ProvidersTotal = len(providers)
+	response.Data.ProvidersEnabled = enabledCount
+	response.Data.RequestCount = 0
+
+	c.JSON(http.StatusOK, response)
 }
 
 func (s *Server) GetHistory(c *gin.Context) {
+	response := HistoryResponse{
+		Success: true,
+	}
+
 	if s.logger != nil {
 		history := s.logger.GetHistory(50)
-		c.JSON(http.StatusOK, gin.H{
-			"success": true,
-			"data":    history,
-		})
+		response.Data = history
 	} else {
-		c.JSON(http.StatusOK, gin.H{
-			"success": true,
-			"data":    []interface{}{},
-		})
+		response.Data = []interface{}{}
 	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 func (s *Server) GetDefaults(c *gin.Context) {
@@ -211,23 +195,23 @@ func (s *Server) GetDefaults(c *gin.Context) {
 	defaultRequestID := cfg.GetDefaultRequestID()
 
 	// Convert Rules to response format
-	responseConfigs := make([]map[string]interface{}, len(requestConfigs))
+	responseConfigs := make([]RequestConfig, len(requestConfigs))
 	for i, rc := range requestConfigs {
-		responseConfigs[i] = map[string]interface{}{
-			"request_model":  rc.RequestModel,
-			"response_model": rc.ResponseModel,
-			"provider":       rc.GetDefaultProvider(),
-			"default_model":  rc.GetDefaultModel(),
+		responseConfigs[i] = RequestConfig{
+			RequestModel:  rc.RequestModel,
+			ResponseModel: rc.ResponseModel,
+			Provider:      rc.GetDefaultProvider(),
+			DefaultModel:  rc.GetDefaultModel(),
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data": gin.H{
-			"request_configs":    responseConfigs,
-			"default_request_id": defaultRequestID,
-		},
-	})
+	response := DefaultsResponse{
+		Success: true,
+	}
+	response.Data.RequestConfigs = responseConfigs
+	response.Data.DefaultRequestID = defaultRequestID
+
+	c.JSON(http.StatusOK, response)
 }
 
 // GetRules returns all rules
@@ -243,10 +227,12 @@ func (s *Server) GetRules(c *gin.Context) {
 
 	rules := cfg.GetRequestConfigs()
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    rules,
-	})
+	response := RulesResponse{
+		Success: true,
+		Data:    rules,
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // GetRule returns a specific rule by name
@@ -278,10 +264,12 @@ func (s *Server) GetRule(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    rule,
-	})
+	response := RuleResponse{
+		Success: true,
+		Data:    rule,
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // SetRule creates or updates a rule
@@ -329,17 +317,17 @@ func (s *Server) SetRule(c *gin.Context) {
 		}, true, fmt.Sprintf("Rule %s updated successfully", ruleUUID))
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Rule saved successfully",
-		"data": map[string]interface{}{
-			"request_model":  rule.RequestModel,
-			"response_model": rule.ResponseModel,
-			"provider":       rule.GetDefaultProvider(),
-			"default_model":  rule.GetDefaultModel(),
-			"active":         rule.Active,
-		},
-	})
+	response := SetRuleResponse{
+		Success: true,
+		Message: "Rule saved successfully",
+	}
+	response.Data.RequestModel = rule.RequestModel
+	response.Data.ResponseModel = rule.ResponseModel
+	response.Data.Provider = rule.GetDefaultProvider()
+	response.Data.DefaultModel = rule.GetDefaultModel()
+	response.Data.Active = rule.Active
+
+	c.JSON(http.StatusOK, response)
 }
 
 func (s *Server) DeleteRule(c *gin.Context) {
@@ -370,21 +358,17 @@ func (s *Server) DeleteRule(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Rule delete successfully",
-	})
+	response := DeleteRuleResponse{
+		Success: true,
+		Message: "Rule deleted successfully",
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // AddProvider adds a new provider
 func (s *Server) AddProvider(c *gin.Context) {
-	var req struct {
-		Name     string `json:"name" binding:"required"`
-		APIBase  string `json:"api_base" binding:"required"`
-		APIStyle string `json:"api_style"`
-		Token    string `json:"token" binding:"required"`
-		Enabled  bool   `json:"enabled"`
-	}
+	var req AddProviderRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -435,11 +419,13 @@ func (s *Server) AddProvider(c *gin.Context) {
 		}, true, fmt.Sprintf("Provider %s added successfully", req.Name))
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Provider added successfully",
-		"data":    provider,
-	})
+	response := AddProviderResponse{
+		Success: true,
+		Message: "Provider added successfully",
+		Data:    provider,
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // DeleteProvider removes a provider
@@ -474,10 +460,12 @@ func (s *Server) DeleteProvider(c *gin.Context) {
 		}, true, fmt.Sprintf("Provider %s deleted successfully", providerName))
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Provider deleted successfully",
-	})
+	response := DeleteProviderResponse{
+		Success: true,
+		Message: "Provider deleted successfully",
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // UpdateProvider updates an existing provider
@@ -491,13 +479,7 @@ func (s *Server) UpdateProvider(c *gin.Context) {
 		return
 	}
 
-	var req struct {
-		NewName  *string `json:"name,omitempty"`
-		APIBase  *string `json:"api_base,omitempty"`
-		APIStyle *string `json:"api_style,omitempty"`
-		Token    *string `json:"token,omitempty"`
-		Enabled  *bool   `json:"enabled,omitempty"`
-	}
+	var req UpdateProviderRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -518,8 +500,8 @@ func (s *Server) UpdateProvider(c *gin.Context) {
 	}
 
 	// Update fields if provided
-	if req.NewName != nil {
-		provider.Name = *req.NewName
+	if req.Name != nil {
+		provider.Name = *req.Name
 	}
 	if req.APIBase != nil {
 		provider.APIBase = *req.APIBase
@@ -558,13 +540,7 @@ func (s *Server) UpdateProvider(c *gin.Context) {
 	}
 
 	// Return masked provider data
-	responseProvider := struct {
-		Name     string `json:"name"`
-		APIBase  string `json:"api_base"`
-		APIStyle string `json:"api_style"`
-		Token    string `json:"token"`
-		Enabled  bool   `json:"enabled"`
-	}{
+	responseProvider := ProviderResponse{
 		Name:     provider.Name,
 		APIBase:  provider.APIBase,
 		APIStyle: string(provider.APIStyle),
@@ -572,11 +548,13 @@ func (s *Server) UpdateProvider(c *gin.Context) {
 		Enabled:  provider.Enabled,
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Provider updated successfully",
-		"data":    responseProvider,
-	})
+	response := UpdateProviderResponse{
+		Success: true,
+		Message: "Provider updated successfully",
+		Data:    responseProvider,
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // GetProvider returns details for a specific provider (with masked token)
@@ -600,26 +578,23 @@ func (s *Server) GetProvider(c *gin.Context) {
 	}
 
 	// Mask the token for security
-	maskedToken := maskToken(provider.Token)
-
-	responseProvider := struct {
-		Name     string `json:"name"`
-		APIBase  string `json:"api_base"`
-		APIStyle string `json:"api_style"`
-		Token    string `json:"token"`
-		Enabled  bool   `json:"enabled"`
-	}{
+	responseProvider := ProviderResponse{
 		Name:     provider.Name,
 		APIBase:  provider.APIBase,
 		APIStyle: string(provider.APIStyle),
-		Token:    maskedToken,
+		Token:    maskToken(provider.Token),
 		Enabled:  provider.Enabled,
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    responseProvider,
-	})
+	response := struct {
+		Success bool             `json:"success"`
+		Data    ProviderResponse `json:"data"`
+	}{
+		Success: true,
+		Data:    responseProvider,
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // ToggleProvider enables/disables a provider
@@ -673,13 +648,13 @@ func (s *Server) ToggleProvider(c *gin.Context) {
 		}, true, fmt.Sprintf("Provider %s %s successfully", providerName, action))
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": fmt.Sprintf("Provider %s %s successfully", providerName, action),
-		"data": gin.H{
-			"enabled": provider.Enabled,
-		},
-	})
+	response := ToggleProviderResponse{
+		Success: true,
+		Message: fmt.Sprintf("Provider %s %s successfully", providerName, action),
+	}
+	response.Data.Enabled = provider.Enabled
+
+	c.JSON(http.StatusOK, response)
 }
 
 // Helper function to mask tokens for display
@@ -703,10 +678,11 @@ func maskToken(token string) string {
 }
 
 func (s *Server) StartServer(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{
-		"success": false,
-		"error":   "Start server via web UI not supported. Please use CLI: tingly start",
-	})
+	response := ServerActionResponse{
+		Success: false,
+		Message: "Start server via web UI not supported. Please use CLI: tingly start",
+	}
+	c.JSON(http.StatusNotImplemented, response)
 }
 
 func (s *Server) StopServer(c *gin.Context) {
@@ -746,27 +722,24 @@ func (s *Server) StopServer(c *gin.Context) {
 		// Channel already has a signal
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Server stopped successfully. The application will now exit.",
-	})
+	response := ServerActionResponse{
+		Success: true,
+		Message: "Server stopped successfully. The application will now exit.",
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 func (s *Server) RestartServer(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{
-		"success": false,
-		"error":   "Restart server via web UI not supported. Please use CLI: tingly restart",
-	})
+	response := ServerActionResponse{
+		Success: false,
+		Message: "Restart server via web UI not supported. Please use CLI: tingly restart",
+	}
+	c.JSON(http.StatusNotImplemented, response)
 }
 
 func (s *Server) SetDefaults(c *gin.Context) {
-	var req struct {
-		RequestConfigs []config.Rule `json:"request_configs"`
-	}
-
-	// Body
-	//bodyBytes, _ := c.GetRawData()
-	//println(string(bodyBytes))
+	var req SetDefaultsRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -808,10 +781,12 @@ func (s *Server) SetDefaults(c *gin.Context) {
 		s.logger.LogAction(memory.ActionUpdateDefaults, logData, true, "Request configs updated via web interface")
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Request configs updated successfully",
-	})
+	response := ServerActionResponse{
+		Success: true,
+		Message: "Request configs updated successfully",
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 func (s *Server) FetchProviderModels(c *gin.Context) {
@@ -852,11 +827,13 @@ func (s *Server) FetchProviderModels(c *gin.Context) {
 		}, true, fmt.Sprintf("Successfully fetched %d models for provider %s", len(models), providerName))
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": fmt.Sprintf("Successfully fetched %d models for provider %s", len(models), providerName),
-		"data":    models,
-	})
+	response := FetchProviderModelsResponse{
+		Success: true,
+		Message: fmt.Sprintf("Successfully fetched %d models for provider %s", len(models), providerName),
+		Data:    models,
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 func (s *Server) GetProviderModels(c *gin.Context) {
@@ -883,10 +860,12 @@ func (s *Server) GetProviderModels(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    providerModels,
-	})
+	response := ProviderModelsResponse{
+		Success: true,
+		Data:    providerModels,
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // authMiddleware validates the authentication token
