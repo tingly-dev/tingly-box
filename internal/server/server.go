@@ -206,6 +206,11 @@ func RequestLoggerMiddleware() gin.HandlerFunc {
 
 // setupRoutes configures server routes
 func (s *Server) setupRoutes() {
+	// Integrate Web UI routes if enabled
+	if s.useUI {
+		s.UseUIEndpoints()
+	}
+
 	// Health check endpoint
 	s.router.GET("/health", s.HealthCheck)
 
@@ -238,13 +243,6 @@ func (s *Server) setupRoutes() {
 		s.loadBalancerAPI.RegisterRoutes(api.Group(""))
 	}
 
-	// Integrate Web UI routes if enabled
-	if s.useUI {
-		s.UseUIEndpoints()
-		// Token generation endpoint (for UI and management)
-		s.router.POST("/api/token", s.UserAuth(), s.GenerateToken)
-		s.router.GET("/api/token", s.UserAuth(), s.GetToken)
-	}
 }
 
 // Start starts the HTTP server

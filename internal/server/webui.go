@@ -934,9 +934,9 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 	// Set Swagger information
 	manager.SetSwaggerInfo(swagger.SwaggerInfo{
 		Title:       "Tingly Box API",
-		Description: "A RESTful API for managing AI model providers, rules, and load balancing with automatic Swagger documentation generation.",
+		Description: "A Restful API for managing AI model providers, rules, and load balancing with automatic Swagger documentation generation.",
 		Version:     "1.0.0",
-		Host:        "localhost:15000",
+		Host:        fmt.Sprintf("localhost:%d", s.config.ServerPort),
 		BasePath:    "/",
 		Contact: swagger.SwaggerContact{
 			Name:  "API Support",
@@ -965,7 +965,7 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 
 	// Create authenticated API group
 	authAPI := manager.NewGroup("api", "v1", "")
-	authAPI.Router.Use(s.authMiddleware())
+	authAPI.Router.Use(s.UserAuth())
 
 	// Provider Management
 	authAPI.GET("/providers", (s.GetProviders),
@@ -1097,6 +1097,20 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 		swagger.WithTags("testing"),
 		swagger.WithRequestModel(ProbeRequest{}),
 		swagger.WithResponseModel(RuleResponse{}),
+	)
+
+	// Token Management
+	authAPI.POST("/token", (s.GenerateToken),
+		swagger.WithDescription("Generate a new API token"),
+		swagger.WithTags("token"),
+		swagger.WithRequestModel(GenerateTokenRequest{}),
+		swagger.WithResponseModel(TokenResponse{}),
+	)
+
+	authAPI.GET("/token", (s.GetToken),
+		swagger.WithDescription("Get existing API token or generate new one"),
+		swagger.WithTags("token"),
+		swagger.WithResponseModel(TokenResponse{}),
 	)
 
 	// Setup Swagger documentation endpoint
