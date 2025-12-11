@@ -39,6 +39,11 @@ tasks:
     cmds:
       - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
   
+  codegen:
+    cmds:
+      - |
+        openapi-generator-cli generate -g typescript-axios -i ./swagger.json -o ./frontend/src/client
+  
   start:
     cmds:
       - task: go:build
