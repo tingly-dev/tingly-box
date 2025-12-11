@@ -86,10 +86,6 @@ const Providers = () => {
     };
 
     const handleDeleteProvider = async (name: string) => {
-        if (!confirm(`Are you sure you want to delete provider "${name}"?`)) {
-            return;
-        }
-
         const result = await api.deleteProvider(name);
 
         if (result.success) {
