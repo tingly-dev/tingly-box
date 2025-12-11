@@ -18,7 +18,7 @@ import {
     Typography,
 } from '@mui/material';
 import IconButton from '@mui/material/IconButton';
-import type { Provider, ProviderModelsData } from './ProviderCard';
+import type {  Provider,  ProviderModelsData } from '../types/provider';
 
 export interface ProviderSelectOption {
     provider: string;
