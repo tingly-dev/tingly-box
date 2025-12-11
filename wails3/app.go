@@ -23,7 +23,7 @@ var uiService *services.ProxyService
 func newApp() *application.App {
 	// Create UI service
 	home, err := util.GetUserPath()
-	uiService, err = services.NewUIService(home, 18080)
+	uiService, err = services.NewUIService(home, 12580)
 	if err != nil {
 		log.Fatalf("Failed to create UI service: %v", err)
 	}
@@ -40,7 +40,7 @@ func newApp() *application.App {
 		Description: AppDescription,
 		Services: []application.Service{
 			application.NewService(&services.GreetService{}),
-			//application.NewService(uiService),
+			application.NewService(uiService),
 		},
 		Assets: application.AssetOptions{
 			Middleware: func(next http.Handler) http.Handler {
