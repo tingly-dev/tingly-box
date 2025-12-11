@@ -39,7 +39,10 @@ export const PageLayout: React.FC<PageLayoutProps> = ({
   }
 
   return (
-    <Box position="relative" minHeight="100vh">
+    <Box
+      position="relative"
+      overflow="scroll"
+    >
       <Box>{children}</Box>
 
       {/* Unified Notification System */}

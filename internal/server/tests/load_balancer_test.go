@@ -408,7 +408,7 @@ func TestLoadBalancerAPI_RuleManagement(t *testing.T) {
 	userToken := globalConfig.GetUserToken()
 
 	t.Run("Get_Existing_Rule", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", fmt.Sprintf("/api/load-balancer/rules/%s", ruleName), nil)
+		req, _ := http.NewRequest("GET", fmt.Sprintf("/api/v1/load-balancer/rules/%s", ruleName), nil)
 		req.Header.Set("Authorization", "Bearer "+userToken)
 		w := httptest.NewRecorder()
 		ts.ginEngine.ServeHTTP(w, req)
@@ -430,7 +430,7 @@ func TestLoadBalancerAPI_RuleManagement(t *testing.T) {
 	})
 
 	t.Run("Get_NonExistent_Rule", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", "/api/load-balancer/rules/nonexistent", nil)
+		req, _ := http.NewRequest("GET", "/api/v1/load-balancer/rules/nonexistent", nil)
 		req.Header.Set("Authorization", "Bearer "+userToken)
 		w := httptest.NewRecorder()
 		ts.ginEngine.ServeHTTP(w, req)
@@ -444,7 +444,7 @@ func TestLoadBalancerAPI_RuleManagement(t *testing.T) {
 	})
 
 	t.Run("Get_Rule_Summary", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", fmt.Sprintf("/api/load-balancer/rules/%s/summary", ruleName), nil)
+		req, _ := http.NewRequest("GET", fmt.Sprintf("/api/v1/load-balancer/rules/%s/summary", ruleName), nil)
 		req.Header.Set("Authorization", "Bearer "+userToken)
 		w := httptest.NewRecorder()
 		ts.ginEngine.ServeHTTP(w, req)
@@ -474,7 +474,7 @@ func TestLoadBalancerAPI_RuleManagement(t *testing.T) {
 		updateReq := map[string]string{"tactic": "random"}
 		reqBody, _ := json.Marshal(updateReq)
 
-		req, _ := http.NewRequest("PUT", fmt.Sprintf("/api/load-balancer/rules/%s/tactic", ruleName), bytes.NewBuffer(reqBody))
+		req, _ := http.NewRequest("PUT", fmt.Sprintf("/api/v1/load-balancer/rules/%s/tactic", ruleName), bytes.NewBuffer(reqBody))
 		req.Header.Set("Authorization", "Bearer "+userToken)
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -493,7 +493,7 @@ func TestLoadBalancerAPI_RuleManagement(t *testing.T) {
 		updateReq := map[string]string{"tactic": "invalid_tactic"}
 		reqBody, _ := json.Marshal(updateReq)
 
-		req, _ := http.NewRequest("PUT", fmt.Sprintf("/api/load-balancer/rules/%s/tactic", ruleName), bytes.NewBuffer(reqBody))
+		req, _ := http.NewRequest("PUT", fmt.Sprintf("/api/v1/load-balancer/rules/%s/tactic", ruleName), bytes.NewBuffer(reqBody))
 		req.Header.Set("Authorization", "Bearer "+userToken)
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -511,7 +511,7 @@ func TestLoadBalancerAPI_RuleManagement(t *testing.T) {
 		updateReq := map[string]string{"tactic": "random"}
 		reqBody, _ := json.Marshal(updateReq)
 
-		req, _ := http.NewRequest("PUT", "/api/load-balancer/rules/nonexistent/tactic", bytes.NewBuffer(reqBody))
+		req, _ := http.NewRequest("PUT", "/api/v1/load-balancer/rules/nonexistent/tactic", bytes.NewBuffer(reqBody))
 		req.Header.Set("Authorization", "Bearer "+userToken)
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -568,7 +568,7 @@ func TestLoadBalancerAPI_CurrentService(t *testing.T) {
 	userToken := globalConfig.GetUserToken()
 
 	t.Run("Get_Current_Service", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", fmt.Sprintf("/api/load-balancer/rules/%s/current-service", ruleName), nil)
+		req, _ := http.NewRequest("GET", fmt.Sprintf("/api/v1/load-balancer/rules/%s/current-service", ruleName), nil)
 		req.Header.Set("Authorization", "Bearer "+userToken)
 		w := httptest.NewRecorder()
 		ts.ginEngine.ServeHTTP(w, req)
@@ -596,7 +596,7 @@ func TestLoadBalancerAPI_CurrentService(t *testing.T) {
 	})
 
 	t.Run("Get_Current_Service_NonExistent_Rule", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", "/api/load-balancer/rules/nonexistent/current-service", nil)
+		req, _ := http.NewRequest("GET", "/api/v1/load-balancer/rules/nonexistent/current-service", nil)
 		req.Header.Set("Authorization", "Bearer "+userToken)
 		w := httptest.NewRecorder()
 		ts.ginEngine.ServeHTTP(w, req)
@@ -655,32 +655,32 @@ func TestLoadBalancerAPI_Authentication(t *testing.T) {
 		{
 			name:           "Get_Rule_No_Auth",
 			method:         "GET",
-			url:            "/api/load-balancer/rules/auth-test-rule",
+			url:            "/api/v1/load-balancer/rules/auth-test-rule",
 			expectedStatus: http.StatusUnauthorized,
 		},
 		{
 			name:           "Get_Rule_Summary_No_Auth",
 			method:         "GET",
-			url:            "/api/load-balancer/rules/auth-test-rule/summary",
+			url:            "/api/v1/load-balancer/rules/auth-test-rule/summary",
 			expectedStatus: http.StatusUnauthorized,
 		},
 		{
 			name:           "Update_Tactic_No_Auth",
 			method:         "PUT",
-			url:            "/api/load-balancer/rules/auth-test-rule/tactic",
+			url:            "/api/v1/load-balancer/rules/auth-test-rule/tactic",
 			body:           map[string]string{"tactic": "random"},
 			expectedStatus: http.StatusUnauthorized,
 		},
 		{
 			name:           "Get_Stats_No_Auth",
 			method:         "GET",
-			url:            "/api/load-balancer/stats",
+			url:            "/api/v1/load-balancer/stats",
 			expectedStatus: http.StatusUnauthorized,
 		},
 		{
 			name:           "Clear_Stats_No_Auth",
 			method:         "POST",
-			url:            "/api/load-balancer/stats/clear",
+			url:            "/api/v1/load-balancer/stats/clear",
 			expectedStatus: http.StatusUnauthorized,
 		},
 	}

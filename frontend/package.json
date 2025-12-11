@@ -17,6 +17,7 @@
     "@mui/material": "^7.3.6",
     "@types/react": "^19.2.7",
     "@wailsio/runtime": "latest",
+    "axios": "^1.13.2",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
     "react-router-dom": "^7.10.1"

@@ -170,10 +170,12 @@ const Dashboard = () => {
                 services: [],
             };
 
-            const result = await api.createRule({
-                name: defaultRule,
-                ...defaultRuleData
-            });
+            const result = await api.createRule(
+                defaultRuleUUID,
+                {
+                    name: defaultRule,
+                    ...defaultRuleData
+                });
             if (result.success) {
                 // Reload the rule after creating it
                 const reloadResult = await api.getRule(defaultRule);
@@ -246,10 +248,12 @@ const Dashboard = () => {
                 result = await api.updateRule(existingRule.data.uuid, ruleData);
             } else {
                 // Create new rule if it doesn't exist
-                const createResult = await api.createRule({
-                    name: 'tingly',
-                    ...ruleData,
-                });
+                const createResult = await api.createRule(
+                    defaultRuleUUID,
+                    {
+                        name: 'tingly',
+                        ...ruleData,
+                    });
                 result = createResult;
             }
             if (result.success) {
@@ -404,12 +408,12 @@ const Dashboard = () => {
                     No Providers Available
                 </Typography>
                 <Typography variant="body1" color="text.secondary"
-                            sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
+                    sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
                     Get started by adding your first AI provider. You can connect to OpenAI, Anthropic, or
                     any compatible API endpoint.
                 </Typography>
                 <Typography variant="body2" color="text.secondary"
-                            sx={{ mb: 4, maxWidth: 400, mx: 'auto' }}>
+                    sx={{ mb: 4, maxWidth: 400, mx: 'auto' }}>
                     <strong>Steps to get started:</strong><br />
                     1. Click the + button to add a provider<br />
                     2. Configure your API credentials<br />
@@ -622,8 +626,6 @@ const Dashboard = () => {
                                     onRefresh={handleModelRefresh}
                                 />
 
-                                {/* Probe Component */}
-                                <Probe rule="tingly" provider={selectedOption.provider} model={selectedOption.model} />
                             </Stack>
                         </Grid>
                     ) : (
@@ -633,6 +635,9 @@ const Dashboard = () => {
                 </Grid>
 
             </UnifiedCard>
+
+            {/* Probe Component */}
+            <Probe rule="tingly" provider={selectedOption.provider} model={selectedOption.model} />
 
             {/* Token Modal */}
             <TokenModal></TokenModal>

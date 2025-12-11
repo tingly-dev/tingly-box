@@ -1,29 +1,29 @@
 import { CheckCircle } from '@mui/icons-material';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import EditIcon from '@mui/icons-material/Edit';
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
-import EditIcon from '@mui/icons-material/Edit';
-import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import {
     Box,
+    Button,
     Card,
     CardContent,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
     InputAdornment,
     Stack,
     Tab,
     Tabs,
     TextField,
     Typography,
-    Button,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
 } from '@mui/material';
 import IconButton from '@mui/material/IconButton';
 import React, { useState } from 'react';
-import type { Provider, ProviderModelsData } from './ProviderCard';
+import type { Provider, ProviderModelsData } from '../types/provider';
 
 export interface ProviderSelectTabOption {
     provider: Provider;
@@ -41,7 +41,7 @@ interface ProviderSelectTabProps {
     onCustomModelSave?: (provider: Provider, customModel: string) => void;
 }
 
-const MODELS_PER_PAGE = 7*4;
+const MODELS_PER_PAGE = 7 * 4;
 
 interface TabPanelProps {
     children?: React.ReactNode;
@@ -138,7 +138,7 @@ export default function ProviderSelectTab({
         setCurrentPage(prev => ({ ...prev, [providerName]: page }));
     };
 
-  const handleCustomModelEdit = (provider: Provider, currentValue?: string) => {
+    const handleCustomModelEdit = (provider: Provider, currentValue?: string) => {
         setCustomModelDialog({
             open: true,
             provider,
@@ -414,26 +414,78 @@ export default function ProviderSelectTab({
                                 </Box>
                             )}
 
-                            
+
                             {/* All Models Section */}
                             <Box
                                 sx={{
-                                    minHeight: 300, // Minimum height to prevent layout shifts
+                                    minHeight: 200, // Minimum height to prevent layout shifts
                                 }}
                             >
                                 <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
                                     All Models ({pagination.totalModels})
                                 </Typography>
                                 <Box
+                                    sx={{
+                                        display: 'grid',
+                                        gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+                                        gap: 0.8,
+                                    }}
+                                >
+                                    {/* Add Custom Model Card */}
+                                    <Card
+                                        key="add-custom-model"
                                         sx={{
-                                            display: 'grid',
-                                            gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
-                                            gap: 0.8,
+                                            width: '100%',
+                                            height: 60,
+                                            border: 1,
+                                            borderColor: 'primary.main',
+                                            borderRadius: 1.5,
+                                            backgroundColor: 'primary.50',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s ease-in-out',
+                                            position: 'relative',
+                                            boxShadow: 0,
+                                            borderStyle: 'dashed',
+                                            '&:hover': {
+                                                backgroundColor: 'primary.100',
+                                                boxShadow: 2,
+                                            },
                                         }}
+                                        onClick={() => handleCustomModelEdit(provider)}
                                     >
-                                        {/* Add Custom Model Card */}
+                                        <CardContent sx={{
+                                            textAlign: 'center',
+                                            py: 1,
+                                            px: 0.8,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            height: '100%'
+                                        }}>
+                                            <Stack direction="row" alignItems="center" spacing={1}>
+                                                <AddCircleOutlineIcon
+                                                    color="primary"
+                                                    sx={{ fontSize: 20 }}
+                                                />
+                                                <Typography
+                                                    variant="body2"
+                                                    sx={{
+                                                        fontWeight: 500,
+                                                        fontSize: '0.75rem',
+                                                        lineHeight: 1.3,
+                                                        color: 'primary.main',
+                                                    }}
+                                                >
+                                                    Custom Model
+                                                </Typography>
+                                            </Stack>
+                                        </CardContent>
+                                    </Card>
+
+                                    {/* Persisted custom model card */}
+                                    {providerModels?.[provider.name]?.custom_model && (
                                         <Card
-                                            key="add-custom-model"
+                                            key="persisted-custom-model"
                                             sx={{
                                                 width: '100%',
                                                 height: 60,
@@ -445,13 +497,17 @@ export default function ProviderSelectTab({
                                                 transition: 'all 0.2s ease-in-out',
                                                 position: 'relative',
                                                 boxShadow: 0,
-                                                borderStyle: 'dashed',
                                                 '&:hover': {
                                                     backgroundColor: 'primary.100',
                                                     boxShadow: 2,
                                                 },
                                             }}
-                                            onClick={() => handleCustomModelEdit(provider)}
+                                            onClick={() => {
+                                                const customModel = providerModels?.[provider.name]?.custom_model;
+                                                if (customModel && onSelected) {
+                                                    onSelected({ provider, model: customModel });
+                                                }
+                                            }}
                                         >
                                             <CardContent sx={{
                                                 textAlign: 'center',
@@ -460,54 +516,154 @@ export default function ProviderSelectTab({
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
-                                                height: '100%'
+                                                height: '100%',
+                                                position: 'relative'
                                             }}>
-                                                <Stack direction="row" alignItems="center" spacing={1}>
-                                                    <AddCircleOutlineIcon
+                                                <Typography
+                                                    variant="body2"
+                                                    sx={{
+                                                        fontWeight: 500,
+                                                        fontSize: '0.75rem',
+                                                        lineHeight: 1.3,
+                                                        wordBreak: 'break-word',
+                                                        textAlign: 'center'
+                                                    }}
+                                                >
+                                                    {providerModels?.[provider.name]?.custom_model}
+                                                </Typography>
+                                                {isProviderSelected && selectedModel === providerModels?.[provider.name]?.custom_model && (
+                                                    <CheckCircle
                                                         color="primary"
-                                                        sx={{ fontSize: 20 }}
-                                                    />
-                                                    <Typography
-                                                        variant="body2"
                                                         sx={{
-                                                            fontWeight: 500,
-                                                            fontSize: '0.75rem',
-                                                            lineHeight: 1.3,
-                                                            color: 'primary.main',
+                                                            position: 'absolute',
+                                                            top: 4,
+                                                            right: 4,
+                                                            fontSize: 16
                                                         }}
-                                                    >
-                                                        Custom Model
-                                                    </Typography>
-                                                </Stack>
+                                                    />
+                                                )}
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleCustomModelEdit(provider, providerModels?.[provider.name]?.custom_model);
+                                                    }}
+                                                    sx={{
+                                                        position: 'absolute',
+                                                        bottom: 4,
+                                                        right: 4,
+                                                        p: 0.5,
+                                                        backgroundColor: 'background.paper',
+                                                        '&:hover': {
+                                                            backgroundColor: 'grey.100',
+                                                        }
+                                                    }}
+                                                >
+                                                    <EditIcon fontSize="small" />
+                                                </IconButton>
                                             </CardContent>
                                         </Card>
+                                    )}
 
-                                        {/* Persisted custom model card */}
-                                        {providerModels?.[provider.name]?.custom_model && (
+                                    {/* Currently selected custom model card (not persisted) */}
+                                    {isProviderSelected && selectedModel && isCustomModel(selectedModel, provider) && (
+                                        <Card
+                                            key="selected-custom-model"
+                                            sx={{
+                                                width: '100%',
+                                                height: 60,
+                                                border: 1,
+                                                borderColor: 'primary.main',
+                                                borderRadius: 1.5,
+                                                backgroundColor: 'primary.50',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s ease-in-out',
+                                                position: 'relative',
+                                                boxShadow: 2,
+                                                '&:hover': {
+                                                    backgroundColor: 'primary.100',
+                                                    boxShadow: 2,
+                                                },
+                                            }}
+                                        >
+                                            <CardContent sx={{
+                                                textAlign: 'center',
+                                                py: 1,
+                                                px: 0.8,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                height: '100%',
+                                                position: 'relative'
+                                            }}>
+                                                <Typography
+                                                    variant="body2"
+                                                    sx={{
+                                                        fontWeight: 500,
+                                                        fontSize: '0.75rem',
+                                                        lineHeight: 1.3,
+                                                        wordBreak: 'break-word',
+                                                        textAlign: 'center'
+                                                    }}
+                                                >
+                                                    {selectedModel}
+                                                </Typography>
+                                                <CheckCircle
+                                                    color="primary"
+                                                    sx={{
+                                                        position: 'absolute',
+                                                        top: 4,
+                                                        right: 4,
+                                                        fontSize: 16
+                                                    }}
+                                                />
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleCustomModelEdit(provider, selectedModel);
+                                                    }}
+                                                    sx={{
+                                                        position: 'absolute',
+                                                        bottom: 4,
+                                                        right: 4,
+                                                        p: 0.5,
+                                                        backgroundColor: 'background.paper',
+                                                        '&:hover': {
+                                                            backgroundColor: 'grey.100',
+                                                        }
+                                                    }}
+                                                >
+                                                    <EditIcon fontSize="small" />
+                                                </IconButton>
+                                            </CardContent>
+                                        </Card>
+                                    )}
+
+                                    {pagination.models.map((model) => {
+                                        const isModelSelected = isProviderSelected && selectedModel === model;
+                                        const isStarred = starModels.includes(model);
+
+                                        return (
                                             <Card
-                                                key="persisted-custom-model"
+                                                key={model}
                                                 sx={{
                                                     width: '100%',
                                                     height: 60,
                                                     border: 1,
-                                                    borderColor: 'primary.main',
+                                                    borderColor: isModelSelected ? 'primary.main' : 'grey.300',
                                                     borderRadius: 1.5,
-                                                    backgroundColor: 'primary.50',
+                                                    backgroundColor: isModelSelected ? 'primary.50' : 'background.paper',
                                                     cursor: 'pointer',
                                                     transition: 'all 0.2s ease-in-out',
                                                     position: 'relative',
-                                                    boxShadow: 0,
+                                                    boxShadow: isModelSelected ? 2 : 0,
                                                     '&:hover': {
-                                                        backgroundColor: 'primary.100',
+                                                        backgroundColor: isModelSelected ? 'primary.100' : 'grey.50',
                                                         boxShadow: 2,
                                                     },
                                                 }}
-                                                onClick={() => {
-                                                    const customModel = providerModels?.[provider.name]?.custom_model;
-                                                    if (customModel && onSelected) {
-                                                        onSelected({ provider, model: customModel });
-                                                    }
-                                                }}
+                                                onClick={() => handleModelSelect(provider, model)}
                                             >
                                                 <CardContent sx={{
                                                     textAlign: 'center',
@@ -516,8 +672,7 @@ export default function ProviderSelectTab({
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
-                                                    height: '100%',
-                                                    position: 'relative'
+                                                    height: '100%'
                                                 }}>
                                                     <Typography
                                                         variant="body2"
@@ -529,9 +684,9 @@ export default function ProviderSelectTab({
                                                             textAlign: 'center'
                                                         }}
                                                     >
-                                                        {providerModels?.[provider.name]?.custom_model}
+                                                        {model}
                                                     </Typography>
-                                                    {isProviderSelected && selectedModel === providerModels?.[provider.name]?.custom_model && (
+                                                    {isModelSelected && (
                                                         <CheckCircle
                                                             color="primary"
                                                             sx={{
@@ -542,180 +697,25 @@ export default function ProviderSelectTab({
                                                             }}
                                                         />
                                                     )}
-                                                    <IconButton
-                                                        size="small"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleCustomModelEdit(provider, providerModels?.[provider.name]?.custom_model);
-                                                        }}
-                                                        sx={{
-                                                            position: 'absolute',
-                                                            bottom: 4,
-                                                            right: 4,
-                                                            p: 0.5,
-                                                            backgroundColor: 'background.paper',
-                                                            '&:hover': {
-                                                                backgroundColor: 'grey.100',
-                                                            }
-                                                        }}
-                                                    >
-                                                        <EditIcon fontSize="small" />
-                                                    </IconButton>
                                                 </CardContent>
-                                            </Card>
-                                        )}
-
-                                        {/* Currently selected custom model card (not persisted) */}
-                                        {isProviderSelected && selectedModel && isCustomModel(selectedModel, provider) && (
-                                            <Card
-                                                key="selected-custom-model"
-                                                sx={{
-                                                    width: '100%',
-                                                    height: 60,
-                                                    border: 1,
-                                                    borderColor: 'primary.main',
-                                                    borderRadius: 1.5,
-                                                    backgroundColor: 'primary.50',
-                                                    cursor: 'pointer',
-                                                    transition: 'all 0.2s ease-in-out',
-                                                    position: 'relative',
-                                                    boxShadow: 2,
-                                                    '&:hover': {
-                                                        backgroundColor: 'primary.100',
-                                                        boxShadow: 2,
-                                                    },
-                                                }}
-                                            >
-                                                <CardContent sx={{
-                                                    textAlign: 'center',
-                                                    py: 1,
-                                                    px: 0.8,
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    height: '100%',
-                                                    position: 'relative'
-                                                }}>
+                                                {isStarred && (
                                                     <Typography
-                                                        variant="body2"
-                                                        sx={{
-                                                            fontWeight: 500,
-                                                            fontSize: '0.75rem',
-                                                            lineHeight: 1.3,
-                                                            wordBreak: 'break-word',
-                                                            textAlign: 'center'
-                                                        }}
-                                                    >
-                                                        {selectedModel}
-                                                    </Typography>
-                                                    <CheckCircle
-                                                        color="primary"
+                                                        variant="caption"
+                                                        color="warning.main"
                                                         sx={{
                                                             position: 'absolute',
                                                             top: 4,
-                                                            right: 4,
-                                                            fontSize: 16
-                                                        }}
-                                                    />
-                                                    <IconButton
-                                                        size="small"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleCustomModelEdit(provider, selectedModel);
-                                                        }}
-                                                        sx={{
-                                                            position: 'absolute',
-                                                            bottom: 4,
-                                                            right: 4,
-                                                            p: 0.5,
-                                                            backgroundColor: 'background.paper',
-                                                            '&:hover': {
-                                                                backgroundColor: 'grey.100',
-                                                            }
+                                                            left: 4,
+                                                            fontSize: '0.75rem'
                                                         }}
                                                     >
-                                                        <EditIcon fontSize="small" />
-                                                    </IconButton>
-                                                </CardContent>
+                                                        ★
+                                                    </Typography>
+                                                )}
                                             </Card>
-                                        )}
-
-                                        {pagination.models.map((model) => {
-                                            const isModelSelected = isProviderSelected && selectedModel === model;
-                                            const isStarred = starModels.includes(model);
-
-                                            return (
-                                                <Card
-                                                    key={model}
-                                                    sx={{
-                                                        width: '100%',
-                                                        height: 60,
-                                                        border: 1,
-                                                        borderColor: isModelSelected ? 'primary.main' : 'grey.300',
-                                                        borderRadius: 1.5,
-                                                        backgroundColor: isModelSelected ? 'primary.50' : 'background.paper',
-                                                        cursor: 'pointer',
-                                                        transition: 'all 0.2s ease-in-out',
-                                                        position: 'relative',
-                                                        boxShadow: isModelSelected ? 2 : 0,
-                                                        '&:hover': {
-                                                            backgroundColor: isModelSelected ? 'primary.100' : 'grey.50',
-                                                            boxShadow: 2,
-                                                        },
-                                                    }}
-                                                    onClick={() => handleModelSelect(provider, model)}
-                                                >
-                                                    <CardContent sx={{
-                                                        textAlign: 'center',
-                                                        py: 1,
-                                                        px: 0.8,
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        height: '100%'
-                                                    }}>
-                                                        <Typography
-                                                            variant="body2"
-                                                            sx={{
-                                                                fontWeight: 500,
-                                                                fontSize: '0.75rem',
-                                                                lineHeight: 1.3,
-                                                                wordBreak: 'break-word',
-                                                                textAlign: 'center'
-                                                            }}
-                                                        >
-                                                            {model}
-                                                        </Typography>
-                                                        {isModelSelected && (
-                                                            <CheckCircle
-                                                                color="primary"
-                                                                sx={{
-                                                                    position: 'absolute',
-                                                                    top: 4,
-                                                                    right: 4,
-                                                                    fontSize: 16
-                                                                }}
-                                                            />
-                                                        )}
-                                                    </CardContent>
-                                                    {isStarred && (
-                                                        <Typography
-                                                            variant="caption"
-                                                            color="warning.main"
-                                                            sx={{
-                                                                position: 'absolute',
-                                                                top: 4,
-                                                                left: 4,
-                                                                fontSize: '0.75rem'
-                                                            }}
-                                                        >
-                                                            ★
-                                                        </Typography>
-                                                    )}
-                                                </Card>
-                                            );
-                                        })}
-                                    </Box>
+                                        );
+                                    })}
+                                </Box>
                                 {pagination.totalModels === 0 && (
                                     <Box sx={{ textAlign: 'center', py: 4 }}>
                                         <Typography variant="body2" color="text.secondary">

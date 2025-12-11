@@ -20,24 +20,9 @@ import {
     Typography
 } from '@mui/material';
 import { useState } from 'react';
+import type { ProviderModelsData, Provider } from '../types/provider';
 
 
-export interface Provider {
-    name: string;
-    enabled: boolean;
-    api_base: string;
-    api_style: string; // "openai" or "anthropic", defaults to "openai"
-    token?: string;
-}
-
-export interface ProviderModelsData {
-    [providerName: string]: {
-        models: string[];
-        star_models?: string[];
-        last_updated?: string;
-        custom_model?: string;
-    };
-}
 
 interface ProviderTableProps {
     providers: Provider[];

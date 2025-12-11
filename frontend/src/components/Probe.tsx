@@ -282,7 +282,7 @@ const Probe = ({ rule, provider, model }) => {
         <UnifiedCard
             title="Configuration Probe"
             subtitle="Test rule validation with a sample request"
-            size="full"
+            size="header"
             rightAction={
                 <Button
                     variant="contained"
