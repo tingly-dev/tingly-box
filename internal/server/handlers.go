@@ -237,10 +237,12 @@ func (s *Server) UserAuth() gin.HandlerFunc {
 }
 
 // ModelAuth middleware for OpenAI and Anthropic API authentication
+// The auth will support both `Authorization` and `X-Api-Key`
 func (s *Server) ModelAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
+		xApiKey := c.GetHeader("X-Api-Key")
+		if authHeader == "" && xApiKey == "" {
 			c.JSON(http.StatusUnauthorized, ErrorResponse{
 				Error: ErrorDetail{
 					Message: "Authorization header required",
@@ -251,33 +253,19 @@ func (s *Server) ModelAuth() gin.HandlerFunc {
 			return
 		}
 
-		// Extract token from "Bearer <token>" format
-		tokenParts := strings.Split(authHeader, " ")
-		if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
-			c.JSON(http.StatusUnauthorized, ErrorResponse{
-				Error: ErrorDetail{
-					Message: "Invalid authorization header format. Expected: 'Bearer <token>'",
-					Type:    "invalid_request_error",
-				},
-			})
-			c.Abort()
-			return
+		token := authHeader
+		// Remove "Bearer " prefix if present in the token
+		if strings.HasPrefix(token, "Bearer ") {
+			token = token[7:]
 		}
-
-		token := tokenParts[1]
 
 		// Check against global config model token first
 		globalConfig := s.config
 		if globalConfig != nil && globalConfig.HasModelToken() {
 			configToken := globalConfig.GetModelToken()
 
-			// Remove "Bearer " prefix if present in the token
-			if strings.HasPrefix(token, "Bearer ") {
-				token = token[7:]
-			}
-
 			// Direct token comparison
-			if token == configToken || strings.TrimPrefix(token, "Bearer ") == configToken {
+			if token == configToken || xApiKey == configToken {
 				// Token matches the one in global config, allow access
 				c.Set("client_id", "model_authenticated")
 				c.Next()
