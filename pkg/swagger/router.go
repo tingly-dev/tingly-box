@@ -387,8 +387,9 @@ func (rm *RouteManager) generateRouteAnnotations(group *RouteGroup, route RouteC
 
 	// Add HTTP method and path
 	fullPath := group.prefix + route.Path
+	swaggerPath := rm.convertPathFormat(fullPath)
 	methodLower := strings.ToLower(route.Method)
-	annotations.WriteString("// @Router " + fullPath + "[" + methodLower + "]\n")
+	annotations.WriteString("// @Router " + swaggerPath + "[" + methodLower + "]\n")
 
 	// Add request model if specified
 	if route.RequestModel != nil {
@@ -694,11 +695,12 @@ func (rm *RouteManager) GenerateSwaggerJSON() (string, error) {
 	for _, group := range rm.groups {
 		for _, route := range group.routes {
 			fullPath := group.prefix + route.Path
+			swaggerPath := rm.convertPathFormat(fullPath)
 			method := strings.ToLower(route.Method)
 
 			// Create path item if not exists
-			if _, exists := swagger.Paths[fullPath]; !exists {
-				swagger.Paths[fullPath] = PathItem{}
+			if _, exists := swagger.Paths[swaggerPath]; !exists {
+				swagger.Paths[swaggerPath] = PathItem{}
 			}
 
 			// Create operation
@@ -803,7 +805,7 @@ func (rm *RouteManager) GenerateSwaggerJSON() (string, error) {
 			}
 
 			// Add operation to path item based on method
-			pathItem := swagger.Paths[fullPath]
+			pathItem := swagger.Paths[swaggerPath]
 			switch method {
 			case "get":
 				pathItem.Get = operation
@@ -820,7 +822,7 @@ func (rm *RouteManager) GenerateSwaggerJSON() (string, error) {
 			case "head":
 				pathItem.Head = operation
 			}
-			swagger.Paths[fullPath] = pathItem
+			swagger.Paths[swaggerPath] = pathItem
 		}
 	}
 
@@ -844,6 +846,21 @@ func (rm *RouteManager) GenerateSwaggerJSON() (string, error) {
 	}
 
 	return string(jsonData), nil
+}
+
+// convertPathFormat converts path parameters from :param to {param} format
+func (rm *RouteManager) convertPathFormat(path string) string {
+	result := path
+	parts := strings.Split(path, "/")
+
+	for _, part := range parts {
+		if strings.HasPrefix(part, ":") {
+			paramName := strings.TrimPrefix(part, ":")
+			result = strings.Replace(result, part, "{"+paramName+"}", 1)
+		}
+	}
+
+	return result
 }
 
 // extractPathParams extracts path parameters from the URL path with intelligent type detection
