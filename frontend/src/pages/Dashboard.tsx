@@ -166,7 +166,7 @@ const Dashboard = () => {
             // Create a default rule with empty services
             // This will be filled when user selects a provider and model
             const defaultRuleData = {
-                response_model: undefined,
+                active: true,
                 services: [],
             };
 
@@ -230,6 +230,7 @@ const Dashboard = () => {
             const ruleData = {
                 uuid: defaultRuleUUID,
                 request_model: defaultRule,
+                active: true,
                 services: [
                     {
                         provider: provider.name,
