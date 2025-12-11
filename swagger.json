@@ -1199,12 +1199,8 @@
       "description": "Operations related to server"
     },
     {
-      "name": "history",
-      "description": "Operations related to history"
-    },
-    {
-      "name": "models",
-      "description": "Operations related to models"
+      "name": "rules",
+      "description": "Operations related to rules"
     },
     {
       "name": "testing",
@@ -1215,12 +1211,16 @@
       "description": "Operations related to token"
     },
     {
-      "name": "rules",
-      "description": "Operations related to rules"
+      "name": "history",
+      "description": "Operations related to history"
     },
     {
       "name": "defaults",
       "description": "Operations related to defaults"
+    },
+    {
+      "name": "models",
+      "description": "Operations related to models"
     }
   ]
 }
