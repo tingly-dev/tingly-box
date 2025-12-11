@@ -12,9 +12,7 @@ import (
 )
 
 // Handler defines the interface for all API handlers
-type Handler interface {
-	Handle(c *gin.Context)
-}
+type Handler func(c *gin.Context)
 
 // RouteConfig defines configuration for a single route
 type RouteConfig struct {
@@ -155,7 +153,7 @@ func (rg *RouteGroup) RegisterRoute(config RouteConfig) {
 
 	// Register route with gin and add the handler
 	middleware = append(middleware, func(c *gin.Context) {
-		config.Handler.Handle(c)
+		config.Handler(c)
 	})
 
 	rg.Router.Handle(config.Method, config.Path, middleware...)
