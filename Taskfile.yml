@@ -42,8 +42,18 @@ tasks:
   codegen:
     cmds:
       - |
+        echo install openapi-generator
+        echo darwin: brew install openapi-generator
+        echo others: npm install @openapitools/openapi-generator-cli -g
+        echo ref: https://openapi-generator.tech/docs/installation
+      - |
         openapi-generator-cli generate -g typescript-axios -i ./swagger.json -o ./frontend/src/client
   
+  swagger:
+    cmds:
+      - |
+        curl -s http://localhost:8080/swagger.json > swagger.json
+
   start:
     cmds:
       - task: go:build
