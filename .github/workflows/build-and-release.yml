@@ -58,8 +58,13 @@ jobs:
         run: pnpm install --frozen-lockfile
         working-directory: ./frontend
 
-      - name: Build frontend
-        run: pnpm build && mkdir -p ../internal/server/web/dist && cp -R dist/* ../internal/server/web/dist/
+      - name: Install openapi-generator-cli
+        run: npm install -g @openapitools/openapi-generator-cli
+
+      - name: Build frontend and run codegen
+        run: |
+          openapi-generator-cli generate -g typescript-axios -i ./swagger.json -o ./frontend/src/client
+          pnpm build && mkdir -p ../internal/server/web/dist && cp -R dist/* ../internal/server/web/dist/
         working-directory: ./frontend
 
       - name: Build Go binary (Linux)
@@ -247,247 +252,7 @@ jobs:
           path: ./dist/
           retention-days: 30
 
-  create-npm-distribution:
-    needs: [build, create-packages]
-    runs-on: ubuntu-latest
-    if: |
-      startsWith(github.ref, 'refs/tags/v') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.createRelease == 'true')
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Download all packages
-        uses: actions/download-artifact@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Create distribution directory
-        run: |
-          mkdir -p dist-npm
-          mkdir -p dist-npm/bin
-
-      - name: Copy binaries to npm package
-        run: |
-          # List what's in the packages directories to debug
-          ls -la packages-linux-amd64/ 2>/dev/null || echo "linux-amd64 not found"
-          ls -la packages-macos-amd64/ 2>/dev/null || echo "macos-amd64 not found"
-          ls -la packages-windows-amd64/ 2>/dev/null || echo "windows-amd64 not found"
-
-          # Download and extract Linux packages
-          if [ -d "packages-linux-amd64" ]; then
-            cd packages-linux-amd64
-            if [ -f "tingly-linux-amd64.tar.gz" ]; then
-              tar -xzf tingly-linux-amd64.tar.gz
-              cp tingly-linux-amd64/tingly ../dist-npm/bin/tingly-linux-amd64
-            fi
-            cd ..
-          fi
-
-          if [ -d "packages-linux-arm64" ]; then
-            cd packages-linux-arm64
-            if [ -f "tingly-linux-arm64.tar.gz" ]; then
-              tar -xzf tingly-linux-arm64.tar.gz
-              cp tingly-linux-arm64/tingly ../dist-npm/bin/tingly-linux-arm64
-            fi
-            cd ..
-          fi
-
-          # Extract macOS packages
-          if [ -d "packages-macos-amd64" ]; then
-            cd packages-macos-amd64
-            if [ -f "tingly-macos-amd64.zip" ]; then
-              unzip -o -q tingly-macos-amd64.zip || true
-              cp tingly-macos-amd64/tingly ../dist-npm/bin/tingly-macos-amd64
-            fi
-            cd ..
-          fi
-
-          if [ -d "packages-macos-arm64" ]; then
-            cd packages-macos-arm64
-            if [ -f "tingly-macos-arm64.zip" ]; then
-              unzip -o -q tingly-macos-arm64.zip || true
-              cp tingly-macos-arm64/tingly ../dist-npm/bin/tingly-macos-arm64
-            fi
-            cd ..
-          fi
-
-          # Extract Windows packages
-          if [ -d "packages-windows-amd64" ]; then
-            cd packages-windows-amd64
-            if [ -f "tingly-windows-amd64.zip" ]; then
-              unzip -o -q tingly-windows-amd64.zip || true
-              cp tingly-windows-amd64/tingly.exe ../dist-npm/bin/tingly-windows-amd64.exe
-            fi
-            cd ..
-          fi
-
-          if [ -d "packages-windows-arm64" ]; then
-            cd packages-windows-arm64
-            if [ -f "tingly-windows-arm64.zip" ]; then
-              unzip -o -q tingly-windows-arm64.zip || true
-              cp tingly-windows-arm64/tingly.exe ../dist-npm/bin/tingly-windows-arm64.exe
-            fi
-            cd ..
-          fi
-
-          chmod +x dist-npm/bin/* 2>/dev/null || true
-
-      - name: Create package.json for npm distribution
-        run: |
-          # Get version from tag or input
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ github.event.inputs.releaseVersion }}" ]; then
-            VERSION="${{ github.event.inputs.releaseVersion }}"
-          else
-            VERSION=${GITHUB_REF#refs/tags/}
-          fi
-          echo "Creating npm package for version $VERSION"
-
-          cat > dist-npm/package.json << EOF
-          {
-            "name": "tingly-box",
-            "version": "$VERSION",
-            "description": "Tingly Box - AI Provider Management CLI",
-            "bin": {
-              "tingly": "./bin/tingly-\${node.platform}-\${node.arch}"
-            },
-            "os": [
-              "linux",
-              "darwin",
-              "win32"
-            ],
-            "cpu": [
-              "x64",
-              "arm64"
-            ],
-            "scripts": {
-              "install": "node install.js"
-            },
-            "keywords": [
-              "cli",
-              "ai",
-              "openai",
-              "management"
-            ],
-            "license": "MIT",
-            "repository": {
-              "type": "git",
-              "url": "https://github.com/${{ github.repository }}"
-            }
-          }
-          EOF
-
-      - name: Create install script
-        run: |
-          cat > dist-npm/install.js << 'EOF'
-          const fs = require('fs');
-          const path = require('path');
-
-          const platform = process.platform;
-          const arch = process.arch;
-
-          const platformMap = {
-            'linux': 'linux',
-            'darwin': 'macos',
-            'win32': 'windows'
-          };
-
-          const archMap = {
-            'x64': 'amd64',
-            'arm64': 'arm64'
-          };
-
-          const binFile = `tingly-${platformMap[platform]}-${archMap[arch]}${platform === 'win32' ? '.exe' : ''}`;
-          const binPath = path.join(__dirname, 'bin', binFile);
-
-          if (!fs.existsSync(binPath)) {
-            console.error(`Binary not found for platform ${platform} and architecture ${arch}`);
-            process.exit(1);
-          }
-
-          console.log(`Installing Tingly for ${platform} ${arch}...`);
-
-          const installDir = path.join(process.env.HOME || process.env.USERPROFILE, '.local', 'bin');
-          if (!fs.existsSync(installDir)) {
-            fs.mkdirSync(installDir, { recursive: true });
-          }
-
-          const destPath = path.join(installDir, 'tingly' + (platform === 'win32' ? '.exe' : ''));
-          fs.copyFileSync(binPath, destPath);
-
-          if (platform !== 'win32') {
-            fs.chmodSync(destPath, 0o755);
-          }
-
-          console.log(`Tingly installed to ${destPath}`);
-          console.log('Make sure to add ' + installDir + ' to your PATH');
-          EOF
-
-      - name: Create README for npm package
-        run: |
-          cat > dist-npm/README.md << 'EOF'
-          # Tingly Box
-
-          AI Provider Management CLI - A unified OpenAI-compatible endpoint for multiple AI providers.
-
-          ## Installation
-
-          ### Via npm (npx)
-          ```bash
-          npx tingly-box@latest
-          ```
-
-          ### Install globally
-          ```bash
-          npm install -g tingly-box
-          tingly --version
-          ```
-
-          ## Usage
-
-          ```bash
-          # Start the server
-          tingly start
-
-          # List configured providers
-          tingly list
-
-          # Add a new provider
-          tingly add
-
-          # Show status
-          tingly status
-          ```
-
-          ## Features
-
-          - Multi-provider AI support
-          - OpenAI-compatible API endpoint
-          - Dynamic configuration
-          - CLI and server modes
-
-          ## Supported Platforms
-
-          - Linux (x64, arm64)
-          - macOS (x64, arm64)
-          - Windows (x64, arm64)
-          EOF
-
-      - name: Create tarball for npm
-        run: |
-          cd dist-npm
-          npm pack
-
-      - name: Upload npm package
-        uses: actions/upload-artifact@v4
-        with:
-          name: npm-package
-          path: ./dist-npm/*.tgz
-          retention-days: 30
-
+  
   release:
     # needs: [create-packages, create-npm-distribution]
     needs: [create-packages]
@@ -515,7 +280,6 @@ jobs:
         run: |
           mkdir -p release
           mv packages-*/* release/ 2>/dev/null || true
-          mv npm-package/*.tgz release/ 2>/dev/null || true
 
       - name: Create checksums
         run: |
@@ -542,32 +306,5 @@ jobs:
           body_path: release-notes.md
           draft: false
           prerelease: false
-          omit_source: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  publish-npm:
-    needs: release
-    runs-on: ubuntu-latest
-    if: |
-      startsWith(github.ref, 'refs/tags/v') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.createRelease == 'true')
-    steps:
-      - name: Download npm package
-        uses: actions/download-artifact@v4
-        with:
-          name: npm-package
-          path: ./npm-package
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          registry-url: 'https://registry.npmjs.org'
-
-      - name: Publish to npm
-        run: |
-          cd npm-package
-          npm publish *.tgz --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

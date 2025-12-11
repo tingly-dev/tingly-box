@@ -15,6 +15,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const (
+	// DefaultMaxTokens is the default max_tokens value for Anthropic API requests
+	DefaultMaxTokens = 60000
+)
+
 // AnthropicMessages handles Anthropic v1 messages API requests
 func (s *Server) AnthropicMessages(c *gin.Context) {
 	// Read the raw request body first for debugging purposes
@@ -67,6 +72,11 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 	// Use the selected service's model
 	actualModel := selectedService.Model
 	req.Model = anthropic.Model(actualModel)
+
+	// Ensure max_tokens is set (Anthropic API requires this)
+	if req.MaxTokens == 0 {
+		req.MaxTokens = DefaultMaxTokens
+	}
 
 	// Set provider and model information in context for statistics middleware
 	c.Set("provider", provider.Name)
@@ -212,11 +222,14 @@ func (s *Server) forwardAnthropicRequestRaw(provider *config.Provider, rawReq ma
 		Messages: messages,
 	}
 
-	// Set max_tokens if provided
+	// Set max_tokens if provided, otherwise use default
 	if maxTokens, ok := rawReq["max_tokens"]; ok {
 		if maxTokensFloat, ok := maxTokens.(float64); ok {
 			params.MaxTokens = int64(maxTokensFloat)
 		}
+	} else {
+		// Set default max_tokens if not provided (Anthropic API requires this)
+		params.MaxTokens = DefaultMaxTokens
 	}
 
 	// Make the request using Anthropic SDK with timeout
@@ -236,7 +249,6 @@ func (s *Server) forwardAnthropicRequest(provider *config.Provider, req anthropi
 	if strings.HasSuffix(apiBase, "/v1") {
 		apiBase = apiBase[:len(apiBase)-3]
 	}
-	log.Printf("Anthropic API Base: %s, Token Length: %d", apiBase, len(provider.Token))
 
 	// Create Anthropic client
 	client := anthropic.NewClient(
