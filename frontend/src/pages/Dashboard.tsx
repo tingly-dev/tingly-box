@@ -185,11 +185,11 @@ const Dashboard = () => {
             } else {
                 console.error(`Failed to create default '${defaultRule}' rule:`, result.error);
                 // Show notification to user about the failure
-                // showNotification(`Failed to create default rule: ${result.error}`, 'error');
+                showNotification(`Failed to create default rule: ${result.error}`, 'error');
             }
         } catch (error) {
             console.error(`Error creating default '${defaultRule}' rule:`, error);
-            // showNotification(`Error creating default rule`, 'error');
+            showNotification(`Error creating default rule`, 'error');
         }
     };
 
