@@ -170,10 +170,12 @@ const Dashboard = () => {
                 services: [],
             };
 
-            const result = await api.createRule({
-                name: defaultRule,
-                ...defaultRuleData
-            });
+            const result = await api.createRule(
+                defaultRuleUUID,
+                {
+                    name: defaultRule,
+                    ...defaultRuleData
+                });
             if (result.success) {
                 // Reload the rule after creating it
                 const reloadResult = await api.getRule(defaultRule);
@@ -246,10 +248,12 @@ const Dashboard = () => {
                 result = await api.updateRule(existingRule.data.uuid, ruleData);
             } else {
                 // Create new rule if it doesn't exist
-                const createResult = await api.createRule({
-                    name: 'tingly',
-                    ...ruleData,
-                });
+                const createResult = await api.createRule(
+                    defaultRuleUUID,
+                    {
+                        name: 'tingly',
+                        ...ruleData,
+                    });
                 result = createResult;
             }
             if (result.success) {

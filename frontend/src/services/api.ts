@@ -1,6 +1,16 @@
 // API service layer for communicating with the backend
 
-import { Configuration, DefaultsApi, HistoryApi, ModelsApi, ProvidersApi, RulesApi, ServerApi, TestingApi, TokenApi } from '../client';
+import {
+    Configuration,
+    DefaultsApi,
+    HistoryApi,
+    ModelsApi,
+    ProvidersApi,
+    RulesApi,
+    ServerApi,
+    TestingApi,
+    TokenApi
+} from '../client';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -20,7 +30,7 @@ const createApiConfig = () => {
     return new Configuration({
         basePath: API_BASE_URL || undefined,
         baseOptions: token ? {
-            headers: { Authorization: `Bearer ${token}` },
+            headers: {Authorization: `Bearer ${token}`},
             validateStatus: (status: number) => status < 500, // Don't reject on 4xx errors
         } : {
             validateStatus: (status: number) => status < 500,
@@ -67,13 +77,13 @@ async function fetchUIAPI(url: string, options: RequestInit = {}): Promise<any> 
         if (response.status === 401) {
             localStorage.removeItem('user_auth_token');
             window.location.href = '/login';
-            return { success: false, error: 'Authentication required' };
+            return {success: false, error: 'Authentication required'};
         }
 
         return await response.json();
     } catch (error) {
         console.error('UI API Error:', error);
-        return { success: false, error: (error as Error).message };
+        return {success: false, error: (error as Error).message};
     }
 }
 
@@ -99,15 +109,73 @@ async function fetchModelAPI(url: string, options: RequestInit = {}): Promise<an
         return await response.json();
     } catch (error) {
         console.error('Model API Error:', error);
-        return { success: false, error: (error as Error).message };
+        return {success: false, error: (error as Error).message};
     }
+}
+
+// Type definition for API instances
+interface ApiInstances {
+    defaultsApi: DefaultsApi;
+    historyApi: HistoryApi;
+    modelsApi: ModelsApi;
+    providersApi: ProvidersApi;
+    rulesApi: RulesApi;
+    serverApi: ServerApi;
+    testingApi: TestingApi;
+    tokenApi: TokenApi;
+}
+
+// Type definitions for API responses and data
+interface ApiResponse<T = any> {
+    success: boolean;
+    data?: T;
+    error?: string;
+}
+
+interface ProviderModel {
+    provider: string;
+    models: ModelInfo[];
+}
+
+interface ModelInfo {
+    model?: string;
+    name?: string;
+
+    [key: string]: any;
+}
+
+interface ProviderData {
+    [providerName: string]: ModelInfo[];
+}
+
+interface Provider {
+    name: string;
+
+    [key: string]: any;
+}
+
+interface Rule {
+    uuid?: string;
+    rule_name?: string;
+
+    [key: string]: any;
+}
+
+interface ServiceData {
+    [key: string]: any;
+}
+
+interface ProbeRequest {
+    rule: Rule;
+    provider: string;
+    model: string;
 }
 
 export const api = {
     // Initialize API instances when needed
-    _instances: null as any,
+    _instances: null as ApiInstances | null,
 
-    get _api() {
+    get _api(): ApiInstances {
         if (!this._instances) {
             this._instances = createApiInstances();
         }
@@ -123,9 +191,9 @@ export const api = {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return { success: false, error: 'Authentication required' };
+                return {success: false, error: 'Authentication required'};
             }
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -135,16 +203,16 @@ export const api = {
             const result = response.data;
             if (result.success && result.data) {
                 // Sort providers alphabetically by name to reduce UI changes
-                result.data.sort((a: any, b: any) => a.name.localeCompare(b.name));
+                result.data.sort((a: Provider, b: Provider) => a.name.localeCompare(b.name));
             }
             return result;
         } catch (error: any) {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return { success: false, error: 'Authentication required' };
+                return {success: false, error: 'Authentication required'};
             }
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -175,9 +243,9 @@ export const api = {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return { success: false, error: 'Authentication required' };
+                return {success: false, error: 'Authentication required'};
             }
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -185,9 +253,7 @@ export const api = {
         try {
             // Note: The generated client has an issue with path parameters
             // We need to manually handle this for now
-            const result = await fetchUIAPI(`/provider-models/${name}`, {
-                method: 'POST',
-            });
+            const result = await api._api.providersApi.apiV1ProvidersNameGet(name);
             if (result.success && result.data) {
                 // Sort models alphabetically by model name to reduce UI changes
                 if (Array.isArray(result.data)) {
@@ -198,7 +264,7 @@ export const api = {
             }
             return result;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -210,9 +276,9 @@ export const api = {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return { success: false, error: 'Authentication required' };
+                return {success: false, error: 'Authentication required'};
             }
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -225,44 +291,41 @@ export const api = {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return { success: false, error: 'Authentication required' };
+                return {success: false, error: 'Authentication required'};
             }
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
     getProvider: async (name: string) => {
         try {
             // Note: The generated client has an issue with path parameters
-            const result = await fetchUIAPI(`/providers/${name}`);
+            const result = await api._api.providersApi.apiV1ProvidersNameGet(name);
             return result;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
     updateProvider: async (name: string, data: any) => {
         try {
             // Note: The generated client has an issue with path parameters
-            const result = await fetchUIAPI(`/providers/${name}`, {
-                method: 'PUT',
-                body: JSON.stringify(data),
-            });
+            const result = await api._api.providersApi.apiV1ProvidersNamePut(name, data);
             return result;
         } catch (error: any) {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return { success: false, error: 'Authentication required' };
+                return {success: false, error: 'Authentication required'};
             }
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
     deleteProvider: async (name: string) => {
         try {
             // Note: The generated client has an issue with path parameters
-            const result = await fetchUIAPI(`/providers/${name}`, {
+            const result = await api._api.providersApi.apiV1ProvidersNameDelete(`/providers/${name}`, {
                 method: 'DELETE',
             });
             return result;
@@ -270,26 +333,24 @@ export const api = {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return { success: false, error: 'Authentication required' };
+                return {success: false, error: 'Authentication required'};
             }
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
     toggleProvider: async (name: string) => {
         try {
             // Note: The generated client has an issue with path parameters
-            const result = await fetchUIAPI(`/providers/${name}/toggle`, {
-                method: 'POST',
-            });
+            const result = await api._api.providersApi.apiV1ProvidersNameTogglePost(name);
             return result;
         } catch (error: any) {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return { success: false, error: 'Authentication required' };
+                return {success: false, error: 'Authentication required'};
             }
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -302,9 +363,9 @@ export const api = {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return { success: false, error: 'Authentication required' };
+                return {success: false, error: 'Authentication required'};
             }
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -316,9 +377,9 @@ export const api = {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return { success: false, error: 'Authentication required' };
+                return {success: false, error: 'Authentication required'};
             }
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -330,23 +391,23 @@ export const api = {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return { success: false, error: 'Authentication required' };
+                return {success: false, error: 'Authentication required'};
             }
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
     generateToken: async (clientId: string) => {
         try {
-            const response = await api._api.tokenApi.apiV1TokenPost({ client_id: clientId });
+            const response = await api._api.tokenApi.apiV1TokenPost({client_id: clientId});
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return { success: false, error: 'Authentication required' };
+                return {success: false, error: 'Authentication required'};
             }
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -358,9 +419,9 @@ export const api = {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return { success: false, error: 'Authentication required' };
+                return {success: false, error: 'Authentication required'};
             }
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -385,72 +446,64 @@ export const api = {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return { success: false, error: 'Authentication required' };
+                return {success: false, error: 'Authentication required'};
             }
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
     getRule: async (uuid: string) => {
         try {
             // Note: The generated client has an issue with path parameters
-            const result = await fetchUIAPI(`/rule/${uuid}`);
+            const result = await api._api.rulesApi.apiV1RuleUuidGet(uuid);
             return result;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
-    createRule: async (data: any) => {
+    createRule: async (uuid: string, data: any) => {
         try {
             // Note: The API uses POST to /rules but generated client expects different structure
-            const result = await fetchUIAPI('/rules', {
-                method: 'POST',
-                body: JSON.stringify(data),
-            });
+            const result = await api._api.rulesApi.apiV1RuleUuidPost(uuid, data);
             return result;
         } catch (error: any) {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return { success: false, error: 'Authentication required' };
+                return {success: false, error: 'Authentication required'};
             }
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
     updateRule: async (uuid: string, data: any) => {
         try {
             // Note: The generated client has an issue with path parameters
-            const result = await fetchUIAPI(`/rule/${uuid}`, {
-                method: 'POST',
-                body: JSON.stringify(data),
-            });
+            const result = await api._api.rulesApi.apiV1RuleUuidPost(uuid, data);
             return result;
         } catch (error: any) {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return { success: false, error: 'Authentication required' };
+                return {success: false, error: 'Authentication required'};
             }
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
     deleteRule: async (uuid: string) => {
         try {
             // Note: The generated client has an issue with path parameters
-            const result = await fetchUIAPI(`/rule/${uuid}`, {
-                method: 'DELETE',
-            });
+            const result = await api._api.rulesApi.apiV1RuleUuidDelete(uuid);
             return result;
         } catch (error: any) {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return { success: false, error: 'Authentication required' };
+                return {success: false, error: 'Authentication required'};
             }
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -466,9 +519,9 @@ export const api = {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return { success: false, error: 'Authentication required' };
+                return {success: false, error: 'Authentication required'};
             }
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
     // Service management within rules
@@ -483,38 +536,6 @@ export const api = {
     deleteServiceFromRule: (ruleName: string, serviceIndex: number) => fetchUIAPI(`/rule/${ruleName}/services/${serviceIndex}`, {
         method: 'DELETE',
     }),
-
-    // Defaults API
-    getDefaults: async () => {
-        try {
-            const response = await api._api.defaultsApi.apiV1DefaultsGet();
-            return response.data;
-        } catch (error: any) {
-            if (error.response?.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
-                return { success: false, error: 'Authentication required' };
-            }
-            return { success: false, error: error.message };
-        }
-    },
-
-    setDefaults: async (requestConfigs: any[]) => {
-        try {
-            const response = await api._api.defaultsApi.apiV1DefaultsPost({
-                request_configs: requestConfigs,
-            });
-            return response.data;
-        } catch (error: any) {
-            if (error.response?.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
-                return { success: false, error: 'Authentication required' };
-            }
-            return { success: false, error: error.message };
-        }
-    },
-
     // Token management
     setUserToken: (token: string) => {
         localStorage.setItem('user_auth_token', token);
