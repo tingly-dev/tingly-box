@@ -291,7 +291,7 @@ export const api = {
     deleteProvider: async (name: string): Promise<any> => {
         try {
             // Note: The generated client has an issue with path parameters
-            const response = await api._api.providersApi.apiV1ProvidersNameDelete(`/providers/${name}`);
+            const response = await api._api.providersApi.apiV1ProvidersNameDelete(name);
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
