@@ -71,10 +71,15 @@ func (s *Server) GenerateToken(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"token": token,
-		"type":  "Bearer",
-	})
+	response := struct {
+		Success bool          `json:"success"`
+		Data    TokenResponse `json:"data"`
+	}{
+		Success: true,
+		Data:    TokenResponse{Token: token, Type: "Bearer"},
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // GetToken handles token retrieval requests - generates a token if it doesn't exist
@@ -117,10 +122,15 @@ func (s *Server) GetToken(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"token": token,
-		"type":  "Bearer",
-	})
+	response := struct {
+		Success bool          `json:"success"`
+		Data    TokenResponse `json:"data"`
+	}{
+		Success: true,
+		Data:    TokenResponse{Token: token, Type: "Bearer"},
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // determineProvider selects the appropriate provider based on model or explicit provider name

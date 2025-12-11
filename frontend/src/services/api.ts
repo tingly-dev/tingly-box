@@ -10,7 +10,7 @@ import {
     ServerApi,
     TestingApi,
     TokenApi,
-    type ProviderResponse
+    type ProviderResponse, type TokenResponse
 } from '../client';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -218,7 +218,7 @@ export const api = {
         }
     },
 
-    getProviderModelsByName: async (name: string): Promise<any> => {
+    getProviderModelsByName: async (name: string): Promise<TokenResponse> => {
         try {
             // Note: The generated client has an issue with path parameters
             // We need to manually handle this for now
