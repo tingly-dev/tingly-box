@@ -16,7 +16,7 @@ import (
 
 const (
 	// DefaultMaxTokens is the default max_tokens value for Anthropic API requests
-	DefaultMaxTokens = 60000
+	DefaultMaxTokens = 4000
 )
 
 // AnthropicMessages handles Anthropic v1 messages API requests
