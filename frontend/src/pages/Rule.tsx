@@ -1,12 +1,12 @@
 import {
     Add as AddIcon,
+    AutoAwesome,
     Check as CheckIcon,
     Delete as DeleteIcon,
+    Dns as DnsIcon,
     Edit as EditIcon,
     Refresh as RefreshIcon,
-    Save as SaveIcon,
-    SmartToy as SmartToyIcon,
-    Dns as DnsIcon
+    Save as SaveIcon
 } from '@mui/icons-material';
 import {
     Box,
@@ -14,6 +14,7 @@ import {
     Card,
     CardActions,
     CardContent,
+    Chip,
     Divider,
     FormControl,
     IconButton,
@@ -24,15 +25,14 @@ import {
     Stack,
     Switch,
     TextField,
-    Typography,
-    Chip,
-    Tooltip
+    Tooltip,
+    Typography
 } from '@mui/material';
-import { styled } from '@mui/material/styles';
-import { useCallback, useEffect, useState } from 'react';
-import { PageLayout } from '../components/PageLayout';
+import {styled} from '@mui/material/styles';
+import {useCallback, useEffect, useState} from 'react';
+import {PageLayout} from '../components/PageLayout';
 import UnifiedCard from '../components/UnifiedCard';
-import { api } from '../services/api';
+import {api} from '../services/api';
 
 const ServiceSection = styled(Box)(({ theme }) => ({
     height: 160,
@@ -387,7 +387,7 @@ const Rule = () => {
                                             <Box>
                                                 <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1.5}>
                                                     <Stack direction="row" alignItems="center" spacing={1}>
-                                                        <SmartToyIcon sx={{ color: 'primary.main', fontSize: 20 }} />
+                                                        <AutoAwesome sx={{ color: 'primary.main', fontSize: 20 }} />
                                                         <Typography variant="subtitle1" component="div" fontWeight={600}>
                                                             Request
                                                         </Typography>
