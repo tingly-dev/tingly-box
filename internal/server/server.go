@@ -46,8 +46,8 @@ func NewServerWithOptions(cfg *config.Config, useUI bool) *Server {
 		// Continue without embedded assets, will fallback to file system
 	}
 
-	// Set Gin mode
-	gin.SetMode(gin.ReleaseMode)
+	//// Set Gin mode
+	//gin.SetMode(gin.ReleaseMode)
 
 	// Check and generate tokens if needed
 	jwtManager := auth.NewJWTManager(cfg.GetJWTSecret())
