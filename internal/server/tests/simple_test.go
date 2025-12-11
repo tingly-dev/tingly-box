@@ -64,7 +64,7 @@ func TestBasicFunctionality(t *testing.T) {
 		}
 
 		w := httptest.NewRecorder()
-		req, _ := http.NewRequest("POST", "/api/token", CreateJSONBody(requestBody))
+		req, _ := http.NewRequest("POST", "/api/v1/token", CreateJSONBody(requestBody))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+userToken)
 

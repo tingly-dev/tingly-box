@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 	"tingly-box/internal/config"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
@@ -41,70 +43,95 @@ func (s *Server) forwardOpenAIRequest(provider *config.Provider, req *RequestWra
 // Helper functions to convert between formats
 func (s *Server) convertAnthropicToOpenAI(anthropicReq *AnthropicMessagesRequest) *RequestWrapper {
 	openaiReq := &RequestWrapper{
-		Model: anthropicReq.Model,
+		Model: openai.ChatModel(anthropicReq.Model),
 	}
 
-	// Convert MaxTokens - use option helper functions if available, otherwise skip
-	// We'll handle these parameters in the forwardOpenAIRequest function
-	s.setRequestParams(openaiReq, anthropicReq)
+	// Set MaxTokens
+	openaiReq.MaxTokens = openai.Opt(int64(anthropicReq.MaxTokens))
 
 	// Convert messages
 	for _, msg := range anthropicReq.Messages {
-		if msg.Role == "user" {
-			openaiMsg := openai.UserMessage(msg.Content)
+		if string(msg.Role) == "user" {
+			// Convert content blocks to string for OpenAI
+			contentStr := s.convertContentBlocksToString(msg.Content)
+			openaiMsg := openai.UserMessage(contentStr)
 			openaiReq.Messages = append(openaiReq.Messages, openaiMsg)
-		} else if msg.Role == "assistant" {
-			openaiMsg := openai.AssistantMessage(msg.Content)
+		} else if string(msg.Role) == "assistant" {
+			// Convert content blocks to string for OpenAI
+			contentStr := s.convertContentBlocksToString(msg.Content)
+			openaiMsg := openai.AssistantMessage(contentStr)
 			openaiReq.Messages = append(openaiReq.Messages, openaiMsg)
 		}
 	}
 
 	// Convert system message
-	if anthropicReq.System != "" {
-		systemMsg := openai.SystemMessage(anthropicReq.System)
+	if len(anthropicReq.System) > 0 {
+		systemStr := s.convertTextBlocksToString(anthropicReq.System)
+		systemMsg := openai.SystemMessage(systemStr)
 		// Add system message at the beginning
 		openaiReq.Messages = append([]openai.ChatCompletionMessageParamUnion{systemMsg}, openaiReq.Messages...)
 	}
 
-	// We'll handle stop sequences in the forwardOpenAIRequest function
-
 	return openaiReq
 }
 
-// setRequestParams handles the optional parameters that need special handling
-func (s *Server) setRequestParams(openaiReq *RequestWrapper, anthropicReq *AnthropicMessagesRequest) {
-	// Note: This is a placeholder for setting optional parameters
-	// In practice, you might need to use the OpenAI SDK's option helpers
-	// For now, we'll skip optional parameters and focus on the core functionality
+// convertContentBlocksToString converts Anthropic content blocks to string
+func (s *Server) convertContentBlocksToString(blocks []anthropic.ContentBlockParamUnion) string {
+	var result strings.Builder
+	for _, block := range blocks {
+		// Use the AsText helper if available, or check the type
+		if block.OfText != nil {
+			result.WriteString(block.OfText.Text)
+		}
+	}
+	return result.String()
 }
 
-func (s *Server) convertOpenAIToAnthropic(openaiResp *openai.ChatCompletion, model string) AnthropicMessagesResponse {
-	response := AnthropicMessagesResponse{
-		ID:           fmt.Sprintf("msg_%d", time.Now().Unix()),
-		Type:         "message",
-		Role:         "assistant",
-		Model:        model,
-		StopReason:   "end_turn",
-		StopSequence: "",
-		Usage: AnthropicUsage{
-			InputTokens:  int(openaiResp.Usage.PromptTokens),
-			OutputTokens: int(openaiResp.Usage.CompletionTokens),
+// convertTextBlocksToString converts Anthropic TextBlockParam array to string
+func (s *Server) convertTextBlocksToString(blocks []anthropic.TextBlockParam) string {
+	var result strings.Builder
+	for _, block := range blocks {
+		result.WriteString(block.Text)
+	}
+	return result.String()
+}
+
+func (s *Server) convertOpenAIToAnthropic(openaiResp *openai.ChatCompletion, model string) anthropic.Message {
+	// Create the response as JSON first, then unmarshal into Message
+	// This is a workaround for the complex union types
+	responseJSON := map[string]interface{}{
+		"id":            fmt.Sprintf("msg_%d", time.Now().Unix()),
+		"type":          "message",
+		"role":          "assistant",
+		"content":       []map[string]interface{}{},
+		"model":         model,
+		"stop_reason":   "end_turn",
+		"stop_sequence": "",
+		"usage": map[string]interface{}{
+			"input_tokens":  openaiResp.Usage.PromptTokens,
+			"output_tokens": openaiResp.Usage.CompletionTokens,
 		},
 	}
 
-	// Convert choices to content
+	// Add content from OpenAI response
 	for _, choice := range openaiResp.Choices {
-		content := choice.Message.Content
-		if content != "" {
-			anthropicContent := AnthropicContent{
-				Type: "text",
-				Text: content,
+		if choice.Message.Content != "" {
+			responseJSON["content"] = []map[string]interface{}{
+				{
+					"type": "text",
+					"text": choice.Message.Content,
+				},
 			}
-			response.Content = append(response.Content, anthropicContent)
+			break
 		}
 	}
 
-	return response
+	// Marshal and unmarshal to create proper Message struct
+	jsonBytes, _ := json.Marshal(responseJSON)
+	var msg anthropic.Message
+	json.Unmarshal(jsonBytes, &msg)
+
+	return msg
 }
 
 // forwardOpenAIStreamRequest forwards the streaming request to the selected provider using OpenAI library

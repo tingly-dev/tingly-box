@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"tingly-box/internal/config"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 )
@@ -127,8 +128,8 @@ func (s *Server) ChatCompletions(c *gin.Context) {
 	}
 
 	if apiStyle == "anthropic" {
-		// Convert OpenAI request to Anthropic format
-		anthropicReq := s.convertOpenAIToAnthropicFormat(&req)
+		// Convert to Anthropic SDK format
+		anthropicReq := s.convertOpenAIToAnthropicRequest(&req, responseModel)
 		// Use direct Anthropic SDK call
 		anthropicResp, err := s.forwardAnthropicRequest(provider, anthropicReq)
 		if err != nil {
@@ -227,51 +228,6 @@ func (s *Server) ListModels(c *gin.Context) {
 	return
 }
 
-// convertOpenAIToAnthropicFormat converts an OpenAI request to Anthropic format
-func (s *Server) convertOpenAIToAnthropicFormat(req *RequestWrapper) *AnthropicMessagesRequest {
-	anthropicReq := &AnthropicMessagesRequest{
-		Model:     req.Model,
-		MaxTokens: 10000, // Default value, should be configurable
-	}
-
-	// Extract temperature from the raw request
-	reqBytes, _ := json.Marshal(req)
-	var reqMap map[string]interface{}
-	if err := json.Unmarshal(reqBytes, &reqMap); err == nil {
-		if temp, ok := reqMap["temperature"].(float64); ok {
-			anthropicReq.Temperature = &temp
-		}
-		if maxTokens, ok := reqMap["max_tokens"].(int); ok {
-			anthropicReq.MaxTokens = maxTokens
-		}
-	}
-
-	// Convert messages
-	for _, msg := range req.Messages {
-		role := msg.GetRole()
-
-		if role != nil {
-			anthropicMsg := AnthropicMessage{
-				Role:    *role,
-				Content: "", // Will be set below
-			}
-
-			// Marshal the message to JSON to extract content properly
-			msgBytes, _ := json.Marshal(msg)
-			var msgMap map[string]interface{}
-			if err := json.Unmarshal(msgBytes, &msgMap); err == nil {
-				if content, ok := msgMap["content"].(string); ok {
-					anthropicMsg.Content = content
-				}
-			}
-
-			anthropicReq.Messages = append(anthropicReq.Messages, anthropicMsg)
-		}
-	}
-
-	return anthropicReq
-}
-
 // convertAnthropicResponseToOpenAI converts an Anthropic response to OpenAI format
 func (s *Server) convertAnthropicResponseToOpenAI(anthropicResp *AnthropicMessagesResponse, responseModel string) map[string]interface{} {
 	response := map[string]interface{}{
@@ -308,4 +264,48 @@ func (s *Server) convertAnthropicResponseToOpenAI(anthropicResp *AnthropicMessag
 	}
 
 	return response
+}
+
+// convertOpenAIToAnthropicRequest converts OpenAI RequestWrapper to Anthropic SDK format
+func (s *Server) convertOpenAIToAnthropicRequest(req *RequestWrapper, model string) anthropic.MessageNewParams {
+	// Convert messages
+	messages := make([]anthropic.MessageParam, 0, len(req.Messages))
+	for _, msg := range req.Messages {
+		role := msg.GetRole()
+		if role == nil {
+			continue
+		}
+
+		// Extract content from OpenAI message
+		msgBytes, _ := json.Marshal(msg)
+		var msgMap map[string]interface{}
+		if err := json.Unmarshal(msgBytes, &msgMap); err == nil {
+			contentStr, _ := msgMap["content"].(string)
+
+			// Create content blocks
+			var contentBlocks []anthropic.ContentBlockParamUnion
+			if contentStr != "" {
+				contentBlocks = append(contentBlocks, anthropic.NewTextBlock(contentStr))
+			}
+
+			if *role == "user" {
+				messages = append(messages, anthropic.NewUserMessage(contentBlocks...))
+			} else if *role == "assistant" {
+				messages = append(messages, anthropic.NewAssistantMessage(contentBlocks...))
+			}
+		}
+	}
+
+	// Create Anthropic request parameters
+	params := anthropic.MessageNewParams{
+		Model:    anthropic.Model(model),
+		Messages: messages,
+	}
+
+	// Set max_tokens if provided
+	if req.MaxTokens.Value != 0 {
+		params.MaxTokens = req.MaxTokens.Value
+	}
+
+	return params
 }

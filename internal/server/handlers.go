@@ -316,7 +316,8 @@ func (s *Server) DetermineProviderAndModel(modelName string) (*config.Provider, 
 	c := s.config
 	if c != nil && c.IsRequestModel(modelName) {
 		// Get the Rule for this specific request model
-		rule := c.GetRequestConfigByRequestModel(modelName)
+		uuid := c.GetUUIDByRequestModel(modelName)
+		rule := c.GetRequestConfigByRequestModel(uuid)
 		if rule != nil && rule.Active {
 			// Use the load balancer to select service
 			selectedService, err := s.loadBalancer.SelectService(rule)

@@ -4,8 +4,9 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gin-gonic/gin"
 	"tingly-box/internal/config"
+
+	"github.com/gin-gonic/gin"
 )
 
 // LoadBalancerAPI provides REST endpoints for load balancer management
@@ -27,30 +28,30 @@ func (api *LoadBalancerAPI) RegisterRoutes(router *gin.RouterGroup) {
 	loadBalancer := router.Group("/load-balancer")
 	{
 		// Rule management
-		loadBalancer.GET("/rules/:ruleName", api.GetRule)
-		loadBalancer.GET("/rules/:ruleName/summary", api.GetRuleSummary)
-		loadBalancer.PUT("/rules/:ruleName/tactic", api.UpdateRuleTactic)
+		loadBalancer.GET("/rules/:ruleId", api.GetRule)
+		loadBalancer.GET("/rules/:ruleId/summary", api.GetRuleSummary)
+		loadBalancer.PUT("/rules/:ruleId/tactic", api.UpdateRuleTactic)
 
 		// Statistics
-		loadBalancer.GET("/rules/:ruleName/stats", api.GetRuleStats)
-		loadBalancer.POST("/rules/:ruleName/stats/clear", api.ClearRuleStats)
-		loadBalancer.GET("/rules/:ruleName/services/:serviceId/stats", api.GetServiceStats)
-		loadBalancer.POST("/rules/:ruleName/services/:serviceId/stats/clear", api.ClearServiceStats)
+		loadBalancer.GET("/rules/:ruleId/stats", api.GetRuleStats)
+		loadBalancer.POST("/rules/:ruleId/stats/clear", api.ClearRuleStats)
+		loadBalancer.GET("/rules/:ruleId/services/:serviceId/stats", api.GetServiceStats)
+		loadBalancer.POST("/rules/:ruleId/services/:serviceId/stats/clear", api.ClearServiceStats)
 
 		// Global statistics
 		loadBalancer.GET("/stats", api.GetAllStats)
 		loadBalancer.POST("/stats/clear", api.ClearAllStats)
 
 		// Current service information
-		loadBalancer.GET("/rules/:ruleName/current-service", api.GetCurrentService)
+		loadBalancer.GET("/rules/:ruleId/current-service", api.GetCurrentService)
 	}
 }
 
 // GetRule returns a specific rule configuration
 func (api *LoadBalancerAPI) GetRule(c *gin.Context) {
-	ruleName := c.Param("ruleName")
+	ruleId := c.Param("ruleId")
 
-	rule := api.config.GetRequestConfigByRequestModel(ruleName)
+	rule := api.config.GetRequestConfigByRequestModel(ruleId)
 	if rule == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
 		return
@@ -61,9 +62,9 @@ func (api *LoadBalancerAPI) GetRule(c *gin.Context) {
 
 // GetRuleSummary returns a comprehensive summary of a rule including statistics
 func (api *LoadBalancerAPI) GetRuleSummary(c *gin.Context) {
-	ruleName := c.Param("ruleName")
+	ruleId := c.Param("ruleId")
 
-	rule := api.config.GetRequestConfigByRequestModel(ruleName)
+	rule := api.config.GetRequestConfigByRequestModel(ruleId)
 	if rule == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
 		return
@@ -75,7 +76,7 @@ func (api *LoadBalancerAPI) GetRuleSummary(c *gin.Context) {
 
 // UpdateRuleTactic updates the load balancing tactic for a rule
 func (api *LoadBalancerAPI) UpdateRuleTactic(c *gin.Context) {
-	ruleName := c.Param("ruleName")
+	ruleId := c.Param("ruleId")
 
 	var req struct {
 		Tactic string `json:"tactic" binding:"required"`
@@ -86,7 +87,7 @@ func (api *LoadBalancerAPI) UpdateRuleTactic(c *gin.Context) {
 		return
 	}
 
-	rule := api.config.GetRequestConfigByRequestModel(ruleName)
+	rule := api.config.GetRequestConfigByRequestModel(ruleId)
 	if rule == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
 		return
@@ -100,7 +101,7 @@ func (api *LoadBalancerAPI) UpdateRuleTactic(c *gin.Context) {
 
 	// Update rule
 	rule.Tactic = req.Tactic
-	if err := api.config.UpdateRequestConfigByRequestModel(ruleName, *rule); err != nil {
+	if err := api.config.UpdateRequestConfigByUUID(ruleId, *rule); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update rule: " + err.Error()})
 		return
 	}
@@ -110,9 +111,9 @@ func (api *LoadBalancerAPI) UpdateRuleTactic(c *gin.Context) {
 
 // GetRuleStats returns statistics for all services in a rule
 func (api *LoadBalancerAPI) GetRuleStats(c *gin.Context) {
-	ruleName := c.Param("ruleName")
+	ruleId := c.Param("ruleId")
 
-	rule := api.config.GetRequestConfigByRequestModel(ruleName)
+	rule := api.config.GetRequestConfigByRequestModel(ruleId)
 	if rule == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
 		return
@@ -128,14 +129,14 @@ func (api *LoadBalancerAPI) GetRuleStats(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"rule": ruleName, "stats": stats})
+	c.JSON(http.StatusOK, gin.H{"rule_id": ruleId, "rule_name": rule.RequestModel, "stats": stats})
 }
 
 // ClearRuleStats clears statistics for all services in a rule
 func (api *LoadBalancerAPI) ClearRuleStats(c *gin.Context) {
-	ruleName := c.Param("ruleName")
+	ruleId := c.Param("ruleId")
 
-	rule := api.config.GetRequestConfigByRequestModel(ruleName)
+	rule := api.config.GetRequestConfigByRequestModel(ruleId)
 	if rule == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
 		return
@@ -146,16 +147,16 @@ func (api *LoadBalancerAPI) ClearRuleStats(c *gin.Context) {
 		api.loadBalancer.ClearServiceStats(service.Provider, service.Model)
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Statistics cleared for rule: " + ruleName})
+	c.JSON(http.StatusOK, gin.H{"message": "Statistics cleared for rule: " + rule.RequestModel})
 }
 
 // GetServiceStats returns statistics for a specific service
 func (api *LoadBalancerAPI) GetServiceStats(c *gin.Context) {
-	ruleName := c.Param("ruleName")
+	ruleId := c.Param("ruleId")
 	serviceId := c.Param("serviceId")
 
 	// Validate that the service belongs to the rule
-	rule := api.config.GetRequestConfigByRequestModel(ruleName)
+	rule := api.config.GetRequestConfigByRequestModel(ruleId)
 	if rule == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
 		return
@@ -177,20 +178,20 @@ func (api *LoadBalancerAPI) GetServiceStats(c *gin.Context) {
 
 	stats := api.loadBalancer.GetServiceStats(foundService.Provider, foundService.Model)
 	if stats == nil {
-		c.JSON(http.StatusOK, gin.H{"service_id": serviceId, "stats": nil})
+		c.JSON(http.StatusOK, gin.H{"rule_id": ruleId, "service_id": serviceId, "stats": nil})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"service_id": serviceId, "stats": stats})
+	c.JSON(http.StatusOK, gin.H{"rule_id": ruleId, "service_id": serviceId, "stats": stats})
 }
 
 // ClearServiceStats clears statistics for a specific service
 func (api *LoadBalancerAPI) ClearServiceStats(c *gin.Context) {
-	ruleName := c.Param("ruleName")
+	ruleId := c.Param("ruleId")
 	serviceId := c.Param("serviceId")
 
 	// Validate that the service belongs to the rule
-	rule := api.config.GetRequestConfigByRequestModel(ruleName)
+	rule := api.config.GetRequestConfigByRequestModel(ruleId)
 	if rule == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
 		return
@@ -228,9 +229,9 @@ func (api *LoadBalancerAPI) ClearAllStats(c *gin.Context) {
 
 // GetCurrentService returns the currently active service for a rule
 func (api *LoadBalancerAPI) GetCurrentService(c *gin.Context) {
-	ruleName := c.Param("ruleName")
+	ruleId := c.Param("ruleId")
 
-	rule := api.config.GetRequestConfigByRequestModel(ruleName)
+	rule := api.config.GetRequestConfigByRequestModel(ruleId)
 	if rule == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
 		return
@@ -250,7 +251,8 @@ func (api *LoadBalancerAPI) GetCurrentService(c *gin.Context) {
 	stats := api.loadBalancer.GetServiceStats(selectedService.Provider, selectedService.Model)
 
 	response := gin.H{
-		"rule":       ruleName,
+		"rule_id":    ruleId,
+		"rule_name":  rule.RequestModel,
 		"service":    selectedService,
 		"service_id": selectedService.ServiceID(),
 		"tactic":     rule.GetTacticType().String(),
@@ -265,9 +267,9 @@ func (api *LoadBalancerAPI) GetCurrentService(c *gin.Context) {
 
 // GetServiceHealth checks the health of all services in a rule
 func (api *LoadBalancerAPI) GetServiceHealth(c *gin.Context) {
-	ruleName := c.Param("ruleName")
+	ruleId := c.Param("ruleId")
 
-	rule := api.config.GetRequestConfigByRequestModel(ruleName)
+	rule := api.config.GetRequestConfigByRequestModel(ruleId)
 	if rule == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
 		return
@@ -292,7 +294,7 @@ func (api *LoadBalancerAPI) GetServiceHealth(c *gin.Context) {
 		health[service.ServiceID()] = serviceHealth
 	}
 
-	c.JSON(http.StatusOK, gin.H{"rule": ruleName, "health": health})
+	c.JSON(http.StatusOK, gin.H{"rule_id": ruleId, "rule_name": rule.RequestModel, "health": health})
 }
 
 // GetMetrics returns load balancing metrics
