@@ -126,28 +126,6 @@ interface ApiInstances {
 }
 
 // Type definitions for API responses and data
-interface ApiResponse<T = any> {
-    success: boolean;
-    data?: T;
-    error?: string;
-}
-
-interface ProviderModel {
-    provider: string;
-    models: ModelInfo[];
-}
-
-interface ModelInfo {
-    model?: string;
-    name?: string;
-
-    [key: string]: any;
-}
-
-interface ProviderData {
-    [providerName: string]: ModelInfo[];
-}
-
 interface Provider {
     name: string;
 
@@ -159,16 +137,6 @@ interface Rule {
     rule_name?: string;
 
     [key: string]: any;
-}
-
-interface ServiceData {
-    [key: string]: any;
-}
-
-interface ProbeRequest {
-    rule: Rule;
-    provider: string;
-    model: string;
 }
 
 export const api = {
@@ -183,7 +151,7 @@ export const api = {
     },
 
     // Status endpoints
-    getStatus: async () => {
+    getStatus: async (): Promise<any> => {
         try {
             const response = await api._api.serverApi.apiV1StatusGet();
             return response.data;
@@ -197,7 +165,7 @@ export const api = {
         }
     },
 
-    getProviders: async () => {
+    getProviders: async (): Promise<any> => {
         try {
             const response = await api._api.providersApi.apiV1ProvidersGet();
             const result = response.data;
@@ -216,7 +184,7 @@ export const api = {
         }
     },
 
-    getProviderModels: async () => {
+    getProviderModels: async (): Promise<any> => {
         try {
             const response = await api._api.modelsApi.apiV1ProviderModelsGet();
             const result = response.data;
@@ -249,7 +217,7 @@ export const api = {
         }
     },
 
-    getProviderModelsByName: async (name: string) => {
+    getProviderModelsByName: async (name: string): Promise<any> => {
         try {
             // Note: The generated client has an issue with path parameters
             // We need to manually handle this for now
@@ -268,7 +236,7 @@ export const api = {
         }
     },
 
-    getHistory: async (limit?: number) => {
+    getHistory: async (limit?: number): Promise<any> => {
         try {
             const response = await api._api.historyApi.apiV1HistoryGet();
             return response.data;
@@ -283,7 +251,7 @@ export const api = {
     },
 
     // Provider management
-    addProvider: async (data: any) => {
+    addProvider: async (data: any): Promise<any> => {
         try {
             const response = await api._api.providersApi.apiV1ProvidersPost(data);
             return response.data;
@@ -298,16 +266,12 @@ export const api = {
     },
 
     getProvider: async (name: string) => {
-        try {
-            // Note: The generated client has an issue with path parameters
-            const result = await api._api.providersApi.apiV1ProvidersNameGet(name);
-            return result;
-        } catch (error: any) {
-            return {success: false, error: error.message};
-        }
+        // Note: The generated client has an issue with path parameters
+        const result = await api._api.providersApi.apiV1ProvidersNameGet(name);
+        return result;
     },
 
-    updateProvider: async (name: string, data: any) => {
+    updateProvider: async (name: string, data: any): Promise<any> => {
         try {
             // Note: The generated client has an issue with path parameters
             const result = await api._api.providersApi.apiV1ProvidersNamePut(name, data);
@@ -322,7 +286,7 @@ export const api = {
         }
     },
 
-    deleteProvider: async (name: string) => {
+    deleteProvider: async (name: string): Promise<any> => {
         try {
             // Note: The generated client has an issue with path parameters
             const result = await api._api.providersApi.apiV1ProvidersNameDelete(`/providers/${name}`, {
@@ -339,7 +303,7 @@ export const api = {
         }
     },
 
-    toggleProvider: async (name: string) => {
+    toggleProvider: async (name: string): Promise<any> => {
         try {
             // Note: The generated client has an issue with path parameters
             const result = await api._api.providersApi.apiV1ProvidersNameTogglePost(name);
@@ -355,7 +319,7 @@ export const api = {
     },
 
     // Server control
-    startServer: async () => {
+    startServer: async (): Promise<any> => {
         try {
             const response = await api._api.serverApi.apiV1ServerStartPost();
             return response.data;
@@ -369,7 +333,7 @@ export const api = {
         }
     },
 
-    stopServer: async () => {
+    stopServer: async (): Promise<any> => {
         try {
             const response = await api._api.serverApi.apiV1ServerStopPost();
             return response.data;
@@ -383,7 +347,7 @@ export const api = {
         }
     },
 
-    restartServer: async () => {
+    restartServer: async (): Promise<any> => {
         try {
             const response = await api._api.serverApi.apiV1ServerRestartPost();
             return response.data;
@@ -397,7 +361,7 @@ export const api = {
         }
     },
 
-    generateToken: async (clientId: string) => {
+    generateToken: async (clientId: string): Promise<any> => {
         try {
             const response = await api._api.tokenApi.apiV1TokenPost({client_id: clientId});
             return response.data;
@@ -411,7 +375,7 @@ export const api = {
         }
     },
 
-    getToken: async () => {
+    getToken: async (): Promise<any> => {
         try {
             const response = await api._api.tokenApi.apiV1TokenGet();
             return response.data;
@@ -426,19 +390,19 @@ export const api = {
     },
 
     // Model API calls (OpenAI/Anthropic compatible)
-    openAIChatCompletions: (data: any) => fetchModelAPI('/openai/v1/chat/completions', {
+    openAIChatCompletions: (data: any): Promise<any> => fetchModelAPI('/openai/v1/chat/completions', {
         method: 'POST',
         body: JSON.stringify(data),
     }),
-    anthropicMessages: (data: any) => fetchModelAPI('/anthropic/v1/messages', {
+    anthropicMessages: (data: any): Promise<any> => fetchModelAPI('/anthropic/v1/messages', {
         method: 'POST',
         body: JSON.stringify(data),
     }),
-    listOpenAIModels: () => fetchModelAPI('/openai/v1/models'),
-    listAnthropicModels: () => fetchModelAPI('/anthropic/v1/models'),
+    listOpenAIModels: (): Promise<any> => fetchModelAPI('/openai/v1/models'),
+    listAnthropicModels: (): Promise<any> => fetchModelAPI('/anthropic/v1/models'),
 
     // Rules API - Updated for new rule structure with services
-    getRules: async () => {
+    getRules: async (): Promise<any> => {
         try {
             const response = await api._api.rulesApi.apiV1RulesGet();
             return response.data;
@@ -452,7 +416,7 @@ export const api = {
         }
     },
 
-    getRule: async (uuid: string) => {
+    getRule: async (uuid: string): Promise<any> => {
         try {
             // Note: The generated client has an issue with path parameters
             const result = await api._api.rulesApi.apiV1RuleUuidGet(uuid);
@@ -462,7 +426,7 @@ export const api = {
         }
     },
 
-    createRule: async (uuid: string, data: any) => {
+    createRule: async (uuid: string, data: any): Promise<any> => {
         try {
             // Note: The API uses POST to /rules but generated client expects different structure
             const result = await api._api.rulesApi.apiV1RuleUuidPost(uuid, data);
@@ -477,7 +441,7 @@ export const api = {
         }
     },
 
-    updateRule: async (uuid: string, data: any) => {
+    updateRule: async (uuid: string, data: any): Promise<any> => {
         try {
             // Note: The generated client has an issue with path parameters
             const result = await api._api.rulesApi.apiV1RuleUuidPost(uuid, data);
@@ -492,7 +456,7 @@ export const api = {
         }
     },
 
-    deleteRule: async (uuid: string) => {
+    deleteRule: async (uuid: string): Promise<any> => {
         try {
             // Note: The generated client has an issue with path parameters
             const result = await api._api.rulesApi.apiV1RuleUuidDelete(uuid);
@@ -507,10 +471,10 @@ export const api = {
         }
     },
 
-    probeRule: async (rule: any, provider: string, model: string) => {
+    probeRule: async (rule: any, provider: string, model: string): Promise<any> => {
         try {
             const response = await api._api.testingApi.apiV1ProbePost({
-                rule: rule,
+                rule: JSON.stringify(rule),
                 provider: provider,
                 model: model,
             });
@@ -525,34 +489,34 @@ export const api = {
         }
     },
     // Service management within rules
-    addServiceToRule: (ruleName: string, serviceData: any) => fetchUIAPI(`/rule/${ruleName}/services`, {
+    addServiceToRule: (ruleName: string, serviceData: any): Promise<any> => fetchUIAPI(`/rule/${ruleName}/services`, {
         method: 'POST',
         body: JSON.stringify(serviceData),
     }),
-    updateServiceInRule: (ruleName: string, serviceIndex: number, serviceData: any) => fetchUIAPI(`/rule/${ruleName}/services/${serviceIndex}`, {
+    updateServiceInRule: (ruleName: string, serviceIndex: number, serviceData: any): Promise<any> => fetchUIAPI(`/rule/${ruleName}/services/${serviceIndex}`, {
         method: 'PUT',
         body: JSON.stringify(serviceData),
     }),
-    deleteServiceFromRule: (ruleName: string, serviceIndex: number) => fetchUIAPI(`/rule/${ruleName}/services/${serviceIndex}`, {
+    deleteServiceFromRule: (ruleName: string, serviceIndex: number): Promise<any> => fetchUIAPI(`/rule/${ruleName}/services/${serviceIndex}`, {
         method: 'DELETE',
     }),
     // Token management
-    setUserToken: (token: string) => {
+    setUserToken: (token: string): void => {
         localStorage.setItem('user_auth_token', token);
         // Reset API instances to refresh token
         api._instances = null;
     },
-    getUserToken: () => getUserAuthToken(),
-    removeUserToken: () => {
+    getUserToken: (): string | null => getUserAuthToken(),
+    removeUserToken: (): void => {
         localStorage.removeItem('user_auth_token');
         // Reset API instances to clear token
         api._instances = null;
     },
-    setModelToken: (token: string) => {
+    setModelToken: (token: string): void => {
         localStorage.setItem('model_token', token);
     },
-    getModelToken: () => getModelToken(),
-    removeModelToken: () => {
+    getModelToken: (): string | null => getModelToken(),
+    removeModelToken: (): void => {
         localStorage.removeItem('model_token');
     },
 };
