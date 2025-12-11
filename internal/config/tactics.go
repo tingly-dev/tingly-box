@@ -2,6 +2,7 @@ package config
 
 import (
 	"math/rand"
+	"strings"
 )
 
 // LoadBalancingTactic defines the interface for load balancing strategies
@@ -321,4 +322,19 @@ func CreateTactic(tacticType TacticType, params map[string]interface{}) LoadBala
 	default:
 		return defaultRoundRobinTactic // Default fallback
 	}
+}
+
+// IsValidTactic checks if the given tactic string is valid
+func IsValidTactic(tacticStr string) bool {
+	// Map of valid tactic names
+	validTactics := map[string]bool{
+		"round_robin": true,
+		"token_based": true,
+		"hybrid":      true,
+		"random":      true,
+	}
+
+	// Convert to lowercase for case-insensitive comparison
+	input := strings.ToLower(tacticStr)
+	return validTactics[input]
 }
