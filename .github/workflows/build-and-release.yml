@@ -67,23 +67,26 @@ jobs:
           pnpm build && mkdir -p ../internal/server/web/dist && cp -R dist/* ../internal/server/web/dist/
         working-directory: ./frontend
 
-      - name: Build Go binary (Linux)
+      - name: Build Go binaries
         run: |
+          # Create build directory
           mkdir -p build
+
+          # Build Linux binaries
           GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o ./build/tingly-linux-amd64 ./cmd/tingly
           GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o ./build/tingly-linux-arm64 ./cmd/tingly
-          chmod +x ./build/tingly-linux-*
 
-      - name: Build Go binary (macOS)
-        run: |
+          # Build macOS binaries
           GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o ./build/tingly-macos-amd64 ./cmd/tingly
           GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o ./build/tingly-macos-arm64 ./cmd/tingly
-          chmod +x ./build/tingly-macos-*
 
-      - name: Build Go binary (Windows)
-        run: |
+          # Build Windows binaries
           GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o ./build/tingly-windows-amd64.exe ./cmd/tingly
           GOOS=windows GOARCH=arm64 go build -ldflags="-s -w" -o ./build/tingly-windows-arm64.exe ./cmd/tingly
+
+          # Make Linux binaries executable
+          chmod +x ./build/tingly-linux-*
+          chmod +x ./build/tingly-macos-*
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -154,7 +157,7 @@ jobs:
           EOF
           chmod +x dist/$ARCHIVE_NAME/install.sh
 
-          # Create tar.gz package
+          # Create tar.gz package with maximum compression
           cd dist
           tar -czf $ARCHIVE_NAME.tar.gz $ARCHIVE_NAME/
 
