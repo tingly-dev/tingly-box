@@ -51,16 +51,18 @@ const Dashboard = () => {
         open: boolean;
         message?: string;
         severity?: 'success' | 'info' | 'warning' | 'error';
+        autoHideDuration?: number;
         customContent?: React.ReactNode;
         onClose?: () => void;
     }>({ open: false });
 
     // Helper function to show notifications
-    const showNotification = (message: string, severity: 'success' | 'info' | 'warning' | 'error' = 'info') => {
+    const showNotification = (message: string, severity: 'success' | 'info' | 'warning' | 'error' = 'info', autoHideDuration: number = 6000) => {
         setNotification({
             open: true,
             message,
             severity,
+            autoHideDuration,
             onClose: () => setNotification(prev => ({ ...prev, open: false }))
         });
     };
@@ -70,6 +72,7 @@ const Dashboard = () => {
         if (showBanner && bannerProvider && bannerModel) {
             setNotification({
                 open: true,
+                autoHideDuration: 0, // Don't auto-hide banner notification
                 customContent: (
                     <>
                         <AlertTitle>Active Provider & Model</AlertTitle>
