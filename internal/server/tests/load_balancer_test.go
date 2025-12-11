@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -40,6 +41,7 @@ func TestLoadBalancer_RoundRobin(t *testing.T) {
 	// Create test rule with multiple services
 	rule := &config.Rule{
 		RequestModel: "test",
+		UUID:         uuid.New().String(),
 		Services: []config.Service{
 			{
 				Provider:   "provider1",
@@ -101,6 +103,7 @@ func TestLoadBalancer_EnabledFilter(t *testing.T) {
 	// Create test rule with mixed enabled/disabled services
 	rule := &config.Rule{
 		RequestModel: "test",
+		UUID:         uuid.New().String(),
 		Services: []config.Service{
 			{
 				Provider:   "enabled1",
@@ -169,6 +172,7 @@ func TestLoadBalancer_RecordUsage(t *testing.T) {
 	// Create a rule with the test service so RecordUsage can find it
 	testRule := config.Rule{
 		RequestModel: "test-model",
+		UUID:         uuid.New().String(),
 		Services: []config.Service{
 			{
 				Provider:   "test-provider",
@@ -229,6 +233,7 @@ func TestLoadBalancer_ValidateRule(t *testing.T) {
 	// Test valid rule
 	validRule := &config.Rule{
 		RequestModel: "test",
+		UUID:         uuid.New().String(),
 		Services: []config.Service{
 			{
 				Provider:   "provider1",
@@ -298,6 +303,7 @@ func TestLoadBalancer_GetRuleSummary(t *testing.T) {
 	// Create test rule
 	rule := &config.Rule{
 		RequestModel: "test",
+		UUID:         uuid.New().String(),
 		Services: []config.Service{
 			{
 				Provider:   "provider1",
@@ -377,8 +383,10 @@ func TestLoadBalancerAPI_RuleManagement(t *testing.T) {
 
 	// Create test rule with multiple services
 	ruleName := "test-rule"
+	ruleUUID := uuid.New().String()
 	rule := config.Rule{
 		RequestModel: ruleName,
+		UUID:         ruleUUID,
 		Services: []config.Service{
 			{
 				Provider:   "openai",
@@ -408,7 +416,7 @@ func TestLoadBalancerAPI_RuleManagement(t *testing.T) {
 	userToken := globalConfig.GetUserToken()
 
 	t.Run("Get_Existing_Rule", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", fmt.Sprintf("/api/v1/load-balancer/rules/%s", ruleName), nil)
+		req, _ := http.NewRequest("GET", fmt.Sprintf("/api/v1/load-balancer/rules/%s", ruleUUID), nil)
 		req.Header.Set("Authorization", "Bearer "+userToken)
 		w := httptest.NewRecorder()
 		ts.ginEngine.ServeHTTP(w, req)
@@ -425,6 +433,7 @@ func TestLoadBalancerAPI_RuleManagement(t *testing.T) {
 		// Check rule structure
 		ruleMap := ruleData.(map[string]interface{})
 		assert.Equal(t, ruleName, ruleMap["request_model"])
+		assert.Equal(t, ruleUUID, ruleMap["uuid"])
 		assert.Equal(t, "round_robin", ruleMap["tactic"])
 		assert.Equal(t, true, ruleMap["active"])
 	})
@@ -444,7 +453,7 @@ func TestLoadBalancerAPI_RuleManagement(t *testing.T) {
 	})
 
 	t.Run("Get_Rule_Summary", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", fmt.Sprintf("/api/v1/load-balancer/rules/%s/summary", ruleName), nil)
+		req, _ := http.NewRequest("GET", fmt.Sprintf("/api/v1/load-balancer/rules/%s/summary", ruleUUID), nil)
 		req.Header.Set("Authorization", "Bearer "+userToken)
 		w := httptest.NewRecorder()
 		ts.ginEngine.ServeHTTP(w, req)
@@ -474,7 +483,7 @@ func TestLoadBalancerAPI_RuleManagement(t *testing.T) {
 		updateReq := map[string]string{"tactic": "random"}
 		reqBody, _ := json.Marshal(updateReq)
 
-		req, _ := http.NewRequest("PUT", fmt.Sprintf("/api/v1/load-balancer/rules/%s/tactic", ruleName), bytes.NewBuffer(reqBody))
+		req, _ := http.NewRequest("PUT", fmt.Sprintf("/api/v1/load-balancer/rules/%s/tactic", ruleUUID), bytes.NewBuffer(reqBody))
 		req.Header.Set("Authorization", "Bearer "+userToken)
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -493,7 +502,7 @@ func TestLoadBalancerAPI_RuleManagement(t *testing.T) {
 		updateReq := map[string]string{"tactic": "invalid_tactic"}
 		reqBody, _ := json.Marshal(updateReq)
 
-		req, _ := http.NewRequest("PUT", fmt.Sprintf("/api/v1/load-balancer/rules/%s/tactic", ruleName), bytes.NewBuffer(reqBody))
+		req, _ := http.NewRequest("PUT", fmt.Sprintf("/api/v1/load-balancer/rules/%s/tactic", ruleUUID), bytes.NewBuffer(reqBody))
 		req.Header.Set("Authorization", "Bearer "+userToken)
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -540,6 +549,7 @@ func TestLoadBalancerAPI_CurrentService(t *testing.T) {
 	ruleName := "current-test-rule"
 	rule := config.Rule{
 		RequestModel: ruleName,
+		UUID:         uuid.New().String(),
 		Services: []config.Service{
 			{
 				Provider:   "openai",
@@ -568,7 +578,7 @@ func TestLoadBalancerAPI_CurrentService(t *testing.T) {
 	userToken := globalConfig.GetUserToken()
 
 	t.Run("Get_Current_Service", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", fmt.Sprintf("/api/v1/load-balancer/rules/%s/current-service", ruleName), nil)
+		req, _ := http.NewRequest("GET", fmt.Sprintf("/api/v1/load-balancer/rules/%s/current-service", rule.UUID), nil)
 		req.Header.Set("Authorization", "Bearer "+userToken)
 		w := httptest.NewRecorder()
 		ts.ginEngine.ServeHTTP(w, req)
@@ -579,7 +589,8 @@ func TestLoadBalancerAPI_CurrentService(t *testing.T) {
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 		require.NoError(t, err)
 
-		assert.Equal(t, ruleName, response["rule"])
+		assert.Equal(t, rule.UUID, response["rule_id"])
+		assert.Equal(t, ruleName, response["rule_name"])
 		assert.Equal(t, "round_robin", response["tactic"])
 
 		service, exists := response["service"]
@@ -627,8 +638,10 @@ func TestLoadBalancerAPI_Authentication(t *testing.T) {
 
 	// Create a test rule
 	ruleName := "auth-test-rule"
+	ruleUUID := uuid.New().String()
 	rule := config.Rule{
 		RequestModel: ruleName,
+		UUID:         ruleUUID,
 		Services: []config.Service{
 			{
 				Provider:   "openai",
@@ -655,19 +668,19 @@ func TestLoadBalancerAPI_Authentication(t *testing.T) {
 		{
 			name:           "Get_Rule_No_Auth",
 			method:         "GET",
-			url:            "/api/v1/load-balancer/rules/auth-test-rule",
+			url:            fmt.Sprintf("/api/v1/load-balancer/rules/%s", ruleUUID),
 			expectedStatus: http.StatusUnauthorized,
 		},
 		{
 			name:           "Get_Rule_Summary_No_Auth",
 			method:         "GET",
-			url:            "/api/v1/load-balancer/rules/auth-test-rule/summary",
+			url:            fmt.Sprintf("/api/v1/load-balancer/rules/%s/summary", ruleUUID),
 			expectedStatus: http.StatusUnauthorized,
 		},
 		{
 			name:           "Update_Tactic_No_Auth",
 			method:         "PUT",
-			url:            "/api/v1/load-balancer/rules/auth-test-rule/tactic",
+			url:            fmt.Sprintf("/api/v1/load-balancer/rules/%s/tactic", ruleUUID),
 			body:           map[string]string{"tactic": "random"},
 			expectedStatus: http.StatusUnauthorized,
 		},
@@ -713,12 +726,10 @@ func TestLoadBalancerFunctionality(t *testing.T) {
 		}
 	}()
 
-	// Add test providers
-	ts.AddTestProviders(t)
-
 	// Add test rule with multiple services
 	testRule := config.Rule{
 		RequestModel: "tingly",
+		UUID:         uuid.New().String(),
 		Services: []config.Service{
 			{
 				Provider:   "openai",
@@ -748,7 +759,7 @@ func TestLoadBalancerFunctionality(t *testing.T) {
 
 	// Test that the rule was created correctly
 	t.Run("VerifyRuleCreation", func(t *testing.T) {
-		retrievedRule := ts.appConfig.GetGlobalConfig().GetRequestConfigByRequestModel("tingly")
+		retrievedRule := ts.appConfig.GetGlobalConfig().GetRequestConfigByRequestModel(testRule.UUID)
 		assert.NotNil(t, retrievedRule)
 		assert.Equal(t, "tingly", retrievedRule.RequestModel)
 		assert.Equal(t, 2, len(retrievedRule.GetServices()))
@@ -763,7 +774,7 @@ func TestLoadBalancerFunctionality(t *testing.T) {
 			return
 		}
 
-		rule := ts.appConfig.GetGlobalConfig().GetRequestConfigByRequestModel("tingly")
+		rule := ts.appConfig.GetGlobalConfig().GetRequestConfigByRequestModel(testRule.UUID)
 		assert.NotNil(t, rule)
 
 		// Test multiple selections to verify round-robin
@@ -885,7 +896,7 @@ func TestLoadBalancer_WithMockProvider(t *testing.T) {
 		Token:   "mock-token",
 		Enabled: true,
 	}
-	err := ts.config.AddProvider(provider)
+	err := ts.appConfig.AddProvider(provider)
 	if err != nil {
 		t.Fatalf("Failed to add mock provider: %v", err)
 	}
@@ -900,6 +911,7 @@ func TestLoadBalancer_WithMockProvider(t *testing.T) {
 	// Create a rule with the mock provider
 	rule := config.Rule{
 		RequestModel: "gpt-3.5-turbo",
+		UUID:         uuid.New().String(),
 		Services: []config.Service{
 			{
 				Provider:   "mock-provider",

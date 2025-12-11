@@ -9,9 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"tingly-box/internal/config"
 	"tingly-box/internal/server"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // MockProviderServer represents a mock AI provider server
@@ -193,7 +194,7 @@ func NewMockProviderTestSuite(t *testing.T) *MockProviderTestSuite {
 		Token:   "mock-token",
 		Enabled: true,
 	}
-	err := suite.testServer.config.AddProvider(provider)
+	err := suite.testServer.appConfig.AddProvider(provider)
 	if err != nil {
 		suite.t.Fatalf("Failed to add mock provider: %v", err)
 	}

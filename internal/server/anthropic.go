@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -15,9 +17,20 @@ import (
 
 // AnthropicMessages handles Anthropic v1 messages API requests
 func (s *Server) AnthropicMessages(c *gin.Context) {
-	var req AnthropicMessagesRequest
-	// Parse request body
+	// Read the raw request body first for debugging purposes
+	bodyBytes, err := c.GetRawData()
+	if err != nil {
+		log.Printf("Failed to read request body: %v", err)
+	} else {
+		// Store the body back for parsing
+		c.Request.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
+	}
+
+	// Parse into MessageNewParams using SDK's JSON unmarshaling
+	var req anthropic.MessageNewParams
 	if err := c.ShouldBindJSON(&req); err != nil {
+		// Log the invalid request for debugging
+		log.Printf("Invalid JSON request received: %v\nBody: %s", err, string(bodyBytes))
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Invalid request body: " + err.Error(),
@@ -27,8 +40,9 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		return
 	}
 
-	// Validate required fields
-	if req.Model == "" {
+	// Get model from request
+	model := string(req.Model)
+	if model == "" {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Model is required",
@@ -38,18 +52,8 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		return
 	}
 
-	if len(req.Messages) == 0 {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "At least one message is required",
-				Type:    "invalid_request_error",
-			},
-		})
-		return
-	}
-
 	// Determine provider and model based on request
-	provider, selectedService, _, err := s.DetermineProviderAndModel(req.Model)
+	provider, selectedService, _, err := s.DetermineProviderAndModel(model)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -62,7 +66,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 
 	// Use the selected service's model
 	actualModel := selectedService.Model
-	req.Model = actualModel
+	req.Model = anthropic.Model(actualModel)
 
 	// Set provider and model information in context for statistics middleware
 	c.Set("provider", provider.Name)
@@ -76,7 +80,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 
 	if apiStyle == "anthropic" {
 		// Use direct Anthropic SDK call
-		anthropicResp, err := s.forwardAnthropicRequest(provider, &req)
+		anthropicResp, err := s.forwardAnthropicRequest(provider, req)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, ErrorResponse{
 				Error: ErrorDetail{
@@ -102,7 +106,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 			return
 		}
 		// Convert OpenAI response back to Anthropic format
-		anthropicResp := s.convertOpenAIToAnthropic(response, req.Model)
+		anthropicResp := s.convertOpenAIToAnthropic(response, model)
 		c.JSON(http.StatusOK, anthropicResp)
 	}
 }
@@ -118,90 +122,102 @@ func (s *Server) AnthropicModels(c *gin.Context) {
 	return
 }
 
-// Anthropic request/response structures
-type AnthropicMessagesRequest struct {
-	Model         string             `json:"model"`
-	Messages      []AnthropicMessage `json:"messages"`
-	MaxTokens     int                `json:"max_tokens"`
-	Temperature   *float64           `json:"temperature,omitempty"`
-	TopP          *float64           `json:"top_p,omitempty"`
-	TopK          *int               `json:"top_k,omitempty"`
-	Stream        bool               `json:"stream,omitempty"`
-	StopSequences []string           `json:"stop_sequences,omitempty"`
-	System        string             `json:"system,omitempty"`
-}
+// Use official Anthropic SDK types directly
+type (
+	// Request types
+	AnthropicMessagesRequest = anthropic.MessageNewParams
+	AnthropicMessage         = anthropic.MessageParam
 
-type AnthropicMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
+	// Response types
+	AnthropicMessagesResponse = anthropic.Message
+	AnthropicUsage            = anthropic.Usage
 
-type AnthropicMessagesResponse struct {
-	ID           string             `json:"id"`
-	Type         string             `json:"type"`
-	Role         string             `json:"role"`
-	Content      []AnthropicContent `json:"content"`
-	Model        string             `json:"model"`
-	StopReason   string             `json:"stop_reason"`
-	StopSequence string             `json:"stop_sequence"`
-	Usage        AnthropicUsage     `json:"usage"`
-}
+	// Model types - SDK doesn't provide a models list, so we define our own
+	AnthropicModel struct {
+		ID           string   `json:"id"`
+		Object       string   `json:"object"`
+		Created      int64    `json:"created"`
+		DisplayName  string   `json:"display_name"`
+		Type         string   `json:"type"`
+		MaxTokens    int      `json:"max_tokens"`
+		Capabilities []string `json:"capabilities"`
+	}
+	AnthropicModelsResponse struct {
+		Data []AnthropicModel `json:"data"`
+	}
+)
 
-type AnthropicContent struct {
-	Type string `json:"type"`
-	Text string `json:"text"`
-}
-
-type AnthropicUsage struct {
-	InputTokens  int `json:"input_tokens"`
-	OutputTokens int `json:"output_tokens"`
-}
-
-type AnthropicModel struct {
-	ID           string   `json:"id"`
-	Object       string   `json:"object"`
-	Created      int64    `json:"created"`
-	DisplayName  string   `json:"display_name"`
-	Type         string   `json:"type"`
-	MaxTokens    int      `json:"max_tokens"`
-	Capabilities []string `json:"capabilities"`
-}
-
-type AnthropicModelsResponse struct {
-	Data []AnthropicModel `json:"data"`
-}
-
-// forwardAnthropicRequest forwards request directly using Anthropic SDK
-func (s *Server) forwardAnthropicRequest(provider *config.Provider, req *AnthropicMessagesRequest) (*AnthropicMessagesResponse, error) {
+// forwardAnthropicRequestRaw forwards request from raw map using Anthropic SDK
+func (s *Server) forwardAnthropicRequestRaw(provider *config.Provider, rawReq map[string]interface{}, model string) (*anthropic.Message, error) {
 	var apiBase = provider.APIBase
 	if strings.HasSuffix(apiBase, "/v1") {
 		apiBase = apiBase[:len(apiBase)-3]
 	}
 	log.Printf("Anthropic API Base: %s, Token Length: %d", apiBase, len(provider.Token))
+
 	// Create Anthropic client
 	client := anthropic.NewClient(
 		option.WithAPIKey(provider.Token),
 		option.WithBaseURL(apiBase),
 	)
 
-	// Convert AnthropicMessagesRequest to Anthropic SDK parameters
-	messages := make([]anthropic.MessageParam, 0, len(req.Messages))
-	for _, msg := range req.Messages {
-		if msg.Role == "user" {
-			messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(msg.Content)))
-		} else if msg.Role == "assistant" {
-			messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(msg.Content)))
+	// Extract and convert messages from raw request
+	messagesData, ok := rawReq["messages"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid messages format")
+	}
+
+	messages := make([]anthropic.MessageParam, 0, len(messagesData))
+	for _, msgData := range messagesData {
+		msg, ok := msgData.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		role, ok := msg["role"].(string)
+		if !ok {
+			continue
+		}
+
+		// Handle content which can be string or array
+		var contentBlocks []anthropic.ContentBlockParamUnion
+		if contentData, exists := msg["content"]; exists {
+			if contentStr, ok := contentData.(string); ok {
+				// Simple string content
+				contentBlocks = append(contentBlocks, anthropic.NewTextBlock(contentStr))
+			} else if contentArray, ok := contentData.([]interface{}); ok {
+				// Array of content blocks
+				for _, blockData := range contentArray {
+					if block, ok := blockData.(map[string]interface{}); ok {
+						if blockType, ok := block["type"].(string); ok && blockType == "text" {
+							if text, ok := block["text"].(string); ok {
+								contentBlocks = append(contentBlocks, anthropic.NewTextBlock(text))
+							}
+						}
+					}
+				}
+			}
+		}
+
+		if role == "user" {
+			messages = append(messages, anthropic.NewUserMessage(contentBlocks...))
+		} else if role == "assistant" {
+			messages = append(messages, anthropic.NewAssistantMessage(contentBlocks...))
 		}
 	}
 
-	// Build request parameters - use simpler approach for now
+	// Build request parameters
 	params := anthropic.MessageNewParams{
-		MaxTokens: int64(req.MaxTokens),
-		Messages:  messages,
+		Model:    anthropic.Model(model),
+		Messages: messages,
 	}
 
-	// Set model - use Anthropic SDK model type
-	params.Model = anthropic.Model(req.Model)
+	// Set max_tokens if provided
+	if maxTokens, ok := rawReq["max_tokens"]; ok {
+		if maxTokensFloat, ok := maxTokens.(float64); ok {
+			params.MaxTokens = int64(maxTokensFloat)
+		}
+	}
 
 	// Make the request using Anthropic SDK with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -211,39 +227,30 @@ func (s *Server) forwardAnthropicRequest(provider *config.Provider, req *Anthrop
 		return nil, err
 	}
 
-	// Convert Anthropic SDK response to our format
-	return s.convertAnthropicSDKToResponse(message, req.Model), nil
+	return message, nil
 }
 
-// convertAnthropicSDKToResponse converts Anthropic SDK response to our format
-func (s *Server) convertAnthropicSDKToResponse(message *anthropic.Message, originalModel string) *AnthropicMessagesResponse {
-	// Convert content
-	content := make([]AnthropicContent, 0, len(message.Content))
-	for _, block := range message.Content {
-		if block.Type == "text" {
-			content = append(content, AnthropicContent{
-				Type: "text",
-				Text: string(block.Text),
-			})
-		}
+// forwardAnthropicRequest forwards request using Anthropic SDK with proper types
+func (s *Server) forwardAnthropicRequest(provider *config.Provider, req anthropic.MessageNewParams) (*anthropic.Message, error) {
+	var apiBase = provider.APIBase
+	if strings.HasSuffix(apiBase, "/v1") {
+		apiBase = apiBase[:len(apiBase)-3]
+	}
+	log.Printf("Anthropic API Base: %s, Token Length: %d", apiBase, len(provider.Token))
+
+	// Create Anthropic client
+	client := anthropic.NewClient(
+		option.WithAPIKey(provider.Token),
+		option.WithBaseURL(apiBase),
+	)
+
+	// Make the request using Anthropic SDK with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	message, err := client.Messages.New(ctx, req)
+	if err != nil {
+		return nil, err
 	}
 
-	// Determine stop reason
-	stopReason := string(message.StopReason)
-
-	response := &AnthropicMessagesResponse{
-		ID:           message.ID,
-		Type:         "message",
-		Role:         "assistant",
-		Content:      content,
-		Model:        originalModel,
-		StopReason:   stopReason,
-		StopSequence: "",
-		Usage: AnthropicUsage{
-			InputTokens:  int(message.Usage.InputTokens),
-			OutputTokens: int(message.Usage.OutputTokens),
-		},
-	}
-
-	return response
+	return message, nil
 }

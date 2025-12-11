@@ -21,7 +21,6 @@ import (
 // TestServer represents a test server wrapper
 type TestServer struct {
 	appConfig *config.AppConfig
-	config    *config.AppConfig
 	server    *server.Server
 	ginEngine *gin.Engine
 }
@@ -63,7 +62,6 @@ func createTestServer(t *testing.T, appConfig *config.AppConfig) *TestServer {
 
 	return &TestServer{
 		appConfig: appConfig,
-		config:    appConfig,
 		server:    httpServer,
 		ginEngine: httpServer.GetRouter(), // Use the server's router
 	}

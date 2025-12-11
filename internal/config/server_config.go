@@ -259,6 +259,19 @@ func (c *Config) IsRequestModel(modelName string) bool {
 	return false
 }
 
+// GetUUIDByRequestModel returns the UUID for the given request model name
+func (c *Config) GetUUIDByRequestModel(requestModel string) string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	for _, rule := range c.Rules {
+		if rule.RequestModel == requestModel {
+			return rule.UUID
+		}
+	}
+	return ""
+}
+
 // GetRequestConfigByRequestModel returns the Rule for the given request uuid
 func (c *Config) GetRequestConfigByRequestModel(UUID string) *Rule {
 	c.mu.RLock()
@@ -266,6 +279,19 @@ func (c *Config) GetRequestConfigByRequestModel(UUID string) *Rule {
 
 	for idx := range c.Rules {
 		if c.Rules[idx].UUID == UUID {
+			return &c.Rules[idx]
+		}
+	}
+	return nil
+}
+
+// GetRuleByRequestModel returns the Rule for the given request model name
+func (c *Config) GetRuleByRequestModel(requestModel string) *Rule {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	for idx := range c.Rules {
+		if c.Rules[idx].RequestModel == requestModel {
 			return &c.Rules[idx]
 		}
 	}
@@ -308,6 +334,21 @@ func (c *Config) UpdateRequestConfigByRequestModel(requestModel string, reqConfi
 	}
 
 	return fmt.Errorf("rule with request model '%s' not found", requestModel)
+}
+
+// UpdateRequestConfigByUUID updates a Rule by its UUID
+func (c *Config) UpdateRequestConfigByUUID(uuid string, reqConfig Rule) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for i, rule := range c.Rules {
+		if rule.UUID == uuid {
+			c.Rules[i] = reqConfig
+			return c.save()
+		}
+	}
+
+	return fmt.Errorf("rule with UUID '%s' not found", uuid)
 }
 
 // AddOrUpdateRequestConfigByRequestModel adds a new Rule or updates an existing one by request model name
