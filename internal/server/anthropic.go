@@ -245,7 +245,7 @@ func (s *Server) forwardAnthropicRequest(provider *config.Provider, req anthropi
 	)
 
 	// Make the request using Anthropic SDK with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	message, err := client.Messages.New(ctx, req)
 	if err != nil {
