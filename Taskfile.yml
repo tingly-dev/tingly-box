@@ -110,19 +110,19 @@ tasks:
         
         # Build for Windows (amd64)
         echo "Building for Windows (amd64)..."
-        GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.version={{.VERSION}}" -o {{.DIST_DIR}}/tingly-{{.VERSION}}-windows-amd64.exe ./cmd/tingly
+        GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.version={{.VERSION}}" -o {{.DIST_DIR}}/{{.BIN_NAME}}-{{.VERSION}}-windows-amd64.exe ./cmd/tingly
         
         # Build for Linux (amd64)
         echo "Building for Linux (amd64)..."
-        GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version={{.VERSION}}" -o {{.DIST_DIR}}/tingly-{{.VERSION}}-linux-amd64 ./cmd/tingly
+        GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version={{.VERSION}}" -o {{.DIST_DIR}}/{{.BIN_NAME}}-{{.VERSION}}-linux-amd64 ./cmd/tingly
         
         # Build for macOS (amd64)
         echo "Building for macOS (amd64)..."
-        GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X main.version={{.VERSION}}" -o {{.DIST_DIR}}/tingly-{{.VERSION}}-darwin-amd64 ./cmd/tingly
+        GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X main.version={{.VERSION}}" -o {{.DIST_DIR}}/{{.BIN_NAME}}-{{.VERSION}}-darwin-amd64 ./cmd/tingly
         
         # Build for macOS (arm64)
         echo "Building for macOS (arm64)..."
-        GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X main.version={{.VERSION}}" -o {{.DIST_DIR}}/tingly-{{.VERSION}}-darwin-arm64 ./cmd/tingly
+        GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X main.version={{.VERSION}}" -o {{.DIST_DIR}}/{{.BIN_NAME}}-{{.VERSION}}-darwin-arm64 ./cmd/tingly
         
         # Create archives
         echo "Creating archives..."
