@@ -1,4 +1,5 @@
 import { CircularProgress, Box, Alert, IconButton } from '@mui/material';
+import { useEffect, useRef } from 'react';
 
 interface PageLoadingProps {
   minHeight?: number;
@@ -34,6 +35,41 @@ export const PageLayout: React.FC<PageLayoutProps> = ({
   loadingMinHeight = 400,
   notification,
 }) => {
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Auto-hide notification after specified duration
+  useEffect(() => {
+    if (notification?.open && notification.autoHideDuration && notification.autoHideDuration > 0) {
+      timeoutRef.current = setTimeout(() => {
+        if (notification.onClose) {
+          notification.onClose();
+        }
+      }, notification.autoHideDuration);
+    }
+
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+  }, [notification?.open, notification?.autoHideDuration, notification?.onClose]);
+
+  // Close notification on page refresh/unload
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (notification?.open && notification.onClose) {
+        notification.onClose();
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [notification?.open, notification?.onClose]);
+
   if (loading) {
     return <PageLoading minHeight={loadingMinHeight} />;
   }
