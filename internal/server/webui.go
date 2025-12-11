@@ -52,10 +52,10 @@ func (s *Server) UseUIEndpoints() {
 	// Dashboard endpoints
 
 	// UI page routes
-	s.router.GET("/dashboard", s.Dashboard)
-	s.router.GET("/providers", s.ProvidersPage)
-	s.router.GET("/system", s.SystemPage)
-	s.router.GET("/history", s.HistoryPage)
+	s.router.GET("/dashboard", s.UseIndex)
+	s.router.GET("/providers", s.UseIndex)
+	s.router.GET("/system", s.UseIndex)
+	s.router.GET("/history", s.UseIndex)
 
 	// API routes (for web UI functionality)
 	s.useWebAPIEndpoints(s.router)
@@ -64,11 +64,17 @@ func (s *Server) UseUIEndpoints() {
 	s.useWebStaticEndpoints(s.router)
 }
 
+type ProbeRequest struct {
+	Rule     string `yaml:"rule" json:"rule"`
+	Provider string `yaml:"provider" json:"provider"`
+	Model    string `yaml:"model" json:"model"`
+}
+
 // ProbeRule tests a rule configuration by sending a sample request to the configured provider
 func (s *Server) ProbeRule(c *gin.Context) {
 
-	var rule config.Rule
-	if err := c.ShouldBindJSON(&rule); err != nil {
+	var req ProbeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"error":   err.Error(),
@@ -94,8 +100,17 @@ func (s *Server) ProbeRule(c *gin.Context) {
 	var testProvider *config.Provider
 
 	for _, provider := range providers {
-		if provider.Enabled && provider.Name == rule.GetDefaultProvider() {
+		if provider.Enabled && provider.Name == req.Provider {
 			testProvider = provider
+			break
+		}
+	}
+
+	rules := s.config.Rules
+	var rule *config.Rule
+	for _, r := range rules {
+		if r.UUID == req.Rule {
+			rule = &r
 			break
 		}
 	}
@@ -103,41 +118,7 @@ func (s *Server) ProbeRule(c *gin.Context) {
 	probe(c, rule, testProvider)
 }
 
-// Page Handlers (exported for server integration)
-func (s *Server) Dashboard(c *gin.Context) {
-	// Get user_auth_token from query parameter
-	userAuthToken := c.Query("user_auth_token")
-
-	// Prepare template data
-	templateData := gin.H{}
-	if userAuthToken != "" {
-		templateData["user_auth_token"] = userAuthToken
-	}
-
-	if s.assets != nil {
-		s.assets.HTML(c, "index.html", templateData)
-	} else {
-		panic("No UI resources")
-	}
-}
-
-func (s *Server) ProvidersPage(c *gin.Context) {
-	if s.assets != nil {
-		s.assets.HTML(c, "index.html", nil)
-	} else {
-		panic("No UI resources")
-	}
-}
-
-func (s *Server) SystemPage(c *gin.Context) {
-	if s.assets != nil {
-		s.assets.HTML(c, "index.html", nil)
-	} else {
-		panic("No UI resources")
-	}
-}
-
-func (s *Server) HistoryPage(c *gin.Context) {
+func (s *Server) UseIndex(c *gin.Context) {
 	if s.assets != nil {
 		s.assets.HTML(c, "index.html", nil)
 	} else {
@@ -261,31 +242,17 @@ func (s *Server) GetRules(c *gin.Context) {
 	}
 
 	rules := cfg.GetRequestConfigs()
-	defaultRequestID := cfg.GetDefaultRequestID()
-
-	// Convert Rules to response format
-	responseRules := make([]map[string]interface{}, len(rules))
-	for i, rule := range rules {
-		responseRules[i] = map[string]interface{}{
-			"request_model":  rule.RequestModel,
-			"response_model": rule.ResponseModel,
-			"provider":       rule.GetDefaultProvider(),
-			"default_model":  rule.GetDefaultModel(),
-			"active":         rule.Active,
-			"is_default":     i == defaultRequestID,
-		}
-	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"data":    responseRules,
+		"data":    rules,
 	})
 }
 
 // GetRule returns a specific rule by name
 func (s *Server) GetRule(c *gin.Context) {
-	ruleName := c.Param("name")
-	if ruleName == "" {
+	ruleUUID := c.Param("uuid")
+	if ruleUUID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"error":   "Rule name is required",
@@ -302,7 +269,7 @@ func (s *Server) GetRule(c *gin.Context) {
 		return
 	}
 
-	rule := cfg.GetRequestConfigByRequestModel(ruleName)
+	rule := cfg.GetRequestConfigByRequestModel(ruleUUID)
 	if rule == nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,
@@ -313,20 +280,14 @@ func (s *Server) GetRule(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"data": map[string]interface{}{
-			"request_model":  rule.RequestModel,
-			"response_model": rule.ResponseModel,
-			"provider":       rule.GetDefaultProvider(),
-			"default_model":  rule.GetDefaultModel(),
-			"active":         rule.Active,
-		},
+		"data":    rule,
 	})
 }
 
 // SetRule creates or updates a rule
 func (s *Server) SetRule(c *gin.Context) {
-	ruleName := c.Param("name")
-	if ruleName == "" {
+	ruleUUID := c.Param("uuid")
+	if ruleUUID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"error":   "Rule name is required",
@@ -334,24 +295,14 @@ func (s *Server) SetRule(c *gin.Context) {
 		return
 	}
 
-	var req struct {
-		ResponseModel string `json:"response_model"`
-		Provider      string `json:"provider"`
-		DefaultModel  string `json:"default_model"`
-		Active        bool   `json:"active"`
-	}
+	var rule config.Rule
 
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := c.ShouldBindJSON(&rule); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"error":   err.Error(),
 		})
 		return
-	}
-
-	// Set default active to true if not provided
-	if !req.Active {
-		req.Active = true
 	}
 
 	cfg := s.config
@@ -361,23 +312,6 @@ func (s *Server) SetRule(c *gin.Context) {
 			"error":   "Global config not available",
 		})
 		return
-	}
-
-	// Create or update the rule with a single service from the provider and model
-	rule := config.Rule{
-		RequestModel:  ruleName,
-		ResponseModel: req.ResponseModel,
-		Services: []config.Service{
-			{
-				Provider:   req.Provider,
-				Model:      req.DefaultModel,
-				Weight:     1,
-				Active:     true,
-				TimeWindow: 300,
-			},
-		},
-		Tactic: config.TacticRoundRobin.String(), // Default to round-robin
-		Active: req.Active,
 	}
 
 	if err := cfg.SetDefaultRequestConfig(rule); err != nil {
@@ -391,8 +325,8 @@ func (s *Server) SetRule(c *gin.Context) {
 	// Log the action
 	if s.logger != nil {
 		s.logger.LogAction(memory.ActionUpdateProvider, map[string]interface{}{
-			"name": ruleName,
-		}, true, fmt.Sprintf("Rule %s updated successfully", ruleName))
+			"name": ruleUUID,
+		}, true, fmt.Sprintf("Rule %s updated successfully", ruleUUID))
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -405,6 +339,40 @@ func (s *Server) SetRule(c *gin.Context) {
 			"default_model":  rule.GetDefaultModel(),
 			"active":         rule.Active,
 		},
+	})
+}
+
+func (s *Server) DeleteRule(c *gin.Context) {
+	ruleUUID := c.Param("uuid")
+	if ruleUUID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Rule name is required",
+		})
+		return
+	}
+
+	cfg := s.config
+	if cfg == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Global config not available",
+		})
+		return
+	}
+
+	err := cfg.DeleteRule(ruleUUID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to save rule: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Rule delete successfully",
 	})
 }
 
@@ -994,8 +962,9 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 
 		// Rule management
 		api.GET("/rules", s.GetRules)
-		api.GET("/rule/:name", s.GetRule)
-		api.POST("/rule/:name", s.SetRule)
+		api.GET("/rule/:uuid", s.GetRule)
+		api.POST("/rule/:uuid", s.SetRule)
+		api.DELETE("/rule/:uuid", s.DeleteRule)
 
 		// History
 		api.GET("/history", s.GetHistory)

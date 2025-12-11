@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // Config represents the global configuration
@@ -72,6 +74,7 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 			// Create a default Rule
 			cfg.Rules = []Rule{
 				{
+					UUID:          "tingly",
 					RequestModel:  "tingly",
 					ResponseModel: "",
 					Services:      []Service{}, // Empty services initially
@@ -99,6 +102,8 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 		} else {
 			return nil, fmt.Errorf("failed to load global cfg: %w", err)
 		}
+	} else {
+		cfg.save()
 	}
 
 	// Ensure tokens exist even for existing configs
@@ -184,7 +189,7 @@ func (c *Config) SetDefaultRequestConfig(reqConfig Rule) error {
 
 	// Find existing config with same request model
 	for i, rc := range c.Rules {
-		if rc.RequestModel == reqConfig.RequestModel {
+		if rc.UUID == reqConfig.UUID {
 			c.Rules[i] = reqConfig
 			return c.save()
 		}
@@ -254,13 +259,13 @@ func (c *Config) IsRequestModel(modelName string) bool {
 	return false
 }
 
-// GetRequestConfigByRequestModel returns the Rule for the given request model name
-func (c *Config) GetRequestConfigByRequestModel(modelName string) *Rule {
+// GetRequestConfigByRequestModel returns the Rule for the given request uuid
+func (c *Config) GetRequestConfigByRequestModel(UUID string) *Rule {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	for idx := range c.Rules {
-		if c.Rules[idx].RequestModel == modelName {
+		if c.Rules[idx].UUID == UUID {
 			return &c.Rules[idx]
 		}
 	}
@@ -711,6 +716,16 @@ func (c *Config) migrateRules() {
 			c.Rules[i].Tactic = TacticRoundRobin.String()
 			needsSave = true
 		}
+
+		// FIXME: update uuid
+		if c.Rules[i].UUID == "" {
+			UUID, err := uuid.NewUUID()
+			if err != nil {
+				continue
+			}
+			c.Rules[i].UUID = UUID.String()
+			needsSave = true
+		}
 	}
 
 	// Save if any rules were updated
@@ -721,6 +736,21 @@ func (c *Config) migrateRules() {
 			os.WriteFile(c.ConfigFile, data, 0644)
 		}
 	}
+}
+
+func (c *Config) DeleteRule(ruleUUID string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	var found = 0
+	for i := range c.Rules {
+		if c.Rules[i].UUID == ruleUUID {
+			found = i
+		}
+	}
+
+	c.Rules = append(c.Rules[:found], c.Rules[found+1:]...)
+	return c.save()
 }
 
 // generateSecret generates a random secret for JWT
