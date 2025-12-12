@@ -1,23 +1,48 @@
-# README
+# API Gateway for LLM Services
 
-将要实现一个客户端工具，但从MVP的角度，我们先验证功能的可用性。
+This project aims to build a client tool that acts as a unified gateway for various Large Language Model (LLM) providers. Starting with an MVP approach to validate core functionality.
 
-这个项目预计是golang实现的，如果你觉得有别的方案，可以在golang，python中选择。
+## Technology Stack
 
-我们先实现一个动态配置更新的server，这个server将提供和openai一样的endpoint，并生成一个uri作为api_base 以接收请求。
+The primary implementation will be in **Go**, with Python as an alternative option if deemed more suitable for specific requirements.
 
-程序既是一个cli，又是一个server。
-用户可以启动cli
-- 通过命令行交互
-  - 新增，配置name，api-base，和对应的token，这些机密信息需要妥善保存在固定的位置
-  - 查看，
-  - 删除
-- 通过命令行交互，查看和管理服务状态，你需要选择合适的方案管理服务
+## Core Architecture
 
+We'll first implement a dynamically configurable server that:
+- Provides OpenAI-compatible endpoints
+- Generates a unified URI base for clients to send requests
+- Acts as both a CLI tool and a server service
 
-服务提供的能力
-- 提供统一的uri api-base，可以由任意client配置使用
-- 生成token，供client 使用
-- 加载配置，和刷新配置
-  - 注意，当cli对配置进行了调整时，需要即时进行刷新
-- client使用token，并选中模型后，会链接到server，此时server需要对应转换字段到正确的api-base和token，完成真正的大模型请求
+## CLI Interface
+
+Users can interact with the tool through command-line interface to:
+
+### Configuration Management
+- **Add**: Configure new providers with name, API base URL, and authentication token
+  - All sensitive information must be securely stored in a fixed location
+- **List**: View all configured providers
+- **Delete**: Remove provider configurations
+
+### Service Management
+- Monitor and manage service status through CLI commands
+- Implement appropriate service management solution
+
+## Server Capabilities
+
+The server provides:
+
+1. **Unified API Endpoint**: A single URI base that any client can configure and use
+2. **Token Management**: Generate and manage client authentication tokens
+3. **Dynamic Configuration**: Load and refresh configurations in real-time
+   - Important: Configuration changes made via CLI must be immediately reflected
+4. **Request Proxying**: When clients use tokens and select models:
+   - Server routes requests to the correct API base URL
+   - Transforms and forwards authentication tokens
+   - Handles the actual LLM provider request/response flow
+
+## Key Features
+
+- Real-time configuration updates without service restart
+- Secure storage of API credentials
+- OpenAI-compatible API interface for easy client integration
+- Support for multiple LLM providers through a unified interface

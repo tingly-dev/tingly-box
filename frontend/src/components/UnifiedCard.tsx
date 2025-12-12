@@ -10,9 +10,9 @@ interface UnifiedCardProps {
   children: ReactNode;
   size?: 'small' | 'medium' | 'large' | 'full' | 'header';
   variant?: 'default' | 'outlined' | 'elevated';
-  // 自定义宽度，如果提供则优先使用
+  // Custom width, prioritized if provided
   width?: number | string;
-  // 自定义高度，如果提供则优先使用
+  // Custom height, prioritized if provided
   height?: number | string;
   // Message support
   message?: { type: 'success' | 'error'; text: string } | null;
@@ -43,7 +43,7 @@ const scrollSpeeds = {
   fast: 200,
 };
 
-// 预设尺寸配置 - 使用相对尺寸和自适应布局
+// Preset size configuration - using relative sizes and responsive layout
 interface PresetDimensions {
   width: string;
   height?: string;
@@ -53,33 +53,33 @@ interface PresetDimensions {
 
 const presetCardDimensions: Record<string, PresetDimensions> = {
   small: {
-    width: '25%',  // 25% 宽度（相对于父容器）
-    height: '50%', // 50% 高度（相对于父容器）
+    width: '25%',  // 25% width (relative to parent container)
+    height: '50%', // 50% height (relative to parent container)
     hasFixedHeight: true,
   },
   medium: {
-    width: '50%',  // 50% 宽度（相对于父容器）
-    height: '100%', // 100% 高度（相对于父容器）
+    width: '50%',  // 50% width (relative to parent container)
+    height: '100%', // 100% height (relative to parent container)
     hasFixedHeight: true,
   },
   large: {
-    width: '100%', // 自适应父容器最大宽度
-    minHeight: '400px', // 最小高度 400px
+    width: '100%', // Adaptive to parent container max width
+    minHeight: '400px', // Min height 400px
     hasFixedHeight: true,
   },
   full: {
-    width: '100%', // 自适应父容器最大宽度
-    height: '100%', // 自适应父容器最大高度
+    width: '100%', // Adaptive to parent container max width
+    height: '100%', // Adaptive to parent container max height
     hasFixedHeight: true,
   },
   header: {
-    width: '100%', // 自适应父容器最大宽度
-    minHeight: '200px', // 最小高度 400px
+    width: '100%', // Adaptive to parent container max width
+    minHeight: '200px', // Min height 200px
     hasFixedHeight: false,
   },
 };
 
-// 计算卡片尺寸的函数
+// Function to calculate card dimensions
 const getCardDimensions = (
   size: 'small' | 'medium' | 'large' | 'full' | 'header',
   customWidth?: number | string,
@@ -87,17 +87,17 @@ const getCardDimensions = (
 ) => {
   const preset = presetCardDimensions[size];
 
-  // 如果提供了自定义宽度，优先使用自定义宽度
+  // If custom width is provided, prioritize using custom width
   const width = customWidth !== undefined
     ? customWidth
     : preset.width;
 
-  // 如果提供了自定义高度，优先使用自定义高度
+  // If custom height is provided, prioritize using custom height
   let height: string | number;
   if (customHeight !== undefined) {
     height = customHeight;
   } else {
-    // 根据预设尺寸设置高度
+    // Set height based on preset size
     switch (size) {
       case 'small':
       case 'medium':

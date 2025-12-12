@@ -1347,7 +1347,7 @@ func (rm *RouteManager) getSwaggerType(goType reflect.Type) Schema {
 
 // SetupSwaggerEndpoints configures Swagger documentation endpoints based on environment
 func (rm *RouteManager) SetupSwaggerEndpoints() {
-	// 只在非生产环境启用
+	// only for non production env
 	if gin.Mode() != gin.ReleaseMode {
 		rm.RegisterSwaggerEndpoint("/swagger.json")
 	}
