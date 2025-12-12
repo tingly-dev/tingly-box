@@ -20,7 +20,7 @@ type ServerManager struct {
 	appConfig  *config.AppConfig
 	server     *server.Server
 	pidManager *config.PIDManager
-	enableUI   bool
+	useUI      bool
 }
 
 // NewServerManager creates a new server manager with UI enabled by default
@@ -31,11 +31,11 @@ func NewServerManager(appConfig *config.AppConfig) *ServerManager {
 }
 
 // NewServerManagerWithOptions creates a new server manager with UI option
-func NewServerManagerWithOptions(appConfig *config.AppConfig, enableUI bool) *ServerManager {
+func NewServerManagerWithOptions(appConfig *config.AppConfig, useUI bool) *ServerManager {
 	res := &ServerManager{
 		appConfig:  appConfig,
 		pidManager: config.NewPIDManager(appConfig.ConfigDir()),
-		enableUI:   enableUI,
+		useUI:      useUI,
 	}
 	res.Setup(appConfig.GetServerPort())
 	return res
@@ -65,7 +65,7 @@ func (sm *ServerManager) Setup(port int) error {
 	}
 
 	// Create server with UI option
-	sm.server = server.NewServerWithOptions(sm.appConfig.GetGlobalConfig(), sm.enableUI)
+	sm.server = server.NewServerWithOptions(sm.appConfig.GetGlobalConfig(), sm.useUI)
 
 	// Set global server instance for web UI control
 	server.SetGlobalServer(sm.server)
