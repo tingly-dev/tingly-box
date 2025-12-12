@@ -1,4 +1,4 @@
-package utils
+package server
 
 import (
 	"context"
@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"tingly-box/internal/config"
-	"tingly-box/internal/server"
 
 	"github.com/gin-gonic/gin"
 )
@@ -18,7 +17,7 @@ import (
 // ServerManager manages the HTTP server lifecycle
 type ServerManager struct {
 	appConfig  *config.AppConfig
-	server     *server.Server
+	server     *Server
 	pidManager *config.PIDManager
 	useUI      bool
 }
@@ -65,10 +64,10 @@ func (sm *ServerManager) Setup(port int) error {
 	}
 
 	// Create server with UI option
-	sm.server = server.NewServerWithOptions(sm.appConfig.GetGlobalConfig(), sm.useUI)
+	sm.server = NewServerWithOptions(sm.appConfig.GetGlobalConfig(), sm.useUI)
 
 	// Set global server instance for web UI control
-	server.SetGlobalServer(sm.server)
+	SetGlobalServer(sm.server)
 
 	return nil
 }

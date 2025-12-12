@@ -9,7 +9,6 @@ import (
 
 	"tingly-box/internal/config"
 	"tingly-box/internal/server"
-	"tingly-box/pkg/utils"
 
 	"github.com/spf13/cobra"
 )
@@ -28,7 +27,7 @@ func StartCommand(appConfig *config.AppConfig) *cobra.Command {
 		Long: `Start the Tingly Box HTTP server that provides the unified API endpoint.
 The server will handle request routing to configured AI providers.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			serverManager := utils.NewServerManagerWithOptions(appConfig, useUI)
+			serverManager := server.NewServerManagerWithOptions(appConfig, useUI)
 
 			// Check if server is already running
 			if serverManager.IsRunning() {
@@ -73,7 +72,7 @@ func StopCommand(appConfig *config.AppConfig) *cobra.Command {
 		Long: `Stop the running Tingly Box HTTP server gracefully.
 All ongoing requests will be completed before shutdown.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			serverManager := utils.NewServerManager(appConfig)
+			serverManager := server.NewServerManager(appConfig)
 
 			if !serverManager.IsRunning() {
 				fmt.Println("Server is not running")
@@ -102,7 +101,7 @@ func StatusCommand(appConfig *config.AppConfig) *cobra.Command {
 show configuration information including number of providers and server port.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			providers := appConfig.ListProviders()
-			serverManager := utils.NewServerManager(appConfig)
+			serverManager := server.NewServerManager(appConfig)
 			serverRunning := serverManager.IsRunning()
 
 			fmt.Println("=== Tingly Box Status ===")
@@ -146,7 +145,7 @@ This command will stop the current server (if running) and start a new instance.
 The restart is graceful - ongoing requests will be completed before shutdown.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// First, clean up any existing PID file to simulate a stop
-			serverManager := utils.NewServerManager(appConfig)
+			serverManager := server.NewServerManager(appConfig)
 			wasRunning := serverManager.IsRunning()
 
 			if wasRunning {
@@ -163,7 +162,7 @@ The restart is graceful - ongoing requests will be completed before shutdown.`,
 			}
 
 			// Create a new server manager for starting
-			newServerManager := utils.NewServerManager(appConfig)
+			newServerManager := server.NewServerManager(appConfig)
 
 			// Start server with new configuration
 			fmt.Println("Starting server...")

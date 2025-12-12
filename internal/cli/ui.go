@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os/exec"
 	"runtime"
+	"tingly-box/internal/server"
 
 	"tingly-box/internal/config"
-	"tingly-box/pkg/utils"
 
 	"github.com/spf13/cobra"
 )
@@ -21,7 +21,7 @@ func UICommand(appConfig *config.AppConfig) *cobra.Command {
 		Long: `Open the Tingly Box web interface in your default browser.
 If the server is not running, it will be started first.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			serverManager := utils.NewServerManager(appConfig)
+			serverManager := server.NewServerManager(appConfig)
 
 			// Check if server is already running
 			serverRunning := serverManager.IsRunning()
@@ -38,7 +38,7 @@ If the server is not running, it will be started first.`,
 
 				// Start server in background
 				go func() {
-					newServerManager := utils.NewServerManagerWithOptions(appConfig, true)
+					newServerManager := server.NewServerManagerWithOptions(appConfig, true)
 					if err := newServerManager.Start(); err != nil {
 						fmt.Printf("Failed to start server: %v\n", err)
 					}
