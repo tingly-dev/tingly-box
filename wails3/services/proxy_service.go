@@ -116,5 +116,11 @@ func (s *ProxyService) ServiceShutdown(ctx context.Context) error {
 }
 
 func (s *ProxyService) GetUserAuthToken() string {
+	fmt.Println("Getting auth token")
 	return s.appConfig.GetGlobalConfig().GetUserToken()
+}
+
+func (s *ProxyService) GetPort() int {
+	fmt.Println("Getting port")
+	return s.appConfig.GetGlobalConfig().GetServerPort()
 }
