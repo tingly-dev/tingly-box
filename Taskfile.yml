@@ -45,7 +45,7 @@ tasks:
       
   wails:manual:
     cmds:
-      - cd frontend; pnpm build:gui
+      - cd frontend; pnpm build:wails
       - |
         mkdir -p wails3/frontend/dist/
         cp -R frontend/dist/* wails3/frontend/dist/

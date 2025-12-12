@@ -8,9 +8,9 @@
     "dev:mock": "vite --mode mock",
     "dev:real": "vite --mode production",
     "build:dev": "vite build --minify false --mode development",
-    "build:dev:gui": "vite build --mode development-gui",
+    "build:dev:gui": "vite build --mode development-wails",
     "build": "vite build --mode production",
-    "build:gui": "vite build --mode production-gui",
+    "build:wails": "vite build --mode production-wails",
     "preview": "vite preview"
   },
   "dependencies": {
