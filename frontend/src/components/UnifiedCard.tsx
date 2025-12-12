@@ -153,10 +153,6 @@ export const UnifiedCard = ({
   scrollPaused = false,
   scrollContentHeight,
   onScrollToggle,
-  showScrollIndicator = false, // Disabled by default
-  showScrollButtons = false, // Disabled by default
-  scrollThrottle = false, // Disabled by default
-  enableSmoothScroll = false, // Disabled by default
 }: UnifiedCardProps) => {
   const contentRef = useRef<HTMLDivElement>(null);
 

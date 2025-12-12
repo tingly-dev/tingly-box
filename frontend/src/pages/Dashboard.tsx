@@ -658,7 +658,7 @@ const Dashboard = () => {
             <UnifiedCard
                 title="Use API"
                 // subtitle={`Total: ${providers.length} providers | Enabled: ${providers.filter((p: any) => p.enabled).length}`}
-                size="full"
+                size="header"
 
             >
                 <Header></Header>

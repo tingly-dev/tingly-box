@@ -1,7 +1,9 @@
 import {
     CheckCircle as CheckIcon,
+    Logout as CompletionIcon,
     Error as ErrorIcon,
     ExpandMore as ExpandMoreIcon,
+    Login as PromptIcon,
     PlayArrow as TestIcon,
     Timer as TimerIcon,
     Token as TokenIcon
@@ -21,8 +23,8 @@ import {
     Typography,
     useTheme
 } from '@mui/material';
-import {useState} from 'react';
-import {api} from '../services/api';
+import { useState } from 'react';
+import { api } from '../services/api';
 import UnifiedCard from './UnifiedCard';
 
 interface ProbeResponse {
@@ -65,7 +67,7 @@ interface ProbeResponse {
     } | string;
 }
 
-const Probe = ({rule, provider, model}) => {
+const Probe = ({ rule, provider, model }) => {
     const theme = useTheme();
     const [isProbing, setIsProbing] = useState(false);
     const [probeResult, setProbeResult] = useState<ProbeResponse | null>(null);
@@ -90,34 +92,34 @@ const Probe = ({rule, provider, model}) => {
         }
     };
 
-    const StatusResponseCard = ({result}) => (
+    const StatusResponseCard = ({ result }) => (
         <Accordion
             expanded={detailsExpanded}
             onChange={(_, isExpanded) => setDetailsExpanded(isExpanded)}
             disableGutters
             elevation={0}
             sx={{
-                '&:before': {display: 'none'},
+                '&:before': { display: 'none' },
                 border: `1px solid ${result.success ? theme.palette.success.main : theme.palette.error.main}30`,
                 borderRadius: 2,
                 overflow: 'hidden'
             }}
         >
             <AccordionSummary
-                expandIcon={<ExpandMoreIcon/>}
+                expandIcon={<ExpandMoreIcon />}
                 sx={{
                     px: 2,
                     py: 1.5,
                     bgcolor: `${result.success ? theme.palette.success.main : theme.palette.error.main}04`,
-                    '&:hover': {bgcolor: `${result.success ? theme.palette.success.main : theme.palette.error.main}08`}
+                    '&:hover': { bgcolor: `${result.success ? theme.palette.success.main : theme.palette.error.main}08` }
                 }}
             >
-                <Box sx={{width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
+                <Box sx={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Stack direction="row" alignItems="center" spacing={2}>
                         <Box>
                             {result.success ?
-                                <CheckIcon sx={{color: theme.palette.success.main, fontSize: 24}}/> :
-                                <ErrorIcon sx={{color: theme.palette.error.main, fontSize: 24}}/>
+                                <CheckIcon sx={{ color: theme.palette.success.main, fontSize: 24 }} /> :
+                                <ErrorIcon sx={{ color: theme.palette.error.main, fontSize: 24 }} />
                             }
                         </Box>
                         <Stack spacing={1}>
@@ -125,7 +127,7 @@ const Probe = ({rule, provider, model}) => {
                                 {result.success ? 'Success' : 'Failed'}
                             </Typography>
                             {result.data && (
-                                <Stack direction="row" spacing={1} alignItems="center" sx={{flexWrap: 'nowrap'}}>
+                                <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flexWrap: 'nowrap' }}>
                                     {result.data.rule_tested && (
                                         <Chip
                                             label={result.data.rule_tested.provider}
@@ -134,8 +136,7 @@ const Probe = ({rule, provider, model}) => {
                                             color="primary"
                                             sx={{
                                                 fontFamily: 'monospace',
-                                                fontSize: '0.6rem',
-                                                height: 18,
+                                                height: 24,
                                                 minWidth: 'auto'
                                             }}
                                         />
@@ -147,39 +148,51 @@ const Probe = ({rule, provider, model}) => {
                                             variant="outlined"
                                             sx={{
                                                 fontFamily: 'monospace',
-                                                fontSize: '0.6rem',
-                                                height: 18,
+                                                height: 24,
                                                 minWidth: 'auto'
                                             }}
                                         />
                                     )}
-                                    <Stack direction="row" alignItems="center" spacing={0.3}>
-                                        <TimerIcon sx={{fontSize: 11, color: 'text.secondary'}}/>
-                                        <Typography variant="caption" color="text.secondary"
-                                                    sx={{fontSize: '0.7rem', whiteSpace: 'nowrap'}}>
-                                            {result.data.request?.processing_time_ms || 0}ms
+
+                                    <Stack direction="row" spacing={1.5}>
+                                        <Stack direction="row" alignItems="center" spacing={0.5}>
+                                            <PromptIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                                            <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                                                Prompt:{result.data.response?.usage?.prompt_tokens || 0}
+                                            </Typography>
+                                        </Stack>
+                                        <Stack direction="row" alignItems="center" spacing={0.5}>
+                                            <CompletionIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                                            <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                                                Completion:{result.data.response?.usage?.completion_tokens || 0}
+                                            </Typography>
+                                        </Stack>
+                                    </Stack>
+                                    <Stack direction="row" alignItems="center" spacing={0.5}>
+                                        <TokenIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                                        <Typography variant="body2" color="text.secondary">
+                                            {result.data.response?.usage?.total_tokens || 0} tokens
                                         </Typography>
                                     </Stack>
-                                    <Stack direction="row" alignItems="center" spacing={0.3}>
-                                        <TokenIcon sx={{fontSize: 11, color: 'text.secondary'}}/>
-                                        <Typography variant="caption" color="text.secondary"
-                                                    sx={{fontSize: '0.7rem', whiteSpace: 'nowrap'}}>
-                                            {result.data.response?.usage?.total_tokens || 0}t
+                                    <Stack direction="row" alignItems="center" spacing={0.5}>
+                                        <TimerIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                                        <Typography variant="body2" color="text.secondary">
+                                            {result.data.request?.processing_time_ms || 0}ms
                                         </Typography>
                                     </Stack>
                                 </Stack>
                             )}
                         </Stack>
                     </Stack>
-                    <Typography variant="body2" color="text.secondary" sx={{fontSize: '0.8rem'}}>
+                    <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
                         details
                     </Typography>
                 </Box>
             </AccordionSummary>
-            <AccordionDetails sx={{p: 0}}>
+            <AccordionDetails sx={{ p: 0 }}>
                 <Box>
-                    <Box sx={{p: 2, bgcolor: 'background.paper'}}>
-                        <Typography variant="body2" sx={{fontWeight: 600, mb: 1, color: 'primary.main'}}>
+                    <Box sx={{ p: 2, bgcolor: 'background.paper' }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, color: 'primary.main' }}>
                             Request
                         </Typography>
                         <Paper
@@ -198,7 +211,7 @@ const Probe = ({rule, provider, model}) => {
                         </Paper>
                     </Box>
 
-                    <Box sx={{p: 2, bgcolor: result.success ? 'success.50' : 'error.50'}}>
+                    <Box sx={{ p: 2, bgcolor: result.success ? 'success.50' : 'error.50' }}>
                         <Typography variant="body2" sx={{
                             fontWeight: 600,
                             mb: 1,
@@ -223,12 +236,12 @@ const Probe = ({rule, provider, model}) => {
                         </Paper>
                     </Box>
 
-                    <Stack direction="row" spacing={3} sx={{p: 2, borderTop: `1px solid ${theme.palette.divider}`}}>
+                    <Stack direction="row" spacing={3} sx={{ p: 2, borderTop: `1px solid ${theme.palette.divider}` }}>
                         <Box>
-                            <Typography variant="caption" color="text.secondary" sx={{fontWeight: 500}}>
+                            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
                                 Finish Reason
                             </Typography>
-                            <Stack direction="row" spacing={2} sx={{mt: 0.5}}>
+                            <Stack direction="row" spacing={2} sx={{ mt: 0.5 }}>
                                 <Typography variant="body2" sx={{
                                     fontSize: '0.8rem', fontFamily: 'monospace'
                                 }}>
@@ -237,17 +250,17 @@ const Probe = ({rule, provider, model}) => {
                             </Stack>
                         </Box>
                         <Box>
-                            <Typography variant="caption" color="text.secondary" sx={{fontWeight: 500}}>
+                            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
                                 Token Usage
                             </Typography>
-                            <Stack direction="row" spacing={2} sx={{mt: 0.5}}>
-                                <Typography variant="body2" sx={{fontSize: '0.8rem', fontFamily: 'monospace'}}>
+                            <Stack direction="row" spacing={2} sx={{ mt: 0.5 }}>
+                                <Typography variant="body2" sx={{ fontSize: '0.8rem', fontFamily: 'monospace' }}>
                                     Prompt: {result.data.response?.usage?.prompt_tokens || 0}
                                 </Typography>
-                                <Typography variant="body2" sx={{fontSize: '0.8rem', fontFamily: 'monospace'}}>
+                                <Typography variant="body2" sx={{ fontSize: '0.8rem', fontFamily: 'monospace' }}>
                                     Completion: {result.data.response?.usage?.completion_tokens || 0}
                                 </Typography>
-                                <Typography variant="body2" sx={{fontSize: '0.8rem', fontFamily: 'monospace'}}>
+                                <Typography variant="body2" sx={{ fontSize: '0.8rem', fontFamily: 'monospace' }}>
                                     Total: {result.data.response?.usage?.total_tokens || 0}
                                 </Typography>
                             </Stack>
@@ -258,20 +271,20 @@ const Probe = ({rule, provider, model}) => {
         </Accordion>
     );
 
-    const ErrorDetails = ({result}) => (
+    const ErrorDetails = ({ result }) => (
         <Alert
             severity="error"
             variant="outlined"
             sx={{
                 mt: 2,
                 borderRadius: 2,
-                '& .MuiAlert-message': {width: '100%'}
+                '& .MuiAlert-message': { width: '100%' }
             }}
         >
-            <Typography variant="body2" sx={{fontWeight: 500, mb: 1}}>
+            <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
                 Error Details
             </Typography>
-            <Typography variant="body2" sx={{fontFamily: 'monospace', fontSize: '0.8rem'}}>
+            <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
                 {typeof result.error === 'string'
                     ? result.error
                     : result.error?.message || result.data?.test_result?.message || 'Unknown error occurred'}
@@ -283,33 +296,34 @@ const Probe = ({rule, provider, model}) => {
         <UnifiedCard
             title={"Check Status"}
             subtitle="Check model with a sample request"
-            size="full"
+            size="medium"
+            width={'100%'}
             rightAction={
                 <Button
                     variant="contained"
-                    startIcon={isProbing ? <CircularProgress size={16} color="inherit"/> : <TestIcon/>}
+                    startIcon={isProbing ? <CircularProgress size={16} color="inherit" /> : <TestIcon />}
                     onClick={handleProbe}
                     disabled={isProbing}
-                    sx={{minWidth: 140}}
+                    sx={{ minWidth: 140 }}
                 >
                     {isProbing ? 'Checking...' : 'Check'}
                 </Button>
             }
         >
-            <Box sx={{width: '100%', maxWidth: 900}}>
+            <Box sx={{ width: '100%', maxWidth: 900 }}>
                 {probeResult && !isProbing ? (
                     <Box>
-                        {probeResult.data && <StatusResponseCard result={probeResult}/>}
-                        {!probeResult.success && probeResult.error && <ErrorDetails result={probeResult}/>}
+                        {probeResult.data && <StatusResponseCard result={probeResult} />}
+                        {!probeResult.success && probeResult.error && <ErrorDetails result={probeResult} />}
                     </Box>
                 ) : (
-                    <Box sx={{textAlign: 'center', py: 8}}>
+                    <Box sx={{ textAlign: 'center', py: 8 }}>
                         {isProbing && (
-                            <Box sx={{mt: 3}}>
-                                <Typography variant="body2" color="text.secondary" sx={{mb: 2}}>
+                            <Box sx={{ mt: 3 }}>
+                                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                                     Running configuration test...
                                 </Typography>
-                                <LinearProgress sx={{height: 6, borderRadius: 3}}/>
+                                <LinearProgress sx={{ height: 6, borderRadius: 3 }} />
                             </Box>
                         )}
                     </Box>
