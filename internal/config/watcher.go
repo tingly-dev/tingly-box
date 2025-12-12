@@ -58,10 +58,6 @@ func (cw *ConfigWatcher) Start() error {
 	// Get config file path (Config uses ConfigFile)
 	configFile := cw.config.ConfigFile
 
-	// Also watch for provider config file (if it exists separately)
-	configDir := filepath.Dir(configFile)
-	providerConfigFile := filepath.Join(configDir, "config.json")
-
 	// Get initial modification time
 	if stat, err := os.Stat(configFile); err == nil {
 		cw.lastModTime = stat.ModTime()
@@ -70,18 +66,6 @@ func (cw *ConfigWatcher) Start() error {
 	// Add Config file to watcher
 	if err := cw.watcher.Add(configFile); err != nil {
 		return fmt.Errorf("failed to watch global config file: %w", err)
-	}
-
-	// Also watch provider config file if it exists
-	if _, err := os.Stat(providerConfigFile); err == nil {
-		if err := cw.watcher.Add(providerConfigFile); err != nil {
-			return fmt.Errorf("failed to watch provider config file: %w", err)
-		}
-	}
-
-	// Also watch the directory for file creation/rename
-	if err := cw.watcher.Add(configDir); err != nil {
-		return fmt.Errorf("failed to watch config directory: %w", err)
 	}
 
 	cw.running = true
