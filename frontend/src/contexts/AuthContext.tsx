@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { api } from '../services/api';
 
 interface AuthContextType {
     token: string | null;
     isAuthenticated: boolean;
     isLoading: boolean;
-    login: (token: string) => void;
+    login: (token: string) => Promise<void>;
     logout: () => void;
 }
 
@@ -28,9 +29,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     const isAuthenticated = !!token;
 
-    const login = (newToken: string) => {
+    const login = async (newToken: string) => {
         setToken(newToken);
         localStorage.setItem('user_auth_token', newToken);
+        // Initialize API instances with the new token
+        await api.initialize();
     };
 
     const logout = () => {
@@ -68,6 +71,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 // Validate token (basic validation - you can add more sophisticated checks)
                 if (finalToken && finalToken.trim() !== '') {
                     setToken(finalToken);
+                    // Initialize API instances with the token
+                    await api.initialize();
                 }
             } catch (error) {
                 console.error('Auth initialization error:', error);

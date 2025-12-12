@@ -5,15 +5,32 @@ import {
     DefaultsApi,
     HistoryApi,
     ModelsApi,
+    type ProviderResponse,
     ProvidersApi,
     RulesApi,
     ServerApi,
     TestingApi,
     TokenApi,
-    type ProviderResponse, type TokenResponse
+    type TokenResponse
 } from '../client';
 
+import { GetPort, GetUserAuthToken } from '../bindings/tingly-box/wails3/services/proxyservice';
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+
+
+// Type definition for API instances
+interface ApiInstances {
+    defaultsApi: DefaultsApi;
+    historyApi: HistoryApi;
+    modelsApi: ModelsApi;
+    providersApi: ProvidersApi;
+    rulesApi: RulesApi;
+    serverApi: ServerApi;
+    testingApi: TestingApi;
+    tokenApi: TokenApi;
+}
+
 
 // Get user auth token for UI and control API from localStorage
 const getUserAuthToken = (): string | null => {
@@ -26,10 +43,19 @@ const getModelToken = (): string | null => {
 };
 
 // Create API configuration
-const createApiConfig = () => {
-    const token = getUserAuthToken();
+const createApiConfig = async () => {
+    var token = getUserAuthToken();
+    var basePath = API_BASE_URL || undefined
+    if (import.meta.env.VITE_PKG_MODE === "gui") {
+        token = await GetUserAuthToken()
+        console.log("get token from gui", token)
+        const port = await GetPort()
+        basePath = `http://localhost:${port}`
+        console.log("get base path from gui", basePath)
+
+    }
     return new Configuration({
-        basePath: API_BASE_URL || undefined,
+        basePath: basePath,
         baseOptions: token ? {
             headers: { Authorization: `Bearer ${token}` },
             validateStatus: (status: number) => status < 500, // Don't reject on 4xx errors
@@ -40,8 +66,8 @@ const createApiConfig = () => {
 };
 
 // Create API instances
-const createApiInstances = () => {
-    const config = createApiConfig();
+const createApiInstances = async () => {
+    const config = await createApiConfig();
 
     return {
         defaultsApi: new DefaultsApi(config),
@@ -114,47 +140,40 @@ async function fetchModelAPI(url: string, options: RequestInit = {}): Promise<an
     }
 }
 
-// Type definition for API instances
-interface ApiInstances {
-    defaultsApi: DefaultsApi;
-    historyApi: HistoryApi;
-    modelsApi: ModelsApi;
-    providersApi: ProvidersApi;
-    rulesApi: RulesApi;
-    serverApi: ServerApi;
-    testingApi: TestingApi;
-    tokenApi: TokenApi;
+
+// Initialize API instances immediately
+let apiInstances: ApiInstances | null = null;
+let initializationPromise: Promise<ApiInstances> | null = null;
+
+// Async initialization function
+async function initializeApiInstances(): Promise<ApiInstances> {
+    if (!apiInstances) {
+        apiInstances = await createApiInstances();
+    }
+    return apiInstances;
 }
 
-// Type definitions for API responses and data
-interface Provider {
-    name: string;
-
-    [key: string]: any;
-}
-
-interface Rule {
-    uuid?: string;
-    rule_name?: string;
-
-    [key: string]: any;
+// Get API instances (async)
+async function getApiInstances(): Promise<ApiInstances> {
+    if (!initializationPromise) {
+        initializationPromise = initializeApiInstances();
+    }
+    return initializationPromise;
 }
 
 export const api = {
-    // Initialize API instances when needed
-    _instances: null as ApiInstances | null,
-
-    get _api(): ApiInstances {
-        if (!this._instances) {
-            this._instances = createApiInstances();
+    // Initialize API instances
+    initialize: async (): Promise<void> => {
+        if (!initializationPromise) {
+            await getApiInstances();
         }
-        return this._instances;
     },
 
     // Status endpoints
     getStatus: async (): Promise<any> => {
         try {
-            const response = await api._api.serverApi.apiV1StatusGet();
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.serverApi.apiV1StatusGet();
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
@@ -168,7 +187,8 @@ export const api = {
 
     getProviders: async (): Promise<any> => {
         try {
-            const response = await api._api.providersApi.apiV1ProvidersGet();
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.providersApi.apiV1ProvidersGet();
             const body = response.data;
             if (body.success && body.data) {
                 // Sort providers alphabetically by name to reduce UI changes
@@ -187,7 +207,8 @@ export const api = {
 
     getProviderModels: async (): Promise<any> => {
         try {
-            const response = await api._api.modelsApi.apiV1ProviderModelsGet();
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.modelsApi.apiV1ProviderModelsGet();
             const body = response.data;
             if (body.success && body.data) {
                 // Sort models within each provider alphabetically by model name
@@ -222,7 +243,8 @@ export const api = {
         try {
             // Note: The generated client has an issue with path parameters
             // We need to manually handle this for now
-            const response = await api._api.modelsApi.apiV1ProviderModelsNamePost(name);
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.modelsApi.apiV1ProviderModelsNamePost(name);
             const body = response.data
             if (body.success && body.data) {
                 // Sort models alphabetically by model name to reduce UI changes
@@ -240,7 +262,8 @@ export const api = {
 
     getHistory: async (limit?: number): Promise<any> => {
         try {
-            const response = await api._api.historyApi.apiV1HistoryGet();
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.historyApi.apiV1HistoryGet();
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
@@ -255,7 +278,8 @@ export const api = {
     // Provider management
     addProvider: async (data: any): Promise<any> => {
         try {
-            const response = await api._api.providersApi.apiV1ProvidersPost(data);
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.providersApi.apiV1ProvidersPost(data);
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
@@ -269,14 +293,16 @@ export const api = {
 
     getProvider: async (name: string) => {
         // Note: The generated client has an issue with path parameters
-        const response = await api._api.providersApi.apiV1ProvidersNameGet(name);
+        const apiInstances = await getApiInstances();
+        const response = await apiInstances.providersApi.apiV1ProvidersNameGet(name);
         return response.data;
     },
 
     updateProvider: async (name: string, data: any): Promise<any> => {
         try {
             // Note: The generated client has an issue with path parameters
-            const response = await api._api.providersApi.apiV1ProvidersNamePut(name, data);
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.providersApi.apiV1ProvidersNamePut(name, data);
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
@@ -291,7 +317,8 @@ export const api = {
     deleteProvider: async (name: string): Promise<any> => {
         try {
             // Note: The generated client has an issue with path parameters
-            const response = await api._api.providersApi.apiV1ProvidersNameDelete(name);
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.providersApi.apiV1ProvidersNameDelete(name);
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
@@ -306,7 +333,8 @@ export const api = {
     toggleProvider: async (name: string): Promise<any> => {
         try {
             // Note: The generated client has an issue with path parameters
-            const response = await api._api.providersApi.apiV1ProvidersNameTogglePost(name);
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.providersApi.apiV1ProvidersNameTogglePost(name);
             return response.data
         } catch (error: any) {
             if (error.response?.status === 401) {
@@ -321,7 +349,8 @@ export const api = {
     // Server control
     startServer: async (): Promise<any> => {
         try {
-            const response = await api._api.serverApi.apiV1ServerStartPost();
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.serverApi.apiV1ServerStartPost();
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
@@ -335,7 +364,8 @@ export const api = {
 
     stopServer: async (): Promise<any> => {
         try {
-            const response = await api._api.serverApi.apiV1ServerStopPost();
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.serverApi.apiV1ServerStopPost();
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
@@ -349,7 +379,8 @@ export const api = {
 
     restartServer: async (): Promise<any> => {
         try {
-            const response = await api._api.serverApi.apiV1ServerRestartPost();
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.serverApi.apiV1ServerRestartPost();
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
@@ -363,7 +394,8 @@ export const api = {
 
     generateToken: async (clientId: string): Promise<any> => {
         try {
-            const response = await api._api.tokenApi.apiV1TokenPost({ client_id: clientId });
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.tokenApi.apiV1TokenPost({ client_id: clientId });
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
@@ -377,7 +409,8 @@ export const api = {
 
     getToken: async (): Promise<any> => {
         try {
-            const response = await api._api.tokenApi.apiV1TokenGet();
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.tokenApi.apiV1TokenGet();
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
@@ -393,7 +426,8 @@ export const api = {
     // Rules API - Updated for new rule structure with services
     getRules: async (): Promise<any> => {
         try {
-            const response = await api._api.rulesApi.apiV1RulesGet();
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.rulesApi.apiV1RulesGet();
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
@@ -408,7 +442,8 @@ export const api = {
     getRule: async (uuid: string): Promise<any> => {
         try {
             // Note: The generated client has an issue with path parameters
-            const response = await api._api.rulesApi.apiV1RuleUuidGet(uuid);
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.rulesApi.apiV1RuleUuidGet(uuid);
             return response.data;
         } catch (error: any) {
             return { success: false, error: error.message };
@@ -418,7 +453,8 @@ export const api = {
     createRule: async (uuid: string, data: any): Promise<any> => {
         try {
             // Note: The API uses POST to /rules but generated client expects different structure
-            const response = await api._api.rulesApi.apiV1RuleUuidPost(uuid, data);
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.rulesApi.apiV1RuleUuidPost(uuid, data);
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
@@ -433,7 +469,8 @@ export const api = {
     updateRule: async (uuid: string, data: any): Promise<any> => {
         try {
             // Note: The generated client has an issue with path parameters
-            const response = await api._api.rulesApi.apiV1RuleUuidPost(uuid, data);
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.rulesApi.apiV1RuleUuidPost(uuid, data);
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
@@ -448,7 +485,8 @@ export const api = {
     deleteRule: async (uuid: string): Promise<any> => {
         try {
             // Note: The generated client has an issue with path parameters
-            const response = await api._api.rulesApi.apiV1RuleUuidDelete(uuid);
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.rulesApi.apiV1RuleUuidDelete(uuid);
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
@@ -462,7 +500,8 @@ export const api = {
 
     probeRule: async (rule: any, provider: string, model: string): Promise<any> => {
         try {
-            const response = await api._api.testingApi.apiV1ProbePost({
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.testingApi.apiV1ProbePost({
                 rule: rule,
                 provider: provider,
                 model: model,
@@ -507,13 +546,15 @@ export const api = {
     setUserToken: (token: string): void => {
         localStorage.setItem('user_auth_token', token);
         // Reset API instances to refresh token
-        api._instances = null;
+        apiInstances = null;
+        initializationPromise = null;
     },
     getUserToken: (): string | null => getUserAuthToken(),
     removeUserToken: (): void => {
         localStorage.removeItem('user_auth_token');
         // Reset API instances to clear token
-        api._instances = null;
+        apiInstances = null;
+        initializationPromise = null;
     },
     setModelToken: (token: string): void => {
         localStorage.setItem('model_token', token);
