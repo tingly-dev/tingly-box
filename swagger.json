@@ -1191,8 +1191,12 @@
   },
   "tags": [
     {
-      "name": "providers",
-      "description": "Operations related to providers"
+      "name": "defaults",
+      "description": "Operations related to defaults"
+    },
+    {
+      "name": "testing",
+      "description": "Operations related to testing"
     },
     {
       "name": "server",
@@ -1203,24 +1207,20 @@
       "description": "Operations related to rules"
     },
     {
-      "name": "testing",
-      "description": "Operations related to testing"
+      "name": "history",
+      "description": "Operations related to history"
+    },
+    {
+      "name": "models",
+      "description": "Operations related to models"
     },
     {
       "name": "token",
       "description": "Operations related to token"
     },
     {
-      "name": "history",
-      "description": "Operations related to history"
-    },
-    {
-      "name": "defaults",
-      "description": "Operations related to defaults"
-    },
-    {
-      "name": "models",
-      "description": "Operations related to models"
+      "name": "providers",
+      "description": "Operations related to providers"
     }
   ]
 }
