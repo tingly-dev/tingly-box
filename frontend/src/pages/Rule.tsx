@@ -338,9 +338,9 @@ const Rule = () => {
                                 gridTemplateColumns: {
                                     xs: '1fr',
                                     sm: 'repeat(3, 1fr)',
-                                    lg: 'repeat(5, 1fr)',
+                                    lg: 'repeat(3, 1fr)',
                                 },
-                                gap: 3,
+                                gap: 2,
                             }}
                         >
                             {configRecords.map((record) => (
@@ -387,10 +387,10 @@ const Rule = () => {
                                             <Box>
                                                 <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1.5}>
                                                     <Stack direction="row" alignItems="center" spacing={1}>
-                                                        <AutoAwesome sx={{ color: 'primary.main', fontSize: 20 }} />
-                                                        <Typography variant="subtitle1" component="div" fontWeight={600}>
-                                                            Request
-                                                        </Typography>
+                                                        {/* <AutoAwesome sx={{ color: 'primary.main', fontSize: 20 }} /> */}
+                                                        {/* <Typography variant="subtitle1" component="div" fontWeight={600}>
+                                                            Rule
+                                                        </Typography> */}
                                                         <Chip
                                                             label={record.active ? 'Active' : 'Inactive'}
                                                             color={record.active ? 'success' : 'default'}
@@ -446,16 +446,19 @@ const Rule = () => {
                                                             size="small"
                                                         />
                                                     </Stack>
-                                                    <Button
-                                                        startIcon={<AddIcon sx={{ fontSize: 16 }} />}
-                                                        onClick={() => addProvider(record.uuid)}
-                                                        variant="outlined"
-                                                        size="small"
-                                                        sx={{ minWidth: 'auto', px: 1 }}
-                                                        disabled={!record.active}
-                                                    >
-                                                        Add
-                                                    </Button>
+                                                    <Tooltip title="Add service">
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() => addProvider(record.uuid)}
+                                                            disabled={!record.active}
+                                                            sx={{
+                                                                padding: 1,
+                                                                '&:hover': { bgcolor: 'action.hover' }
+                                                            }}
+                                                        >
+                                                            <AddIcon fontSize="small" />
+                                                        </IconButton>
+                                                    </Tooltip>
                                                 </Stack>
 
                                                 <ServiceSection>
@@ -646,7 +649,7 @@ const Rule = () => {
                                             </Box>
                                         </Stack>
                                     </CardContent>
-                                    <CardActions sx={{ px: 2, pb: 2, justifyContent: 'flex-end', gap: 1 }}>
+                                    <CardActions sx={{ px: 2, pb: 2, justifyContent: 'center', gap: 1 }}>
                                         <Button
                                             variant="contained"
                                             color="primary"

@@ -1,13 +1,16 @@
 {
-  "name": "frontend",
+  "name": "tingly-model-box",
   "private": true,
   "version": "0.0.0",
+  "type": "module",
   "scripts": {
-    "dev": "vite --mode development",
+    "dev": "vite --mode development --port 9245",
     "dev:mock": "vite --mode mock",
     "dev:real": "vite --mode production",
     "build:dev": "vite build --minify false --mode development",
+    "build:dev:gui": "vite build --mode development-wails",
     "build": "vite build --mode production",
+    "build:wails": "vite build --mode production-wails",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -23,6 +26,7 @@
     "react-router-dom": "^7.10.1"
   },
   "devDependencies": {
+    "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react-swc": "^4.2.2",
     "vite": "^7.2.7",
     "vite-plugin-mock": "^3.0.2"

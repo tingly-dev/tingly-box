@@ -39,6 +39,24 @@ tasks:
     cmds:
       - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
   
+  wails:binding:
+    cmds:
+      - wails3 generate bindings -ts -f '-buildvcs=false -gcflags=all="-l"' -clean=true ./wails3 -d frontend/src/bindings
+      
+  wails:manual:
+    cmds:
+      - cd frontend; pnpm build:wails
+      - |
+        mkdir -p wails3/frontend/dist/
+        cp -R frontend/dist/* wails3/frontend/dist/
+      - |
+        go build -tags debug -trimpath -buildvcs=false -ldflags="-w -s" -o bin/model-box ./wails3
+        mkdir -p bin/ModelBox.app/Contents/{MacOS,Resources}
+        cp build/darwin/icons.icns bin/ModelBox.app/Contents/Resources
+        cp bin/model-box bin/ModelBox.app/Contents/MacOS
+        cp build/darwin/Info.plist bin/ModelBox.app/Contents
+        codesign --force --deep --sign - bin/ModelBox.app
+        
   codegen:
     cmds:
       - |
@@ -93,6 +111,14 @@ tasks:
       - |
         cp -R frontend/dist/* internal/server/web/dist/
   
+  ui:dist-dev:
+    cmds:
+      - |
+        cd frontend; pnpm build:dev
+      - |
+        mkdir -p internal/server/web/dist/
+        cp -R frontend/dist/* internal/server/web/dist/
+        
   gui:build:
     cmds:
       - |
@@ -110,19 +136,19 @@ tasks:
         
         # Build for Windows (amd64)
         echo "Building for Windows (amd64)..."
-        GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.version={{.VERSION}}" -o {{.DIST_DIR}}/tingly-{{.VERSION}}-windows-amd64.exe ./cmd/tingly
+        GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.version={{.VERSION}}" -o {{.DIST_DIR}}/{{.BIN_NAME}}-{{.VERSION}}-windows-amd64.exe ./cmd/tingly
         
         # Build for Linux (amd64)
         echo "Building for Linux (amd64)..."
-        GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version={{.VERSION}}" -o {{.DIST_DIR}}/tingly-{{.VERSION}}-linux-amd64 ./cmd/tingly
+        GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version={{.VERSION}}" -o {{.DIST_DIR}}/{{.BIN_NAME}}-{{.VERSION}}-linux-amd64 ./cmd/tingly
         
         # Build for macOS (amd64)
         echo "Building for macOS (amd64)..."
-        GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X main.version={{.VERSION}}" -o {{.DIST_DIR}}/tingly-{{.VERSION}}-darwin-amd64 ./cmd/tingly
+        GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X main.version={{.VERSION}}" -o {{.DIST_DIR}}/{{.BIN_NAME}}-{{.VERSION}}-darwin-amd64 ./cmd/tingly
         
         # Build for macOS (arm64)
         echo "Building for macOS (arm64)..."
-        GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X main.version={{.VERSION}}" -o {{.DIST_DIR}}/tingly-{{.VERSION}}-darwin-arm64 ./cmd/tingly
+        GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X main.version={{.VERSION}}" -o {{.DIST_DIR}}/{{.BIN_NAME}}-{{.VERSION}}-darwin-arm64 ./cmd/tingly
         
         # Create archives
         echo "Creating archives..."
