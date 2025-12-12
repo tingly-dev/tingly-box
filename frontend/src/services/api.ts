@@ -11,7 +11,7 @@ import {
     RulesApi,
     ServerApi,
     TestingApi,
-    TokenApi
+    TokenApi, type TokenResponse
 } from '../client';
 
 // Cache for dynamically imported ProxyService
@@ -74,6 +74,8 @@ export const getBaseUrl = async (): Promise<string> => {
                 console.error('Failed to get port from ProxyService:', err);
             }
         }
+    } else {
+        basePath =  window.location.href.replace(/\/$/, "")
     }
 
     return basePath
@@ -611,7 +613,6 @@ export const api = {
     setModelToken: (token: string): void => {
         localStorage.setItem('model_token', token);
     },
-    getModelToken: (): string | null => getModelToken(),
     removeModelToken: (): void => {
         localStorage.removeItem('model_token');
     },
