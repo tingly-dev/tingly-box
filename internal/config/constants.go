@@ -1,6 +1,9 @@
 package config
 
-import "path/filepath"
+import (
+	"path/filepath"
+	"time"
+)
 
 const (
 	// ConfigDirName is the main configuration directory name
@@ -8,6 +11,9 @@ const (
 
 	// ModelsDirName is the subdirectory for provider model configurations
 	ModelsDirName = "models"
+
+	// RequestTimeout is the default timeout for HTTP requests in seconds
+	RequestTimeout = 60 * time.Second
 )
 
 // GetTinglyConfDir returns the config directory path
