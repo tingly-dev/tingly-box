@@ -2,7 +2,7 @@
 
 import {
     Configuration,
-    DefaultsApi,
+    DefaultsApi, type FetchProviderModelsResponse,
     HistoryApi,
     ModelsApi,
     type ProviderResponse,
@@ -10,8 +10,7 @@ import {
     RulesApi,
     ServerApi,
     TestingApi,
-    TokenApi,
-    type TokenResponse
+    TokenApi
 } from '../client';
 
 import { GetPort, GetUserAuthToken } from '../bindings/tingly-box/wails3/services/proxyservice';
@@ -239,7 +238,7 @@ export const api = {
         }
     },
 
-    getProviderModelsByName: async (name: string): Promise<TokenResponse> => {
+    getProviderModelsByName: async (name: string): Promise<FetchProviderModelsResponse> => {
         try {
             // Note: The generated client has an issue with path parameters
             // We need to manually handle this for now
