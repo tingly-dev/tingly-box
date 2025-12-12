@@ -17,28 +17,31 @@ import {
     Tooltip,
     Typography
 } from '@mui/material';
-import React, { useEffect, useState } from 'react';
-import { PageLayout } from '../components/PageLayout';
+import React, {useEffect, useState} from 'react';
+import {useNavigate} from 'react-router-dom';
+import {PageLayout} from '../components/PageLayout';
 import Probe from '../components/Probe';
-import ProviderSelectTab, { type ProviderSelectTabOption } from "../components/ProviderSelectTab.tsx";
+import ProviderSelectTab, {type ProviderSelectTabOption} from "../components/ProviderSelectTab.tsx";
 import UnifiedCard from '../components/UnifiedCard';
-import ProviderFormDialog, { type ProviderFormData } from '../components/ui/ProviderFormDialog';
-import { api } from '../services/api';
+import ProviderFormDialog, {type ProviderFormData} from '../components/ui/ProviderFormDialog';
+import {api, getBaseUrl} from '../services/api';
 
 const defaultRule = "tingly"
 const defaultRuleUUID = "tingly"
 
 
 const Dashboard = () => {
+    const navigate = useNavigate();
     const [providers, setProviders] = useState<any[]>([]);
     const [rule, setRule] = useState<any>({});
     const [providerModels, setProviderModels] = useState<any>({});
     const [loading, setLoading] = useState(true);
-    const [selectedOption, setSelectedOption] = useState<any>({ provider: "", model: "" });
+    const [selectedOption, setSelectedOption] = useState<any>({provider: "", model: ""});
+    const [baseUrl, setBaseUrl] = useState<string>("");
 
     // Server info states
     const [generatedToken, setGeneratedToken] = useState<string>('');
-    const [modelToken, setModelToken] = useState<string>('');
+    const [apiKey, setApiKey] = useState<string>('');
     const [showTokenModal, setShowTokenModal] = useState(false);
 
     // Banner state for provider/model selection
@@ -54,7 +57,7 @@ const Dashboard = () => {
         autoHideDuration?: number;
         customContent?: React.ReactNode;
         onClose?: () => void;
-    }>({ open: false });
+    }>({open: false});
 
     // Helper function to show notifications
     const showNotification = (message: string, severity: 'success' | 'info' | 'warning' | 'error' = 'info', autoHideDuration: number = 6000) => {
@@ -63,7 +66,7 @@ const Dashboard = () => {
             message,
             severity,
             autoHideDuration,
-            onClose: () => setNotification(prev => ({ ...prev, open: false }))
+            onClose: () => setNotification(prev => ({...prev, open: false}))
         });
     };
 
@@ -85,7 +88,7 @@ const Dashboard = () => {
                 severity: 'info',
                 onClose: () => {
                     setShowBanner(false);
-                    setNotification(prev => ({ ...prev, open: false }));
+                    setNotification(prev => ({...prev, open: false}));
                 }
             });
         }
@@ -96,7 +99,7 @@ const Dashboard = () => {
         if (showBanner) {
             showBannerNotification();
         } else {
-            setNotification(prev => ({ ...prev, open: false }));
+            setNotification(prev => ({...prev, open: false}));
         }
     }, [showBanner, bannerProvider, bannerModel]);
 
@@ -109,10 +112,17 @@ const Dashboard = () => {
         token: '',
     });
 
+    const loadBaseUrl = async () => {
+        const baseUrl = await getBaseUrl()
+        setBaseUrl(baseUrl)
+    }
+
     useEffect(() => {
+        loadBaseUrl()
         loadData();
         loadToken();
     }, []);
+
 
     // Update selected option when rules are loaded
     useEffect(() => {
@@ -132,14 +142,16 @@ const Dashboard = () => {
 
     const loadToken = async () => {
         const result = await api.getToken();
-        if (result.success && result.data && result.data.token) {
-            setModelToken(result.data.token);
+        console.log(result)
+        if (result.token) {
+            setApiKey(result.token);
         }
     };
 
     const loadData = async () => {
         setLoading(true);
         await Promise.all([
+            loadBaseUrl(),
             loadProviders(),
             loadProviderModels(),
             loadRule(),
@@ -158,42 +170,8 @@ const Dashboard = () => {
         const result = await api.getRule(defaultRule);
         if (result.success) {
             setRule(result.data);
-        } else {
-            // If the 'tingly' rule doesn't exist, create a default one
-            await createDefaultTinglyRule();
         }
-    };
-
-    const createDefaultTinglyRule = async () => {
-        try {
-            // Create a default rule with empty services
-            // This will be filled when user selects a provider and model
-            const defaultRuleData = {
-                active: true,
-                services: [],
-            };
-
-            const result = await api.createRule(
-                defaultRuleUUID,
-                {
-                    name: defaultRule,
-                    ...defaultRuleData
-                });
-            if (result.success) {
-                // Reload the rule after creating it
-                const reloadResult = await api.getRule(defaultRule);
-                if (reloadResult.success) {
-                    setRule(reloadResult.data);
-                }
-            } else {
-                console.error(`Failed to create default '${defaultRule}' rule:`, result.error);
-                // Show notification to user about the failure
-                showNotification(`Failed to create default rule: ${result.error}`, 'error');
-            }
-        } catch (error) {
-            console.error(`Error creating default '${defaultRule}' rule:`, error);
-            showNotification(`Error creating default rule`, 'error');
-        }
+        // Remove automatic rule creation - rule should only be created when user selects a provider/model
     };
 
     const loadProviderModels = async () => {
@@ -226,7 +204,7 @@ const Dashboard = () => {
 
     // Composition handlers for provider select
     const handleModelSelect = async (provider: any, model: string) => {
-        setSelectedOption({ provider: provider.name, model: model });
+        setSelectedOption({provider: provider.name, model: model});
 
         try {
             // Update the "tingly" rule with the selected provider and model
@@ -341,12 +319,11 @@ const Dashboard = () => {
         }
     };
 
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || window.location.origin;
     const openaiBaseUrl = `${baseUrl}/openai`;
     const anthropicBaseUrl = `${baseUrl}/anthropic`;
-    const token = generatedToken || modelToken;
+    const token = generatedToken || apiKey;
 
-    const TokenModal = () => {
+    const ApiKeyModal = () => {
         return (
             <Dialog
                 open={showTokenModal}
@@ -356,28 +333,38 @@ const Dashboard = () => {
             >
                 <DialogTitle>API Token</DialogTitle>
                 <DialogContent>
-                    <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    <Box sx={{mb: 2}}>
+                        <Typography variant="body2" color="text.secondary" sx={{mb: 1}}>
                             Your authentication token:
                         </Typography>
-                        <Box sx={{
-                            p: 2,
-                            bgcolor: 'grey.100',
-                            borderRadius: 1,
-                            fontFamily: 'monospace',
-                            fontSize: '0.85rem',
-                            wordBreak: 'break-all',
-                            border: '1px solid',
-                            borderColor: 'grey.300'
-                        }}>
+                        <Box
+                            onClick={() => copyToClipboard(token, 'API Token')}
+                            sx={{
+                                p: 2,
+                                bgcolor: 'grey.100',
+                                borderRadius: 1,
+                                fontFamily: 'monospace',
+                                fontSize: '0.85rem',
+                                wordBreak: 'break-all',
+                                border: '1px solid',
+                                borderColor: 'grey.300',
+                                cursor: 'pointer',
+                                '&:hover': {
+                                    backgroundColor: 'grey.200',
+                                    borderColor: 'primary.main'
+                                },
+                                transition: 'all 0.2s ease-in-out',
+                                title: 'Click to copy token'
+                            }}
+                        >
                             {token}
                         </Box>
                     </Box>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Box sx={{display: 'flex', gap: 1}}>
                         <Button
                             variant="outlined"
                             onClick={() => copyToClipboard(token, 'API Token')}
-                            startIcon={<CopyIcon fontSize="small" />}
+                            startIcon={<CopyIcon fontSize="small"/>}
                         >
                             Copy Token
                         </Button>
@@ -406,26 +393,26 @@ const Dashboard = () => {
                         },
                     }}
                 >
-                    <AddIcon sx={{ fontSize: 40 }} />
+                    <AddIcon sx={{fontSize: 40}}/>
                 </IconButton>
-                <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>
+                <Typography variant="h5" sx={{fontWeight: 600, mb: 2}}>
                     No Providers Available
                 </Typography>
                 <Typography variant="body1" color="text.secondary"
-                    sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
+                            sx={{mb: 3, maxWidth: 500, mx: 'auto'}}>
                     Get started by adding your first AI provider. You can connect to OpenAI, Anthropic, or
                     any compatible API endpoint.
                 </Typography>
                 <Typography variant="body2" color="text.secondary"
-                    sx={{ mb: 4, maxWidth: 400, mx: 'auto' }}>
-                    <strong>Steps to get started:</strong><br />
-                    1. Click the + button to add a provider<br />
-                    2. Configure your API credentials<br />
+                            sx={{mb: 4, maxWidth: 400, mx: 'auto'}}>
+                    <strong>Steps to get started:</strong><br/>
+                    1. Click the + button to add a provider<br/>
+                    2. Configure your API credentials<br/>
                     3. Select your preferred model
                 </Typography>
                 <Button
                     variant="contained"
-                    startIcon={<AddIcon />}
+                    startIcon={<AddIcon/>}
                     onClick={handleAddProviderClick}
                     size="large"
                 >
@@ -439,33 +426,50 @@ const Dashboard = () => {
     const Header = () => {
         return (
             <>
-                <Grid container spacing={2}>
-                    <Grid size={{ xs: 12, md: 6 }}>
-                        <Stack spacing={1}>
+                <Grid container spacing={3}>
+                    <Grid size={{xs: 12, md: 6}}>
+                        <Stack spacing={2}>
                             {/* OpenAI Row */}
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Typography variant="body2" color="text.secondary" sx={{ minWidth: 80 }}>
+                            <Box sx={{display: 'flex', alignItems: 'center', gap: 2}}>
+                                <Typography
+                                    variant="body2"
+                                    color="text.secondary"
+                                    sx={{
+                                        minWidth: 120,
+                                        flexShrink: 0,
+                                        fontWeight: 500
+                                    }}
+                                >
                                     OpenAI Base URL:
                                 </Typography>
                                 <Typography
                                     variant="body2"
+                                    onClick={() => copyToClipboard(openaiBaseUrl, 'OpenAI Base URL')}
                                     sx={{
                                         fontFamily: 'monospace',
-                                        fontSize: '0.7rem',
+                                        fontSize: '0.75rem',
                                         color: 'primary.main',
                                         flex: 1,
-                                        minWidth: 0
+                                        cursor: 'pointer',
+                                        '&:hover': {
+                                            textDecoration: 'underline',
+                                            backgroundColor: 'action.hover'
+                                        },
+                                        padding: 1,
+                                        borderRadius: 1,
+                                        transition: 'all 0.2s ease-in-out'
                                     }}
+                                    title="Click to copy OpenAI Base URL"
                                 >
                                     {baseUrl}/openai
                                 </Typography>
-                                <Stack direction="row" spacing={0.2}>
+                                <Stack direction="row" spacing={0.5} sx={{flexShrink: 0}}>
                                     <IconButton
                                         onClick={() => copyToClipboard(openaiBaseUrl, 'OpenAI Base URL')}
                                         size="small"
                                         title="Copy OpenAI Base URL"
                                     >
-                                        <CopyIcon fontSize="small" />
+                                        <CopyIcon fontSize="small"/>
                                     </IconButton>
                                     <IconButton
                                         onClick={() => {
@@ -475,35 +479,52 @@ const Dashboard = () => {
                                         size="small"
                                         title="Copy OpenAI cURL Example"
                                     >
-                                        <TerminalIcon fontSize="small" />
+                                        <TerminalIcon fontSize="small"/>
                                     </IconButton>
                                 </Stack>
                             </Box>
 
                             {/* Anthropic Row */}
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Typography variant="body2" color="text.secondary" sx={{ minWidth: 80 }}>
+                            <Box sx={{display: 'flex', alignItems: 'center', gap: 2}}>
+                                <Typography
+                                    variant="body2"
+                                    color="text.secondary"
+                                    sx={{
+                                        minWidth: 120,
+                                        flexShrink: 0,
+                                        fontWeight: 500
+                                    }}
+                                >
                                     Anthropic Base URL:
                                 </Typography>
                                 <Typography
                                     variant="body2"
+                                    onClick={() => copyToClipboard(anthropicBaseUrl, 'Anthropic Base URL')}
                                     sx={{
                                         fontFamily: 'monospace',
-                                        fontSize: '0.7rem',
+                                        fontSize: '0.75rem',
                                         color: 'primary.main',
                                         flex: 1,
-                                        minWidth: 0
+                                        cursor: 'pointer',
+                                        '&:hover': {
+                                            textDecoration: 'underline',
+                                            backgroundColor: 'action.hover'
+                                        },
+                                        padding: 1,
+                                        borderRadius: 1,
+                                        transition: 'all 0.2s ease-in-out'
                                     }}
+                                    title="Click to copy Anthropic Base URL"
                                 >
                                     {baseUrl}/anthropic
                                 </Typography>
-                                <Stack direction="row" spacing={0.2}>
+                                <Stack direction="row" spacing={0.5} sx={{flexShrink: 0}}>
                                     <IconButton
                                         onClick={() => copyToClipboard(anthropicBaseUrl, 'Anthropic Base URL')}
                                         size="small"
                                         title="Copy Anthropic Base URL"
                                     >
-                                        <CopyIcon fontSize="small" />
+                                        <CopyIcon fontSize="small"/>
                                     </IconButton>
                                     <IconButton
                                         onClick={() => {
@@ -513,18 +534,26 @@ const Dashboard = () => {
                                         size="small"
                                         title="Copy Anthropic cURL Example"
                                     >
-                                        <TerminalIcon fontSize="small" />
+                                        <TerminalIcon fontSize="small"/>
                                     </IconButton>
                                 </Stack>
                             </Box>
                         </Stack>
                     </Grid>
 
-                    <Grid size={{ xs: 12, md: 6 }}>
-                        <Stack spacing={1}>
+                    <Grid size={{xs: 12, md: 6}}>
+                        <Stack spacing={2}>
                             {/* Token Row */}
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Typography variant="body2" color="text.secondary" sx={{ minWidth: 60 }}>
+                            <Box sx={{display: 'flex', alignItems: 'center', gap: 2}}>
+                                <Typography
+                                    variant="body2"
+                                    color="text.secondary"
+                                    sx={{
+                                        minWidth: 120,
+                                        flexShrink: 0,
+                                        fontWeight: 500
+                                    }}
+                                >
                                     LLM API KEY:
                                 </Typography>
                                 <Typography
@@ -535,12 +564,13 @@ const Dashboard = () => {
                                         color: 'text.secondary',
                                         letterSpacing: '2px',
                                         flex: 1,
-                                        minWidth: 0
+                                        cursor: 'default',
+                                        userSelect: 'none'
                                     }}
                                 >
                                     ••••••••••••••••
                                 </Typography>
-                                <Stack direction="row" spacing={0.2}>
+                                <Stack direction="row" spacing={0.5} sx={{flexShrink: 0}}>
                                     <Tooltip title="View Token">
                                         <IconButton
                                             onClick={() => setShowTokenModal(true)}
@@ -556,42 +586,60 @@ const Dashboard = () => {
                                         size="small"
                                         title="Generate New Token"
                                     >
-                                        <RefreshIcon fontSize="small" />
+                                        <RefreshIcon fontSize="small"/>
                                     </IconButton>
                                     <IconButton
                                         onClick={() => copyToClipboard(token, 'API Token')}
                                         size="small"
                                         title="Copy Token"
                                     >
-                                        <CopyIcon fontSize="small" />
+                                        <CopyIcon fontSize="small"/>
                                     </IconButton>
                                 </Stack>
                             </Box>
 
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Typography variant="body2" color="text.secondary" sx={{ minWidth: 60 }}>
+                            {/* Model Row */}
+                            <Box sx={{display: 'flex', alignItems: 'center', gap: 2}}>
+                                <Typography
+                                    variant="body2"
+                                    color="text.secondary"
+                                    sx={{
+                                        minWidth: 120,
+                                        flexShrink: 0,
+                                        fontWeight: 500
+                                    }}
+                                >
                                     LLM API Model:
                                 </Typography>
                                 <Typography
                                     variant="body2"
+                                    onClick={() => copyToClipboard('tingly', 'LLM API Model')}
                                     sx={{
                                         fontFamily: 'monospace',
                                         fontSize: '0.8rem',
                                         color: 'text.secondary',
                                         letterSpacing: '2px',
                                         flex: 1,
-                                        minWidth: 0
+                                        cursor: 'pointer',
+                                        '&:hover': {
+                                            textDecoration: 'underline',
+                                            backgroundColor: 'action.hover'
+                                        },
+                                        padding: 1,
+                                        borderRadius: 1,
+                                        transition: 'all 0.2s ease-in-out'
                                     }}
+                                    title="Click to copy LLM API Model"
                                 >
                                     tingly
                                 </Typography>
-                                <Stack direction="row" spacing={0.2}>
+                                <Stack direction="row" spacing={0.5} sx={{flexShrink: 0}}>
                                     <IconButton
-                                        onClick={() => copyToClipboard(token, 'API Token')}
+                                        onClick={() => copyToClipboard('tingly', 'LLM API Model')}
                                         size="small"
-                                        title="Copy Token"
+                                        title="Copy Model"
                                     >
-                                        <CopyIcon fontSize="small" />
+                                        <CopyIcon fontSize="small"/>
                                     </IconButton>
                                 </Stack>
                             </Box>
@@ -608,51 +656,51 @@ const Dashboard = () => {
         >
             {/* Server Information Header */}
             <UnifiedCard
-                title="Switch Provider & Model"
-                subtitle={`Total: ${providers.length} providers | Enabled: ${providers.filter((p: any) => p.enabled).length}`}
-                size="full"
+                title="Use API"
+                // subtitle={`Total: ${providers.length} providers | Enabled: ${providers.filter((p: any) => p.enabled).length}`}
+                size="header"
+
+            >
+                <Header></Header>
+            </UnifiedCard>
+
+            <UnifiedCard
+                title="Choose Model"
+                size={"full"}
                 rightAction={
                     <Box>
                         <Button
                             variant="contained"
-                            onClick={() => window.location.href = '/providers'}
+                            onClick={() => navigate('/providers')}
                         >
                             Manage Providers
                         </Button>
                     </Box>
                 }
             >
-                <Grid>
-                    <Header></Header>
 
+                {providers.length > 0 ? (
+                    <Stack spacing={2}>
+                        <ProviderSelectTab
+                            providers={providers}
+                            providerModels={providerModels}
+                            selectedProvider={selectedOption?.provider}
+                            selectedModel={selectedOption?.model}
+                            onSelected={(opt: ProviderSelectTabOption) => handleModelSelect(opt.provider, opt.model || "")}
+                            onRefresh={handleModelRefresh}
+                        />
 
-                    {providers.length > 0 ? (
-
-                        <Grid size={{ xs: 12, md: 12 }}>
-                            <Stack spacing={2}>
-                                <ProviderSelectTab
-                                    providers={providers}
-                                    providerModels={providerModels}
-                                    selectedProvider={selectedOption?.provider}
-                                    selectedModel={selectedOption?.model}
-                                    onSelected={(opt: ProviderSelectTabOption) => handleModelSelect(opt.provider, opt.model || "")}
-                                    onRefresh={handleModelRefresh}
-                                />
-
-                            </Stack>
-                        </Grid>
-                    ) : (
-                        <Guiding></Guiding>
-                    )}
-                </Grid>
-
+                    </Stack>
+                ) : (
+                    <Guiding></Guiding>
+                )}
             </UnifiedCard>
 
             {/* Probe Component */}
-            <Probe rule="tingly" provider={selectedOption.provider} model={selectedOption.model} />
+            <Probe rule="tingly" provider={selectedOption.provider} model={selectedOption.model}/>
 
             {/* Token Modal */}
-            <TokenModal></TokenModal>
+            <ApiKeyModal></ApiKeyModal>
 
             {/* Add Provider Dialog */}
             <ProviderFormDialog
@@ -663,7 +711,7 @@ const Dashboard = () => {
                 onChange={handleProviderFormChange}
                 mode="add"
             />
-        </PageLayout >
+        </PageLayout>
     );
 };
 

@@ -9,7 +9,6 @@ import (
 
 	"tingly-box/internal/config"
 	"tingly-box/internal/server"
-	"tingly-box/pkg/utils"
 
 	"github.com/spf13/cobra"
 )
@@ -20,7 +19,8 @@ const PidFile = "tingly-server.pid"
 // StartCommand represents the start server command
 func StartCommand(appConfig *config.AppConfig) *cobra.Command {
 	var port int
-	var enableUI bool
+	var useUI bool
+	var useDebug bool
 
 	cmd := &cobra.Command{
 		Use:   "start",
@@ -28,7 +28,7 @@ func StartCommand(appConfig *config.AppConfig) *cobra.Command {
 		Long: `Start the Tingly Box HTTP server that provides the unified API endpoint.
 The server will handle request routing to configured AI providers.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			serverManager := utils.NewServerManagerWithOptions(appConfig, enableUI)
+			serverManager := server.NewServerManagerWithOptions(appConfig, useUI)
 
 			// Check if server is already running
 			if serverManager.IsRunning() {
@@ -43,7 +43,11 @@ The server will handle request routing to configured AI providers.`,
 			// Start server in goroutine to keep it non-blocking
 			serverErr := make(chan error, 1)
 			go func() {
-				serverErr <- serverManager.Start()
+				if useDebug {
+					serverErr <- serverManager.Debug()
+				} else {
+					serverErr <- serverManager.Start()
+				}
 			}()
 
 			// Wait for either server error, shutdown signal, or web UI stop request
@@ -61,7 +65,8 @@ The server will handle request routing to configured AI providers.`,
 	}
 
 	cmd.Flags().IntVarP(&port, "port", "p", 8080, "Server port (default: 8080)")
-	cmd.Flags().BoolVarP(&enableUI, "ui", "u", true, "Enable web UI (default: true)")
+	cmd.Flags().BoolVarP(&useUI, "ui", "u", true, "Enable web UI (default: true)")
+	cmd.Flags().BoolVar(&useDebug, "debug", false, "Enable debug and openapi (default: false)")
 	return cmd
 }
 
@@ -73,7 +78,7 @@ func StopCommand(appConfig *config.AppConfig) *cobra.Command {
 		Long: `Stop the running Tingly Box HTTP server gracefully.
 All ongoing requests will be completed before shutdown.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			serverManager := utils.NewServerManager(appConfig)
+			serverManager := server.NewServerManager(appConfig)
 
 			if !serverManager.IsRunning() {
 				fmt.Println("Server is not running")
@@ -102,7 +107,7 @@ func StatusCommand(appConfig *config.AppConfig) *cobra.Command {
 show configuration information including number of providers and server port.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			providers := appConfig.ListProviders()
-			serverManager := utils.NewServerManager(appConfig)
+			serverManager := server.NewServerManager(appConfig)
 			serverRunning := serverManager.IsRunning()
 
 			fmt.Println("=== Tingly Box Status ===")
@@ -146,7 +151,7 @@ This command will stop the current server (if running) and start a new instance.
 The restart is graceful - ongoing requests will be completed before shutdown.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// First, clean up any existing PID file to simulate a stop
-			serverManager := utils.NewServerManager(appConfig)
+			serverManager := server.NewServerManager(appConfig)
 			wasRunning := serverManager.IsRunning()
 
 			if wasRunning {
@@ -163,7 +168,7 @@ The restart is graceful - ongoing requests will be completed before shutdown.`,
 			}
 
 			// Create a new server manager for starting
-			newServerManager := utils.NewServerManager(appConfig)
+			newServerManager := server.NewServerManager(appConfig)
 
 			// Start server with new configuration
 			fmt.Println("Starting server...")

@@ -1,7 +1,9 @@
 import {
     CheckCircle as CheckIcon,
+    Logout as CompletionIcon,
     Error as ErrorIcon,
     ExpandMore as ExpandMoreIcon,
+    Login as PromptIcon,
     PlayArrow as TestIcon,
     Timer as TimerIcon,
     Token as TokenIcon
@@ -125,14 +127,18 @@ const Probe = ({ rule, provider, model }) => {
                                 {result.success ? 'Success' : 'Failed'}
                             </Typography>
                             {result.data && (
-                                <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'nowrap' }}>
+                                <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flexWrap: 'nowrap' }}>
                                     {result.data.rule_tested && (
                                         <Chip
                                             label={result.data.rule_tested.provider}
                                             size="small"
                                             variant="filled"
                                             color="primary"
-                                            sx={{ fontFamily: 'monospace', fontSize: '0.6rem', height: 18, minWidth: 'auto' }}
+                                            sx={{
+                                                fontFamily: 'monospace',
+                                                height: 24,
+                                                minWidth: 'auto'
+                                            }}
                                         />
                                     )}
                                     {result.data.rule_tested && (
@@ -140,19 +146,38 @@ const Probe = ({ rule, provider, model }) => {
                                             label={result.data.rule_tested.model}
                                             size="small"
                                             variant="outlined"
-                                            sx={{ fontFamily: 'monospace', fontSize: '0.6rem', height: 18, minWidth: 'auto' }}
+                                            sx={{
+                                                fontFamily: 'monospace',
+                                                height: 24,
+                                                minWidth: 'auto'
+                                            }}
                                         />
                                     )}
-                                    <Stack direction="row" alignItems="center" spacing={0.3}>
-                                        <TimerIcon sx={{ fontSize: 11, color: 'text.secondary' }} />
-                                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', whiteSpace: 'nowrap' }}>
-                                            {result.data.request?.processing_time_ms || 0}ms
+
+                                    <Stack direction="row" spacing={1.5}>
+                                        <Stack direction="row" alignItems="center" spacing={0.5}>
+                                            <PromptIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                                            <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                                                Prompt:{result.data.response?.usage?.prompt_tokens || 0}
+                                            </Typography>
+                                        </Stack>
+                                        <Stack direction="row" alignItems="center" spacing={0.5}>
+                                            <CompletionIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                                            <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                                                Completion:{result.data.response?.usage?.completion_tokens || 0}
+                                            </Typography>
+                                        </Stack>
+                                    </Stack>
+                                    <Stack direction="row" alignItems="center" spacing={0.5}>
+                                        <TokenIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                                        <Typography variant="body2" color="text.secondary">
+                                            {result.data.response?.usage?.total_tokens || 0} tokens
                                         </Typography>
                                     </Stack>
-                                    <Stack direction="row" alignItems="center" spacing={0.3}>
-                                        <TokenIcon sx={{ fontSize: 11, color: 'text.secondary' }} />
-                                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', whiteSpace: 'nowrap' }}>
-                                            {result.data.response?.usage?.total_tokens || 0}t
+                                    <Stack direction="row" alignItems="center" spacing={0.5}>
+                                        <TimerIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                                        <Typography variant="body2" color="text.secondary">
+                                            {result.data.request?.processing_time_ms || 0}ms
                                         </Typography>
                                     </Stack>
                                 </Stack>
@@ -187,7 +212,11 @@ const Probe = ({ rule, provider, model }) => {
                     </Box>
 
                     <Box sx={{ p: 2, bgcolor: result.success ? 'success.50' : 'error.50' }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, color: result.success ? 'success.dark' : 'error.dark' }}>
+                        <Typography variant="body2" sx={{
+                            fontWeight: 600,
+                            mb: 1,
+                            color: result.success ? 'success.dark' : 'error.dark'
+                        }}>
                             Response
                         </Typography>
                         <Paper
@@ -265,9 +294,10 @@ const Probe = ({ rule, provider, model }) => {
 
     return (
         <UnifiedCard
-            title="Configuration Probe"
-            subtitle="Test rule validation with a sample request"
-            size="full"
+            title={"Check Status"}
+            subtitle="Check model with a sample request"
+            size="medium"
+            width={'100%'}
             rightAction={
                 <Button
                     variant="contained"
@@ -276,7 +306,7 @@ const Probe = ({ rule, provider, model }) => {
                     disabled={isProbing}
                     sx={{ minWidth: 140 }}
                 >
-                    {isProbing ? 'Testing...' : 'Run Test'}
+                    {isProbing ? 'Checking...' : 'Check'}
                 </Button>
             }
         >

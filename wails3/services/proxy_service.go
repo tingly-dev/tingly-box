@@ -8,7 +8,6 @@ import (
 
 	"tingly-box/internal/config"
 	"tingly-box/internal/server"
-	"tingly-box/pkg/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -17,7 +16,7 @@ import (
 // ProxyService manages the web UI and HTTP server functionality
 type ProxyService struct {
 	appConfig     *config.AppConfig
-	serverManager *utils.ServerManager
+	serverManager *server.ServerManager
 	httpServer    *server.Server
 	shutdownChan  chan struct{}
 	isRunning     bool
@@ -31,7 +30,7 @@ func NewUIService(configDir string, port int) (*ProxyService, error) {
 		return nil, fmt.Errorf("failed to create app config: %w", err)
 	}
 
-	serverManager := utils.NewServerManagerWithOptions(appConfig, true)
+	serverManager := server.NewServerManagerWithOptions(appConfig, true)
 	serverManager.Setup(port)
 
 	res := &ProxyService{
@@ -116,5 +115,11 @@ func (s *ProxyService) ServiceShutdown(ctx context.Context) error {
 }
 
 func (s *ProxyService) GetUserAuthToken() string {
+	fmt.Println("Getting auth token")
 	return s.appConfig.GetGlobalConfig().GetUserToken()
+}
+
+func (s *ProxyService) GetPort() int {
+	fmt.Println("Getting port")
+	return s.appConfig.GetGlobalConfig().GetServerPort()
 }

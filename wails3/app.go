@@ -2,8 +2,6 @@ package main
 
 import (
 	"log"
-	"net/http"
-	"strings"
 	"time"
 
 	"tingly-box/internal/util"
@@ -23,7 +21,7 @@ var uiService *services.ProxyService
 func newApp() *application.App {
 	// Create UI service
 	home, err := util.GetUserPath()
-	uiService, err = services.NewUIService(home, 18080)
+	uiService, err = services.NewUIService(home, 12580)
 	if err != nil {
 		log.Fatalf("Failed to create UI service: %v", err)
 	}
@@ -31,37 +29,46 @@ func newApp() *application.App {
 	// Create a new Wails application by providing the necessary options.
 	// Variables 'Name' and 'Description' are for application metadata.
 	// 'Assets' configures the asset server with the 'FS' variable pointing to the frontend files.
-	// 'Services' is a list of Go struct instances. The frontend has access to the methods of these instances.
+	// 'Services' is a lis t of Go struct instances. The frontend has access to the methods of these instances.
 	// 'Mac' options tailor the application when running an macOS.
-	ginEngine := uiService.GetGinEngine()
 	embdHandler := application.AssetFileServerFS(assets)
 	app := application.New(application.Options{
 		Name:        AppName,
 		Description: AppDescription,
 		Services: []application.Service{
 			application.NewService(&services.GreetService{}),
-			//application.NewService(uiService),
+			application.NewService(uiService),
 		},
 		Assets: application.AssetOptions{
-			Middleware: func(next http.Handler) http.Handler {
-				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					if strings.HasPrefix(r.URL.Path, "/api") {
-						// Let API handle everything else
-						ginEngine.ServeHTTP(w, r)
-						return
-					}
-
-					// Let Wails handle the `/wails/` route
-					if strings.HasPrefix(r.URL.Path, "/dashboard") {
-						next.ServeHTTP(w, r)
-						return
-					}
-
-					embdHandler.ServeHTTP(w, r)
-					return
-				})
-			},
+			Handler: embdHandler,
 		},
+		//Assets: application.AssetOptions{
+		//	Middleware: func(next http.Handler) http.Handler {
+		//		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		//			// Let Wails handle the `/wails/` route
+		//			if strings.HasPrefix(r.URL.Path, "/wails") {
+		//				// Let API handle everything else
+		//				next.ServeHTTP(w, r)
+		//				return
+		//			}
+		//
+		//			if strings.HasPrefix(r.URL.Path, "/api") {
+		//				// Let API handle everything else
+		//				ginEngine.ServeHTTP(w, r)
+		//				return
+		//			}
+		//
+		//			// Let Wails handle the `/wails/` route
+		//			if strings.HasPrefix(r.URL.Path, "/dashboard") {
+		//				next.ServeHTTP(w, r)
+		//				return
+		//			}
+		//
+		//			embdHandler.ServeHTTP(w, r)
+		//			return
+		//		})
+		//	},
+		//},
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},

@@ -41,12 +41,13 @@ tasks:
     cmds:
       - |
         pnpm run {{.BUILD_COMMAND}}
-        cp -R dist ../wails3/frontend
+        mkdir -p ../wails3/frontend/dist
+        cp -R dist/* ../wails3/frontend/dist/
         
     env:
       PRODUCTION: '{{.PRODUCTION | default "false"}}'
     vars:
-      BUILD_COMMAND: '{{if eq .PRODUCTION "true"}}build{{else}}build:dev{{end}}'
+      BUILD_COMMAND: '{{if eq .PRODUCTION "true"}}build:wails{{else}}build:dev:gui{{end}}'
 
 
   generate:bindings:
@@ -64,7 +65,7 @@ tasks:
     generates:
       - frontend/bindings/**/*
     cmds:
-      - wails3 generate bindings -f '{{.BUILD_FLAGS}}' -clean=true {{.PACKAGE_PATH}}
+      - wails3 generate bindings -ts -f '{{.BUILD_FLAGS}}' -clean=true {{.PACKAGE_PATH}} -d frontend/src/bindings
 
   generate:icons:
     summary: Generates Windows `.ico` and Mac `.icns` files from an image

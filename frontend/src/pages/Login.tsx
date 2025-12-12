@@ -31,7 +31,7 @@ const Login: React.FC = () => {
             });
 
             if (response.ok) {
-                login(token);
+                await login(token);
                 setShowSuccess(true);
                 setTimeout(() => {
                     navigate('/dashboard');

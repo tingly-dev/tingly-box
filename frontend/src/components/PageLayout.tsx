@@ -77,7 +77,6 @@ export const PageLayout: React.FC<PageLayoutProps> = ({
   return (
     <Box
       position="relative"
-      overflow="auto"
     >
       <Box>{children}</Box>
 
