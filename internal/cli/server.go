@@ -20,6 +20,7 @@ const PidFile = "tingly-server.pid"
 func StartCommand(appConfig *config.AppConfig) *cobra.Command {
 	var port int
 	var useUI bool
+	var useDebug bool
 
 	cmd := &cobra.Command{
 		Use:   "start",
@@ -42,7 +43,11 @@ The server will handle request routing to configured AI providers.`,
 			// Start server in goroutine to keep it non-blocking
 			serverErr := make(chan error, 1)
 			go func() {
-				serverErr <- serverManager.Start()
+				if useDebug {
+					serverErr <- serverManager.Debug()
+				} else {
+					serverErr <- serverManager.Start()
+				}
 			}()
 
 			// Wait for either server error, shutdown signal, or web UI stop request
@@ -61,6 +66,7 @@ The server will handle request routing to configured AI providers.`,
 
 	cmd.Flags().IntVarP(&port, "port", "p", 8080, "Server port (default: 8080)")
 	cmd.Flags().BoolVarP(&useUI, "ui", "u", true, "Enable web UI (default: true)")
+	cmd.Flags().BoolVar(&useDebug, "debug", false, "Enable debug and openapi (default: false)")
 	return cmd
 }
 

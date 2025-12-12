@@ -95,15 +95,34 @@ func (sm *ServerManager) Start() error {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
+	gin.SetMode(gin.ReleaseMode)
 	return sm.server.Start(sm.appConfig.GetServerPort())
 }
 
-// StartWithPort sets up and starts the server in one call (legacy behavior)
-func (sm *ServerManager) StartWithPort(port int) error {
-	if err := sm.Setup(port); err != nil {
-		return err
+func (sm *ServerManager) Debug() error {
+	if sm.server == nil {
+		return fmt.Errorf("server not initialized, call Setup() first")
 	}
-	return sm.Start()
+
+	// Check if already running
+	if sm.IsRunning() {
+		return fmt.Errorf("server is already running")
+	}
+
+	// Create PID file
+	if err := sm.pidManager.CreatePIDFile(); err != nil {
+		return fmt.Errorf("failed to create PID file: %w", err)
+	}
+
+	// Start server synchronously (blocking)
+	fmt.Printf("Starting server on port %d...\n", sm.appConfig.GetServerPort())
+
+	// Setup signal handling for graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	gin.SetMode(gin.DebugMode)
+	return sm.server.Start(sm.appConfig.GetServerPort())
 }
 
 // Stop stops the server gracefully
