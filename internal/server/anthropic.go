@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
+	"github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/gin-gonic/gin"
 )
 
@@ -29,6 +31,26 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		// Store the body back for parsing
 		c.Request.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
 	}
+
+	// Parse the request to check if streaming is requested
+	var rawReq map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &rawReq); err != nil {
+		log.Printf("Invalid JSON in request body: %v", err)
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Invalid JSON: " + err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
+	// Check if streaming is requested
+	isStreaming := false
+	if stream, ok := rawReq["stream"].(bool); ok {
+		isStreaming = stream
+	}
+	log.Printf("Stream requested for AnthropicMessages: %v", isStreaming)
 
 	// Parse into MessageNewParams using SDK's JSON unmarshaling
 	var req anthropic.MessageNewParams
@@ -89,34 +111,59 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 
 	if apiStyle == "anthropic" {
 		// Use direct Anthropic SDK call
-		anthropicResp, err := s.forwardAnthropicRequest(provider, req)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, ErrorResponse{
-				Error: ErrorDetail{
-					Message: "Failed to forward Anthropic request: " + err.Error(),
-					Type:    "api_error",
-				},
-			})
-			return
+		if isStreaming {
+			// Handle streaming request
+			stream, err := s.forwardAnthropicStreamRequest(provider, req)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, ErrorResponse{
+					Error: ErrorDetail{
+						Message: "Failed to create streaming request: " + err.Error(),
+						Type:    "api_error",
+					},
+				})
+				return
+			}
+			// Handle the streaming response
+			s.handleAnthropicStreamResponse(c, stream)
+		} else {
+			// Handle non-streaming request
+			anthropicResp, err := s.forwardAnthropicRequest(provider, req)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, ErrorResponse{
+					Error: ErrorDetail{
+						Message: "Failed to forward Anthropic request: " + err.Error(),
+						Type:    "api_error",
+					},
+				})
+				return
+			}
+			c.JSON(http.StatusOK, anthropicResp)
 		}
-		c.JSON(http.StatusOK, anthropicResp)
 		return
 	} else {
 		// Use OpenAI conversion path (default behavior)
-		openaiReq := s.convertAnthropicToOpenAI(&req)
-		response, err := s.forwardOpenAIRequest(provider, openaiReq)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, ErrorResponse{
-				Error: ErrorDetail{
-					Message: "Failed to forward request: " + err.Error(),
-					Type:    "api_error",
-				},
-			})
-			return
+		if isStreaming {
+			// Convert Anthropic request to OpenAI format for streaming
+			openaiReq := s.convertAnthropicToOpenAI(&req)
+			// Handle streaming request using OpenAI path
+			s.handleStreamingRequest(c, provider, openaiReq, selectedService.Model)
+		} else {
+			// Handle non-streaming request
+			openaiReq := s.convertAnthropicToOpenAI(&req)
+			response, err := s.forwardOpenAIRequest(provider, openaiReq)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, ErrorResponse{
+					Error: ErrorDetail{
+						Message: "Failed to forward request: " + err.Error(),
+						Type:    "api_error",
+					},
+				})
+				return
+			}
+			// Convert OpenAI response back to Anthropic format
+			anthropicResp := s.convertOpenAIToAnthropic(response, model)
+			c.JSON(http.StatusOK, anthropicResp)
 		}
-		// Convert OpenAI response back to Anthropic format
-		anthropicResp := s.convertOpenAIToAnthropic(response, model)
-		c.JSON(http.StatusOK, anthropicResp)
 	}
 }
 
@@ -264,4 +311,121 @@ func (s *Server) forwardAnthropicRequest(provider *config.Provider, req anthropi
 	}
 
 	return message, nil
+}
+
+// forwardAnthropicStreamRequest forwards streaming request using Anthropic SDK
+func (s *Server) forwardAnthropicStreamRequest(provider *config.Provider, req anthropic.MessageNewParams) (*ssestream.Stream[anthropic.MessageStreamEventUnion], error) {
+	var apiBase = provider.APIBase
+	if strings.HasSuffix(apiBase, "/v1") {
+		apiBase = apiBase[:len(apiBase)-3]
+	}
+
+	// Create Anthropic client
+	client := anthropic.NewClient(
+		option.WithAPIKey(provider.Token),
+		option.WithBaseURL(apiBase),
+	)
+
+	log.Printf("Creating Anthropic streaming request to: %s", apiBase)
+
+	// Use background context for streaming
+	// The stream will manage its own lifecycle and timeout
+	// We don't use a timeout here because streaming responses can take longer
+	ctx := context.Background()
+	stream := client.Messages.NewStreaming(ctx, req)
+
+	return stream, nil
+}
+
+// handleAnthropicStreamResponse processes the Anthropic streaming response and sends it to the client
+func (s *Server) handleAnthropicStreamResponse(c *gin.Context, stream *ssestream.Stream[anthropic.MessageStreamEventUnion]) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Panic in Anthropic streaming handler: %v", r)
+			// Try to send an error event if possible
+			if c.Writer != nil {
+				c.Writer.WriteHeader(http.StatusInternalServerError)
+				c.Writer.Write([]byte("event: error\ndata: {\"error\":{\"message\":\"Internal streaming error\",\"type\":\"internal_error\"}}\n\n"))
+				if flusher, ok := c.Writer.(http.Flusher); ok {
+					flusher.Flush()
+				}
+			}
+		}
+		// Ensure stream is always closed
+		if stream != nil {
+			if err := stream.Close(); err != nil {
+				log.Printf("Error closing Anthropic stream: %v", err)
+			}
+		}
+	}()
+
+	// Set SSE headers
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("Access-Control-Allow-Origin", "*")
+	c.Header("Access-Control-Allow-Headers", "Cache-Control")
+
+	// Create a flusher to ensure immediate sending of data
+	flusher, ok := c.Writer.(http.Flusher)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Streaming not supported by this connection",
+				Type:    "api_error",
+				Code:    "streaming_unsupported",
+			},
+		})
+		return
+	}
+
+	// Process the stream
+	for stream.Next() {
+		event := stream.Current()
+
+		// Convert the event to JSON
+		eventJSON, err := json.Marshal(event)
+		if err != nil {
+			log.Printf("Failed to marshal Anthropic stream event: %v", err)
+			continue
+		}
+
+		// Send the event as SSE
+		// Anthropic streaming uses server-sent events format
+		c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", string(eventJSON))))
+		flusher.Flush()
+	}
+
+	// Check for stream errors
+	if err := stream.Err(); err != nil {
+		log.Printf("Anthropic stream error: %v", err)
+
+		// Send error event
+		errorEvent := map[string]interface{}{
+			"type":  "error",
+			"error": map[string]interface{}{
+				"message": err.Error(),
+				"type":    "stream_error",
+				"code":    "stream_failed",
+			},
+		}
+
+		errorJSON, marshalErr := json.Marshal(errorEvent)
+		if marshalErr != nil {
+			log.Printf("Failed to marshal Anthropic error event: %v", marshalErr)
+			c.Writer.Write([]byte("event: error\ndata: {\"error\":{\"message\":\"Failed to marshal error\",\"type\":\"internal_error\"}}\n\n"))
+		} else {
+			c.Writer.Write([]byte(fmt.Sprintf("event: error\ndata: %s\n\n", string(errorJSON))))
+		}
+		flusher.Flush()
+		return
+	}
+
+	// Send a final event to indicate completion (similar to OpenAI's [DONE])
+	finishEvent := map[string]interface{}{
+		"type": "message_stop",
+	}
+	finishJSON, _ := json.Marshal(finishEvent)
+	c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", string(finishJSON))))
+	flusher.Flush()
 }
