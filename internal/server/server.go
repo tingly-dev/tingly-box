@@ -1,11 +1,8 @@
 package server
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"time"
@@ -178,29 +175,24 @@ func RequestLoggerMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
 
-		var buf bytes.Buffer
-		var body []byte
-
-		// Only read body if it exists (for POST/PUT requests)
-		if c.Request.Body != nil {
-			tee := io.TeeReader(c.Request.Body, &buf)
-			body, _ = ioutil.ReadAll(tee)
-			c.Request.Body = ioutil.NopCloser(&buf)
+		// Get content length from headers instead of reading the whole body
+		contentLength := c.Request.ContentLength
+		if contentLength == -1 {
+			contentLength = 0
 		}
-
-		// Log details after the request is processed
-		duration := time.Since(start)
-		fmt.Printf("Method: %s | Path: %s | Status: %v | Headers: %v | Body: %s | Duration: %v\n",
-			c.Request.Method,
-			c.Request.URL.Path,
-			c.Request.Header,
-			c.Writer.Status(),
-			string(body),
-			duration,
-		)
 
 		// Process the request
 		c.Next()
+
+		// Log essential details after the request is processed
+		duration := time.Since(start)
+		fmt.Printf("Method: %s | Path: %s | Status: %d | Content-Length: %d | Duration: %v\n",
+			c.Request.Method,
+			c.Request.URL.Path,
+			c.Writer.Status(),
+			contentLength,
+			duration,
+		)
 	}
 }
 
