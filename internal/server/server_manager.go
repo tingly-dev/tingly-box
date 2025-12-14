@@ -4,10 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
-	"os/signal"
 	"sync"
-	"syscall"
 	"time"
 
 	"tingly-box/internal/config"
@@ -87,10 +84,6 @@ func (sm *ServerManager) Start() error {
 	// Start server synchronously (blocking)
 	fmt.Printf("Starting server on port %d...\n", sm.appConfig.GetServerPort())
 
-	// Setup signal handling for graceful shutdown
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
 	gin.SetMode(gin.ReleaseMode)
 	err := sm.server.Start(sm.appConfig.GetServerPort())
 	if err != nil {
@@ -115,10 +108,6 @@ func (sm *ServerManager) Debug() error {
 
 	// Start server synchronously (blocking)
 	fmt.Printf("Starting server on port %d...\n", sm.appConfig.GetServerPort())
-
-	// Setup signal handling for graceful shutdown
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	gin.SetMode(gin.DebugMode)
 	return sm.server.Start(sm.appConfig.GetServerPort())
