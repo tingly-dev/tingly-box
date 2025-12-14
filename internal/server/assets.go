@@ -4,6 +4,7 @@ import (
 	"embed"
 	"io/fs"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -29,6 +30,22 @@ func (e *EmbeddedAssets) SetupStaticRoutes(router *gin.Engine) {
 	router.StaticFile("/vite.svg", "web/dist/vite.svg")
 
 	router.NoRoute(func(c *gin.Context) {
+		// Don't serve index.html for API routes - let them return 404s
+		path := c.Request.URL.Path
+		// Check if this looks like an API route
+		if path == "" || strings.HasPrefix(path, "/api") || strings.HasPrefix(path, "/v1") || strings.HasPrefix(path, "/openai") || strings.HasPrefix(path, "/anthropic") {
+			// This looks like an API route, return 404
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": gin.H{
+					"message": "API endpoint not found",
+					"type":    "invalid_request_error",
+					"code":    "not_found",
+				},
+			})
+			return
+		}
+
+		// For all other routes, serve the SPA index.html
 		data, err := webDistFS.ReadFile("web/dist/index.html")
 		if err != nil {
 			c.AbortWithError(http.StatusInternalServerError, err)

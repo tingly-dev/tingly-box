@@ -2,10 +2,14 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
+	"time"
 	"tingly-box/internal/config"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 )
@@ -130,20 +134,37 @@ func (s *Server) ChatCompletions(c *gin.Context) {
 	if apiStyle == "anthropic" {
 		// Convert to Anthropic SDK format
 		anthropicReq := s.convertOpenAIToAnthropicRequest(&req, responseModel)
-		// Use direct Anthropic SDK call
-		anthropicResp, err := s.forwardAnthropicRequest(provider, anthropicReq)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, ErrorResponse{
-				Error: ErrorDetail{
-					Message: "Failed to forward Anthropic request: " + err.Error(),
-					Type:    "api_error",
-				},
-			})
-			return
+
+		if isStreaming {
+			// Handle streaming request
+			stream, err := s.forwardAnthropicStreamRequest(provider, anthropicReq)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, ErrorResponse{
+					Error: ErrorDetail{
+						Message: "Failed to create streaming request: " + err.Error(),
+						Type:    "api_error",
+					},
+				})
+				return
+			}
+			// Handle streaming response and convert to OpenAI format
+			s.handleAnthropicToOpenAIStreamResponse(c, stream, responseModel)
+		} else {
+			// Handle non-streaming request
+			anthropicResp, err := s.forwardAnthropicRequest(provider, anthropicReq)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, ErrorResponse{
+					Error: ErrorDetail{
+						Message: "Failed to forward Anthropic request: " + err.Error(),
+						Type:    "api_error",
+					},
+				})
+				return
+			}
+			// Convert Anthropic response back to OpenAI format
+			openaiResp := s.convertAnthropicResponseToOpenAI(anthropicResp, responseModel)
+			c.JSON(http.StatusOK, openaiResp)
 		}
-		// Convert Anthropic response back to OpenAI format
-		openaiResp := s.convertAnthropicResponseToOpenAI(anthropicResp, responseModel)
-		c.JSON(http.StatusOK, openaiResp)
 		return
 	}
 
@@ -308,4 +329,182 @@ func (s *Server) convertOpenAIToAnthropicRequest(req *RequestWrapper, model stri
 	}
 
 	return params
+}
+
+// handleAnthropicToOpenAIStreamResponse processes Anthropic streaming events and converts them to OpenAI format
+func (s *Server) handleAnthropicToOpenAIStreamResponse(c *gin.Context, stream *ssestream.Stream[anthropic.MessageStreamEventUnion], responseModel string) {
+	defer func() {
+		if r := recover(); r != nil {
+			logrus.Errorf("Panic in Anthropic to OpenAI streaming handler: %v", r)
+			// Try to send an error event if possible
+			if c.Writer != nil {
+				c.Writer.WriteHeader(http.StatusInternalServerError)
+				c.Writer.Write([]byte("data: {\"error\":{\"message\":\"Internal streaming error\",\"type\":\"internal_error\"}}\n\n"))
+				if flusher, ok := c.Writer.(http.Flusher); ok {
+					flusher.Flush()
+				}
+			}
+		}
+		// Ensure stream is always closed
+		if stream != nil {
+			if err := stream.Close(); err != nil {
+				logrus.Errorf("Error closing Anthropic stream: %v", err)
+			}
+		}
+	}()
+
+	// Set SSE headers
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("Access-Control-Allow-Origin", "*")
+	c.Header("Access-Control-Allow-Headers", "Cache-Control")
+
+	// Create a flusher to ensure immediate sending of data
+	flusher, ok := c.Writer.(http.Flusher)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Streaming not supported by this connection",
+				Type:    "api_error",
+				Code:    "streaming_unsupported",
+			},
+		})
+		return
+	}
+
+	// Track streaming state
+	var (
+		chatID      = fmt.Sprintf("chatcmpl-%d", time.Now().Unix())
+		created     = time.Now().Unix()
+		contentText = strings.Builder{}
+		usage       *anthropic.MessageDeltaUsage
+	)
+
+	// Process the stream
+	for stream.Next() {
+		event := stream.Current()
+
+		// Handle different event types
+		switch event.Type {
+		case "message_start":
+			// Send initial chat completion chunk
+			chunk := map[string]interface{}{
+				"id":      chatID,
+				"object":  "chat.completion.chunk",
+				"created": created,
+				"model":   responseModel,
+				"choices": []map[string]interface{}{
+					{
+						"index":         0,
+						"delta":         map[string]interface{}{"role": "assistant"},
+						"finish_reason": nil,
+					},
+				},
+			}
+			s.sendOpenAIStreamChunk(c, chunk, flusher)
+
+		case "content_block_start":
+			// Content block starting (usually text)
+			if event.ContentBlock.Type == "text" {
+				// Reset content builder for new block
+				contentText.Reset()
+			}
+
+		case "content_block_delta":
+			// Text delta - send as OpenAI chunk
+			if event.Delta.Type == "text_delta" && event.Delta.Text != "" {
+				text := event.Delta.Text
+				contentText.WriteString(text)
+
+				chunk := map[string]interface{}{
+					"id":      chatID,
+					"object":  "chat.completion.chunk",
+					"created": created,
+					"model":   responseModel,
+					"choices": []map[string]interface{}{
+						{
+							"index":         0,
+							"delta":         map[string]interface{}{"content": text},
+							"finish_reason": nil,
+						},
+					},
+				}
+				s.sendOpenAIStreamChunk(c, chunk, flusher)
+			}
+
+		case "content_block_stop":
+			// Content block finished - no specific action needed
+
+		case "message_delta":
+			// Message delta (includes usage info)
+			if event.Usage.InputTokens != 0 || event.Usage.OutputTokens != 0 {
+				usage = &event.Usage
+			}
+
+		case "message_stop":
+			// Send final chunk with finish_reason and usage
+			chunk := map[string]interface{}{
+				"id":      chatID,
+				"object":  "chat.completion.chunk",
+				"created": created,
+				"model":   responseModel,
+				"choices": []map[string]interface{}{
+					{
+						"index":         0,
+						"delta":         map[string]interface{}{},
+						"finish_reason": "stop",
+					},
+				},
+			}
+
+			// Add usage if available
+			if usage != nil {
+				chunk["usage"] = map[string]interface{}{
+					"prompt_tokens":     usage.InputTokens,
+					"completion_tokens": usage.OutputTokens,
+					"total_tokens":      usage.InputTokens + usage.OutputTokens,
+				}
+			}
+
+			s.sendOpenAIStreamChunk(c, chunk, flusher)
+			// Send final [DONE] message
+			c.Writer.Write([]byte("data: [DONE]\n\n"))
+			flusher.Flush()
+			return
+		}
+	}
+
+	// Check for stream errors
+	if err := stream.Err(); err != nil {
+		logrus.Errorf("Anthropic stream error: %v", err)
+		// Send error event
+		errorChunk := map[string]interface{}{
+			"error": map[string]interface{}{
+				"message": err.Error(),
+				"type":    "stream_error",
+				"code":    "stream_failed",
+			},
+		}
+		errorJSON, marshalErr := json.Marshal(errorChunk)
+		if marshalErr != nil {
+			logrus.Errorf("Failed to marshal error chunk: %v", marshalErr)
+			c.Writer.Write([]byte("data: {\"error\":{\"message\":\"Failed to marshal error\",\"type\":\"internal_error\"}}\n\n"))
+		} else {
+			c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", string(errorJSON))))
+		}
+		flusher.Flush()
+		return
+	}
+}
+
+// sendOpenAIStreamChunk helper function to send a chunk in OpenAI format
+func (s *Server) sendOpenAIStreamChunk(c *gin.Context, chunk map[string]interface{}, flusher http.Flusher) {
+	chunkJSON, err := json.Marshal(chunk)
+	if err != nil {
+		logrus.Errorf("Failed to marshal OpenAI stream chunk: %v", err)
+		return
+	}
+	c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", string(chunkJSON))))
+	flusher.Flush()
 }
