@@ -15,6 +15,11 @@ import (
 
 // stopServer stops the running server using the PID manager
 func stopServer(pidManager *config.PIDManager) error {
+	return stopServerWithPIDManager(pidManager)
+}
+
+// stopServerWithPIDManager handles the server stopping logic
+func stopServerWithPIDManager(pidManager *config.PIDManager) error {
 	// Get PID from manager
 	pid, err := pidManager.GetPID()
 	if err != nil {
@@ -49,6 +54,115 @@ func stopServer(pidManager *config.PIDManager) error {
 	return nil
 }
 
+// startServerOptions contains options for starting the server
+type startServerOptions struct {
+	Port     int
+	UseUI    bool
+	UseDebug bool
+}
+
+// startServer handles the server starting logic
+func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
+	// Set port if provided
+	if opts.Port != 8080 {
+		if err := appConfig.SetServerPort(opts.Port); err != nil {
+			return fmt.Errorf("failed to set server port: %w", err)
+		}
+	}
+
+	// Create PID manager
+	pidManager := config.NewPIDManager(appConfig.ConfigDir())
+
+	// Check if server is already running using PID manager
+	if pidManager.IsRunning() {
+		fmt.Printf("Server is already running on port %d\n", appConfig.GetServerPort())
+		return nil
+	}
+
+	// Create PID file before starting server
+	if err := pidManager.CreatePIDFile(); err != nil {
+		return fmt.Errorf("failed to create PID file: %w", err)
+	}
+
+	serverManager := server.NewServerManagerWithOptions(appConfig, opts.UseUI)
+
+	// Setup signal handling for graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	// Start server in goroutine to keep it non-blocking
+	serverErr := make(chan error, 1)
+	go func() {
+		if opts.UseDebug {
+			serverErr <- serverManager.Debug()
+		} else {
+			serverErr <- serverManager.Start()
+		}
+	}()
+
+	fmt.Printf("Server starting on port %d...\n", appConfig.GetServerPort())
+	fmt.Printf("API endpoint: http://localhost:%d/v1/chat/completions\n", appConfig.GetServerPort())
+	if opts.UseUI {
+		fmt.Printf("Web UI: http://localhost:%d/dashboard\n", appConfig.GetServerPort())
+	}
+
+	// Wait for either server error, shutdown signal, or web UI stop request
+	select {
+	case err := <-serverErr:
+		// Clean up PID file on error
+		pidManager.RemovePIDFile()
+		return fmt.Errorf("server stopped unexpectedly: %w", err)
+	case <-sigChan:
+		fmt.Println("\nReceived shutdown signal, stopping server...")
+		// Clean up PID file on shutdown
+		defer pidManager.RemovePIDFile()
+		return serverManager.Stop()
+	case <-server.GetShutdownChannel():
+		fmt.Println("\nReceived stop request from web UI, stopping server...")
+		// Clean up PID file on shutdown
+		defer pidManager.RemovePIDFile()
+		return serverManager.Stop()
+	}
+}
+
+// startServerNonBlocking starts the server in non-blocking mode (for restart command)
+func startServerNonBlocking(appConfig *config.AppConfig, opts startServerOptions) error {
+	// Set port if provided
+	if opts.Port != 8080 {
+		if err := appConfig.SetServerPort(opts.Port); err != nil {
+			return fmt.Errorf("failed to set server port: %w", err)
+		}
+	}
+
+	// Create PID manager
+	pidManager := config.NewPIDManager(appConfig.ConfigDir())
+
+	// Create PID file before starting server
+	if err := pidManager.CreatePIDFile(); err != nil {
+		return fmt.Errorf("failed to create PID file: %w", err)
+	}
+
+	// Create a new server manager for starting
+	newServerManager := server.NewServerManager(appConfig)
+
+	// Start server with new configuration
+	fmt.Println("Starting server...")
+	if err := newServerManager.Start(); err != nil {
+		// Clean up PID file on error
+		pidManager.RemovePIDFile()
+		return fmt.Errorf("failed to start server: %w", err)
+	}
+
+	serverPort := appConfig.GetServerPort()
+	fmt.Printf("Server started successfully on port %d\n", serverPort)
+	fmt.Printf("OpenAI Style API Endpoint: http://localhost:%d/openai/v1/chat/completions\n", serverPort)
+	fmt.Printf("Anthropic Style API Endpoint: http://localhost:%d/anthropic/v1/messages\n", serverPort)
+	fmt.Printf("Web UI: http://localhost:%d/dashboard\n", serverPort)
+	fmt.Println("Use 'tingly status' to check server status")
+
+	return nil
+}
+
 // StartCommand represents the start server command
 func StartCommand(appConfig *config.AppConfig) *cobra.Command {
 	var port int
@@ -61,66 +175,11 @@ func StartCommand(appConfig *config.AppConfig) *cobra.Command {
 		Long: `Start the Tingly Box HTTP server that provides the unified API endpoint.
 The server will handle request routing to configured AI providers.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Set port if provided
-			if port != 8080 {
-				if err := appConfig.SetServerPort(port); err != nil {
-					return fmt.Errorf("failed to set server port: %w", err)
-				}
-			}
-
-			// Create PID manager
-			pidManager := config.NewPIDManager(appConfig.ConfigDir())
-
-			// Check if server is already running using PID manager
-			if pidManager.IsRunning() {
-				fmt.Printf("Server is already running on port %d\n", appConfig.GetServerPort())
-				return nil
-			}
-
-			// Create PID file before starting server
-			if err := pidManager.CreatePIDFile(); err != nil {
-				return fmt.Errorf("failed to create PID file: %w", err)
-			}
-
-			serverManager := server.NewServerManagerWithOptions(appConfig, useUI)
-
-			// Setup signal handling for graceful shutdown
-			sigChan := make(chan os.Signal, 1)
-			signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-			// Start server in goroutine to keep it non-blocking
-			serverErr := make(chan error, 1)
-			go func() {
-				if useDebug {
-					serverErr <- serverManager.Debug()
-				} else {
-					serverErr <- serverManager.Start()
-				}
-			}()
-
-			fmt.Printf("Server starting on port %d...\n", appConfig.GetServerPort())
-			fmt.Printf("API endpoint: http://localhost:%d/v1/chat/completions\n", appConfig.GetServerPort())
-			if useUI {
-				fmt.Printf("Web UI: http://localhost:%d/dashboard\n", appConfig.GetServerPort())
-			}
-
-			// Wait for either server error, shutdown signal, or web UI stop request
-			select {
-			case err := <-serverErr:
-				// Clean up PID file on error
-				pidManager.RemovePIDFile()
-				return fmt.Errorf("server stopped unexpectedly: %w", err)
-			case <-sigChan:
-				fmt.Println("\nReceived shutdown signal, stopping server...")
-				// Clean up PID file on shutdown
-				defer pidManager.RemovePIDFile()
-				return serverManager.Stop()
-			case <-server.GetShutdownChannel():
-				fmt.Println("\nReceived stop request from web UI, stopping server...")
-				// Clean up PID file on shutdown
-				defer pidManager.RemovePIDFile()
-				return serverManager.Stop()
-			}
+			return startServer(appConfig, startServerOptions{
+				Port:     port,
+				UseUI:    useUI,
+				UseDebug: useDebug,
+			})
 		},
 	}
 
@@ -146,7 +205,7 @@ All ongoing requests will be completed before shutdown.`,
 			}
 
 			fmt.Println("Stopping server...")
-			if err := stopServer(pidManager); err != nil {
+			if err := stopServerWithPIDManager(pidManager); err != nil {
 				return fmt.Errorf("failed to stop server: %w", err)
 			}
 
@@ -252,7 +311,7 @@ The restart is graceful - ongoing requests will be completed before shutdown.`,
 
 			if wasRunning {
 				fmt.Println("Stopping current server...")
-				if err := stopServer(pidManager); err != nil {
+				if err := stopServerWithPIDManager(pidManager); err != nil {
 					return fmt.Errorf("failed to stop server: %w", err)
 				}
 				fmt.Println("Server stopped successfully")
@@ -263,29 +322,11 @@ The restart is graceful - ongoing requests will be completed before shutdown.`,
 				fmt.Println("Server was not running, starting it...")
 			}
 
-			// Create PID file for new server
-			if err := pidManager.CreatePIDFile(); err != nil {
-				return fmt.Errorf("failed to create PID file: %w", err)
-			}
-
-			// Create a new server manager for starting
-			newServerManager := server.NewServerManager(appConfig)
-
-			// Start server with new configuration
-			fmt.Println("Starting server...")
-			if err := newServerManager.Start(); err != nil {
-				// Clean up PID file on error
-				pidManager.RemovePIDFile()
-				return fmt.Errorf("failed to start server: %w", err)
-			}
-
-			serverPort := appConfig.GetServerPort()
-			fmt.Printf("Server restarted successfully on port %d\n", serverPort)
-			fmt.Printf("OpenAI Style API Endpoint: http://localhost:%d/openai/v1/chat/completions\n", serverPort)
-			fmt.Printf("Anthropic Style API Endpoint: http://localhost:%d/anthropic/v1/messages\n", serverPort)
-			fmt.Printf("Web UI: http://localhost:%d/dashboard\n", serverPort)
-			fmt.Println("Use 'tingly status' to check server status")
-			return nil
+			// Start new server using non-blocking mode
+			return startServerNonBlocking(appConfig, startServerOptions{
+				Port:  port,
+				UseUI: true, // Always enable UI for restart
+			})
 		},
 	}
 
