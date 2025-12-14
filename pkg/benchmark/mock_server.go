@@ -248,6 +248,7 @@ func (ms *MockServer) Start() error {
 	openai.POST("/chat/completions", ms.handleOpenAIChat)
 
 	// Register Anthropic endpoints
+	anthropic.GET("/models", ms.handleAnthropicModels)
 	anthropic.POST("/messages", ms.handleAnthropicMessages)
 
 	// Generic endpoints (for backward compatibility)

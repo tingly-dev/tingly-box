@@ -6,14 +6,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 )
 
 var (
-	openaiResponseCounter = 0
+	openaiResponseCounter    = 0
 	anthropicResponseCounter = 0
-	openaiCounterMutex = &sync.Mutex{}
-	anthropicCounterMutex = &sync.Mutex{}
+	openaiCounterMutex       = &sync.Mutex{}
+	anthropicCounterMutex    = &sync.Mutex{}
 )
 
 // Model represents a model in the models list
@@ -34,24 +35,51 @@ func (ms *MockServer) handleOpenAIModels(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// handleOpenAIChat handles the /v1/chat/completions endpoint
-func (ms *MockServer) handleOpenAIChat(c *gin.Context) {
+// handleAnthropicModels handles the /anthropic/v1/models endpoint
+func (ms *MockServer) handleAnthropicModels(c *gin.Context) {
 	c.Header("Content-Type", "application/json")
 
+	// Filter and return only Anthropic models in Anthropic's format
+	var anthropicModels []map[string]interface{}
+	for _, model := range ms.config.defaultModels {
+		if model.OwnedBy == "anthropic" {
+			anthropicModel := map[string]interface{}{
+				"id":           model.ID,
+				"display_name": model.ID,
+				"type":         "model",
+				"created_at":   model.Created,
+			}
+			anthropicModels = append(anthropicModels, anthropicModel)
+		}
+	}
+
+	response := map[string]interface{}{
+		"data": anthropicModels,
+	}
+	c.JSON(http.StatusOK, response)
+}
+
+// handleOpenAIChat handles the /v1/chat/completions endpoint
+func (ms *MockServer) handleOpenAIChat(c *gin.Context) {
 	ms.applyDelay(ms.config.chatDelayMs)
 
 	response := ms.getChatResponse()
-	c.Data(http.StatusOK, "application/json", response)
+	c.JSON(http.StatusOK,  response)
 }
 
 // handleAnthropicMessages handles the /v1/messages endpoint
 func (ms *MockServer) handleAnthropicMessages(c *gin.Context) {
-	c.Header("Content-Type", "application/json")
+	// Parse into MessageNewParams using SDK's JSON unmarshaling
+	var req anthropic.MessageNewParams
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusUnprocessableEntity, "request do not follow anthropic api style" )
+		return
+	}
 
 	ms.applyDelay(ms.config.msgDelayMs)
 
 	response := ms.getMessageResponse()
-	c.Data(http.StatusOK, "application/json", response)
+	c.JSON(http.StatusOK, response)
 }
 
 // applyDelay applies delay to simulate real API latency
