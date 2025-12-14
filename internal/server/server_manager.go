@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -16,10 +17,11 @@ import (
 
 // ServerManager manages the HTTP server lifecycle
 type ServerManager struct {
-	appConfig  *config.AppConfig
-	server     *Server
-	pidManager *config.PIDManager
-	useUI      bool
+	appConfig *config.AppConfig
+	server    *Server
+	useUI     bool
+	status    string
+	sync.Mutex
 }
 
 // NewServerManager creates a new server manager with UI enabled by default
@@ -32,9 +34,8 @@ func NewServerManager(appConfig *config.AppConfig) *ServerManager {
 // NewServerManagerWithOptions creates a new server manager with UI option
 func NewServerManagerWithOptions(appConfig *config.AppConfig, useUI bool) *ServerManager {
 	res := &ServerManager{
-		appConfig:  appConfig,
-		pidManager: config.NewPIDManager(appConfig.ConfigDir()),
-		useUI:      useUI,
+		appConfig: appConfig,
+		useUI:     useUI,
 	}
 	res.Setup(appConfig.GetServerPort())
 	return res
@@ -83,11 +84,6 @@ func (sm *ServerManager) Start() error {
 		return fmt.Errorf("server is already running")
 	}
 
-	// Create PID file
-	if err := sm.pidManager.CreatePIDFile(); err != nil {
-		return fmt.Errorf("failed to create PID file: %w", err)
-	}
-
 	// Start server synchronously (blocking)
 	fmt.Printf("Starting server on port %d...\n", sm.appConfig.GetServerPort())
 
@@ -96,7 +92,15 @@ func (sm *ServerManager) Start() error {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	gin.SetMode(gin.ReleaseMode)
-	return sm.server.Start(sm.appConfig.GetServerPort())
+	err := sm.server.Start(sm.appConfig.GetServerPort())
+	if err != nil {
+		return err
+	}
+
+	sm.Lock()
+	defer sm.Unlock()
+	sm.status = "Running"
+	return nil
 }
 
 func (sm *ServerManager) Debug() error {
@@ -107,11 +111,6 @@ func (sm *ServerManager) Debug() error {
 	// Check if already running
 	if sm.IsRunning() {
 		return fmt.Errorf("server is already running")
-	}
-
-	// Create PID file
-	if err := sm.pidManager.CreatePIDFile(); err != nil {
-		return fmt.Errorf("failed to create PID file: %w", err)
 	}
 
 	// Start server synchronously (blocking)
@@ -146,12 +145,10 @@ func (sm *ServerManager) Stop() error {
 	return nil
 }
 
-// Cleanup removes PID file
 func (sm *ServerManager) Cleanup() {
-	sm.pidManager.RemovePIDFile()
 }
 
 // IsRunning checks if the server is currently running
 func (sm *ServerManager) IsRunning() bool {
-	return sm.pidManager.IsRunning()
+	return sm.status == "Running"
 }
