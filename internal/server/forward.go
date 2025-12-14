@@ -12,18 +12,14 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
-	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/sirupsen/logrus"
 )
 
 // forwardOpenAIRequest forwards the request to the selected provider using OpenAI library
 func (s *Server) forwardOpenAIRequest(provider *config.Provider, req *RequestWrapper) (*openai.ChatCompletion, error) {
-	// Create OpenAI client with provider configuration
-	client := openai.NewClient(
-		option.WithAPIKey(provider.Token),
-		option.WithBaseURL(provider.APIBase),
-	)
+	// Get or create OpenAI client from pool
+	client := s.clientPool.GetClient(provider)
 	logrus.Infof("provider: %s", provider.Name)
 
 	// Since RequestWrapper is a type alias to openai.ChatCompletionNewParams,
@@ -136,11 +132,8 @@ func (s *Server) convertOpenAIToAnthropic(openaiResp *openai.ChatCompletion, mod
 
 // forwardOpenAIStreamRequest forwards the streaming request to the selected provider using OpenAI library
 func (s *Server) forwardOpenAIStreamRequest(provider *config.Provider, req *RequestWrapper) (*ssestream.Stream[openai.ChatCompletionChunk], error) {
-	// Create OpenAI client with provider configuration
-	client := openai.NewClient(
-		option.WithAPIKey(provider.Token),
-		option.WithBaseURL(provider.APIBase),
-	)
+	// Get or create OpenAI client from pool
+	client := s.clientPool.GetClient(provider)
 	logrus.Infof("provider: %s (streaming)", provider.Name)
 
 	// Since RequestWrapper is a type alias to openai.ChatCompletionNewParams,

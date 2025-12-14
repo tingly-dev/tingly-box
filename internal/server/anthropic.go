@@ -11,7 +11,6 @@ import (
 	"tingly-box/internal/config"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/gin-gonic/gin"
 )
@@ -205,17 +204,9 @@ type (
 
 // forwardAnthropicRequestRaw forwards request from raw map using Anthropic SDK
 func (s *Server) forwardAnthropicRequestRaw(provider *config.Provider, rawReq map[string]interface{}, model string) (*anthropic.Message, error) {
-	var apiBase = provider.APIBase
-	if strings.HasSuffix(apiBase, "/v1") {
-		apiBase = apiBase[:len(apiBase)-3]
-	}
-	log.Printf("Anthropic API Base: %s, Token Length: %d", apiBase, len(provider.Token))
-
-	// Create Anthropic client
-	client := anthropic.NewClient(
-		option.WithAPIKey(provider.Token),
-		option.WithBaseURL(apiBase),
-	)
+	// Get or create Anthropic client from pool
+	client := s.clientPool.GetAnthropicClient(provider)
+	log.Printf("Anthropic API Token Length: %d", len(provider.Token))
 
 	// Extract and convert messages from raw request
 	messagesData, ok := rawReq["messages"].([]interface{})
@@ -291,16 +282,8 @@ func (s *Server) forwardAnthropicRequestRaw(provider *config.Provider, rawReq ma
 
 // forwardAnthropicRequest forwards request using Anthropic SDK with proper types
 func (s *Server) forwardAnthropicRequest(provider *config.Provider, req anthropic.MessageNewParams) (*anthropic.Message, error) {
-	var apiBase = provider.APIBase
-	if strings.HasSuffix(apiBase, "/v1") {
-		apiBase = apiBase[:len(apiBase)-3]
-	}
-
-	// Create Anthropic client
-	client := anthropic.NewClient(
-		option.WithAPIKey(provider.Token),
-		option.WithBaseURL(apiBase),
-	)
+	// Get or create Anthropic client from pool
+	client := s.clientPool.GetAnthropicClient(provider)
 
 	// Make the request using Anthropic SDK with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), config.RequestTimeout)
@@ -315,18 +298,10 @@ func (s *Server) forwardAnthropicRequest(provider *config.Provider, req anthropi
 
 // forwardAnthropicStreamRequest forwards streaming request using Anthropic SDK
 func (s *Server) forwardAnthropicStreamRequest(provider *config.Provider, req anthropic.MessageNewParams) (*ssestream.Stream[anthropic.MessageStreamEventUnion], error) {
-	var apiBase = provider.APIBase
-	if strings.HasSuffix(apiBase, "/v1") {
-		apiBase = apiBase[:len(apiBase)-3]
-	}
+	// Get or create Anthropic client from pool
+	client := s.clientPool.GetAnthropicClient(provider)
 
-	// Create Anthropic client
-	client := anthropic.NewClient(
-		option.WithAPIKey(provider.Token),
-		option.WithBaseURL(apiBase),
-	)
-
-	log.Printf("Creating Anthropic streaming request to: %s", apiBase)
+	log.Printf("Creating Anthropic streaming request")
 
 	// Use background context for streaming
 	// The stream will manage its own lifecycle and timeout
@@ -402,7 +377,7 @@ func (s *Server) handleAnthropicStreamResponse(c *gin.Context, stream *ssestream
 
 		// Send error event
 		errorEvent := map[string]interface{}{
-			"type":  "error",
+			"type": "error",
 			"error": map[string]interface{}{
 				"message": err.Error(),
 				"type":    "stream_error",
