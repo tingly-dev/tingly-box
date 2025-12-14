@@ -1,6 +1,5 @@
 import {
     Add as AddIcon,
-    AutoAwesome,
     Check as CheckIcon,
     Delete as DeleteIcon,
     Dns as DnsIcon,
@@ -33,11 +32,11 @@ import {
     Tooltip,
     Typography
 } from '@mui/material';
-import {styled} from '@mui/material/styles';
-import {useCallback, useEffect, useState} from 'react';
-import {PageLayout} from '../components/PageLayout';
+import { styled } from '@mui/material/styles';
+import { useCallback, useEffect, useState } from 'react';
+import { PageLayout } from '../components/PageLayout';
 import UnifiedCard from '../components/UnifiedCard';
-import {api} from '../services/api';
+import { api } from '../services/api';
 
 const ServiceSection = styled(Box)(({ theme }) => ({
     maxHeight: 160,
@@ -312,15 +311,22 @@ const Rule = () => {
 
         try {
             const result = await api.getProviderModelsByName(providerName);
+            console.log("found models", result.data)
             if (result.success) {
                 // Update providerModels with the refreshed data
-                setProviderModels((prev: any) => ({
-                    ...prev,
-                    [providerName]: result.data
-                }));
+                // The result from getProviderModelsByName is a direct array, not an object with models field
+                setProviderModels((prev: any) => {
+                    const updated = {
+                        ...prev,
+                        [providerName]: {
+                            models: result.data  // Wrap the array in a models object to match the expected structure
+                        }
+                    };
+                    return updated;
+                });
                 setMessage({ type: 'success', text: `Successfully refreshed models for ${providerName}` });
             } else {
-                setMessage({ type: 'error', text: `Failed to refresh models for ${providerName}: ${result.error}` });
+                setMessage({ type: 'error', text: `Failed to refresh models for ${providerName}: ${result.message}` });
             }
         } catch (error) {
             setMessage({ type: 'error', text: `Failed to refresh models for ${providerName}: ${error}` });
@@ -587,6 +593,7 @@ const Rule = () => {
                                                                             <FormControl size="small" disabled={!provider.provider || !record.active} fullWidth sx={{ flex: 1 }}>
                                                                                 <InputLabel>Model</InputLabel>
                                                                                 <Select
+                                                                                    key={`${provider.provider}-${JSON.stringify(providerModels[provider.provider]?.models || [])}`}
                                                                                     value={provider.model}
                                                                                     onChange={(e) =>
                                                                                         updateProvider(
