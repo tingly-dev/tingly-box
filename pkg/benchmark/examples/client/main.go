@@ -17,6 +17,7 @@ const (
 	DefaultMaxTokens     = 1000
 	DefaultConcurrency   = 25
 	DefaultTotalRequests = 150
+	DefaultApiKey        = "sk-benchmark"
 )
 
 func main() {
@@ -50,9 +51,10 @@ func testMultiProviderBenchmark(port int) {
 		benchmark.WithPort(port),
 		benchmark.WithChatResponseContent("OpenAI response: This is optimized for performance testing."),
 		benchmark.WithMessageResponseContent("Anthropic response: This is optimized for performance testing."),
-		benchmark.WithChatDelay(benchmark.DefaultChatDelayMs - 20), // Slightly faster for benchmarking
-		benchmark.WithMessageDelay(benchmark.DefaultMessageDelayMs - 30), // Slightly faster for benchmarking
+		benchmark.WithChatDelay(benchmark.DefaultChatDelayMs-20),       // Slightly faster for benchmarking
+		benchmark.WithMessageDelay(benchmark.DefaultMessageDelayMs-30), // Slightly faster for benchmarking
 		benchmark.WithRandomDelay(benchmark.DefaultRandomDelayMin*5, benchmark.DefaultRandomDelayMin+50),
+		benchmark.WithApiKey(DefaultApiKey),
 	)
 
 	// Start server in background
@@ -86,7 +88,7 @@ func testOpenAIEndpoints(baseURL string) {
 		BaseURL:  baseURL,
 		Timeout:  10 * time.Second,
 		Provider: "openai",
-		APIKey:   "sk-test-key",
+		APIKey:   DefaultApiKey,
 		MaxConns: 100,
 	})
 
@@ -118,7 +120,7 @@ func testAnthropicEndpoints(baseURL string) {
 		BaseURL:  baseURL,
 		Timeout:  10 * time.Second,
 		Provider: "anthropic",
-		APIKey:   "sk-ant-test-key",
+		APIKey:   DefaultApiKey,
 		MaxConns: 80,
 	})
 
