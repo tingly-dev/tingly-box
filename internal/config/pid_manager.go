@@ -24,6 +24,7 @@ func NewPIDManager(configDir string) *PIDManager {
 // CreatePIDFile creates a PID file with current process ID
 func (pm *PIDManager) CreatePIDFile() error {
 	pid := os.Getpid()
+	fmt.Printf("Save PID file: %s\n", pm.pidFile)
 	return os.WriteFile(pm.pidFile, []byte(strconv.Itoa(pid)), 0644)
 }
 
@@ -53,16 +54,8 @@ func (pm *PIDManager) IsRunning() bool {
 
 	// Check if process with this PID exists
 	// On Unix-like systems, we can check if we can signal the process
-	process, err := os.FindProcess(pid)
+	_, err = os.FindProcess(pid)
 	if err != nil {
-		return false
-	}
-
-	// Send signal 0 to check if process exists
-	err = process.Signal(os.Signal(nil))
-	if err != nil {
-		// Process doesn't exist, remove stale PID file
-		pm.RemovePIDFile()
 		return false
 	}
 
