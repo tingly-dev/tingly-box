@@ -1,6 +1,8 @@
 package server
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"sync"
@@ -114,14 +116,16 @@ func (p *ClientPool) generateProviderKey(provider *config.Provider) string {
 	return fmt.Sprintf("%s:%s:%s", provider.Name, provider.APIBase, hashToken(provider.Token))
 }
 
-// hashToken creates a simple hash of the token for key generation
+// hashToken creates a secure hash of the token for key generation
 // This ensures different tokens for the same provider get different clients
 func hashToken(token string) string {
-	if len(token) <= 8 {
-		return token
+	if token == "" {
+		return ""
 	}
-	// Use first and last 4 chars as a simple hash
-	return token[:4] + token[len(token)-4:]
+	h := sha256.New()
+	h.Write([]byte(token))
+	// Use first 16 characters, providing sufficient entropy while maintaining reasonable length
+	return hex.EncodeToString(h.Sum(nil))[:16]
 }
 
 // Clear removes all clients from the pool
