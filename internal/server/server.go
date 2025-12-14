@@ -236,6 +236,8 @@ func (s *Server) setupRoutes() {
 	{
 		// Chat completions endpoint (Anthropic compatible)
 		anthropicV1.POST("/messages", s.ModelAuth(), s.AnthropicMessages)
+		// Count tokens endpoint (Anthropic compatible)
+		anthropicV1.POST("/messages/count_tokens", s.ModelAuth(), s.AnthropicCountTokens)
 		// Models endpoint (Anthropic compatible)
 		//anthropicV1.GET("/models", s.ModelAuth(), s.AnthropicModels)
 	}
