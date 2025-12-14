@@ -13,8 +13,41 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// PidFile stores the server process ID
-const PidFile = "tingly-server.pid"
+// stopServer stops the running server using the PID manager
+func stopServer(pidManager *config.PIDManager) error {
+	// Get PID from manager
+	pid, err := pidManager.GetPID()
+	if err != nil {
+		return fmt.Errorf("PID file does not exist or is invalid: %w", err)
+	}
+
+	// Find and signal the process
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return fmt.Errorf("failed to find process: %w", err)
+	}
+
+	// Send SIGTERM for graceful shutdown
+	if err := process.Signal(syscall.SIGTERM); err != nil {
+		return fmt.Errorf("failed to send shutdown signal: %w", err)
+	}
+
+	// Wait for process to exit
+	for i := 0; i < 30; i++ { // Wait up to 30 seconds
+		if !pidManager.IsRunning() {
+			return nil
+		}
+		time.Sleep(1 * time.Second)
+	}
+
+	// If still running, force kill
+	fmt.Println("Server didn't stop gracefully, force killing...")
+	if err := process.Signal(syscall.SIGKILL); err != nil {
+		return fmt.Errorf("failed to force kill process: %w", err)
+	}
+
+	return nil
+}
 
 // StartCommand represents the start server command
 func StartCommand(appConfig *config.AppConfig) *cobra.Command {
@@ -28,13 +61,28 @@ func StartCommand(appConfig *config.AppConfig) *cobra.Command {
 		Long: `Start the Tingly Box HTTP server that provides the unified API endpoint.
 The server will handle request routing to configured AI providers.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			serverManager := server.NewServerManagerWithOptions(appConfig, useUI)
+			// Set port if provided
+			if port != 8080 {
+				if err := appConfig.SetServerPort(port); err != nil {
+					return fmt.Errorf("failed to set server port: %w", err)
+				}
+			}
 
-			// Check if server is already running
-			if serverManager.IsRunning() {
-				fmt.Println("Server is already running")
+			// Create PID manager
+			pidManager := config.NewPIDManager(appConfig.ConfigDir())
+
+			// Check if server is already running using PID manager
+			if pidManager.IsRunning() {
+				fmt.Printf("Server is already running on port %d\n", appConfig.GetServerPort())
 				return nil
 			}
+
+			// Create PID file before starting server
+			if err := pidManager.CreatePIDFile(); err != nil {
+				return fmt.Errorf("failed to create PID file: %w", err)
+			}
+
+			serverManager := server.NewServerManagerWithOptions(appConfig, useUI)
 
 			// Setup signal handling for graceful shutdown
 			sigChan := make(chan os.Signal, 1)
@@ -50,15 +98,27 @@ The server will handle request routing to configured AI providers.`,
 				}
 			}()
 
+			fmt.Printf("Server starting on port %d...\n", appConfig.GetServerPort())
+			fmt.Printf("API endpoint: http://localhost:%d/v1/chat/completions\n", appConfig.GetServerPort())
+			if useUI {
+				fmt.Printf("Web UI: http://localhost:%d/dashboard\n", appConfig.GetServerPort())
+			}
+
 			// Wait for either server error, shutdown signal, or web UI stop request
 			select {
 			case err := <-serverErr:
+				// Clean up PID file on error
+				pidManager.RemovePIDFile()
 				return fmt.Errorf("server stopped unexpectedly: %w", err)
 			case <-sigChan:
 				fmt.Println("\nReceived shutdown signal, stopping server...")
+				// Clean up PID file on shutdown
+				defer pidManager.RemovePIDFile()
 				return serverManager.Stop()
 			case <-server.GetShutdownChannel():
 				fmt.Println("\nReceived stop request from web UI, stopping server...")
+				// Clean up PID file on shutdown
+				defer pidManager.RemovePIDFile()
 				return serverManager.Stop()
 			}
 		},
@@ -78,15 +138,15 @@ func StopCommand(appConfig *config.AppConfig) *cobra.Command {
 		Long: `Stop the running Tingly Box HTTP server gracefully.
 All ongoing requests will be completed before shutdown.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			serverManager := server.NewServerManager(appConfig)
+			pidManager := config.NewPIDManager(appConfig.ConfigDir())
 
-			if !serverManager.IsRunning() {
+			if !pidManager.IsRunning() {
 				fmt.Println("Server is not running")
 				return nil
 			}
 
 			fmt.Println("Stopping server...")
-			if err := serverManager.Stop(); err != nil {
+			if err := stopServer(pidManager); err != nil {
 				return fmt.Errorf("failed to stop server: %w", err)
 			}
 
@@ -107,17 +167,31 @@ func StatusCommand(appConfig *config.AppConfig) *cobra.Command {
 show configuration information including number of providers and server port.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			providers := appConfig.ListProviders()
-			serverManager := server.NewServerManager(appConfig)
-			serverRunning := serverManager.IsRunning()
+			pidManager := config.NewPIDManager(appConfig.ConfigDir())
+			serverRunning := pidManager.IsRunning()
+			globalConfig := appConfig.GetGlobalConfig()
 
 			fmt.Println("=== Tingly Box Status ===")
 			fmt.Printf("Server Status: ")
 			if serverRunning {
 				fmt.Printf("Running\n")
-				fmt.Printf("Port: %d\n", appConfig.GetServerPort())
-				fmt.Printf("Endpoint: http://localhost:%d/v1/chat/completions\n", appConfig.GetServerPort())
+				port := appConfig.GetServerPort()
+				fmt.Printf("Port: %d\n", port)
+				fmt.Printf("OpenAI Style API Endpoint: http://localhost:%d/openai/v1/chat/completions\n", port)
+				fmt.Printf("Anthropic Style API Endpoint: http://localhost:%d/anthropic/v1/messages\n", port)
+				fmt.Printf("Web UI: http://localhost:%d/dashboard\n", port)
+				if globalConfig.HasUserToken() {
+					fmt.Printf("UI Management Key: %s\n", globalConfig.GetUserToken())
+				}
 			} else {
 				fmt.Printf("Stopped\n")
+			}
+
+			fmt.Printf("\nAuthentication:\n")
+			if globalConfig.HasModelToken() {
+				fmt.Printf("  Model API Key: Configured (sk-tingly- format)\n")
+			} else {
+				fmt.Printf("  Model API Key: Not configured (will auto-generate on start)\n")
 			}
 
 			fmt.Printf("\nConfigured Providers: %d\n", len(providers))
@@ -128,7 +202,23 @@ show configuration information including number of providers and server port.`,
 					if provider.Enabled {
 						status = "Enabled"
 					}
-					fmt.Printf("  - %s (%s): %s\n", provider.Name, provider.APIBase, status)
+					fmt.Printf("  - %s (%s) [%s]: %s\n", provider.Name, provider.APIBase, provider.APIStyle, status)
+				}
+			}
+
+			// Show rules
+			cfg := appConfig.GetGlobalConfig()
+			rules := cfg.Rules
+			fmt.Printf("\nConfigured Rules: %d\n", len(rules))
+			if len(rules) > 0 {
+				fmt.Println("Rules:")
+				for _, rule := range rules {
+					status := "Inactive"
+					if rule.Active {
+						status = "Active"
+					}
+					serviceCount := len(rule.GetServices())
+					fmt.Printf("  - %s -> %s: %s (%d services)\n", rule.RequestModel, rule.ResponseModel, status, serviceCount)
 				}
 			}
 
@@ -150,15 +240,21 @@ func RestartCommand(appConfig *config.AppConfig) *cobra.Command {
 This command will stop the current server (if running) and start a new instance.
 The restart is graceful - ongoing requests will be completed before shutdown.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// First, clean up any existing PID file to simulate a stop
-			serverManager := server.NewServerManager(appConfig)
-			wasRunning := serverManager.IsRunning()
+			// Set port if provided
+			if port != 8080 {
+				if err := appConfig.SetServerPort(port); err != nil {
+					return fmt.Errorf("failed to set server port: %w", err)
+				}
+			}
+
+			pidManager := config.NewPIDManager(appConfig.ConfigDir())
+			wasRunning := pidManager.IsRunning()
 
 			if wasRunning {
 				fmt.Println("Stopping current server...")
-				// For a simple restart, we just clean up the PID file
-				// In a real implementation, you would send a signal to the running process
-				serverManager.Cleanup()
+				if err := stopServer(pidManager); err != nil {
+					return fmt.Errorf("failed to stop server: %w", err)
+				}
 				fmt.Println("Server stopped successfully")
 
 				// Give a moment for cleanup
@@ -167,17 +263,27 @@ The restart is graceful - ongoing requests will be completed before shutdown.`,
 				fmt.Println("Server was not running, starting it...")
 			}
 
+			// Create PID file for new server
+			if err := pidManager.CreatePIDFile(); err != nil {
+				return fmt.Errorf("failed to create PID file: %w", err)
+			}
+
 			// Create a new server manager for starting
 			newServerManager := server.NewServerManager(appConfig)
 
 			// Start server with new configuration
 			fmt.Println("Starting server...")
 			if err := newServerManager.Start(); err != nil {
+				// Clean up PID file on error
+				pidManager.RemovePIDFile()
 				return fmt.Errorf("failed to start server: %w", err)
 			}
 
-			fmt.Printf("Server restarted successfully on port %d\n", appConfig.GetServerPort())
-			fmt.Printf("API endpoint: http://localhost:%d/v1/chat/completions\n", appConfig.GetServerPort())
+			serverPort := appConfig.GetServerPort()
+			fmt.Printf("Server restarted successfully on port %d\n", serverPort)
+			fmt.Printf("OpenAI Style API Endpoint: http://localhost:%d/openai/v1/chat/completions\n", serverPort)
+			fmt.Printf("Anthropic Style API Endpoint: http://localhost:%d/anthropic/v1/messages\n", serverPort)
+			fmt.Printf("Web UI: http://localhost:%d/dashboard\n", serverPort)
 			fmt.Println("Use 'tingly status' to check server status")
 			return nil
 		},
