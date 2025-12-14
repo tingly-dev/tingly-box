@@ -37,6 +37,7 @@ type serverConfig struct {
 	msgDelayMs           int
 	randomDelayMinMs     int
 	randomDelayMaxMs     int
+	apiKey               string
 }
 
 // Option is a functional option for configuring the MockServer
@@ -157,6 +158,54 @@ func WithRandomDelay(minMs, maxMs int) Option {
 	}
 }
 
+// WithApiKey sets the authentication key required for requests
+func WithApiKey(key string) Option {
+	return func(c *serverConfig) {
+		c.apiKey = key
+	}
+}
+
+// authMiddleware creates a middleware that checks for valid authentication
+func (ms *MockServer) authMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// If no auth key is configured, allow all requests
+		if ms.config.apiKey == "" {
+			c.Next()
+			return
+		}
+
+		// Check Authorization header (Bearer token)
+		authHeader := c.GetHeader("Authorization")
+		if authHeader != "" {
+			// Remove "Bearer " prefix if present
+			token := authHeader
+			if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
+				token = authHeader[7:]
+			}
+			if token == ms.config.apiKey {
+				c.Next()
+				return
+			}
+		}
+
+		// Check x-api-key header (Anthropic style)
+		apiKey := c.GetHeader("x-api-key")
+		if apiKey == ms.config.apiKey {
+			c.Next()
+			return
+		}
+
+		// If we reach here, authentication failed
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": gin.H{
+				"type":    "authentication_error",
+				"message": "Invalid authentication key",
+			},
+		})
+		c.Abort()
+	}
+}
+
 // WithDefaultOptions applies sensible defaults
 func WithDefaultOptions() Option {
 	return func(c *serverConfig) {
@@ -224,6 +273,11 @@ func (ms *MockServer) Start() error {
 	// ms.engine.Use(gin.Logger())
 	ms.engine.Use(gin.Recovery())
 
+	// Add auth middleware if auth key is configured
+	if ms.config.apiKey != "" {
+		ms.engine.Use(ms.authMiddleware())
+	}
+
 	// Add CORS middleware if needed
 	ms.engine.Use(func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")
@@ -274,4 +328,11 @@ func (ms *MockServer) Stop() error {
 // Port returns the configured port
 func (ms *MockServer) Port() int {
 	return ms.config.port
+}
+
+// UseAuthMiddleware applies the auth middleware to all routes
+func (ms *MockServer) UseAuthMiddleware() {
+	if ms.engine != nil {
+		ms.engine.Use(ms.authMiddleware())
+	}
 }
