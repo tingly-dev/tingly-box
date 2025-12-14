@@ -89,6 +89,8 @@ func NewServerWithOptions(cfg *config.Config, useUI bool) *Server {
 		memoryLogger = nil
 	}
 
+	gin.SetMode(gin.ReleaseMode)
+
 	// Create server struct first
 	server := &Server{
 		config:     cfg,
