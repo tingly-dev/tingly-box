@@ -15,6 +15,11 @@ import {
     CardActions,
     CardContent,
     Chip,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogContentText,
+    DialogTitle,
     Divider,
     FormControl,
     IconButton,
@@ -35,15 +40,27 @@ import UnifiedCard from '../components/UnifiedCard';
 import {api} from '../services/api';
 
 const ServiceSection = styled(Box)(({ theme }) => ({
-    height: 160,
-    overflow: 'auto',
+    maxHeight: 160,
+    overflowY: 'auto',
     paddingTop: 10,
     marginRight: -theme.spacing(1),
     paddingRight: theme.spacing(2),
+    '&::-webkit-scrollbar': {
+        width: 6,
+    },
+    '&::-webkit-scrollbar-track': {
+        background: 'transparent',
+    },
+    '&::-webkit-scrollbar-thumb': {
+        backgroundColor: 'rgba(0, 0, 0, 0.2)',
+        borderRadius: 3,
+    },
+    '&::-webkit-scrollbar-thumb:hover': {
+        backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    },
 }));
 
 const RuleCard = styled(Card)(({ theme }) => ({
-    height: '100%',
     display: 'flex',
     flexDirection: 'column',
     '&:hover': {
@@ -78,6 +95,8 @@ const Rule = () => {
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [loading, setLoading] = useState(true);
     const [savingRecords, setSavingRecords] = useState<Set<string>>(new Set());
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [recordToDelete, setRecordToDelete] = useState<string | null>(null);
 
     const loadData = useCallback(async () => {
         setLoading(true);
@@ -110,21 +129,26 @@ const Rule = () => {
 
     useEffect(() => {
         if (Array.isArray(rules)) {
-            const records: ConfigRecord[] = rules.map((rule: any) => ({
-                uuid: rule.uuid || crypto.randomUUID(),
-                requestModel: rule.request_model || '',
-                responseModel: rule.response_model || '',
-                active: rule.active !== undefined ? rule.active : true,
-                providers: (rule.services || []).map((service: any) => ({
-                    uuid: crypto.randomUUID(),
-                    provider: service.provider || '',
-                    model: service.model || '',
-                    isManualInput: false,
-                    weight: service.weight || 0,
-                    active: service.active !== undefined ? service.active : true,
-                    time_window: service.time_window || 0,
-                })),
-            }));
+            const records: ConfigRecord[] = rules.map((rule: any) => {
+                // Use the rule's UUID as-is, don't generate new ones for existing rules
+                const ruleUuid = rule.uuid || '';
+                return {
+                    uuid: ruleUuid,
+                    requestModel: rule.request_model || '',
+                    responseModel: rule.response_model || '',
+                    active: rule.active !== undefined ? rule.active : true,
+                    providers: (rule.services || []).map((service: any) => ({
+                        // Use service identifier if available, otherwise generate one
+                        uuid: service.id || service.uuid || crypto.randomUUID(),
+                        provider: service.provider || '',
+                        model: service.model || '',
+                        isManualInput: false,
+                        weight: service.weight || 0,
+                        active: service.active !== undefined ? service.active : true,
+                        time_window: service.time_window || 0,
+                    })),
+                };
+            });
             setConfigRecords(records);
         } else {
             setConfigRecords([]);
@@ -201,7 +225,22 @@ const Rule = () => {
     };
 
     const deleteRule = (recordId: string) => {
-        api.deleteRule(recordId).then(() => loadData())
+        setRecordToDelete(recordId);
+        setDeleteDialogOpen(true);
+    };
+
+    const confirmDeleteRule = async () => {
+        if (recordToDelete) {
+            await api.deleteRule(recordToDelete);
+            await loadData();
+        }
+        setDeleteDialogOpen(false);
+        setRecordToDelete(null);
+    };
+
+    const cancelDelete = () => {
+        setDeleteDialogOpen(false);
+        setRecordToDelete(null);
     };
 
     const updateConfigRecord = (recordId: string, field: keyof ConfigRecord, value: any) => {
@@ -332,17 +371,7 @@ const Rule = () => {
                             </Typography>
                         </Box>
                     ) : (
-                        <Box
-                            sx={{
-                                display: 'grid',
-                                gridTemplateColumns: {
-                                    xs: '1fr',
-                                    sm: 'repeat(3, 1fr)',
-                                    lg: 'repeat(3, 1fr)',
-                                },
-                                gap: 2,
-                            }}
-                        >
+                        <Stack spacing={2}>
                             {configRecords.map((record) => (
                                 <RuleCard
                                     key={record.uuid}
@@ -404,7 +433,7 @@ const Rule = () => {
                                                         disabled={savingRecords.has(record.uuid)}
                                                     />
                                                 </Stack>
-                                                <Stack spacing={1}>
+                                                <Stack direction="row" spacing={1}>
                                                     <TextField
                                                         label="Request Model"
                                                         value={record.requestModel}
@@ -496,7 +525,7 @@ const Rule = () => {
                                                                         value={provider.provider ? (providers.find(p => p.name === provider.provider)?.api_style || 'openai') : ''}
                                                                         placeholder=""
                                                                         size="small"
-                                                                        sx={{ minWidth: 90 }}
+                                                                        sx={{ minWidth: 50 }}
                                                                         disabled
                                                                         slotProps={{
                                                                             input: {
@@ -648,7 +677,7 @@ const Rule = () => {
                                                             flexDirection: 'column',
                                                             alignItems: 'center',
                                                             justifyContent: 'center',
-                                                            height: 200,
+                                                            minHeight: 120,
                                                             textAlign: 'center',
                                                             border: '2px dashed',
                                                             borderColor: 'divider',
@@ -690,11 +719,35 @@ const Rule = () => {
                                     </CardActions>
                                 </RuleCard>
                             ))}
-                        </Box>
+                        </Stack>
                     )}
 
                 </Stack>
             </UnifiedCard>
+
+            <Dialog
+                open={deleteDialogOpen}
+                onClose={cancelDelete}
+                aria-labelledby="delete-dialog-title"
+                aria-describedby="delete-dialog-description"
+            >
+                <DialogTitle id="delete-dialog-title">
+                    Delete Rule
+                </DialogTitle>
+                <DialogContent>
+                    <DialogContentText id="delete-dialog-description">
+                        Are you sure you want to delete this rule? This action cannot be undone.
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={cancelDelete} color="primary">
+                        Cancel
+                    </Button>
+                    <Button onClick={confirmDeleteRule} color="error" variant="contained" autoFocus>
+                        Delete
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </PageLayout>
     );
 };
