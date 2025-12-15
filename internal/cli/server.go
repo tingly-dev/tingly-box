@@ -60,6 +60,7 @@ type startServerOptions struct {
 	Port     int
 	UseUI    bool
 	UseDebug bool
+	enableAdaptor bool
 }
 
 // startServer handles the server starting logic
@@ -85,7 +86,7 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 		return fmt.Errorf("failed to create PID file: %w", err)
 	}
 
-	serverManager := server.NewServerManagerWithOptions(appConfig, opts.UseUI)
+	serverManager := server.NewServerManagerWithOptions(appConfig, opts.UseUI, opts.enableAdaptor)
 
 	// Setup signal handling for graceful shutdown
 	sigChan := make(chan os.Signal, 1)

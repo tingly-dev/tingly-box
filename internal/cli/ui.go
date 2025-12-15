@@ -38,7 +38,7 @@ If the server is not running, it will be started first.`,
 
 				// Start server in background
 				go func() {
-					newServerManager := server.NewServerManagerWithOptions(appConfig, true)
+					newServerManager := server.NewServerManagerWithOptions(appConfig, true, false)
 					if err := newServerManager.Start(); err != nil {
 						fmt.Printf("Failed to start server: %v\n", err)
 					}

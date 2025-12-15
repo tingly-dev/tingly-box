@@ -17,22 +17,25 @@ type ServerManager struct {
 	appConfig *config.AppConfig
 	server    *Server
 	useUI     bool
+	enableAdaptor bool
 	status    string
 	sync.Mutex
 }
 
 // NewServerManager creates a new server manager with UI enabled by default
 func NewServerManager(appConfig *config.AppConfig) *ServerManager {
-	res := NewServerManagerWithOptions(appConfig, true)
+	res := NewServerManagerWithOptions(appConfig, true, false)
 	res.Setup(appConfig.GetServerPort())
 	return res
 }
 
 // NewServerManagerWithOptions creates a new server manager with UI option
-func NewServerManagerWithOptions(appConfig *config.AppConfig, useUI bool) *ServerManager {
+func NewServerManagerWithOptions(appConfig *config.AppConfig, useUI bool, enableAdaptor bool) *ServerManager {
 	res := &ServerManager{
-		appConfig: appConfig,
-		useUI:     useUI,
+		appConfig:     appConfig,
+
+		useUI:         useUI,
+		enableAdaptor: enableAdaptor,
 	}
 	res.Setup(appConfig.GetServerPort())
 	return res
@@ -61,8 +64,8 @@ func (sm *ServerManager) Setup(port int) error {
 		}
 	}
 
-	// Create server with UI option
-	sm.server = NewServerWithOptions(sm.appConfig.GetGlobalConfig(), sm.useUI)
+	// Create server with UI and adaptor options
+	sm.server = NewServerWithAllOptions(sm.appConfig.GetGlobalConfig(), sm.useUI, sm.enableAdaptor)
 
 	// Set global server instance for web UI control
 	SetGlobalServer(sm.server)
