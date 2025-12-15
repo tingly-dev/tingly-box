@@ -41,13 +41,13 @@ const AddProviderDialog = ({
 }: AddProviderDialogProps) => {
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-            <DialogTitle>Add New Provider</DialogTitle>
+            <DialogTitle>Add New Credential</DialogTitle>
             <form onSubmit={onSubmit}>
                 <DialogContent>
                     <Stack spacing={2} mt={1}>
                         <TextField
                             fullWidth
-                            label="Provider Name"
+                            label="Name"
                             value={providerName}
                             onChange={(e) => onProviderNameChange(e.target.value)}
                             required
@@ -87,7 +87,7 @@ const AddProviderDialog = ({
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={onClose}>Cancel</Button>
-                    <Button type="submit" variant="contained">Add Provider</Button>
+                    <Button type="submit" variant="contained">Add Key</Button>
                 </DialogActions>
             </form>
         </Dialog>

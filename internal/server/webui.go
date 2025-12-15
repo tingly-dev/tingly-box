@@ -53,8 +53,9 @@ func (s *Server) UseUIEndpoints() {
 	// Dashboard endpoints
 
 	// UI page routes
-	s.router.GET("/dashboard", s.UseIndex)
-	s.router.GET("/providers", s.UseIndex)
+	s.router.GET("/home", s.UseIndex)
+	s.router.GET("/credential", s.UseIndex)
+	s.router.GET("/rule", s.UseIndex)
 	s.router.GET("/system", s.UseIndex)
 	s.router.GET("/history", s.UseIndex)
 

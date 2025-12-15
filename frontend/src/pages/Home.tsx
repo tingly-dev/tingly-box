@@ -30,7 +30,7 @@ const defaultRule = "tingly"
 const defaultRuleUUID = "tingly"
 
 
-const Dashboard = () => {
+const Home = () => {
     const navigate = useNavigate();
     const [providers, setProviders] = useState<any[]>([]);
     const [rule, setRule] = useState<any>({});
@@ -407,7 +407,7 @@ const Dashboard = () => {
                             sx={{mb: 4, maxWidth: 400, mx: 'auto'}}>
                     <strong>Steps to get started:</strong><br/>
                     1. Click the + button to add a provider<br/>
-                    2. Configure your API credentials<br/>
+                    2. Configure your API keys<br/>
                     3. Select your preferred model
                 </Typography>
                 <Button
@@ -656,7 +656,7 @@ const Dashboard = () => {
         >
             {/* Server Information Header */}
             <UnifiedCard
-                title="Use API"
+                title="Model Proxy Config"
                 // subtitle={`Total: ${providers.length} providers | Enabled: ${providers.filter((p: any) => p.enabled).length}`}
                 size="header"
 
@@ -671,9 +671,9 @@ const Dashboard = () => {
                     <Box>
                         <Button
                             variant="contained"
-                            onClick={() => navigate('/providers')}
+                            onClick={() => navigate('/provider')}
                         >
-                            Manage Providers
+                            Manage Credentials
                         </Button>
                     </Box>
                 }
@@ -715,4 +715,4 @@ const Dashboard = () => {
     );
 };
 
-export default Dashboard;
+export default Home;

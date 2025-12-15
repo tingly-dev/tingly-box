@@ -123,7 +123,7 @@ export default [
             } else {
                 return {
                     success: false,
-                    error: `Provider '${name}' not found`
+                    error: `Credential '${name}' not found`
                 };
             }
         }

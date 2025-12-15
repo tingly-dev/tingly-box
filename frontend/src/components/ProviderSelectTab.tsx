@@ -233,7 +233,7 @@ export default function ProviderSelectTab({
                 <Tabs
                     value={currentTab}
                     onChange={handleTabChange}
-                    aria-label="Provider selection tabs"
+                    aria-label="Credential selection tabs"
                     variant="scrollable"
                     scrollButtons="auto"
                     allowScrollButtonsMobile

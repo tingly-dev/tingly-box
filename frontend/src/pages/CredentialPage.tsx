@@ -7,7 +7,7 @@ import ProviderFormDialog, { type ProviderFormData } from '../components/ui/Prov
 import UnifiedCard from '../components/UnifiedCard';
 import { api } from '../services/api';
 
-const Providers = () => {
+const CredentialPage = () => {
     const [providers, setProviders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [snackbar, setSnackbar] = useState<{
@@ -77,7 +77,7 @@ const Providers = () => {
               });
 
         if (result.success) {
-            showNotification(`Provider ${dialogMode === 'add' ? 'added' : 'updated'} successfully!`, 'success');
+            showNotification(`Credential ${dialogMode === 'add' ? 'added' : 'updated'} successfully!`, 'success');
             setDialogOpen(false);
             loadProviders();
         } else {
@@ -89,7 +89,7 @@ const Providers = () => {
         const result = await api.deleteProvider(name);
 
         if (result.success) {
-            showNotification('Provider deleted successfully!', 'success');
+            showNotification('Credential deleted successfully!', 'success');
             loadProviders();
         } else {
             showNotification(`Failed to delete provider: ${result.error}`, 'error');
@@ -130,8 +130,8 @@ const Providers = () => {
         <PageLayout loading={loading}>
             {providers.length > 0 && (
                 <UnifiedCard
-                    title="Current Providers"
-                    subtitle={providers.length > 0 ? `Managing ${providers.length} provider(s)` : "No providers configured yet"}
+                    title="Credentials"
+                    subtitle={providers.length > 0 ? `Managing ${providers.length} credential(s)` : "No model API key configured yet"}
                     size="full"
                     rightAction={
                         <Stack direction="row" spacing={1} alignItems="center">
@@ -141,7 +141,7 @@ const Providers = () => {
                                 onClick={handleAddProviderClick}
                                 size="small"
                             >
-                                Add Provider
+                                Add Credential
                             </Button>
                         </Stack>
                     }
@@ -158,10 +158,10 @@ const Providers = () => {
                     ) : (
                         <Box textAlign="center" py={5}>
                             <Typography variant="h6" color="text.secondary" gutterBottom>
-                                No Providers Configured
+                                No Model API Key Configured
                             </Typography>
                             <Typography color="text.secondary">
-                                Add your first AI provider using the form below to get started.
+                                Add your first API token or key using the button above to get started.
                             </Typography>
                         </Box>
                     )}
@@ -170,13 +170,13 @@ const Providers = () => {
 
             {providers.length === 0 && (
                 <UnifiedCard
-                    title="No Providers Configured"
-                    subtitle="Get started by adding your first AI provider"
+                    title="No Model API Key Configured"
+                    subtitle="Get started by adding your first API token or key"
                     size="large"
                 >
                     <Box textAlign="center" py={3}>
                         <Typography color="text.secondary" gutterBottom>
-                            Click the + button on any card to add a new provider
+                            Configure your API tokens and keys to access AI services
                         </Typography>
                         <Button
                             variant="contained"
@@ -184,7 +184,7 @@ const Providers = () => {
                             onClick={() => setDialogOpen(true)}
                             sx={{ mt: 2 }}
                         >
-                            Add Your First Provider
+                            Add Your First Credential
                         </Button>
                     </Box>
                 </UnifiedCard>
@@ -220,4 +220,4 @@ const Providers = () => {
     );
 };
 
-export default Providers;
+export default CredentialPage;
