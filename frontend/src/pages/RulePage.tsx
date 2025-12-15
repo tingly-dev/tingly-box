@@ -1,8 +1,5 @@
-import React from 'react';
 import {
-    Add as AddIcon,
-    Delete as DeleteIcon,
-    Save as SaveIcon
+    Add as AddIcon
 } from '@mui/icons-material';
 import {
     Box,
@@ -17,8 +14,8 @@ import {
 } from '@mui/material';
 import { useCallback, useEffect, useState } from 'react';
 import { PageLayout } from '../components/PageLayout';
+import RuleCard from '../components/RuleCard';
 import UnifiedCard from '../components/UnifiedCard';
-import SimplifiedRuleCard from '../components/SimplifiedRuleCard';
 import { api } from '../services/api';
 
 
@@ -333,7 +330,7 @@ const RulePage = () => {
                     ) : (
                         <Stack spacing={2}>
                             {configRecords.map((record) => (
-                                <SimplifiedRuleCard
+                                <RuleCard
                                     key={record.uuid}
                                     record={record}
                                     providers={providers}

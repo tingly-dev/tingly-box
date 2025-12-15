@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
 import {
+    Api as ApiIcon,
     Delete as DeleteIcon,
-    Save as SaveIcon,
-    ExpandMore as ExpandMoreIcon,
     ExpandLess as ExpandLessIcon,
-    Api as ApiIcon
+    ExpandMore as ExpandMoreIcon,
+    Save as SaveIcon
 } from '@mui/icons-material';
 import {
     Box,
@@ -20,6 +19,7 @@ import {
     Typography
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
+import React, { useState } from 'react';
 import ProviderConfig from './ProviderConfig';
 
 interface ConfigProvider {
@@ -40,7 +40,7 @@ interface ConfigRecord {
     providers: ConfigProvider[];
 }
 
-interface SimplifiedRuleCardProps {
+interface RuleCardProps {
     record: ConfigRecord;
     providers: any[];
     providerModels: any;
@@ -58,18 +58,6 @@ const StyledCard = styled(Card, {
     shouldForwardProp: (prop) => prop !== 'active',
 })<{ active: boolean }>(({ active }) => ({
     transition: 'all 0.2s ease-in-out',
-    borderRadius: 2,
-    border: '1px solid',
-    borderColor: 'divider',
-    backgroundColor: 'background.paper',
-    '&:hover': {
-        boxShadow: 2,
-        borderColor: active ? 'primary.main' : 'divider',
-    },
-    ...(active ? {} : {
-        backgroundColor: 'grey.50',
-        opacity: 0.8,
-    }),
 }));
 
 const SummarySection = styled(Box)(({ theme }) => ({
@@ -83,7 +71,7 @@ const SummarySection = styled(Box)(({ theme }) => ({
     },
 }));
 
-const SimplifiedRuleCard: React.FC<SimplifiedRuleCardProps> = ({
+const RuleCard: React.FC<RuleCardProps> = ({
     record,
     providers,
     providerModels,
@@ -221,4 +209,4 @@ const SimplifiedRuleCard: React.FC<SimplifiedRuleCardProps> = ({
     );
 };
 
-export default SimplifiedRuleCard;
+export default RuleCard;
