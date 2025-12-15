@@ -251,6 +251,9 @@ const Layout = ({ children }: LayoutProps) => {
                         flex: 1,
                         p: 3,
                         overflowY: 'auto',
+                        height: '100%',
+                        // Ensure proper scrolling
+                        scrollBehavior: 'smooth',
                         '&::-webkit-scrollbar': {
                             width: 8,
                         },
