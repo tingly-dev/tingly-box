@@ -2,7 +2,6 @@
 
 import {
     Configuration,
-    DefaultsApi,
     type FetchProviderModelsResponse,
     HistoryApi,
     ModelsApi,
@@ -11,7 +10,7 @@ import {
     RulesApi,
     ServerApi,
     TestingApi,
-    TokenApi, type TokenResponse
+    TokenApi
 } from '../client';
 
 // Cache for dynamically imported ProxyService
@@ -38,7 +37,6 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 // Type definition for API instances
 interface ApiInstances {
-    defaultsApi: DefaultsApi;
     historyApi: HistoryApi;
     modelsApi: ModelsApi;
     providersApi: ProvidersApi;
@@ -75,7 +73,7 @@ export const getBaseUrl = async (): Promise<string> => {
             }
         }
     } else {
-        basePath =  window.location.href.replace(/\/$/, "")
+        basePath = window.location.href.replace(/\/$/, "")
     }
 
     return basePath
@@ -124,7 +122,6 @@ const createApiInstances = async () => {
     const config = await createApiConfig();
 
     return {
-        defaultsApi: new DefaultsApi(config),
         historyApi: new HistoryApi(config),
         modelsApi: new ModelsApi(config),
         providersApi: new ProvidersApi(config),
@@ -552,13 +549,12 @@ export const api = {
         }
     },
 
-    probeRule: async (rule: any, provider: string, model: string): Promise<any> => {
+    probeModel: async (provider: string, model: string): Promise<any> => {
         try {
             const apiInstances = await getApiInstances();
             const response = await apiInstances.testingApi.apiV1ProbePost({
-                rule: rule,
                 provider: provider,
-                model: model,
+                model: model
             });
             return response.data;
         } catch (error: any) {

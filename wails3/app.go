@@ -70,7 +70,7 @@ func newApp() *application.App {
 		//	},
 		//},
 		Mac: application.MacOptions{
-			ApplicationShouldTerminateAfterLastWindowClosed: true,
+			ApplicationShouldTerminateAfterLastWindowClosed: false,
 		},
 		Windows: application.WindowsOptions{},
 		SingleInstance: &application.SingleInstanceOptions{
