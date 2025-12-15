@@ -37,7 +37,7 @@ func (s *Server) forwardOpenAIRequest(provider *config.Provider, req *RequestWra
 }
 
 // Helper functions to convert between formats
-func (s *Server) convertAnthropicToOpenAI(anthropicReq *AnthropicMessagesRequest) *RequestWrapper {
+func (s *Server) convertAnthropicToOpenAI(anthropicReq *anthropic.MessageNewParams) *RequestWrapper {
 	openaiReq := &RequestWrapper{
 		Model: openai.ChatModel(anthropicReq.Model),
 	}

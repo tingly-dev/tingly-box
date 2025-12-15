@@ -109,10 +109,17 @@ func (s *Server) ChatCompletions(c *gin.Context) {
 		apiStyle = "openai"
 	}
 
-	// ─────────────────────────────────────────────
-	// Anthropic path (WITH TOOL SUPPORT)
-	// ─────────────────────────────────────────────
 	if apiStyle == "anthropic" {
+		// Check if adaptor is enabled
+		if !s.enableAdaptor {
+			c.JSON(http.StatusUnprocessableEntity, ErrorResponse{
+				Error: ErrorDetail{
+					Message: fmt.Sprintf("Request format adaptation is disabled. Cannot send OpenAI request to Anthropic-style provider '%s'. Use --adaptor flag to enable format conversion.", provider.Name),
+					Type:    "adapter_disabled",
+				},
+			})
+			return
+		}
 
 		anthropicReq := s.convertOpenAIToAnthropicRequest(&req)
 

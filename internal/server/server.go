@@ -30,6 +30,7 @@ type Server struct {
 	loadBalancerAPI *LoadBalancerAPI
 	assets          *EmbeddedAssets
 	clientPool      *ClientPool // client pool for caching
+	enableAdaptor   bool
 }
 
 // NewServer creates a new HTTP server instance
@@ -39,6 +40,11 @@ func NewServer(cfg *config.Config) *Server {
 
 // NewServerWithOptions creates a new HTTP server with UI option
 func NewServerWithOptions(cfg *config.Config, useUI bool) *Server {
+	return NewServerWithAllOptions(cfg, useUI, false)
+}
+
+// NewServerWithAllOptions creates a new HTTP server with UI and adaptor options
+func NewServerWithAllOptions(cfg *config.Config, useUI bool, enableAdaptor bool) *Server {
 	// Initialize embedded assets
 	assets, err := NewEmbeddedAssets()
 	if err != nil {
@@ -98,14 +104,15 @@ func NewServerWithOptions(cfg *config.Config, useUI bool) *Server {
 
 	// Create server struct first
 	server := &Server{
-		config:     cfg,
-		jwtManager: jwtManager,
-		router:     gin.New(),
-		logger:     memoryLogger,
-		useUI:      useUI,
-		assets:     assets,
+		config:        cfg,
+		jwtManager:    jwtManager,
+		router:        gin.New(),
+		logger:        memoryLogger,
+		useUI:         useUI,
+		assets:        assets,
 		clientPool: NewClientPool(), // Initialize client pool
-		debugMW:    debugMW,
+		debugMW:       debugMW,
+		enableAdaptor: enableAdaptor,
 	}
 
 	// Initialize statistics middleware with server reference
