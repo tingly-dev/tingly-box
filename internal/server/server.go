@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"path/filepath"
 	"time"
 
 	"tingly-box/internal/auth"
@@ -24,6 +25,7 @@ type Server struct {
 	useUI           bool
 	logger          *memory.MemoryLogger
 	statsMW         *StatsMiddleware
+	debugMW         *DebugMiddleware
 	loadBalancer    *LoadBalancer
 	loadBalancerAPI *LoadBalancerAPI
 	assets          *EmbeddedAssets
@@ -86,6 +88,14 @@ func NewServerWithOptions(cfg *config.Config, useUI bool) *Server {
 		memoryLogger = nil
 	}
 
+	// Initialize debug middleware (only if debug mode is enabled)
+	var debugMW *DebugMiddleware
+	if cfg.GetDebug() {
+		debugLogPath := filepath.Join(config.GetTinglyConfDir(), "debug_requests.log")
+		debugMW = NewDebugMiddleware(debugLogPath, 10)
+		log.Println("Debug middleware initialized (debug=true in config)")
+	}
+
 	// Create server struct first
 	server := &Server{
 		config:     cfg,
@@ -95,6 +105,7 @@ func NewServerWithOptions(cfg *config.Config, useUI bool) *Server {
 		useUI:      useUI,
 		assets:     assets,
 		clientPool: NewClientPool(), // Initialize client pool
+		debugMW:    debugMW,
 	}
 
 	// Initialize statistics middleware with server reference
@@ -151,6 +162,11 @@ func (s *Server) setupMiddleware() {
 
 	// Recovery middleware
 	s.router.Use(gin.Recovery())
+
+	// Debug middleware for logging requests/responses (only if enabled)
+	if s.debugMW != nil {
+		s.router.Use(s.debugMW.Middleware())
+	}
 
 	// Statistics middleware for load balancing
 	s.router.Use(s.statsMW.Middleware())
@@ -241,6 +257,11 @@ func (s *Server) setupRoutes() {
 	api := s.router.Group("/api")
 	api.Use(s.UserAuth()) // Require user authentication for management APIs
 	{
+		// Debug logging control endpoints
+		api.GET("/debug/status", s.getDebugStatus)
+		api.POST("/debug/enable", s.enableDebug)
+		api.POST("/debug/disable", s.disableDebug)
+
 		// Load balancer API routes
 		s.loadBalancerAPI.RegisterRoutes(api.Group("/v1"))
 	}
@@ -290,10 +311,70 @@ func (s *Server) GetLoadBalancer() *LoadBalancer {
 	return s.loadBalancer
 }
 
+// getDebugStatus returns the current debug logging status
+func (s *Server) getDebugStatus(c *gin.Context) {
+	if s.debugMW == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"enabled": false,
+			"message": "Debug middleware not initialized",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"enabled":  s.debugMW.IsEnabled(),
+		"log_path": filepath.Join(config.GetTinglyConfDir(), config.LogDirName, "debug_requests.log"),
+	})
+}
+
+// enableDebug enables debug logging
+func (s *Server) enableDebug(c *gin.Context) {
+	if s.debugMW == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Debug middleware not initialized",
+		})
+		return
+	}
+
+	if err := s.debugMW.Enable(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	log.Println("Debug logging enabled")
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "Debug logging enabled",
+		"log_path": filepath.Join(config.GetTinglyConfDir(), config.LogDirName, "debug_requests.log"),
+	})
+}
+
+// disableDebug disables debug logging
+func (s *Server) disableDebug(c *gin.Context) {
+	if s.debugMW == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Debug middleware not initialized",
+		})
+		return
+	}
+
+	s.debugMW.Disable()
+	log.Println("Debug logging disabled")
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Debug logging disabled",
+	})
+}
+
 // Stop gracefully stops the HTTP server
 func (s *Server) Stop(ctx context.Context) error {
 	if s.httpServer == nil {
 		return nil
+	}
+
+	// Stop debug middleware
+	if s.debugMW != nil {
+		s.debugMW.Stop()
 	}
 
 	// Stop configuration watcher

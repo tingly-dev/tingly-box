@@ -29,6 +29,7 @@ type Config struct {
 	Providers  map[string]*Provider `json:"providers"`
 	ServerPort int                  `json:"server_port"`
 	JWTSecret  string               `json:"jwt_secret"`
+	Debug      bool                 `yaml:"debug" json:"debug"` // Enable debug logging
 
 	ConfigFile string `yaml:"-" json:"-"` // Not serialized to YAML (exported to preserve field)
 
@@ -794,6 +795,21 @@ func (c *Config) migrateRules() {
 			os.WriteFile(c.ConfigFile, data, 0644)
 		}
 	}
+}
+
+// GetDebug returns whether debug logging is enabled
+func (c *Config) GetDebug() bool {
+	c.mu.RLock()
+	defer c.mu.Unlock()
+	return c.Debug
+}
+
+// SetDebug sets the debug logging flag
+func (c *Config) SetDebug(debug bool) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.Debug = debug
+	return c.save()
 }
 
 func (c *Config) DeleteRule(ruleUUID string) error {

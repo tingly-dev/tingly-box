@@ -12,6 +12,8 @@ const (
 	// ModelsDirName is the subdirectory for provider model configurations
 	ModelsDirName = "models"
 
+	LogDirName = "log"
+
 	// RequestTimeout is the default timeout for HTTP requests in seconds
 	RequestTimeout = 60 * time.Second
 )
