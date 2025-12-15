@@ -18,15 +18,15 @@ import {
     Tooltip,
     Typography
 } from '@mui/material';
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import type { ProbeResponse } from '../client';
 import CredentialFormDialog, { type ProviderFormData } from '../components/CredentialFormDialog.tsx';
 import ModelSelectTab, { type ProviderSelectTabOption } from "../components/ModelSelectTab.tsx";
 import { PageLayout } from '../components/PageLayout';
 import Probe from '../components/Probe';
 import UnifiedCard from '../components/UnifiedCard';
 import { api, getBaseUrl } from '../services/api';
-import type { ProbeResponse } from '../client';
 
 const defaultRule = "tingly"
 const defaultRuleUUID = "tingly"
@@ -698,6 +698,7 @@ const Home = () => {
             <UnifiedCard
                 title="Choose Model"
                 size={"full"}
+                height={"100%"}
                 rightAction={
                     <Box sx={{ display: 'flex', gap: 1 }}>
                         <Button
@@ -731,18 +732,18 @@ const Home = () => {
 
                         {/* Probe Component - only show when provider and model are selected */}
                         {selectedOption.provider && selectedOption.model && (
-                            <Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'center' }}>
                                 {/* <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, fontSize: '0.875rem' }}>
                                     Connection Status
                                 </Typography> */}
                                 <Probe
-                                        provider={selectedOption.provider}
-                                        model={selectedOption.model}
-                                        isProbing={isProbing}
-                                        probeResult={probeResult}
-                                        onToggleDetails={() => setDetailsExpanded(!detailsExpanded)}
-                                        detailsExpanded={detailsExpanded}
-                                    />
+                                    provider={selectedOption.provider}
+                                    model={selectedOption.model}
+                                    isProbing={isProbing}
+                                    probeResult={probeResult}
+                                    onToggleDetails={() => setDetailsExpanded(!detailsExpanded)}
+                                    detailsExpanded={detailsExpanded}
+                                />
                             </Box>
                         )}
                     </Stack>
