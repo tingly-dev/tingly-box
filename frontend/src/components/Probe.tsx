@@ -23,43 +23,38 @@ import {
     Typography,
     useTheme
 } from '@mui/material';
-import { useState } from 'react';
-import { api } from '../services/api';
+import React, { useState } from 'react';
 import UnifiedCard from './UnifiedCard';
 import type { ProbeResponse, ErrorDetail } from '../client';
 
-const Probe = ({ provider, model }: { provider: any; model: any }) => {
+interface ProbeProps {
+    provider: any;
+    model: any;
+    isProbing?: boolean;
+    probeResult?: ProbeResponse | null;
+    onToggleDetails?: () => void;
+    detailsExpanded?: boolean;
+}
+
+const Probe = ({ provider, model, isProbing = false, probeResult = null, onToggleDetails, detailsExpanded = false }: ProbeProps) => {
     const theme = useTheme();
-    const [isProbing, setIsProbing] = useState(false);
-    const [probeResult, setProbeResult] = useState<ProbeResponse | null>(null);
-    const [detailsExpanded, setDetailsExpanded] = useState(false);
 
-    const handleProbe = async () => {
-        setIsProbing(true);
-        setProbeResult(null);
+    // Internal state for details expansion if not controlled externally
+    const [internalDetailsExpanded, setInternalDetailsExpanded] = useState(false);
+    const isExpanded = detailsExpanded !== undefined ? detailsExpanded : internalDetailsExpanded;
 
-        try {
-            console.log(provider, model)
-            const result = await api.probeModel(provider, model);
-            setProbeResult(result);
-        } catch (error) {
-            console.error('Probe error:', error);
-            setProbeResult({
-                success: false,
-                error: {
-                    message: (error as Error).message,
-                    type: 'client_error'
-                }
-            });
-        } finally {
-            setIsProbing(false);
+    const handleToggleDetails = () => {
+        if (onToggleDetails) {
+            onToggleDetails();
+        } else {
+            setInternalDetailsExpanded(!isExpanded);
         }
     };
 
     const StatusResponseCard = ({ result }: { result: ProbeResponse }) => (
         <Accordion
-            expanded={detailsExpanded}
-            onChange={(_, isExpanded) => setDetailsExpanded(isExpanded)}
+            expanded={isExpanded}
+            onChange={(_, isExpanded) => handleToggleDetails()}
             disableGutters
             elevation={0}
             sx={{
@@ -251,43 +246,30 @@ const Probe = ({ provider, model }: { provider: any; model: any }) => {
     );
 
     return (
-        <UnifiedCard
-            title={"Check Status"}
-            subtitle="Check model with a sample request"
-            size="medium"
-            width={'100%'}
-            rightAction={
-                <Button
-                    variant="contained"
-                    startIcon={isProbing ? <CircularProgress size={16} color="inherit" /> : <TestIcon />}
-                    onClick={handleProbe}
-                    disabled={isProbing}
-                    sx={{ minWidth: 140 }}
-                >
-                    {isProbing ? 'Checking...' : 'Check'}
-                </Button>
-            }
-        >
-            <Box sx={{ width: '100%', maxWidth: 900 }}>
-                {probeResult && !isProbing ? (
-                    <Box>
-                        {probeResult.data && <StatusResponseCard result={probeResult} />}
-                        {!probeResult.success && probeResult.error && <ErrorDetails result={probeResult} />}
-                    </Box>
-                ) : (
-                    <Box sx={{ textAlign: 'center', py: 8 }}>
-                        {isProbing && (
-                            <Box sx={{ mt: 3 }}>
-                                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                                    Running configuration test...
-                                </Typography>
-                                <LinearProgress sx={{ height: 6, borderRadius: 3 }} />
-                            </Box>
-                        )}
-                    </Box>
-                )}
-            </Box>
-        </UnifiedCard>
+        <Box sx={{ width: '100%', maxWidth: 900 }}>
+            {probeResult && !isProbing ? (
+                <Box>
+                    {probeResult.data && <StatusResponseCard result={probeResult} />}
+                    {!probeResult.success && probeResult.error && <ErrorDetails result={probeResult} />}
+                </Box>
+            ) : (
+                <Box sx={{ textAlign: 'center', py: 8 }}>
+                    {isProbing && (
+                        <Box sx={{ mt: 3 }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                                Running configuration test...
+                            </Typography>
+                            <LinearProgress sx={{ height: 6, borderRadius: 3 }} />
+                        </Box>
+                    )}
+                    {!isProbing && !probeResult && (
+                        <Typography variant="body2" color="text.secondary">
+                            Click "Test Connection" to check the provider and model configuration
+                        </Typography>
+                    )}
+                </Box>
+            )}
+        </Box>
     );
 };
 

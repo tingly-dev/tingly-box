@@ -1,6 +1,7 @@
 import {
     Add as AddIcon,
     ContentCopy as CopyIcon,
+    PlayArrow as ProbeIcon,
     Refresh as RefreshIcon,
     Terminal as TerminalIcon
 } from '@mui/icons-material';
@@ -17,14 +18,15 @@ import {
     Tooltip,
     Typography
 } from '@mui/material';
-import React, {useEffect, useState} from 'react';
-import {useNavigate} from 'react-router-dom';
-import {PageLayout} from '../components/PageLayout';
+import React, { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import CredentialFormDialog, { type ProviderFormData } from '../components/CredentialFormDialog.tsx';
+import ModelSelectTab, { type ProviderSelectTabOption } from "../components/ModelSelectTab.tsx";
+import { PageLayout } from '../components/PageLayout';
 import Probe from '../components/Probe';
-import ModelSelectTab, {type ProviderSelectTabOption} from "../components/ModelSelectTab.tsx";
 import UnifiedCard from '../components/UnifiedCard';
-import CredentialFormDialog, {type ProviderFormData} from '../components/CredentialFormDialog.tsx';
-import {api, getBaseUrl} from '../services/api';
+import { api, getBaseUrl } from '../services/api';
+import type { ProbeResponse } from '../client';
 
 const defaultRule = "tingly"
 const defaultRuleUUID = "tingly"
@@ -36,7 +38,7 @@ const Home = () => {
     const [rule, setRule] = useState<any>({});
     const [providerModels, setProviderModels] = useState<any>({});
     const [loading, setLoading] = useState(true);
-    const [selectedOption, setSelectedOption] = useState<any>({provider: "", model: ""});
+    const [selectedOption, setSelectedOption] = useState<any>({ provider: "", model: "" });
     const [baseUrl, setBaseUrl] = useState<string>("");
 
     // Server info states
@@ -57,7 +59,36 @@ const Home = () => {
         autoHideDuration?: number;
         customContent?: React.ReactNode;
         onClose?: () => void;
-    }>({open: false});
+    }>({ open: false });
+
+    // Probe state and logic
+    const [isProbing, setIsProbing] = useState(false);
+    const [probeResult, setProbeResult] = useState<ProbeResponse | null>(null);
+    const [detailsExpanded, setDetailsExpanded] = useState(false);
+
+    const handleProbe = useCallback(async () => {
+        if (!selectedOption.provider || !selectedOption.model) return;
+
+        setIsProbing(true);
+        setProbeResult(null);
+
+        try {
+            console.log(selectedOption.provider, selectedOption.model);
+            const result = await api.probeModel(selectedOption.provider, selectedOption.model);
+            setProbeResult(result);
+        } catch (error) {
+            console.error('Probe error:', error);
+            setProbeResult({
+                success: false,
+                error: {
+                    message: (error as Error).message,
+                    type: 'client_error'
+                }
+            });
+        } finally {
+            setIsProbing(false);
+        }
+    }, [selectedOption.provider, selectedOption.model]);
 
     // Helper function to show notifications
     const showNotification = (message: string, severity: 'success' | 'info' | 'warning' | 'error' = 'info', autoHideDuration: number = 6000) => {
@@ -66,7 +97,7 @@ const Home = () => {
             message,
             severity,
             autoHideDuration,
-            onClose: () => setNotification(prev => ({...prev, open: false}))
+            onClose: () => setNotification(prev => ({ ...prev, open: false }))
         });
     };
 
@@ -88,7 +119,7 @@ const Home = () => {
                 severity: 'info',
                 onClose: () => {
                     setShowBanner(false);
-                    setNotification(prev => ({...prev, open: false}));
+                    setNotification(prev => ({ ...prev, open: false }));
                 }
             });
         }
@@ -99,7 +130,7 @@ const Home = () => {
         if (showBanner) {
             showBannerNotification();
         } else {
-            setNotification(prev => ({...prev, open: false}));
+            setNotification(prev => ({ ...prev, open: false }));
         }
     }, [showBanner, bannerProvider, bannerModel]);
 
@@ -204,7 +235,7 @@ const Home = () => {
 
     // Composition handlers for provider select
     const handleModelSelect = async (provider: any, model: string) => {
-        setSelectedOption({provider: provider.name, model: model});
+        setSelectedOption({ provider: provider.name, model: model });
 
         try {
             // Update the "tingly" rule with the selected provider and model
@@ -331,14 +362,14 @@ const Home = () => {
                 maxWidth="md"
                 fullWidth
             >
-                <DialogTitle>API Token</DialogTitle>
+                <DialogTitle>API Key</DialogTitle>
                 <DialogContent>
-                    <Box sx={{mb: 2}}>
-                        <Typography variant="body2" color="text.secondary" sx={{mb: 1}}>
+                    <Box sx={{ mb: 2 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                             Your authentication token:
                         </Typography>
                         <Box
-                            onClick={() => copyToClipboard(token, 'API Token')}
+                            onClick={() => copyToClipboard(token, 'API Key')}
                             sx={{
                                 p: 2,
                                 bgcolor: 'grey.100',
@@ -360,11 +391,11 @@ const Home = () => {
                             {token}
                         </Box>
                     </Box>
-                    <Box sx={{display: 'flex', gap: 1}}>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
                         <Button
                             variant="outlined"
-                            onClick={() => copyToClipboard(token, 'API Token')}
-                            startIcon={<CopyIcon fontSize="small"/>}
+                            onClick={() => copyToClipboard(token, 'API Key')}
+                            startIcon={<CopyIcon fontSize="small" />}
                         >
                             Copy Token
                         </Button>
@@ -393,26 +424,26 @@ const Home = () => {
                         },
                     }}
                 >
-                    <AddIcon sx={{fontSize: 40}}/>
+                    <AddIcon sx={{ fontSize: 40 }} />
                 </IconButton>
-                <Typography variant="h5" sx={{fontWeight: 600, mb: 2}}>
+                <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>
                     No Providers Available
                 </Typography>
                 <Typography variant="body1" color="text.secondary"
-                            sx={{mb: 3, maxWidth: 500, mx: 'auto'}}>
+                    sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
                     Get started by adding your first AI provider. You can connect to OpenAI, Anthropic, or
                     any compatible API endpoint.
                 </Typography>
                 <Typography variant="body2" color="text.secondary"
-                            sx={{mb: 4, maxWidth: 400, mx: 'auto'}}>
-                    <strong>Steps to get started:</strong><br/>
-                    1. Click the + button to add a provider<br/>
-                    2. Configure your API keys<br/>
+                    sx={{ mb: 4, maxWidth: 400, mx: 'auto' }}>
+                    <strong>Steps to get started:</strong><br />
+                    1. Click the + button to add a provider<br />
+                    2. Configure your API keys<br />
                     3. Select your preferred model
                 </Typography>
                 <Button
                     variant="contained"
-                    startIcon={<AddIcon/>}
+                    startIcon={<AddIcon />}
                     onClick={handleAddProviderClick}
                     size="large"
                 >
@@ -427,10 +458,10 @@ const Home = () => {
         return (
             <>
                 <Grid container spacing={3}>
-                    <Grid size={{xs: 12, md: 6}}>
+                    <Grid size={{ xs: 12, md: 6 }}>
                         <Stack spacing={2}>
                             {/* OpenAI Row */}
-                            <Box sx={{display: 'flex', alignItems: 'center', gap: 2}}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                                 <Typography
                                     variant="body2"
                                     color="text.secondary"
@@ -463,13 +494,13 @@ const Home = () => {
                                 >
                                     {baseUrl}/openai
                                 </Typography>
-                                <Stack direction="row" spacing={0.5} sx={{flexShrink: 0}}>
+                                <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
                                     <IconButton
                                         onClick={() => copyToClipboard(openaiBaseUrl, 'OpenAI Base URL')}
                                         size="small"
                                         title="Copy OpenAI Base URL"
                                     >
-                                        <CopyIcon fontSize="small"/>
+                                        <CopyIcon fontSize="small" />
                                     </IconButton>
                                     <IconButton
                                         onClick={() => {
@@ -479,13 +510,13 @@ const Home = () => {
                                         size="small"
                                         title="Copy OpenAI cURL Example"
                                     >
-                                        <TerminalIcon fontSize="small"/>
+                                        <TerminalIcon fontSize="small" />
                                     </IconButton>
                                 </Stack>
                             </Box>
 
                             {/* Anthropic Row */}
-                            <Box sx={{display: 'flex', alignItems: 'center', gap: 2}}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                                 <Typography
                                     variant="body2"
                                     color="text.secondary"
@@ -518,13 +549,13 @@ const Home = () => {
                                 >
                                     {baseUrl}/anthropic
                                 </Typography>
-                                <Stack direction="row" spacing={0.5} sx={{flexShrink: 0}}>
+                                <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
                                     <IconButton
                                         onClick={() => copyToClipboard(anthropicBaseUrl, 'Anthropic Base URL')}
                                         size="small"
                                         title="Copy Anthropic Base URL"
                                     >
-                                        <CopyIcon fontSize="small"/>
+                                        <CopyIcon fontSize="small" />
                                     </IconButton>
                                     <IconButton
                                         onClick={() => {
@@ -534,17 +565,17 @@ const Home = () => {
                                         size="small"
                                         title="Copy Anthropic cURL Example"
                                     >
-                                        <TerminalIcon fontSize="small"/>
+                                        <TerminalIcon fontSize="small" />
                                     </IconButton>
                                 </Stack>
                             </Box>
                         </Stack>
                     </Grid>
 
-                    <Grid size={{xs: 12, md: 6}}>
+                    <Grid size={{ xs: 12, md: 6 }}>
                         <Stack spacing={2}>
                             {/* Token Row */}
-                            <Box sx={{display: 'flex', alignItems: 'center', gap: 2}}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                                 <Typography
                                     variant="body2"
                                     color="text.secondary"
@@ -570,7 +601,7 @@ const Home = () => {
                                 >
                                     ••••••••••••••••
                                 </Typography>
-                                <Stack direction="row" spacing={0.5} sx={{flexShrink: 0}}>
+                                <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
                                     <Tooltip title="View Token">
                                         <IconButton
                                             onClick={() => setShowTokenModal(true)}
@@ -586,20 +617,20 @@ const Home = () => {
                                         size="small"
                                         title="Generate New Token"
                                     >
-                                        <RefreshIcon fontSize="small"/>
+                                        <RefreshIcon fontSize="small" />
                                     </IconButton>
                                     <IconButton
-                                        onClick={() => copyToClipboard(token, 'API Token')}
+                                        onClick={() => copyToClipboard(token, 'API Key')}
                                         size="small"
                                         title="Copy Token"
                                     >
-                                        <CopyIcon fontSize="small"/>
+                                        <CopyIcon fontSize="small" />
                                     </IconButton>
                                 </Stack>
                             </Box>
 
                             {/* Model Row */}
-                            <Box sx={{display: 'flex', alignItems: 'center', gap: 2}}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                                 <Typography
                                     variant="body2"
                                     color="text.secondary"
@@ -633,13 +664,13 @@ const Home = () => {
                                 >
                                     tingly
                                 </Typography>
-                                <Stack direction="row" spacing={0.5} sx={{flexShrink: 0}}>
+                                <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
                                     <IconButton
                                         onClick={() => copyToClipboard('tingly', 'LLM API Model')}
                                         size="small"
                                         title="Copy Model"
                                     >
-                                        <CopyIcon fontSize="small"/>
+                                        <CopyIcon fontSize="small" />
                                     </IconButton>
                                 </Stack>
                             </Box>
@@ -668,7 +699,15 @@ const Home = () => {
                 title="Choose Model"
                 size={"full"}
                 rightAction={
-                    <Box>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Button
+                            variant="outlined"
+                            onClick={handleProbe}
+                            disabled={!selectedOption.provider || !selectedOption.model || isProbing}
+                            startIcon={<ProbeIcon />}
+                        >
+                            Test Connection
+                        </Button>
                         <Button
                             variant="contained"
                             onClick={() => navigate('/provider')}
@@ -680,7 +719,7 @@ const Home = () => {
             >
 
                 {providers.length > 0 ? (
-                    <Stack spacing={2}>
+                    <Stack spacing={3}>
                         <ModelSelectTab
                             providers={providers}
                             providerModels={providerModels}
@@ -690,14 +729,28 @@ const Home = () => {
                             onRefresh={handleModelRefresh}
                         />
 
+                        {/* Probe Component - only show when provider and model are selected */}
+                        {selectedOption.provider && selectedOption.model && (
+                            <Box>
+                                {/* <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, fontSize: '0.875rem' }}>
+                                    Connection Status
+                                </Typography> */}
+                                <Probe
+                                        provider={selectedOption.provider}
+                                        model={selectedOption.model}
+                                        isProbing={isProbing}
+                                        probeResult={probeResult}
+                                        onToggleDetails={() => setDetailsExpanded(!detailsExpanded)}
+                                        detailsExpanded={detailsExpanded}
+                                    />
+                            </Box>
+                        )}
                     </Stack>
                 ) : (
                     <Guiding></Guiding>
                 )}
-            </UnifiedCard>
 
-            {/* Probe Component */}
-            <Probe provider={selectedOption.provider} model={selectedOption.model}/>
+            </UnifiedCard>
 
             {/* Token Modal */}
             <ApiKeyModal></ApiKeyModal>
