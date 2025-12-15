@@ -65,12 +65,12 @@ const presetCardDimensions: Record<string, PresetDimensions> = {
   large: {
     width: '100%', // Adaptive to parent container max width
     minHeight: '400px', // Min height 400px
-    hasFixedHeight: true,
+    hasFixedHeight: false,
   },
   full: {
     width: '100%', // Adaptive to parent container max width
-    height: '100%', // Adaptive to parent container max height
-    hasFixedHeight: true,
+    // No height constraints - let content determine height
+    hasFixedHeight: false,
   },
   header: {
     width: '100%', // Adaptive to parent container max width
@@ -92,33 +92,22 @@ const getCardDimensions = (
     ? customWidth
     : preset.width;
 
-  // If custom height is provided, prioritize using custom height
-  let height: string | number;
-  if (customHeight !== undefined) {
-    height = customHeight;
-  } else {
-    // Set height based on preset size
-    switch (size) {
-      case 'small':
-      case 'medium':
-      case 'full':
-        height = preset.height;
-        break;
-      case 'large':
-      case 'header':
-        height = preset.minHeight || 'auto';
-        break;
-      default:
-        height = 'auto';
-    }
-  }
-
-  return {
+  // Determine height/minHeight based on preset and custom values
+  const dimensions: any = {
     width,
-    height,
     display: 'flex',
     flexDirection: 'column' as const,
   };
+
+  if (customHeight !== undefined) {
+    dimensions.height = customHeight;
+  } else if (preset.hasFixedHeight && preset.height) {
+    dimensions.height = preset.height;
+  } else if (preset.minHeight) {
+    dimensions.minHeight = preset.minHeight;
+  }
+
+  return dimensions;
 };
 
 const cardVariants = {
@@ -298,28 +287,34 @@ export const UnifiedCard = ({
             ref={contentRef}
             sx={{
               flex: 1,
-              overflow: 'auto',
-              height: scrollContentHeight || '100%',
+              // Only enable internal scrolling for auto-scroll feature
+              overflow: autoScroll ? 'auto' : 'visible',
+              overflowY: autoScroll ? 'auto' : 'visible',
+              overflowX: 'hidden',
+              // Use maxHeight instead of height to allow card to grow with content
+              maxHeight: scrollContentHeight || (autoScroll ? '400px' : 'none'),
               position: 'relative',
-              // Simple scrollbar styling
+              // Ensure proper scrolling behavior
+              scrollBehavior: 'smooth',
+              // Simple scrollbar styling (only show when scrolling is enabled)
               '&::-webkit-scrollbar': {
-                width: '8px',
-                height: '8px',
+                width: autoScroll ? '8px' : 0,
+                height: autoScroll ? '8px' : 0,
               },
               '&::-webkit-scrollbar-track': {
-                background: 'rgba(0, 0, 0, 0.05)',
+                background: autoScroll ? 'rgba(0, 0, 0, 0.05)' : 'transparent',
                 borderRadius: '4px',
               },
               '&::-webkit-scrollbar-thumb': {
-                background: 'rgba(0, 0, 0, 0.2)',
+                background: autoScroll ? 'rgba(0, 0, 0, 0.2)' : 'transparent',
                 borderRadius: '4px',
               },
               '&::-webkit-scrollbar-thumb:hover': {
-                background: 'rgba(0, 0, 0, 0.3)',
+                background: autoScroll ? 'rgba(0, 0, 0, 0.3)' : 'transparent',
               },
               // Firefox scrollbar
-              scrollbarWidth: 'thin',
-              scrollbarColor: 'rgba(0, 0, 0, 0.2) transparent',
+              scrollbarWidth: autoScroll ? 'thin' : 'none',
+              scrollbarColor: autoScroll ? 'rgba(0, 0, 0, 0.2) transparent' : 'transparent',
             }}
             onClick={autoScroll ? handleScrollToggle : undefined}
             style={{ cursor: autoScroll && onScrollToggle ? 'pointer' : 'default' }}

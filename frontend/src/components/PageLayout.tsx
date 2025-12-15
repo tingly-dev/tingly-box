@@ -77,8 +77,14 @@ export const PageLayout: React.FC<PageLayoutProps> = ({
   return (
     <Box
       position="relative"
+      sx={{
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
     >
-      <Box>{children}</Box>
+      <Box sx={{ flex: 1 }}>{children}</Box>
 
       {/* Unified Notification System */}
       {notification?.open && (
