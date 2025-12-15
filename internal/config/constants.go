@@ -14,6 +14,9 @@ const (
 
 	LogDirName = "log"
 
+	// DebugLogFileName is the name of the debug log file
+	DebugLogFileName = "bad_requests.log"
+
 	// RequestTimeout is the default timeout for HTTP requests in seconds
 	RequestTimeout = 60 * time.Second
 )

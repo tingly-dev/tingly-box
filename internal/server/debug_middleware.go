@@ -30,6 +30,7 @@ func NewDebugMiddleware(logPath string, maxSizeMB int) *DebugMiddleware {
 		logPath:   logPath,
 		maxSize:   int64(maxSizeMB) * 1024 * 1024, // Convert MB to bytes
 		rotateLog: true,
+		enabled:   true, // Debug middleware is enabled when created
 	}
 
 	// Create log directory if it doesn't exist
@@ -39,11 +40,8 @@ func NewDebugMiddleware(logPath string, maxSizeMB int) *DebugMiddleware {
 			return dm
 		}
 
-		// Check if file exists and determine if debug is enabled
-		if _, err := os.Stat(logPath); err == nil {
-			dm.enabled = true
-			dm.openLogFile()
-		}
+		// Open the log file
+		dm.openLogFile()
 	}
 
 	return dm
@@ -217,6 +215,11 @@ func (dm *DebugMiddleware) logEntry(entry *logEntry) {
 	defer dm.mu.RUnlock()
 
 	if !dm.enabled || dm.logFile == nil {
+		return
+	}
+
+	// Only log error responses (4xx, 5xx)
+	if entry.StatusCode < 400 {
 		return
 	}
 

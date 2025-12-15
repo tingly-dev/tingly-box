@@ -800,7 +800,7 @@ func (c *Config) migrateRules() {
 // GetDebug returns whether debug logging is enabled
 func (c *Config) GetDebug() bool {
 	c.mu.RLock()
-	defer c.mu.Unlock()
+	defer c.mu.RUnlock()
 	return c.Debug
 }
 
