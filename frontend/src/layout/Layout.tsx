@@ -1,4 +1,4 @@
-import { AccountCircle as AccountIcon, CloudQueue as CloudIcon, Dashboard as DashboardIcon, History as HistoryIcon, Key as KeyIcon, Logout as LogoutIcon, Menu as MenuIcon, RuleOutlined, Settings as SettingsIcon } from '@mui/icons-material';
+import { AccountCircle as AccountIcon, Dashboard as DashboardIcon, History as HistoryIcon, Key as KeyIcon, Logout as LogoutIcon, Menu as MenuIcon, RuleOutlined, Settings as SettingsIcon } from '@mui/icons-material';
 import { Box, Drawer, IconButton, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Typography } from '@mui/material';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
@@ -80,7 +80,11 @@ const Layout = ({ children }: LayoutProps) => {
                 <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary' }}>
                     Tingly Box
                 </Typography>
+
             </Box>
+
+
+
 
             {/* Navigation Menu */}
             <List sx={{ flex: 1, py: 2 }}>
@@ -115,6 +119,23 @@ const Layout = ({ children }: LayoutProps) => {
                 ))}
             </List>
 
+            {/* Version Info */}
+            <Typography
+                variant="body2"
+                sx={{
+                    color: 'text.secondary',
+                    fontSize: '0.75rem',
+                    textAlign: 'center',
+                    py: 1,
+                    borderTop: '1px solid',
+                    borderColor: 'divider',
+                    mt: 1,
+                    fontStyle: 'italic'
+                }}
+            >
+                version 0.1.0
+            </Typography>
+
             {/* Bottom Section - Slogan and User */}
             <Box
                 sx={{
@@ -132,7 +153,7 @@ const Layout = ({ children }: LayoutProps) => {
                         color: 'text.secondary',
                         fontSize: '0.75rem',
                         textAlign: 'center',
-                        fontStyle: 'italic'
+                        fontStyle: 'italic',
                     }}
                 >
                     Ready for AI Agent Dev
@@ -166,6 +187,9 @@ const Layout = ({ children }: LayoutProps) => {
                         </MenuItem>
                     </Menu>
                 </Box>
+
+
+
             </Box>
         </Box>
     );
