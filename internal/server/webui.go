@@ -354,7 +354,7 @@ func (s *Server) DeleteRule(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
-			"error":   "Failed to save rule: " + err.Error(),
+			"error":   "Failed to delete rule: " + err.Error(),
 		})
 		return
 	}

@@ -800,14 +800,21 @@ func (c *Config) DeleteRule(ruleUUID string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	var found = 0
+	var found = false
+	var index = 0
 	for i := range c.Rules {
 		if c.Rules[i].UUID == ruleUUID {
-			found = i
+			index = i
+			found = true
 		}
 	}
 
-	c.Rules = append(c.Rules[:found], c.Rules[found+1:]...)
+	if !found {
+		// Rule not found - return an error
+		return fmt.Errorf("rule with UUID %s not found", ruleUUID)
+	}
+
+	c.Rules = append(c.Rules[:index], c.Rules[index+1:]...)
 	return c.save()
 }
 

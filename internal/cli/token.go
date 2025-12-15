@@ -12,25 +12,40 @@ import (
 func TokenCommand(appConfig *config.AppConfig) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "token",
-		Short: "Generate or display API key (sk-tingly- format) for authentication",
-		Long: `Generate or display an API key with sk-tingly- prefix that contains a base64-encoded JWT.
-The key can be used to authenticate requests to the Tingly Box API endpoint.
-Include this token in the Authorization header as 'Bearer <token>'.`,
+		Short: "Display UI management key and model API key",
+		Long: `Display the UI management key for dashboard access and the model API key for API authentication.
+These keys are used for different purposes:
+- UI Management Key: For accessing the web dashboard/management interface
+- Model API Key: For authenticating API requests (sk-tingly- format)`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			globalConfig := appConfig.GetGlobalConfig()
 
-			// Check if token exists in global config
-			if globalConfig.HasToken() {
-				fmt.Println("Current API Key from Global Config:")
-				fmt.Println(globalConfig.GetToken())
-				fmt.Println()
-				fmt.Println("Usage in API requests:")
-				fmt.Println("Authorization: Bearer", globalConfig.GetToken())
-				fmt.Println()
-				fmt.Println("This token is stored in config/global_config.yaml")
-				fmt.Println("The server will use this token for authentication.")
+			// Display UI Management Key (User Token)
+			fmt.Println("===============================")
+			fmt.Println("UI Management Key (User Token)")
+			fmt.Println("===============================")
+			fmt.Println("Purpose: Access the web dashboard and management interface")
+			if globalConfig.HasUserToken() {
+				fmt.Printf("UI Key: %s\n", globalConfig.GetUserToken())
+				fmt.Println("\nUsage:")
+				fmt.Printf("  Dashboard URL: http://localhost:8080/dashboard?user_auth_token=%s\n", globalConfig.GetUserToken())
 			} else {
-				// Generate new token
+				fmt.Println("No UI management key configured.")
+				fmt.Println("The server will auto-generate one on startup if needed.")
+			}
+
+			fmt.Println("\n\n===============================")
+			fmt.Println("   Model API Key (Authentication)")
+			fmt.Println("===============================")
+			fmt.Println("Purpose: Authenticate API requests (Bearer token)")
+
+			// Check if model API key exists
+			if globalConfig.HasModelToken() {
+				fmt.Printf("API Key: %s\n", globalConfig.GetModelToken())
+				fmt.Println("\nUsage in API requests:")
+				fmt.Println("  Authorization: Bearer", globalConfig.GetModelToken())
+			} else {
+				// Generate new model API key
 				jwtManager := auth.NewJWTManager(appConfig.GetJWTSecret())
 
 				apiKey, err := jwtManager.GenerateAPIKey("client")
@@ -38,15 +53,9 @@ Include this token in the Authorization header as 'Bearer <token>'.`,
 					return fmt.Errorf("failed to generate API key: %w", err)
 				}
 
-				fmt.Println("Generated Tingly API Key:")
-				fmt.Println(apiKey)
-				fmt.Println()
-				fmt.Println("This key is a base64-encoded JWT with sk-tingly- prefix.")
-				fmt.Println("Usage in API requests:")
-				fmt.Println("Authorization: Bearer", apiKey)
-				fmt.Println()
-				fmt.Println("The key contains JWT claims that can be validated server-side.")
-				fmt.Println("Note: The server will auto-generate a token on startup if none exists.")
+				fmt.Printf("Generated API Key: %s\n", apiKey)
+				fmt.Println("\nUsage in API requests:")
+				fmt.Println("  Authorization: Bearer", apiKey)
 			}
 
 			return nil

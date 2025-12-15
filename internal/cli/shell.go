@@ -155,6 +155,26 @@ func addProviderInteractive(appConfig *config.AppConfig, reader *bufio.Reader, l
 		return
 	}
 
+	// Ask for API style
+	fmt.Println("\nSelect API style:")
+	fmt.Println("1. openai - For OpenAI-compatible APIs")
+	fmt.Println("2. anthropic - For Anthropic Claude API")
+	fmt.Print("Enter choice (1-2, default: openai): ")
+
+	styleInput, _ := reader.ReadString('\n')
+	styleInput = strings.TrimSpace(strings.TrimSuffix(styleInput, "\n"))
+
+	var apiStyle config.APIStyle = config.APIStyleOpenAI
+	switch styleInput {
+	case "2", "anthropic":
+		apiStyle = config.APIStyleAnthropic
+	case "1", "openai", "":
+		apiStyle = config.APIStyleOpenAI
+	default:
+		fmt.Printf("Invalid choice '%s', using default: openai\n", styleInput)
+		apiStyle = config.APIStyleOpenAI
+	}
+
 	if err := appConfig.AddProviderByName(name, apiBase, token); err != nil {
 		fmt.Printf("❌ Failed to add provider: %v\n", err)
 		if logger != nil {
@@ -166,7 +186,16 @@ func addProviderInteractive(appConfig *config.AppConfig, reader *bufio.Reader, l
 		return
 	}
 
-	fmt.Printf("✅ Provider '%s' added successfully!\n", name)
+	// Update the provider to set the API style
+	if provider, err := appConfig.GetProvider(name); err == nil {
+		provider.APIStyle = apiStyle
+		// Save the configuration
+		if saveErr := appConfig.Save(); saveErr != nil {
+			fmt.Printf("Warning: failed to save API style configuration: %v\n", saveErr)
+		}
+	}
+
+	fmt.Printf("✅ Provider '%s' added successfully with API style '%s'!\n", name, apiStyle)
 	if logger != nil {
 		logger.LogAction(memory.ActionAddProvider, map[string]interface{}{
 			"name":     name,

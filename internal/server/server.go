@@ -89,6 +89,8 @@ func NewServerWithOptions(cfg *config.Config, useUI bool) *Server {
 		memoryLogger = nil
 	}
 
+	gin.SetMode(gin.ReleaseMode)
+
 	// Create server struct first
 	server := &Server{
 		config:     cfg,
@@ -234,6 +236,8 @@ func (s *Server) setupRoutes() {
 	{
 		// Chat completions endpoint (Anthropic compatible)
 		anthropicV1.POST("/messages", s.ModelAuth(), s.AnthropicMessages)
+		// Count tokens endpoint (Anthropic compatible)
+		anthropicV1.POST("/messages/count_tokens", s.ModelAuth(), s.AnthropicCountTokens)
 		// Models endpoint (Anthropic compatible)
 		//anthropicV1.GET("/models", s.ModelAuth(), s.AnthropicModels)
 	}

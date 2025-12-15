@@ -177,6 +177,131 @@ func (s *Server) AnthropicModels(c *gin.Context) {
 	return
 }
 
+// AnthropicCountTokens handles Anthropic v1 count_tokens endpoint
+func (s *Server) AnthropicCountTokens(c *gin.Context) {
+	// Check if beta parameter is set to true
+	beta := c.Query("beta") == "true"
+	if !beta {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "The count_tokens endpoint requires beta=true parameter",
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
+	// Read the raw request body first for debugging purposes
+	bodyBytes, err := c.GetRawData()
+	if err != nil {
+		log.Printf("Failed to read request body: %v", err)
+	} else {
+		// Store the body back for parsing
+		c.Request.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
+	}
+
+	// Parse the request to check if streaming is requested
+	var rawReq map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &rawReq); err != nil {
+		log.Printf("Invalid JSON in request body: %v", err)
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Invalid JSON: " + err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
+	// Check if streaming is requested
+	isStreaming := false
+	if stream, ok := rawReq["stream"].(bool); ok {
+		isStreaming = stream
+	}
+	log.Printf("Stream requested for AnthropicMessages: %v", isStreaming)
+
+	// Parse into MessageNewParams using SDK's JSON unmarshaling
+	var req anthropic.MessageCountTokensParams
+	if err := c.ShouldBindJSON(&req); err != nil {
+		// Log the invalid request for debugging
+		log.Printf("Invalid JSON request received: %v\nBody: %s", err, string(bodyBytes))
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Invalid request body: " + err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
+	// Get model from request
+	model := string(req.Model)
+	if model == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Model is required",
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
+	// Determine provider and model based on request
+	provider, selectedService, _, err := s.DetermineProviderAndModel(model)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
+	// Use the selected service's model
+	actualModel := selectedService.Model
+	req.Model = anthropic.Model(actualModel)
+
+	// Set provider and model information in context for statistics middleware
+	c.Set("provider", provider.Name)
+	c.Set("model", selectedService.Model)
+
+	// Check provider's API style to decide which path to take
+	apiStyle := string(provider.APIStyle)
+	if apiStyle == "" {
+		apiStyle = "openai" // default to openai
+	}
+
+	// If the provider uses Anthropic API style, use the actual count_tokens endpoint
+	if apiStyle == "anthropic" {
+		// Get or create Anthropic client from pool
+		client := s.clientPool.GetAnthropicClient(provider)
+
+		// Make the request using Anthropic SDK with timeout
+		ctx, cancel := context.WithTimeout(context.Background(), config.RequestTimeout)
+		defer cancel()
+		message, err := client.Messages.CountTokens(ctx, req)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error: ErrorDetail{
+					Message: "Invalid request body: " + err.Error(),
+					Type:    "invalid_request_error",
+				},
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, message)
+	} else {
+		c.JSON(http.StatusNotFound, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Do not support: " + err.Error(),
+				Type:    "not_support",
+			},
+		})
+	}
+}
+
 // Use official Anthropic SDK types directly
 type (
 	// Request types
