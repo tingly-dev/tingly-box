@@ -124,8 +124,10 @@ func (m *MockProviderServer) SetResponse(endpoint string, response MockResponse)
 
 // SetStreamingResponse configures a mock streaming response for a specific endpoint
 func (m *MockProviderServer) SetStreamingResponse(endpoint string, response MockStreamingResponse) {
+	key := strings.TrimPrefix(endpoint, "/")
+	fmt.Printf("Setting streaming response for endpoint: %s (key: %s)\n", endpoint, key)
 	m.streamingResponses = make(map[string]MockStreamingResponse)
-	m.streamingResponses[strings.TrimPrefix(endpoint, "/")] = response
+	m.streamingResponses[key] = response
 }
 
 // handleChatCompletions handles mock chat completion requests
@@ -195,6 +197,9 @@ func (m *MockProviderServer) handleMessages(w http.ResponseWriter, r *http.Reque
 	m.callCount[endpoint]++
 	m.mutex.Unlock()
 
+	// Debug: log the endpoint
+	fmt.Printf("handleMessages called for endpoint: %s (URL: %s)\n", endpoint, r.URL.Path)
+
 	// Parse request for debugging
 	var reqBody map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&reqBody); err == nil {
@@ -202,10 +207,19 @@ func (m *MockProviderServer) handleMessages(w http.ResponseWriter, r *http.Reque
 		m.lastRequest[endpoint] = reqBody
 		m.mutex.Unlock()
 
+		// Debug: log the received request body
+		fmt.Printf("Mock server received request for %s: %+v\n", endpoint, reqBody)
+
 		// Check if this is a streaming request
-		if stream, ok := reqBody["stream"].(bool); ok && stream {
-			m.handleStreamingRequest(w, r, endpoint, reqBody)
-			return
+		if stream, ok := reqBody["stream"].(bool); ok {
+			fmt.Printf("Stream flag detected: %v\n", stream)
+			if stream {
+				fmt.Printf("Handling streaming request for %s\n", endpoint)
+				m.handleStreamingRequest(w, r, endpoint, reqBody)
+				return
+			}
+		} else {
+			fmt.Printf("No stream flag in request\n")
 		}
 	}
 
@@ -269,6 +283,7 @@ func (m *MockProviderServer) handleStreamingRequest(w http.ResponseWriter, r *ht
 	// Get streaming response configuration
 	streamingResp, exists := m.streamingResponses[endpoint]
 	if !exists {
+		fmt.Printf("No configured streaming response for %s, using default\n", endpoint)
 		// Default streaming response
 		streamingResp = MockStreamingResponse{
 			Events: []string{
@@ -278,10 +293,13 @@ func (m *MockProviderServer) handleStreamingRequest(w http.ResponseWriter, r *ht
 				`data: [DONE]`,
 			},
 		}
+	} else {
+		fmt.Printf("Found configured streaming response for %s with %d events\n", endpoint, len(streamingResp.Events))
 	}
 
 	// Send streaming events
 	for _, event := range streamingResp.Events {
+		fmt.Printf("Sending event: %s\n", event)
 		fmt.Fprintf(w, "%s\n\n", event)
 		flusher.Flush()
 		// Small delay to simulate real streaming
