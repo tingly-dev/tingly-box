@@ -33,7 +33,7 @@ func (e *EmbeddedAssets) SetupStaticRoutes(router *gin.Engine) {
 		// Don't serve index.html for API routes - let them return 404s
 		path := c.Request.URL.Path
 		// Check if this looks like an API route
-		if path == "" || strings.HasPrefix(path, "/api") || strings.HasPrefix(path, "/v1") || strings.HasPrefix(path, "/openai") || strings.HasPrefix(path, "/anthropic") {
+		if path == "" || strings.HasPrefix(path, "/api/v") || strings.HasPrefix(path, "/v") || strings.HasPrefix(path, "/openai") || strings.HasPrefix(path, "/anthropic") {
 			// This looks like an API route, return 404
 			c.JSON(http.StatusNotFound, gin.H{
 				"error": gin.H{

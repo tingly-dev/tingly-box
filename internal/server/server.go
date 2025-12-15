@@ -27,6 +27,7 @@ type Server struct {
 	loadBalancer    *LoadBalancer
 	loadBalancerAPI *LoadBalancerAPI
 	assets          *EmbeddedAssets
+	clientPool      *ClientPool // client pool for caching
 }
 
 // NewServer creates a new HTTP server instance
@@ -96,6 +97,7 @@ func NewServerWithOptions(cfg *config.Config, useUI bool) *Server {
 		logger:     memoryLogger,
 		useUI:      useUI,
 		assets:     assets,
+		clientPool: NewClientPool(), // Initialize client pool
 	}
 
 	// Initialize statistics middleware with server reference

@@ -491,6 +491,23 @@ const Rule = () => {
                                                                         </Select>
                                                                     </FormControl>
 
+                                                                    <TextField
+                                                                        label="API Style"
+                                                                        value={provider.provider ? (providers.find(p => p.name === provider.provider)?.api_style || 'openai') : ''}
+                                                                        placeholder=""
+                                                                        size="small"
+                                                                        sx={{ minWidth: 90 }}
+                                                                        disabled
+                                                                        slotProps={{
+                                                                            input: {
+                                                                                readOnly: true,
+                                                                                style: {
+                                                                                    fontFamily: 'monospace',
+                                                                                }
+                                                                            }
+                                                                        }}
+                                                                    />
+
                                                                     {provider.isManualInput ? (
                                                                         <Box sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'flex-end' }}>
                                                                             <TextField
