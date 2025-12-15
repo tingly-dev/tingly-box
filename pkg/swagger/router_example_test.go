@@ -1,7 +1,9 @@
 package swagger
 
 import (
+	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -142,4 +144,214 @@ func CreateUserHandler(c *gin.Context) {
 		"data":    user,
 		"message": "User created successfully",
 	})
+}
+
+// Example test for nested models in Swagger generation
+func TestRouteManager_nestedModels(t *testing.T) {
+	// Create gin engine
+	engine := gin.New()
+
+	// Create route manager
+	manager := NewRouteManager(engine)
+
+	// Set Swagger information
+	manager.SetSwaggerInfo(SwaggerInfo{
+		Title:       "Nested Models API",
+		Description: "API demonstrating nested model handling in Swagger",
+		Version:     "1.0.0",
+		Host:        "localhost:15000",
+		BasePath:    "/",
+	})
+
+	// Create v1 group
+	v1 := manager.NewGroup("api", "v1", "")
+
+	// Register a route with nested models
+	v1.POST("/companies", CreateCompanyHandler,
+		WithDescription("Create a new company with nested address and contacts"),
+		WithTags("companies"),
+		WithRequestModel(CreateCompanyRequest{}),
+		WithResponseModel(CompanyResponse{}),
+	)
+
+	swaggerJSON, _ := manager.GenerateSwaggerJSON()
+	fmt.Printf("%s\n", swaggerJSON)
+}
+
+// Address represents a nested address struct
+type Address struct {
+	Street  string `json:"street" binding:"required" description:"Street address"`
+	City    string `json:"city" binding:"required" description:"City name"`
+	Country string `json:"country" binding:"required" description:"Country name"`
+	ZipCode string `json:"zip_code" description:"Postal/ZIP code"`
+}
+
+// Contact represents a nested contact struct
+type Contact struct {
+	Name    string  `json:"name" binding:"required" description:"Contact name"`
+	Email   string  `json:"email" binding:"required,email" description:"Contact email"`
+	Phone   string  `json:"phone" description:"Contact phone"`
+	Address Address `json:"address" description:"Contact address"`
+}
+
+// CreateCompanyRequest demonstrates nested and array models
+type CreateCompanyRequest struct {
+	Name        string    `json:"name" binding:"required" description:"Company name"`
+	Description string    `json:"description" description:"Company description"`
+	Website     string    `json:"website" description:"Company website"`
+	Address     Address   `json:"address" binding:"required" description:"Company headquarters"`
+	Contacts    []Contact `json:"contacts" description:"List of company contacts"`
+	Founded     time.Time `json:"founded" description:"Company founding date"`
+	Active      bool      `json:"active" description:"Whether company is active"`
+}
+
+// CompanyResponse demonstrates multiple levels of nesting
+type CompanyResponse struct {
+	ID          string    `json:"id" example:"123e4567-e89b-12d3-a456-426614174000"`
+	Name        string    `json:"name" example:"Acme Corp"`
+	Description string    `json:"description,omitempty" example:"A leading technology company"`
+	Website     string    `json:"website,omitempty" example:"https://acme.com"`
+	Address     Address   `json:"address"`
+	Contacts    []Contact `json:"contacts"`
+	Founded     time.Time `json:"founded" example:"2020-01-01T00:00:00Z"`
+	CreatedAt   time.Time `json:"created_at" example:"2024-01-01T00:00:00Z"`
+	UpdatedAt   time.Time `json:"updated_at" example:"2024-01-01T00:00:00Z"`
+}
+
+// CreateCompanyHandler handles company creation
+func CreateCompanyHandler(c *gin.Context) {
+	var req CreateCompanyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, ErrorResponse{
+			Success:   false,
+			Error:     "Invalid request data",
+			Details:   map[string]string{"validation_error": err.Error()},
+			Timestamp: time.Now().Unix(),
+		})
+		return
+	}
+
+	// Mock company creation
+	company := CompanyResponse{
+		ID:          fmt.Sprintf("%d", time.Now().Unix()),
+		Name:        req.Name,
+		Description: req.Description,
+		Website:     req.Website,
+		Address:     req.Address,
+		Contacts:    req.Contacts,
+		Founded:     req.Founded,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	c.JSON(200, gin.H{
+		"success": true,
+		"data":    company,
+		"message": "Company created successfully",
+	})
+}
+
+// Test pointer to nested struct
+type CompanyWithPointers struct {
+	ID       string     `json:"id"`
+	Name     string     `json:"name"`
+	Address  *Address   `json:"address"`         // Pointer to struct
+	Contacts []*Contact `json:"contacts"`        // Slice of pointers to structs
+	Owner    *Person    `json:"owner,omitempty"` // Optional pointer to struct
+}
+
+type Person struct {
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+	Email     string `json:"email"`
+}
+
+// Test nested models with pointers
+func TestRouteManager_nestedModelsWithPointers(t *testing.T) {
+	// Create gin engine
+	engine := gin.New()
+
+	// Create route manager
+	manager := NewRouteManager(engine)
+
+	// Set Swagger information
+	manager.SetSwaggerInfo(SwaggerInfo{
+		Title:       "Nested Models with Pointers API",
+		Description: "API demonstrating nested model with pointers handling",
+		Version:     "1.0.0",
+		Host:        "localhost:15000",
+		BasePath:    "/",
+	})
+
+	// Create v1 group
+	v1 := manager.NewGroup("api", "v1", "")
+
+	// Register a route with nested models using pointers
+	v1.POST("/companies-pointer", func(c *gin.Context) {
+		var req CompanyWithPointers
+		c.JSON(200, req)
+	},
+		WithDescription("Create company with pointer fields"),
+		WithTags("companies"),
+		WithRequestModel(CompanyWithPointers{}),
+		WithResponseModel(CompanyWithPointers{}),
+	)
+
+	swaggerJSON, err := manager.GenerateSwaggerJSON()
+	if err != nil {
+		t.Errorf("Failed to generate Swagger JSON: %v", err)
+	}
+
+	// Print the JSON for manual verification
+	fmt.Printf("\n=== Swagger JSON with Pointer Types ===\n")
+	fmt.Printf("%s\n", swaggerJSON)
+
+	// Check that definitions for Address, Contact, and Person exist
+	if !strings.Contains(swaggerJSON, `"definitions"`) {
+		t.Error("Definitions section not found in Swagger JSON")
+	}
+
+	// Check that $ref references are created for nested structs
+	if !strings.Contains(swaggerJSON, `"#/definitions/Address"`) {
+		t.Error("$ref to Address definition not found")
+	}
+	if !strings.Contains(swaggerJSON, `"#/definitions/Contact"`) {
+		t.Error("$ref to Contact definition not found")
+	}
+	if !strings.Contains(swaggerJSON, `"#/definitions/Person"`) {
+		t.Error("$ref to Person definition not found")
+	}
+
+	// Parse JSON to check structure
+	var swaggerData map[string]interface{}
+	if err := json.Unmarshal([]byte(swaggerJSON), &swaggerData); err != nil {
+		t.Errorf("Failed to parse generated Swagger JSON: %v", err)
+	}
+
+	// Check definitions exist
+	definitions, ok := swaggerData["definitions"].(map[string]interface{})
+	if !ok {
+		t.Error("Definitions section is missing or not a map")
+		return
+	}
+
+	// Verify all required definitions exist
+	requiredDefs := []string{"CompanyWithPointers", "Address", "Contact", "Person"}
+	for _, defName := range requiredDefs {
+		if _, exists := definitions[defName]; !exists {
+			t.Errorf("Definition %s not found in definitions", defName)
+		}
+	}
+
+	// Verify Address definition has correct properties
+	if addressDef, exists := definitions["Address"].(map[string]interface{}); exists {
+		if props, ok := addressDef["properties"].(map[string]interface{}); ok {
+			streets := []string{"street", "city", "country", "zip_code"}
+			for _, field := range streets {
+				if _, exists := props[field]; !exists {
+					t.Errorf("Field %s not found in Address definition", field)
+				}
+			}
+		}
+	}
 }
