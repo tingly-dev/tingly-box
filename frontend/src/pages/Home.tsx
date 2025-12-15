@@ -21,9 +21,9 @@ import React, {useEffect, useState} from 'react';
 import {useNavigate} from 'react-router-dom';
 import {PageLayout} from '../components/PageLayout';
 import Probe from '../components/Probe';
-import ProviderSelectTab, {type ProviderSelectTabOption} from "../components/ProviderSelectTab.tsx";
+import ModelSelectTab, {type ProviderSelectTabOption} from "../components/ModelSelectTab.tsx";
 import UnifiedCard from '../components/UnifiedCard';
-import ProviderFormDialog, {type ProviderFormData} from '../components/ui/ProviderFormDialog';
+import CredentialFormDialog, {type ProviderFormData} from '../components/CredentialFormDialog.tsx';
 import {api, getBaseUrl} from '../services/api';
 
 const defaultRule = "tingly"
@@ -681,7 +681,7 @@ const Home = () => {
 
                 {providers.length > 0 ? (
                     <Stack spacing={2}>
-                        <ProviderSelectTab
+                        <ModelSelectTab
                             providers={providers}
                             providerModels={providerModels}
                             selectedProvider={selectedOption?.provider}
@@ -703,7 +703,7 @@ const Home = () => {
             <ApiKeyModal></ApiKeyModal>
 
             {/* Add Provider Dialog */}
-            <ProviderFormDialog
+            <CredentialFormDialog
                 open={addDialogOpen}
                 onClose={() => setAddDialogOpen(false)}
                 onSubmit={handleAddProvider}

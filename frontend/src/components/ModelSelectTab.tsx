@@ -76,7 +76,7 @@ function a11yProps(index: number) {
     };
 }
 
-export default function ProviderSelectTab({
+export default function ModelSelectTab({
     providers,
     providerModels,
     selectedProvider,

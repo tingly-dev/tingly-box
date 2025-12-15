@@ -12,7 +12,7 @@ import {
     MenuItem,
 } from '@mui/material';
 
-interface AddProviderDialogProps {
+interface ProviderDialogProps {
     open: boolean;
     onClose: () => void;
     onSubmit: (e: React.FormEvent) => void;
@@ -24,9 +24,11 @@ interface AddProviderDialogProps {
     onProviderApiStyleChange: (value: string) => void;
     providerToken: string;
     onProviderTokenChange: (value: string) => void;
+    title?: string;
+    submitText?: string;
 }
 
-const AddProviderDialog = ({
+export const CredentialDialog = ({
     open,
     onClose,
     onSubmit,
@@ -38,16 +40,18 @@ const AddProviderDialog = ({
     onProviderApiStyleChange,
     providerToken,
     onProviderTokenChange,
-}: AddProviderDialogProps) => {
+    title = "Add New Credential",
+    submitText = "Add Credential",
+}: ProviderDialogProps) => {
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-            <DialogTitle>Add New Credential</DialogTitle>
+            <DialogTitle>{title}</DialogTitle>
             <form onSubmit={onSubmit}>
                 <DialogContent>
                     <Stack spacing={2} mt={1}>
                         <TextField
                             fullWidth
-                            label="Name"
+                            label="Credential Name"
                             value={providerName}
                             onChange={(e) => onProviderNameChange(e.target.value)}
                             required
@@ -87,11 +91,11 @@ const AddProviderDialog = ({
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={onClose}>Cancel</Button>
-                    <Button type="submit" variant="contained">Add Key</Button>
+                    <Button type="submit" variant="contained">{submitText}</Button>
                 </DialogActions>
             </form>
         </Dialog>
     );
 };
 
-export default AddProviderDialog;
+export default CredentialDialog;
