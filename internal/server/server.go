@@ -44,9 +44,6 @@ func NewServerWithOptions(cfg *config.Config, useUI bool) *Server {
 		// Continue without embedded assets, will fallback to file system
 	}
 
-	//// Set Gin mode
-	//gin.SetMode(gin.ReleaseMode)
-
 	// Check and generate tokens if needed
 	jwtManager := auth.NewJWTManager(cfg.GetJWTSecret())
 
@@ -88,8 +85,6 @@ func NewServerWithOptions(cfg *config.Config, useUI bool) *Server {
 		log.Printf("Warning: Failed to initialize memory logger: %v", err)
 		memoryLogger = nil
 	}
-
-	gin.SetMode(gin.ReleaseMode)
 
 	// Create server struct first
 	server := &Server{
