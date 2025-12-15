@@ -22,27 +22,31 @@ tasks:
   wails:build:
     summary: Builds the application
     cmds:
+      - task: codegen
       - task: "{{OS}}:build"
   
   wails:package:
     summary: Packages a production build of the application
     cmds:
+      - task: codegen
       - task: "{{OS}}:package"
   
   wails:run:
     summary: Runs the application
     cmds:
+      - task: codegen
       - task: "{{OS}}:run"
   
   wails:dev:
     summary: Runs the application in development mode
     cmds:
+      - task: codegen
       - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
   
   wails:binding:
     cmds:
       - wails3 generate bindings -ts -f '-buildvcs=false -gcflags=all="-l"' -clean=true ./wails3 -d frontend/src/bindings
-      
+  
   wails:manual:
     cmds:
       - cd frontend; pnpm build:wails
@@ -56,7 +60,7 @@ tasks:
         cp bin/model-box bin/ModelBox.app/Contents/MacOS
         cp build/darwin/Info.plist bin/ModelBox.app/Contents
         codesign --force --deep --sign - bin/ModelBox.app
-        
+  
   codegen:
     cmds:
       - |
@@ -71,7 +75,7 @@ tasks:
     cmds:
       - |
         curl -s http://localhost:8080/swagger.json > swagger.json
-
+  
   start:
     cmds:
       - task: go:build
@@ -87,12 +91,12 @@ tasks:
       - |
         mkdir -p build
         go build -o ./build/tingly ./cmd/tingly
-
+  
   go:test:
     cmds:
       - |
         go test ./internal/...
-
+  
   all:dev:
     cmds:
       - task: ui:dist
@@ -118,7 +122,7 @@ tasks:
       - |
         mkdir -p internal/server/web/dist/
         cp -R frontend/dist/* internal/server/web/dist/
-        
+  
   gui:build:
     cmds:
       - |
