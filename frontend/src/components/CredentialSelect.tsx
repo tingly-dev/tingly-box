@@ -41,7 +41,7 @@ interface SingleProviderSelectProps {
 
 const MODELS_PER_PAGE = 15;
 
-export const ProviderSelect = ({
+export const CredentialSelect = ({
     provider,
     providerModels,
     selectedProvider,

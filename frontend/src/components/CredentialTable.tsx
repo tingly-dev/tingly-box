@@ -49,7 +49,7 @@ interface DeleteModalState {
     providerName: string;
 }
 
-const ProviderTable = ({
+const CredentialTable = ({
                            providers,
                            onEdit,
                            onToggle,
@@ -447,4 +447,4 @@ const ProviderTable = ({
     );
 };
 
-export default ProviderTable;
+export default CredentialTable;

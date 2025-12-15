@@ -2,8 +2,8 @@ import { Add } from '@mui/icons-material';
 import { Alert, Box, Button, Snackbar, Stack, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { PageLayout } from '../components/PageLayout';
-import ProviderTable from '../components/ProviderTable';
-import ProviderFormDialog, { type ProviderFormData } from '../components/ui/ProviderFormDialog';
+import CredentialTable from '../components/CredentialTable.tsx';
+import CredentialFormDialog, { type ProviderFormData } from '../components/CredentialFormDialog.tsx';
 import UnifiedCard from '../components/UnifiedCard';
 import { api } from '../services/api';
 
@@ -148,7 +148,7 @@ const CredentialPage = () => {
                 >
                     {providers.length > 0 ? (
                         <Box sx={{ flex: 1 }}>
-                                <ProviderTable
+                                <CredentialTable
                                     providers={providers}
                                     onEdit={handleEditProvider}
                                     onToggle={handleToggleProvider}
@@ -191,7 +191,7 @@ const CredentialPage = () => {
             )}
 
             {/* Provider Dialog */}
-            <ProviderFormDialog
+            <CredentialFormDialog
                 open={dialogOpen}
                 onClose={() => setDialogOpen(false)}
                 onSubmit={handleProviderSubmit}
