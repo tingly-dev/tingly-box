@@ -43,8 +43,8 @@ const ProviderFormDialog = ({
   title,
   submitText,
 }: ProviderFormDialogProps) => {
-  const defaultTitle = mode === 'add' ? 'Add New Provider' : 'Edit Provider';
-  const defaultSubmitText = mode === 'add' ? 'Add Provider' : 'Save Changes';
+  const defaultTitle = mode === 'add' ? 'Add New API Key' : 'Edit API Key';
+  const defaultSubmitText = mode === 'add' ? 'Add API Key' : 'Save Changes';
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -54,20 +54,12 @@ const ProviderFormDialog = ({
           <Stack spacing={2} mt={1}>
             <TextField
               fullWidth
-              label="Provider Name"
+              label="Name"
               value={data.name}
               onChange={(e) => onChange('name', e.target.value)}
               required
               placeholder="e.g., openai, anthropic"
               autoFocus={mode === 'add'}
-            />
-            <TextField
-              fullWidth
-              label="API Base URL"
-              value={data.apiBase}
-              onChange={(e) => onChange('apiBase', e.target.value)}
-              required
-              placeholder="e.g., https://api.openai.com/v1"
             />
             <FormControl fullWidth>
               <InputLabel id="api-style-label">API Style</InputLabel>
@@ -81,6 +73,16 @@ const ProviderFormDialog = ({
                 <MenuItem value="anthropic">Anthropic</MenuItem>
               </Select>
             </FormControl>
+
+            <TextField
+              fullWidth
+              label="API Base URL"
+              value={data.apiBase}
+              onChange={(e) => onChange('apiBase', e.target.value)}
+              required
+              placeholder="e.g., https://api.openai.com/v1"
+            />
+
             <TextField
               fullWidth
               label="API Token"

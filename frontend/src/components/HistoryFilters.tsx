@@ -62,8 +62,8 @@ const HistoryFilters = ({
                         <MenuItem value="start_server">Start Server</MenuItem>
                         <MenuItem value="stop_server">Stop Server</MenuItem>
                         <MenuItem value="restart_server">Restart Server</MenuItem>
-                        <MenuItem value="add_provider">Add Provider</MenuItem>
-                        <MenuItem value="delete_provider">Delete Provider</MenuItem>
+                        <MenuItem value="add_provider">Add Key</MenuItem>
+                        <MenuItem value="delete_provider">Delete Key</MenuItem>
                         <MenuItem value="generate_token">Generate Token</MenuItem>
                     </Select>
                 </FormControl>

@@ -1,4 +1,4 @@
-import { Cancel, CheckCircle, ContentCopy, Delete, Edit, Visibility } from '@mui/icons-material';
+import {Cancel, CheckCircle, ContentCopy, Delete, Edit, Visibility} from '@mui/icons-material';
 import {
     Box,
     Button,
@@ -19,9 +19,8 @@ import {
     Tooltip,
     Typography
 } from '@mui/material';
-import { useState } from 'react';
-import type { ProviderModelsData, Provider } from '../types/provider';
-
+import {useState} from 'react';
+import type {Provider, ProviderModelsData} from '../types/provider';
 
 
 interface ProviderTableProps {
@@ -51,11 +50,11 @@ interface DeleteModalState {
 }
 
 const ProviderTable = ({
-    providers,
-    onEdit,
-    onToggle,
-    onDelete,
-}: ProviderTableProps) => {
+                           providers,
+                           onEdit,
+                           onToggle,
+                           onDelete,
+                       }: ProviderTableProps) => {
     const [tokenStates, setTokenStates] = useState<{ [key: string]: TokenMenuState }>({});
     const [tokenModal, setTokenModal] = useState<TokenModalState>({
         open: false,
@@ -153,16 +152,16 @@ const ProviderTable = ({
     };
 
     return (
-        <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
+        <TableContainer component={Paper} elevation={0} sx={{border: 1, borderColor: 'divider'}}>
             <Table>
                 <TableHead>
                     <TableRow>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Status</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 150 }}>Provider</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 200 }}>API Base</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>API Version</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 150 }}>API Token</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Actions</TableCell>
+                        <TableCell sx={{fontWeight: 600, minWidth: 150}}>Name</TableCell>
+                        <TableCell sx={{fontWeight: 600, minWidth: 150}}>API Key</TableCell>
+                        <TableCell sx={{fontWeight: 600, minWidth: 200}}>API Base</TableCell>
+                        <TableCell sx={{fontWeight: 600, minWidth: 120}}>API Version</TableCell>
+                        <TableCell sx={{fontWeight: 600, minWidth: 120}}>Actions</TableCell>
+                        <TableCell sx={{fontWeight: 600, minWidth: 120}}>Status</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -170,33 +169,60 @@ const ProviderTable = ({
                         <TableRow key={provider.name}>
                             <TableCell>
                                 <Stack direction="row" alignItems="center" spacing={1}>
-                                    <FormControlLabel
-                                        control={
-                                            <Switch
-                                                checked={provider.enabled}
-                                                onChange={() => onToggle?.(provider.name)}
-                                                size="small"
-                                                color="success"
-                                            />
-                                        }
-                                        label=""
-                                    />
-                                    <Typography variant="body2" color={provider.enabled ? 'success.main' : 'error.main'}>
-                                        {provider.enabled ? 'Enabled' : 'Disabled'}
+                                    {provider.enabled ? (
+                                        <CheckCircle color="success" fontSize="small"/>
+                                    ) : (
+                                        <Cancel color="error" fontSize="small"/>
+                                    )}
+                                    <Typography variant="body2" sx={{fontWeight: 500}}>
+                                        {provider.name}
                                     </Typography>
                                 </Stack>
                             </TableCell>
-
                             <TableCell>
                                 <Stack direction="row" alignItems="center" spacing={1}>
-                                    {provider.enabled ? (
-                                        <CheckCircle color="success" fontSize="small" />
-                                    ) : (
-                                        <Cancel color="error" fontSize="small" />
-                                    )}
-                                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                        {provider.name}
+                                    <Typography
+                                        variant="body2"
+                                        sx={{
+                                            fontFamily: 'monospace',
+                                            wordBreak: 'break-all',
+                                            flex: 1,
+                                            minWidth: 0
+                                        }}
+                                    >
+                                        {formatTokenDisplay(provider)}
                                     </Typography>
+                                    {provider.token && (
+                                        <Stack direction="row" spacing={0.25}>
+                                            <Tooltip title="View Token">
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={() => handleViewToken(provider.name)}
+                                                    sx={{p: 0.25}}
+                                                >
+                                                    <Visibility fontSize="small"/>
+                                                </IconButton>
+                                            </Tooltip>
+                                            <Tooltip title="Copy Token">
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={() => handleCopyToken(provider)}
+                                                    sx={{p: 0.25}}
+                                                >
+                                                    <ContentCopy fontSize="small"/>
+                                                </IconButton>
+                                            </Tooltip>
+                                            {/* <IconButton
+                                                size="small"
+                                                onClick={(e) => handleTokenMenuClick(e, provider.name)}
+                                                sx={{ p: 0.25 }}
+                                            >
+                                                <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
+                                                    •••
+                                                </Typography>
+                                            </IconButton> */}
+                                        </Stack>
+                                    )}
                                 </Stack>
                             </TableCell>
 
@@ -224,53 +250,6 @@ const ProviderTable = ({
                                 </Typography>
                             </TableCell>
 
-                            <TableCell>
-                                <Stack direction="row" alignItems="center" spacing={1}>
-                                    <Typography
-                                        variant="body2"
-                                        sx={{
-                                            fontFamily: 'monospace',
-                                            wordBreak: 'break-all',
-                                            flex: 1,
-                                            minWidth: 0
-                                        }}
-                                    >
-                                        {formatTokenDisplay(provider)}
-                                    </Typography>
-                                    {provider.token && (
-                                        <Stack direction="row" spacing={0.25}>
-                                            <Tooltip title="View Token">
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={() => handleViewToken(provider.name)}
-                                                    sx={{ p: 0.25 }}
-                                                >
-                                                    <Visibility fontSize="small" />
-                                                </IconButton>
-                                            </Tooltip>
-                                            <Tooltip title="Copy Token">
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={() => handleCopyToken(provider)}
-                                                    sx={{ p: 0.25 }}
-                                                >
-                                                    <ContentCopy fontSize="small" />
-                                                </IconButton>
-                                            </Tooltip>
-                                            {/* <IconButton
-                                                size="small"
-                                                onClick={(e) => handleTokenMenuClick(e, provider.name)}
-                                                sx={{ p: 0.25 }}
-                                            >
-                                                <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
-                                                    •••
-                                                </Typography>
-                                            </IconButton> */}
-                                        </Stack>
-                                    )}
-                                </Stack>
-                            </TableCell>
-
 
                             <TableCell>
                                 <Stack direction="row" spacing={0.5}>
@@ -281,7 +260,7 @@ const ProviderTable = ({
                                                 color="primary"
                                                 onClick={() => onEdit(provider.name)}
                                             >
-                                                <Edit fontSize="small" />
+                                                <Edit fontSize="small"/>
                                             </IconButton>
                                         </Tooltip>
                                     )}
@@ -292,10 +271,29 @@ const ProviderTable = ({
                                                 color="error"
                                                 onClick={() => handleDeleteClick(provider.name)}
                                             >
-                                                <Delete fontSize="small" />
+                                                <Delete fontSize="small"/>
                                             </IconButton>
                                         </Tooltip>
                                     )}
+                                </Stack>
+                            </TableCell>
+                            <TableCell>
+                                <Stack direction="row" alignItems="center" spacing={1}>
+                                    <FormControlLabel
+                                        control={
+                                            <Switch
+                                                checked={provider.enabled}
+                                                onChange={() => onToggle?.(provider.name)}
+                                                size="small"
+                                                color="success"
+                                            />
+                                        }
+                                        label=""
+                                    />
+                                    <Typography variant="body2"
+                                                color={provider.enabled ? 'success.main' : 'error.main'}>
+                                        {provider.enabled ? 'Enabled' : 'Disabled'}
+                                    </Typography>
                                 </Stack>
                             </TableCell>
                         </TableRow>
@@ -320,14 +318,14 @@ const ProviderTable = ({
                     }}
                 >
                     <MenuItem onClick={() => handleViewToken(providerName)}>
-                        <Visibility fontSize="small" sx={{ mr: 1 }} />
+                        <Visibility fontSize="small" sx={{mr: 1}}/>
                         View Token
                     </MenuItem>
                     <MenuItem onClick={() => {
                         const provider = providers.find(p => p.name === providerName);
                         if (provider) handleCopyToken(provider);
                     }}>
-                        <ContentCopy fontSize="small" sx={{ mr: 1 }} />
+                        <ContentCopy fontSize="small" sx={{mr: 1}}/>
                         Copy Token
                     </MenuItem>
                 </Menu>
@@ -354,12 +352,12 @@ const ProviderTable = ({
                         borderRadius: 2,
                     }}
                 >
-                    <Typography id="token-modal-title" variant="h6" component="h2" sx={{ mb: 2 }}>
-                        API Token - {tokenModal.providerName}
+                    <Typography id="token-modal-title" variant="h6" component="h2" sx={{mb: 2}}>
+                        API Key - {tokenModal.providerName}
                     </Typography>
 
-                    <Box sx={{ mb: 3 }}>
-                        <Typography id="token-modal-description" variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    <Box sx={{mb: 3}}>
+                        <Typography id="token-modal-description" variant="body2" color="text.secondary" sx={{mb: 2}}>
                             Full token for {tokenModal.providerName}:
                         </Typography>
 
@@ -393,12 +391,12 @@ const ProviderTable = ({
                             }}
                             title="Copy Token"
                         >
-                            <ContentCopy />
+                            <ContentCopy/>
                         </IconButton>
 
                         <Tooltip title="Close">
                             <IconButton onClick={handleCloseTokenModal}>
-                                <Cancel />
+                                <Cancel/>
                             </IconButton>
                         </Tooltip>
                     </Stack>
@@ -426,12 +424,13 @@ const ProviderTable = ({
                         borderRadius: 2,
                     }}
                 >
-                    <Typography id="delete-modal-title" variant="h6" component="h2" sx={{ mb: 2 }}>
-                        Delete Provider
+                    <Typography id="delete-modal-title" variant="h6" component="h2" sx={{mb: 2}}>
+                        Delete Credential
                     </Typography>
 
-                    <Typography id="delete-modal-description" variant="body2" sx={{ mb: 3 }}>
-                        Are you sure you want to delete the provider "{deleteModal.providerName}"? This action cannot be undone.
+                    <Typography id="delete-modal-description" variant="body2" sx={{mb: 3}}>
+                        Are you sure you want to delete the credential "{deleteModal.providerName}"? This action cannot
+                        be undone.
                     </Typography>
 
                     <Stack direction="row" spacing={2} justifyContent="flex-end">

@@ -47,13 +47,13 @@ const EditProviderDialog = ({
 }: EditProviderDialogProps) => {
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-            <DialogTitle>Edit Provider</DialogTitle>
+            <DialogTitle>Edit Credential</DialogTitle>
             <form onSubmit={onSubmit}>
                 <DialogContent>
                     <Stack spacing={2} mt={1}>
                         <TextField
                             fullWidth
-                            label="Provider Name"
+                            label="Credential Name"
                             value={editName}
                             onChange={(e) => onEditNameChange(e.target.value)}
                             required
