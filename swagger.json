@@ -20,61 +20,6 @@
     "https"
   ],
   "paths": {
-    "/api/v1/defaults": {
-      "get": {
-        "tags": [
-          "defaults"
-        ],
-        "summary": "Get default request configurations",
-        "description": "Get default request configurations",
-        "consumes": [
-          "application/json"
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "schema": {
-              "$ref": "#/definitions/DefaultsResponse"
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "defaults"
-        ],
-        "summary": "Set default request configurations",
-        "description": "Set default request configurations",
-        "consumes": [
-          "application/json"
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "parameters": [
-          {
-            "name": "request",
-            "in": "body",
-            "description": "Request body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/SetDefaultsRequest"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "schema": {
-              "$ref": "#/definitions/SetRuleResponse"
-            }
-          }
-        }
-      }
-    },
     "/api/v1/history": {
       "get": {
         "tags": [
@@ -126,7 +71,7 @@
           "200": {
             "description": "Successful response",
             "schema": {
-              "$ref": "#/definitions/RuleResponse"
+              "$ref": "#/definitions/ProbeResponse"
             }
           }
         }
@@ -712,24 +657,6 @@
         "data"
       ]
     },
-    "DefaultsResponse": {
-      "type": "object",
-      "properties": {
-        "data": {
-          "type": "object",
-          "description": "Field data"
-        },
-        "success": {
-          "type": "boolean",
-          "description": "Field success",
-          "example": true
-        }
-      },
-      "required": [
-        "success",
-        "data"
-      ]
-    },
     "DeleteProviderResponse": {
       "type": "object",
       "properties": {
@@ -766,6 +693,27 @@
       "required": [
         "success",
         "message"
+      ]
+    },
+    "ErrorDetail": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "Field code"
+        },
+        "message": {
+          "type": "string",
+          "description": "Field message"
+        },
+        "type": {
+          "type": "string",
+          "description": "Field type"
+        }
+      },
+      "required": [
+        "message",
+        "type"
       ]
     },
     "FetchProviderModelsResponse": {
@@ -826,20 +774,166 @@
     "ProbeRequest": {
       "type": "object",
       "properties": {
+        "model": {
+          "type": "string",
+          "description": "Model name to test against",
+          "example": "gpt-4-latest"
+        },
         "provider": {
           "type": "string",
           "description": "Provider name to test against",
           "example": "openai"
-        },
-        "rule": {
-          "type": "string",
-          "description": "Rule UUID to test",
-          "example": "123e4567-e89b-12d3-a456-426614174000"
         }
       },
       "required": [
         "provider",
-        "rule"
+        "model"
+      ]
+    },
+    "ProbeRequestDetail": {
+      "type": "object",
+      "properties": {
+        "max_tokens": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field max_tokens"
+        },
+        "messages": {
+          "type": "array",
+          "description": "Field messages",
+          "items": {
+            "type": "object"
+          }
+        },
+        "model": {
+          "type": "string",
+          "description": "Field model"
+        },
+        "provider": {
+          "type": "string",
+          "description": "Field provider"
+        },
+        "temperature": {
+          "type": "number",
+          "format": "double",
+          "description": "Field temperature"
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "Field timestamp"
+        }
+      },
+      "required": [
+        "messages",
+        "model",
+        "max_tokens",
+        "temperature",
+        "provider",
+        "timestamp"
+      ]
+    },
+    "ProbeResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "description": "Field data",
+          "$ref": "#/definitions/ProbeResponseData"
+        },
+        "error": {
+          "description": "Field error",
+          "$ref": "#/definitions/ErrorDetail"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success"
+        }
+      },
+      "required": [
+        "success"
+      ]
+    },
+    "ProbeResponseData": {
+      "type": "object",
+      "properties": {
+        "request": {
+          "description": "Field request",
+          "$ref": "#/definitions/ProbeRequestDetail"
+        },
+        "response": {
+          "description": "Field response",
+          "$ref": "#/definitions/ProbeResponseDetail"
+        },
+        "usage": {
+          "description": "Field usage",
+          "$ref": "#/definitions/ProbeUsage"
+        }
+      },
+      "required": [
+        "request",
+        "response",
+        "usage"
+      ]
+    },
+    "ProbeResponseDetail": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "string",
+          "description": "Field content"
+        },
+        "error": {
+          "type": "string",
+          "description": "Field error"
+        },
+        "finish_reason": {
+          "type": "string",
+          "description": "Field finish_reason"
+        },
+        "model": {
+          "type": "string",
+          "description": "Field model"
+        },
+        "provider": {
+          "type": "string",
+          "description": "Field provider"
+        }
+      },
+      "required": [
+        "content",
+        "model",
+        "provider",
+        "finish_reason"
+      ]
+    },
+    "ProbeUsage": {
+      "type": "object",
+      "properties": {
+        "completion_tokens": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field completion_tokens"
+        },
+        "prompt_tokens": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field prompt_tokens"
+        },
+        "time_cost": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field time_cost"
+        },
+        "total_tokens": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field total_tokens"
+        }
+      },
+      "required": [
+        "prompt_tokens",
+        "completion_tokens",
+        "total_tokens",
+        "time_cost"
       ]
     },
     "ProviderModelsResponse": {
@@ -904,7 +998,7 @@
           "type": "array",
           "description": "Field data",
           "items": {
-            "type": "object"
+            "$ref": "#/definitions/ProviderResponse"
           }
         },
         "success": {
@@ -973,19 +1067,103 @@
         "message"
       ]
     },
-    "SetDefaultsRequest": {
+    "Service": {
       "type": "object",
       "properties": {
-        "request_configs": {
-          "type": "array",
-          "description": "Field request_configs",
-          "items": {
-            "type": "object"
-          }
+        "active": {
+          "type": "boolean",
+          "description": "Field active"
+        },
+        "model": {
+          "type": "string",
+          "description": "Field model"
+        },
+        "provider": {
+          "type": "string",
+          "description": "Field provider"
+        },
+        "stats": {
+          "description": "Field stats",
+          "$ref": "#/definitions/ServiceStats"
+        },
+        "time_window": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field time_window"
+        },
+        "weight": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field weight"
         }
       },
       "required": [
-        "request_configs"
+        "provider",
+        "model",
+        "weight",
+        "active",
+        "time_window",
+        "stats"
+      ]
+    },
+    "ServiceStats": {
+      "type": "object",
+      "properties": {
+        "last_used": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Field last_used"
+        },
+        "request_count": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field request_count"
+        },
+        "service_id": {
+          "type": "string",
+          "description": "Field service_id"
+        },
+        "time_window": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field time_window"
+        },
+        "window_input_tokens": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field window_input_tokens"
+        },
+        "window_output_tokens": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field window_output_tokens"
+        },
+        "window_request_count": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field window_request_count"
+        },
+        "window_start": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Field window_start"
+        },
+        "window_tokens_consumed": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field window_tokens_consumed"
+        }
+      },
+      "required": [
+        "service_id",
+        "request_count",
+        "last_used",
+        "window_start",
+        "window_request_count",
+        "window_tokens_consumed",
+        "window_input_tokens",
+        "window_output_tokens",
+        "time_window"
       ]
     },
     "SetRuleRequest": {
@@ -1020,7 +1198,7 @@
           "type": "array",
           "description": "Field services",
           "items": {
-            "type": "object"
+            "$ref": "#/definitions/Service"
           }
         },
         "tactic": {
@@ -1051,7 +1229,36 @@
       "properties": {
         "data": {
           "type": "object",
-          "description": "Field data"
+          "description": "Field data",
+          "properties": {
+            "active": {
+              "type": "boolean",
+              "description": "Field active"
+            },
+            "default_model": {
+              "type": "string",
+              "description": "Field default_model"
+            },
+            "provider": {
+              "type": "string",
+              "description": "Field provider"
+            },
+            "request_model": {
+              "type": "string",
+              "description": "Field request_model"
+            },
+            "response_model": {
+              "type": "string",
+              "description": "Field response_model"
+            }
+          },
+          "required": [
+            "request_model",
+            "response_model",
+            "provider",
+            "default_model",
+            "active"
+          ]
         },
         "message": {
           "type": "string",
@@ -1075,7 +1282,40 @@
       "properties": {
         "data": {
           "type": "object",
-          "description": "Field data"
+          "description": "Field data",
+          "properties": {
+            "port": {
+              "type": "integer",
+              "format": "int64",
+              "description": "Field port"
+            },
+            "providers_enabled": {
+              "type": "integer",
+              "format": "int64",
+              "description": "Field providers_enabled"
+            },
+            "providers_total": {
+              "type": "integer",
+              "format": "int64",
+              "description": "Field providers_total"
+            },
+            "request_count": {
+              "type": "integer",
+              "format": "int64",
+              "description": "Field request_count"
+            },
+            "server_running": {
+              "type": "boolean",
+              "description": "Field server_running"
+            }
+          },
+          "required": [
+            "server_running",
+            "port",
+            "providers_total",
+            "providers_enabled",
+            "request_count"
+          ]
         },
         "success": {
           "type": "boolean",
@@ -1093,7 +1333,16 @@
       "properties": {
         "data": {
           "type": "object",
-          "description": "Field data"
+          "description": "Field data",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Field enabled"
+            }
+          },
+          "required": [
+            "enabled"
+          ]
         },
         "message": {
           "type": "string",
@@ -1160,8 +1409,8 @@
       "type": "object",
       "properties": {
         "data": {
-          "type": "object",
-          "description": "Field data"
+          "description": "Field data",
+          "$ref": "#/definitions/ProviderResponse"
         },
         "message": {
           "type": "string",
@@ -1191,22 +1440,6 @@
   },
   "tags": [
     {
-      "name": "defaults",
-      "description": "Operations related to defaults"
-    },
-    {
-      "name": "testing",
-      "description": "Operations related to testing"
-    },
-    {
-      "name": "server",
-      "description": "Operations related to server"
-    },
-    {
-      "name": "rules",
-      "description": "Operations related to rules"
-    },
-    {
       "name": "history",
       "description": "Operations related to history"
     },
@@ -1215,12 +1448,24 @@
       "description": "Operations related to models"
     },
     {
+      "name": "testing",
+      "description": "Operations related to testing"
+    },
+    {
       "name": "token",
       "description": "Operations related to token"
     },
     {
       "name": "providers",
       "description": "Operations related to providers"
+    },
+    {
+      "name": "server",
+      "description": "Operations related to server"
+    },
+    {
+      "name": "rules",
+      "description": "Operations related to rules"
     }
   ]
 }
