@@ -610,3 +610,397 @@ func TestPerformance(t *testing.T) {
 		})
 	})
 }
+
+// TestAdaptorFeature provides tests for the adaptor functionality
+func TestAdaptorFeature(t *testing.T) {
+	t.Run("Adaptor_Disabled_OpenAI_to_Anthropic", func(t *testing.T) {
+		// Create test server with adaptor disabled (default)
+		ts := NewTestServer(t)
+		defer Cleanup()
+
+		// Add test providers - one OpenAI-style, one Anthropic-style
+		ts.AddTestProvider(t, "openai-provider", "http://localhost:9999", "openai", true)
+		ts.AddTestProvider(t, "anthropic-provider", "http://localhost:9999", "anthropic", true)
+
+		// Add a rule that routes to Anthropic-style provider
+		ts.AddTestRule(t, "test-anthropic-rule", "anthropic-provider", "gpt-4")
+
+		globalConfig := ts.appConfig.GetGlobalConfig()
+		modelToken := globalConfig.GetModelToken()
+
+		// Test OpenAI request to Anthropic provider should fail with adaptor disabled
+		reqBody := map[string]interface{}{
+			"model": "test-anthropic-rule",
+			"messages": []map[string]string{
+				{"role": "user", "content": "Hello"},
+			},
+		}
+
+		req, _ := http.NewRequest("POST", "/openai/v1/chat/completions", CreateJSONBody(reqBody))
+		req.Header.Set("Authorization", "Bearer "+modelToken)
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		ts.ginEngine.ServeHTTP(w, req)
+
+		assert.Equal(t, 422, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.Contains(t, response["error"].(map[string]interface{})["message"], "Request format adaptation is disabled")
+		assert.Contains(t, response["error"].(map[string]interface{})["message"], "OpenAI request to Anthropic-style provider")
+	})
+
+	t.Run("Adaptor_Disabled_Anthropic_to_OpenAI", func(t *testing.T) {
+		// Create test server with adaptor disabled (default)
+		ts := NewTestServer(t)
+		defer Cleanup()
+
+		// Add test providers - one OpenAI-style, one Anthropic-style
+		ts.AddTestProvider(t, "openai-provider", "http://localhost:9999", "openai", true)
+		ts.AddTestProvider(t, "anthropic-provider", "http://localhost:9999", "anthropic", true)
+
+		// Add a rule that routes to OpenAI-style provider
+		ts.AddTestRule(t, "test-openai-rule", "openai-provider", "gpt-3.5-turbo")
+
+		globalConfig := ts.appConfig.GetGlobalConfig()
+		modelToken := globalConfig.GetModelToken()
+
+		// Test Anthropic request to OpenAI provider should fail with adaptor disabled
+		reqBody := map[string]interface{}{
+			"model":      "test-openai-rule",
+			"max_tokens": 100,
+			"messages": []map[string]string{
+				{"role": "user", "content": "Hello"},
+			},
+		}
+
+		req, _ := http.NewRequest("POST", "/anthropic/v1/messages", CreateJSONBody(reqBody))
+		req.Header.Set("Authorization", "Bearer "+modelToken)
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		ts.ginEngine.ServeHTTP(w, req)
+
+		assert.Equal(t, 422, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.Contains(t, response["error"].(map[string]interface{})["message"], "Request format adaptation is disabled")
+		assert.Contains(t, response["error"].(map[string]interface{})["message"], "Anthropic request to OpenAI-style provider")
+	})
+
+	t.Run("Adaptor_Enabled_OpenAI_to_Anthropic_With_Functions", func(t *testing.T) {
+		// Create test server with adaptor enabled
+		ts := NewTestServerWithAdaptor(t, true)
+		defer Cleanup()
+
+		// Add mock Anthropic provider
+		mockServer := NewMockProviderServer()
+		defer mockServer.Close()
+
+		// Configure mock response for function calls
+		mockResponse := map[string]interface{}{
+			"id":   "msg_test123",
+			"type": "message",
+			"role": "assistant",
+			"content": []map[string]interface{}{
+				{
+					"type": "text",
+					"text": "I'll help you with that.",
+				},
+				{
+					"type": "tool_use",
+					"id":   "tool_123",
+					"name": "get_weather",
+					"input": map[string]interface{}{
+						"location": "New York",
+					},
+				},
+			},
+			"model":       "claude-3",
+			"stop_reason": "tool_use",
+			"usage": map[string]interface{}{
+				"input_tokens":  50,
+				"output_tokens": 30,
+			},
+		}
+
+		mockServer.SetResponse("/v1/messages", MockResponse{
+			StatusCode: 200,
+			Body:       mockResponse,
+		})
+
+		// Add test provider pointing to mock server
+		ts.AddTestProviderWithURL(t, "anthropic-mock", mockServer.GetURL(), "anthropic", true)
+		ts.AddTestRule(t, "test-func-rule", "anthropic-mock", "claude-3")
+
+		globalConfig := ts.appConfig.GetGlobalConfig()
+		modelToken := globalConfig.GetModelToken()
+
+		// Test OpenAI request with functions to Anthropic provider
+		reqBody := map[string]interface{}{
+			"model": "test-func-rule",
+			"messages": []map[string]string{
+				{"role": "user", "content": "What's the weather in New York?"},
+			},
+			"tools": []map[string]interface{}{
+				{
+					"type": "function",
+					"function": map[string]interface{}{
+						"name":        "get_weather",
+						"description": "Get the current weather in a location",
+						"parameters": map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"location": map[string]interface{}{
+									"type":        "string",
+									"description": "The city and state",
+								},
+							},
+							"required": []string{"location"},
+						},
+					},
+				},
+			},
+			"tool_choice": "auto",
+		}
+
+		req, _ := http.NewRequest("POST", "/openai/v1/chat/completions", CreateJSONBody(reqBody))
+		req.Header.Set("Authorization", "Bearer "+modelToken)
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		ts.ginEngine.ServeHTTP(w, req)
+
+		// Check that the request was properly converted and sent
+		if w.Code != 200 {
+			// Print error response for debugging
+			t.Logf("Error response body: %s", w.Body.String())
+			var errorResp map[string]interface{}
+			json.Unmarshal(w.Body.Bytes(), &errorResp)
+			t.Logf("Error response parsed: %+v", errorResp)
+		}
+		assert.Equal(t, 200, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.Equal(t, "chat.completion", response["object"])
+
+		// Check that tool calls were properly converted
+		choices := response["choices"].([]interface{})
+		assert.NotEmpty(t, choices)
+		choice := choices[0].(map[string]interface{})
+		message := choice["message"].(map[string]interface{})
+		assert.Contains(t, message, "tool_calls")
+
+		toolCalls := message["tool_calls"].([]interface{})
+		assert.NotEmpty(t, toolCalls)
+		toolCall := toolCalls[0].(map[string]interface{})
+		assert.Equal(t, "function", toolCall["type"])
+		assert.Equal(t, "get_weather", toolCall["function"].(map[string]interface{})["name"])
+	})
+
+	t.Run("Adaptor_Enabled_Anthropic_to_OpenAI_With_Functions", func(t *testing.T) {
+		// Create test server with adaptor enabled
+		ts := NewTestServerWithAdaptor(t, true)
+		defer Cleanup()
+
+		// Add mock OpenAI provider
+		mockServer := NewMockProviderServer()
+		defer mockServer.Close()
+
+		// Configure mock response for function calls
+		mockResponse := map[string]interface{}{
+			"id":      "chatcmpl-test123",
+			"object":  "chat.completion",
+			"created": 1234567890,
+			"model":   "gpt-4",
+			"choices": []map[string]interface{}{
+				{
+					"index": 0,
+					"message": map[string]interface{}{
+						"role":    "assistant",
+						"content": "I'll check the weather for you.",
+						"tool_calls": []map[string]interface{}{
+							{
+								"id":   "call_123",
+								"type": "function",
+								"function": map[string]interface{}{
+									"name":      "get_weather",
+									"arguments": `{"location":"New York"}`,
+								},
+							},
+						},
+					},
+					"finish_reason": "tool_calls",
+				},
+			},
+			"usage": map[string]interface{}{
+				"prompt_tokens":     50,
+				"completion_tokens": 30,
+				"total_tokens":      80,
+			},
+		}
+
+		mockServer.SetResponse("chat/completions", MockResponse{
+			StatusCode: 200,
+			Body:       mockResponse,
+		})
+
+		// Add test provider pointing to mock server
+		mockURL := mockServer.GetURL()
+		t.Logf("Mock server URL: %s", mockURL)
+		ts.AddTestProviderWithURL(t, "openai-mock", mockURL, "openai", true)
+		ts.AddTestRule(t, "test-func-rule-reverse", "openai-mock", "gpt-4")
+
+		globalConfig := ts.appConfig.GetGlobalConfig()
+		modelToken := globalConfig.GetModelToken()
+
+		// Test Anthropic request with tools to OpenAI provider
+		reqBody := map[string]interface{}{
+			"model":      "test-func-rule-reverse",
+			"max_tokens": 100,
+			"messages": []map[string]string{
+				{"role": "user", "content": "What's the weather in New York?"},
+			},
+			"tools": []map[string]interface{}{
+				{
+					"name":        "get_weather",
+					"description": "Get the current weather in a location",
+					"input_schema": map[string]interface{}{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"location": map[string]interface{}{
+								"type":        "string",
+								"description": "The city and state",
+							},
+						},
+						"required": []string{"location"},
+					},
+				},
+			},
+		}
+
+		req, _ := http.NewRequest("POST", "/anthropic/v1/messages", CreateJSONBody(reqBody))
+		req.Header.Set("Authorization", "Bearer "+modelToken)
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		ts.ginEngine.ServeHTTP(w, req)
+
+		// Check that the mock server was called
+		assert.Equal(t, 1, mockServer.GetCallCount("chat/completions"))
+
+		// Check that the request was properly converted and sent
+		assert.Equal(t, 200, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		t.Logf("Response type: %v", response["type"])
+
+		// Check that tool_use blocks were properly converted from OpenAI response
+		t.Logf("Response content: %+v", response)
+		content, ok := response["content"].([]interface{})
+		if !ok {
+			t.Logf("Content is not []interface{}: %T", response["content"])
+			t.Logf("Full response: %+v", response)
+		}
+		assert.NotEmpty(t, content)
+
+		// Find the tool_use block
+		var toolUseBlock map[string]interface{}
+		for _, block := range content {
+			if blockMap, ok := block.(map[string]interface{}); ok {
+				t.Logf("Block: %+v", blockMap)
+				if blockMap["type"] == "tool_use" {
+					toolUseBlock = blockMap
+					break
+				}
+			}
+		}
+
+		assert.NotNil(t, toolUseBlock)
+		assert.Equal(t, "get_weather", toolUseBlock["name"])
+		assert.Equal(t, "call_123", toolUseBlock["id"])
+	})
+
+	t.Run("Adaptor_Enabled_OpenAI_to_Anthropic_Streaming_With_Functions", func(t *testing.T) {
+		// Create test server with adaptor enabled
+		ts := NewTestServerWithAdaptor(t, true)
+		defer Cleanup()
+
+		// Add mock Anthropic provider
+		mockServer := NewMockProviderServer()
+		defer mockServer.Close()
+
+		// Configure mock streaming response with function calls
+		streamingEvents := []string{
+			`{"type":"message_start","message":{"id":"msg_test123","type":"message","role":"assistant","content":[],"model":"claude-3","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":50,"output_tokens":0}}}`,
+			`{"type":"content_block_start","index":0,"content_block":{"type":"text","text":"I'll help you with that."}}`,
+			`{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" Let me check the weather."}}`,
+			`{"type":"content_block_stop","index":0}`,
+			`{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"tool_123","name":"get_weather","input":{"location":"New York"}}}`,
+			`{"type":"content_block_stop","index":1}`,
+			`{"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null}}`,
+			`{"type":"message_stop"}`,
+		}
+
+		mockServer.SetStreamingResponse("/v1/messages", MockStreamingResponse{
+			Events: streamingEvents,
+		})
+
+		// Add test provider pointing to mock server
+		ts.AddTestProviderWithURL(t, "anthropic-stream", mockServer.GetURL(), "anthropic", true)
+		ts.AddTestRule(t, "test-stream-rule", "anthropic-stream", "claude-3")
+
+		globalConfig := ts.appConfig.GetGlobalConfig()
+		modelToken := globalConfig.GetModelToken()
+
+		// Test OpenAI streaming request with functions to Anthropic provider
+		reqBody := map[string]interface{}{
+			"model": "test-stream-rule",
+			"messages": []map[string]string{
+				{"role": "user", "content": "What's the weather?"},
+			},
+			"tools": []map[string]interface{}{
+				{
+					"type": "function",
+					"function": map[string]interface{}{
+						"name":        "get_weather",
+						"description": "Get weather",
+					},
+				},
+			},
+			"stream": true,
+		}
+
+		req, _ := http.NewRequest("POST", "/openai/v1/chat/completions", CreateJSONBody(reqBody))
+		req.Header.Set("Authorization", "Bearer "+modelToken)
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		ts.ginEngine.ServeHTTP(w, req)
+
+		// Check streaming response
+		assert.Equal(t, 200, w.Code)
+		assert.Equal(t, "text/event-stream", w.Header().Get("Content-Type"))
+
+		// Parse streaming response
+		response := w.Body.String()
+		t.Logf("Streaming response body: %s", response)
+		lines := strings.Split(response, "\n")
+
+		// Should have multiple data lines for streaming events
+		dataCount := 0
+		for _, line := range lines {
+			if strings.HasPrefix(line, "data: ") && line != "data: [DONE]" {
+				dataCount++
+			}
+		}
+
+		assert.Greater(t, dataCount, 0, "Should have streaming data events")
+
+		// Check that tool calls are present in the streaming response
+		assert.Contains(t, response, `"tool_calls"`)
+	})
+}

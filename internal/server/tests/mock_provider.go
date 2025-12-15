@@ -2,6 +2,7 @@ package tests
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -17,11 +18,12 @@ import (
 
 // MockProviderServer represents a mock AI provider server
 type MockProviderServer struct {
-	server      *httptest.Server
-	responses   map[string]MockResponse
-	callCount   map[string]int
-	lastRequest map[string]interface{}
-	mutex       sync.RWMutex
+	server             *httptest.Server
+	responses          map[string]MockResponse
+	streamingResponses map[string]MockStreamingResponse
+	callCount          map[string]int
+	lastRequest        map[string]interface{}
+	mutex              sync.RWMutex
 }
 
 // CreateMockChatCompletionResponse creates a mock chat completion response that matches OpenAI format
@@ -49,12 +51,48 @@ func CreateMockChatCompletionResponse(id, model, content string) map[string]inte
 	}
 }
 
+// CreateMockChatCompletionResponseWithToolCalls creates a mock response with function/tool calls
+func CreateMockChatCompletionResponseWithToolCalls(id, model, content string, toolCalls []map[string]interface{}) map[string]interface{} {
+	message := map[string]interface{}{
+		"role":    "assistant",
+		"content": content,
+	}
+
+	if len(toolCalls) > 0 {
+		message["tool_calls"] = toolCalls
+	}
+
+	return map[string]interface{}{
+		"id":      id,
+		"object":  "chat.completion",
+		"created": time.Now().Unix(),
+		"model":   model,
+		"choices": []map[string]interface{}{
+			{
+				"index":         0,
+				"message":       message,
+				"finish_reason": "tool_calls",
+			},
+		},
+		"usage": map[string]interface{}{
+			"prompt_tokens":     15,
+			"completion_tokens": 10,
+			"total_tokens":      25,
+		},
+	}
+}
+
 // MockResponse defines a mock response configuration
 type MockResponse struct {
 	StatusCode int
 	Body       interface{}
 	Delay      time.Duration
 	Error      string
+}
+
+// MockStreamingResponse defines a mock streaming response configuration
+type MockStreamingResponse struct {
+	Events []string
 }
 
 // NewMockProviderServer creates a new mock provider server
@@ -71,13 +109,23 @@ func NewMockProviderServer() *MockProviderServer {
 	// Register default handlers
 	mux.HandleFunc("/v1/chat/completions", mock.handleChatCompletions)
 	mux.HandleFunc("/chat/completions", mock.handleChatCompletions)
+	mux.HandleFunc("/v1/messages", mock.handleMessages)
+	mux.HandleFunc("/messages", mock.handleMessages)
 
 	return mock
 }
 
 // SetResponse configures a mock response for a specific endpoint
 func (m *MockProviderServer) SetResponse(endpoint string, response MockResponse) {
-	m.responses[strings.TrimPrefix(endpoint, "/")] = response
+	key := strings.TrimPrefix(endpoint, "/")
+	fmt.Printf("Setting response for endpoint: %s (key: %s)\n", endpoint, key)
+	m.responses[key] = response
+}
+
+// SetStreamingResponse configures a mock streaming response for a specific endpoint
+func (m *MockProviderServer) SetStreamingResponse(endpoint string, response MockStreamingResponse) {
+	m.streamingResponses = make(map[string]MockStreamingResponse)
+	m.streamingResponses[strings.TrimPrefix(endpoint, "/")] = response
 }
 
 // handleChatCompletions handles mock chat completion requests
@@ -94,14 +142,91 @@ func (m *MockProviderServer) handleChatCompletions(w http.ResponseWriter, r *htt
 		m.mutex.Lock()
 		m.lastRequest[endpoint] = reqBody
 		m.mutex.Unlock()
+
+		// Debug: log the received request
+		fmt.Printf("Mock server received request for %s: %+v\n", endpoint, reqBody)
+
+		// Check if this is a streaming request
+		if stream, ok := reqBody["stream"].(bool); ok && stream {
+			m.handleStreamingRequest(w, r, endpoint, reqBody)
+			return
+		}
 	}
 
 	response, exists := m.responses[endpoint]
 	if !exists {
 		// Default successful response
+		fmt.Printf("No configured response for %s, using default\n", endpoint)
 		response = MockResponse{
 			StatusCode: 200,
 			Body:       CreateMockChatCompletionResponse("chatcmpl-mock", "gpt-3.5-turbo", "Mock response from provider"),
+		}
+	} else {
+		fmt.Printf("Found configured response for %s\n", endpoint)
+	}
+
+	// Apply delay if configured
+	if response.Delay > 0 {
+		time.Sleep(response.Delay)
+	}
+
+	// Handle error responses
+	if response.Error != "" {
+		w.WriteHeader(response.StatusCode)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": map[string]interface{}{
+				"message": response.Error,
+				"type":    "api_error",
+			},
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	json.NewEncoder(w).Encode(response.Body)
+}
+
+// handleMessages handles mock Anthropic messages requests
+func (m *MockProviderServer) handleMessages(w http.ResponseWriter, r *http.Request) {
+	endpoint := strings.TrimPrefix(r.URL.Path, "/")
+
+	m.mutex.Lock()
+	m.callCount[endpoint]++
+	m.mutex.Unlock()
+
+	// Parse request for debugging
+	var reqBody map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&reqBody); err == nil {
+		m.mutex.Lock()
+		m.lastRequest[endpoint] = reqBody
+		m.mutex.Unlock()
+
+		// Check if this is a streaming request
+		if stream, ok := reqBody["stream"].(bool); ok && stream {
+			m.handleStreamingRequest(w, r, endpoint, reqBody)
+			return
+		}
+	}
+
+	response, exists := m.responses[endpoint]
+	if !exists {
+		// Default successful response for messages endpoint
+		response = MockResponse{
+			StatusCode: 200,
+			Body: map[string]interface{}{
+				"id":            "msg-mock",
+				"type":          "message",
+				"role":          "assistant",
+				"content":       []map[string]interface{}{{"type": "text", "text": "Mock response from provider"}},
+				"model":         "claude-3",
+				"stop_reason":   "end_turn",
+				"stop_sequence": "",
+				"usage": map[string]interface{}{
+					"input_tokens":  10,
+					"output_tokens": 5,
+				},
+			},
 		}
 	}
 
@@ -122,8 +247,46 @@ func (m *MockProviderServer) handleChatCompletions(w http.ResponseWriter, r *htt
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(response.StatusCode)
 	json.NewEncoder(w).Encode(response.Body)
+}
+
+// handleStreamingRequest handles streaming requests
+func (m *MockProviderServer) handleStreamingRequest(w http.ResponseWriter, r *http.Request, endpoint string, reqBody map[string]interface{}) {
+	// Set SSE headers
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	// Get streaming response configuration
+	streamingResp, exists := m.streamingResponses[endpoint]
+	if !exists {
+		// Default streaming response
+		streamingResp = MockStreamingResponse{
+			Events: []string{
+				`data: {"id":"chatcmpl-mock","object":"chat.completion.chunk","created":1700000000,"model":"gpt-3.5-turbo","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}`,
+				`data: {"id":"chatcmpl-mock","object":"chat.completion.chunk","created":1700000000,"model":"gpt-3.5-turbo","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}`,
+				`data: {"id":"chatcmpl-mock","object":"chat.completion.chunk","created":1700000000,"model":"gpt-3.5-turbo","choices":[{"index":0,"delta":{"content":"!"},"finish_reason":"stop"}]}`,
+				`data: [DONE]`,
+			},
+		}
+	}
+
+	// Send streaming events
+	for _, event := range streamingResp.Events {
+		fmt.Fprintf(w, "%s\n\n", event)
+		flusher.Flush()
+		// Small delay to simulate real streaming
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 // GetURL returns the mock server URL
