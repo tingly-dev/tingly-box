@@ -429,6 +429,7 @@ func (s *Server) convertOpenAIToAnthropicRequest(req *RequestWrapper) anthropic.
 
 // handleAnthropicToOpenAIStreamResponse processes Anthropic streaming events and converts them to OpenAI format
 func (s *Server) handleAnthropicToOpenAIStreamResponse(c *gin.Context, stream *ssestream.Stream[anthropic.MessageStreamEventUnion], responseModel string) {
+	logrus.Info("Starting Anthropic to OpenAI streaming response handler")
 	defer func() {
 		if r := recover(); r != nil {
 			logrus.Errorf("Panic in Anthropic to OpenAI streaming handler: %v", r)
@@ -447,6 +448,7 @@ func (s *Server) handleAnthropicToOpenAIStreamResponse(c *gin.Context, stream *s
 				logrus.Errorf("Error closing Anthropic stream: %v", err)
 			}
 		}
+		logrus.Info("Finished Anthropic to OpenAI streaming response handler")
 	}()
 
 	// Set SSE headers
