@@ -205,20 +205,6 @@ type RequestConfig struct {
 	DefaultModel  string `json:"default_model" example:"gpt-3.5-turbo"`
 }
 
-// DefaultsResponse represents the response for getting defaults
-type DefaultsResponse struct {
-	Success bool `json:"success" example:"true"`
-	Data    struct {
-		RequestConfigs   []RequestConfig `json:"request_configs"`
-		DefaultRequestID int             `json:"default_request_id" example:"0"`
-	} `json:"data"`
-}
-
-// SetDefaultsRequest represents the request to set defaults
-type SetDefaultsRequest struct {
-	RequestConfigs []config.Rule `json:"request_configs"`
-}
-
 // RulesResponse represents the response for getting all rules
 type RulesResponse struct {
 	Success bool        `json:"success" example:"true"`

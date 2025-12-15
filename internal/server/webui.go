@@ -182,39 +182,6 @@ func (s *Server) GetHistory(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-func (s *Server) GetDefaults(c *gin.Context) {
-	cfg := s.config
-	if cfg == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Global config not available",
-		})
-		return
-	}
-
-	requestConfigs := cfg.GetRequestConfigs()
-	defaultRequestID := cfg.GetDefaultRequestID()
-
-	// Convert Rules to response format
-	responseConfigs := make([]RequestConfig, len(requestConfigs))
-	for i, rc := range requestConfigs {
-		responseConfigs[i] = RequestConfig{
-			RequestModel:  rc.RequestModel,
-			ResponseModel: rc.ResponseModel,
-			Provider:      rc.GetDefaultProvider(),
-			DefaultModel:  rc.GetDefaultModel(),
-		}
-	}
-
-	response := DefaultsResponse{
-		Success: true,
-	}
-	response.Data.RequestConfigs = responseConfigs
-	response.Data.DefaultRequestID = defaultRequestID
-
-	c.JSON(http.StatusOK, response)
-}
-
 // GetRules returns all rules
 func (s *Server) GetRules(c *gin.Context) {
 	cfg := s.config
@@ -739,57 +706,6 @@ func (s *Server) RestartServer(c *gin.Context) {
 	c.JSON(http.StatusNotImplemented, response)
 }
 
-func (s *Server) SetDefaults(c *gin.Context) {
-	var req SetDefaultsRequest
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
-		return
-	}
-
-	cfg := s.config
-	if cfg == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Global config not available",
-		})
-		return
-	}
-
-	// Update Rules if provided
-	if req.RequestConfigs != nil {
-		if err := cfg.SetRequestConfigs(req.RequestConfigs); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"error":   fmt.Sprintf("Failed to update request configs: %v", err),
-			})
-			return
-		}
-	}
-
-	if s.logger != nil {
-		logData := map[string]interface{}{
-			"request_configs_count": 0,
-		}
-
-		if req.RequestConfigs != nil {
-			logData["request_configs_count"] = len(req.RequestConfigs)
-		}
-
-		s.logger.LogAction(memory.ActionUpdateDefaults, logData, true, "Request configs updated via web interface")
-	}
-
-	response := ServerActionResponse{
-		Success: true,
-		Message: "Request configs updated successfully",
-	}
-
-	c.JSON(http.StatusOK, response)
-}
-
 func (s *Server) FetchProviderModels(c *gin.Context) {
 	providerName := c.Param("name")
 
@@ -1062,20 +978,6 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 		swagger.WithDescription("Get request history"),
 		swagger.WithTags("history"),
 		swagger.WithResponseModel(HistoryResponse{}),
-	)
-
-	// Defaults Management
-	authAPI.GET("/defaults", (s.GetDefaults),
-		swagger.WithDescription("Get default request configurations"),
-		swagger.WithTags("defaults"),
-		swagger.WithResponseModel(DefaultsResponse{}),
-	)
-
-	authAPI.POST("/defaults", (s.SetDefaults),
-		swagger.WithDescription("Set default request configurations"),
-		swagger.WithTags("defaults"),
-		swagger.WithRequestModel(SetDefaultsRequest{}),
-		swagger.WithResponseModel(SetRuleResponse{}),
 	)
 
 	// Provider Models Management
