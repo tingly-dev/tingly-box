@@ -67,6 +67,29 @@ func createTestServer(t *testing.T, appConfig *config.AppConfig) *TestServer {
 	}
 }
 
+// NewTestServerWithAdaptor creates a new test server with adaptor flag
+func NewTestServerWithAdaptor(t *testing.T, enableAdaptor bool) *TestServer {
+	// Create test config directory
+	configDir := ".tingly-box"
+	if err := os.MkdirAll(configDir, 0700); err != nil {
+		t.Fatalf("Failed to create test config directory: %v", err)
+	}
+
+	appConfig, err := config.NewAppConfig()
+	if err != nil {
+		t.Fatalf("Failed to create app config: %v", err)
+	}
+
+	// Create server instance with adaptor flag
+	httpServer := server.NewServerWithAllOptions(appConfig.GetGlobalConfig(), true, enableAdaptor)
+
+	return &TestServer{
+		appConfig: appConfig,
+		server:    httpServer,
+		ginEngine: httpServer.GetRouter(), // Use the server's router
+	}
+}
+
 // AddTestProviders adds test providers to the configuration
 func (ts *TestServer) AddTestProviders(t *testing.T) {
 	providers := []struct {
@@ -177,6 +200,59 @@ func CaptureRequest(handler gin.HandlerFunc) (*http.Request, map[string]interfac
 	json.NewDecoder(c.Request.Body).Decode(&requestData)
 
 	return req, requestData, nil
+}
+
+// AddTestProvider adds a single test provider
+func (ts *TestServer) AddTestProvider(t *testing.T, name, apiBase, apiStyle string, enabled bool) {
+	provider := &config.Provider{
+		Name:     name,
+		APIBase:  apiBase,
+		APIStyle: config.APIStyle(apiStyle),
+		Token:    "test-token",
+		Enabled:  enabled,
+	}
+	if err := ts.appConfig.AddProvider(provider); err != nil {
+		t.Fatalf("Failed to add provider %s: %v", name, err)
+	}
+}
+
+// AddTestProviderWithURL adds a provider with a specific URL
+func (ts *TestServer) AddTestProviderWithURL(t *testing.T, name, url, apiStyle string, enabled bool) {
+	provider := &config.Provider{
+		Name:     name,
+		APIBase:  url,
+		APIStyle: config.APIStyle(apiStyle),
+		Token:    "test-token",
+		Enabled:  enabled,
+	}
+	if err := ts.appConfig.AddProvider(provider); err != nil {
+		t.Fatalf("Failed to add provider %s: %v", name, err)
+	}
+}
+
+// AddTestRule adds a test rule that routes to a specific provider
+func (ts *TestServer) AddTestRule(t *testing.T, requestModel, providerName, model string) {
+	// Create a simple rule
+	rule := config.Rule{
+		UUID:          requestModel + "-uuid",
+		RequestModel:  requestModel,
+		ResponseModel: model,
+		Services: []config.Service{
+			{
+				Provider: providerName,
+				Model:    model,
+				Weight:   1,
+				Active:   true,
+			},
+		},
+		CurrentServiceIndex: 0,
+		Tactic:              "round_robin",
+		Active:              true,
+	}
+
+	if err := ts.appConfig.GetGlobalConfig().AddRequestConfig(rule); err != nil {
+		t.Fatalf("Failed to add rule %s: %v", requestModel, err)
+	}
 }
 
 // Cleanup removes test files
