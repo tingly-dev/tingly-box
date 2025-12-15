@@ -65,8 +65,8 @@ func (s *Server) UseUIEndpoints() {
 	s.useWebStaticEndpoints(s.router)
 }
 
-// ProbeRule tests a rule configuration by sending a sample request to the configured provider
-func (s *Server) ProbeRule(c *gin.Context) {
+// HandleProbe tests a rule configuration by sending a sample request to the configured provider
+func (s *Server) HandleProbe(c *gin.Context) {
 
 	var req ProbeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -1092,11 +1092,11 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 	)
 
 	// Probe endpoint
-	authAPI.POST("/probe", (s.ProbeRule),
+	authAPI.POST("/probe", (s.HandleProbe),
 		swagger.WithDescription("Test a rule configuration by sending a sample request"),
 		swagger.WithTags("testing"),
 		swagger.WithRequestModel(ProbeRequest{}),
-		swagger.WithResponseModel(RuleResponse{}),
+		swagger.WithResponseModel(ProbeResponse{}),
 	)
 
 	// Token Management

@@ -13,18 +13,6 @@ import (
 
 type RequestWrapper = openai.ChatCompletionNewParams
 
-// ErrorResponse represents an error response
-type ErrorResponse struct {
-	Error ErrorDetail `json:"error"`
-}
-
-// ErrorDetail represents error details
-type ErrorDetail struct {
-	Message string `json:"message"`
-	Type    string `json:"type"`
-	Code    string `json:"code,omitempty"`
-}
-
 // HealthCheck handles health check requests
 func (s *Server) HealthCheck(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{

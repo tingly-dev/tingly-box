@@ -1,10 +1,25 @@
 package server
 
 import (
+	"time"
 	"tingly-box/internal/config"
 
 	"github.com/openai/openai-go/v3"
 )
+
+// Error Models
+
+// ErrorResponse represents an error response
+type ErrorResponse struct {
+	Error ErrorDetail `json:"error"`
+}
+
+// ErrorDetail represents error details
+type ErrorDetail struct {
+	Message string `json:"message"`
+	Type    string `json:"type"`
+	Code    string `json:"code,omitempty"`
+}
 
 // =============================================
 // Health Check Models
@@ -296,4 +311,66 @@ type FetchProviderModelsResponse struct {
 	Success bool        `json:"success" example:"true"`
 	Message string      `json:"message" example:"Successfully fetched 150 models for provider openai"`
 	Data    interface{} `json:"data"`
+}
+
+// =============================================
+// Probe API Models
+// =============================================
+
+// ProbeUsage represents token usage information
+type ProbeUsage struct {
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+	TotalTokens      int `json:"total_tokens"`
+	TimeCost         int `json:"time_cost"`
+}
+
+// ProbeResponseData represents the response data structure
+type ProbeResponseData struct {
+	Request  ProbeRequestDetail  `json:"request"`
+	Response ProbeResponseDetail `json:"response"`
+	Usage    ProbeUsage          `json:"usage"`
+}
+
+// ProbeResponseDetail represents the API response
+type ProbeResponseDetail struct {
+	Content      string `json:"content"`
+	Model        string `json:"model"`
+	Provider     string `json:"provider"`
+	FinishReason string `json:"finish_reason"`
+	Error        string `json:"error,omitempty"`
+}
+
+// ProbeRequestDetail represents the mock request data for probing
+type ProbeRequestDetail struct {
+	Messages    []map[string]interface{} `json:"messages"`
+	Model       string                   `json:"model"`
+	MaxTokens   int                      `json:"max_tokens"`
+	Temperature float64                  `json:"temperature"`
+	Provider    string                   `json:"provider"`
+	Timestamp   string                   `json:"timestamp"`
+}
+
+// NewMockRequest creates a new mock request with default values
+func NewMockRequest(model, provider string) ProbeRequestDetail {
+	return ProbeRequestDetail{
+		Messages: []map[string]interface{}{
+			{
+				"role":    "user",
+				"content": "hi",
+			},
+		},
+		Model:       model,
+		MaxTokens:   100,
+		Temperature: 0.7,
+		Provider:    provider,
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+}
+
+// ProbeResponse represents the overall probe response
+type ProbeResponse struct {
+	Success bool               `json:"success"`
+	Error   *ErrorDetail       `json:"error,omitempty"`
+	Data    *ProbeResponseData `json:"data,omitempty"`
 }

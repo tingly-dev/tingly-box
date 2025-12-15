@@ -15,11 +15,7 @@ import (
 )
 
 // probeWithOpenAI handles probe requests for OpenAI-style APIs
-func probeWithOpenAI(c *gin.Context, rule *config.Rule, provider *config.Provider) (string, struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
-	TotalTokens      int `json:"total_tokens"`
-}, error) {
+func probeWithOpenAI(c *gin.Context, rule *config.Rule, provider *config.Provider) (string, ProbeUsage, error) {
 	startTime := time.Now()
 
 	// Configure OpenAI client
@@ -44,11 +40,7 @@ func probeWithOpenAI(c *gin.Context, rule *config.Rule, provider *config.Provide
 	processingTime := time.Since(startTime).Milliseconds()
 
 	var responseContent string
-	var tokenUsage struct {
-		PromptTokens     int `json:"prompt_tokens"`
-		CompletionTokens int `json:"completion_tokens"`
-		TotalTokens      int `json:"total_tokens"`
-	}
+	var tokenUsage ProbeUsage
 
 	if err == nil && resp != nil {
 		// Extract response data
@@ -92,11 +84,7 @@ func probeWithOpenAI(c *gin.Context, rule *config.Rule, provider *config.Provide
 }
 
 // probeWithAnthropic handles probe requests for Anthropic-style APIs
-func probeWithAnthropic(c *gin.Context, rule *config.Rule, provider *config.Provider) (string, struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
-	TotalTokens      int `json:"total_tokens"`
-}, error) {
+func probeWithAnthropic(c *gin.Context, rule *config.Rule, provider *config.Provider) (string, ProbeUsage, error) {
 	startTime := time.Now()
 
 	// Configure Anthropic client
@@ -122,11 +110,7 @@ func probeWithAnthropic(c *gin.Context, rule *config.Rule, provider *config.Prov
 	processingTime := time.Since(startTime).Milliseconds()
 
 	var responseContent string
-	var tokenUsage struct {
-		PromptTokens     int `json:"prompt_tokens"`
-		CompletionTokens int `json:"completion_tokens"`
-		TotalTokens      int `json:"total_tokens"`
-	}
+	var tokenUsage ProbeUsage
 
 	if err == nil && resp != nil {
 		// Extract response data
@@ -180,39 +164,19 @@ func probe(c *gin.Context, rule *config.Rule, provider *config.Provider) {
 	}
 
 	// Create the mock request data that would be sent to the API
-	mockRequest := map[string]interface{}{
-		"messages": []map[string]interface{}{
-			{
-				"role":    "user",
-				"content": "hi",
-			},
-		},
-		"model":       rule.GetDefaultModel(), // Use empty stats for probe testing
-		"max_tokens":  100,
-		"temperature": 0.7,
-		"provider":    rule.GetDefaultProvider(), // Use empty stats for probe testing
-		"timestamp":   startTime.Format(time.RFC3339),
-	}
+	mockRequest := NewMockRequest(rule.GetDefaultModel(), rule.GetDefaultProvider())
 
 	if provider == nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error": gin.H{
-				"code":    "PROVIDER_NOT_FOUND",
-				"message": fmt.Sprintf("Provider '%s' not found or disabled", rule.GetDefaultProvider()),
-			},
-			"data": gin.H{
-				"request": mockRequest,
-				"rule_tested": gin.H{
-					"name":      rule.RequestModel,
-					"provider":  rule.GetDefaultProvider(),
-					"model":     rule.GetDefaultModel(),
-					"timestamp": time.Now().Format(time.RFC3339),
-				},
-				"test_result": gin.H{
-					"success": false,
-					"message": fmt.Sprintf("Provider '%s' is not enabled or configured", rule.GetDefaultProvider()),
-				},
+		errorResp := ErrorDetail{
+			Code:    "PROVIDER_NOT_FOUND",
+			Message: fmt.Sprintf("Provider '%s' not found or disabled", rule.GetDefaultProvider()),
+		}
+
+		c.JSON(http.StatusBadRequest, ProbeResponse{
+			Success: false,
+			Error:   &errorResp,
+			Data: &ProbeResponseData{
+				Request: mockRequest,
 			},
 		})
 		return
@@ -220,109 +184,64 @@ func probe(c *gin.Context, rule *config.Rule, provider *config.Provider) {
 
 	// Call the appropriate probe function based on provider API style
 	var responseContent string
-	var tokenUsage struct {
-		PromptTokens     int `json:"prompt_tokens"`
-		CompletionTokens int `json:"completion_tokens"`
-		TotalTokens      int `json:"total_tokens"`
-	}
+	var usage ProbeUsage
 	var err error
 
 	switch provider.APIStyle {
 	case config.APIStyleAnthropic:
-		responseContent, tokenUsage, err = probeWithAnthropic(c, rule, provider)
+		responseContent, usage, err = probeWithAnthropic(c, rule, provider)
 	case config.APIStyleOpenAI:
 		fallthrough
 	default:
-		responseContent, tokenUsage, err = probeWithOpenAI(c, rule, provider)
+		responseContent, usage, err = probeWithOpenAI(c, rule, provider)
 	}
 
-	processingTime := time.Since(startTime).Milliseconds()
+	endTime := time.Now()
 
 	if err != nil {
 		// Extract error code from the formatted error message
 		errorMessage := err.Error()
 		errorCode := "PROBE_FAILED"
 
-		// Parse error to extract code if available
-		if strings.Contains(errorMessage, ":") {
-			parts := strings.SplitN(errorMessage, ":", 2)
-			if len(parts) == 2 && len(parts[0]) <= 25 { // Reasonable length for error code
-				errorCode = strings.TrimSpace(parts[0])
-				errorMessage = strings.TrimSpace(parts[1])
-			}
+		errorResp := ErrorDetail{
+			Message: fmt.Sprintf("Probe failed: %s", errorMessage),
+			Type:    "error",
+			Code:    errorCode,
 		}
 
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"error": gin.H{
-				"code":    errorCode,
-				"message": errorMessage,
-				"details": gin.H{
-					"provider":           rule.GetDefaultProvider(),
-					"model":              rule.GetDefaultModel(),
-					"timestamp":          time.Now().Format(time.RFC3339),
-					"processing_time_ms": processingTime,
+		c.JSON(http.StatusOK, ProbeResponse{
+			Success: false,
+			Error:   &errorResp,
+			Data: &ProbeResponseData{
+				Request: mockRequest,
+				Response: ProbeResponseDetail{
+					Content:      "",
+					Model:        rule.GetDefaultModel(),
+					Provider:     rule.GetDefaultProvider(),
+					FinishReason: "error",
+					Error:        errorMessage,
 				},
-			},
-			"data": gin.H{
-				"request": mockRequest,
-				"response": gin.H{
-					"content":  nil,
-					"model":    rule.GetDefaultModel(),
-					"provider": rule.GetDefaultProvider(),
-					"usage": gin.H{
-						"prompt_tokens":     0,
-						"completion_tokens": 0,
-						"total_tokens":      0,
-					},
-					"finish_reason": "error",
-					"error":         errorMessage,
-				},
-				"rule_tested": gin.H{
-					"name":      rule.RequestModel,
-					"provider":  rule.GetDefaultProvider(),
-					"model":     rule.GetDefaultModel(),
-					"timestamp": time.Now().Format(time.RFC3339),
-				},
-				"test_result": gin.H{
-					"success": false,
-					"message": fmt.Sprintf("Probe failed: %s", errorMessage),
-				},
+				Usage: ProbeUsage{},
 			},
 		})
 		return
 	}
 
 	finishReason := "stop"
-	if tokenUsage.TotalTokens == 0 {
+	if usage.TotalTokens == 0 {
 		finishReason = "unknown"
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data": gin.H{
-			"request": mockRequest,
-			"response": gin.H{
-				"content":  responseContent,
-				"model":    rule.GetDefaultModel(),
-				"provider": rule.GetDefaultProvider(),
-				"usage": gin.H{
-					"prompt_tokens":     tokenUsage.PromptTokens,
-					"completion_tokens": tokenUsage.CompletionTokens,
-					"total_tokens":      tokenUsage.TotalTokens,
-				},
-				"finish_reason": finishReason,
+	usage.TimeCost = int(endTime.Sub(startTime).Milliseconds())
+	c.JSON(http.StatusOK, ProbeResponse{
+		Success: true,
+		Data: &ProbeResponseData{
+			Request: mockRequest,
+			Response: ProbeResponseDetail{
+				Content:      responseContent,
+				FinishReason: finishReason,
 			},
-			"rule_tested": gin.H{
-				"name":      rule.RequestModel,
-				"provider":  rule.GetDefaultProvider(),
-				"model":     rule.GetDefaultModel(),
-				"timestamp": time.Now().Format(time.RFC3339),
-			},
-			"test_result": gin.H{
-				"success": true,
-				"message": "Rule configuration is valid and working correctly",
-			},
+			Usage: usage,
 		},
 	})
 }
