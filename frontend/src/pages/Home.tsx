@@ -685,73 +685,74 @@ const Home = () => {
             loading={loading}
             notification={notification}
         >
-            {/* Server Information Header */}
-            <UnifiedCard
-                title="Model Proxy Config"
-                // subtitle={`Total: ${providers.length} providers | Enabled: ${providers.filter((p: any) => p.enabled).length}`}
-                size="header"
+            <Stack>
+                {/* Server Information Header */}
+                <UnifiedCard
+                    title="Model Proxy Config"
+                    // subtitle={`Total: ${providers.length} providers | Enabled: ${providers.filter((p: any) => p.enabled).length}`}
+                    size="header"
 
-            >
-                <Header></Header>
-            </UnifiedCard>
+                >
+                    <Header></Header>
+                </UnifiedCard>
 
-            <UnifiedCard
-                title="Choose Model"
-                size={"full"}
-                height={"100%"}
-                rightAction={
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                        <Button
-                            variant="outlined"
-                            onClick={handleProbe}
-                            disabled={!selectedOption.provider || !selectedOption.model || isProbing}
-                            startIcon={<ProbeIcon />}
-                        >
-                            Test Connection
-                        </Button>
-                        <Button
-                            variant="contained"
-                            onClick={() => navigate('/provider')}
-                        >
-                            Manage Credentials
-                        </Button>
-                    </Box>
-                }
-            >
+                <UnifiedCard
+                    title="Choose Model"
+                    size="full"
+                    rightAction={
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                            <Button
+                                variant="outlined"
+                                onClick={handleProbe}
+                                disabled={!selectedOption.provider || !selectedOption.model || isProbing}
+                                startIcon={<ProbeIcon />}
+                            >
+                                Test Connection
+                            </Button>
+                            <Button
+                                variant="contained"
+                                onClick={() => navigate('/provider')}
+                            >
+                                Manage Credentials
+                            </Button>
+                        </Box>
+                    }
+                >
 
-                {providers.length > 0 ? (
-                    <Stack spacing={3}>
-                        <ModelSelectTab
-                            providers={providers}
-                            providerModels={providerModels}
-                            selectedProvider={selectedOption?.provider}
-                            selectedModel={selectedOption?.model}
-                            onSelected={(opt: ProviderSelectTabOption) => handleModelSelect(opt.provider, opt.model || "")}
-                            onRefresh={handleModelRefresh}
-                        />
+                    {providers.length > 0 ? (
+                        <Stack spacing={3}>
+                            <ModelSelectTab
+                                providers={providers}
+                                providerModels={providerModels}
+                                selectedProvider={selectedOption?.provider}
+                                selectedModel={selectedOption?.model}
+                                onSelected={(opt: ProviderSelectTabOption) => handleModelSelect(opt.provider, opt.model || "")}
+                                onRefresh={handleModelRefresh}
+                            />
 
-                        {/* Probe Component - only show when provider and model are selected */}
-                        {selectedOption.provider && selectedOption.model && (
-                            <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                                {/* <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, fontSize: '0.875rem' }}>
+                            {/* Probe Component - only show when provider and model are selected */}
+                            {selectedOption.provider && selectedOption.model && (
+                                <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                                    {/* <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, fontSize: '0.875rem' }}>
                                     Connection Status
                                 </Typography> */}
-                                <Probe
-                                    provider={selectedOption.provider}
-                                    model={selectedOption.model}
-                                    isProbing={isProbing}
-                                    probeResult={probeResult}
-                                    onToggleDetails={() => setDetailsExpanded(!detailsExpanded)}
-                                    detailsExpanded={detailsExpanded}
-                                />
-                            </Box>
-                        )}
-                    </Stack>
-                ) : (
-                    <Guiding></Guiding>
-                )}
+                                    <Probe
+                                        provider={selectedOption.provider}
+                                        model={selectedOption.model}
+                                        isProbing={isProbing}
+                                        probeResult={probeResult}
+                                        onToggleDetails={() => setDetailsExpanded(!detailsExpanded)}
+                                        detailsExpanded={detailsExpanded}
+                                    />
+                                </Box>
+                            )}
+                        </Stack>
+                    ) : (
+                        <Guiding></Guiding>
+                    )}
 
-            </UnifiedCard>
+                </UnifiedCard>
+            </Stack>
 
             {/* Token Modal */}
             <ApiKeyModal></ApiKeyModal>
