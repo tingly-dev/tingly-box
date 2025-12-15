@@ -22,8 +22,42 @@ import {
     Typography,
 } from '@mui/material';
 import IconButton from '@mui/material/IconButton';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Provider, ProviderModelsData } from '../types/provider';
+
+// Local storage key for custom models
+const CUSTOM_MODELS_STORAGE_KEY = 'tingly_custom_models';
+
+// Helper functions to manage custom models in local storage
+const loadCustomModelsFromStorage = (): { [providerName: string]: string } => {
+    try {
+        const stored = localStorage.getItem(CUSTOM_MODELS_STORAGE_KEY);
+        return stored ? JSON.parse(stored) : {};
+    } catch (error) {
+        console.error('Failed to load custom models from storage:', error);
+        return {};
+    }
+};
+
+const saveCustomModelToStorage = (providerName: string, customModel: string) => {
+    try {
+        const customModels = loadCustomModelsFromStorage();
+        customModels[providerName] = customModel;
+        localStorage.setItem(CUSTOM_MODELS_STORAGE_KEY, JSON.stringify(customModels));
+    } catch (error) {
+        console.error('Failed to save custom model to storage:', error);
+    }
+};
+
+const removeCustomModelFromStorage = (providerName: string) => {
+    try {
+        const customModels = loadCustomModelsFromStorage();
+        delete customModels[providerName];
+        localStorage.setItem(CUSTOM_MODELS_STORAGE_KEY, JSON.stringify(customModels));
+    } catch (error) {
+        console.error('Failed to remove custom model from storage:', error);
+    }
+};
 
 export interface ProviderSelectTabOption {
     provider: Provider;
@@ -88,6 +122,7 @@ export default function ModelSelectTab({
 }: ProviderSelectTabProps) {
     const [internalCurrentTab, setInternalCurrentTab] = useState(0);
     const [isInitialized, setIsInitialized] = useState(false);
+    const [customModels, setCustomModels] = useState<{ [providerName: string]: string }>({});
 
     // Use external activeTab if provided, otherwise use internal state
     const currentTab = externalActiveTab !== undefined ? externalActiveTab : internalCurrentTab;
@@ -98,6 +133,48 @@ export default function ModelSelectTab({
         provider: null,
         value: ''
     });
+
+    // Load custom models from local storage on component mount
+    useEffect(() => {
+        const storedCustomModels = loadCustomModelsFromStorage();
+        setCustomModels(storedCustomModels);
+    }, []);
+
+    // Sync local storage custom models with providerModels when they change
+    useEffect(() => {
+        if (providerModels && customModels) {
+            // For each provider that has a custom model in local storage,
+            // we could optionally save it to the backend here
+            Object.keys(customModels).forEach(providerName => {
+                const customModel = customModels[providerName];
+                // Only call onCustomModelSave if the backend doesn't already have this custom model
+                if (customModel && !providerModels[providerName]?.custom_model) {
+                    // Uncomment the next line if you want to auto-sync to backend
+                    // onCustomModelSave?.({ name: providerName } as Provider, customModel);
+                }
+            });
+        }
+    }, [providerModels, customModels, onCustomModelSave]);
+
+    // Enhanced save function that also saves to local storage
+    const handleCustomModelSave = () => {
+        const customModel = customModelDialog.value?.trim();
+        if (customModel && customModelDialog.provider) {
+            // Save to local storage first
+            saveCustomModelToStorage(customModelDialog.provider.name, customModel);
+            setCustomModels(prev => ({ ...prev, [customModelDialog.provider!.name]: customModel }));
+
+            // Then save to persistence through parent component
+            if (onCustomModelSave) {
+                onCustomModelSave(customModelDialog.provider, customModel);
+            }
+            // Select the custom model
+            if (onSelected) {
+                onSelected({ provider: customModelDialog.provider, model: customModel });
+            }
+        }
+        setCustomModelDialog({ open: false, provider: null, value: '' });
+    };
 
     const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
         if (externalActiveTab === undefined) {
@@ -146,30 +223,67 @@ export default function ModelSelectTab({
         });
     };
 
-    const handleCustomModelSave = () => {
-        const customModel = customModelDialog.value?.trim();
-        if (customModel && customModelDialog.provider) {
-            // Save custom model to persistence
-            if (onCustomModelSave) {
-                onCustomModelSave(customModelDialog.provider, customModel);
-            }
-            // Select the custom model
-            if (onSelected) {
-                onSelected({ provider: customModelDialog.provider, model: customModel });
-            }
-        }
+    const handleCustomModelCancel = () => {
         setCustomModelDialog({ open: false, provider: null, value: '' });
     };
 
-    const handleCustomModelCancel = () => {
-        setCustomModelDialog({ open: false, provider: null, value: '' });
+    const getTotalModelsCount = (provider: Provider) => {
+        const models = providerModels?.[provider.name]?.models || [];
+        const starModels = providerModels?.[provider.name]?.star_models || [];
+        const backendCustomModel = providerModels?.[provider.name]?.custom_model;
+        const localStorageCustomModel = customModels[provider.name];
+
+        // Count unique models (avoid double counting starred models that are also in models array)
+        const uniqueModels = new Set(models);
+
+        // Add starred models if not already counted
+        starModels.forEach(model => uniqueModels.add(model));
+
+        // Add custom models if they exist
+        if (backendCustomModel) {
+            uniqueModels.add(backendCustomModel);
+        }
+        if (localStorageCustomModel) {
+            uniqueModels.add(localStorageCustomModel);
+        }
+
+        return uniqueModels.size;
     };
 
     const isCustomModel = (model: string, provider: Provider) => {
         const models = providerModels?.[provider.name]?.models || [];
         const starModels = providerModels?.[provider.name]?.star_models || [];
         const customModel = providerModels?.[provider.name]?.custom_model;
-        return !models.includes(model) && !starModels.includes(model) && model !== '' && model !== customModel;
+        const localStorageCustomModel = customModels[provider.name];
+        return !models.includes(model) && !starModels.includes(model) && model !== '' &&
+               model !== customModel && model !== localStorageCustomModel;
+    };
+
+    const getAllModelsForSearch = (provider: Provider) => {
+        const models = providerModels?.[provider.name]?.models || [];
+        const starModels = providerModels?.[provider.name]?.star_models || [];
+        const backendCustomModel = providerModels?.[provider.name]?.custom_model;
+        const localStorageCustomModel = customModels[provider.name];
+
+        // Combine all models into a single array for searching
+        const allModels = [...models];
+
+        // Add starred models that are not already in the models array
+        starModels.forEach(model => {
+            if (!allModels.includes(model)) {
+                allModels.push(model);
+            }
+        });
+
+        // Add custom models if they exist and are not already included
+        if (backendCustomModel && !allModels.includes(backendCustomModel)) {
+            allModels.push(backendCustomModel);
+        }
+        if (localStorageCustomModel && !allModels.includes(localStorageCustomModel)) {
+            allModels.push(localStorageCustomModel);
+        }
+
+        return allModels;
     };
 
     const getFilteredModels = (provider: Provider) => {
@@ -182,8 +296,79 @@ export default function ModelSelectTab({
         );
     };
 
+    // New function to get all filtered models including custom models
+    const getFilteredAllModels = (provider: Provider) => {
+        const allModels = getAllModelsForSearch(provider);
+        const searchTerm = searchTerms[provider.name] || '';
+        if (!searchTerm) return allModels;
+
+        return allModels.filter(model =>
+            model.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    };
+
     const getPaginatedModels = (provider: Provider) => {
         const filteredModels = getFilteredModels(provider);
+        const page = currentPage[provider.name] || 1;
+        const startIndex = (page - 1) * MODELS_PER_PAGE;
+        const endIndex = startIndex + MODELS_PER_PAGE;
+
+        return {
+            models: filteredModels.slice(startIndex, endIndex),
+            totalPages: Math.ceil(filteredModels.length / MODELS_PER_PAGE),
+            currentPage: page,
+            totalModels: filteredModels.length,
+        };
+    };
+
+    // Get models to display in "All Models" section (excluding custom models which are shown separately)
+    const getStandardModelsForDisplay = (provider: Provider) => {
+        const allModels = getAllModelsForSearch(provider);
+        const starModels = providerModels?.[provider.name]?.star_models || [];
+        const backendCustomModel = providerModels?.[provider.name]?.custom_model;
+        const localStorageCustomModel = customModels[provider.name];
+
+        // Filter out custom models and starred models
+        return allModels.filter(model => {
+            // Exclude custom models
+            if (model === backendCustomModel || model === localStorageCustomModel) {
+                return false;
+            }
+            // Exclude starred models
+            if (starModels.includes(model)) {
+                return false;
+            }
+            return true;
+        });
+    };
+
+    // New pagination function for all models including custom models
+    const getPaginatedAllModels = (provider: Provider) => {
+        const filteredAllModels = getFilteredAllModels(provider);
+        const page = currentPage[provider.name] || 1;
+        const startIndex = (page - 1) * MODELS_PER_PAGE;
+        const endIndex = startIndex + MODELS_PER_PAGE;
+
+        return {
+            models: filteredAllModels.slice(startIndex, endIndex),
+            totalPages: Math.ceil(filteredAllModels.length / MODELS_PER_PAGE),
+            currentPage: page,
+            totalModels: filteredAllModels.length,
+        };
+    };
+
+    // Pagination function for standard models only (excluding custom and starred models)
+    const getPaginatedStandardModels = (provider: Provider) => {
+        const standardModels = getStandardModelsForDisplay(provider);
+        const searchTerm = searchTerms[provider.name] || '';
+
+        let filteredModels = standardModels;
+        if (searchTerm) {
+            filteredModels = standardModels.filter(model =>
+                model.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+        }
+
         const page = currentPage[provider.name] || 1;
         const startIndex = (page - 1) * MODELS_PER_PAGE;
         const endIndex = startIndex + MODELS_PER_PAGE;
@@ -240,6 +425,7 @@ export default function ModelSelectTab({
                 >
                     {(providers || []).filter(provider => provider.enabled).map((provider, index) => {
                         const models = providerModels?.[provider.name]?.models || [];
+                        const totalModelsCount = getTotalModelsCount(provider);
                         const isProviderSelected = selectedProvider === provider.name;
 
                         return (
@@ -251,7 +437,7 @@ export default function ModelSelectTab({
                                             {provider.name}
                                         </Typography>
                                         <Typography variant="caption" color="text.secondary">
-                                            ({models.length})
+                                            ({totalModelsCount})
                                         </Typography>
                                         {isProviderSelected && (
                                             <CheckCircle color="primary" sx={{ fontSize: 16 }} />
@@ -277,7 +463,7 @@ export default function ModelSelectTab({
                 const models = providerModels?.[provider.name]?.models || [];
                 const starModels = providerModels?.[provider.name]?.star_models || [];
                 const isProviderSelected = selectedProvider === provider.name;
-                const pagination = getPaginatedModels(provider);
+                const pagination = getPaginatedStandardModels(provider);
 
                 return (
                     <TabPanel key={provider.name} value={currentTab} index={index}>
@@ -482,8 +668,92 @@ export default function ModelSelectTab({
                                         </CardContent>
                                     </Card>
 
-                                    {/* Persisted custom model card */}
-                                    {providerModels?.[provider.name]?.custom_model && (
+                                    {/* Custom model from local storage - prioritized */}
+                                    {customModels[provider.name] && (
+                                        <Card
+                                            key="localStorage-custom-model"
+                                            sx={{
+                                                width: '100%',
+                                                height: 60,
+                                                border: 1,
+                                                borderColor: 'primary.main',
+                                                borderRadius: 1.5,
+                                                backgroundColor: 'primary.50',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s ease-in-out',
+                                                position: 'relative',
+                                                boxShadow: 0,
+                                                '&:hover': {
+                                                    backgroundColor: 'primary.100',
+                                                    boxShadow: 2,
+                                                },
+                                            }}
+                                            onClick={() => {
+                                                const customModel = customModels[provider.name];
+                                                if (customModel && onSelected) {
+                                                    onSelected({ provider, model: customModel });
+                                                }
+                                            }}
+                                        >
+                                            <CardContent sx={{
+                                                textAlign: 'center',
+                                                py: 1,
+                                                px: 0.8,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                height: '100%',
+                                                position: 'relative'
+                                            }}>
+                                                <Typography
+                                                    variant="body2"
+                                                    sx={{
+                                                        fontWeight: 500,
+                                                        fontSize: '0.75rem',
+                                                        lineHeight: 1.3,
+                                                        wordBreak: 'break-word',
+                                                        textAlign: 'center'
+                                                    }}
+                                                >
+                                                    {customModels[provider.name]}
+                                                </Typography>
+                                                {isProviderSelected && selectedModel === customModels[provider.name] && (
+                                                    <CheckCircle
+                                                        color="primary"
+                                                        sx={{
+                                                            position: 'absolute',
+                                                            top: 4,
+                                                            right: 4,
+                                                            fontSize: 16
+                                                        }}
+                                                    />
+                                                )}
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleCustomModelEdit(provider, customModels[provider.name]);
+                                                    }}
+                                                    sx={{
+                                                        position: 'absolute',
+                                                        bottom: 4,
+                                                        right: 4,
+                                                        p: 0.5,
+                                                        backgroundColor: 'background.paper',
+                                                        '&:hover': {
+                                                            backgroundColor: 'grey.100',
+                                                        }
+                                                    }}
+                                                >
+                                                    <EditIcon fontSize="small" />
+                                                </IconButton>
+                                            </CardContent>
+                                        </Card>
+                                    )}
+
+                                    {/* Persisted custom model card (from backend) */}
+                                    {providerModels?.[provider.name]?.custom_model &&
+                                     !customModels[provider.name] && (
                                         <Card
                                             key="persisted-custom-model"
                                             sx={{
@@ -566,7 +836,9 @@ export default function ModelSelectTab({
                                     )}
 
                                     {/* Currently selected custom model card (not persisted) */}
-                                    {isProviderSelected && selectedModel && isCustomModel(selectedModel, provider) && (
+                                    {isProviderSelected && selectedModel && isCustomModel(selectedModel, provider) &&
+                                     selectedModel !== customModels[provider.name] &&
+                                     selectedModel !== providerModels?.[provider.name]?.custom_model && (
                                         <Card
                                             key="selected-custom-model"
                                             sx={{
@@ -642,8 +914,6 @@ export default function ModelSelectTab({
 
                                     {pagination.models.map((model) => {
                                         const isModelSelected = isProviderSelected && selectedModel === model;
-                                        const isStarred = starModels.includes(model);
-
                                         return (
                                             <Card
                                                 key={model}
@@ -698,25 +968,14 @@ export default function ModelSelectTab({
                                                         />
                                                     )}
                                                 </CardContent>
-                                                {isStarred && (
-                                                    <Typography
-                                                        variant="caption"
-                                                        color="warning.main"
-                                                        sx={{
-                                                            position: 'absolute',
-                                                            top: 4,
-                                                            left: 4,
-                                                            fontSize: '0.75rem'
-                                                        }}
-                                                    >
-                                                        ★
-                                                    </Typography>
-                                                )}
                                             </Card>
                                         );
                                     })}
                                 </Box>
-                                {pagination.totalModels === 0 && (
+                                {pagination.totalModels === 0 &&
+                                !customModels[provider.name] &&
+                                !providerModels?.[provider.name]?.custom_model &&
+                                !(isProviderSelected && selectedModel && isCustomModel(selectedModel, provider)) && (
                                     <Box sx={{ textAlign: 'center', py: 4 }}>
                                         <Typography variant="body2" color="text.secondary">
                                             No models found matching "{searchTerms[provider.name] || ''}"
