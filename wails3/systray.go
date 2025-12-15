@@ -20,9 +20,9 @@ func useSystray(app *application.App) {
 	// Create the SystemTray menu
 	SystrayMenu = app.Menu.New()
 
-	// Dashboard menu item
+	// Home menu item
 	SystrayMenuDashboard = SystrayMenu.
-		Add("Dashboard").
+		Add("Home").
 		OnClick(func(ctx *application.Context) {
 			// Show main window
 			WindowMain.Show()
