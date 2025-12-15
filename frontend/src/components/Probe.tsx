@@ -23,7 +23,7 @@ import {
     Typography,
     useTheme
 } from '@mui/material';
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import UnifiedCard from './UnifiedCard';
 import type { ProbeResponse, ErrorDetail } from '../client';
 
@@ -51,7 +51,7 @@ const Probe = ({ provider, model, isProbing = false, probeResult = null, onToggl
         }
     };
 
-    const StatusResponseCard = ({ result }: { result: ProbeResponse }) => (
+  const StatusResponseCard = memo(({ result }: { result: ProbeResponse }) => (
         <Accordion
             expanded={isExpanded}
             onChange={(_, isExpanded) => handleToggleDetails()}
@@ -224,9 +224,9 @@ const Probe = ({ provider, model, isProbing = false, probeResult = null, onToggl
                 </Box>
             </AccordionDetails>
         </Accordion>
-    );
+    ));
 
-    const ErrorDetails = ({ result }: { result: ProbeResponse }) => (
+    const ErrorDetails = memo(({ result }: { result: ProbeResponse }) => (
         <Alert
             severity="error"
             variant="outlined"
@@ -243,7 +243,7 @@ const Probe = ({ provider, model, isProbing = false, probeResult = null, onToggl
                 {result.error?.message || 'Unknown error occurred'}
             </Typography>
         </Alert>
-    );
+    ));
 
     return (
         <Box sx={{ width: '100%', maxWidth: 900 }}>
@@ -273,4 +273,4 @@ const Probe = ({ provider, model, isProbing = false, probeResult = null, onToggl
     );
 };
 
-export default Probe;
+export default memo(Probe);
