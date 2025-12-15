@@ -697,7 +697,7 @@ const Dashboard = () => {
             </UnifiedCard>
 
             {/* Probe Component */}
-            <Probe rule="tingly" provider={selectedOption.provider} model={selectedOption.model}/>
+            <Probe provider={selectedOption.provider} model={selectedOption.model}/>
 
             {/* Token Modal */}
             <ApiKeyModal></ApiKeyModal>

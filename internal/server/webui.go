@@ -77,6 +77,11 @@ func (s *Server) HandleProbe(c *gin.Context) {
 		return
 	}
 
+	if req.Provider == "" || req.Model == "" {
+		c.JSON(http.StatusBadRequest, gin.H{})
+		return
+	}
+
 	// Get the first rule or create a default one for testing
 	globalConfig := s.config
 	if globalConfig == nil {
@@ -92,25 +97,99 @@ func (s *Server) HandleProbe(c *gin.Context) {
 
 	// Find the provider for this rule
 	providers := s.config.ListProviders()
-	var testProvider *config.Provider
+	var provider *config.Provider
+	var model = req.Model
 
-	for _, provider := range providers {
-		if provider.Enabled && provider.Name == req.Provider {
-			testProvider = provider
+	for _, p := range providers {
+		if p.Enabled && p.Name == req.Provider {
+			provider = p
 			break
 		}
 	}
 
-	rules := s.config.Rules
-	var rule *config.Rule
-	for _, r := range rules {
-		if r.UUID == req.Rule {
-			rule = &r
-			break
+	startTime := time.Now()
+
+	// Create the mock request data that would be sent to the API
+	mockRequest := NewMockRequest(req.Provider, req.Model)
+
+	if provider == nil {
+		errorResp := ErrorDetail{
+			Code:    "PROVIDER_NOT_FOUND",
+			Message: fmt.Sprintf("Provider '%s' not found or disabled", req.Provider),
 		}
+
+		c.JSON(http.StatusBadRequest, ProbeResponse{
+			Success: false,
+			Error:   &errorResp,
+			Data: &ProbeResponseData{
+				Request: mockRequest,
+			},
+		})
+		return
 	}
 
-	probe(c, rule, testProvider)
+	// Call the appropriate probe function based on provider API style
+	var responseContent string
+	var usage ProbeUsage
+	var err error
+
+	switch provider.APIStyle {
+	case config.APIStyleAnthropic:
+		responseContent, usage, err = probeWithAnthropic(c, provider, model)
+	case config.APIStyleOpenAI:
+		fallthrough
+	default:
+		responseContent, usage, err = probeWithOpenAI(c, provider, model)
+	}
+
+	endTime := time.Now()
+
+	if err != nil {
+		// Extract error code from the formatted error message
+		errorMessage := err.Error()
+		errorCode := "PROBE_FAILED"
+
+		errorResp := ErrorDetail{
+			Message: fmt.Sprintf("Probe failed: %s", errorMessage),
+			Type:    "error",
+			Code:    errorCode,
+		}
+
+		c.JSON(http.StatusOK, ProbeResponse{
+			Success: false,
+			Error:   &errorResp,
+			Data: &ProbeResponseData{
+				Request: mockRequest,
+				Response: ProbeResponseDetail{
+					Content:      "",
+					Model:        model,
+					Provider:     provider.Name,
+					FinishReason: "error",
+					Error:        errorMessage,
+				},
+				Usage: ProbeUsage{},
+			},
+		})
+		return
+	}
+
+	finishReason := "stop"
+	if usage.TotalTokens == 0 {
+		finishReason = "unknown"
+	}
+
+	usage.TimeCost = int(endTime.Sub(startTime).Milliseconds())
+	c.JSON(http.StatusOK, ProbeResponse{
+		Success: true,
+		Data: &ProbeResponseData{
+			Request: mockRequest,
+			Response: ProbeResponseDetail{
+				Content:      responseContent,
+				FinishReason: finishReason,
+			},
+			Usage: usage,
+		},
+	})
 }
 
 func (s *Server) UseIndex(c *gin.Context) {

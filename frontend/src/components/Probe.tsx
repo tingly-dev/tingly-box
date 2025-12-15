@@ -28,7 +28,7 @@ import { api } from '../services/api';
 import UnifiedCard from './UnifiedCard';
 import type { ProbeResponse, ErrorDetail } from '../client';
 
-const Probe = ({ rule, provider, model }: { rule: any; provider: any; model: any }) => {
+const Probe = ({ provider, model }: { provider: any; model: any }) => {
     const theme = useTheme();
     const [isProbing, setIsProbing] = useState(false);
     const [probeResult, setProbeResult] = useState<ProbeResponse | null>(null);
@@ -39,8 +39,8 @@ const Probe = ({ rule, provider, model }: { rule: any; provider: any; model: any
         setProbeResult(null);
 
         try {
-            console.log(rule, provider, model)
-            const result = await api.probeRule(rule, provider, model);
+            console.log(provider, model)
+            const result = await api.probeModel(provider, model);
             setProbeResult(result);
         } catch (error) {
             console.error('Probe error:', error);

@@ -158,10 +158,10 @@ type RuleSummaryResponse struct {
 // Web UI API Models
 // =============================================
 
-// ProbeRequest represents the request to probe/test a rule configuration
+// ProbeRequest represents the request to probe/test a provider and model
 type ProbeRequest struct {
 	Provider string `json:"provider" binding:"required" description:"Provider name to test against" example:"openai"`
-	Rule     string `json:"rule" binding:"required" description:"Rule UUID to test" example:"123e4567-e89b-12d3-a456-426614174000"`
+	Model    string `json:"model" binding:"required" description:"Model name to test against" example:"gpt-4-latest"`
 }
 
 // ProviderResponse represents a provider configuration with masked token
@@ -338,7 +338,7 @@ type ProbeRequestDetail struct {
 }
 
 // NewMockRequest creates a new mock request with default values
-func NewMockRequest(model, provider string) ProbeRequestDetail {
+func NewMockRequest(provider, model string) ProbeRequestDetail {
 	return ProbeRequestDetail{
 		Messages: []map[string]interface{}{
 			{

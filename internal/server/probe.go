@@ -2,7 +2,6 @@ package server
 
 import (
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 	"tingly-box/internal/config"
@@ -15,7 +14,7 @@ import (
 )
 
 // probeWithOpenAI handles probe requests for OpenAI-style APIs
-func probeWithOpenAI(c *gin.Context, rule *config.Rule, provider *config.Provider) (string, ProbeUsage, error) {
+func probeWithOpenAI(c *gin.Context, provider *config.Provider, model string) (string, ProbeUsage, error) {
 	startTime := time.Now()
 
 	// Configure OpenAI client
@@ -29,7 +28,7 @@ func probeWithOpenAI(c *gin.Context, rule *config.Rule, provider *config.Provide
 
 	// Create chat completion request using OpenAI SDK
 	chatRequest := &openai.ChatCompletionNewParams{
-		Model: rule.GetDefaultModel(), // Use empty stats for probe testing
+		Model: model, // Use empty stats for probe testing
 		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage("hi"),
 		},
@@ -84,7 +83,7 @@ func probeWithOpenAI(c *gin.Context, rule *config.Rule, provider *config.Provide
 }
 
 // probeWithAnthropic handles probe requests for Anthropic-style APIs
-func probeWithAnthropic(c *gin.Context, rule *config.Rule, provider *config.Provider) (string, ProbeUsage, error) {
+func probeWithAnthropic(c *gin.Context, provider *config.Provider, model string) (string, ProbeUsage, error) {
 	startTime := time.Now()
 
 	// Configure Anthropic client
@@ -98,7 +97,7 @@ func probeWithAnthropic(c *gin.Context, rule *config.Rule, provider *config.Prov
 
 	// Create message request using Anthropic SDK
 	messageRequest := anthropic.MessageNewParams{
-		Model: anthropic.Model(rule.GetDefaultModel()), // Use empty stats for probe testing
+		Model: anthropic.Model(model), // Use empty stats for probe testing
 		Messages: []anthropic.MessageParam{
 			anthropic.NewUserMessage(anthropic.NewTextBlock("hi")),
 		},
@@ -153,95 +152,4 @@ func probeWithAnthropic(c *gin.Context, rule *config.Rule, provider *config.Prov
 	}
 
 	return responseContent, tokenUsage, nil
-}
-
-func probe(c *gin.Context, rule *config.Rule, provider *config.Provider) {
-	startTime := time.Now()
-
-	if rule == nil {
-		c.JSON(http.StatusBadRequest, gin.H{})
-		return
-	}
-
-	// Create the mock request data that would be sent to the API
-	mockRequest := NewMockRequest(rule.GetDefaultModel(), rule.GetDefaultProvider())
-
-	if provider == nil {
-		errorResp := ErrorDetail{
-			Code:    "PROVIDER_NOT_FOUND",
-			Message: fmt.Sprintf("Provider '%s' not found or disabled", rule.GetDefaultProvider()),
-		}
-
-		c.JSON(http.StatusBadRequest, ProbeResponse{
-			Success: false,
-			Error:   &errorResp,
-			Data: &ProbeResponseData{
-				Request: mockRequest,
-			},
-		})
-		return
-	}
-
-	// Call the appropriate probe function based on provider API style
-	var responseContent string
-	var usage ProbeUsage
-	var err error
-
-	switch provider.APIStyle {
-	case config.APIStyleAnthropic:
-		responseContent, usage, err = probeWithAnthropic(c, rule, provider)
-	case config.APIStyleOpenAI:
-		fallthrough
-	default:
-		responseContent, usage, err = probeWithOpenAI(c, rule, provider)
-	}
-
-	endTime := time.Now()
-
-	if err != nil {
-		// Extract error code from the formatted error message
-		errorMessage := err.Error()
-		errorCode := "PROBE_FAILED"
-
-		errorResp := ErrorDetail{
-			Message: fmt.Sprintf("Probe failed: %s", errorMessage),
-			Type:    "error",
-			Code:    errorCode,
-		}
-
-		c.JSON(http.StatusOK, ProbeResponse{
-			Success: false,
-			Error:   &errorResp,
-			Data: &ProbeResponseData{
-				Request: mockRequest,
-				Response: ProbeResponseDetail{
-					Content:      "",
-					Model:        rule.GetDefaultModel(),
-					Provider:     rule.GetDefaultProvider(),
-					FinishReason: "error",
-					Error:        errorMessage,
-				},
-				Usage: ProbeUsage{},
-			},
-		})
-		return
-	}
-
-	finishReason := "stop"
-	if usage.TotalTokens == 0 {
-		finishReason = "unknown"
-	}
-
-	usage.TimeCost = int(endTime.Sub(startTime).Milliseconds())
-	c.JSON(http.StatusOK, ProbeResponse{
-		Success: true,
-		Data: &ProbeResponseData{
-			Request: mockRequest,
-			Response: ProbeResponseDetail{
-				Content:      responseContent,
-				FinishReason: finishReason,
-			},
-			Usage: usage,
-		},
-	})
 }
