@@ -11,6 +11,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/gin-gonic/gin"
+	"github.com/openai/openai-go/v3"
 	"github.com/sirupsen/logrus"
 )
 
@@ -22,10 +23,9 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 
 // ChatCompletions handles OpenAI-compatible chat completion requests
 func (s *Server) ChatCompletions(c *gin.Context) {
-	// Read the raw request body to check for stream parameter
+	// Read raw body
 	bodyBytes, err := c.GetRawData()
 	if err != nil {
-		logrus.Error("Failed to read request body")
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Failed to read request body: " + err.Error(),
@@ -35,10 +35,9 @@ func (s *Server) ChatCompletions(c *gin.Context) {
 		return
 	}
 
-	// Parse the request to check if streaming is requested
+	// Inspect stream flag
 	var rawReq map[string]interface{}
 	if err := json.Unmarshal(bodyBytes, &rawReq); err != nil {
-		logrus.Error("Invalid JSON in request body")
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Invalid JSON: " + err.Error(),
@@ -48,17 +47,14 @@ func (s *Server) ChatCompletions(c *gin.Context) {
 		return
 	}
 
-	// Check if streaming is requested
 	isStreaming := false
-	if stream, ok := rawReq["stream"].(bool); ok {
-		isStreaming = stream
+	if v, ok := rawReq["stream"].(bool); ok {
+		isStreaming = v
 	}
-	logrus.Infof("Stream requested: %v", isStreaming)
 
-	// Parse request body into RequestWrapper
+	// Parse OpenAI-style request
 	var req RequestWrapper
 	if err := json.Unmarshal(bodyBytes, &req); err != nil {
-		logrus.Error("Invalid request body")
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Invalid request body: " + err.Error(),
@@ -68,22 +64,8 @@ func (s *Server) ChatCompletions(c *gin.Context) {
 		return
 	}
 
-	for i := 0; i < len(req.Messages); i++ {
-		role := req.Messages[i].GetRole()
-		if role != nil {
-			// Convert the entire message to JSON to see the content properly
-			messageBytes, err := json.Marshal(req.Messages[i])
-			if err == nil {
-				logrus.Infof("message: %s", string(messageBytes))
-			} else {
-				logrus.Infof("role: %s", *role)
-			}
-		}
-	}
-
-	// Validate required fields
+	// Validate
 	if req.Model == "" {
-		logrus.Error("No model id")
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Model is required",
@@ -94,7 +76,6 @@ func (s *Server) ChatCompletions(c *gin.Context) {
 	}
 
 	if len(req.Messages) == 0 {
-		logrus.Error("No messages")
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "At least one message is required",
@@ -104,7 +85,7 @@ func (s *Server) ChatCompletions(c *gin.Context) {
 		return
 	}
 
-	// Determine provider and model based on request
+	// Determine provider & model
 	provider, selectedService, rule, err := s.DetermineProviderAndModel(req.Model)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
@@ -116,27 +97,36 @@ func (s *Server) ChatCompletions(c *gin.Context) {
 		return
 	}
 
-	// Use the selected service's model
 	actualModel := selectedService.Model
 	responseModel := rule.ResponseModel
 	req.Model = actualModel
 
-	// Set provider and model information in context for statistics middleware
 	c.Set("provider", provider.Name)
 	c.Set("model", actualModel)
 
-	// Check provider's API style to decide which path to take
 	apiStyle := string(provider.APIStyle)
 	if apiStyle == "" {
-		apiStyle = "openai" // default to openai
+		apiStyle = "openai"
 	}
 
+	// ─────────────────────────────────────────────
+	// Anthropic path (WITH TOOL SUPPORT)
+	// ─────────────────────────────────────────────
 	if apiStyle == "anthropic" {
-		// Convert to Anthropic SDK format
-		anthropicReq := s.convertOpenAIToAnthropicRequest(&req, responseModel)
+
+		anthropicReq := s.convertOpenAIToAnthropicRequest(&req)
+
+		// 🔥 REQUIRED: forward tools
+		if len(req.Tools) > 0 {
+			anthropicReq.Tools = s.convertOpenAIToolsToAnthropic(req.Tools)
+		}
+
+		// 🔥 REQUIRED: forward tool_choice
+		if req.ToolChoice.OfAuto.Value != "" || req.ToolChoice.OfAllowedTools != nil || req.ToolChoice.OfFunctionToolChoice != nil || req.ToolChoice.OfCustomToolChoice != nil {
+			anthropicReq.ToolChoice = s.convertOpenAIToolChoice(&req.ToolChoice)
+		}
 
 		if isStreaming {
-			// Handle streaming request
 			stream, err := s.forwardAnthropicStreamRequest(provider, anthropicReq)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, ErrorResponse{
@@ -147,28 +137,27 @@ func (s *Server) ChatCompletions(c *gin.Context) {
 				})
 				return
 			}
-			// Handle streaming response and convert to OpenAI format
+
 			s.handleAnthropicToOpenAIStreamResponse(c, stream, responseModel)
-		} else {
-			// Handle non-streaming request
-			anthropicResp, err := s.forwardAnthropicRequest(provider, anthropicReq)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, ErrorResponse{
-					Error: ErrorDetail{
-						Message: "Failed to forward Anthropic request: " + err.Error(),
-						Type:    "api_error",
-					},
-				})
-				return
-			}
-			// Convert Anthropic response back to OpenAI format
-			openaiResp := s.convertAnthropicResponseToOpenAI(anthropicResp, responseModel)
-			c.JSON(http.StatusOK, openaiResp)
+			return
 		}
+
+		anthropicResp, err := s.forwardAnthropicRequest(provider, anthropicReq)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Error: ErrorDetail{
+					Message: "Failed to forward Anthropic request: " + err.Error(),
+					Type:    "api_error",
+				},
+			})
+			return
+		}
+
+		openaiResp := s.convertAnthropicResponseToOpenAI(anthropicResp, responseModel)
+		c.JSON(http.StatusOK, openaiResp)
 		return
 	}
 
-	// Handle streaming or non-streaming request for OpenAI-style providers
 	if isStreaming {
 		s.handleStreamingRequest(c, provider, &req, responseModel)
 	} else {
@@ -250,20 +239,77 @@ func (s *Server) ListModels(c *gin.Context) {
 }
 
 // convertAnthropicResponseToOpenAI converts an Anthropic response to OpenAI format
-func (s *Server) convertAnthropicResponseToOpenAI(anthropicResp *AnthropicMessagesResponse, responseModel string) map[string]interface{} {
+func (s *Server) convertAnthropicResponseToOpenAI(
+	anthropicResp *anthropic.Message,
+	responseModel string,
+) map[string]interface{} {
+
+	message := map[string]interface{}{
+		"role":    "assistant",
+		"content": "",
+	}
+
+	var toolCalls []map[string]interface{}
+	var textContent string
+
+	// Walk Anthropic content blocks
+	for _, block := range anthropicResp.Content {
+
+		switch block.Type {
+
+		case "text":
+			textContent += block.Text
+
+		case "tool_use":
+			// Anthropic → OpenAI tool call
+			toolCalls = append(toolCalls, map[string]interface{}{
+				"id":   block.ID,
+				"type": "function",
+				"function": map[string]interface{}{
+					"name":      block.Name,
+					"arguments": block.Input, // map[string]any (NOT stringified yet)
+				},
+			})
+		}
+	}
+
+	// OpenAI expects arguments as STRING
+	for _, tc := range toolCalls {
+		fn := tc["function"].(map[string]interface{})
+		if args, ok := fn["arguments"]; ok {
+			if b, err := json.Marshal(args); err == nil {
+				fn["arguments"] = string(b)
+			}
+		}
+	}
+
+	if textContent != "" {
+		message["content"] = textContent
+	}
+
+	if len(toolCalls) > 0 {
+		message["tool_calls"] = toolCalls
+	}
+
+	// Map stop reason
+	finishReason := "stop"
+	switch anthropicResp.StopReason {
+	case "tool_use":
+		finishReason = "tool_calls"
+	case "max_tokens":
+		finishReason = "length"
+	}
+
 	response := map[string]interface{}{
 		"id":      anthropicResp.ID,
 		"object":  "chat.completion",
-		"created": 0, // Should be set to current timestamp
+		"created": time.Now().Unix(),
 		"model":   responseModel,
 		"choices": []map[string]interface{}{
 			{
-				"index": 0,
-				"message": map[string]interface{}{
-					"role":    "assistant",
-					"content": "",
-				},
-				"finish_reason": anthropicResp.StopReason,
+				"index":         0,
+				"message":       message,
+				"finish_reason": finishReason,
 			},
 		},
 		"usage": map[string]interface{}{
@@ -273,59 +319,102 @@ func (s *Server) convertAnthropicResponseToOpenAI(anthropicResp *AnthropicMessag
 		},
 	}
 
-	// Extract content from Anthropic response
-	if len(anthropicResp.Content) > 0 {
-		content := ""
-		for _, c := range anthropicResp.Content {
-			if c.Type == "text" {
-				content += c.Text
-			}
-		}
-		response["choices"].([]map[string]interface{})[0]["message"].(map[string]interface{})["content"] = content
-	}
-
 	return response
 }
 
 // convertOpenAIToAnthropicRequest converts OpenAI RequestWrapper to Anthropic SDK format
-func (s *Server) convertOpenAIToAnthropicRequest(req *RequestWrapper, model string) anthropic.MessageNewParams {
-	// Convert messages
+func (s *Server) convertOpenAIToAnthropicRequest(req *RequestWrapper) anthropic.MessageNewParams {
 	messages := make([]anthropic.MessageParam, 0, len(req.Messages))
+	var systemParts []string
+
 	for _, msg := range req.Messages {
-		role := msg.GetRole()
-		if role == nil {
+		rolePtr := msg.GetRole()
+		if rolePtr == nil {
+			continue
+		}
+		role := *rolePtr
+
+		// Marshal to map for flexible access
+		raw, _ := json.Marshal(msg)
+		var m map[string]interface{}
+		if err := json.Unmarshal(raw, &m); err != nil {
 			continue
 		}
 
-		// Extract content from OpenAI message
-		msgBytes, _ := json.Marshal(msg)
-		var msgMap map[string]interface{}
-		if err := json.Unmarshal(msgBytes, &msgMap); err == nil {
-			contentStr, _ := msgMap["content"].(string)
+		// Extract text content
+		content, _ := m["content"].(string)
 
-			// Create content blocks
-			var contentBlocks []anthropic.ContentBlockParamUnion
-			if contentStr != "" {
-				contentBlocks = append(contentBlocks, anthropic.NewTextBlock(contentStr))
+		//1⃣ SYSTEM → params.System
+		if role == "system" {
+			if content != "" {
+				systemParts = append(systemParts, content)
+			}
+			continue
+		}
+
+		var blocks []anthropic.ContentBlockParamUnion
+
+		//2⃣ Normal text content
+		if content, ok := m["content"].(string); ok && content != "" {
+			blocks = append(blocks, anthropic.NewTextBlock(content))
+		}
+
+		//2 Assistant tool calls → tool_use blocks
+		if role == "assistant" {
+			if toolCalls, ok := m["tool_calls"].([]interface{}); ok {
+				for _, tc := range toolCalls {
+					call := tc.(map[string]interface{})
+					fn := call["function"].(map[string]interface{})
+
+					// Parse the arguments as JSON to maintain proper structure
+					var argsInput interface{}
+					if argsStr, ok := fn["arguments"].(string); ok {
+						json.Unmarshal([]byte(argsStr), &argsInput)
+					}
+
+					blocks = append(blocks,
+						anthropic.NewToolUseBlock(
+							call["id"].(string),
+							argsInput,
+							fn["name"].(string),
+						),
+					)
+				}
 			}
 
-			if *role == "user" {
-				messages = append(messages, anthropic.NewUserMessage(contentBlocks...))
-			} else if *role == "assistant" {
-				messages = append(messages, anthropic.NewAssistantMessage(contentBlocks...))
+			if len(blocks) > 0 {
+				messages = append(messages, anthropic.NewAssistantMessage(blocks...))
 			}
+			continue
+		}
+
+		//3⃣ Tool result message → tool_result block (must be USER role)
+		if role == "tool" {
+			toolID, _ := m["tool_call_id"].(string)
+			content, _ := m["content"].(string)
+
+			blocks = append(blocks,
+				anthropic.NewToolResultBlock(
+					toolID,
+					content,
+					false, // is_error
+				),
+			)
+
+			messages = append(messages, anthropic.NewUserMessage(blocks...))
+			continue
+		}
+
+		// 4️⃣ Normal user message
+		if (role == "user") && len(blocks) > 0 {
+			messages = append(messages, anthropic.NewUserMessage(blocks...))
 		}
 	}
 
-	// Create Anthropic request parameters
 	params := anthropic.MessageNewParams{
-		Model:    anthropic.Model(model),
-		Messages: messages,
-	}
-
-	// Set max_tokens if provided
-	if req.MaxTokens.Value != 0 {
-		params.MaxTokens = req.MaxTokens.Value
+		Model:     anthropic.Model(req.Model),
+		Messages:  messages,
+		MaxTokens: req.MaxTokens.Value,
 	}
 
 	return params
@@ -507,4 +596,96 @@ func (s *Server) sendOpenAIStreamChunk(c *gin.Context, chunk map[string]interfac
 	}
 	c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", string(chunkJSON))))
 	flusher.Flush()
+}
+
+func (s *Server) convertOpenAIToolsToAnthropic(tools []openai.ChatCompletionToolUnionParam) []anthropic.ToolUnionParam {
+
+	if len(tools) == 0 {
+		return nil
+	}
+
+	out := make([]anthropic.ToolUnionParam, 0, len(tools))
+
+	for _, t := range tools {
+		fn := t.GetFunction()
+		if fn == nil {
+			continue
+		}
+
+		// Convert OpenAI function schema to Anthropic input schema
+		var inputSchema map[string]interface{}
+		if fn.Parameters != nil {
+			if bytes, err := json.Marshal(fn.Parameters); err == nil {
+				if err := json.Unmarshal(bytes, &inputSchema); err == nil {
+					// Create tool with input schema
+					var tool anthropic.ToolUnionParam
+					if inputSchema != nil {
+						// Convert map[string]interface{} to the proper structure
+						if schemaBytes, err := json.Marshal(inputSchema); err == nil {
+							var schemaParam anthropic.ToolInputSchemaParam
+							if err := json.Unmarshal(schemaBytes, &schemaParam); err == nil {
+								tool = anthropic.ToolUnionParam{
+									OfTool: &anthropic.ToolParam{
+										Name:        fn.Name,
+										InputSchema: schemaParam,
+									},
+								}
+							}
+						}
+					} else {
+						tool = anthropic.ToolUnionParam{
+							OfTool: &anthropic.ToolParam{
+								Name: fn.Name,
+							},
+						}
+					}
+
+					// Set description if available
+					if fn.Description.Value != "" && tool.OfTool != nil {
+						tool.OfTool.Description = anthropic.Opt(fn.Description.Value)
+					}
+					out = append(out, tool)
+				}
+			}
+		}
+	}
+
+	return out
+}
+
+func (s *Server) convertOpenAIToolChoice(tc *openai.ChatCompletionToolChoiceOptionUnionParam) anthropic.ToolChoiceUnionParam {
+
+	// Check the different variants
+	if auto := tc.OfAuto.Value; auto != "" {
+		if auto == "auto" {
+			return anthropic.ToolChoiceUnionParam{
+				OfAuto: &anthropic.ToolChoiceAutoParam{},
+			}
+		}
+	}
+
+	if tc.OfAllowedTools != nil {
+		// Default to auto for allowed tools
+		return anthropic.ToolChoiceUnionParam{
+			OfAuto: &anthropic.ToolChoiceAutoParam{},
+		}
+	}
+
+	if funcChoice := tc.OfFunctionToolChoice; funcChoice != nil {
+		if name := funcChoice.Function.Name; name != "" {
+			return anthropic.ToolChoiceParamOfTool(name)
+		}
+	}
+
+	if tc.OfCustomToolChoice != nil {
+		// Default to auto for custom tool choice
+		return anthropic.ToolChoiceUnionParam{
+			OfAuto: &anthropic.ToolChoiceAutoParam{},
+		}
+	}
+
+	// Default to auto
+	return anthropic.ToolChoiceUnionParam{
+		OfAuto: &anthropic.ToolChoiceAutoParam{},
+	}
 }
