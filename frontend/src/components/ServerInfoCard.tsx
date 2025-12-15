@@ -168,7 +168,7 @@ const ServerInfoCard = ({ currentToken }: ServerInfoCardProps) => {
                                 </Typography>
 
                                 <TextField
-                                    label="API Token"
+                                    label="API Key"
                                     value={showToken ? token : token.replace(/./g, '•')}
                                     fullWidth
                                     size="small"
@@ -188,7 +188,7 @@ const ServerInfoCard = ({ currentToken }: ServerInfoCardProps) => {
                                                         </Typography>
                                                     </IconButton>
                                                     <IconButton
-                                                        onClick={() => copyToClipboard(token, 'API Token')}
+                                                        onClick={() => copyToClipboard(token, 'API Key')}
                                                         size="small"
                                                         title="Copy Token"
                                                     >

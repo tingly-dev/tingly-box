@@ -80,12 +80,12 @@ export const CredentialDialog = ({
                         </FormControl>
                         <TextField
                             fullWidth
-                            label="API Token"
+                            label="API Key"
                             type="password"
                             value={providerToken}
                             onChange={(e) => onProviderTokenChange(e.target.value)}
                             required
-                            placeholder="Your API token"
+                            placeholder="Your API Key"
                         />
                     </Stack>
                 </DialogContent>
