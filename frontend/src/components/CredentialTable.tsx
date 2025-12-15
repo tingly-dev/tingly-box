@@ -159,7 +159,7 @@ const CredentialTable = ({
                         <TableCell sx={{fontWeight: 600, minWidth: 150}}>Name</TableCell>
                         <TableCell sx={{fontWeight: 600, minWidth: 150}}>API Key</TableCell>
                         <TableCell sx={{fontWeight: 600, minWidth: 200}}>API Base</TableCell>
-                        <TableCell sx={{fontWeight: 600, minWidth: 120}}>API Version</TableCell>
+                        <TableCell sx={{fontWeight: 600, minWidth: 120}}>API Style</TableCell>
                         <TableCell sx={{fontWeight: 600, minWidth: 120}}>Actions</TableCell>
                         <TableCell sx={{fontWeight: 600, minWidth: 120}}>Status</TableCell>
                     </TableRow>
