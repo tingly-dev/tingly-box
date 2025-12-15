@@ -1,4 +1,4 @@
-import { AccountCircle as AccountIcon, CloudQueue as CloudIcon, Dashboard as DashboardIcon, History as HistoryIcon, Logout as LogoutIcon, Menu as MenuIcon, RuleOutlined, Settings as SettingsIcon } from '@mui/icons-material';
+import { AccountCircle as AccountIcon, CloudQueue as CloudIcon, Dashboard as DashboardIcon, History as HistoryIcon, Key as KeyIcon, Logout as LogoutIcon, Menu as MenuIcon, RuleOutlined, Settings as SettingsIcon } from '@mui/icons-material';
 import { Box, Drawer, IconButton, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Typography } from '@mui/material';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
@@ -41,9 +41,9 @@ const Layout = ({ children }: LayoutProps) => {
     };
 
     const menuItems = [
-        { path: '/', label: 'Dashboard', icon: <DashboardIcon /> },
-        { path: '/providers', label: 'Providers', icon: <CloudIcon /> },
-        { path: '/rules', label: 'Rules', icon: <RuleOutlined /> },
+        { path: '/', label: 'Home', icon: <DashboardIcon /> },
+        { path: '/credential', label: 'Credentials', icon: <KeyIcon /> },
+        { path: '/rule', label: 'Rules', icon: <RuleOutlined /> },
         { path: '/system', label: 'System', icon: <SettingsIcon /> },
         { path: '/history', label: 'History', icon: <HistoryIcon /> },
     ];
@@ -78,7 +78,7 @@ const Layout = ({ children }: LayoutProps) => {
                     T
                 </Box>
                 <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                    Tingly Model Box
+                    Tingly Box
                 </Typography>
             </Box>
 

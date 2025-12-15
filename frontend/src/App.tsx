@@ -4,11 +4,11 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider } from './contexts/AuthContext';
 import Layout from './layout/Layout';
-import Dashboard from './pages/Dashboard';
+import Home from './pages/Home.tsx';
 import History from "./pages/History";
 import Login from './pages/Login';
-import Providers from './pages/Providers';
-import Rule from './pages/Rule';
+import CredentialPage from './pages/CredentialPage.tsx';
+import RulePage from './pages/RulePage.tsx';
 import System from './pages/System';
 import theme from './theme';
 function App() {
@@ -25,10 +25,12 @@ function App() {
                                 <ProtectedRoute>
                                     <Layout>
                                         <Routes>
-                                            <Route path="/" element={<Dashboard />} />
-                                            <Route path="/dashboard" element={<Dashboard />} />
-                                            <Route path="/providers" element={<Providers />} />
-                                            <Route path="/rules" element={<Rule />} />
+                                            <Route path="/" element={<Home />} />
+                                            <Route path="/home" element={<Home />} />
+                                            <Route path="/dashboard" element={<Home />} />
+                                            <Route path="/credential" element={<CredentialPage />} />
+                                            <Route path="/provider" element={<CredentialPage />} />
+                                            <Route path="/rule" element={<RulePage />} />
                                             <Route path="/system" element={<System />} />
                                             <Route path="/history" element={<History />} />
                                         </Routes>
