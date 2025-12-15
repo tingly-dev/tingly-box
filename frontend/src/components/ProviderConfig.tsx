@@ -1,9 +1,8 @@
-import React from 'react';
 import {
     Add as AddIcon,
+    Check as CheckIcon,
     Delete as DeleteIcon,
     Edit as EditIcon,
-    Check as CheckIcon,
     Refresh as RefreshIcon
 } from '@mui/icons-material';
 import {
@@ -19,6 +18,7 @@ import {
     Tooltip,
     Typography
 } from '@mui/material';
+import React from 'react';
 
 interface ConfigProvider {
     uuid: string;
@@ -165,16 +165,16 @@ const ProviderRow: React.FC<ProviderRowProps> = ({
         >
             {/* Provider Select */}
             <FormControl size="small" disabled={!active} fullWidth>
-                <InputLabel shrink sx={{ fontSize: '0.875rem' }}>Provider</InputLabel>
+                <InputLabel shrink sx={{ fontSize: '0.875rem' }}>Name</InputLabel>
                 <Select
                     value={provider.provider}
                     onChange={(e) => onUpdate('provider', e.target.value)}
-                    label="Provider"
+                    label="Key"
                     size="small"
                     notched
                     sx={{ fontSize: '0.875rem' }}
                 >
-                    <MenuItem value="">Select</MenuItem>
+                    <MenuItem value="">Select API Key</MenuItem>
                     {availableProviders.map((p) => (
                         <MenuItem key={p.name} value={p.name}>
                             {p.name}
@@ -235,7 +235,7 @@ const ProviderRow: React.FC<ProviderRowProps> = ({
                             notched
                             sx={{ fontSize: '0.875rem' }}
                         >
-                            <MenuItem value="">Select</MenuItem>
+                            <MenuItem value="">Select Model</MenuItem>
                             {provider.model && !models.includes(provider.model) && (
                                 <MenuItem value={provider.model}>
                                     {provider.model} (custom)
