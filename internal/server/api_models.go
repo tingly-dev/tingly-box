@@ -1,10 +1,25 @@
 package server
 
 import (
+	"time"
 	"tingly-box/internal/config"
 
 	"github.com/openai/openai-go/v3"
 )
+
+// Error Models
+
+// ErrorResponse represents an error response
+type ErrorResponse struct {
+	Error ErrorDetail `json:"error"`
+}
+
+// ErrorDetail represents error details
+type ErrorDetail struct {
+	Message string `json:"message"`
+	Type    string `json:"type"`
+	Code    string `json:"code,omitempty"`
+}
 
 // =============================================
 // Health Check Models
@@ -143,10 +158,10 @@ type RuleSummaryResponse struct {
 // Web UI API Models
 // =============================================
 
-// ProbeRequest represents the request to probe/test a rule configuration
+// ProbeRequest represents the request to probe/test a provider and model
 type ProbeRequest struct {
 	Provider string `json:"provider" binding:"required" description:"Provider name to test against" example:"openai"`
-	Rule     string `json:"rule" binding:"required" description:"Rule UUID to test" example:"123e4567-e89b-12d3-a456-426614174000"`
+	Model    string `json:"model" binding:"required" description:"Model name to test against" example:"gpt-4-latest"`
 }
 
 // ProviderResponse represents a provider configuration with masked token
@@ -188,20 +203,6 @@ type RequestConfig struct {
 	ResponseModel string `json:"response_model" example:"gpt-3.5-turbo"`
 	Provider      string `json:"provider" example:"openai"`
 	DefaultModel  string `json:"default_model" example:"gpt-3.5-turbo"`
-}
-
-// DefaultsResponse represents the response for getting defaults
-type DefaultsResponse struct {
-	Success bool `json:"success" example:"true"`
-	Data    struct {
-		RequestConfigs   []RequestConfig `json:"request_configs"`
-		DefaultRequestID int             `json:"default_request_id" example:"0"`
-	} `json:"data"`
-}
-
-// SetDefaultsRequest represents the request to set defaults
-type SetDefaultsRequest struct {
-	RequestConfigs []config.Rule `json:"request_configs"`
 }
 
 // RulesResponse represents the response for getting all rules
@@ -296,4 +297,66 @@ type FetchProviderModelsResponse struct {
 	Success bool        `json:"success" example:"true"`
 	Message string      `json:"message" example:"Successfully fetched 150 models for provider openai"`
 	Data    interface{} `json:"data"`
+}
+
+// =============================================
+// Probe API Models
+// =============================================
+
+// ProbeUsage represents token usage information
+type ProbeUsage struct {
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+	TotalTokens      int `json:"total_tokens"`
+	TimeCost         int `json:"time_cost"`
+}
+
+// ProbeResponseData represents the response data structure
+type ProbeResponseData struct {
+	Request  ProbeRequestDetail  `json:"request"`
+	Response ProbeResponseDetail `json:"response"`
+	Usage    ProbeUsage          `json:"usage"`
+}
+
+// ProbeResponseDetail represents the API response
+type ProbeResponseDetail struct {
+	Content      string `json:"content"`
+	Model        string `json:"model"`
+	Provider     string `json:"provider"`
+	FinishReason string `json:"finish_reason"`
+	Error        string `json:"error,omitempty"`
+}
+
+// ProbeRequestDetail represents the mock request data for probing
+type ProbeRequestDetail struct {
+	Messages    []map[string]interface{} `json:"messages"`
+	Model       string                   `json:"model"`
+	MaxTokens   int                      `json:"max_tokens"`
+	Temperature float64                  `json:"temperature"`
+	Provider    string                   `json:"provider"`
+	Timestamp   string                   `json:"timestamp"`
+}
+
+// NewMockRequest creates a new mock request with default values
+func NewMockRequest(provider, model string) ProbeRequestDetail {
+	return ProbeRequestDetail{
+		Messages: []map[string]interface{}{
+			{
+				"role":    "user",
+				"content": "hi",
+			},
+		},
+		Model:       model,
+		MaxTokens:   100,
+		Temperature: 0.7,
+		Provider:    provider,
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+}
+
+// ProbeResponse represents the overall probe response
+type ProbeResponse struct {
+	Success bool               `json:"success"`
+	Error   *ErrorDetail       `json:"error,omitempty"`
+	Data    *ProbeResponseData `json:"data,omitempty"`
 }

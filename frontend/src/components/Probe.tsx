@@ -26,48 +26,9 @@ import {
 import { useState } from 'react';
 import { api } from '../services/api';
 import UnifiedCard from './UnifiedCard';
+import type { ProbeResponse, ErrorDetail } from '../client';
 
-interface ProbeResponse {
-    success: boolean;
-    data?: {
-        request: {
-            provider: string;
-            model: string;
-            timestamp: string;
-            processing_time_ms: number;
-            messages: Array<{ role: string; content: string }>;
-        };
-        response: {
-            content: string | null;
-            model: string;
-            provider: string;
-            usage: {
-                prompt_tokens: number;
-                completion_tokens: number;
-                total_tokens: number;
-            };
-            finish_reason: string;
-            error?: string;
-        };
-        rule_tested: {
-            name: string;
-            provider: string;
-            model: string;
-            timestamp: string;
-        };
-        test_result: {
-            success: boolean;
-            message: string;
-        };
-    };
-    error?: {
-        code: string;
-        message: string;
-        details?: any;
-    } | string;
-}
-
-const Probe = ({ rule, provider, model }) => {
+const Probe = ({ provider, model }: { provider: any; model: any }) => {
     const theme = useTheme();
     const [isProbing, setIsProbing] = useState(false);
     const [probeResult, setProbeResult] = useState<ProbeResponse | null>(null);
@@ -78,21 +39,24 @@ const Probe = ({ rule, provider, model }) => {
         setProbeResult(null);
 
         try {
-            console.log(rule, provider, model)
-            const result = await api.probeRule(rule, provider, model);
+            console.log(provider, model)
+            const result = await api.probeModel(provider, model);
             setProbeResult(result);
         } catch (error) {
             console.error('Probe error:', error);
             setProbeResult({
                 success: false,
-                error: (error as Error).message
+                error: {
+                    message: (error as Error).message,
+                    type: 'client_error'
+                }
             });
         } finally {
             setIsProbing(false);
         }
     };
 
-    const StatusResponseCard = ({ result }) => (
+    const StatusResponseCard = ({ result }: { result: ProbeResponse }) => (
         <Accordion
             expanded={detailsExpanded}
             onChange={(_, isExpanded) => setDetailsExpanded(isExpanded)}
@@ -128,56 +92,52 @@ const Probe = ({ rule, provider, model }) => {
                             </Typography>
                             {result.data && (
                                 <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flexWrap: 'nowrap' }}>
-                                    {result.data.rule_tested && (
-                                        <Chip
-                                            label={result.data.rule_tested.provider}
-                                            size="small"
-                                            variant="filled"
-                                            color="primary"
-                                            sx={{
-                                                fontFamily: 'monospace',
-                                                height: 24,
-                                                minWidth: 'auto'
-                                            }}
-                                        />
-                                    )}
-                                    {result.data.rule_tested && (
-                                        <Chip
-                                            label={result.data.rule_tested.model}
-                                            size="small"
-                                            variant="outlined"
-                                            sx={{
-                                                fontFamily: 'monospace',
-                                                height: 24,
-                                                minWidth: 'auto'
-                                            }}
-                                        />
-                                    )}
+                                    <Chip
+                                        label={result.data.request.provider}
+                                        size="small"
+                                        variant="filled"
+                                        color="primary"
+                                        sx={{
+                                            fontFamily: 'monospace',
+                                            height: 24,
+                                            minWidth: 'auto'
+                                        }}
+                                    />
+                                    <Chip
+                                        label={result.data.request.model}
+                                        size="small"
+                                        variant="outlined"
+                                        sx={{
+                                            fontFamily: 'monospace',
+                                            height: 24,
+                                            minWidth: 'auto'
+                                        }}
+                                    />
 
                                     <Stack direction="row" spacing={1.5}>
                                         <Stack direction="row" alignItems="center" spacing={0.5}>
                                             <PromptIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
                                             <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
-                                                Prompt:{result.data.response?.usage?.prompt_tokens || 0}
+                                                Prompt:{result.data.usage?.prompt_tokens || 0}
                                             </Typography>
                                         </Stack>
                                         <Stack direction="row" alignItems="center" spacing={0.5}>
                                             <CompletionIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
                                             <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
-                                                Completion:{result.data.response?.usage?.completion_tokens || 0}
+                                                Completion:{result.data.usage?.completion_tokens || 0}
                                             </Typography>
                                         </Stack>
                                     </Stack>
                                     <Stack direction="row" alignItems="center" spacing={0.5}>
                                         <TokenIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
                                         <Typography variant="body2" color="text.secondary">
-                                            {result.data.response?.usage?.total_tokens || 0} tokens
+                                            {result.data.usage?.total_tokens || 0} tokens
                                         </Typography>
                                     </Stack>
                                     <Stack direction="row" alignItems="center" spacing={0.5}>
                                         <TimerIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
                                         <Typography variant="body2" color="text.secondary">
-                                            {result.data.request?.processing_time_ms || 0}ms
+                                            {result.data.usage?.time_cost || 0}ms
                                         </Typography>
                                     </Stack>
                                 </Stack>
@@ -207,7 +167,7 @@ const Probe = ({ rule, provider, model }) => {
                                 borderRadius: 1.5
                             }}
                         >
-                            {result.data.request?.messages?.[0]?.content || 'No request content'}
+                            {(result.data?.request?.messages?.[0] as any)?.content || 'No request content'}
                         </Paper>
                     </Box>
 
@@ -232,7 +192,7 @@ const Probe = ({ rule, provider, model }) => {
                                 borderColor: result.success ? 'success.light' : 'error.light'
                             }}
                         >
-                            {result.data.response?.content || result.data.response?.error || 'No response content'}
+                            {result.data?.response?.content || result.data?.response?.error || 'No response content'}
                         </Paper>
                     </Box>
 
@@ -245,7 +205,7 @@ const Probe = ({ rule, provider, model }) => {
                                 <Typography variant="body2" sx={{
                                     fontSize: '0.8rem', fontFamily: 'monospace'
                                 }}>
-                                    {result.data.response?.finish_reason || 'unknown'}
+                                    {result.data?.response?.finish_reason || 'unknown'}
                                 </Typography>
                             </Stack>
                         </Box>
@@ -255,13 +215,13 @@ const Probe = ({ rule, provider, model }) => {
                             </Typography>
                             <Stack direction="row" spacing={2} sx={{ mt: 0.5 }}>
                                 <Typography variant="body2" sx={{ fontSize: '0.8rem', fontFamily: 'monospace' }}>
-                                    Prompt: {result.data.response?.usage?.prompt_tokens || 0}
+                                    Prompt: {result.data?.usage?.prompt_tokens || 0}
                                 </Typography>
                                 <Typography variant="body2" sx={{ fontSize: '0.8rem', fontFamily: 'monospace' }}>
-                                    Completion: {result.data.response?.usage?.completion_tokens || 0}
+                                    Completion: {result.data?.usage?.completion_tokens || 0}
                                 </Typography>
                                 <Typography variant="body2" sx={{ fontSize: '0.8rem', fontFamily: 'monospace' }}>
-                                    Total: {result.data.response?.usage?.total_tokens || 0}
+                                    Total: {result.data?.usage?.total_tokens || 0}
                                 </Typography>
                             </Stack>
                         </Box>
@@ -271,7 +231,7 @@ const Probe = ({ rule, provider, model }) => {
         </Accordion>
     );
 
-    const ErrorDetails = ({ result }) => (
+    const ErrorDetails = ({ result }: { result: ProbeResponse }) => (
         <Alert
             severity="error"
             variant="outlined"
@@ -285,9 +245,7 @@ const Probe = ({ rule, provider, model }) => {
                 Error Details
             </Typography>
             <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
-                {typeof result.error === 'string'
-                    ? result.error
-                    : result.error?.message || result.data?.test_result?.message || 'Unknown error occurred'}
+                {result.error?.message || 'Unknown error occurred'}
             </Typography>
         </Alert>
     );

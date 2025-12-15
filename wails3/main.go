@@ -4,6 +4,8 @@ import (
 	"embed"
 	_ "embed"
 	"log"
+
+	"github.com/gin-gonic/gin"
 )
 
 // Wails uses Go's `embed` package to embed the frontend files into the binary.
@@ -25,6 +27,7 @@ func init() {
 // and starts a goroutine that emits a time-based event every second. It subsequently runs the application and
 // logs any error that might occur.
 func main() {
+	gin.SetMode(gin.ReleaseMode)
 	app := newApp()
 	useWindows(app)
 	useSystray(app)

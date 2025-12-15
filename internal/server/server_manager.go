@@ -96,23 +96,6 @@ func (sm *ServerManager) Start() error {
 	return nil
 }
 
-func (sm *ServerManager) Debug() error {
-	if sm.server == nil {
-		return fmt.Errorf("server not initialized, call Setup() first")
-	}
-
-	// Check if already running
-	if sm.IsRunning() {
-		return fmt.Errorf("server is already running")
-	}
-
-	// Start server synchronously (blocking)
-	fmt.Printf("Starting server on port %d...\n", sm.appConfig.GetServerPort())
-
-	gin.SetMode(gin.DebugMode)
-	return sm.server.Start(sm.appConfig.GetServerPort())
-}
-
 // Stop stops the server gracefully
 func (sm *ServerManager) Stop() error {
 	if sm.server == nil {

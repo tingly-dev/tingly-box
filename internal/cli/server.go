@@ -10,6 +10,7 @@ import (
 	"tingly-box/internal/config"
 	"tingly-box/internal/server"
 
+	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
 )
 
@@ -93,11 +94,7 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 	// Start server in goroutine to keep it non-blocking
 	serverErr := make(chan error, 1)
 	go func() {
-		if opts.UseDebug {
-			serverErr <- serverManager.Debug()
-		} else {
-			serverErr <- serverManager.Start()
-		}
+		serverErr <- serverManager.Start()
 	}()
 
 	fmt.Printf("Server starting on port %d...\n", appConfig.GetServerPort())
@@ -140,6 +137,12 @@ func startServerNonBlocking(appConfig *config.AppConfig, opts startServerOptions
 	// Create PID file before starting server
 	if err := pidManager.CreatePIDFile(); err != nil {
 		return fmt.Errorf("failed to create PID file: %w", err)
+	}
+
+	if opts.UseDebug {
+		gin.SetMode(gin.DebugMode)
+	} else {
+		gin.SetMode(gin.ReleaseMode)
 	}
 
 	// Create a new server manager for starting

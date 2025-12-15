@@ -65,8 +65,8 @@ func (s *Server) UseUIEndpoints() {
 	s.useWebStaticEndpoints(s.router)
 }
 
-// ProbeRule tests a rule configuration by sending a sample request to the configured provider
-func (s *Server) ProbeRule(c *gin.Context) {
+// HandleProbe tests a rule configuration by sending a sample request to the configured provider
+func (s *Server) HandleProbe(c *gin.Context) {
 
 	var req ProbeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -74,6 +74,11 @@ func (s *Server) ProbeRule(c *gin.Context) {
 			"success": false,
 			"error":   err.Error(),
 		})
+		return
+	}
+
+	if req.Provider == "" || req.Model == "" {
+		c.JSON(http.StatusBadRequest, gin.H{})
 		return
 	}
 
@@ -92,25 +97,99 @@ func (s *Server) ProbeRule(c *gin.Context) {
 
 	// Find the provider for this rule
 	providers := s.config.ListProviders()
-	var testProvider *config.Provider
+	var provider *config.Provider
+	var model = req.Model
 
-	for _, provider := range providers {
-		if provider.Enabled && provider.Name == req.Provider {
-			testProvider = provider
+	for _, p := range providers {
+		if p.Enabled && p.Name == req.Provider {
+			provider = p
 			break
 		}
 	}
 
-	rules := s.config.Rules
-	var rule *config.Rule
-	for _, r := range rules {
-		if r.UUID == req.Rule {
-			rule = &r
-			break
+	startTime := time.Now()
+
+	// Create the mock request data that would be sent to the API
+	mockRequest := NewMockRequest(req.Provider, req.Model)
+
+	if provider == nil {
+		errorResp := ErrorDetail{
+			Code:    "PROVIDER_NOT_FOUND",
+			Message: fmt.Sprintf("Provider '%s' not found or disabled", req.Provider),
 		}
+
+		c.JSON(http.StatusBadRequest, ProbeResponse{
+			Success: false,
+			Error:   &errorResp,
+			Data: &ProbeResponseData{
+				Request: mockRequest,
+			},
+		})
+		return
 	}
 
-	probe(c, rule, testProvider)
+	// Call the appropriate probe function based on provider API style
+	var responseContent string
+	var usage ProbeUsage
+	var err error
+
+	switch provider.APIStyle {
+	case config.APIStyleAnthropic:
+		responseContent, usage, err = probeWithAnthropic(c, provider, model)
+	case config.APIStyleOpenAI:
+		fallthrough
+	default:
+		responseContent, usage, err = probeWithOpenAI(c, provider, model)
+	}
+
+	endTime := time.Now()
+
+	if err != nil {
+		// Extract error code from the formatted error message
+		errorMessage := err.Error()
+		errorCode := "PROBE_FAILED"
+
+		errorResp := ErrorDetail{
+			Message: fmt.Sprintf("Probe failed: %s", errorMessage),
+			Type:    "error",
+			Code:    errorCode,
+		}
+
+		c.JSON(http.StatusOK, ProbeResponse{
+			Success: false,
+			Error:   &errorResp,
+			Data: &ProbeResponseData{
+				Request: mockRequest,
+				Response: ProbeResponseDetail{
+					Content:      "",
+					Model:        model,
+					Provider:     provider.Name,
+					FinishReason: "error",
+					Error:        errorMessage,
+				},
+				Usage: ProbeUsage{},
+			},
+		})
+		return
+	}
+
+	finishReason := "stop"
+	if usage.TotalTokens == 0 {
+		finishReason = "unknown"
+	}
+
+	usage.TimeCost = int(endTime.Sub(startTime).Milliseconds())
+	c.JSON(http.StatusOK, ProbeResponse{
+		Success: true,
+		Data: &ProbeResponseData{
+			Request: mockRequest,
+			Response: ProbeResponseDetail{
+				Content:      responseContent,
+				FinishReason: finishReason,
+			},
+			Usage: usage,
+		},
+	})
 }
 
 func (s *Server) UseIndex(c *gin.Context) {
@@ -178,39 +257,6 @@ func (s *Server) GetHistory(c *gin.Context) {
 	} else {
 		response.Data = []interface{}{}
 	}
-
-	c.JSON(http.StatusOK, response)
-}
-
-func (s *Server) GetDefaults(c *gin.Context) {
-	cfg := s.config
-	if cfg == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Global config not available",
-		})
-		return
-	}
-
-	requestConfigs := cfg.GetRequestConfigs()
-	defaultRequestID := cfg.GetDefaultRequestID()
-
-	// Convert Rules to response format
-	responseConfigs := make([]RequestConfig, len(requestConfigs))
-	for i, rc := range requestConfigs {
-		responseConfigs[i] = RequestConfig{
-			RequestModel:  rc.RequestModel,
-			ResponseModel: rc.ResponseModel,
-			Provider:      rc.GetDefaultProvider(),
-			DefaultModel:  rc.GetDefaultModel(),
-		}
-	}
-
-	response := DefaultsResponse{
-		Success: true,
-	}
-	response.Data.RequestConfigs = responseConfigs
-	response.Data.DefaultRequestID = defaultRequestID
 
 	c.JSON(http.StatusOK, response)
 }
@@ -739,57 +785,6 @@ func (s *Server) RestartServer(c *gin.Context) {
 	c.JSON(http.StatusNotImplemented, response)
 }
 
-func (s *Server) SetDefaults(c *gin.Context) {
-	var req SetDefaultsRequest
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
-		return
-	}
-
-	cfg := s.config
-	if cfg == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Global config not available",
-		})
-		return
-	}
-
-	// Update Rules if provided
-	if req.RequestConfigs != nil {
-		if err := cfg.SetRequestConfigs(req.RequestConfigs); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"error":   fmt.Sprintf("Failed to update request configs: %v", err),
-			})
-			return
-		}
-	}
-
-	if s.logger != nil {
-		logData := map[string]interface{}{
-			"request_configs_count": 0,
-		}
-
-		if req.RequestConfigs != nil {
-			logData["request_configs_count"] = len(req.RequestConfigs)
-		}
-
-		s.logger.LogAction(memory.ActionUpdateDefaults, logData, true, "Request configs updated via web interface")
-	}
-
-	response := ServerActionResponse{
-		Success: true,
-		Message: "Request configs updated successfully",
-	}
-
-	c.JSON(http.StatusOK, response)
-}
-
 func (s *Server) FetchProviderModels(c *gin.Context) {
 	providerName := c.Param("name")
 
@@ -1064,20 +1059,6 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 		swagger.WithResponseModel(HistoryResponse{}),
 	)
 
-	// Defaults Management
-	authAPI.GET("/defaults", (s.GetDefaults),
-		swagger.WithDescription("Get default request configurations"),
-		swagger.WithTags("defaults"),
-		swagger.WithResponseModel(DefaultsResponse{}),
-	)
-
-	authAPI.POST("/defaults", (s.SetDefaults),
-		swagger.WithDescription("Set default request configurations"),
-		swagger.WithTags("defaults"),
-		swagger.WithRequestModel(SetDefaultsRequest{}),
-		swagger.WithResponseModel(SetRuleResponse{}),
-	)
-
 	// Provider Models Management
 	authAPI.GET("/provider-models", (s.GetProviderModels),
 		swagger.WithDescription("Get all provider models"),
@@ -1092,11 +1073,11 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 	)
 
 	// Probe endpoint
-	authAPI.POST("/probe", (s.ProbeRule),
+	authAPI.POST("/probe", (s.HandleProbe),
 		swagger.WithDescription("Test a rule configuration by sending a sample request"),
 		swagger.WithTags("testing"),
 		swagger.WithRequestModel(ProbeRequest{}),
-		swagger.WithResponseModel(RuleResponse{}),
+		swagger.WithResponseModel(ProbeResponse{}),
 	)
 
 	// Token Management
