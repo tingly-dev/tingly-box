@@ -91,9 +91,9 @@ func NewServerWithOptions(cfg *config.Config, useUI bool) *Server {
 	// Initialize debug middleware (only if debug mode is enabled)
 	var debugMW *DebugMiddleware
 	if cfg.GetDebug() {
-		debugLogPath := filepath.Join(config.GetTinglyConfDir(), "debug_requests.log")
+		debugLogPath := filepath.Join(config.GetTinglyConfDir(), config.LogDirName, config.DebugLogFileName)
 		debugMW = NewDebugMiddleware(debugLogPath, 10)
-		log.Println("Debug middleware initialized (debug=true in config)")
+		log.Printf("Debug middleware initialized (debug=true in config), logging to: %s", debugLogPath)
 	}
 
 	// Create server struct first
@@ -323,7 +323,7 @@ func (s *Server) getDebugStatus(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"enabled":  s.debugMW.IsEnabled(),
-		"log_path": filepath.Join(config.GetTinglyConfDir(), config.LogDirName, "debug_requests.log"),
+		"log_path": filepath.Join(config.GetTinglyConfDir(), config.LogDirName, config.DebugLogFileName),
 	})
 }
 
@@ -346,7 +346,7 @@ func (s *Server) enableDebug(c *gin.Context) {
 	log.Println("Debug logging enabled")
 	c.JSON(http.StatusOK, gin.H{
 		"message":  "Debug logging enabled",
-		"log_path": filepath.Join(config.GetTinglyConfDir(), config.LogDirName, "debug_requests.log"),
+		"log_path": filepath.Join(config.GetTinglyConfDir(), config.LogDirName, config.DebugLogFileName),
 	})
 }
 
