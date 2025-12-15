@@ -556,9 +556,8 @@ export const api = {
         try {
             const apiInstances = await getApiInstances();
             const response = await apiInstances.testingApi.apiV1ProbePost({
-                rule: rule,
                 provider: provider,
-                model: model,
+                rule: rule.uuid || rule.name, // Use rule UUID if available, otherwise use rule directly
             });
             return response.data;
         } catch (error: any) {
