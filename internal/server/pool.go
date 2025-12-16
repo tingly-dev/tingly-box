@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 
@@ -14,6 +16,7 @@ import (
 	"github.com/openai/openai-go/v3"
 	openaiOption "github.com/openai/openai-go/v3/option"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/net/proxy"
 )
 
 // ClientPool manages OpenAI and Anthropic client instances for different providers
@@ -31,9 +34,50 @@ func NewClientPool() *ClientPool {
 	}
 }
 
-// GetClient returns an OpenAI client for the specified provider
+// createHTTPClientWithProxy creates an HTTP client with proxy support
+func createHTTPClientWithProxy(proxyURL string) *http.Client {
+	if proxyURL == "" {
+		return http.DefaultClient
+	}
+
+	// Parse the proxy URL
+	parsedURL, err := url.Parse(proxyURL)
+	if err != nil {
+		logrus.Errorf("Failed to parse proxy URL %s: %v, using default client", proxyURL, err)
+		return http.DefaultClient
+	}
+
+	// Create transport with proxy
+	transport := &http.Transport{}
+
+	switch parsedURL.Scheme {
+	case "http", "https":
+		transport.Proxy = http.ProxyURL(parsedURL)
+	case "socks5":
+		dialer, err := proxy.SOCKS5("tcp", parsedURL.Host, nil, proxy.Direct)
+		if err != nil {
+			logrus.Errorf("Failed to create SOCKS5 proxy dialer: %v, using default client", err)
+			return http.DefaultClient
+		}
+		dialContext, ok := dialer.(proxy.ContextDialer)
+		if ok {
+			transport.DialContext = dialContext.DialContext
+		} else {
+			return http.DefaultClient
+		}
+	default:
+		logrus.Errorf("Unsupported proxy scheme %s, supported schemes are http, https, socks5", parsedURL.Scheme)
+		return http.DefaultClient
+	}
+
+	return &http.Client{
+		Transport: transport,
+	}
+}
+
+// GetOpenAIClient returns an OpenAI client for the specified provider
 // It creates a new client if one doesn't exist for the provider
-func (p *ClientPool) GetClient(provider *config.Provider) *openai.Client {
+func (p *ClientPool) GetOpenAIClient(provider *config.Provider) *openai.Client {
 	// Generate unique key for provider
 	key := p.generateProviderKey(provider)
 
@@ -56,12 +100,22 @@ func (p *ClientPool) GetClient(provider *config.Provider) *openai.Client {
 		return client
 	}
 
-	// Create new client
+	// Create new client with proxy support if configured
 	logrus.Infof("Creating new OpenAI client for provider: %s (API: %s)", provider.Name, provider.APIBase)
-	client := openai.NewClient(
+
+	options := []openaiOption.RequestOption{
 		openaiOption.WithAPIKey(provider.Token),
 		openaiOption.WithBaseURL(provider.APIBase),
-	)
+	}
+
+	// Add proxy if configured
+	if provider.ProxyURL != "" {
+		httpClient := createHTTPClientWithProxy(provider.ProxyURL)
+		options = append(options, openaiOption.WithHTTPClient(httpClient))
+		logrus.Infof("Using proxy for OpenAI client: %s", provider.ProxyURL)
+	}
+
+	client := openai.NewClient(options...)
 
 	// Store in pool
 	p.openaiClients[key] = &client
@@ -93,17 +147,27 @@ func (p *ClientPool) GetAnthropicClient(provider *config.Provider) anthropic.Cli
 		return client
 	}
 
-	// Create new client
+	// Create new client with proxy support if configured
 	var apiBase = provider.APIBase
 	if strings.HasSuffix(apiBase, "/v1") {
 		apiBase = apiBase[:len(apiBase)-3]
 	}
 
 	logrus.Infof("Creating new Anthropic client for provider: %s (API: %s)", provider.Name, apiBase)
-	client := anthropic.NewClient(
+
+	options := []anthropicOption.RequestOption{
 		anthropicOption.WithAPIKey(provider.Token),
 		anthropicOption.WithBaseURL(apiBase),
-	)
+	}
+
+	// Add proxy if configured
+	if provider.ProxyURL != "" {
+		httpClient := createHTTPClientWithProxy(provider.ProxyURL)
+		options = append(options, anthropicOption.WithHTTPClient(httpClient))
+		logrus.Infof("Using proxy for Anthropic client: %s", provider.ProxyURL)
+	}
+
+	client := anthropic.NewClient(options...)
 
 	// Store in pool
 	p.anthropicClients[key] = client
@@ -111,9 +175,9 @@ func (p *ClientPool) GetAnthropicClient(provider *config.Provider) anthropic.Cli
 }
 
 // generateProviderKey creates a unique key for a provider
-// Uses combination of name, API base, and a hash of the token for uniqueness
+// Uses combination of name, API base, hash of the token, and proxy URL for uniqueness
 func (p *ClientPool) generateProviderKey(provider *config.Provider) string {
-	return fmt.Sprintf("%s:%s:%s", provider.Name, provider.APIBase, hashToken(provider.Token))
+	return fmt.Sprintf("%s:%s:%s:%s", provider.Name, provider.APIBase, hashToken(provider.Token), hashToken(provider.ProxyURL))
 }
 
 // hashToken creates a secure hash of the token for key generation

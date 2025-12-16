@@ -8,13 +8,14 @@ const (
 	APIStyleAnthropic APIStyle = "anthropic"
 )
 
-// Provider represents an AI model provider configuration
+// Provider represents an AI model api key and provider configuration
 type Provider struct {
 	Name     string   `json:"name"`
 	APIBase  string   `json:"api_base"`
 	APIStyle APIStyle `json:"api_style"` // "openai" or "anthropic", defaults to "openai"
 	Token    string   `json:"token"`
 	Enabled  bool     `json:"enabled"`
+	ProxyURL string   `json:"proxy_url"` // HTTP or SOCKS proxy URL (e.g., "http://127.0.0.1:7890" or "socks5://127.0.0.1:1080")
 }
 
 // Rule represents a request/response configuration with load balancing support

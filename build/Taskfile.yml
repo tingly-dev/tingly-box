@@ -1,7 +1,7 @@
 version: '3'
 
 vars:
-  PACKAGE_PATH: ./wails3
+  PACKAGE_PATH: ./internal/wails3
 
 tasks:
   go:mod:tidy:
@@ -41,8 +41,10 @@ tasks:
     cmds:
       - |
         pnpm run {{.BUILD_COMMAND}}
-        mkdir -p ../wails3/frontend/dist
-        cp -R dist/* ../wails3/frontend/dist/
+      - |
+        cd ..
+        mkdir -p ./internal/gui/dist
+        cp -R frontend/dist/* ./internal/gui/dist/
         
     env:
       PRODUCTION: '{{.PRODUCTION | default "false"}}'

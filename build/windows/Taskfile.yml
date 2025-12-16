@@ -4,7 +4,7 @@ includes:
   common: ../Taskfile.yml
 
 vars:
-  PACKAGE_PATH: ./wails3
+  PACKAGE_PATH: ./internal/wails3
 
 tasks:
   build:

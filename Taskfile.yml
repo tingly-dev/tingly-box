@@ -13,8 +13,10 @@ vars:
   BUILD_DIR: build
   DIST_DIR: build/dist
   
-  APP_NAME: "ModelBox"
-  BIN_NAME: "model-box"
+  PACKAGE_PATH: ./internal/wails3
+  
+  APP_NAME: "TinglyBox"
+  BIN_NAME: "tingly-box"
   BIN_DIR: "bin"
   VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
 
@@ -51,15 +53,15 @@ tasks:
     cmds:
       - cd frontend; pnpm build:wails
       - |
-        mkdir -p wails3/frontend/dist/
-        cp -R frontend/dist/* wails3/frontend/dist/
+        mkdir -p internal/gui/dist/
+        cp -R frontend/dist/* internal/gui/dist/
       - |
-        go build -tags debug -trimpath -buildvcs=false -ldflags="-w -s" -o bin/model-box ./wails3
-        mkdir -p bin/ModelBox.app/Contents/{MacOS,Resources}
-        cp build/darwin/icons.icns bin/ModelBox.app/Contents/Resources
-        cp bin/model-box bin/ModelBox.app/Contents/MacOS
-        cp build/darwin/Info.plist bin/ModelBox.app/Contents
-        codesign --force --deep --sign - bin/ModelBox.app
+        go build -tags debug -trimpath -buildvcs=false -ldflags="-w -s" -o bin/{{.BIN_NAME}} {{.PACKAGE_PATH}}
+        mkdir -p bin/{{.APP_NAME}}.app/Contents/{MacOS,Resources}
+        cp build/darwin/icons.icns bin/{{.APP_NAME}}.app/Contents/Resources
+        cp bin/{{.BIN_NAME}} bin/{{.APP_NAME}}.app/Contents/MacOS
+        cp build/darwin/Info.plist bin/{{.APP_NAME}}.app/Contents
+        codesign --force --deep --sign - bin/{{.APP_NAME}}.app
   
   codegen:
     cmds:
@@ -81,57 +83,58 @@ tasks:
       - task: go:build
       - ./build/tingly start
   
-  all:build:
+  cli:build:
     cmds:
-      - task: ui:dist
+      - task: web:dist
       - task: go:build
   
   go:build:
     cmds:
       - |
         mkdir -p build
-        go build -o ./build/tingly ./cmd/tingly
+        go build -o ./build/{{.BIN_NAME}} ./cmd/tingly-box
   
   go:test:
     cmds:
       - |
         go test ./internal/...
   
-  all:dev:
+  cli:dev:
     cmds:
-      - task: ui:dist
+      - task: web:dist
       - |
-        go run ./cmd/tingly start
+        go run ./cmd/tingly-box start
   
-  ui:dev:
+  web:dev:
     cmds:
       - |
         cd frontend; pnpm dev
   
-  ui:dist:
+  web:dist:
     cmds:
       - |
         cd frontend; pnpm build
       - |
-        cp -R frontend/dist/* internal/server/web/dist/
+        mkdir -p internal/web/dist/
+        cp -R frontend/dist/* internal/web/dist/
   
-  ui:dist-dev:
+  web:dist-dev:
     cmds:
       - |
         cd frontend; pnpm build:dev
       - |
-        mkdir -p internal/server/web/dist/
-        cp -R frontend/dist/* internal/server/web/dist/
+        mkdir -p internal/web/dist/
+        cp -R frontend/dist/* internal/web/dist/
   
   gui:build:
     cmds:
       - |
-        go build -buildvcs=false -gcflags=all="-l" -o bin/tingly-box ./wails3
+        go build -buildvcs=false -gcflags=all="-l" -o bin/{{.BIN_NAME}} ./wails3
   
   dist:
     desc: Build cross-platform distributions for Windows, Linux, and macOS
     cmds:
-      - task: ui:dist
+      - task: web:dist
       - |
         echo "Building distributions for version {{.VERSION}}..."
         

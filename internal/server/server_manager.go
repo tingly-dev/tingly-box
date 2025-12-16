@@ -12,33 +12,57 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const StopTimeout = time.Second * 10
+
 // ServerManager manages the HTTP server lifecycle
 type ServerManager struct {
-	appConfig *config.AppConfig
-	server    *Server
-	useUI     bool
+	appConfig     *config.AppConfig
+	server        *Server
+	enableUI      bool
 	enableAdaptor bool
-	status    string
+	status        string
 	sync.Mutex
 }
 
-// NewServerManager creates a new server manager with UI enabled by default
-func NewServerManager(appConfig *config.AppConfig) *ServerManager {
-	res := NewServerManagerWithOptions(appConfig, true, false)
-	res.Setup(appConfig.GetServerPort())
-	return res
+// ServerManagerOption defines a functional option for ServerManager
+type ServerManagerOption func(*ServerManager)
+
+// WithUI enables or disables the UI for the server manager
+func WithUI(enabled bool) ServerManagerOption {
+	return func(sm *ServerManager) {
+		sm.enableUI = enabled
+	}
 }
 
-// NewServerManagerWithOptions creates a new server manager with UI option
-func NewServerManagerWithOptions(appConfig *config.AppConfig, useUI bool, enableAdaptor bool) *ServerManager {
-	res := &ServerManager{
-		appConfig:     appConfig,
-
-		useUI:         useUI,
-		enableAdaptor: enableAdaptor,
+// WithAdaptor enables or disables the adaptor for the server manager
+func WithAdaptor(enabled bool) ServerManagerOption {
+	return func(sm *ServerManager) {
+		sm.enableAdaptor = enabled
 	}
-	res.Setup(appConfig.GetServerPort())
-	return res
+}
+
+// NewServerManager creates a new server manager with default options (UI enabled, adaptor disabled)
+func NewServerManager(appConfig *config.AppConfig, opts ...ServerManagerOption) *ServerManager {
+	// Default options
+	sm := &ServerManager{
+		appConfig:     appConfig,
+		enableUI:      true,  // Default: UI enabled
+		enableAdaptor: false, // Default: adaptor disabled
+	}
+
+	// Apply provided options
+	for _, opt := range opts {
+		opt(sm)
+	}
+
+	sm.Setup(appConfig.GetServerPort())
+	return sm
+}
+
+// NewServerManagerWithOptions creates a new server manager with specific bool options
+// Deprecated: Use NewServerManager with functional options instead
+func NewServerManagerWithOptions(appConfig *config.AppConfig, enableUI bool, enableAdaptor bool) *ServerManager {
+	return NewServerManager(appConfig, WithUI(enableUI), WithAdaptor(enableAdaptor))
 }
 
 func (sm *ServerManager) GetGinEngine() *gin.Engine {
@@ -46,7 +70,7 @@ func (sm *ServerManager) GetGinEngine() *gin.Engine {
 }
 
 func (sm *ServerManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// All requests go to the Gin router
+	// All requests go to the Gin engine
 	sm.server.GetRouter().ServeHTTP(w, r)
 }
 
@@ -65,7 +89,7 @@ func (sm *ServerManager) Setup(port int) error {
 	}
 
 	// Create server with UI and adaptor options
-	sm.server = NewServerWithAllOptions(sm.appConfig.GetGlobalConfig(), sm.useUI, sm.enableAdaptor)
+	sm.server = NewServerWithAllOptions(sm.appConfig.GetGlobalConfig(), sm.enableUI, sm.enableAdaptor)
 
 	// Set global server instance for web UI control
 	SetGlobalServer(sm.server)
@@ -107,7 +131,7 @@ func (sm *ServerManager) Stop() error {
 	}
 
 	fmt.Println("Stopping server...")
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), StopTimeout)
 	defer cancel()
 
 	if err := sm.server.Stop(ctx); err != nil {

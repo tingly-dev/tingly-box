@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"tingly-box/internal/server/middleware"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -27,11 +28,8 @@ func TestLoadBalancer_RoundRobin(t *testing.T) {
 	appConfig, err := config.NewAppConfigWithDir(t.TempDir())
 	require.NoError(t, err)
 
-	// Create a minimal server for stats middleware
-	srv := server.NewServer(appConfig.GetGlobalConfig())
-
 	// Create stats middleware
-	statsMW := server.NewStatsMiddleware(srv)
+	statsMW := middleware.NewStatsMiddleware(appConfig.GetGlobalConfig())
 	defer statsMW.Stop()
 
 	// Create load balancer - pass the config from appConfig
@@ -89,11 +87,8 @@ func TestLoadBalancer_EnabledFilter(t *testing.T) {
 	appConfig, err := config.NewAppConfigWithDir(t.TempDir())
 	require.NoError(t, err)
 
-	// Create a minimal server for stats middleware
-	srv := server.NewServer(appConfig.GetGlobalConfig())
-
 	// Create stats middleware
-	statsMW := server.NewStatsMiddleware(srv)
+	statsMW := middleware.NewStatsMiddleware(appConfig.GetGlobalConfig())
 	defer statsMW.Stop()
 
 	// Create load balancer
@@ -158,11 +153,8 @@ func TestLoadBalancer_RecordUsage(t *testing.T) {
 	appConfig, err := config.NewAppConfigWithDir(t.TempDir())
 	require.NoError(t, err)
 
-	// Create a minimal server for stats middleware
-	srv := server.NewServer(appConfig.GetGlobalConfig())
-
 	// Create stats middleware
-	statsMW := server.NewStatsMiddleware(srv)
+	statsMW := middleware.NewStatsMiddleware(appConfig.GetGlobalConfig())
 	defer statsMW.Stop()
 
 	// Create load balancer
@@ -219,11 +211,8 @@ func TestLoadBalancer_ValidateRule(t *testing.T) {
 	appConfig, err := config.NewAppConfigWithDir(t.TempDir())
 	require.NoError(t, err)
 
-	// Create a minimal server for stats middleware
-	srv := server.NewServer(appConfig.GetGlobalConfig())
-
 	// Create stats middleware
-	statsMW := server.NewStatsMiddleware(srv)
+	statsMW := middleware.NewStatsMiddleware(appConfig.GetGlobalConfig())
 	defer statsMW.Stop()
 
 	// Create load balancer
@@ -289,11 +278,8 @@ func TestLoadBalancer_GetRuleSummary(t *testing.T) {
 	appConfig, err := config.NewAppConfigWithDir(t.TempDir())
 	require.NoError(t, err)
 
-	// Create a minimal server for stats middleware
-	srv := server.NewServer(appConfig.GetGlobalConfig())
-
 	// Create stats middleware
-	statsMW := server.NewStatsMiddleware(srv)
+	statsMW := middleware.NewStatsMiddleware(appConfig.GetGlobalConfig())
 	defer statsMW.Stop()
 
 	// Create load balancer
@@ -809,11 +795,8 @@ func TestLoadBalancer_WeightedRandom(t *testing.T) {
 	appConfig, err := config.NewAppConfigWithDir(t.TempDir())
 	require.NoError(t, err)
 
-	// Create a minimal server for stats middleware
-	srv := server.NewServer(appConfig.GetGlobalConfig())
-
 	// Create stats middleware
-	statsMW := server.NewStatsMiddleware(srv)
+	statsMW := middleware.NewStatsMiddleware(appConfig.GetGlobalConfig())
 	defer statsMW.Stop()
 
 	// Create load balancer and register random tactic
@@ -932,7 +915,7 @@ func TestLoadBalancer_WithMockProvider(t *testing.T) {
 	}
 
 	// Create stats middleware
-	statsMW := server.NewStatsMiddleware(ts.server)
+	statsMW := middleware.NewStatsMiddleware(ts.appConfig.GetGlobalConfig())
 	defer statsMW.Stop()
 
 	// Create load balancer

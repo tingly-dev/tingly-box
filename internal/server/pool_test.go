@@ -3,8 +3,8 @@ package server
 import (
 	"testing"
 
-	"tingly-box/internal/config"
 	"github.com/openai/openai-go/v3"
+	"tingly-box/internal/config"
 )
 
 func TestClientPool_GetClient(t *testing.T) {
@@ -18,13 +18,13 @@ func TestClientPool_GetClient(t *testing.T) {
 	}
 
 	// First call should create new client
-	client1 := pool.GetClient(provider)
+	client1 := pool.GetOpenAIClient(provider)
 	if client1 == nil {
 		t.Fatal("Expected non-nil client")
 	}
 
 	// Second call should return same client
-	client2 := pool.GetClient(provider)
+	client2 := pool.GetOpenAIClient(provider)
 	if client1 != client2 {
 		t.Error("Expected same client instance for same provider")
 	}
@@ -52,8 +52,8 @@ func TestClientPool_DifferentProviders(t *testing.T) {
 	}
 
 	// Get clients for different providers
-	client1 := pool.GetClient(provider1)
-	client2 := pool.GetClient(provider2)
+	client1 := pool.GetOpenAIClient(provider1)
+	client2 := pool.GetOpenAIClient(provider2)
 
 	if client1 == client2 {
 		t.Error("Expected different clients for different providers")
@@ -82,7 +82,7 @@ func TestClientPool_ConcurrentAccess(t *testing.T) {
 
 	for i := 0; i < numGoroutines; i++ {
 		go func(index int) {
-			client := pool.GetClient(provider)
+			client := pool.GetOpenAIClient(provider)
 			clients[index] = client
 			done <- true
 		}(i)
@@ -124,8 +124,8 @@ func TestClientPool_Clear(t *testing.T) {
 		APIBase: "https://api.openai.com/v1",
 	}
 
-	pool.GetClient(provider1)
-	pool.GetClient(provider2)
+	pool.GetOpenAIClient(provider1)
+	pool.GetOpenAIClient(provider2)
 
 	// Verify pool has clients
 	if pool.Size() != 2 {
@@ -157,8 +157,8 @@ func TestClientPool_RemoveProvider(t *testing.T) {
 	}
 
 	// Add clients
-	pool.GetClient(provider1)
-	pool.GetClient(provider2)
+	pool.GetOpenAIClient(provider1)
+	pool.GetOpenAIClient(provider2)
 
 	// Verify pool size
 	if pool.Size() != 2 {
@@ -174,7 +174,7 @@ func TestClientPool_RemoveProvider(t *testing.T) {
 	}
 
 	// Verify remaining client is for provider2
-	client := pool.GetClient(provider2)
+	client := pool.GetOpenAIClient(provider2)
 	if client == nil {
 		t.Error("Expected provider2 client to still exist")
 	}
@@ -190,7 +190,7 @@ func TestClientPool_Stats(t *testing.T) {
 	}
 
 	// Add a client
-	pool.GetClient(provider)
+	pool.GetOpenAIClient(provider)
 
 	// Get stats
 	stats := pool.Stats()

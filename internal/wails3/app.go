@@ -2,17 +2,19 @@ package main
 
 import (
 	"log"
+	"path/filepath"
 	"time"
 
+	assets "tingly-box/internal"
 	"tingly-box/internal/util"
-	"tingly-box/wails3/services"
+	"tingly-box/internal/wails3/services"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 const (
-	AppName        = "Model Box"
-	AppDescription = "A proxy server for AI model APIs with web UI"
+	AppName        = "Tingly Box"
+	AppDescription = "A proxy server for AI model APIs"
 )
 
 var App *application.App
@@ -21,7 +23,11 @@ var uiService *services.ProxyService
 func newApp() *application.App {
 	// Create UI service
 	home, err := util.GetUserPath()
-	uiService, err = services.NewUIService(home, 12580)
+	if err != nil {
+		log.Fatal(err)
+	}
+	configDir := filepath.Join(home, ".tingly-box")
+	uiService, err = services.NewUIService(configDir, 12580)
 	if err != nil {
 		log.Fatalf("Failed to create UI service: %v", err)
 	}
@@ -31,7 +37,7 @@ func newApp() *application.App {
 	// 'Assets' configures the asset server with the 'FS' variable pointing to the frontend files.
 	// 'Services' is a lis t of Go struct instances. The frontend has access to the methods of these instances.
 	// 'Mac' options tailor the application when running an macOS.
-	embdHandler := application.AssetFileServerFS(assets)
+	embdHandler := application.AssetFileServerFS(assets.GUIDistAssets)
 	app := application.New(application.Options{
 		Name:        AppName,
 		Description: AppDescription,

@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"sync"
+	"tingly-box/internal/server/middleware"
 
 	"tingly-box/internal/config"
 )
@@ -11,13 +12,13 @@ import (
 type LoadBalancer struct {
 	tactics map[config.TacticType]config.LoadBalancingTactic
 	stats   map[string]*config.ServiceStats
-	statsMW *StatsMiddleware
+	statsMW *middleware.StatsMiddleware
 	config  *config.Config
 	mutex   sync.RWMutex
 }
 
 // NewLoadBalancer creates a new load balancer
-func NewLoadBalancer(statsMW *StatsMiddleware, cfg *config.Config) *LoadBalancer {
+func NewLoadBalancer(statsMW *middleware.StatsMiddleware, cfg *config.Config) *LoadBalancer {
 	lb := &LoadBalancer{
 		tactics: make(map[config.TacticType]config.LoadBalancingTactic),
 		stats:   make(map[string]*config.ServiceStats),

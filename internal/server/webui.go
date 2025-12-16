@@ -3,14 +3,16 @@ package server
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"log"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
+	assets "tingly-box/internal"
 	"tingly-box/internal/config"
-	"tingly-box/internal/memory"
+	"tingly-box/internal/obs"
 	"tingly-box/pkg/swagger"
 
 	"github.com/gin-gonic/gin"
@@ -37,14 +39,14 @@ func GetGlobalServer() *Server {
 	return globalServer
 }
 
-// Init sets up Server routes and templates on the main server router
+// Init sets up Server routes and templates on the main server engine
 func (s *Server) UseUIEndpoints() {
 
 	// Middleware
-	s.router.Use(gin.Logger())
-	s.router.Use(gin.Recovery())
+	s.engine.Use(gin.Logger())
+	s.engine.Use(gin.Recovery())
 
-	s.router.Use(func(c *gin.Context) {
+	s.engine.Use(func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization")
@@ -53,17 +55,17 @@ func (s *Server) UseUIEndpoints() {
 	// Dashboard endpoints
 
 	// UI page routes
-	s.router.GET("/home", s.UseIndex)
-	s.router.GET("/credential", s.UseIndex)
-	s.router.GET("/rule", s.UseIndex)
-	s.router.GET("/system", s.UseIndex)
-	s.router.GET("/history", s.UseIndex)
+	s.engine.GET("/home", s.UseIndex)
+	s.engine.GET("/credential", s.UseIndex)
+	s.engine.GET("/rule", s.UseIndex)
+	s.engine.GET("/system", s.UseIndex)
+	s.engine.GET("/history", s.UseIndex)
 
 	// API routes (for web UI functionality)
-	s.useWebAPIEndpoints(s.router)
+	s.useWebAPIEndpoints(s.engine)
 
 	// Static files and templates - try embedded assets first, fallback to filesystem
-	s.useWebStaticEndpoints(s.router)
+	s.useWebStaticEndpoints(s.engine)
 }
 
 // HandleProbe tests a rule configuration by sending a sample request to the configured provider
@@ -194,11 +196,7 @@ func (s *Server) HandleProbe(c *gin.Context) {
 }
 
 func (s *Server) UseIndex(c *gin.Context) {
-	if s.assets != nil {
-		s.assets.HTML(c, "index.html", nil)
-	} else {
-		panic("No UI resources")
-	}
+	c.FileFromFS("web/dist/index.html", http.FS(assets.WebDistAssets))
 }
 
 // API Handlers (exported for server integration)
@@ -360,7 +358,7 @@ func (s *Server) SetRule(c *gin.Context) {
 
 	// Log the action
 	if s.logger != nil {
-		s.logger.LogAction(memory.ActionUpdateProvider, map[string]interface{}{
+		s.logger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
 			"name": ruleUUID,
 		}, true, fmt.Sprintf("Rule %s updated successfully", ruleUUID))
 	}
@@ -447,7 +445,7 @@ func (s *Server) AddProvider(c *gin.Context) {
 	err := s.config.AddProvider(provider)
 	if err != nil {
 		if s.logger != nil {
-			s.logger.LogAction(memory.ActionAddProvider, map[string]interface{}{
+			s.logger.LogAction(obs.ActionAddProvider, map[string]interface{}{
 				"name":     req.Name,
 				"api_base": req.APIBase,
 			}, false, err.Error())
@@ -461,7 +459,7 @@ func (s *Server) AddProvider(c *gin.Context) {
 	}
 
 	if s.logger != nil {
-		s.logger.LogAction(memory.ActionAddProvider, map[string]interface{}{
+		s.logger.LogAction(obs.ActionAddProvider, map[string]interface{}{
 			"name":     req.Name,
 			"api_base": req.APIBase,
 		}, true, fmt.Sprintf("Provider %s added successfully", req.Name))
@@ -490,7 +488,7 @@ func (s *Server) DeleteProvider(c *gin.Context) {
 	err := s.config.DeleteProvider(providerName)
 	if err != nil {
 		if s.logger != nil {
-			s.logger.LogAction(memory.ActionDeleteProvider, map[string]interface{}{
+			s.logger.LogAction(obs.ActionDeleteProvider, map[string]interface{}{
 				"name": providerName,
 			}, false, err.Error())
 		}
@@ -503,7 +501,7 @@ func (s *Server) DeleteProvider(c *gin.Context) {
 	}
 
 	if s.logger != nil {
-		s.logger.LogAction(memory.ActionDeleteProvider, map[string]interface{}{
+		s.logger.LogAction(obs.ActionDeleteProvider, map[string]interface{}{
 			"name": providerName,
 		}, true, fmt.Sprintf("Provider %s deleted successfully", providerName))
 	}
@@ -568,7 +566,7 @@ func (s *Server) UpdateProvider(c *gin.Context) {
 	err = s.config.UpdateProvider(providerName, provider)
 	if err != nil {
 		if s.logger != nil {
-			s.logger.LogAction(memory.ActionUpdateProvider, map[string]interface{}{
+			s.logger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
 				"name":    providerName,
 				"updates": req,
 			}, false, err.Error())
@@ -582,7 +580,7 @@ func (s *Server) UpdateProvider(c *gin.Context) {
 	}
 
 	if s.logger != nil {
-		s.logger.LogAction(memory.ActionUpdateProvider, map[string]interface{}{
+		s.logger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
 			"name": providerName,
 		}, true, fmt.Sprintf("Provider %s updated successfully", providerName))
 	}
@@ -671,7 +669,7 @@ func (s *Server) ToggleProvider(c *gin.Context) {
 	err = s.config.UpdateProvider(providerName, provider)
 	if err != nil {
 		if s.logger != nil {
-			s.logger.LogAction(memory.ActionUpdateProvider, map[string]interface{}{
+			s.logger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
 				"name":    providerName,
 				"enabled": provider.Enabled,
 			}, false, err.Error())
@@ -690,7 +688,7 @@ func (s *Server) ToggleProvider(c *gin.Context) {
 	}
 
 	if s.logger != nil {
-		s.logger.LogAction(memory.ActionUpdateProvider, map[string]interface{}{
+		s.logger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
 			"name":    providerName,
 			"enabled": provider.Enabled,
 		}, true, fmt.Sprintf("Provider %s %s successfully", providerName, action))
@@ -758,7 +756,7 @@ func (s *Server) StopServer(c *gin.Context) {
 
 	// Log the action
 	if s.logger != nil {
-		s.logger.LogAction(memory.ActionStopServer, map[string]interface{}{
+		s.logger.LogAction(obs.ActionStopServer, map[string]interface{}{
 			"source": "web_ui",
 		}, true, "Server stopped via web interface")
 	}
@@ -801,7 +799,7 @@ func (s *Server) FetchProviderModels(c *gin.Context) {
 	err := s.config.FetchAndSaveProviderModels(providerName)
 	if err != nil {
 		if s.logger != nil {
-			s.logger.LogAction(memory.ActionFetchModels, map[string]interface{}{
+			s.logger.LogAction(obs.ActionFetchModels, map[string]interface{}{
 				"provider": providerName,
 			}, false, err.Error())
 		}
@@ -818,7 +816,7 @@ func (s *Server) FetchProviderModels(c *gin.Context) {
 	models := modelManager.GetModels(providerName)
 
 	if s.logger != nil {
-		s.logger.LogAction(memory.ActionFetchModels, map[string]interface{}{
+		s.logger.LogAction(obs.ActionFetchModels, map[string]interface{}{
 			"provider":     providerName,
 			"models_count": len(models),
 		}, true, fmt.Sprintf("Successfully fetched %d models for provider %s", len(models), providerName))
@@ -961,7 +959,7 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 
 	// Create authenticated API group
 	authAPI := manager.NewGroup("api", "v1", "")
-	authAPI.Router.Use(s.UserAuth())
+	authAPI.Router.Use(s.UserAuthMiddleware())
 
 	// Provider Management
 	authAPI.GET("/providers", (s.GetProviders),
@@ -1100,13 +1098,39 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 }
 
 func (s *Server) useWebStaticEndpoints(engine *gin.Engine) {
-	// Load templates and static files on the main router - try embedded first
-	if s.assets != nil {
-		log.Printf("Using embedded assets on main server")
-		s.assets.SetupStaticRoutes(engine)
-	} else {
-		panic("No UI resources")
-	}
+	// Load templates and static files on the main engine - try embedded first
+	log.Printf("Using embedded assets on main server")
+
+	// Serve static assets from embedded filesystem
+	st, _ := fs.Sub(assets.WebDistAssets, "web/dist/assets")
+	engine.StaticFS("/assets", http.FS(st))
+
+	engine.StaticFile("/vite.svg", "web/dist/vite.svg")
+
+	engine.NoRoute(func(c *gin.Context) {
+		// Don't serve index.html for API routes - let them return 404s
+		path := c.Request.URL.Path
+		// Check if this looks like an API route
+		if path == "" || strings.HasPrefix(path, "/api/v") || strings.HasPrefix(path, "/v") || strings.HasPrefix(path, "/openai") || strings.HasPrefix(path, "/anthropic") {
+			// This looks like an API route, return 404
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": gin.H{
+					"message": "API endpoint not found",
+					"type":    "invalid_request_error",
+					"code":    "not_found",
+				},
+			})
+			return
+		}
+
+		// For all other routes, serve the SPA index.html
+		data, err := assets.WebDistAssets.ReadFile("web/dist/index.html")
+		if err != nil {
+			c.AbortWithError(http.StatusInternalServerError, err)
+			return
+		}
+		c.Data(http.StatusOK, "text/html; charset=utf-8", data)
+	})
 }
 
 // GetShutdownChannel returns the shutdown channel for the main process to listen on

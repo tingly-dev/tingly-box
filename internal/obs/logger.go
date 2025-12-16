@@ -1,4 +1,4 @@
-package memory
+package obs
 
 import (
 	"encoding/json"
