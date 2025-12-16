@@ -15,6 +15,7 @@ type Provider struct {
 	APIStyle APIStyle `json:"api_style"` // "openai" or "anthropic", defaults to "openai"
 	Token    string   `json:"token"`
 	Enabled  bool     `json:"enabled"`
+	ProxyURL string   `json:"proxy_url"` // HTTP or SOCKS proxy URL (e.g., "http://127.0.0.1:7890" or "socks5://127.0.0.1:1080")
 }
 
 // Rule represents a request/response configuration with load balancing support
