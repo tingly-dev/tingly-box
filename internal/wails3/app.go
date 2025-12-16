@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"path/filepath"
 	"time"
 
 	assets "tingly-box/internal"
@@ -22,7 +23,11 @@ var uiService *services.ProxyService
 func newApp() *application.App {
 	// Create UI service
 	home, err := util.GetUserPath()
-	uiService, err = services.NewUIService(home, 12580)
+	if err != nil {
+		log.Fatal(err)
+	}
+	configDir := filepath.Join(home, ".tingly-box")
+	uiService, err = services.NewUIService(configDir, 12580)
 	if err != nil {
 		log.Fatalf("Failed to create UI service: %v", err)
 	}
