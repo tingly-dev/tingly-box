@@ -251,7 +251,7 @@ func (s *Server) convertAnthropicResponseToOpenAI(
 	responseModel string,
 ) map[string]interface{} {
 
-	var message map[string]interface{}
+	message := make(map[string]interface{})
 	var toolCalls []map[string]interface{}
 	var textContent string
 
