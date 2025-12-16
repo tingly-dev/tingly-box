@@ -240,7 +240,7 @@ func (s *Server) sendOpenAIStreamChunk(c *gin.Context, chunk map[string]interfac
 // forwardOpenAIRequest forwards the request to the selected provider using OpenAI library
 func (s *Server) forwardOpenAIRequest(provider *config.Provider, req *openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
 	// Get or create OpenAI client from pool
-	client := s.clientPool.GetClient(provider)
+	client := s.clientPool.GetOpenAIClient(provider)
 	logrus.Infof("provider: %s", provider.Name)
 
 	// Since  openai.ChatCompletionNewParams is a type alias to openai.ChatCompletionNewParams,
@@ -260,7 +260,7 @@ func (s *Server) forwardOpenAIRequest(provider *config.Provider, req *openai.Cha
 // forwardOpenAIStreamRequest forwards the streaming request to the selected provider using OpenAI library
 func (s *Server) forwardOpenAIStreamRequest(provider *config.Provider, req *openai.ChatCompletionNewParams) (*ssestream.Stream[openai.ChatCompletionChunk], error) {
 	// Get or create OpenAI client from pool
-	client := s.clientPool.GetClient(provider)
+	client := s.clientPool.GetOpenAIClient(provider)
 	logrus.Infof("provider: %s (streaming)", provider.Name)
 
 	// Since  openai.ChatCompletionNewParams is a type alias to openai.ChatCompletionNewParams,
