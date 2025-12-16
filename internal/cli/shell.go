@@ -11,7 +11,7 @@ import (
 
 	"tingly-box/internal/auth"
 	"tingly-box/internal/config"
-	"tingly-box/internal/memory"
+	"tingly-box/internal/obs"
 
 	"github.com/spf13/cobra"
 )
@@ -34,7 +34,7 @@ This provides an easy-to-use menu system for all operations.`,
 // runInteractiveMode starts the interactive CLI
 func runInteractiveMode(appConfig *config.AppConfig) error {
 	// Initialize memory logger
-	logger, err := memory.NewMemoryLogger()
+	logger, err := obs.NewMemoryLogger()
 	if err != nil {
 		fmt.Printf("Warning: Failed to initialize memory logger: %v\n", err)
 	}
@@ -104,7 +104,7 @@ func showMainMenu() {
 }
 
 // handleProviderManagement handles provider management operations
-func handleProviderManagement(appConfig *config.AppConfig, reader *bufio.Reader, logger *memory.MemoryLogger) {
+func handleProviderManagement(appConfig *config.AppConfig, reader *bufio.Reader, logger *obs.MemoryLogger) {
 	fmt.Println("\n👥 Provider Management")
 	fmt.Println("1. Add Provider")
 	fmt.Println("2. Delete Provider")
@@ -127,7 +127,7 @@ func handleProviderManagement(appConfig *config.AppConfig, reader *bufio.Reader,
 }
 
 // addProviderInteractive adds a provider interactively
-func addProviderInteractive(appConfig *config.AppConfig, reader *bufio.Reader, logger *memory.MemoryLogger) {
+func addProviderInteractive(appConfig *config.AppConfig, reader *bufio.Reader, logger *obs.MemoryLogger) {
 	fmt.Print("Enter provider name: ")
 	name, _ := reader.ReadString('\n')
 	name = strings.TrimSpace(strings.TrimSuffix(name, "\n"))
@@ -178,7 +178,7 @@ func addProviderInteractive(appConfig *config.AppConfig, reader *bufio.Reader, l
 	if err := appConfig.AddProviderByName(name, apiBase, token); err != nil {
 		fmt.Printf("❌ Failed to add provider: %v\n", err)
 		if logger != nil {
-			logger.LogAction(memory.ActionAddProvider, map[string]interface{}{
+			logger.LogAction(obs.ActionAddProvider, map[string]interface{}{
 				"name":     name,
 				"api_base": apiBase,
 			}, false, err.Error())
@@ -197,7 +197,7 @@ func addProviderInteractive(appConfig *config.AppConfig, reader *bufio.Reader, l
 
 	fmt.Printf("✅ Provider '%s' added successfully with API style '%s'!\n", name, apiStyle)
 	if logger != nil {
-		logger.LogAction(memory.ActionAddProvider, map[string]interface{}{
+		logger.LogAction(obs.ActionAddProvider, map[string]interface{}{
 			"name":     name,
 			"api_base": apiBase,
 		}, true, "Provider added successfully")
@@ -205,7 +205,7 @@ func addProviderInteractive(appConfig *config.AppConfig, reader *bufio.Reader, l
 }
 
 // deleteProviderInteractive deletes a provider interactively
-func deleteProviderInteractive(appConfig *config.AppConfig, reader *bufio.Reader, logger *memory.MemoryLogger) {
+func deleteProviderInteractive(appConfig *config.AppConfig, reader *bufio.Reader, logger *obs.MemoryLogger) {
 	providers := appConfig.ListProviders()
 	if len(providers) == 0 {
 		fmt.Println("❌ No providers configured.")
@@ -240,7 +240,7 @@ func deleteProviderInteractive(appConfig *config.AppConfig, reader *bufio.Reader
 	if err := appConfig.DeleteProvider(nameToDelete); err != nil {
 		fmt.Printf("❌ Failed to delete provider: %v\n", err)
 		if logger != nil {
-			logger.LogAction(memory.ActionDeleteProvider, map[string]interface{}{
+			logger.LogAction(obs.ActionDeleteProvider, map[string]interface{}{
 				"name": nameToDelete,
 			}, false, err.Error())
 		}
@@ -249,14 +249,14 @@ func deleteProviderInteractive(appConfig *config.AppConfig, reader *bufio.Reader
 
 	fmt.Printf("✅ Provider '%s' deleted successfully!\n", nameToDelete)
 	if logger != nil {
-		logger.LogAction(memory.ActionDeleteProvider, map[string]interface{}{
+		logger.LogAction(obs.ActionDeleteProvider, map[string]interface{}{
 			"name": nameToDelete,
 		}, true, "Provider deleted successfully")
 	}
 }
 
 // handleServerManagement handles server management operations
-func handleServerManagement(appConfig *config.AppConfig, reader *bufio.Reader, logger *memory.MemoryLogger) {
+func handleServerManagement(appConfig *config.AppConfig, reader *bufio.Reader, logger *obs.MemoryLogger) {
 	fmt.Println("\n⚡ Server Management")
 	fmt.Println("1. Start Server")
 	fmt.Println("2. Stop Server")
@@ -289,7 +289,7 @@ func handleServerManagement(appConfig *config.AppConfig, reader *bufio.Reader, l
 		if err := serverManager.Start(); err != nil {
 			fmt.Printf("❌ Failed to start server: %v\n", err)
 			if logger != nil {
-				logger.LogAction(memory.ActionStartServer, map[string]interface{}{
+				logger.LogAction(obs.ActionStartServer, map[string]interface{}{
 					"port": port,
 				}, false, err.Error())
 			}
@@ -298,7 +298,7 @@ func handleServerManagement(appConfig *config.AppConfig, reader *bufio.Reader, l
 
 		fmt.Printf("✅ Server started on port %d\n", port)
 		if logger != nil {
-			logger.LogAction(memory.ActionStartServer, map[string]interface{}{
+			logger.LogAction(obs.ActionStartServer, map[string]interface{}{
 				"port": port,
 			}, true, "Server started successfully")
 			logger.UpdateServerStatus(true, port, "0s", 0)
@@ -313,14 +313,14 @@ func handleServerManagement(appConfig *config.AppConfig, reader *bufio.Reader, l
 		if err := serverManager.Stop(); err != nil {
 			fmt.Printf("❌ Failed to stop server: %v\n", err)
 			if logger != nil {
-				logger.LogAction(memory.ActionStopServer, nil, false, err.Error())
+				logger.LogAction(obs.ActionStopServer, nil, false, err.Error())
 			}
 			return
 		}
 
 		fmt.Println("✅ Server stopped successfully")
 		if logger != nil {
-			logger.LogAction(memory.ActionStopServer, nil, true, "Server stopped successfully")
+			logger.LogAction(obs.ActionStopServer, nil, true, "Server stopped successfully")
 			logger.UpdateServerStatus(false, 0, "", 0)
 		}
 
@@ -346,7 +346,7 @@ func handleServerManagement(appConfig *config.AppConfig, reader *bufio.Reader, l
 		if err := newServerManager.Start(); err != nil {
 			fmt.Printf("❌ Failed to restart server: %v\n", err)
 			if logger != nil {
-				logger.LogAction(memory.ActionRestartServer, map[string]interface{}{
+				logger.LogAction(obs.ActionRestartServer, map[string]interface{}{
 					"port":        port,
 					"was_running": wasRunning,
 				}, false, err.Error())
@@ -356,7 +356,7 @@ func handleServerManagement(appConfig *config.AppConfig, reader *bufio.Reader, l
 
 		fmt.Printf("✅ Server restarted on port %d\n", port)
 		if logger != nil {
-			logger.LogAction(memory.ActionRestartServer, map[string]interface{}{
+			logger.LogAction(obs.ActionRestartServer, map[string]interface{}{
 				"port":        port,
 				"was_running": wasRunning,
 			}, true, "Server restarted successfully")
@@ -390,7 +390,7 @@ func handleViewProviders(appConfig *config.AppConfig) {
 }
 
 // handleServerStatus displays server status
-func handleServerStatus(appConfig *config.AppConfig, logger *memory.MemoryLogger) {
+func handleServerStatus(appConfig *config.AppConfig, logger *obs.MemoryLogger) {
 	fmt.Println("\n📊 Server Status")
 	fmt.Println(strings.Repeat("=", 50))
 
@@ -436,7 +436,7 @@ func handleServerStatus(appConfig *config.AppConfig, logger *memory.MemoryLogger
 }
 
 // handleGenerateToken generates a JWT token
-func handleGenerateToken(appConfig *config.AppConfig, reader *bufio.Reader, logger *memory.MemoryLogger) {
+func handleGenerateToken(appConfig *config.AppConfig, reader *bufio.Reader, logger *obs.MemoryLogger) {
 	fmt.Print("Enter client ID (default: client): ")
 	clientIDInput, _ := reader.ReadString('\n')
 	clientIDInput = strings.TrimSpace(strings.TrimSuffix(clientIDInput, "\n"))
@@ -457,7 +457,7 @@ func handleGenerateToken(appConfig *config.AppConfig, reader *bufio.Reader, logg
 	fmt.Printf("Authorization: Bearer %s\n", token)
 
 	if logger != nil {
-		logger.LogAction(memory.ActionGenerateToken, map[string]interface{}{
+		logger.LogAction(obs.ActionGenerateToken, map[string]interface{}{
 			"client_id": clientID,
 		}, true, "Token generated successfully")
 	}
@@ -471,7 +471,7 @@ func generateTokenForClient(appConfig *config.AppConfig, clientID string) string
 }
 
 // handleViewHistory displays operation history
-func handleViewHistory(logger *memory.MemoryLogger) {
+func handleViewHistory(logger *obs.MemoryLogger) {
 	if logger == nil {
 		fmt.Println("❌ History logging is not available.")
 		return
@@ -502,7 +502,7 @@ func handleViewHistory(logger *memory.MemoryLogger) {
 }
 
 // handleSystemInfo displays system information
-func handleSystemInfo(logger *memory.MemoryLogger) {
+func handleSystemInfo(logger *obs.MemoryLogger) {
 	fmt.Println("\n💾 System Information")
 	fmt.Println(strings.Repeat("=", 50))
 
