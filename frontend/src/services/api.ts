@@ -23,7 +23,7 @@ const getProxyService = async (): Promise<any> => {
 
     if (isGuiMode && !ProxyService) {
         try {
-            const module = await import('../bindings/tingly-box/wails3/services');
+            const module = await import('../bindings/tingly-box/internal/wails3/services');
             ProxyService = module.ProxyService;
         } catch (err) {
             console.error('Failed to load ProxyService:', err);
