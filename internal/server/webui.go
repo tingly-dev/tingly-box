@@ -39,14 +39,14 @@ func GetGlobalServer() *Server {
 	return globalServer
 }
 
-// Init sets up Server routes and templates on the main server router
+// Init sets up Server routes and templates on the main server engine
 func (s *Server) UseUIEndpoints() {
 
 	// Middleware
-	s.router.Use(gin.Logger())
-	s.router.Use(gin.Recovery())
+	s.engine.Use(gin.Logger())
+	s.engine.Use(gin.Recovery())
 
-	s.router.Use(func(c *gin.Context) {
+	s.engine.Use(func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization")
@@ -55,17 +55,17 @@ func (s *Server) UseUIEndpoints() {
 	// Dashboard endpoints
 
 	// UI page routes
-	s.router.GET("/home", s.UseIndex)
-	s.router.GET("/credential", s.UseIndex)
-	s.router.GET("/rule", s.UseIndex)
-	s.router.GET("/system", s.UseIndex)
-	s.router.GET("/history", s.UseIndex)
+	s.engine.GET("/home", s.UseIndex)
+	s.engine.GET("/credential", s.UseIndex)
+	s.engine.GET("/rule", s.UseIndex)
+	s.engine.GET("/system", s.UseIndex)
+	s.engine.GET("/history", s.UseIndex)
 
 	// API routes (for web UI functionality)
-	s.useWebAPIEndpoints(s.router)
+	s.useWebAPIEndpoints(s.engine)
 
 	// Static files and templates - try embedded assets first, fallback to filesystem
-	s.useWebStaticEndpoints(s.router)
+	s.useWebStaticEndpoints(s.engine)
 }
 
 // HandleProbe tests a rule configuration by sending a sample request to the configured provider

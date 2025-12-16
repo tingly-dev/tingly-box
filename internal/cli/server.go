@@ -57,9 +57,9 @@ func stopServerWithPIDManager(pidManager *config.PIDManager) error {
 
 // startServerOptions contains options for starting the server
 type startServerOptions struct {
-	Port     int
-	UseUI    bool
-	UseDebug bool
+	Port          int
+	EnableUI      bool
+	EnableDebug   bool
 	enableAdaptor bool
 }
 
@@ -86,7 +86,7 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 		return fmt.Errorf("failed to create PID file: %w", err)
 	}
 
-	serverManager := server.NewServerManagerWithOptions(appConfig, opts.UseUI, opts.enableAdaptor)
+	serverManager := server.NewServerManagerWithOptions(appConfig, opts.EnableUI, opts.enableAdaptor)
 
 	// Setup signal handling for graceful shutdown
 	sigChan := make(chan os.Signal, 1)
@@ -100,7 +100,7 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 
 	fmt.Printf("Server starting on port %d...\n", appConfig.GetServerPort())
 	fmt.Printf("API endpoint: http://localhost:%d/v1/chat/completions\n", appConfig.GetServerPort())
-	if opts.UseUI {
+	if opts.EnableUI {
 		fmt.Printf("Web UI: http://localhost:%d/dashboard\n", appConfig.GetServerPort())
 	}
 
@@ -140,7 +140,7 @@ func startServerNonBlocking(appConfig *config.AppConfig, opts startServerOptions
 		return fmt.Errorf("failed to create PID file: %w", err)
 	}
 
-	if opts.UseDebug {
+	if opts.EnableDebug {
 		gin.SetMode(gin.DebugMode)
 	} else {
 		gin.SetMode(gin.ReleaseMode)
@@ -170,8 +170,8 @@ func startServerNonBlocking(appConfig *config.AppConfig, opts startServerOptions
 // StartCommand represents the start server command
 func StartCommand(appConfig *config.AppConfig) *cobra.Command {
 	var port int
-	var useUI bool
-	var useDebug bool
+	var enableUI bool
+	var enableDebug bool
 
 	cmd := &cobra.Command{
 		Use:   "start",
@@ -180,16 +180,16 @@ func StartCommand(appConfig *config.AppConfig) *cobra.Command {
 The server will handle request routing to configured AI providers.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return startServer(appConfig, startServerOptions{
-				Port:     port,
-				UseUI:    useUI,
-				UseDebug: useDebug,
+				Port:        port,
+				EnableUI:    enableUI,
+				EnableDebug: enableDebug,
 			})
 		},
 	}
 
 	cmd.Flags().IntVarP(&port, "port", "p", 8080, "Server port (default: 8080)")
-	cmd.Flags().BoolVarP(&useUI, "ui", "u", true, "Enable web UI (default: true)")
-	cmd.Flags().BoolVar(&useDebug, "debug", false, "Enable debug logging and Gin debug mode (default: false)")
+	cmd.Flags().BoolVarP(&enableUI, "ui", "u", true, "Enable web UI (default: true)")
+	cmd.Flags().BoolVar(&enableDebug, "debug", false, "Enable debug logging and Gin debug mode (default: false)")
 	return cmd
 }
 
@@ -328,8 +328,8 @@ The restart is graceful - ongoing requests will be completed before shutdown.`,
 
 			// Start new server using non-blocking mode
 			return startServerNonBlocking(appConfig, startServerOptions{
-				Port:  port,
-				UseUI: true, // Always enable UI for restart
+				Port:     port,
+				EnableUI: true, // Always enable UI for restart
 			})
 		},
 	}

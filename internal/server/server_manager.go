@@ -12,11 +12,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const StopTimeout = time.Second * 10
+
 // ServerManager manages the HTTP server lifecycle
 type ServerManager struct {
 	appConfig     *config.AppConfig
 	server        *Server
-	useUI         bool
+	enableUI      bool
 	enableAdaptor bool
 	status        string
 	sync.Mutex
@@ -28,7 +30,7 @@ type ServerManagerOption func(*ServerManager)
 // WithUI enables or disables the UI for the server manager
 func WithUI(enabled bool) ServerManagerOption {
 	return func(sm *ServerManager) {
-		sm.useUI = enabled
+		sm.enableUI = enabled
 	}
 }
 
@@ -44,7 +46,7 @@ func NewServerManager(appConfig *config.AppConfig, opts ...ServerManagerOption) 
 	// Default options
 	sm := &ServerManager{
 		appConfig:     appConfig,
-		useUI:         true,  // Default: UI enabled
+		enableUI:      true,  // Default: UI enabled
 		enableAdaptor: false, // Default: adaptor disabled
 	}
 
@@ -59,8 +61,8 @@ func NewServerManager(appConfig *config.AppConfig, opts ...ServerManagerOption) 
 
 // NewServerManagerWithOptions creates a new server manager with specific bool options
 // Deprecated: Use NewServerManager with functional options instead
-func NewServerManagerWithOptions(appConfig *config.AppConfig, useUI bool, enableAdaptor bool) *ServerManager {
-	return NewServerManager(appConfig, WithUI(useUI), WithAdaptor(enableAdaptor))
+func NewServerManagerWithOptions(appConfig *config.AppConfig, enableUI bool, enableAdaptor bool) *ServerManager {
+	return NewServerManager(appConfig, WithUI(enableUI), WithAdaptor(enableAdaptor))
 }
 
 func (sm *ServerManager) GetGinEngine() *gin.Engine {
@@ -68,7 +70,7 @@ func (sm *ServerManager) GetGinEngine() *gin.Engine {
 }
 
 func (sm *ServerManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// All requests go to the Gin router
+	// All requests go to the Gin engine
 	sm.server.GetRouter().ServeHTTP(w, r)
 }
 
@@ -87,7 +89,7 @@ func (sm *ServerManager) Setup(port int) error {
 	}
 
 	// Create server with UI and adaptor options
-	sm.server = NewServerWithAllOptions(sm.appConfig.GetGlobalConfig(), sm.useUI, sm.enableAdaptor)
+	sm.server = NewServerWithAllOptions(sm.appConfig.GetGlobalConfig(), sm.enableUI, sm.enableAdaptor)
 
 	// Set global server instance for web UI control
 	SetGlobalServer(sm.server)
@@ -129,7 +131,7 @@ func (sm *ServerManager) Stop() error {
 	}
 
 	fmt.Println("Stopping server...")
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), StopTimeout)
 	defer cancel()
 
 	if err := sm.server.Stop(ctx); err != nil {

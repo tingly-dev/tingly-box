@@ -18,19 +18,25 @@ import (
 
 // Server represents the HTTP server
 type Server struct {
-	config          *config.Config
-	jwtManager      *auth.JWTManager
-	router          *gin.Engine
-	httpServer      *http.Server
-	watcher         *config.ConfigWatcher
-	useUI           bool
-	logger          *obs.MemoryLogger
+	config     *config.Config
+	jwtManager *auth.JWTManager
+	engine     *gin.Engine
+	httpServer *http.Server
+	watcher    *config.ConfigWatcher
+	logger     *obs.MemoryLogger
+
+	// middleware
 	statsMW         *middleware.StatsMiddleware
 	debugMW         *middleware.DebugMiddleware
 	loadBalancer    *LoadBalancer
 	loadBalancerAPI *LoadBalancerAPI
-	clientPool      *ClientPool // client pool for caching
-	enableAdaptor   bool
+
+	// client pool for caching
+	clientPool *ClientPool
+
+	// options
+	enableUI      bool
+	enableAdaptor bool
 }
 
 // NewServer creates a new HTTP server instance
@@ -39,12 +45,12 @@ func NewServer(cfg *config.Config) *Server {
 }
 
 // NewServerWithOptions creates a new HTTP server with UI option
-func NewServerWithOptions(cfg *config.Config, useUI bool) *Server {
-	return NewServerWithAllOptions(cfg, useUI, false)
+func NewServerWithOptions(cfg *config.Config, enableUI bool) *Server {
+	return NewServerWithAllOptions(cfg, enableUI, false)
 }
 
 // NewServerWithAllOptions creates a new HTTP server with UI and adaptor options
-func NewServerWithAllOptions(cfg *config.Config, useUI bool, enableAdaptor bool) *Server {
+func NewServerWithAllOptions(cfg *config.Config, enableUI bool, enableAdaptor bool) *Server {
 	// Check and generate tokens if needed
 	jwtManager := auth.NewJWTManager(cfg.GetJWTSecret())
 
@@ -99,9 +105,9 @@ func NewServerWithAllOptions(cfg *config.Config, useUI bool, enableAdaptor bool)
 	server := &Server{
 		config:        cfg,
 		jwtManager:    jwtManager,
-		router:        gin.New(),
+		engine:        gin.New(),
 		logger:        memoryLogger,
-		useUI:         useUI,
+		enableUI:      enableUI,
 		clientPool:    NewClientPool(), // Initialize client pool
 		debugMW:       debugMW,
 		enableAdaptor: enableAdaptor,
@@ -154,24 +160,24 @@ func (s *Server) setupConfigWatcher() {
 
 // setupMiddleware configures server middleware
 func (s *Server) setupMiddleware() {
-	s.router.Use(RequestLoggerMiddleware())
+	s.engine.Use(RequestLoggerMiddleware())
 
 	// Logger middleware
-	s.router.Use(gin.Logger())
+	s.engine.Use(gin.Logger())
 
 	// Recovery middleware
-	s.router.Use(gin.Recovery())
+	s.engine.Use(gin.Recovery())
 
 	// Debug middleware for logging requests/responses (only if enabled)
 	if s.debugMW != nil {
-		s.router.Use(s.debugMW.Middleware())
+		s.engine.Use(s.debugMW.Middleware())
 	}
 
 	// Statistics middleware for load balancing
-	s.router.Use(s.statsMW.Middleware())
+	s.engine.Use(s.statsMW.Middleware())
 
 	// CORS middleware
-	s.router.Use(func(c *gin.Context) {
+	s.engine.Use(func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization")
@@ -213,18 +219,18 @@ func RequestLoggerMiddleware() gin.HandlerFunc {
 // setupRoutes configures server routes
 func (s *Server) setupRoutes() {
 	// Integrate Web UI routes if enabled
-	if s.useUI {
+	if s.enableUI {
 		s.UseUIEndpoints()
 	}
 
 	// Health check endpoint
-	s.router.GET("/health", s.HealthCheck)
+	s.engine.GET("/health", s.HealthCheck)
 
 	// Models endpoint
-	//s.router.GET("/v1/models", s.ListModels)
+	//s.engine.GET("/v1/models", s.ListModels)
 
 	// OpenAI v1 API group
-	openaiV1 := s.router.Group("/openai/v1")
+	openaiV1 := s.engine.Group("/openai/v1")
 	{
 		// Chat completions endpoint (OpenAI compatible)
 		openaiV1.POST("/chat/completions", s.ModelAuthMiddleware(), s.OpenAIChatCompletions)
@@ -233,7 +239,7 @@ func (s *Server) setupRoutes() {
 	}
 
 	// OpenAI API alias (without version)
-	openai := s.router.Group("/openai")
+	openai := s.engine.Group("/openai")
 	{
 		// Chat completions endpoint (OpenAI compatible)
 		openai.POST("/chat/completions", s.ModelAuthMiddleware(), s.OpenAIChatCompletions)
@@ -242,7 +248,7 @@ func (s *Server) setupRoutes() {
 	}
 
 	// Anthropic v1 API group
-	anthropicV1 := s.router.Group("/anthropic/v1")
+	anthropicV1 := s.engine.Group("/anthropic/v1")
 	{
 		// Chat completions endpoint (Anthropic compatible)
 		anthropicV1.POST("/messages", s.ModelAuthMiddleware(), s.AnthropicMessages)
@@ -253,7 +259,7 @@ func (s *Server) setupRoutes() {
 	}
 
 	// API routes for load balancer management
-	api := s.router.Group("/api")
+	api := s.engine.Group("/api")
 	api.Use(s.UserAuthMiddleware()) // Require user authentication for management APIs
 	{
 		// Load balancer API routes
@@ -275,7 +281,7 @@ func (s *Server) Start(port int) error {
 
 	s.httpServer = &http.Server{
 		Addr:         fmt.Sprintf(":%d", port),
-		Handler:      s.router,
+		Handler:      s.engine,
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 	}
@@ -295,9 +301,9 @@ func (s *Server) Start(port int) error {
 	return s.httpServer.ListenAndServe()
 }
 
-// GetRouter returns the Gin router for testing purposes
+// GetRouter returns the Gin engine for testing purposes
 func (s *Server) GetRouter() *gin.Engine {
-	return s.router
+	return s.engine
 }
 
 // GetLoadBalancer returns the load balancer instance
