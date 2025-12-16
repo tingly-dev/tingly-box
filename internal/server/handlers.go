@@ -8,10 +8,7 @@ import (
 	"tingly-box/internal/config"
 
 	"github.com/gin-gonic/gin"
-	"github.com/openai/openai-go/v3"
 )
-
-type RequestWrapper = openai.ChatCompletionNewParams
 
 // HealthCheck handles health check requests
 func (s *Server) HealthCheck(c *gin.Context) {
