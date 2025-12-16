@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	AppName        = "Model Box"
-	AppDescription = "A proxy server for AI model APIs with web UI"
+	AppName        = "Tingly Box"
+	AppDescription = "A proxy server for AI model APIs"
 )
 
 var App *application.App
