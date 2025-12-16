@@ -75,9 +75,9 @@ func createHTTPClientWithProxy(proxyURL string) *http.Client {
 	}
 }
 
-// GetClient returns an OpenAI client for the specified provider
+// GetOpenAIClient returns an OpenAI client for the specified provider
 // It creates a new client if one doesn't exist for the provider
-func (p *ClientPool) GetClient(provider *config.Provider) *openai.Client {
+func (p *ClientPool) GetOpenAIClient(provider *config.Provider) *openai.Client {
 	// Generate unique key for provider
 	key := p.generateProviderKey(provider)
 
