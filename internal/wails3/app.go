@@ -4,8 +4,9 @@ import (
 	"log"
 	"time"
 
+	assets "tingly-box/internal"
 	"tingly-box/internal/util"
-	"tingly-box/wails3/services"
+	"tingly-box/internal/wails3/services"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -31,7 +32,7 @@ func newApp() *application.App {
 	// 'Assets' configures the asset server with the 'FS' variable pointing to the frontend files.
 	// 'Services' is a lis t of Go struct instances. The frontend has access to the methods of these instances.
 	// 'Mac' options tailor the application when running an macOS.
-	embdHandler := application.AssetFileServerFS(assets)
+	embdHandler := application.AssetFileServerFS(assets.GUIDistAssets)
 	app := application.New(application.Options{
 		Name:        AppName,
 		Description: AppDescription,
