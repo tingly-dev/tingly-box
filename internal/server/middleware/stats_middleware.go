@@ -1,4 +1,4 @@
-package server
+package middleware
 
 import (
 	"bytes"
@@ -6,19 +6,20 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"tingly-box/internal/config"
 
 	"github.com/gin-gonic/gin"
 )
 
 // StatsMiddleware tracks usage statistics by updating service-embedded stats
 type StatsMiddleware struct {
-	server *Server // Reference to server to access config and rules
+	config *config.Config // Reference to config to access config and rules
 }
 
 // NewStatsMiddleware creates a new statistics middleware
-func NewStatsMiddleware(server *Server) *StatsMiddleware {
+func NewStatsMiddleware(cfg *config.Config) *StatsMiddleware {
 	return &StatsMiddleware{
-		server: server,
+		config: cfg,
 	}
 }
 
@@ -184,7 +185,7 @@ func (sm *StatsMiddleware) extractTokenUsage(responseBody, endpoint string) (int
 
 // RecordUsage records usage for a service by finding it in the rules and updating its embedded stats
 func (sm *StatsMiddleware) RecordUsage(serviceID string, inputTokens, outputTokens int) {
-	if sm.server == nil || sm.server.config == nil {
+	if sm.config == nil {
 		return
 	}
 
@@ -196,7 +197,7 @@ func (sm *StatsMiddleware) RecordUsage(serviceID string, inputTokens, outputToke
 	provider, model := parts[0], parts[1]
 
 	// Find the rule that contains this service
-	rules := sm.server.config.GetRequestConfigs()
+	rules := sm.config.GetRequestConfigs()
 	for _, rule := range rules {
 		if !rule.Active {
 			continue
@@ -212,15 +213,4 @@ func (sm *StatsMiddleware) RecordUsage(serviceID string, inputTokens, outputToke
 			}
 		}
 	}
-}
-
-// responseBod yWriter is a wrapper around gin.ResponseWriter that captures the response body
-type responseBodyWriter struct {
-	gin.ResponseWriter
-	body *bytes.Buffer
-}
-
-func (r *responseBodyWriter) Write(b []byte) (int, error) {
-	r.body.Write(b)
-	return r.ResponseWriter.Write(b)
 }

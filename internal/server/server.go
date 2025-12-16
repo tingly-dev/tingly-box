@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"time"
+	"tingly-box/internal/server/middleware"
 
 	"tingly-box/internal/auth"
 	"tingly-box/internal/config"
@@ -24,8 +25,8 @@ type Server struct {
 	watcher         *config.ConfigWatcher
 	useUI           bool
 	logger          *obs.MemoryLogger
-	statsMW         *StatsMiddleware
-	debugMW         *DebugMiddleware
+	statsMW         *middleware.StatsMiddleware
+	debugMW         *middleware.DebugMiddleware
 	loadBalancer    *LoadBalancer
 	loadBalancerAPI *LoadBalancerAPI
 	assets          *EmbeddedAssets
@@ -95,10 +96,10 @@ func NewServerWithAllOptions(cfg *config.Config, useUI bool, enableAdaptor bool)
 	}
 
 	// Initialize debug middleware (only if debug mode is enabled)
-	var debugMW *DebugMiddleware
+	var debugMW *middleware.DebugMiddleware
 	if cfg.GetDebug() {
 		debugLogPath := filepath.Join(config.GetTinglyConfDir(), config.LogDirName, config.DebugLogFileName)
-		debugMW = NewDebugMiddleware(debugLogPath, 10)
+		debugMW = middleware.NewDebugMiddleware(debugLogPath, 10)
 		log.Printf("Debug middleware initialized (debug=true in config), logging to: %s", debugLogPath)
 	}
 
@@ -116,7 +117,7 @@ func NewServerWithAllOptions(cfg *config.Config, useUI bool, enableAdaptor bool)
 	}
 
 	// Initialize statistics middleware with server reference
-	statsMW := NewStatsMiddleware(server)
+	statsMW := middleware.NewStatsMiddleware(cfg)
 
 	// Initialize load balancer
 	loadBalancer := NewLoadBalancer(statsMW, cfg)
