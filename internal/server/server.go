@@ -10,7 +10,7 @@ import (
 
 	"tingly-box/internal/auth"
 	"tingly-box/internal/config"
-	"tingly-box/internal/memory"
+	"tingly-box/internal/obs"
 
 	"github.com/gin-gonic/gin"
 )
@@ -23,7 +23,7 @@ type Server struct {
 	httpServer      *http.Server
 	watcher         *config.ConfigWatcher
 	useUI           bool
-	logger          *memory.MemoryLogger
+	logger          *obs.MemoryLogger
 	statsMW         *StatsMiddleware
 	debugMW         *DebugMiddleware
 	loadBalancer    *LoadBalancer
@@ -88,7 +88,7 @@ func NewServerWithAllOptions(cfg *config.Config, useUI bool, enableAdaptor bool)
 	}
 
 	// Initialize memory logger
-	memoryLogger, err := memory.NewMemoryLogger()
+	memoryLogger, err := obs.NewMemoryLogger()
 	if err != nil {
 		log.Printf("Warning: Failed to initialize memory logger: %v", err)
 		memoryLogger = nil

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"tingly-box/internal/config"
-	"tingly-box/internal/memory"
+	"tingly-box/internal/obs"
 	"tingly-box/pkg/swagger"
 
 	"github.com/gin-gonic/gin"
@@ -360,7 +360,7 @@ func (s *Server) SetRule(c *gin.Context) {
 
 	// Log the action
 	if s.logger != nil {
-		s.logger.LogAction(memory.ActionUpdateProvider, map[string]interface{}{
+		s.logger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
 			"name": ruleUUID,
 		}, true, fmt.Sprintf("Rule %s updated successfully", ruleUUID))
 	}
@@ -447,7 +447,7 @@ func (s *Server) AddProvider(c *gin.Context) {
 	err := s.config.AddProvider(provider)
 	if err != nil {
 		if s.logger != nil {
-			s.logger.LogAction(memory.ActionAddProvider, map[string]interface{}{
+			s.logger.LogAction(obs.ActionAddProvider, map[string]interface{}{
 				"name":     req.Name,
 				"api_base": req.APIBase,
 			}, false, err.Error())
@@ -461,7 +461,7 @@ func (s *Server) AddProvider(c *gin.Context) {
 	}
 
 	if s.logger != nil {
-		s.logger.LogAction(memory.ActionAddProvider, map[string]interface{}{
+		s.logger.LogAction(obs.ActionAddProvider, map[string]interface{}{
 			"name":     req.Name,
 			"api_base": req.APIBase,
 		}, true, fmt.Sprintf("Provider %s added successfully", req.Name))
@@ -490,7 +490,7 @@ func (s *Server) DeleteProvider(c *gin.Context) {
 	err := s.config.DeleteProvider(providerName)
 	if err != nil {
 		if s.logger != nil {
-			s.logger.LogAction(memory.ActionDeleteProvider, map[string]interface{}{
+			s.logger.LogAction(obs.ActionDeleteProvider, map[string]interface{}{
 				"name": providerName,
 			}, false, err.Error())
 		}
@@ -503,7 +503,7 @@ func (s *Server) DeleteProvider(c *gin.Context) {
 	}
 
 	if s.logger != nil {
-		s.logger.LogAction(memory.ActionDeleteProvider, map[string]interface{}{
+		s.logger.LogAction(obs.ActionDeleteProvider, map[string]interface{}{
 			"name": providerName,
 		}, true, fmt.Sprintf("Provider %s deleted successfully", providerName))
 	}
@@ -568,7 +568,7 @@ func (s *Server) UpdateProvider(c *gin.Context) {
 	err = s.config.UpdateProvider(providerName, provider)
 	if err != nil {
 		if s.logger != nil {
-			s.logger.LogAction(memory.ActionUpdateProvider, map[string]interface{}{
+			s.logger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
 				"name":    providerName,
 				"updates": req,
 			}, false, err.Error())
@@ -582,7 +582,7 @@ func (s *Server) UpdateProvider(c *gin.Context) {
 	}
 
 	if s.logger != nil {
-		s.logger.LogAction(memory.ActionUpdateProvider, map[string]interface{}{
+		s.logger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
 			"name": providerName,
 		}, true, fmt.Sprintf("Provider %s updated successfully", providerName))
 	}
@@ -671,7 +671,7 @@ func (s *Server) ToggleProvider(c *gin.Context) {
 	err = s.config.UpdateProvider(providerName, provider)
 	if err != nil {
 		if s.logger != nil {
-			s.logger.LogAction(memory.ActionUpdateProvider, map[string]interface{}{
+			s.logger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
 				"name":    providerName,
 				"enabled": provider.Enabled,
 			}, false, err.Error())
@@ -690,7 +690,7 @@ func (s *Server) ToggleProvider(c *gin.Context) {
 	}
 
 	if s.logger != nil {
-		s.logger.LogAction(memory.ActionUpdateProvider, map[string]interface{}{
+		s.logger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
 			"name":    providerName,
 			"enabled": provider.Enabled,
 		}, true, fmt.Sprintf("Provider %s %s successfully", providerName, action))
@@ -758,7 +758,7 @@ func (s *Server) StopServer(c *gin.Context) {
 
 	// Log the action
 	if s.logger != nil {
-		s.logger.LogAction(memory.ActionStopServer, map[string]interface{}{
+		s.logger.LogAction(obs.ActionStopServer, map[string]interface{}{
 			"source": "web_ui",
 		}, true, "Server stopped via web interface")
 	}
@@ -801,7 +801,7 @@ func (s *Server) FetchProviderModels(c *gin.Context) {
 	err := s.config.FetchAndSaveProviderModels(providerName)
 	if err != nil {
 		if s.logger != nil {
-			s.logger.LogAction(memory.ActionFetchModels, map[string]interface{}{
+			s.logger.LogAction(obs.ActionFetchModels, map[string]interface{}{
 				"provider": providerName,
 			}, false, err.Error())
 		}
@@ -818,7 +818,7 @@ func (s *Server) FetchProviderModels(c *gin.Context) {
 	models := modelManager.GetModels(providerName)
 
 	if s.logger != nil {
-		s.logger.LogAction(memory.ActionFetchModels, map[string]interface{}{
+		s.logger.LogAction(obs.ActionFetchModels, map[string]interface{}{
 			"provider":     providerName,
 			"models_count": len(models),
 		}, true, fmt.Sprintf("Successfully fetched %d models for provider %s", len(models), providerName))
