@@ -24,23 +24,37 @@ type AppConfig struct {
 	mu         sync.RWMutex
 }
 
-// NewAppConfig creates a new application configuration
-func NewAppConfig() (*AppConfig, error) {
-	// homeDir, err := os.UserHomeDir()
-	// if err != nil {
-	// 	return nil, fmt.Errorf("failed to get home directory: %w", err)
-	// }
+// AppConfigOption defines a functional option for AppConfig
+type AppConfigOption func(*appConfigOptions)
 
-	// configDir := filepath.Join(homeDir, ".tingly-box")
-	configDir := GetTinglyConfDir()
-	if err := os.MkdirAll(configDir, 0700); err != nil {
-		return nil, fmt.Errorf("failed to create config directory: %w", err)
+type appConfigOptions struct {
+	configDir string
+}
+
+// WithConfigDir sets a custom config directory for AppConfig
+func WithConfigDir(dir string) AppConfigOption {
+	return func(opts *appConfigOptions) {
+		opts.configDir = dir
+	}
+}
+
+// NewAppConfig creates a new application configuration with default options
+func NewAppConfig(opts ...AppConfigOption) (*AppConfig, error) {
+	// Default options
+	options := &appConfigOptions{
+		configDir: GetTinglyConfDir(),
 	}
 
-	return NewAppConfigWithDir(configDir)
+	// Apply provided options
+	for _, opt := range opts {
+		opt(options)
+	}
+
+	return NewAppConfigWithDir(options.configDir)
 }
 
 // NewAppConfigWithDir creates a new AppConfig with a custom config directory
+// Deprecated: Use NewAppConfig with functional options instead
 func NewAppConfigWithDir(configDir string) (*AppConfig, error) {
 	if err := os.MkdirAll(configDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create config directory: %w", err)

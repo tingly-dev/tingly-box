@@ -14,31 +14,53 @@ import (
 
 // ServerManager manages the HTTP server lifecycle
 type ServerManager struct {
-	appConfig *config.AppConfig
-	server    *Server
-	useUI     bool
+	appConfig     *config.AppConfig
+	server        *Server
+	useUI         bool
 	enableAdaptor bool
-	status    string
+	status        string
 	sync.Mutex
 }
 
-// NewServerManager creates a new server manager with UI enabled by default
-func NewServerManager(appConfig *config.AppConfig) *ServerManager {
-	res := NewServerManagerWithOptions(appConfig, true, false)
-	res.Setup(appConfig.GetServerPort())
-	return res
+// ServerManagerOption defines a functional option for ServerManager
+type ServerManagerOption func(*ServerManager)
+
+// WithUI enables or disables the UI for the server manager
+func WithUI(enabled bool) ServerManagerOption {
+	return func(sm *ServerManager) {
+		sm.useUI = enabled
+	}
 }
 
-// NewServerManagerWithOptions creates a new server manager with UI option
-func NewServerManagerWithOptions(appConfig *config.AppConfig, useUI bool, enableAdaptor bool) *ServerManager {
-	res := &ServerManager{
-		appConfig:     appConfig,
-
-		useUI:         useUI,
-		enableAdaptor: enableAdaptor,
+// WithAdaptor enables or disables the adaptor for the server manager
+func WithAdaptor(enabled bool) ServerManagerOption {
+	return func(sm *ServerManager) {
+		sm.enableAdaptor = enabled
 	}
-	res.Setup(appConfig.GetServerPort())
-	return res
+}
+
+// NewServerManager creates a new server manager with default options (UI enabled, adaptor disabled)
+func NewServerManager(appConfig *config.AppConfig, opts ...ServerManagerOption) *ServerManager {
+	// Default options
+	sm := &ServerManager{
+		appConfig:     appConfig,
+		useUI:         true,  // Default: UI enabled
+		enableAdaptor: false, // Default: adaptor disabled
+	}
+
+	// Apply provided options
+	for _, opt := range opts {
+		opt(sm)
+	}
+
+	sm.Setup(appConfig.GetServerPort())
+	return sm
+}
+
+// NewServerManagerWithOptions creates a new server manager with specific bool options
+// Deprecated: Use NewServerManager with functional options instead
+func NewServerManagerWithOptions(appConfig *config.AppConfig, useUI bool, enableAdaptor bool) *ServerManager {
+	return NewServerManager(appConfig, WithUI(useUI), WithAdaptor(enableAdaptor))
 }
 
 func (sm *ServerManager) GetGinEngine() *gin.Engine {
