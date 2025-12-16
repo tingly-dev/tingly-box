@@ -251,11 +251,7 @@ func (s *Server) convertAnthropicResponseToOpenAI(
 	responseModel string,
 ) map[string]interface{} {
 
-	message := map[string]interface{}{
-		"role":    "assistant",
-		"content": "",
-	}
-
+	var message map[string]interface{}
 	var toolCalls []map[string]interface{}
 	var textContent string
 
@@ -351,7 +347,7 @@ func (s *Server) convertOpenAIToAnthropicRequest(req *RequestWrapper) anthropic.
 		// Extract text content
 		content, _ := m["content"].(string)
 
-		//1⃣ SYSTEM → params.System
+		//1 SYSTEM → params.System
 		if role == "system" {
 			if content != "" {
 				systemParts = append(systemParts, content)
@@ -361,12 +357,12 @@ func (s *Server) convertOpenAIToAnthropicRequest(req *RequestWrapper) anthropic.
 
 		var blocks []anthropic.ContentBlockParamUnion
 
-		//2⃣ Normal text content
+		//2 Normal text content
 		if content, ok := m["content"].(string); ok && content != "" {
 			blocks = append(blocks, anthropic.NewTextBlock(content))
 		}
 
-		//2 Assistant tool calls → tool_use blocks
+		//3 Assistant tool calls → tool_use blocks
 		if role == "assistant" {
 			if toolCalls, ok := m["tool_calls"].([]interface{}); ok {
 				for _, tc := range toolCalls {
@@ -395,7 +391,7 @@ func (s *Server) convertOpenAIToAnthropicRequest(req *RequestWrapper) anthropic.
 			continue
 		}
 
-		//3⃣ Tool result message → tool_result block (must be USER role)
+		//4 Tool result message → tool_result block (must be USER role)
 		if role == "tool" {
 			toolID, _ := m["tool_call_id"].(string)
 			content, _ := m["content"].(string)
@@ -412,7 +408,7 @@ func (s *Server) convertOpenAIToAnthropicRequest(req *RequestWrapper) anthropic.
 			continue
 		}
 
-		// 4️⃣ Normal user message
+		//5 Normal user message
 		if (role == "user") && len(blocks) > 0 {
 			messages = append(messages, anthropic.NewUserMessage(blocks...))
 		}
