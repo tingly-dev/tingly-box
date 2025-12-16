@@ -24,8 +24,9 @@ func useSystray(app *application.App) {
 	SystrayMenuDashboard = SystrayMenu.
 		Add("Home").
 		OnClick(func(ctx *application.Context) {
-			// Show main window
+			// Show main window and bring to front
 			WindowMain.Show()
+			WindowMain.Focus()
 		})
 
 	SystrayMenu.AddSeparator()
