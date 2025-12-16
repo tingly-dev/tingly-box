@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -39,6 +40,8 @@ func NewUIService(configDir string, port int) (*ProxyService, error) {
 		shutdownChan:  make(chan struct{}),
 		isRunning:     false,
 	}
+
+	log.Printf("config file: %s\n", appConfig.GetGlobalConfig().ConfigFile)
 
 	return res, nil
 }
