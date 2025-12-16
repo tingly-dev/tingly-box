@@ -18,7 +18,8 @@ import {
     Tooltip,
     Typography
 } from '@mui/material';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { useCustomModels, dispatchCustomModelUpdate, listenForCustomModelUpdates } from '../hooks/useCustomModels';
 
 interface ConfigProvider {
     uuid: string;
@@ -144,6 +145,47 @@ const ProviderRow: React.FC<ProviderRowProps> = ({
     onDelete,
     onRefreshModels
 }) => {
+    const { saveCustomModel, getCustomModels } = useCustomModels();
+
+    // Listen for custom model updates
+    useEffect(() => {
+        const cleanup = listenForCustomModelUpdates(() => {
+            // Force re-render when custom models are updated
+            // The hook will automatically handle state updates
+        });
+        return cleanup;
+    }, []);
+
+    // Handle model update
+    const handleModelUpdate = (field: 'model' | 'isManualInput', value: any) => {
+        if (field === 'model' && typeof value === 'string' && provider.isManualInput) {
+            // Save to custom models when manually inputting
+            saveCustomModel(provider.provider, value);
+            // Notify other components
+            dispatchCustomModelUpdate(provider.provider, value);
+        }
+        onUpdate(field, value);
+    };
+
+    // Get all available models including custom ones
+    const getAllModels = () => {
+        const customModelsList = getCustomModels(provider.provider);
+        const allModels = [...models];
+
+        // Add custom models if they exist and are not already in the list
+        customModelsList.forEach((customModel: string) => {
+            if (!allModels.includes(customModel)) {
+                allModels.unshift(customModel); // Add at the beginning to prioritize
+            }
+        });
+
+        return allModels;
+    };
+
+    // Check if a model is a custom model
+    const isModelCustom = (model: string) => {
+        return getCustomModels(provider.provider).includes(model);
+    };
     return (
         <Box
             sx={{
@@ -201,7 +243,7 @@ const ProviderRow: React.FC<ProviderRowProps> = ({
             {provider.isManualInput ? (
                 <TextField
                     value={provider.model}
-                    onChange={(e) => onUpdate('model', e.target.value)}
+                    onChange={(e) => handleModelUpdate('model', e.target.value)}
                     placeholder="Enter model name"
                     size="small"
                     fullWidth
@@ -236,14 +278,10 @@ const ProviderRow: React.FC<ProviderRowProps> = ({
                             sx={{ fontSize: '0.875rem' }}
                         >
                             <MenuItem value="">Select Model</MenuItem>
-                            {provider.model && !models.includes(provider.model) && (
-                                <MenuItem value={provider.model}>
-                                    {provider.model} (custom)
-                                </MenuItem>
-                            )}
-                            {models.map((model) => (
+                            {getAllModels().map((model) => (
                                 <MenuItem key={model} value={model}>
                                     {model}
+                                    {isModelCustom(model) && ' (custom)'}
                                 </MenuItem>
                             ))}
                         </Select>

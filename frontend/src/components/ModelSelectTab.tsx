@@ -1,5 +1,6 @@
 import { CheckCircle } from '@mui/icons-material';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
@@ -24,40 +25,7 @@ import {
 import IconButton from '@mui/material/IconButton';
 import React, { useState, useEffect } from 'react';
 import type { Provider, ProviderModelsData } from '../types/provider';
-
-// Local storage key for custom models
-const CUSTOM_MODELS_STORAGE_KEY = 'tingly_custom_models';
-
-// Helper functions to manage custom models in local storage
-const loadCustomModelsFromStorage = (): { [providerName: string]: string } => {
-    try {
-        const stored = localStorage.getItem(CUSTOM_MODELS_STORAGE_KEY);
-        return stored ? JSON.parse(stored) : {};
-    } catch (error) {
-        console.error('Failed to load custom models from storage:', error);
-        return {};
-    }
-};
-
-const saveCustomModelToStorage = (providerName: string, customModel: string) => {
-    try {
-        const customModels = loadCustomModelsFromStorage();
-        customModels[providerName] = customModel;
-        localStorage.setItem(CUSTOM_MODELS_STORAGE_KEY, JSON.stringify(customModels));
-    } catch (error) {
-        console.error('Failed to save custom model to storage:', error);
-    }
-};
-
-const removeCustomModelFromStorage = (providerName: string) => {
-    try {
-        const customModels = loadCustomModelsFromStorage();
-        delete customModels[providerName];
-        localStorage.setItem(CUSTOM_MODELS_STORAGE_KEY, JSON.stringify(customModels));
-    } catch (error) {
-        console.error('Failed to remove custom model from storage:', error);
-    }
-};
+import { useCustomModels, dispatchCustomModelUpdate, listenForCustomModelUpdates } from '../hooks/useCustomModels';
 
 export interface ProviderSelectTabOption {
     provider: Provider;
@@ -122,7 +90,7 @@ export default function ModelSelectTab({
 }: ProviderSelectTabProps) {
     const [internalCurrentTab, setInternalCurrentTab] = useState(0);
     const [isInitialized, setIsInitialized] = useState(false);
-    const [customModels, setCustomModels] = useState<{ [providerName: string]: string }>({});
+    const { customModels, saveCustomModel, removeCustomModel, getCustomModels } = useCustomModels();
 
     // Use external activeTab if provided, otherwise use internal state
     const currentTab = externalActiveTab !== undefined ? externalActiveTab : internalCurrentTab;
@@ -134,35 +102,24 @@ export default function ModelSelectTab({
         value: ''
     });
 
-    // Load custom models from local storage on component mount
+    // Listen for custom model updates from other components
     useEffect(() => {
-        const storedCustomModels = loadCustomModelsFromStorage();
-        setCustomModels(storedCustomModels);
+        const cleanup = listenForCustomModelUpdates((providerName: string, modelName: string) => {
+            // Update local state when custom model is updated elsewhere
+            // The hook will automatically handle state updates
+        });
+        return cleanup;
     }, []);
-
-    // Sync local storage custom models with providerModels when they change
-    useEffect(() => {
-        if (providerModels && customModels) {
-            // For each provider that has a custom model in local storage,
-            // we could optionally save it to the backend here
-            Object.keys(customModels).forEach(providerName => {
-                const customModel = customModels[providerName];
-                // Only call onCustomModelSave if the backend doesn't already have this custom model
-                if (customModel && !providerModels[providerName]?.custom_model) {
-                    // Uncomment the next line if you want to auto-sync to backend
-                    // onCustomModelSave?.({ name: providerName } as Provider, customModel);
-                }
-            });
-        }
-    }, [providerModels, customModels, onCustomModelSave]);
 
     // Enhanced save function that also saves to local storage
     const handleCustomModelSave = () => {
         const customModel = customModelDialog.value?.trim();
         if (customModel && customModelDialog.provider) {
-            // Save to local storage first
-            saveCustomModelToStorage(customModelDialog.provider.name, customModel);
-            setCustomModels(prev => ({ ...prev, [customModelDialog.provider!.name]: customModel }));
+            // Save to local storage using hook
+            if (saveCustomModel(customModelDialog.provider.name, customModel)) {
+                // Notify other components of the change
+                dispatchCustomModelUpdate(customModelDialog.provider.name, customModel);
+            }
 
             // Then save to persistence through parent component
             if (onCustomModelSave) {
@@ -215,6 +172,12 @@ export default function ModelSelectTab({
         setCurrentPage(prev => ({ ...prev, [providerName]: page }));
     };
 
+    // Delete custom model handler
+    const handleDeleteCustomModel = (provider: Provider, customModel: string) => {
+        removeCustomModel(provider.name, customModel);
+        dispatchCustomModelUpdate(provider.name, customModel);
+    };
+
     const handleCustomModelEdit = (provider: Provider, currentValue?: string) => {
         setCustomModelDialog({
             open: true,
@@ -231,7 +194,7 @@ export default function ModelSelectTab({
         const models = providerModels?.[provider.name]?.models || [];
         const starModels = providerModels?.[provider.name]?.star_models || [];
         const backendCustomModel = providerModels?.[provider.name]?.custom_model;
-        const localStorageCustomModel = customModels[provider.name];
+        const localStorageCustomModels = customModels[provider.name] || [];
 
         // Count unique models (avoid double counting starred models that are also in models array)
         const uniqueModels = new Set(models);
@@ -239,13 +202,13 @@ export default function ModelSelectTab({
         // Add starred models if not already counted
         starModels.forEach(model => uniqueModels.add(model));
 
-        // Add custom models if they exist
+        // Add backend custom model if it exists
         if (backendCustomModel) {
             uniqueModels.add(backendCustomModel);
         }
-        if (localStorageCustomModel) {
-            uniqueModels.add(localStorageCustomModel);
-        }
+
+        // Add local storage custom models
+        localStorageCustomModels.forEach(model => uniqueModels.add(model));
 
         return uniqueModels.size;
     };
@@ -253,17 +216,21 @@ export default function ModelSelectTab({
     const isCustomModel = (model: string, provider: Provider) => {
         const models = providerModels?.[provider.name]?.models || [];
         const starModels = providerModels?.[provider.name]?.star_models || [];
-        const customModel = providerModels?.[provider.name]?.custom_model;
-        const localStorageCustomModel = customModels[provider.name];
-        return !models.includes(model) && !starModels.includes(model) && model !== '' &&
-               model !== customModel && model !== localStorageCustomModel;
+        const backendCustomModel = providerModels?.[provider.name]?.custom_model;
+        const localStorageCustomModels = customModels[provider.name] || [];
+
+        return !models.includes(model) &&
+               !starModels.includes(model) &&
+               model !== '' &&
+               model !== backendCustomModel &&
+               !localStorageCustomModels.includes(model);
     };
 
     const getAllModelsForSearch = (provider: Provider) => {
         const models = providerModels?.[provider.name]?.models || [];
         const starModels = providerModels?.[provider.name]?.star_models || [];
         const backendCustomModel = providerModels?.[provider.name]?.custom_model;
-        const localStorageCustomModel = customModels[provider.name];
+        const localStorageCustomModels = customModels[provider.name] || [];
 
         // Combine all models into a single array for searching
         const allModels = [...models];
@@ -275,13 +242,17 @@ export default function ModelSelectTab({
             }
         });
 
-        // Add custom models if they exist and are not already included
+        // Add backend custom model if it exists
         if (backendCustomModel && !allModels.includes(backendCustomModel)) {
             allModels.push(backendCustomModel);
         }
-        if (localStorageCustomModel && !allModels.includes(localStorageCustomModel)) {
-            allModels.push(localStorageCustomModel);
-        }
+
+        // Add local storage custom models
+        localStorageCustomModels.forEach(model => {
+            if (!allModels.includes(model)) {
+                allModels.push(model);
+            }
+        });
 
         return allModels;
     };
@@ -326,12 +297,16 @@ export default function ModelSelectTab({
         const allModels = getAllModelsForSearch(provider);
         const starModels = providerModels?.[provider.name]?.star_models || [];
         const backendCustomModel = providerModels?.[provider.name]?.custom_model;
-        const localStorageCustomModel = customModels[provider.name];
+        const localStorageCustomModels = customModels[provider.name] || [];
 
         // Filter out custom models and starred models
         return allModels.filter(model => {
-            // Exclude custom models
-            if (model === backendCustomModel || model === localStorageCustomModel) {
+            // Exclude backend custom model
+            if (model === backendCustomModel) {
+                return false;
+            }
+            // Exclude local storage custom models
+            if (localStorageCustomModels.includes(model)) {
                 return false;
             }
             // Exclude starred models
@@ -668,10 +643,10 @@ export default function ModelSelectTab({
                                         </CardContent>
                                     </Card>
 
-                                    {/* Custom model from local storage - prioritized */}
-                                    {customModels[provider.name] && (
+                                    {/* Custom models from local storage - prioritized */}
+                                    {customModels[provider.name]?.map((customModel, index) => (
                                         <Card
-                                            key="localStorage-custom-model"
+                                            key={`localStorage-custom-model-${index}`}
                                             sx={{
                                                 width: '100%',
                                                 height: 60,
@@ -689,7 +664,6 @@ export default function ModelSelectTab({
                                                 },
                                             }}
                                             onClick={() => {
-                                                const customModel = customModels[provider.name];
                                                 if (customModel && onSelected) {
                                                     onSelected({ provider, model: customModel });
                                                 }
@@ -715,9 +689,9 @@ export default function ModelSelectTab({
                                                         textAlign: 'center'
                                                     }}
                                                 >
-                                                    {customModels[provider.name]}
+                                                    {customModel}
                                                 </Typography>
-                                                {isProviderSelected && selectedModel === customModels[provider.name] && (
+                                                {isProviderSelected && selectedModel === customModel && (
                                                     <CheckCircle
                                                         color="primary"
                                                         sx={{
@@ -732,7 +706,7 @@ export default function ModelSelectTab({
                                                     size="small"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        handleCustomModelEdit(provider, customModels[provider.name]);
+                                                        handleCustomModelEdit(provider, customModel);
                                                     }}
                                                     sx={{
                                                         position: 'absolute',
@@ -747,13 +721,33 @@ export default function ModelSelectTab({
                                                 >
                                                     <EditIcon fontSize="small" />
                                                 </IconButton>
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleDeleteCustomModel(provider, customModel);
+                                                    }}
+                                                    sx={{
+                                                        position: 'absolute',
+                                                        bottom: 4,
+                                                        left: 4,
+                                                        p: 0.5,
+                                                        backgroundColor: 'background.paper',
+                                                        '&:hover': {
+                                                            backgroundColor: 'grey.100',
+                                                        }
+                                                    }}
+                                                    title="Delete custom model"
+                                                >
+                                                    <DeleteIcon fontSize="small" />
+                                                </IconButton>
                                             </CardContent>
                                         </Card>
-                                    )}
+                                    ))}
 
                                     {/* Persisted custom model card (from backend) */}
                                     {providerModels?.[provider.name]?.custom_model &&
-                                     !customModels[provider.name] && (
+                                     (!customModels[provider.name] || customModels[provider.name].length === 0) && (
                                         <Card
                                             key="persisted-custom-model"
                                             sx={{
@@ -837,7 +831,7 @@ export default function ModelSelectTab({
 
                                     {/* Currently selected custom model card (not persisted) */}
                                     {isProviderSelected && selectedModel && isCustomModel(selectedModel, provider) &&
-                                     selectedModel !== customModels[provider.name] &&
+                                     (!customModels[provider.name] || !customModels[provider.name].includes(selectedModel)) &&
                                      selectedModel !== providerModels?.[provider.name]?.custom_model && (
                                         <Card
                                             key="selected-custom-model"
@@ -973,7 +967,7 @@ export default function ModelSelectTab({
                                     })}
                                 </Box>
                                 {pagination.totalModels === 0 &&
-                                !customModels[provider.name] &&
+                                (!customModels[provider.name] || customModels[provider.name].length === 0) &&
                                 !providerModels?.[provider.name]?.custom_model &&
                                 !(isProviderSelected && selectedModel && isCustomModel(selectedModel, provider)) && (
                                     <Box sx={{ textAlign: 'center', py: 4 }}>
