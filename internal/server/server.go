@@ -110,7 +110,7 @@ func NewServerWithAllOptions(cfg *config.Config, useUI bool, enableAdaptor bool)
 		logger:        memoryLogger,
 		useUI:         useUI,
 		assets:        assets,
-		clientPool: NewClientPool(), // Initialize client pool
+		clientPool:    NewClientPool(), // Initialize client pool
 		debugMW:       debugMW,
 		enableAdaptor: enableAdaptor,
 	}
@@ -264,11 +264,6 @@ func (s *Server) setupRoutes() {
 	api := s.router.Group("/api")
 	api.Use(s.UserAuth()) // Require user authentication for management APIs
 	{
-		// Debug logging control endpoints
-		api.GET("/debug/status", s.getDebugStatus)
-		api.POST("/debug/enable", s.enableDebug)
-		api.POST("/debug/disable", s.disableDebug)
-
 		// Load balancer API routes
 		s.loadBalancerAPI.RegisterRoutes(api.Group("/v1"))
 	}
@@ -316,61 +311,6 @@ func (s *Server) GetRouter() *gin.Engine {
 // GetLoadBalancer returns the load balancer instance
 func (s *Server) GetLoadBalancer() *LoadBalancer {
 	return s.loadBalancer
-}
-
-// getDebugStatus returns the current debug logging status
-func (s *Server) getDebugStatus(c *gin.Context) {
-	if s.debugMW == nil {
-		c.JSON(http.StatusOK, gin.H{
-			"enabled": false,
-			"message": "Debug middleware not initialized",
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"enabled":  s.debugMW.IsEnabled(),
-		"log_path": filepath.Join(config.GetTinglyConfDir(), config.LogDirName, config.DebugLogFileName),
-	})
-}
-
-// enableDebug enables debug logging
-func (s *Server) enableDebug(c *gin.Context) {
-	if s.debugMW == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Debug middleware not initialized",
-		})
-		return
-	}
-
-	if err := s.debugMW.Enable(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
-		return
-	}
-
-	log.Println("Debug logging enabled")
-	c.JSON(http.StatusOK, gin.H{
-		"message":  "Debug logging enabled",
-		"log_path": filepath.Join(config.GetTinglyConfDir(), config.LogDirName, config.DebugLogFileName),
-	})
-}
-
-// disableDebug disables debug logging
-func (s *Server) disableDebug(c *gin.Context) {
-	if s.debugMW == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Debug middleware not initialized",
-		})
-		return
-	}
-
-	s.debugMW.Disable()
-	log.Println("Debug logging disabled")
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Debug logging disabled",
-	})
 }
 
 // Stop gracefully stops the HTTP server
