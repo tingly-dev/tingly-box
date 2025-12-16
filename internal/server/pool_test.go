@@ -3,8 +3,8 @@ package server
 import (
 	"testing"
 
-	"tingly-box/internal/config"
 	"github.com/openai/openai-go/v3"
+	"tingly-box/internal/config"
 )
 
 func TestClientPool_GetClient(t *testing.T) {

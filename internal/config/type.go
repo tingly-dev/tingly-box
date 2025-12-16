@@ -8,7 +8,7 @@ const (
 	APIStyleAnthropic APIStyle = "anthropic"
 )
 
-// Provider represents an AI model provider configuration
+// Provider represents an AI model api key and provider configuration
 type Provider struct {
 	Name     string   `json:"name"`
 	APIBase  string   `json:"api_base"`
