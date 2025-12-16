@@ -3,12 +3,14 @@ package server
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"log"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
+	assets "tingly-box/internal"
 	"tingly-box/internal/config"
 	"tingly-box/internal/obs"
 	"tingly-box/pkg/swagger"
@@ -194,11 +196,7 @@ func (s *Server) HandleProbe(c *gin.Context) {
 }
 
 func (s *Server) UseIndex(c *gin.Context) {
-	if s.assets != nil {
-		s.assets.HTML(c, "index.html", nil)
-	} else {
-		panic("No UI resources")
-	}
+	c.FileFromFS("web/dist/index.html", http.FS(assets.WebDistAssets))
 }
 
 // API Handlers (exported for server integration)
@@ -961,7 +959,7 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 
 	// Create authenticated API group
 	authAPI := manager.NewGroup("api", "v1", "")
-	authAPI.Router.Use(s.UserAuth())
+	authAPI.Router.Use(s.UserAuthMiddleware())
 
 	// Provider Management
 	authAPI.GET("/providers", (s.GetProviders),
@@ -1100,13 +1098,39 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 }
 
 func (s *Server) useWebStaticEndpoints(engine *gin.Engine) {
-	// Load templates and static files on the main router - try embedded first
-	if s.assets != nil {
-		log.Printf("Using embedded assets on main server")
-		s.assets.SetupStaticRoutes(engine)
-	} else {
-		panic("No UI resources")
-	}
+	// Load templates and static files on the main engine - try embedded first
+	log.Printf("Using embedded assets on main server")
+
+	// Serve static assets from embedded filesystem
+	st, _ := fs.Sub(assets.WebDistAssets, "web/dist/assets")
+	engine.StaticFS("/assets", http.FS(st))
+
+	engine.StaticFile("/vite.svg", "web/dist/vite.svg")
+
+	engine.NoRoute(func(c *gin.Context) {
+		// Don't serve index.html for API routes - let them return 404s
+		path := c.Request.URL.Path
+		// Check if this looks like an API route
+		if path == "" || strings.HasPrefix(path, "/api/v") || strings.HasPrefix(path, "/v") || strings.HasPrefix(path, "/openai") || strings.HasPrefix(path, "/anthropic") {
+			// This looks like an API route, return 404
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": gin.H{
+					"message": "API endpoint not found",
+					"type":    "invalid_request_error",
+					"code":    "not_found",
+				},
+			})
+			return
+		}
+
+		// For all other routes, serve the SPA index.html
+		data, err := assets.WebDistAssets.ReadFile("web/dist/index.html")
+		if err != nil {
+			c.AbortWithError(http.StatusInternalServerError, err)
+			return
+		}
+		c.Data(http.StatusOK, "text/html; charset=utf-8", data)
+	})
 }
 
 // GetShutdownChannel returns the shutdown channel for the main process to listen on

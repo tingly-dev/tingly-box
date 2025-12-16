@@ -29,7 +29,6 @@ type Server struct {
 	debugMW         *middleware.DebugMiddleware
 	loadBalancer    *LoadBalancer
 	loadBalancerAPI *LoadBalancerAPI
-	assets          *EmbeddedAssets
 	clientPool      *ClientPool // client pool for caching
 	enableAdaptor   bool
 }
@@ -46,13 +45,6 @@ func NewServerWithOptions(cfg *config.Config, useUI bool) *Server {
 
 // NewServerWithAllOptions creates a new HTTP server with UI and adaptor options
 func NewServerWithAllOptions(cfg *config.Config, useUI bool, enableAdaptor bool) *Server {
-	// Initialize embedded assets
-	assets, err := NewEmbeddedAssets()
-	if err != nil {
-		log.Printf("Failed to initialize embedded assets: %v", err)
-		// Continue without embedded assets, will fallback to file system
-	}
-
 	// Check and generate tokens if needed
 	jwtManager := auth.NewJWTManager(cfg.GetJWTSecret())
 
@@ -110,7 +102,6 @@ func NewServerWithAllOptions(cfg *config.Config, useUI bool, enableAdaptor bool)
 		router:        gin.New(),
 		logger:        memoryLogger,
 		useUI:         useUI,
-		assets:        assets,
 		clientPool:    NewClientPool(), // Initialize client pool
 		debugMW:       debugMW,
 		enableAdaptor: enableAdaptor,
@@ -236,34 +227,34 @@ func (s *Server) setupRoutes() {
 	openaiV1 := s.router.Group("/openai/v1")
 	{
 		// Chat completions endpoint (OpenAI compatible)
-		openaiV1.POST("/chat/completions", s.ModelAuth(), s.OpenAIChatCompletions)
+		openaiV1.POST("/chat/completions", s.ModelAuthMiddleware(), s.OpenAIChatCompletions)
 		// Models endpoint (OpenAI compatible)
-		//openaiV1.GET("/models", s.ModelAuth(), s.ListModels)
+		//openaiV1.GET("/models", s.ModelAuthMiddleware(), s.ListModels)
 	}
 
 	// OpenAI API alias (without version)
 	openai := s.router.Group("/openai")
 	{
 		// Chat completions endpoint (OpenAI compatible)
-		openai.POST("/chat/completions", s.ModelAuth(), s.OpenAIChatCompletions)
+		openai.POST("/chat/completions", s.ModelAuthMiddleware(), s.OpenAIChatCompletions)
 		// Models endpoint (OpenAI compatible)
-		//openai.GET("/models", s.ModelAuth(), s.ListModels)
+		//openai.GET("/models", s.ModelAuthMiddleware(), s.ListModels)
 	}
 
 	// Anthropic v1 API group
 	anthropicV1 := s.router.Group("/anthropic/v1")
 	{
 		// Chat completions endpoint (Anthropic compatible)
-		anthropicV1.POST("/messages", s.ModelAuth(), s.AnthropicMessages)
+		anthropicV1.POST("/messages", s.ModelAuthMiddleware(), s.AnthropicMessages)
 		// Count tokens endpoint (Anthropic compatible)
-		anthropicV1.POST("/messages/count_tokens", s.ModelAuth(), s.AnthropicCountTokens)
+		anthropicV1.POST("/messages/count_tokens", s.ModelAuthMiddleware(), s.AnthropicCountTokens)
 		// Models endpoint (Anthropic compatible)
-		//anthropicV1.GET("/models", s.ModelAuth(), s.AnthropicModels)
+		//anthropicV1.GET("/models", s.ModelAuthMiddleware(), s.AnthropicModels)
 	}
 
 	// API routes for load balancer management
 	api := s.router.Group("/api")
-	api.Use(s.UserAuth()) // Require user authentication for management APIs
+	api.Use(s.UserAuthMiddleware()) // Require user authentication for management APIs
 	{
 		// Load balancer API routes
 		s.loadBalancerAPI.RegisterRoutes(api.Group("/v1"))
