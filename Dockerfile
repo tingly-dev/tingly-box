@@ -72,6 +72,7 @@ CMD ["sh", "-c", "echo '======================================' && \
      echo '  Web UI will be available at:' && \
      echo '  http://localhost:8080/dashboard?user_auth_token=tingly-box-user-token' && \
      echo '======================================' && \
+     rm -f /app/.tingly-box/tingly-server.pid && \
      exec tingly start --port 8080"]
 
 # Volumes for persistent data
