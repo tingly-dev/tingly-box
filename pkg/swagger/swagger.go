@@ -1215,14 +1215,39 @@ func (rm *RouteManager) getSwaggerType(goType reflect.Type) Schema {
 	case reflect.Bool:
 		return Schema{Type: "boolean"}
 	case reflect.Slice, reflect.Array:
-		//elemType := goType.Elem()
+		elemType := goType.Elem()
+		if elemType.Kind() == reflect.Ptr {
+			elemType = elemType.Elem()
+		}
 		// Just return basic array type, nested structs will be handled at higher level
 		return Schema{
 			Type:  "array",
-			Items: &Schema{Type: "object"},
+			Items: &Schema{Type: elemType.Name()},
 		}
 	case reflect.Map:
-		return Schema{Type: "object"}
+		// Get key and value types
+		valueType := goType.Elem()
+
+		if valueType.Kind() == reflect.Ptr {
+			valueType = valueType.Elem()
+		}
+
+		// Generate schema for map with additionalProperties
+		schema := Schema{Type: "object"}
+
+		// Set value type in additionalProperties
+		if valueType.Kind() == reflect.Struct && valueType.String() != "time.Time" {
+			// For struct values, use reference
+			schema.AdditionalProperties = &Schema{
+				Ref: fmt.Sprintf("#/definitions/%s", valueType.Name()),
+			}
+		} else {
+			// For primitive types, get the swagger type
+			valueSchema := rm.getSwaggerType(valueType)
+			schema.AdditionalProperties = &valueSchema
+		}
+
+		return schema
 	case reflect.Struct:
 		// Handle time.Time specially
 		if goType.String() == "time.Time" {
@@ -1304,6 +1329,18 @@ func (rm *RouteManager) collectNestedModels(model interface{}, allModels map[str
 			}
 			if elemType.Kind() == reflect.Struct && elemType.String() != "time.Time" {
 				nestedModel := reflect.Zero(elemType).Interface()
+				rm.collectNestedModels(nestedModel, allModels, processedModels)
+			}
+		}
+
+		// If field is a map with struct values, process the value type
+		if field.Type.Kind() == reflect.Map {
+			valueType := field.Type.Elem()
+			if valueType.Kind() == reflect.Ptr {
+				valueType = valueType.Elem()
+			}
+			if valueType.Kind() == reflect.Struct && valueType.String() != "time.Time" {
+				nestedModel := reflect.Zero(valueType).Interface()
 				rm.collectNestedModels(nestedModel, allModels, processedModels)
 			}
 		}
