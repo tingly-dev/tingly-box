@@ -37,8 +37,8 @@ func NewUIService(configDir string, port int) (*ProxyService, error) {
 		manage.WithUI(true),
 		manage.WithAdaptor(false),
 		manage.WithDebug(true),
+		manage.WithPort(port),
 	)
-	serverManager.Setup(port)
 
 	res := &ProxyService{
 		appConfig:     appConfig,
