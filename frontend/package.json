@@ -8,7 +8,7 @@
     "dev:mock": "vite --mode mock",
     "dev:real": "vite --mode production",
     "build:dev": "vite build --minify false --mode development",
-    "build:dev:gui": "vite build --mode development-wails",
+    "build:dev:wails": "vite build --mode development-wails",
     "build": "vite build --mode production",
     "build:wails": "vite build --mode production-wails",
     "preview": "vite preview"
