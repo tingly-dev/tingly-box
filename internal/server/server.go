@@ -39,18 +39,43 @@ type Server struct {
 	enableAdaptor bool
 }
 
-// NewServer creates a new HTTP server instance
-func NewServer(cfg *config.Config) *Server {
-	return NewServerWithOptions(cfg, true)
-}
-
-// NewServerWithOptions creates a new HTTP server with UI option
-func NewServerWithOptions(cfg *config.Config, enableUI bool) *Server {
-	return NewServerWithAllOptions(cfg, enableUI, false)
-}
-
 // NewServerWithAllOptions creates a new HTTP server with UI and adaptor options
+// Deprecated: Use NewServerWithFunctionalOptions instead
 func NewServerWithAllOptions(cfg *config.Config, enableUI bool, enableAdaptor bool) *Server {
+	return NewServer(cfg, WithServerUI(enableUI), WithServerAdaptor(enableAdaptor))
+}
+
+// ServerOption defines a functional option for Server configuration
+type ServerOption func(*Server)
+
+// WithServerUI enables or disables the UI for the server
+func WithServerUI(enabled bool) ServerOption {
+	return func(s *Server) {
+		s.enableUI = enabled
+	}
+}
+
+// WithServerAdaptor enables or disables the adaptor for the server
+func WithServerAdaptor(enabled bool) ServerOption {
+	return func(s *Server) {
+		s.enableAdaptor = enabled
+	}
+}
+
+// NewServer creates a new HTTP server instance with functional options
+func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
+	// Default options
+	server := &Server{
+		config:        cfg,
+		enableUI:      true,  // Default: UI enabled
+		enableAdaptor: false, // Default: adaptor disabled
+	}
+
+	// Apply provided options
+	for _, opt := range opts {
+		opt(server)
+	}
+
 	// Check and generate tokens if needed
 	jwtManager := auth.NewJWTManager(cfg.GetJWTSecret())
 
@@ -101,17 +126,12 @@ func NewServerWithAllOptions(cfg *config.Config, enableUI bool, enableAdaptor bo
 		log.Printf("Debug middleware initialized (debug=true in config), logging to: %s", debugLogPath)
 	}
 
-	// Create server struct first
-	server := &Server{
-		config:        cfg,
-		jwtManager:    jwtManager,
-		engine:        gin.New(),
-		logger:        memoryLogger,
-		enableUI:      enableUI,
-		clientPool:    NewClientPool(), // Initialize client pool
-		debugMW:       debugMW,
-		enableAdaptor: enableAdaptor,
-	}
+	// Create server struct first with applied options
+	server.jwtManager = jwtManager
+	server.engine = gin.New()
+	server.logger = memoryLogger
+	server.clientPool = NewClientPool() // Initialize client pool
+	server.debugMW = debugMW
 
 	// Initialize statistics middleware with server reference
 	statsMW := middleware.NewStatsMiddleware(cfg)
