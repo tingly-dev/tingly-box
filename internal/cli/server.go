@@ -86,7 +86,7 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 		return fmt.Errorf("failed to create PID file: %w", err)
 	}
 
-	serverManager := server.NewServerManagerWithOptions(appConfig, opts.EnableUI, opts.enableAdaptor)
+	serverManager := server.NewServerManager(appConfig, server.WithUI(opts.EnableUI), server.WithAdaptor(opts.enableAdaptor), server.WithDebug(opts.EnableDebug))
 
 	// Setup signal handling for graceful shutdown
 	sigChan := make(chan os.Signal, 1)
