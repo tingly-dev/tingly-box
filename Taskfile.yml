@@ -81,7 +81,7 @@ tasks:
   start:
     cmds:
       - task: go:build
-      - ./build/tingly start
+      - ./build/{{.BIN_NAME}} start
   
   cli:build:
     cmds:

@@ -30,7 +30,7 @@ tasks:
     env:
       GOOS: windows
       CGO_ENABLED: 0
-      GOARCH: '{{.ARCH | default ARCH}}'
+      GOARCH: '{{.ARCH | default "amd64"}}'
       PRODUCTION: '{{.PRODUCTION | default "false"}}'
 
   package:
@@ -46,7 +46,7 @@ tasks:
     cmds:
       - wails3 generate syso -arch {{.ARCH}} -icon windows/icon.ico -manifest windows/wails.exe.manifest -info windows/info.json -out ../wails_windows_{{.ARCH}}.syso
     vars:
-      ARCH: '{{.ARCH | default ARCH}}'
+      ARCH: '{{.ARCH | default "amd64"}}'
 
   create:nsis:installer:
     summary: Creates an NSIS installer
@@ -65,8 +65,8 @@ tasks:
         makensis -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.ROOT_DIR}}/{{.BIN_DIR}}/{{.APP_NAME}}.exe" project.nsi
         {{end}}
     vars:
-      ARCH: '{{.ARCH | default ARCH}}'
-      ARG_FLAG: '{{if eq .ARCH "amd64"}}AMD64{{else}}ARM64{{end}}'
+      ARCH: '{{.ARCH | default "amd64"}}'
+      ARG_FLAG: '{{if eq .ARCH "amd64"}}amd64{{else}}arm64{{end}}'
 
   create:msix:package:
     summary: Creates an MSIX package
@@ -86,7 +86,7 @@ tasks:
           {{if .PUBLISHER}}--publisher "{{.PUBLISHER}}"{{end}} \
           {{if .USE_MSIX_TOOL}}--use-msix-tool{{else}}--use-makeappx{{end}}
     vars:
-      ARCH: '{{.ARCH | default ARCH}}'
+      ARCH: '{{.ARCH | default "amd64"}}'
       CERT_PATH: '{{.CERT_PATH | default ""}}'
       PUBLISHER: '{{.PUBLISHER | default ""}}'
       USE_MSIX_TOOL: '{{.USE_MSIX_TOOL | default "false"}}'
