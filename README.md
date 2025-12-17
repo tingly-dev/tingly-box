@@ -1,162 +1,192 @@
 # Tingly Box
 
-A CLI tool and server for managing multiple AI model providers with a unified OpenAI-compatible endpoint.
+A **provider-agnostic AI model proxy** that exposes a unified OpenAI-compatible API endpoint while routing requests to multiple configured AI providers. It consists of both a **CLI tool** for management and a **service** for handling requests, acting as a middleware layer between your applications and various AI service providers.
 
-## Features
+## Core Features
 
-- **CLI Management**: Add, list, and delete AI provider configurations
-- **Interactive Interface**: User-friendly interactive CLI for easy management
-- **Web Dashboard**: Simple web interface for configuration and monitoring
-- **Unified Endpoint**: Single OpenAI-compatible API endpoint for all providers
-- **Dynamic Configuration**: Hot-reload configuration changes without server restart
-- **JWT Authentication**: Secure token-based API access
-- **Encrypted Storage**: Secure storage of sensitive API tokens
-- **Memory Logging**: Persistent operation history and statistics
+**1. Multi-Provider Support with Unified API**
+   - Connect to OpenAI, Anthropic, and custom AI providers simultaneously
+   - Single OpenAI-compatible endpoint for all providers
+   - Switch between providers without changing application code
+   - Provider-agnostic architecture prevents vendor lock-in
+
+**2. Config-Based Request Forwarding**
+   - Route requests to specific providers based on model configuration
+   - Pooled sharing & Load balancing between provider endpoints (same/different providers, same/different models, or different tokens)
+   - Real-time streaming support for chat completions
+   - Format adaptation between OpenAI and Anthropic APIs (experimental)
+
+**3. User-Friendly Management UI**
+   - Intuitive web interface for provider configuration
+   - Visual dashboard for monitoring and status
+   - Simple token and provider management
+   - Easy provider addition and removal
 
 ## Quick Start
 
-### 1. Build the application
+### Prerequisites
+
+- **Go**: Version 1.21 or later
+- **Node.js**: Version 18 or later (for web UI development)
+
+### Installation
 
 ```bash
+# Build the CLI binary
 go build ./cmd/tingly
+
+# Move to system PATH
+sudo mv tingly /usr/local/bin/
+
+# Or add to your PATH in ~/.bashrc or ~/.zshrc
+export PATH="$PATH:/path/to/tingly-box"
 ```
 
-### 2. Add an AI provider
+### Basic Usage
 
 ```bash
+# 1. Add AI providers
 ./tingly add openai https://api.openai.com/v1 sk-your-openai-token
 ./tingly add anthropic https://api.anthropic.com sk-your-anthropic-token
-```
 
-### 3. List configured providers
+# 2. Generate access token
+./tingly token
 
-```bash
-./tingly list
-```
-
-### 4. Generate example and test token
-
-```bash
-./tingly example
-```
-
-The `example` command generates a JWT token and shows a ready-to-use curl command for testing.
-
-### 5. Start the server
-
-```bash
+# 3. Start the server
 ./tingly start --port 8080
-```
 
-### 6. Use the unified API endpoint
-
-```bash
+# 4. Use the unified API
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{
     "model": "gpt-3.5-turbo",
     "messages": [{"role": "user", "content": "Hello, world!"}]
   }'
 ```
 
-## CLI Commands
+## Documentation
+
+📖 **[Complete User Manual](docs/user-manual.md)**
+
+The comprehensive user manual covers:
+
+1. **What is Tingly Box?** - Architecture, features, and use cases
+2. **Installation** - Detailed setup instructions for all platforms
+3. **Integration with Claude CLI** - Step-by-step configuration guide
+4. **Troubleshooting** - Common issues and solutions
+
+## Key CLI Commands
 
 ### Provider Management
-
-- `tingly add <name> <api-base> <token>` - Add a new AI provider
-- `tingly list` - List all configured providers
-- `tingly delete <name>` - Delete a provider configuration
-- `tingly token` - Generate a JWT authentication token
-- `tingly example` - Generate example token and curl command for testing
-- `tingly interactive` - Enter interactive management mode
-- `tingly restart [--port <port>]` - Restart the server
-
-### Server Management
-
-- `tingly start [--port <port>]` - Start the server (default port: 8080)
-- `tingly stop` - Stop the running server
-- `tingly restart [--port <port>]` - Restart the server
-- `tingly status` - Check server status and configuration
-
-### Interactive Management
-
-- `tingly interactive` - Enter interactive mode with menu-driven interface
-
-## Web Interface
-
-Tingly Box also provides a simple web dashboard for configuration management:
-
 ```bash
-# Start the web interface (on port 9090)
-./tingly start --port 9090
-
-# Access the dashboard at
-http://localhost:9090
+./tingly add <name> <api-base> <token>      # Add new provider
+./tingly list                               # List all providers
+./tingly delete <name>                      # Remove provider
+./tingly token                              # Generate JWT token
 ```
 
-### Web Interface Features:
+### Server Management
+```bash
+./tingly start [--port <port>]              # Start server (default: 8080)
+./tingly stop                               # Stop server
+./tingly restart [--port <port>]            # Restart server
+./tingly status                             # Check server status
+```
 
-- **Dashboard**: Overview of server status and system information
-- **Provider Management**: Add, remove, and view AI providers
-- **Server Control**: Start, stop, and restart the server
-- **Token Generation**: Generate JWT tokens for API access
-- **Activity History**: View recent operations and statistics
+### Additional Features
+```bash
+./tingly ui                                 # Open web interface
+./tingly shell                              # Interactive mode
+./tingly completion <shell>                 # Generate shell completions
+```
 
-## Configuration and Memory
+## Architecture Overview
 
-Configuration is stored securely in `~/.tingly-box/config.enc` with encryption based on your hostname.
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   Application   │───▶│   Tingly Box     │───▶│  AI Providers   │
+│   (Claude CLI)  │    │   (Proxy Server) │    │ (OpenAI, Anth.) │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+                              │
+                              ▼
+                       ┌──────────────┐
+                       │   Web UI     │
+                       │ (Management) │
+                       └──────────────┘
+```
 
-Tingly Box maintains operation history and system state in the `memory/` directory:
+## Use Cases
 
-- `memory/history.json` - Complete operation history with timestamps
-- `memory/status.json` - Current server status and statistics
-
-### Memory Features:
-
-- **Operation Logging**: All provider and server actions are logged
-- **Persistent History**: Operation history persists across restarts
-- **Statistics**: Action counts and server metrics
-- **Crash Recovery**: System state is preserved for recovery
+- **Development**: Test different AI providers without changing code
+- **Production**: High availability with automatic failover across providers with load balancing support
+- **Cost Optimization**: Route requests to the most cost-effective provider
+- **Vendor Lock-in Prevention**: Easily switch between providers
+- **Unified Interface**: Standardize API access across teams
 
 ## API Endpoints
 
 - `GET /health` - Health check
 - `POST /token` - Generate JWT token
-- `POST /v1/chat/completions` - OpenAI-compatible chat completions (requires authentication)
+- `POST /v1/chat/completions` - OpenAI-compatible chat completions
+- `POST /anthropic/v1/messages` - Anthropic-compatible messages API
+- `GET /v1/models` - List available models
 
-## Supported Providers
+## Configuration
 
-The system is provider-agnostic and works with any OpenAI-compatible API. Provider selection can be:
-- Automatic based on model name patterns
-- Explicit by adding `provider` parameter to requests
+- **Config**: `~/.tingly-box/config.json` (encrypted)
+- **Global**: `~/.tingly-box/global.json` (JWT secrets, tokens)
+- **Logs**: `~/.tingly-box/logs/server.log`
+- **Memory**: `memory/` directory for operation history
 
 ## Development
 
-### Project Structure
-
-```
-├── cmd/tingly/          # CLI entry point
-├── internal/
-│   ├── auth/           # JWT authentication
-│   ├── cli/            # CLI command implementations
-│   ├── config/         # Configuration management and hot-reload
-│   └── server/         # HTTP server and API handlers
-├── pkg/utils/          # Server management utilities
-└── go.mod              # Go module definition
-```
-
-### Build Requirements
-
-- Go 1.25.3+
-- See go.mod for full dependency list
-
-### Running Tests
-
 ```bash
+# Run all tests
 go test ./...
+
+# Run integration tests
+go test ./tests -v
+
+# Run with coverage
+go test -cover ./...
+
+# Build for multiple platforms
+GOOS=linux GOARCH=amd64 go build ./cmd/tingly -o tingly-linux-amd64
+GOOS=windows GOARCH=amd64 go build ./cmd/tingly -o tingly-windows-amd64.exe
+GOOS=darwin GOARCH=amd64 go build ./cmd/tingly -o tingly-darwin-amd64
+GOOS=darwin GOARCH=arm64 go build ./cmd/tingly -o tingly-darwin-arm64
+
+# Build frontend
+cd frontend
+npm install
+npm run build
+
+# Development mode
+cd frontend
+npm run dev
+```
+
+## Project Structure
+
+```
+├── cmd/tingly/              # CLI entry point (main.go uses Cobra)
+├── internal/
+│   ├── auth/                # JWT token management
+│   ├── cli/                 # CLI commands (add, list, start, stop, etc.)
+│   ├── config/              # Configuration management (encrypted JSON storage)
+│   ├── memory/              # Operation history and statistics logging
+│   └── server/              # HTTP server with Gin framework
+├── frontend/                # React/TypeScript web UI (Material-UI)
+├── tests/                   # Integration tests
+├── docs/                    # Documentation
+└── wails3/                  # Desktop GUI (experimental)
 ```
 
 ## License
 
 MIT License
+
+---
+
+For detailed information, please refer to the **[Complete User Manual](docs/user-manual.md)**.

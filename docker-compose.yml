@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  # Tingly Box Server
+  tingly-box:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tingly-box
+    ports:
+      - "8080:8080"
+    volumes:
+      # Mount configuration directory
+      - ./data/.tingly-box:/app/.tingly-box
+      # Mount logs directory
+      - ./data/logs:/app/logs
+      # Mount memory directory
+      - ./data/memory:/app/memory
+    environment:
+      - TINGLY_PORT=8080
+      - TINGLY_HOST=0.0.0.0
+      - TINGLY_DEBUG=false
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "tingly", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Development mode - mount source and rebuild manually
+  tingly-box-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tingly-box-dev
+    ports:
+      - "8080:8080"
+    volumes:
+      # Mount source code for development
+      - .:/app
+      # Mount node_modules to avoid container rebuilding it
+      - /app/frontend/node_modules
+      # Mount configuration directory
+      - ./data/.tingly-box:/app/.tingly-box
+      # Mount logs directory
+      - ./data/logs:/app/logs
+      # Mount memory directory
+      - ./data/memory:/app/memory
+    environment:
+      - TINGLY_PORT=8080
+      - TINGLY_HOST=0.0.0.0
+      - TINGLY_DEBUG=true
+    profiles:
+      - dev
