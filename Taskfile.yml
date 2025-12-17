@@ -113,19 +113,28 @@ tasks:
   web:dist:
     cmds:
       - task: codegen
-      - task: wails:binding
       - |
-        cd frontend; pnpm install; pnpm build
+        cd frontend;
+        if [ "$CI" = "true" ]; then
+          pnpm install --no-frozen-lockfile;
+        else
+          pnpm install;
+        fi;
+        pnpm build
       - |
         mkdir -p internal/web/dist/
-        mkdir -p internal/gui/dist/
         cp -R frontend/dist/* internal/web/dist/
-        cp -R frontend/dist/* internal/gui/dist/
 
   web:dist-dev:
     cmds:
       - |
-        cd frontend; pnpm build:dev
+        cd frontend;
+        if [ "$CI" = "true" ]; then
+          pnpm install --no-frozen-lockfile;
+        else
+          pnpm install;
+        fi;
+        pnpm build:dev
       - |
         mkdir -p internal/web/dist/
         cp -R frontend/dist/* internal/web/dist/
