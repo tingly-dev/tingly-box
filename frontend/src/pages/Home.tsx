@@ -19,6 +19,7 @@ import { useNavigate } from 'react-router-dom';
 import type { ProbeResponse } from '../client';
 import CardGrid from '../components/CardGrid.tsx';
 import CredentialFormDialog, { type ProviderFormData } from '../components/CredentialFormDialog.tsx';
+import EnhancedProviderFormDialog, { type EnhancedProviderFormData } from '../components/EnhancedProviderFormDialog.tsx';
 import { HomeHeader } from '../components/HomeHeader.tsx';
 import ModelSelectTab, { type ProviderSelectTabOption } from "../components/ModelSelectTab.tsx";
 import { PageLayout } from '../components/PageLayout';
@@ -322,6 +323,13 @@ const Home = () => {
         }));
     };
 
+    const handleEnhanceProviderFormChange = (field: keyof EnhancedProviderFormData, value: any) => {
+        setProviderFormData(prev => ({
+            ...prev,
+            [field]: value,
+        }));
+    };
+
     const handleAddProvider = async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -546,6 +554,15 @@ const Home = () => {
                 onSubmit={handleAddProvider}
                 data={providerFormData}
                 onChange={handleProviderFormChange}
+                mode="add"
+            />
+
+            <EnhancedProviderFormDialog
+                open={addDialogOpen}
+                onClose={() => setAddDialogOpen(false)}
+                onSubmit={handleAddProvider}
+                data={providerFormData}
+                onChange={handleEnhanceProviderFormChange}
                 mode="add"
             />
         </PageLayout>
