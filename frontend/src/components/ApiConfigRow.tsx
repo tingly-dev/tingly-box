@@ -25,7 +25,7 @@ export const ApiConfigRow: React.FC<ApiConfigRowProps> = ({
     isMonospace = true,
     showEllipsis = false
 }) => (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, maxWidth: 500 }}>
         <Typography
             variant="body2"
             color="text.secondary"
@@ -61,7 +61,7 @@ export const ApiConfigRow: React.FC<ApiConfigRowProps> = ({
         >
             {showEllipsis ? '••••••••••••••••' : value}
         </Typography>
-        <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0, minWidth: 'fit-content' }}>
+        <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0, minWidth: 'fit-content', marginLeft: 'auto' }}>
             {children}
         </Stack>
     </Box>
