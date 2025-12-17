@@ -121,7 +121,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize debug middleware (only if debug mode is enabled)
 	var debugMW *middleware.DebugMiddleware
 	if cfg.GetDebug() {
-		debugLogPath := filepath.Join(config.GetTinglyConfDir(), config.LogDirName, config.DebugLogFileName)
+		debugLogPath := filepath.Join(cfg.ConfigDir, config.LogDirName, config.DebugLogFileName)
 		debugMW = middleware.NewDebugMiddleware(debugLogPath, 10)
 		log.Printf("Debug middleware initialized (debug=true in config), logging to: %s", debugLogPath)
 	}
