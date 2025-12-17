@@ -39,7 +39,6 @@ func init() {
 	rootCmd.AddCommand(cli.StatusCommand(appConfig))
 	rootCmd.AddCommand(cli.TokenCommand(appConfig))
 	rootCmd.AddCommand(cli.ShellCommand(appConfig))
-	rootCmd.AddCommand(cli.UICommand(appConfig))
 }
 
 func main() {
