@@ -106,9 +106,9 @@ export const HomeHeader: React.FC<HomeHeaderProps> = ({
             </ApiConfigRow>
 
             <ApiConfigRow
-                label="LLM API Model"
+                label="Model Name"
                 value="tingly"
-                onCopy={() => copyToClipboard('tingly', 'LLM API Model')}
+                onCopy={() => copyToClipboard('tingly', 'Model Name')}
                 isClickable={true}
             >
                 <Box sx={{ display: 'flex', gap: 0.5, ml: 'auto' }}>

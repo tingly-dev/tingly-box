@@ -426,19 +426,19 @@ const Home = () => {
                     <AddIcon sx={{ fontSize: 40 }} />
                 </IconButton>
                 <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>
-                    No Providers Available
+                    No API Keys Available
                 </Typography>
                 <Typography variant="body1" color="text.secondary"
                     sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
-                    Get started by adding your first AI provider. You can connect to OpenAI, Anthropic, or
-                    any compatible API endpoint.
+                    Get started by adding your first AI API Key.
+                    You can connect to OpenAI, Anthropic, or any compatible API endpoint.
                 </Typography>
                 <Typography variant="body2" color="text.secondary"
                     sx={{ mb: 4, maxWidth: 400, mx: 'auto' }}>
                     <strong>Steps to get started:</strong><br />
-                    1. Click the + button to add a provider<br />
-                    2. Configure your API keys<br />
-                    3. Select your preferred model
+                    1. Click the + button to add model api key<br />
+                    2. Select your preferred model
+                    3. Use tingly box model config to access
                 </Typography>
                 <Button
                     variant="contained"
@@ -446,13 +446,11 @@ const Home = () => {
                     onClick={handleAddProviderClick}
                     size="large"
                 >
-                    Add Your First Provider
+                    Add Your First API Key
                 </Button>
             </Box>
         )
     }
-
-
 
     return (
         <PageLayout
@@ -481,7 +479,7 @@ const Home = () => {
                 </UnifiedCard>
 
                 <UnifiedCard
-                    title="API Key & Model to Use"
+                    title="Models"
                     size="full"
                     rightAction={
                         <Box sx={{ display: 'flex', gap: 1 }}>
