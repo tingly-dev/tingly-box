@@ -75,21 +75,8 @@ func (lb *LoadBalancer) SelectService(rule *config.Rule) (*config.Service, error
 		return &activeServices[0], nil
 	}
 
-	// Get the tactic for this rule
-	tacticType := rule.GetTacticType()
-	tactic, exists := lb.getTactic(tacticType)
-	if !exists {
-		// Fallback to round robin
-		tactic = lb.tactics[config.TacticRoundRobin]
-	}
-
-	// Create a new tactic with parameters if available
-	var actualTactic config.LoadBalancingTactic
-	if rule.TacticParams != nil && len(rule.TacticParams) > 0 {
-		actualTactic = config.CreateTactic(tacticType, rule.TacticParams)
-	} else {
-		actualTactic = tactic
-	}
+	// Use the LBTactic from the rule
+	actualTactic := rule.LBTactic.Instantiate()
 
 	// Select service using the tactic
 	selectedService := actualTactic.SelectService(rule)
