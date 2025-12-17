@@ -4,6 +4,13 @@
  */
 {
   "compilerOptions": {
+    "baseUrl": "./",
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ]
+    },
+
     "allowJs": true,
     "moduleResolution": "bundler",
     /**
