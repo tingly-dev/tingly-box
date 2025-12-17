@@ -32,7 +32,12 @@ func NewUIService(configDir string, port int) (*ProxyService, error) {
 		return nil, fmt.Errorf("failed to create app config: %w", err)
 	}
 
-	serverManager := manage.NewServerManager(appConfig, manage.WithUI(true), manage.WithAdaptor(false), manage.WithDebug(false))
+	serverManager := manage.NewServerManager(
+		appConfig,
+		manage.WithUI(true),
+		manage.WithAdaptor(false),
+		manage.WithDebug(true),
+	)
 	serverManager.Setup(port)
 
 	res := &ProxyService{
