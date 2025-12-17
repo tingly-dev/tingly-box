@@ -45,7 +45,7 @@ const Layout = ({ children }: LayoutProps) => {
         { path: '/credential', label: 'API Keys', icon: <KeyIcon /> },
         { path: '/rule', label: 'Rules', icon: <RuleOutlined /> },
         { path: '/system', label: 'System', icon: <SettingsIcon /> },
-        { path: '/history', label: 'History', icon: <HistoryIcon /> },
+        // { path: '/history', label: 'History', icon: <HistoryIcon /> },
     ];
 
     const drawerContent = (

@@ -1,13 +1,14 @@
-import { Cancel, CheckCircle, Key, PlayArrow, RestartAlt, Stop, Refresh as RefreshIcon } from '@mui/icons-material';
+import { Cancel, CheckCircle, Key, PlayArrow, Refresh as RefreshIcon, RestartAlt, Stop } from '@mui/icons-material';
 import { Button, IconButton, Stack, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import CardGrid from '../components/CardGrid';
-import UnifiedCard from '../components/UnifiedCard';
 import { PageLayout } from '../components/PageLayout';
-import { api } from '../services/api';
+import UnifiedCard from '../components/UnifiedCard';
+import { api, getBaseUrl } from '../services/api';
 
 const System = () => {
     const [serverStatus, setServerStatus] = useState<any>(null);
+    const [baseUrl, setBaseUrl] = useState<string>("");
     const [providersStatus, setProvidersStatus] = useState<any>(null);
     const [rules, setRules] = useState<any>({});
     const [providers, setProviders] = useState<any[]>([]);
@@ -30,6 +31,7 @@ const System = () => {
     const loadAllData = async () => {
         setLoading(true);
         await Promise.all([
+            loadBaseUrl(),
             loadServerStatus(),
             loadProvidersStatus(),
             loadDefaults(),
@@ -37,6 +39,11 @@ const System = () => {
         ]);
         setLoading(false);
     };
+
+    const loadBaseUrl = async () => {
+        const reuslt = await getBaseUrl();
+        setBaseUrl(reuslt)
+    }
 
     const loadServerStatus = async () => {
         const result = await api.getStatus();
@@ -136,59 +143,59 @@ const System = () => {
     };
 
     return (
-        <PageLayout loading={loading} message={message} onClearMessage={() => setMessage(null)}>
+        <PageLayout loading={loading}>
             <CardGrid>
                 {/* Server Status - Consolidated */}
                 <UnifiedCard
                     title="Server Status & Control"
                     size="full"
-                    rightAction={
-                        <Stack direction="row" spacing={1}>
-                            <Button
-                                variant="outlined"
-                                size="small"
-                                startIcon={<Key />}
-                                onClick={handleGenerateToken}
-                                title="Generate Token"
-                            >
-                                Token
-                            </Button>
-                            <Button
-                                variant="contained"
-                                color="success"
-                                size="small"
-                                startIcon={<PlayArrow />}
-                                onClick={handleStartServer}
-                                disabled={serverStatus?.server_running}
-                                title="Start Server"
-                            >
-                                Start
-                            </Button>
-                            <Button
-                                variant="contained"
-                                color="error"
-                                size="small"
-                                startIcon={<Stop />}
-                                onClick={handleStopServer}
-                                disabled={!serverStatus?.server_running}
-                                title="Stop Server"
-                            >
-                                Stop
-                            </Button>
-                            <Button
-                                variant="contained"
-                                size="small"
-                                startIcon={<RestartAlt />}
-                                onClick={handleRestartServer}
-                                title="Restart Server"
-                            >
-                                Restart
-                            </Button>
-                            <IconButton onClick={loadServerStatus} size="small" title="Refresh Status">
-                                <RefreshIcon />
-                            </IconButton>
-                        </Stack>
-                    }
+                    // rightAction={
+                    //     <Stack direction="row" spacing={1}>
+                    //         <Button
+                    //             variant="outlined"
+                    //             size="small"
+                    //             startIcon={<Key />}
+                    //             onClick={handleGenerateToken}
+                    //             title="Generate Token"
+                    //         >
+                    //             Token
+                    //         </Button>
+                    //         <Button
+                    //             variant="contained"
+                    //             color="success"
+                    //             size="small"
+                    //             startIcon={<PlayArrow />}
+                    //             onClick={handleStartServer}
+                    //             disabled={serverStatus?.server_running}
+                    //             title="Start Server"
+                    //         >
+                    //             Start
+                    //         </Button>
+                    //         <Button
+                    //             variant="contained"
+                    //             color="error"
+                    //             size="small"
+                    //             startIcon={<Stop />}
+                    //             onClick={handleStopServer}
+                    //             disabled={!serverStatus?.server_running}
+                    //             title="Stop Server"
+                    //         >
+                    //             Stop
+                    //         </Button>
+                    //         <Button
+                    //             variant="contained"
+                    //             size="small"
+                    //             startIcon={<RestartAlt />}
+                    //             onClick={handleRestartServer}
+                    //             title="Restart Server"
+                    //         >
+                    //             Restart
+                    //         </Button>
+                    //         <IconButton onClick={loadServerStatus} size="small" title="Refresh Status">
+                    //             <RefreshIcon />
+                    //         </IconButton>
+                    //     </Stack>
+                    // }
                 >
                     {serverStatus ? (
                         <Stack spacing={3}>
@@ -205,7 +212,7 @@ const System = () => {
                                     </Typography>
                                 </Stack>
                                 <Typography variant="body2" color="text.secondary">
-                                    <strong>Port:</strong> {serverStatus.port}
+                                    <strong>Server:</strong> {baseUrl}
                                 </Typography>
                                 <Typography variant="body2" color="text.secondary">
                                     <strong>Providers:</strong> {serverStatus.providers_enabled}/{serverStatus.providers_total}
@@ -220,11 +227,11 @@ const System = () => {
                                         <strong>Last Updated:</strong> {serverStatus.last_updated}
                                     </Typography>
                                 )}
-                                {serverStatus.request_count !== undefined && (
+                                {/* {serverStatus.request_count !== undefined && (
                                     <Typography variant="body2" color="text.secondary">
                                         <strong>Total Requests:</strong> {serverStatus.request_count}
                                     </Typography>
-                                )}
+                                )} */}
                             </Stack>
                         </Stack>
                     ) : (
