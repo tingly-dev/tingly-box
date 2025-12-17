@@ -12,8 +12,7 @@ import {
     TestingApi,
     TokenApi
 } from '../client';
-import {getProxyService} from "./binding.ts";
-
+import ProxyService from "@/bindings";
 
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -45,8 +44,9 @@ export const getBaseUrl = async (): Promise<string> => {
 
     // Check if we're in GUI mode
     if (import.meta.env.VITE_PKG_MODE === "gui") {
-        const proxy = await getProxyService();
+        const proxy = ProxyService;
         if (proxy) {
+            console.log(proxy)
             try {
                 const port = await proxy.GetPort();
                 basePath = `http://localhost:${port}`;
@@ -70,7 +70,7 @@ const createApiConfig = async () => {
 
     // Check if we're in GUI mode
     if (import.meta.env.VITE_PKG_MODE === "gui") {
-        const proxy = await getProxyService();
+        const proxy = ProxyService;
         if (proxy) {
             try {
                 // Get token from GUI
