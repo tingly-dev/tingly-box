@@ -32,6 +32,7 @@ type Config struct {
 	Debug      bool                 `yaml:"debug" json:"debug"` // Enable debug logging
 
 	ConfigFile string `yaml:"-" json:"-"` // Not serialized to YAML (exported to preserve field)
+	ConfigDir  string `yaml:"-" json:"-"`
 
 	modelManager *ModelListManager
 
@@ -66,6 +67,7 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 
 	cfg := &Config{
 		ConfigFile: configFile,
+		ConfigDir:  configDir,
 	}
 
 	// Load existing cfg if exists
