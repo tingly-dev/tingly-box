@@ -36,7 +36,7 @@ func TestLoadBalancer_RoundRobin(t *testing.T) {
 	lb := server.NewLoadBalancer(statsMW, appConfig.GetGlobalConfig())
 	defer lb.Stop()
 
-	// Create test rule with multiple services
+	// Create test rule with multiple services using new LBTactic format
 	rule := &config.Rule{
 		RequestModel: "test",
 		UUID:         uuid.New().String(),
@@ -57,9 +57,9 @@ func TestLoadBalancer_RoundRobin(t *testing.T) {
 			},
 		},
 		CurrentServiceIndex: 0, // Start with first service
-		Tactic:              "round_robin",
-		TacticParams: map[string]interface{}{
-			"request_threshold": int64(1),
+		LBTactic: config.Tactic{
+			Type:   config.TacticRoundRobin,
+			Params: &config.RoundRobinParams{RequestThreshold: 1},
 		},
 		Active: true,
 	}
@@ -122,7 +122,10 @@ func TestLoadBalancer_EnabledFilter(t *testing.T) {
 				TimeWindow: 300,
 			},
 		},
-		Tactic: "round_robin",
+		LBTactic: config.Tactic{
+			Type:   config.TacticRoundRobin,
+			Params: config.DefaultRoundRobinParams(),
+		},
 		Active: true,
 	}
 
@@ -799,14 +802,11 @@ func TestLoadBalancer_WeightedRandom(t *testing.T) {
 	statsMW := middleware.NewStatsMiddleware(appConfig.GetGlobalConfig())
 	defer statsMW.Stop()
 
-	// Create load balancer and register random tactic
+	// Create load balancer - it already has all default tactics
 	lb := server.NewLoadBalancer(statsMW, appConfig.GetGlobalConfig())
 	defer lb.Stop()
 
-	randomTactic := config.NewRandomTactic()
-	lb.RegisterTactic(config.TacticRoundRobin, randomTactic)
-
-	// Create test rule with weighted services
+	// Create test rule with weighted services using new LBTactic format
 	rule := &config.Rule{
 		RequestModel: "test",
 		Services: []config.Service{
@@ -825,7 +825,10 @@ func TestLoadBalancer_WeightedRandom(t *testing.T) {
 				TimeWindow: 300,
 			},
 		},
-		Tactic: "round_robin", // Will use our registered random tactic
+		LBTactic: config.Tactic{
+			Type:   config.TacticRandom,
+			Params: config.NewRandomParams(),
+		},
 		Active: true,
 	}
 

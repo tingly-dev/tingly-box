@@ -77,14 +77,15 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 			// Create a default Rule
 			cfg.Rules = []Rule{
 				{
-					UUID:          "tingly",
+					UUID:          generateUUID(),
 					RequestModel:  "tingly",
 					ResponseModel: "",
 					Services:      []Service{}, // Empty services initially
-					Active:        true,
-					// Legacy fields for backward compatibility
-					Provider:     "",
-					DefaultModel: "",
+					LBTactic: Tactic{ // Initialize with default round-robin tactic
+						Type:   TacticRoundRobin,
+						Params: DefaultRoundRobinParams(),
+					},
+					Active: true,
 				},
 			}
 			cfg.DefaultRequestID = 0
@@ -769,16 +770,11 @@ func (c *Config) GetModelManager() *ModelListManager {
 	return c.modelManager
 }
 
-// migrateRules ensures all rules have a tactic set, applying default values for migration
+// migrateRules ensures all rules have proper UUID and LBTactic set
 func (c *Config) migrateRules() {
 	needsSave := false
 	for i := range c.Rules {
-		if c.Rules[i].Tactic == "" {
-			c.Rules[i].Tactic = TacticRoundRobin.String()
-			needsSave = true
-		}
-
-		// FIXME: update uuid
+		// Ensure UUID exists
 		if c.Rules[i].UUID == "" {
 			UUID, err := uuid.NewUUID()
 			if err != nil {
@@ -786,6 +782,33 @@ func (c *Config) migrateRules() {
 			}
 			c.Rules[i].UUID = UUID.String()
 			needsSave = true
+		}
+
+		// Ensure LBTactic is properly initialized
+		if c.Rules[i].LBTactic.Type == 0 {
+			// If LBTactic is empty but old Tactic field exists, migrate it
+			if c.Rules[i].Tactic != "" {
+				c.Rules[i].LBTactic = Tactic{
+					Type: ParseTacticType(c.Rules[i].Tactic),
+				}
+
+				// Convert old tactic_params to proper typed parameters
+				if c.Rules[i].TacticParams != nil {
+					c.Rules[i].LBTactic.Params = convertLegacyParams(c.Rules[i].Tactic, c.Rules[i].TacticParams)
+				}
+
+				// Clear old fields after migration
+				c.Rules[i].Tactic = ""
+				c.Rules[i].TacticParams = nil
+				needsSave = true
+			} else {
+				// Set default tactic if none exists
+				c.Rules[i].LBTactic = Tactic{
+					Type:   TacticRoundRobin,
+					Params: DefaultRoundRobinParams(),
+				}
+				needsSave = true
+			}
 		}
 	}
 
@@ -839,4 +862,14 @@ func (c *Config) DeleteRule(ruleUUID string) error {
 // generateSecret generates a random secret for JWT
 func generateSecret() string {
 	return fmt.Sprintf("%d", time.Now().UnixNano())
+}
+
+// generateUUID generates a new UUID string
+func generateUUID() string {
+	id, err := uuid.NewUUID()
+	if err != nil {
+		// Fallback to timestamp-based UUID if generation fails
+		return fmt.Sprintf("uuid-%d", time.Now().UnixNano())
+	}
+	return id.String()
 }

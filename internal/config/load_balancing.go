@@ -153,6 +153,7 @@ const (
 	TacticRoundRobin TacticType = iota // Rotate by request count
 	TacticTokenBased                   // Rotate by token consumption
 	TacticHybrid                       // Hybrid: request count or tokens, whichever comes first
+	TacticRandom                       // Random selection with weighted probability
 )
 
 // String returns string representation of TacticType
@@ -164,6 +165,8 @@ func (tt TacticType) String() string {
 		return "token_based"
 	case TacticHybrid:
 		return "hybrid"
+	case TacticRandom:
+		return "random"
 	default:
 		return "unknown"
 	}
@@ -178,6 +181,8 @@ func ParseTacticType(s string) TacticType {
 		return TacticTokenBased
 	case "hybrid":
 		return TacticHybrid
+	case "random":
+		return TacticRandom
 	default:
 		return TacticRoundRobin // default
 	}

@@ -1,9 +1,153 @@
 package config
 
 import (
+	"encoding/json"
 	"math/rand"
 	"strings"
 )
+
+// Tactic bundles the strategy type and its parameters together
+type Tactic struct {
+	Type   TacticType   `json:"type" yaml:"type"`
+	Params TacticParams `json:"params" yaml:"params"`
+}
+
+// UnmarshalJSON handles the polymorphic decoding of TacticParams
+func (tc *Tactic) UnmarshalJSON(data []byte) error {
+	type Alias Tactic
+	aux := &struct {
+		Params json.RawMessage `json:"params"`
+		*Alias
+	}{
+		Alias: (*Alias)(tc),
+	}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	// Assign the concrete struct based on the type
+	switch tc.Type {
+	case TacticRoundRobin:
+		tc.Params = &RoundRobinParams{}
+	case TacticTokenBased:
+		tc.Params = &TokenBasedParams{}
+	case TacticHybrid:
+		tc.Params = &HybridParams{}
+	case TacticRandom:
+		tc.Params = &RandomParams{}
+	default:
+		return nil
+	}
+
+	if aux.Params != nil {
+		return json.Unmarshal(aux.Params, tc.Params)
+	}
+	return nil
+}
+
+// Instantiate converts the configuration into functional logic
+func (tc *Tactic) Instantiate() LoadBalancingTactic {
+	if tc == nil {
+		return defaultRoundRobinTactic
+	}
+	return CreateTacticWithTypedParams(tc.Type, tc.Params)
+}
+
+// TacticParams represents parameters for different load balancing tactics
+// This is a sealed type that can only be one of the specific tactic parameter types
+type TacticParams interface {
+	// Unexported methods make this a sealed type
+	isTacticParams()
+}
+
+// RoundRobinParams holds parameters for round-robin tactic
+type RoundRobinParams struct {
+	RequestThreshold int64 `json:"request_threshold"` // Number of requests per service before switching
+}
+
+func (r RoundRobinParams) isTacticParams() {}
+
+// TokenBasedParams holds parameters for token-based tactic
+type TokenBasedParams struct {
+	TokenThreshold int64 `json:"token_threshold"` // Threshold for token consumption before switching
+}
+
+func (t TokenBasedParams) isTacticParams() {}
+
+// HybridParams holds parameters for hybrid tactic
+type HybridParams struct {
+	RequestThreshold int64 `json:"request_threshold"` // Request threshold for hybrid tactic
+	TokenThreshold   int64 `json:"token_threshold"`   // Token threshold for hybrid tactic
+}
+
+func (h HybridParams) isTacticParams() {}
+
+// RandomParams represents parameters for random tactic (currently empty but extensible)
+type RandomParams struct{}
+
+func (r RandomParams) isTacticParams() {}
+
+// Helper constructors for creating tactic parameters
+func NewRoundRobinParams(threshold int64) TacticParams {
+	return RoundRobinParams{RequestThreshold: threshold}
+}
+
+func NewTokenBasedParams(threshold int64) TacticParams {
+	return TokenBasedParams{TokenThreshold: threshold}
+}
+
+func NewHybridParams(requestThreshold, tokenThreshold int64) TacticParams {
+	return HybridParams{
+		RequestThreshold: requestThreshold,
+		TokenThreshold:   tokenThreshold,
+	}
+}
+
+func NewRandomParams() TacticParams {
+	return RandomParams{}
+}
+
+// DefaultParams returns default parameters for each tactic type
+func DefaultRoundRobinParams() TacticParams {
+	return RoundRobinParams{RequestThreshold: 100}
+}
+
+func DefaultTokenBasedParams() TacticParams {
+	return TokenBasedParams{TokenThreshold: 10000}
+}
+
+func DefaultHybridParams() TacticParams {
+	return HybridParams{
+		RequestThreshold: 100,
+		TokenThreshold:   10000,
+	}
+}
+
+func DefaultRandomParams() TacticParams {
+	return RandomParams{}
+}
+
+// Type assertion helpers for TacticParams
+func AsRoundRobinParams(p TacticParams) (RoundRobinParams, bool) {
+	rp, ok := p.(RoundRobinParams)
+	return rp, ok
+}
+
+func AsTokenBasedParams(p TacticParams) (TokenBasedParams, bool) {
+	tp, ok := p.(TokenBasedParams)
+	return tp, ok
+}
+
+func AsHybridParams(p TacticParams) (HybridParams, bool) {
+	hp, ok := p.(HybridParams)
+	return hp, ok
+}
+
+func AsRandomParams(p TacticParams) (RandomParams, bool) {
+	rp, ok := p.(RandomParams)
+	return rp, ok
+}
 
 // LoadBalancingTactic defines the interface for load balancing strategies
 type LoadBalancingTactic interface {
@@ -265,7 +409,7 @@ func (rt *RandomTactic) GetName() string {
 }
 
 func (rt *RandomTactic) GetType() TacticType {
-	return TacticRoundRobin // Treat as round-robin type for compatibility
+	return TacticRandom
 }
 
 // Pre-created singleton tactic instances
@@ -275,54 +419,6 @@ var (
 	defaultHybridTactic     = NewHybridTactic(100, 10000)
 	defaultRandomTactic     = NewRandomTactic()
 )
-
-// CreateTactic creates a tactic instance based on type and parameters
-// Returns singleton instances for default configurations, creates new instances only when custom parameters are provided
-func CreateTactic(tacticType TacticType, params map[string]interface{}) LoadBalancingTactic {
-	switch tacticType {
-	case TacticRoundRobin:
-		if params != nil {
-			var requestThreshold int64
-			if rt, ok := params["request_threshold"].(int64); ok && rt > 0 {
-				requestThreshold = rt
-			} else if rt, ok := params["request_threshold"].(float64); ok && rt > 0 {
-				requestThreshold = int64(rt)
-			}
-			if requestThreshold > 0 {
-				return NewRoundRobinTactic(requestThreshold)
-			}
-		}
-		return defaultRoundRobinTactic
-	case TacticTokenBased:
-		if params != nil {
-			if tokenThreshold, ok := params["token_threshold"].(int64); ok && tokenThreshold > 0 && tokenThreshold != 10000 {
-				return NewTokenBasedTactic(tokenThreshold)
-			}
-		}
-		return defaultTokenBasedTactic
-	case TacticHybrid:
-		if params != nil {
-			var requestThreshold, tokenThreshold int64 = 100, 10000
-			hasCustomParams := false
-
-			if rt, ok := params["request_threshold"].(int64); ok && rt > 0 {
-				requestThreshold = rt
-				hasCustomParams = true
-			}
-			if tt, ok := params["token_threshold"].(int64); ok && tt > 0 {
-				tokenThreshold = tt
-				hasCustomParams = true
-			}
-
-			if hasCustomParams {
-				return NewHybridTactic(requestThreshold, tokenThreshold)
-			}
-		}
-		return defaultHybridTactic
-	default:
-		return defaultRoundRobinTactic // Default fallback
-	}
-}
 
 // IsValidTactic checks if the given tactic string is valid
 func IsValidTactic(tacticStr string) bool {
@@ -337,4 +433,37 @@ func IsValidTactic(tacticStr string) bool {
 	// Convert to lowercase for case-insensitive comparison
 	input := strings.ToLower(tacticStr)
 	return validTactics[input]
+}
+
+func CreateTacticWithTypedParams(tacticType TacticType, params TacticParams) LoadBalancingTactic {
+	switch tacticType {
+	case TacticRoundRobin:
+		if rp, ok := params.(*RoundRobinParams); ok {
+			return NewRoundRobinTactic(rp.RequestThreshold)
+		}
+	case TacticTokenBased:
+		if tp, ok := params.(*TokenBasedParams); ok {
+			return NewTokenBasedTactic(tp.TokenThreshold)
+		}
+	case TacticHybrid:
+		if hp, ok := params.(*HybridParams); ok {
+			return NewHybridTactic(hp.RequestThreshold, hp.TokenThreshold)
+		}
+	case TacticRandom:
+		return defaultRandomTactic
+	}
+	return GetDefaultTactic(tacticType)
+}
+
+func GetDefaultTactic(tType TacticType) LoadBalancingTactic {
+	switch tType {
+	case TacticTokenBased:
+		return defaultTokenBasedTactic
+	case TacticHybrid:
+		return defaultHybridTactic
+	case TacticRandom:
+		return defaultRandomTactic
+	default:
+		return defaultRoundRobinTactic
+	}
 }
