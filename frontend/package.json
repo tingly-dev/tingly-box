@@ -19,11 +19,14 @@
     "@mui/icons-material": "^7.3.6",
     "@mui/material": "^7.3.6",
     "@types/react": "^19.2.7",
+    "@types/react-window": "^1.8.8",
     "@wailsio/runtime": "latest",
     "axios": "^1.13.2",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
-    "react-router-dom": "^7.10.1"
+    "react-router-dom": "^7.10.1",
+    "react-virtualized-auto-sizer": "^1.0.26",
+    "react-window": "^2.2.3"
   },
   "devDependencies": {
     "@types/react-dom": "^19.2.3",
