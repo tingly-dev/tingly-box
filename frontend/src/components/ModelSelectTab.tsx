@@ -43,7 +43,6 @@ interface ProviderSelectTabProps {
     onCustomModelSave?: (provider: Provider, customModel: string) => void;
 }
 
-const MODELS_PER_PAGE = 7 * 4;
 
 interface TabPanelProps {
     children?: React.ReactNode;
@@ -91,6 +90,53 @@ export default function ModelSelectTab({
     const [internalCurrentTab, setInternalCurrentTab] = useState(0);
     const [isInitialized, setIsInitialized] = useState(false);
     const { customModels, saveCustomModel, removeCustomModel, getCustomModels } = useCustomModels();
+
+    // Calculate grid layout based on viewport size
+    const calculateGridLayout = () => {
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+
+        // Reserve space for UI elements (header, tabs, search, pagination, etc.)
+        const headerHeight = 280; // Approximate height for headers, tabs, search, etc.
+        const availableHeight = viewportHeight - headerHeight;
+
+        // Card dimensions including gaps
+        const cardWidth = 140;
+        const cardHeight = 80; // 60px card height + 20px gap
+        const minGap = 8;
+
+        // Calculate columns based on viewport width
+        const maxColumns = Math.floor((viewportWidth - 100) / (cardWidth + minGap)); // Reserve 100px for padding
+        const columns = Math.max(3, Math.min(8, maxColumns)); // Between 3-8 columns
+
+        // Calculate rows based on available height
+        const maxRows = Math.floor(availableHeight / cardHeight);
+        const rows = Math.max(2, Math.min(6, maxRows)); // Between 2-6 rows
+
+        const modelsPerPage = columns * rows;
+
+        return {
+            columns,
+            rows,
+            modelsPerPage: Math.max(12, Math.min(48, modelsPerPage)), // Ensure reasonable range
+            cardWidth: `${100 / columns}%` // Responsive width
+        };
+    };
+
+    const [gridLayout, setGridLayout] = useState(calculateGridLayout());
+    const [modelsPerPage, setModelsPerPage] = useState(gridLayout.modelsPerPage);
+
+    // Update grid layout when window resizes
+    useEffect(() => {
+        const handleResize = () => {
+            const newLayout = calculateGridLayout();
+            setGridLayout(newLayout);
+            setModelsPerPage(newLayout.modelsPerPage);
+        };
+
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     // Use external activeTab if provided, otherwise use internal state
     const currentTab = externalActiveTab !== undefined ? externalActiveTab : internalCurrentTab;
@@ -145,7 +191,7 @@ export default function ModelSelectTab({
             const modelIndex = models.indexOf(selectedModel);
 
             if (modelIndex !== -1) {
-                const targetPage = Math.floor(modelIndex / MODELS_PER_PAGE) + 1;
+                const targetPage = Math.floor(modelIndex / modelsPerPage) + 1;
                 const currentPageForProvider = currentPage[targetProvider.name] || 1;
 
                 // Only update if we're not already on the correct page
@@ -281,12 +327,12 @@ export default function ModelSelectTab({
     const getPaginatedModels = (provider: Provider) => {
         const filteredModels = getFilteredModels(provider);
         const page = currentPage[provider.name] || 1;
-        const startIndex = (page - 1) * MODELS_PER_PAGE;
-        const endIndex = startIndex + MODELS_PER_PAGE;
+        const startIndex = (page - 1) * modelsPerPage;
+        const endIndex = startIndex + modelsPerPage;
 
         return {
             models: filteredModels.slice(startIndex, endIndex),
-            totalPages: Math.ceil(filteredModels.length / MODELS_PER_PAGE),
+            totalPages: Math.ceil(filteredModels.length / modelsPerPage),
             currentPage: page,
             totalModels: filteredModels.length,
         };
@@ -321,12 +367,12 @@ export default function ModelSelectTab({
     const getPaginatedAllModels = (provider: Provider) => {
         const filteredAllModels = getFilteredAllModels(provider);
         const page = currentPage[provider.name] || 1;
-        const startIndex = (page - 1) * MODELS_PER_PAGE;
-        const endIndex = startIndex + MODELS_PER_PAGE;
+        const startIndex = (page - 1) * modelsPerPage;
+        const endIndex = startIndex + modelsPerPage;
 
         return {
             models: filteredAllModels.slice(startIndex, endIndex),
-            totalPages: Math.ceil(filteredAllModels.length / MODELS_PER_PAGE),
+            totalPages: Math.ceil(filteredAllModels.length / modelsPerPage),
             currentPage: page,
             totalModels: filteredAllModels.length,
         };
@@ -345,12 +391,12 @@ export default function ModelSelectTab({
         }
 
         const page = currentPage[provider.name] || 1;
-        const startIndex = (page - 1) * MODELS_PER_PAGE;
-        const endIndex = startIndex + MODELS_PER_PAGE;
+        const startIndex = (page - 1) * modelsPerPage;
+        const endIndex = startIndex + modelsPerPage;
 
         return {
             models: filteredModels.slice(startIndex, endIndex),
-            totalPages: Math.ceil(filteredModels.length / MODELS_PER_PAGE),
+            totalPages: Math.ceil(filteredModels.length / modelsPerPage),
             currentPage: page,
             totalModels: filteredModels.length,
         };
@@ -375,7 +421,7 @@ export default function ModelSelectTab({
                     const modelIndex = models.indexOf(selectedModel);
 
                     if (modelIndex !== -1) {
-                        const targetPage = Math.floor(modelIndex / MODELS_PER_PAGE) + 1;
+                        const targetPage = Math.floor(modelIndex / modelsPerPage) + 1;
 
                         setCurrentPage(prev => ({ ...prev, [targetProvider.name]: targetPage }));
                     }
@@ -537,7 +583,7 @@ export default function ModelSelectTab({
                                     <Box
                                         sx={{
                                             display: 'grid',
-                                            gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+                                            gridTemplateColumns: `repeat(${gridLayout.columns}, 1fr)`,
                                             gap: 0.8,
                                         }}
                                     >
@@ -617,7 +663,7 @@ export default function ModelSelectTab({
                                 <Box
                                     sx={{
                                         display: 'grid',
-                                        gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+                                        gridTemplateColumns: `repeat(${gridLayout.columns}, 1fr)`,
                                         gap: 0.8,
                                     }}
                                 >
