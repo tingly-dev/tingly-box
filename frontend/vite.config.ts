@@ -23,6 +23,14 @@ export default defineConfig({
             logger: true,
         })] : []),
     ],
+    resolve: {
+        alias: {
+            // Provide fallback for bindings in non-GUI builds
+            '@/bindings': useGUI ?
+                '/src/bindings-wails' :
+                '/src/bindings-web'
+        }
+    },
     server: {
         proxy: useMock ? {} : {
             '/api': {
