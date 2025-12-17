@@ -64,10 +64,16 @@ func TestLoadBalancer_RoundRobin(t *testing.T) {
 		Active: true,
 	}
 
-	// Test round-robin selection
-	// First, we need to simulate some usage for the selected services
-	// Record usage for each selection to trigger rotation
-	for i := 0; i < 4; i++ {
+	// Test round-robin selection with threshold 1
+	// With threshold 1, we should see different providers on each request
+	// after the first request to each provider
+	var selectedProviders []string
+	totalRequests := 6
+
+	// Test that the round-robin logic works with threshold 1
+	// We need to record usage directly on the services for the round-robin to work
+
+	for i := 0; i < totalRequests; i++ {
 		service, err := lb.SelectService(rule)
 		if err != nil {
 			t.Fatalf("SelectService failed: %v", err)
@@ -77,9 +83,42 @@ func TestLoadBalancer_RoundRobin(t *testing.T) {
 			t.Fatal("SelectService returned nil")
 		}
 
-		// Record usage to increment the request count
-		lb.RecordUsage(service.Provider, service.Model, 10, 10)
+		selectedProviders = append(selectedProviders, service.Provider)
+
+		// Record usage directly on the service to trigger round-robin logic
+		service.RecordUsage(10, 10)
+
+		t.Logf("Request %d: Selected provider %s", i+1, service.Provider)
 	}
+
+	// Verify round-robin behavior with threshold 1
+	// Expected pattern: provider1, provider2, provider1, provider2, provider1, provider2
+	expectedPattern := []string{"provider1", "provider2", "provider1", "provider2", "provider1", "provider2"}
+
+	for i, expected := range expectedPattern {
+		if selectedProviders[i] != expected {
+			t.Errorf("Request %d: expected provider %s, got %s", i+1, expected, selectedProviders[i])
+		}
+	}
+
+	// Count selections for each provider
+	provider1Count := 0
+	provider2Count := 0
+	for _, provider := range selectedProviders {
+		if provider == "provider1" {
+			provider1Count++
+		} else if provider == "provider2" {
+			provider2Count++
+		}
+	}
+
+	// With 6 requests and perfect alternation, we should have 3 each
+	if provider1Count != 3 || provider2Count != 3 {
+		t.Errorf("Expected 3 selections each, got provider1: %d, provider2: %d",
+			provider1Count, provider2Count)
+	}
+
+	t.Logf("Final distribution: provider1: %d, provider2: %d", provider1Count, provider2Count)
 }
 
 func TestLoadBalancer_EnabledFilter(t *testing.T) {
