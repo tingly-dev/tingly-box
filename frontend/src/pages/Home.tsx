@@ -12,15 +12,17 @@ import {
     Dialog,
     DialogContent,
     DialogTitle,
-    Grid,
     IconButton,
     Stack,
+    Tab,
+    Tabs,
     Tooltip,
     Typography
 } from '@mui/material';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { ProbeResponse } from '../client';
+import CardGrid from '../components/CardGrid.tsx';
 import CredentialFormDialog, { type ProviderFormData } from '../components/CredentialFormDialog.tsx';
 import ModelSelectTab, { type ProviderSelectTabOption } from "../components/ModelSelectTab.tsx";
 import { PageLayout } from '../components/PageLayout';
@@ -45,6 +47,7 @@ const Home = () => {
     const [generatedToken, setGeneratedToken] = useState<string>('');
     const [apiKey, setApiKey] = useState<string>('');
     const [showTokenModal, setShowTokenModal] = useState(false);
+    const [activeTab, setActiveTab] = useState(0);
 
     // Banner state for provider/model selection
     const [bannerProvider, setBannerProvider] = useState<string>('');
@@ -455,237 +458,239 @@ const Home = () => {
 
 
     const Header = () => {
+        const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+            setActiveTab(newValue);
+        };
+
+        // Common component for API configuration rows
+        const ApiConfigRow = ({
+            label,
+            value,
+            onCopy,
+            children,
+            isClickable = false,
+            isMonospace = true,
+            showEllipsis = false
+        }: {
+            label: string;
+            value?: string;
+            onCopy?: () => void;
+            children?: React.ReactNode;
+            isClickable?: boolean;
+            isMonospace?: boolean;
+            showEllipsis?: boolean;
+        }) => (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{
+                        minWidth: 120,
+                        flexShrink: 0,
+                        fontWeight: 500
+                    }}
+                >
+                    {label}:
+                </Typography>
+                <Typography
+                    variant="body2"
+                    onClick={isClickable && onCopy ? onCopy : undefined}
+                    sx={{
+                        fontFamily: isMonospace ? 'monospace' : 'inherit',
+                        fontSize: showEllipsis ? '0.8rem' : '0.75rem',
+                        color: isClickable ? 'primary.main' : 'text.secondary',
+                        letterSpacing: showEllipsis ? '2px' : 'normal',
+                        flex: 'none',
+                        maxWidth: '300px',
+                        cursor: isClickable ? 'pointer' : 'default',
+                        userSelect: showEllipsis ? 'none' : 'auto',
+                        '&:hover': isClickable ? {
+                            textDecoration: 'underline',
+                            backgroundColor: 'action.hover'
+                        } : {},
+                        padding: isClickable ? 1 : 0,
+                        borderRadius: isClickable ? 1 : 0,
+                        transition: 'all 0.2s ease-in-out'
+                    }}
+                    title={isClickable ? `Click to copy ${label}` : undefined}
+                >
+                    {showEllipsis ? '••••••••••••••••' : value}
+                </Typography>
+                <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0, minWidth: 'fit-content' }}>
+                    {children}
+                </Stack>
+            </Box>
+        );
+
+        const OpenAITab = () => (
+            <Box sx={{ p: 2 }}>
+                <ApiConfigRow
+                    label="Base URL"
+                    value={`${baseUrl}/openai`}
+                    onCopy={() => copyToClipboard(openaiBaseUrl, 'OpenAI Base URL')}
+                    isClickable={true}
+                >
+                    <IconButton
+                        onClick={() => copyToClipboard(openaiBaseUrl, 'OpenAI Base URL')}
+                        size="small"
+                        title="Copy OpenAI Base URL"
+                    >
+                        <CopyIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton
+                        onClick={() => {
+                            const openaiCurl = `curl -X POST "${openaiBaseUrl}/v1/chat/completions" -H "Authorization: Bearer ${token}" -H "Content-Type: application/json" -d '{"messages": [{"role": "user", "content": "Hello!"}]}'`;
+                            copyToClipboard(openaiCurl, 'OpenAI cURL command');
+                        }}
+                        size="small"
+                        title="Copy OpenAI cURL Example"
+                    >
+                        <TerminalIcon fontSize="small" />
+                    </IconButton>
+                </ApiConfigRow>
+
+                <ApiConfigRow
+                    label="API Key"
+                    showEllipsis={true}
+                >
+                    <Tooltip title="View Token">
+                        <IconButton
+                            onClick={() => setShowTokenModal(true)}
+                            size="small"
+                        >
+                            <Typography variant="caption">
+                                👁️
+                            </Typography>
+                        </IconButton>
+                    </Tooltip>
+                    <IconButton
+                        onClick={generateToken}
+                        size="small"
+                        title="Generate New Token"
+                    >
+                        <RefreshIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton
+                        onClick={() => copyToClipboard(token, 'API Key')}
+                        size="small"
+                        title="Copy Token"
+                    >
+                        <CopyIcon fontSize="small" />
+                    </IconButton>
+                </ApiConfigRow>
+
+                <ApiConfigRow
+                    label="LLM API Model"
+                    value="tingly"
+                    onCopy={() => copyToClipboard('tingly', 'LLM API Model')}
+                    isClickable={true}
+                >
+                    <IconButton
+                        onClick={() => copyToClipboard('tingly', 'LLM API Model')}
+                        size="small"
+                        title="Copy Model"
+                    >
+                        <CopyIcon fontSize="small" />
+                    </IconButton>
+                </ApiConfigRow>
+            </Box>
+        );
+
+        const AnthropicTab = () => (
+            <Box sx={{ p: 2 }}>
+                <ApiConfigRow
+                    label="Base URL"
+                    value={`${baseUrl}/anthropic`}
+                    onCopy={() => copyToClipboard(anthropicBaseUrl, 'Anthropic Base URL')}
+                    isClickable={true}
+                >
+                    <IconButton
+                        onClick={() => copyToClipboard(anthropicBaseUrl, 'Anthropic Base URL')}
+                        size="small"
+                        title="Copy Anthropic Base URL"
+                    >
+                        <CopyIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton
+                        onClick={() => {
+                            const anthropicCurl = `curl -X POST "${anthropicBaseUrl}/v1/messages" -H "Authorization: Bearer ${token}" -H "Content-Type: application/json" -d '{"messages": [{"role": "user", "content": "Hello!"}], "max_tokens": 100}'`;
+                            copyToClipboard(anthropicCurl, 'Anthropic cURL command');
+                        }}
+                        size="small"
+                        title="Copy Anthropic cURL Example"
+                    >
+                        <TerminalIcon fontSize="small" />
+                    </IconButton>
+                </ApiConfigRow>
+
+                <ApiConfigRow
+                    label="API Key"
+                    showEllipsis={true}
+                >
+                    <Tooltip title="View Token">
+                        <IconButton
+                            onClick={() => setShowTokenModal(true)}
+                            size="small"
+                        >
+                            <Typography variant="caption">
+                                👁️
+                            </Typography>
+                        </IconButton>
+                    </Tooltip>
+                    <IconButton
+                        onClick={generateToken}
+                        size="small"
+                        title="Generate New Token"
+                    >
+                        <RefreshIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton
+                        onClick={() => copyToClipboard(token, 'API Key')}
+                        size="small"
+                        title="Copy Token"
+                    >
+                        <CopyIcon fontSize="small" />
+                    </IconButton>
+                </ApiConfigRow>
+
+                <ApiConfigRow
+                    label="LLM API Model"
+                    value="tingly"
+                    onCopy={() => copyToClipboard('tingly', 'LLM API Model')}
+                    isClickable={true}
+                >
+                    <IconButton
+                        onClick={() => copyToClipboard('tingly', 'LLM API Model')}
+                        size="small"
+                        title="Copy Model"
+                    >
+                        <CopyIcon fontSize="small" />
+                    </IconButton>
+                </ApiConfigRow>
+            </Box>
+        );
+
+
         return (
             <>
-                <Grid container spacing={3}>
-                    <Grid size={{ xs: 12, md: 6 }}>
-                        <Stack spacing={2}>
-                            {/* OpenAI Row */}
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                <Typography
-                                    variant="body2"
-                                    color="text.secondary"
-                                    sx={{
-                                        minWidth: 120,
-                                        flexShrink: 0,
-                                        fontWeight: 500
-                                    }}
-                                >
-                                    OpenAI Base URL:
-                                </Typography>
-                                <Typography
-                                    variant="body2"
-                                    onClick={() => copyToClipboard(openaiBaseUrl, 'OpenAI Base URL')}
-                                    sx={{
-                                        fontFamily: 'monospace',
-                                        fontSize: '0.75rem',
-                                        color: 'primary.main',
-                                        flex: 1,
-                                        cursor: 'pointer',
-                                        '&:hover': {
-                                            textDecoration: 'underline',
-                                            backgroundColor: 'action.hover'
-                                        },
-                                        padding: 1,
-                                        borderRadius: 1,
-                                        transition: 'all 0.2s ease-in-out'
-                                    }}
-                                    title="Click to copy OpenAI Base URL"
-                                >
-                                    {baseUrl}/openai
-                                </Typography>
-                                <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
-                                    <IconButton
-                                        onClick={() => copyToClipboard(openaiBaseUrl, 'OpenAI Base URL')}
-                                        size="small"
-                                        title="Copy OpenAI Base URL"
-                                    >
-                                        <CopyIcon fontSize="small" />
-                                    </IconButton>
-                                    <IconButton
-                                        onClick={() => {
-                                            const openaiCurl = `curl -X POST "${openaiBaseUrl}/v1/chat/completions" -H "Authorization: Bearer ${token}" -H "Content-Type: application/json" -d '{"messages": [{"role": "user", "content": "Hello!"}]}'`;
-                                            copyToClipboard(openaiCurl, 'OpenAI cURL command');
-                                        }}
-                                        size="small"
-                                        title="Copy OpenAI cURL Example"
-                                    >
-                                        <TerminalIcon fontSize="small" />
-                                    </IconButton>
-                                </Stack>
-                            </Box>
-
-                            {/* Anthropic Row */}
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                <Typography
-                                    variant="body2"
-                                    color="text.secondary"
-                                    sx={{
-                                        minWidth: 120,
-                                        flexShrink: 0,
-                                        fontWeight: 500
-                                    }}
-                                >
-                                    Anthropic Base URL:
-                                </Typography>
-                                <Typography
-                                    variant="body2"
-                                    onClick={() => copyToClipboard(anthropicBaseUrl, 'Anthropic Base URL')}
-                                    sx={{
-                                        fontFamily: 'monospace',
-                                        fontSize: '0.75rem',
-                                        color: 'primary.main',
-                                        flex: 1,
-                                        cursor: 'pointer',
-                                        '&:hover': {
-                                            textDecoration: 'underline',
-                                            backgroundColor: 'action.hover'
-                                        },
-                                        padding: 1,
-                                        borderRadius: 1,
-                                        transition: 'all 0.2s ease-in-out'
-                                    }}
-                                    title="Click to copy Anthropic Base URL"
-                                >
-                                    {baseUrl}/anthropic
-                                </Typography>
-                                <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
-                                    <IconButton
-                                        onClick={() => copyToClipboard(anthropicBaseUrl, 'Anthropic Base URL')}
-                                        size="small"
-                                        title="Copy Anthropic Base URL"
-                                    >
-                                        <CopyIcon fontSize="small" />
-                                    </IconButton>
-                                    <IconButton
-                                        onClick={() => {
-                                            const anthropicCurl = `curl -X POST "${anthropicBaseUrl}/v1/messages" -H "Authorization: Bearer ${token}" -H "Content-Type: application/json" -d '{"messages": [{"role": "user", "content": "Hello!"}], "max_tokens": 100}'`;
-                                            copyToClipboard(anthropicCurl, 'Anthropic cURL command');
-                                        }}
-                                        size="small"
-                                        title="Copy Anthropic cURL Example"
-                                    >
-                                        <TerminalIcon fontSize="small" />
-                                    </IconButton>
-                                </Stack>
-                            </Box>
-                        </Stack>
-                    </Grid>
-
-                    <Grid size={{ xs: 12, md: 6 }}>
-                        <Stack spacing={2}>
-                            {/* Token Row */}
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                <Typography
-                                    variant="body2"
-                                    color="text.secondary"
-                                    sx={{
-                                        minWidth: 120,
-                                        flexShrink: 0,
-                                        fontWeight: 500
-                                    }}
-                                >
-                                    LLM API KEY:
-                                </Typography>
-                                <Typography
-                                    variant="body2"
-                                    sx={{
-                                        fontFamily: 'monospace',
-                                        fontSize: '0.8rem',
-                                        color: 'text.secondary',
-                                        letterSpacing: '2px',
-                                        flex: 1,
-                                        cursor: 'default',
-                                        userSelect: 'none'
-                                    }}
-                                >
-                                    ••••••••••••••••
-                                </Typography>
-                                <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
-                                    <Tooltip title="View Token">
-                                        <IconButton
-                                            onClick={() => setShowTokenModal(true)}
-                                            size="small"
-                                        >
-                                            <Typography variant="caption">
-                                                👁️
-                                            </Typography>
-                                        </IconButton>
-                                    </Tooltip>
-                                    <IconButton
-                                        onClick={generateToken}
-                                        size="small"
-                                        title="Generate New Token"
-                                    >
-                                        <RefreshIcon fontSize="small" />
-                                    </IconButton>
-                                    <IconButton
-                                        onClick={() => copyToClipboard(token, 'API Key')}
-                                        size="small"
-                                        title="Copy Token"
-                                    >
-                                        <CopyIcon fontSize="small" />
-                                    </IconButton>
-                                </Stack>
-                            </Box>
-
-                            {/* Model Row */}
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                <Typography
-                                    variant="body2"
-                                    color="text.secondary"
-                                    sx={{
-                                        minWidth: 120,
-                                        flexShrink: 0,
-                                        fontWeight: 500
-                                    }}
-                                >
-                                    LLM API Model:
-                                </Typography>
-                                <Typography
-                                    variant="body2"
-                                    onClick={() => copyToClipboard('tingly', 'LLM API Model')}
-                                    sx={{
-                                        fontFamily: 'monospace',
-                                        fontSize: '0.8rem',
-                                        color: 'text.secondary',
-                                        letterSpacing: '2px',
-                                        flex: 1,
-                                        cursor: 'pointer',
-                                        '&:hover': {
-                                            textDecoration: 'underline',
-                                            backgroundColor: 'action.hover'
-                                        },
-                                        padding: 1,
-                                        borderRadius: 1,
-                                        transition: 'all 0.2s ease-in-out'
-                                    }}
-                                    title="Click to copy LLM API Model"
-                                >
-                                    tingly
-                                </Typography>
-                                <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
-                                    <IconButton
-                                        onClick={() => copyToClipboard('tingly', 'LLM API Model')}
-                                        size="small"
-                                        title="Copy Model"
-                                    >
-                                        <CopyIcon fontSize="small" />
-                                    </IconButton>
-                                </Stack>
-                            </Box>
-                        </Stack>
-                    </Grid>
-                </Grid>
+                <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+                    <Tabs value={activeTab} onChange={handleTabChange} aria-label="API configuration tabs">
+                        <Tab label="Use OpenAI" />
+                        <Tab label="Use Anthropic" />
+                    </Tabs>
+                </Box>
+                {activeTab === 0 && <OpenAITab />}
+                {activeTab === 1 && <AnthropicTab />}
             </>
         )
     }
+
     return (
         <PageLayout
             loading={loading}
             notification={notification}
         >
-            <Stack>
+            <CardGrid>
                 {/* Server Information Header */}
                 <UnifiedCard
                     title="Model Proxy Config"
@@ -697,7 +702,7 @@ const Home = () => {
                 </UnifiedCard>
 
                 <UnifiedCard
-                    title="Choose Model"
+                    title="Use Key & Model"
                     size="full"
                     rightAction={
                         <Box sx={{ display: 'flex', gap: 1 }}>
@@ -711,9 +716,9 @@ const Home = () => {
                             </Button>
                             <Button
                                 variant="contained"
-                                onClick={() => navigate('/provider')}
+                                onClick={handleAddProviderClick}
                             >
-                                Manage Credentials
+                                Add Credential
                             </Button>
                         </Box>
                     }
@@ -752,7 +757,7 @@ const Home = () => {
                     )}
 
                 </UnifiedCard>
-            </Stack>
+            </CardGrid>
 
             {/* Token Modal */}
             <ApiKeyModal></ApiKeyModal>
