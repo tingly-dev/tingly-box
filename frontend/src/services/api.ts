@@ -12,26 +12,9 @@ import {
     TestingApi,
     TokenApi
 } from '../client';
+import {getProxyService} from "./binding.ts";
 
-// Cache for dynamically imported ProxyService
-let ProxyService: any = null;
 
-// Helper function to dynamically import ProxyService when needed
-const getProxyService = async (): Promise<any> => {
-    // Check if we're in GUI mode
-    const isGuiMode = import.meta.env.VITE_PKG_MODE === "gui";
-
-    if (isGuiMode && !ProxyService) {
-        try {
-            const module = await import('../bindings/tingly-box/internal/wails3/services');
-            ProxyService = module.ProxyService;
-        } catch (err) {
-            console.error('Failed to load ProxyService:', err);
-            return null;
-        }
-    }
-    return ProxyService;
-};
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -73,7 +56,8 @@ export const getBaseUrl = async (): Promise<string> => {
             }
         }
     } else {
-        basePath = window.location.href.replace(/\/$/, "")
+        const host = window.location.host.replace(/\/$/, "")
+        basePath = `http;//${host}`
     }
 
     return basePath

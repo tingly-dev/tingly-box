@@ -93,14 +93,9 @@ const RuleCard: React.FC<RuleCardProps> = ({
                     <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary' }}>
                         {record.requestModel || 'Untitled Rule'}
                     </Typography>
-                    {record.responseModel && (
-                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                            → {record.responseModel}
-                        </Typography>
-                    )}
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Chip
-                            icon={<ApiIcon sx={{ fontSize: 16 }} />}
+                            // icon={<ApiIcon sx={{ fontSize: 16 }} />}
                             label={`use ${record.providers.length} keys`}
                             size="small"
                             variant="outlined"
@@ -110,6 +105,13 @@ const RuleCard: React.FC<RuleCardProps> = ({
                             color={record.active ? 'success' : 'default'}
                             size="small"
                         />
+                        {
+                            record.responseModel && <Chip
+                                label={`Response as ${record.responseModel}`}
+                                size="small"
+                                color={'info'}
+                            />
+                        }
                     </Box>
                 </Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
