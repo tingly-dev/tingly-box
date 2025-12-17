@@ -7,10 +7,15 @@ import { viteMockServe } from 'vite-plugin-mock';
 const useMock = process.env.USE_MOCK === 'true'
 console.log("use mock", useMock)
 
+// Check if we're building for GUI mode
+const isGuiMode = process.env.NODE_ENV === 'production' &&
+                  (process.env.VITE_PKG_MODE === 'gui')
+
 // https://vite.dev/config/
 export default defineConfig({
     plugins: [
-        wails("./src/bindings"),
+        // Only include wails plugin when building for GUI mode
+        ...(isGuiMode ? [wails("./src/bindings")] : []),
         react(),
         viteMockServe({
             mockPath: 'src/mock',
