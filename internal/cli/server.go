@@ -66,11 +66,11 @@ type startServerOptions struct {
 
 // startServer handles the server starting logic
 func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
-	// Set port if provided
-	if opts.Port != 8080 {
-		if err := appConfig.SetServerPort(opts.Port); err != nil {
-			return fmt.Errorf("failed to set server port: %w", err)
-		}
+	var port int = opts.Port
+	if port == 0 {
+		port = appConfig.GetServerPort()
+	} else {
+		appConfig.SetServerPort(port)
 	}
 
 	// Create PID manager
@@ -78,7 +78,7 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 
 	// Check if server is already running using PID manager
 	if pidManager.IsRunning() {
-		fmt.Printf("Server is already running on port %d\n", appConfig.GetServerPort())
+		fmt.Printf("Server is already running on port %d\n", port)
 		return nil
 	}
 
@@ -87,7 +87,13 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 		return fmt.Errorf("failed to create PID file: %w", err)
 	}
 
-	serverManager := manage.NewServerManager(appConfig, manage.WithUI(opts.EnableUI), manage.WithAdaptor(opts.enableAdaptor), manage.WithDebug(opts.EnableDebug))
+	serverManager := manage.NewServerManager(
+		appConfig,
+		manage.WithUI(opts.EnableUI),
+		manage.WithAdaptor(opts.enableAdaptor),
+		manage.WithDebug(opts.EnableDebug),
+		manage.WithPort(port),
+	)
 
 	// Setup signal handling for graceful shutdown
 	sigChan := make(chan os.Signal, 1)
@@ -99,10 +105,10 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 		serverErr <- serverManager.Start()
 	}()
 
-	fmt.Printf("Server starting on port %d...\n", appConfig.GetServerPort())
-	fmt.Printf("API endpoint: http://localhost:%d/v1/chat/completions\n", appConfig.GetServerPort())
+	fmt.Printf("Server starting on port %d...\n", port)
+	fmt.Printf("API endpoint: http://localhost:%d/v1/chat/completions\n", port)
 	if opts.EnableUI {
-		fmt.Printf("Web UI: http://localhost:%d/dashboard\n", appConfig.GetServerPort())
+		fmt.Printf("Web UI: http://localhost:%d/dashboard\n", port)
 	}
 
 	// Wait for either server error, shutdown signal, or web UI stop request
