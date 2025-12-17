@@ -61,7 +61,7 @@ export const CardGrid = ({
   // Calculate visible items with proper column support
   const visibleItems = useMemo(() => {
     const currentContainerHeight = containerRef.current?.clientHeight || propContainerHeight;
-    const spacingValue = spacing * 8; // Convert spacing unit to pixels (approximate)
+    const spacingValue = spacing * 4; // Convert spacing unit to pixels (approximate)
     const actualItemHeight = itemHeight + spacingValue;
 
     const startIndex = Math.max(0, Math.floor(scrollTop / actualItemHeight) - overscan);

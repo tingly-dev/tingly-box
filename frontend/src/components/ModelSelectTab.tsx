@@ -111,7 +111,7 @@ export default function ModelSelectTab({
 
         // Calculate rows based on available height
         const maxRows = Math.floor(availableHeight / cardHeight);
-        const rows = Math.max(2, Math.min(6, maxRows)); // Between 2-6 rows
+        const rows =  Math.min(2, maxRows);
 
         const modelsPerPage = columns * rows;
 
