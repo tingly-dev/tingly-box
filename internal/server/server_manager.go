@@ -90,6 +90,8 @@ func (sm *ServerManager) Setup(port int) error {
 		}
 	}
 
+	sm.appConfig.GetGlobalConfig().SetDebug(sm.enableDebug)
+
 	// Create server with UI and adaptor options
 	sm.server = NewServerWithAllOptions(sm.appConfig.GetGlobalConfig(), sm.enableUI, sm.enableAdaptor)
 
