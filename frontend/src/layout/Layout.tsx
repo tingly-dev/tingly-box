@@ -42,7 +42,7 @@ const Layout = ({ children }: LayoutProps) => {
 
     const menuItems = [
         { path: '/', label: 'Home', icon: <DashboardIcon /> },
-        { path: '/credential', label: 'Credentials', icon: <KeyIcon /> },
+        { path: '/credential', label: 'API Keys', icon: <KeyIcon /> },
         { path: '/rule', label: 'Rules', icon: <RuleOutlined /> },
         { path: '/system', label: 'System', icon: <SettingsIcon /> },
         { path: '/history', label: 'History', icon: <HistoryIcon /> },

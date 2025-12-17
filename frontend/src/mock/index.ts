@@ -123,7 +123,7 @@ export default [
             } else {
                 return {
                     success: false,
-                    error: `Credential '${name}' not found`
+                    error: `API Key '${name}' not found`
                 };
             }
         }

@@ -481,7 +481,7 @@ const Home = () => {
                 </UnifiedCard>
 
                 <UnifiedCard
-                    title="Use Key & Model"
+                    title="API Key & Model to Use"
                     size="full"
                     rightAction={
                         <Box sx={{ display: 'flex', gap: 1 }}>
@@ -497,7 +497,7 @@ const Home = () => {
                                 variant="contained"
                                 onClick={handleAddProviderClick}
                             >
-                                Add Credential
+                                Add API Key
                             </Button>
                         </Box>
                     }
