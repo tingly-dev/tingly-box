@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"tingly-box/internal/config"
+	"tingly-box/internal/manage"
 	"tingly-box/internal/server"
 
 	"github.com/gin-gonic/gin"
@@ -86,7 +87,7 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 		return fmt.Errorf("failed to create PID file: %w", err)
 	}
 
-	serverManager := server.NewServerManager(appConfig, server.WithUI(opts.EnableUI), server.WithAdaptor(opts.enableAdaptor), server.WithDebug(opts.EnableDebug))
+	serverManager := manage.NewServerManager(appConfig, manage.WithUI(opts.EnableUI), manage.WithAdaptor(opts.enableAdaptor), manage.WithDebug(opts.EnableDebug))
 
 	// Setup signal handling for graceful shutdown
 	sigChan := make(chan os.Signal, 1)
@@ -147,7 +148,7 @@ func startServerNonBlocking(appConfig *config.AppConfig, opts startServerOptions
 	}
 
 	// Create a new server manager for starting
-	newServerManager := server.NewServerManager(appConfig)
+	newServerManager := manage.NewServerManager(appConfig)
 
 	// Start server with new configuration
 	fmt.Println("Starting server...")

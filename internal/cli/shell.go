@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"tingly-box/internal/server"
 
 	"tingly-box/internal/auth"
 	"tingly-box/internal/config"
+	"tingly-box/internal/manage"
 	"tingly-box/internal/obs"
 
 	"github.com/spf13/cobra"
@@ -267,7 +267,7 @@ func handleServerManagement(appConfig *config.AppConfig, reader *bufio.Reader, l
 	input, _ := reader.ReadString('\n')
 	choice := strings.TrimSpace(strings.TrimSuffix(input, "\n"))
 
-	serverManager := server.NewServerManager(appConfig)
+	serverManager := manage.NewServerManager(appConfig)
 
 	switch choice {
 	case "1":
@@ -342,7 +342,7 @@ func handleServerManagement(appConfig *config.AppConfig, reader *bufio.Reader, l
 			time.Sleep(1 * time.Second)
 		}
 
-		newServerManager := server.NewServerManager(appConfig)
+		newServerManager := manage.NewServerManager(appConfig)
 		if err := newServerManager.Start(); err != nil {
 			fmt.Printf("❌ Failed to restart server: %v\n", err)
 			if logger != nil {
@@ -394,7 +394,7 @@ func handleServerStatus(appConfig *config.AppConfig, logger *obs.MemoryLogger) {
 	fmt.Println("\n📊 Server Status")
 	fmt.Println(strings.Repeat("=", 50))
 
-	serverManager := server.NewServerManager(appConfig)
+	serverManager := manage.NewServerManager(appConfig)
 	running := serverManager.IsRunning()
 
 	status := "❌ Stopped"
