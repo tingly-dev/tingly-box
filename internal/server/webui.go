@@ -928,17 +928,17 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 	// Set Swagger information
 	manager.SetSwaggerInfo(swagger.SwaggerInfo{
 		Title:       "Tingly Box API",
-		Description: "A Restful API for managing AI model providers, rules, and load balancing with automatic Swagger documentation generation.",
+		Description: "A Restful API for tingly-box with automatic Swagger documentation generation.",
 		Version:     "1.0.0",
 		Host:        fmt.Sprintf("localhost:%d", s.config.ServerPort),
 		BasePath:    "/",
 		Contact: swagger.SwaggerContact{
 			Name:  "API Support",
-			Email: "support@tingly-box.com",
+			Email: "ops@tingly.dev",
 		},
 		License: swagger.SwaggerLicense{
-			Name: "MIT",
-			URL:  "https://opensource.org/licenses/MIT",
+			Name: "Apache License\nVersion 2.0",
+			URL:  "https://www.apache.org/licenses/LICENSE-2.0",
 		},
 	})
 
