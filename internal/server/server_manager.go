@@ -20,6 +20,7 @@ type ServerManager struct {
 	server        *Server
 	enableUI      bool
 	enableAdaptor bool
+	enableDebug   bool
 	status        string
 	sync.Mutex
 }
@@ -41,6 +42,13 @@ func WithAdaptor(enabled bool) ServerManagerOption {
 	}
 }
 
+// WithAdaptor enables or disables the adaptor for the server manager
+func WithDebug(enabled bool) ServerManagerOption {
+	return func(sm *ServerManager) {
+		sm.enableDebug = enabled
+	}
+}
+
 // NewServerManager creates a new server manager with default options (UI enabled, adaptor disabled)
 func NewServerManager(appConfig *config.AppConfig, opts ...ServerManagerOption) *ServerManager {
 	// Default options
@@ -57,12 +65,6 @@ func NewServerManager(appConfig *config.AppConfig, opts ...ServerManagerOption) 
 
 	sm.Setup(appConfig.GetServerPort())
 	return sm
-}
-
-// NewServerManagerWithOptions creates a new server manager with specific bool options
-// Deprecated: Use NewServerManager with functional options instead
-func NewServerManagerWithOptions(appConfig *config.AppConfig, enableUI bool, enableAdaptor bool) *ServerManager {
-	return NewServerManager(appConfig, WithUI(enableUI), WithAdaptor(enableAdaptor))
 }
 
 func (sm *ServerManager) GetGinEngine() *gin.Engine {
