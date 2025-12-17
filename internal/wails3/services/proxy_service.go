@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"tingly-box/internal/config"
+	"tingly-box/internal/manage"
 	"tingly-box/internal/server"
 
 	"github.com/gin-gonic/gin"
@@ -17,7 +18,7 @@ import (
 // ProxyService manages the web UI and HTTP server functionality
 type ProxyService struct {
 	appConfig     *config.AppConfig
-	serverManager *server.ServerManager
+	serverManager *manage.ServerManager
 	httpServer    *server.Server
 	shutdownChan  chan struct{}
 	isRunning     bool
@@ -31,7 +32,7 @@ func NewUIService(configDir string, port int) (*ProxyService, error) {
 		return nil, fmt.Errorf("failed to create app config: %w", err)
 	}
 
-	serverManager := server.NewServerManager(appConfig, server.WithUI(true), server.WithAdaptor(false), server.WithDebug(false))
+	serverManager := manage.NewServerManager(appConfig, manage.WithUI(true), manage.WithAdaptor(false), manage.WithDebug(false))
 	serverManager.Setup(port)
 
 	res := &ProxyService{

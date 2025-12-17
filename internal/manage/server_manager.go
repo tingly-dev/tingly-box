@@ -1,4 +1,4 @@
-package server
+package manage
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"tingly-box/internal/config"
+	"tingly-box/internal/server"
 
 	"github.com/gin-gonic/gin"
 )
@@ -17,7 +18,7 @@ const StopTimeout = time.Second * 10
 // ServerManager manages the HTTP server lifecycle
 type ServerManager struct {
 	appConfig     *config.AppConfig
-	server        *Server
+	server        *server.Server
 	enableUI      bool
 	enableAdaptor bool
 	enableDebug   bool
@@ -93,10 +94,10 @@ func (sm *ServerManager) Setup(port int) error {
 	sm.appConfig.GetGlobalConfig().SetDebug(sm.enableDebug)
 
 	// Create server with UI and adaptor options
-	sm.server = NewServerWithAllOptions(sm.appConfig.GetGlobalConfig(), sm.enableUI, sm.enableAdaptor)
+	sm.server = server.NewServerWithAllOptions(sm.appConfig.GetGlobalConfig(), sm.enableUI, sm.enableAdaptor)
 
 	// Set global server instance for web UI control
-	SetGlobalServer(sm.server)
+	server.SetGlobalServer(sm.server)
 
 	return nil
 }

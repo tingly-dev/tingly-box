@@ -42,21 +42,21 @@ type Server struct {
 // NewServerWithAllOptions creates a new HTTP server with UI and adaptor options
 // Deprecated: Use NewServerWithFunctionalOptions instead
 func NewServerWithAllOptions(cfg *config.Config, enableUI bool, enableAdaptor bool) *Server {
-	return NewServer(cfg, WithServerUI(enableUI), WithServerAdaptor(enableAdaptor))
+	return NewServer(cfg, WithUI(enableUI), WithAdaptor(enableAdaptor))
 }
 
 // ServerOption defines a functional option for Server configuration
 type ServerOption func(*Server)
 
-// WithServerUI enables or disables the UI for the server
-func WithServerUI(enabled bool) ServerOption {
+// WithUI enables or disables the UI for the server
+func WithUI(enabled bool) ServerOption {
 	return func(s *Server) {
 		s.enableUI = enabled
 	}
 }
 
-// WithServerAdaptor enables or disables the adaptor for the server
-func WithServerAdaptor(enabled bool) ServerOption {
+// WithAdaptor enables or disables the adaptor for the server
+func WithAdaptor(enabled bool) ServerOption {
 	return func(s *Server) {
 		s.enableAdaptor = enabled
 	}
