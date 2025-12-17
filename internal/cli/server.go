@@ -92,7 +92,6 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 		manage.WithUI(opts.EnableUI),
 		manage.WithAdaptor(opts.enableAdaptor),
 		manage.WithDebug(opts.EnableDebug),
-		manage.WithPort(port),
 	)
 
 	// Setup signal handling for graceful shutdown
@@ -133,10 +132,11 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 // startServerNonBlocking starts the server in non-blocking mode (for restart command)
 func startServerNonBlocking(appConfig *config.AppConfig, opts startServerOptions) error {
 	// Set port if provided
-	if opts.Port != 8080 {
-		if err := appConfig.SetServerPort(opts.Port); err != nil {
-			return fmt.Errorf("failed to set server port: %w", err)
-		}
+	var port int = opts.Port
+	if port == 0 {
+		port = appConfig.GetServerPort()
+	} else {
+		appConfig.SetServerPort(port)
 	}
 
 	// Create PID manager
