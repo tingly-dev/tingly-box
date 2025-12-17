@@ -50,12 +50,6 @@ func WithDebug(enabled bool) ServerManagerOption {
 	}
 }
 
-func WithPort(port int) ServerManagerOption {
-	return func(sm *ServerManager) {
-		sm.appConfig.SetServerPort(port)
-	}
-}
-
 // NewServerManager creates a new server manager with default options (UI enabled, adaptor disabled)
 func NewServerManager(appConfig *config.AppConfig, opts ...ServerManagerOption) *ServerManager {
 	// Default options
