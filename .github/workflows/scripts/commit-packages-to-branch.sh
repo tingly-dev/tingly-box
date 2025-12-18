@@ -10,7 +10,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
 # Get version from environment or use default
 VERSION="${VERSION:-$(date +%Y%m%d-%H%M%S)}"
-BRANCH_NAME="${1:-packages-${VERSION}}"
+BRANCH_NAME="${1:-${VERSION}}"
 TARGET_REPO="${2:-tingly-dev/tingly-box-release}"
 
 echo "📦 Committing packages to branch: $BRANCH_NAME"
