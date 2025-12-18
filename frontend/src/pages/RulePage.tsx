@@ -47,6 +47,7 @@ const RulePage = () => {
     const [savingRecords, setSavingRecords] = useState<Set<string>>(new Set());
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [recordToDelete, setRecordToDelete] = useState<string | null>(null);
+    const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
 
     const loadData = useCallback(async () => {
         setLoading(true);
@@ -257,6 +258,24 @@ const RulePage = () => {
         );
     };
 
+    const resetRule = async (recordId: string) => {
+        // Reload data from server to reset changes
+        await loadData();
+        setMessage({ type: 'success', text: 'Rule reset to latest saved state' });
+    };
+
+    const toggleCardExpanded = (recordId: string) => {
+        setExpandedCards(prev => {
+            const next = new Set(prev);
+            if (next.has(recordId)) {
+                next.delete(recordId);
+            } else {
+                next.add(recordId);
+            }
+            return next;
+        });
+    };
+
     const handleRefreshProviderModels = async (providerName: string) => {
         if (!providerName) return;
 
@@ -336,6 +355,7 @@ const RulePage = () => {
                                     providers={providers}
                                     providerModels={providerModels}
                                     saving={savingRecords.has(record.uuid)}
+                                    expanded={expandedCards.has(record.uuid)}
                                     onUpdateRecord={(field, value) => updateConfigRecord(record.uuid, field, value)}
                                     onUpdateProvider={(providerId, field, value) => updateProvider(record.uuid, providerId, field, value)}
                                     onAddProvider={() => addProvider(record.uuid)}
@@ -343,6 +363,8 @@ const RulePage = () => {
                                     onRefreshModels={handleRefreshProviderModels}
                                     onSave={() => handleSaveRule(record)}
                                     onDelete={() => deleteRule(record.uuid)}
+                                    onReset={() => resetRule(record.uuid)}
+                                    onToggleExpanded={() => toggleCardExpanded(record.uuid)}
                                 />
                             ))}
                         </Stack>

@@ -2,7 +2,10 @@ import {
     Delete as DeleteIcon,
     ExpandLess as ExpandLessIcon,
     ExpandMore as ExpandMoreIcon,
-    Save as SaveIcon
+    Save as SaveIcon,
+    MoreVert as MoreVertIcon,
+    Settings as SettingsIcon,
+    Refresh as RefreshIcon
 } from '@mui/icons-material';
 import {
     Box,
@@ -15,7 +18,11 @@ import {
     Stack,
     Switch,
     TextField,
-    Typography
+    Typography,
+    Menu,
+    MenuItem,
+    ListItemIcon,
+    ListItemText
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import React, { useState } from 'react';
@@ -44,6 +51,7 @@ interface RuleCardProps {
     providers: any[];
     providerModels: any;
     saving: boolean;
+    expanded: boolean;
     onUpdateRecord: (field: keyof ConfigRecord, value: any) => void;
     onUpdateProvider: (providerId: string, field: keyof ConfigProvider, value: any) => void;
     onAddProvider: () => void;
@@ -51,6 +59,8 @@ interface RuleCardProps {
     onRefreshModels: (providerName: string) => void;
     onSave: () => void;
     onDelete: () => void;
+    onReset: () => void;
+    onToggleExpanded: () => void;
 }
 
 const StyledCard = styled(Card, {
@@ -71,23 +81,60 @@ const SummarySection = styled(Box)(({ theme }) => ({
 }));
 
 const RuleCard: React.FC<RuleCardProps> = ({
-    record,
-    providers,
-    providerModels,
-    saving,
-    onUpdateRecord,
-    onUpdateProvider,
-    onAddProvider,
-    onDeleteProvider,
-    onRefreshModels,
-    onSave,
-    onDelete
-}) => {
-    const [expanded, setExpanded] = useState(false);
+                                               record,
+                                               providers,
+                                               providerModels,
+                                               saving,
+                                               expanded,
+                                               onUpdateRecord,
+                                               onUpdateProvider,
+                                               onAddProvider,
+                                               onDeleteProvider,
+                                               onRefreshModels,
+                                               onSave,
+                                               onDelete,
+                                               onReset,
+                                               onToggleExpanded
+                                           }) => {
+    const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
+    const [showResponseField, setShowResponseField] = useState(false);
+    const menuOpen = Boolean(menuAnchorEl);
+
+    const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
+        event.stopPropagation();
+        setMenuAnchorEl(event.currentTarget);
+    };
+
+    const handleMenuClose = () => {
+        setMenuAnchorEl(null);
+    };
+
+    const handleConfigureResponse = () => {
+        handleMenuClose();
+        // TODO: Add configure response logic
+        console.log('Configure response for:', record.responseModel);
+    };
+
+    const handleConfigureResponseModel = () => {
+        handleMenuClose();
+        // Show the response field and expand the card
+        setShowResponseField(true);
+        if (!expanded) {
+            onToggleExpanded();
+        }
+        // Use a timeout to ensure the field is rendered before focusing
+        setTimeout(() => {
+            const responseField = document.getElementById(`response-model-${record.uuid}`) as HTMLInputElement;
+            if (responseField) {
+                responseField.focus();
+                responseField.select();
+            }
+        }, 100);
+    };
 
     return (
         <StyledCard active={record.active}>
-            <SummarySection onClick={() => setExpanded(!expanded)}>
+            <SummarySection onClick={onToggleExpanded}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1 }}>
                     <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary' }}>
                         {record.requestModel || 'Local Model Name'}
@@ -131,19 +178,58 @@ const RuleCard: React.FC<RuleCardProps> = ({
                             {saving ? 'Saving...' : 'Save'}
                         </Button>
                         <Button
-                            startIcon={<DeleteIcon />}
+                            startIcon={<RefreshIcon />}
                             onClick={(e) => {
                                 e.stopPropagation();
-                                onDelete();
+                                onReset();
                             }}
                             variant="outlined"
                             size="small"
-                            color="error"
                             disabled={saving}
                             sx={{ minWidth: 'auto', px: 1.5 }}
                         >
-                            Delete
+                            Reset
                         </Button>
+                        <IconButton
+                            size="small"
+                            onClick={handleMenuClick}
+                            disabled={saving}
+                            sx={{ ml: 0.5 }}
+                        >
+                            <MoreVertIcon />
+                        </IconButton>
+                        <Menu
+                            anchorEl={menuAnchorEl}
+                            open={menuOpen}
+                            onClose={handleMenuClose}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            {!record.responseModel ? (
+                                <MenuItem onClick={handleConfigureResponseModel}>
+                                    <ListItemIcon>
+                                        <SettingsIcon fontSize="small" />
+                                    </ListItemIcon>
+                                    <ListItemText>Configure Response Model</ListItemText>
+                                </MenuItem>
+                            ) : (
+                                <MenuItem onClick={handleConfigureResponse}>
+                                    <ListItemIcon>
+                                        <SettingsIcon fontSize="small" />
+                                    </ListItemIcon>
+                                    <ListItemText>Configure Response</ListItemText>
+                                </MenuItem>
+                            )}
+                            <MenuItem onClick={(e) => {
+                                e.stopPropagation();
+                                onDelete();
+                            }}>
+
+                                <ListItemIcon>
+                                    <DeleteIcon fontSize="small" />
+                                </ListItemIcon>
+                                <ListItemText>Delete Rule</ListItemText>
+                            </MenuItem>
+                        </Menu>
                     </Box>
                     <Switch
                         checked={record.active}
@@ -156,7 +242,7 @@ const RuleCard: React.FC<RuleCardProps> = ({
                         size="small"
                         onClick={(e) => {
                             e.stopPropagation();
-                            setExpanded(!expanded);
+                            onToggleExpanded();
                         }}
                     >
                         {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
@@ -180,14 +266,25 @@ const RuleCard: React.FC<RuleCardProps> = ({
                                     helperText="Model name to match"
                                     size="small"
                                     disabled={!record.active}
+                                    fullWidth
                                 />
                                 <TextField
+                                    id={`response-model-${record.uuid}`}
                                     label="Response Model"
                                     value={record.responseModel}
-                                    onChange={(e) => onUpdateRecord('responseModel', e.target.value)}
-                                    helperText="Empty for as-is"
+                                    onChange={(e) => {
+                                        onUpdateRecord('responseModel', e.target.value);
+                                        if (e.target.value) {
+                                            setShowResponseField(false);
+                                        }
+                                    }}
+                                    helperText={record.responseModel ? "Model to return as" : "Leave empty for as-is response"}
                                     size="small"
                                     disabled={!record.active}
+                                    sx={{
+                                        minWidth: 200,
+                                        display: record.responseModel || showResponseField ? 'block' : 'none'
+                                    }}
                                 />
                             </Stack>
                         </Box>
