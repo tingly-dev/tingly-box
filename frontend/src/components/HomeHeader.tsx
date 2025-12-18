@@ -3,6 +3,7 @@ import {
     Refresh as RefreshIcon,
     Terminal as TerminalIcon
 } from '@mui/icons-material';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 import {
     Box,
     IconButton,
@@ -27,16 +28,16 @@ interface HomeHeaderProps {
 }
 
 export const HomeHeader: React.FC<HomeHeaderProps> = ({
-    activeTab,
-    setActiveTab,
-    openaiBaseUrl,
-    anthropicBaseUrl,
-    token,
-    showTokenModal,
-    setShowTokenModal,
-    generateToken,
-    copyToClipboard
-}) => {
+                                                          activeTab,
+                                                          setActiveTab,
+                                                          openaiBaseUrl,
+                                                          anthropicBaseUrl,
+                                                          token,
+                                                          showTokenModal,
+                                                          setShowTokenModal,
+                                                          generateToken,
+                                                          copyToClipboard
+                                                      }) => {
     const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
         setActiveTab(newValue);
     };
@@ -83,18 +84,18 @@ export const HomeHeader: React.FC<HomeHeaderProps> = ({
                             onClick={() => setShowTokenModal(true)}
                             size="small"
                         >
-                            <Typography variant="caption">
-                                👁️
-                            </Typography>
+                            <VisibilityIcon></VisibilityIcon>
                         </IconButton>
                     </Tooltip>
-                    <IconButton
-                        onClick={generateToken}
-                        size="small"
-                        title="Generate New Token"
-                    >
-                        <RefreshIcon fontSize="small" />
-                    </IconButton>
+                    <Tooltip title="Refresh Token">
+                        <IconButton
+                            onClick={generateToken}
+                            size="small"
+                            title="Generate New Token"
+                        >
+                            <RefreshIcon fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
                     <IconButton
                         onClick={() => copyToClipboard(token, 'API Key')}
                         size="small"
@@ -129,7 +130,7 @@ export const HomeHeader: React.FC<HomeHeaderProps> = ({
         return <ProviderTab
             baseUrl={openaiBaseUrl}
             baseUrlLabel="OpenAI Base URL"
-        // curlCommand={openaiCurl}
+            // curlCommand={openaiCurl}
         />;
     };
 
@@ -138,7 +139,7 @@ export const HomeHeader: React.FC<HomeHeaderProps> = ({
         return <ProviderTab
             baseUrl={anthropicBaseUrl}
             baseUrlLabel="Anthropic Base URL"
-        // curlCommand={anthropicCurl}
+            // curlCommand={anthropicCurl}
         />;
     };
 
