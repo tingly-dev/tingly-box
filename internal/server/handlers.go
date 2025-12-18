@@ -97,6 +97,7 @@ func (s *Server) GetToken(c *gin.Context) {
 	}
 
 	// Save the token to config
+	token = "tingly-box-" + token
 	err = globalConfig.SetModelToken(token)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{

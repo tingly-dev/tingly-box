@@ -109,6 +109,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 		if err != nil {
 			log.Printf("Failed to generate model API key: %v", err)
 		} else {
+			apiKey = "tingly-box-" + apiKey
 			if err := cfg.SetModelToken(apiKey); err != nil {
 				log.Printf("Failed to save generated model token: %v", err)
 			} else {
