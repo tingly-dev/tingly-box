@@ -190,7 +190,7 @@ const ProviderRow: React.FC<ProviderRowProps> = ({
         <Box
             sx={{
                 display: 'grid',
-                gridTemplateColumns: '150px 100px 1fr auto',
+                gridTemplateColumns: '190px 80px 1fr auto',
                 gap: 1.5,
                 alignItems: 'center',
                 p: 1.5,
@@ -207,14 +207,21 @@ const ProviderRow: React.FC<ProviderRowProps> = ({
         >
             {/* Provider Select */}
             <FormControl size="small" disabled={!active} fullWidth>
-                <InputLabel shrink sx={{ fontSize: '0.875rem' }}>Provider</InputLabel>
+                <InputLabel shrink sx={{ fontSize: '0.875rem',backgroundColor: 'white',  }}>Provider</InputLabel>
                 <Select
                     value={provider.provider}
                     onChange={(e) => onUpdate('provider', e.target.value)}
                     label="Key"
                     size="small"
                     notched
-                    sx={{ fontSize: '0.875rem' }}
+                    sx={{
+                        fontSize: '0.875rem',
+                        '& .MuiSelect-select': {
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                        }
+                    }}
                 >
                     <MenuItem value="">Select API Key</MenuItem>
                     {availableProviders.map((p) => (
