@@ -37,6 +37,7 @@ type Server struct {
 	// options
 	enableUI      bool
 	enableAdaptor bool
+	host          string
 }
 
 // NewServerWithAllOptions creates a new HTTP server with UI and adaptor options
@@ -52,6 +53,12 @@ type ServerOption func(*Server)
 func WithUI(enabled bool) ServerOption {
 	return func(s *Server) {
 		s.enableUI = enabled
+	}
+}
+
+func WithHost(host string) ServerOption {
+	return func(s *Server) {
+		s.host = host
 	}
 }
 
@@ -300,10 +307,8 @@ func (s *Server) Start(port int) error {
 	}
 
 	s.httpServer = &http.Server{
-		Addr:         fmt.Sprintf(":%d", port),
-		Handler:      s.engine,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
+		Addr:    fmt.Sprintf("%s:%d", s.host, port),
+		Handler: s.engine,
 	}
 
 	fmt.Printf("Starting server on port %d\n", port)
