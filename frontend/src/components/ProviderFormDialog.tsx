@@ -33,7 +33,7 @@ interface ProviderFormDialogProps {
     submitText?: string;
 }
 
-const CredentialFormDialog = ({
+const ProviderFormDialog = ({
     open,
     onClose,
     onSubmit,
@@ -117,4 +117,4 @@ const CredentialFormDialog = ({
     );
 };
 
-export default CredentialFormDialog;
+export default ProviderFormDialog;

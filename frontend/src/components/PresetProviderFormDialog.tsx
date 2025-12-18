@@ -58,7 +58,7 @@ interface EnhancedProviderFormDialogProps {
     submitText?: string;
 }
 
-const EnhancedProviderFormDialog = ({
+const PresetProviderFormDialog = ({
     open,
     onClose,
     onSubmit,
@@ -217,4 +217,4 @@ const EnhancedProviderFormDialog = ({
     );
 };
 
-export default EnhancedProviderFormDialog;
+export default PresetProviderFormDialog;
