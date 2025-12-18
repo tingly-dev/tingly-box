@@ -190,7 +190,7 @@ const ProviderRow: React.FC<ProviderRowProps> = ({
         <Box
             sx={{
                 display: 'grid',
-                gridTemplateColumns: '150px 80px 1fr auto',
+                gridTemplateColumns: '150px 100px 1fr auto',
                 gap: 1.5,
                 alignItems: 'center',
                 p: 1.5,
@@ -229,6 +229,7 @@ const ProviderRow: React.FC<ProviderRowProps> = ({
             <TextField
                 value={provider.provider ? apiStyle : ''}
                 size="small"
+                fullWidth
                 disabled
                 label="Style"
                 sx={{
