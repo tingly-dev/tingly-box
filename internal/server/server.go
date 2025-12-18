@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 	"tingly-box/internal/server/middleware"
+	"tingly-box/internal/util"
 
 	"tingly-box/internal/auth"
 	"tingly-box/internal/config"
@@ -311,15 +312,17 @@ func (s *Server) Start(port int) error {
 		Handler: s.engine,
 	}
 
+	resolvedHost := util.ResolveHost(s.host)
+
 	fmt.Printf("Starting server on port %d\n", port)
-	fmt.Printf("OpenAI v1 Chat API endpoint: http://localhost:%d/openai/v1/chat/completions\n", port)
-	fmt.Printf("Anthropic v1 Message API endpoint: http://localhost:%d/anthropic/v1/messages\n", port)
+	fmt.Printf("OpenAI v1 Chat API endpoint: http://%s:%d/openai/v1/chat/completions\n", resolvedHost, port)
+	fmt.Printf("Anthropic v1 Message API endpoint: http://%s:%d/anthropic/v1/messages\n", resolvedHost, port)
 
 	// Get user token for Web UI URL
-	webUIURL := fmt.Sprintf("http://localhost:%d/dashboard", port)
+	webUIURL := fmt.Sprintf("http://%s:%d/dashboard", resolvedHost, port)
 	if s.config.HasUserToken() {
 		userToken := s.config.GetUserToken()
-		webUIURL = fmt.Sprintf("http://localhost:%d/dashboard?user_auth_token=%s", port, userToken)
+		webUIURL = fmt.Sprintf("http://%s:%d/dashboard?user_auth_token=%s", resolvedHost, port, userToken)
 	}
 	fmt.Printf("Web UI: %s\n", webUIURL)
 
