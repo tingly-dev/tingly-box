@@ -1,9 +1,9 @@
 import { Add } from '@mui/icons-material';
 import { Alert, Box, Button, Snackbar, Stack, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
-import { type ProviderFormData } from '../components/CredentialFormDialog.tsx';
+import { type ProviderFormData } from '../components/ProviderFormDialog.tsx';
 import CredentialTable from '../components/CredentialTable.tsx';
-import EnhancedProviderFormDialog from '../components/EnhancedProviderFormDialog.tsx';
+import PresetProviderFormDialog from '../components/PresetProviderFormDialog.tsx';
 import { PageLayout } from '../components/PageLayout';
 import UnifiedCard from '../components/UnifiedCard';
 import { api } from '../services/api';
@@ -201,7 +201,7 @@ const CredentialPage = () => {
                 mode={dialogMode}
             /> */}
 
-            <EnhancedProviderFormDialog
+            <PresetProviderFormDialog
                 open={dialogOpen}
                 onClose={() => setDialogOpen(false)}
                 onSubmit={handleProviderSubmit}

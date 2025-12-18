@@ -65,6 +65,3 @@ export function getProvidersByStyle(style: 'openai' | 'anthropic'): ServiceProvi
 
 // Export the raw data for direct access
 export { serviceProviders };
-
-// Export a map of providers for easy lookup
-export const serviceProviderMap: Record<string, ServiceProvider> = serviceProviders as Record<string, ServiceProvider>;
