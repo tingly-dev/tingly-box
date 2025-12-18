@@ -1,5 +1,4 @@
 import {
-    Api as ApiIcon,
     Delete as DeleteIcon,
     ExpandLess as ExpandLessIcon,
     ExpandMore as ExpandMoreIcon,
@@ -91,7 +90,7 @@ const RuleCard: React.FC<RuleCardProps> = ({
             <SummarySection onClick={() => setExpanded(!expanded)}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1 }}>
                     <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                        {record.requestModel || 'Untitled Rule'}
+                        {record.requestModel || 'Local Model Name'}
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Chip
@@ -171,7 +170,7 @@ const RuleCard: React.FC<RuleCardProps> = ({
                         {/* Model Configuration */}
                         <Box>
                             <Typography variant="subtitle1" sx={{ fontWeight: 600, color: 'text.primary', mb: 1.5 }}>
-                                Model Configuration
+                                Local Model
                             </Typography>
                             <Stack direction="row" spacing={1}>
                                 <TextField

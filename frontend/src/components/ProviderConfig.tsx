@@ -18,8 +18,8 @@ import {
     Tooltip,
     Typography
 } from '@mui/material';
-import React, { useEffect, useState } from 'react';
-import { useCustomModels, dispatchCustomModelUpdate, listenForCustomModelUpdates } from '../hooks/useCustomModels';
+import React, { useEffect } from 'react';
+import { dispatchCustomModelUpdate, listenForCustomModelUpdates, useCustomModels } from '../hooks/useCustomModels';
 
 interface ConfigProvider {
     uuid: string;
@@ -62,7 +62,7 @@ const ProviderConfig: React.FC<ProviderConfigProps> = ({
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                        API Keys
+                        Forwarding To
                     </Typography>
                     <Chip
                         label={providers.length}
@@ -207,7 +207,7 @@ const ProviderRow: React.FC<ProviderRowProps> = ({
         >
             {/* Provider Select */}
             <FormControl size="small" disabled={!active} fullWidth>
-                <InputLabel shrink sx={{ fontSize: '0.875rem' }}>Name</InputLabel>
+                <InputLabel shrink sx={{ fontSize: '0.875rem' }}>Provider</InputLabel>
                 <Select
                     value={provider.provider}
                     onChange={(e) => onUpdate('provider', e.target.value)}

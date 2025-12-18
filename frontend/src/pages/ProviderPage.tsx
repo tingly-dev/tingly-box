@@ -1,10 +1,10 @@
 import { Add } from '@mui/icons-material';
 import { Alert, Box, Button, Snackbar, Stack, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
-import { type ProviderFormData } from '../components/ProviderFormDialog.tsx';
 import CredentialTable from '../components/CredentialTable.tsx';
-import PresetProviderFormDialog from '../components/PresetProviderFormDialog.tsx';
 import { PageLayout } from '../components/PageLayout';
+import PresetProviderFormDialog from '../components/PresetProviderFormDialog.tsx';
+import { type ProviderFormData } from '../components/ProviderFormDialog.tsx';
 import UnifiedCard from '../components/UnifiedCard';
 import { api } from '../services/api';
 
@@ -131,7 +131,7 @@ const ProviderPage = () => {
         <PageLayout loading={loading}>
             {providers.length > 0 && (
                 <UnifiedCard
-                    title="API Keys"
+                    title="Providers"
                     subtitle={providers.length > 0 ? `Managing ${providers.length} credential(s)` : "No model API key configured yet"}
                     size="full"
                     rightAction={

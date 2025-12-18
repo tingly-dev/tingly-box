@@ -468,7 +468,7 @@ const Home = () => {
             <CardGrid>
                 {/* Server Information Header */}
                 <UnifiedCard
-                    title="Model Proxy Config"
+                    title="Proxy Configs"
                     // subtitle={`Total: ${providers.length} providers | Enabled: ${providers.filter((p: any) => p.enabled).length}`}
                     size="header"
 
@@ -487,7 +487,7 @@ const Home = () => {
                 </UnifiedCard>
 
                 <UnifiedCard
-                    title="Models"
+                    title="Providers"
                     size="full"
                     rightAction={
                         <Box sx={{ display: 'flex', gap: 1 }}>
