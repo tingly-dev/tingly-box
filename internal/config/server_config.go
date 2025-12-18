@@ -785,8 +785,8 @@ func (c *Config) migrateRules() {
 		}
 
 		// Ensure LBTactic is properly initialized
-		if c.Rules[i].LBTactic.Type == 0 {
-			// If LBTactic is empty but old Tactic field exists, migrate it
+		if c.Rules[i].LBTactic.Params == nil {
+			// If LBTactic has no params but old Tactic field exists, migrate it
 			if c.Rules[i].Tactic != "" {
 				c.Rules[i].LBTactic = Tactic{
 					Type: ParseTacticType(c.Rules[i].Tactic),

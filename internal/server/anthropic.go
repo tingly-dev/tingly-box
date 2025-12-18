@@ -107,7 +107,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 	}
 
 	// Determine provider and model based on request
-	provider, selectedService, _, err := s.DetermineProviderAndModel(model)
+	provider, selectedService, rule, err := s.DetermineProviderAndModel(model)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -118,10 +118,13 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		return
 	}
 
+	// Set the rule and provider in context so middleware can use the same rule
+	if rule != nil {
+		c.Set("rule", rule)
+	}
 	// Use the selected service's model
 	actualModel := selectedService.Model
 	req.Model = anthropic.Model(actualModel)
-
 	// Ensure max_tokens is set (Anthropic API requires this)
 	if req.MaxTokens == 0 {
 		req.MaxTokens = DefaultMaxTokens

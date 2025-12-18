@@ -84,26 +84,32 @@ func (ss *ServiceStats) RecordUsage(inputTokens, outputTokens int) {
 
 // GetWindowStats returns current window statistics
 func (ss *ServiceStats) GetWindowStats() (requestCount int64, tokensConsumed int64) {
-	ss.mutex.RLock()
-	defer ss.mutex.RUnlock()
-
-	// Check if window has expired
+	// Check if window has expired without locking first
 	if time.Since(ss.WindowStart) >= time.Duration(ss.TimeWindow)*time.Second {
+		// Reset the window when it expires - ResetWindow handles locking internally
+		ss.ResetWindow()
 		return 0, 0
 	}
+
+	// Now get the read lock for normal operation
+	ss.mutex.RLock()
+	defer ss.mutex.RUnlock()
 
 	return ss.WindowRequestCount, ss.WindowTokensConsumed
 }
 
 // GetWindowTokenDetails returns current window input and output token details
 func (ss *ServiceStats) GetWindowTokenDetails() (requestCount int64, inputTokens int64, outputTokens int64) {
-	ss.mutex.RLock()
-	defer ss.mutex.RUnlock()
-
-	// Check if window has expired
+	// Check if window has expired without locking first
 	if time.Since(ss.WindowStart) >= time.Duration(ss.TimeWindow)*time.Second {
+		// Reset the window when it expires - ResetWindow handles locking internally
+		ss.ResetWindow()
 		return 0, 0, 0
 	}
+
+	// Now get the read lock for normal operation
+	ss.mutex.RLock()
+	defer ss.mutex.RUnlock()
 
 	return ss.WindowRequestCount, ss.WindowInputTokens, ss.WindowOutputTokens
 }
