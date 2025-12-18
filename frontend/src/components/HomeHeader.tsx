@@ -5,14 +5,21 @@ import {
 } from '@mui/icons-material';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import {
+    Alert,
     Box,
+    Button,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogContentText,
+    DialogTitle,
     IconButton,
     Tab,
     Tabs,
     Tooltip,
     Typography
 } from '@mui/material';
-import React from 'react';
+import React, { useState } from 'react';
 import { ApiConfigRow } from './ApiConfigRow';
 
 interface HomeHeaderProps {
@@ -38,8 +45,19 @@ export const HomeHeader: React.FC<HomeHeaderProps> = ({
                                                           generateToken,
                                                           copyToClipboard
                                                       }) => {
+    const [showRefreshConfirmation, setShowRefreshConfirmation] = useState(false);
+
     const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
         setActiveTab(newValue);
+    };
+
+    const handleRefreshToken = () => {
+        setShowRefreshConfirmation(true);
+    };
+
+    const confirmRefreshToken = () => {
+        setShowRefreshConfirmation(false);
+        generateToken();
     };
 
     const ProviderTab = ({ baseUrl, baseUrlLabel, curlCommand }: {
@@ -89,7 +107,7 @@ export const HomeHeader: React.FC<HomeHeaderProps> = ({
                     </Tooltip>
                     <Tooltip title="Refresh Token">
                         <IconButton
-                            onClick={generateToken}
+                            onClick={handleRefreshToken}
                             size="small"
                             title="Generate New Token"
                         >
@@ -153,6 +171,33 @@ export const HomeHeader: React.FC<HomeHeaderProps> = ({
             </Box>
             {activeTab === 0 && <OpenAITab />}
             {activeTab === 1 && <AnthropicTab />}
+
+            <Dialog
+                open={showRefreshConfirmation}
+                onClose={() => setShowRefreshConfirmation(false)}
+                aria-labelledby="refresh-token-dialog-title"
+                aria-describedby="refresh-token-dialog-description"
+            >
+                <DialogTitle id="refresh-token-dialog-title">
+                    Confirm Token Refresh
+                </DialogTitle>
+                <DialogContent>
+                    <Alert severity="warning" sx={{ mb: 2 }}>
+                        Important Reminder
+                    </Alert>
+                    <DialogContentText id="refresh-token-dialog-description">
+                        Modifying the token will cause configured tools to become unavailable. Are you sure you want to continue generating a new token?
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setShowRefreshConfirmation(false)} color="primary">
+                        Cancel
+                    </Button>
+                    <Button onClick={confirmRefreshToken} color="error" variant="contained">
+                        Confirm Refresh
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </>
     );
 };
