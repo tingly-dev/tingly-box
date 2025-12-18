@@ -8,7 +8,17 @@ on:
     paths:
       - 'npx/package.json'
   workflow_dispatch:
-    inputs: {}
+    inputs:
+      packages_branch:
+        description: 'Branch to pull packages from (e.g., main, v1.2.3)'
+        required: true
+        type: string
+        default: 'main'
+      version_override:
+        description: 'NPX package version (leave empty to auto-generate)'
+        required: false
+        type: string
+        default: ''
 
 jobs:
   # Check if pipeline should be skipped based on first line of commit message
@@ -21,16 +31,23 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      
+        with:
+          fetch-depth: 0
+
       - name: Check if pipeline should be skipped
         id: check
         run: |
-          COMMIT_MESSAGE=$(git log -1 --pretty=%B)
-          FIRST_LINE=$(echo "$COMMIT_MESSAGE" | head -n 1)
-          if [[ "$FIRST_LINE" == *"--skip-pipeline"* ]]; then
-            echo "should-skip=true" >> $GITHUB_OUTPUT
-          else
+          # Skip check for workflow_dispatch events
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "should-skip=false" >> $GITHUB_OUTPUT
+          else
+            COMMIT_MESSAGE=$(git log -1 --pretty=%B)
+            FIRST_LINE=$(echo "$COMMIT_MESSAGE" | head -n 1)
+            if [[ "$FIRST_LINE" == *"--skip-pipeline"* ]]; then
+              echo "should-skip=true" >> $GITHUB_OUTPUT
+            else
+              echo "should-skip=false" >> $GITHUB_OUTPUT
+            fi
           fi
   
   publish:
@@ -84,11 +101,28 @@ jobs:
         id: fetch-latest
         env:
           REPOSITORY: "tingly-dev/tingly-box-release"
+          MANUAL_BRANCH: ${{ github.event.inputs.packages_branch || '' }}
         run: |
           # Make script executable
           chmod +x .github/workflows/scripts/fetch-latest-package-info.sh
-          # Run the fetch script
-          .github/workflows/scripts/fetch-latest-package-info.sh "$REPOSITORY"
+
+          # If manual branch is provided, use it instead
+          if [ -n "$MANUAL_BRANCH" ]; then
+            echo "Using manually specified branch: $MANUAL_BRANCH"
+            echo "packages_branch=$MANUAL_BRANCH" >> $GITHUB_OUTPUT
+
+            # Get version from branch name if it's a version branch
+            if [[ "$MANUAL_BRANCH" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              VERSION="${MANUAL_BRANCH#v}"
+              echo "packages_version=$VERSION" >> $GITHUB_OUTPUT
+            else
+              # Use current date as version for non-version branches
+              echo "packages_version=$(date +%Y.%m.%d)" >> $GITHUB_OUTPUT
+            fi
+          else
+            # Run the fetch script
+            .github/workflows/scripts/fetch-latest-package-info.sh "$REPOSITORY"
+          fi
       
       # Extract and validate current NPX version from package.json
       - name: Extract current NPX version
@@ -102,35 +136,43 @@ jobs:
       # Update NPX package.json with new version based on latest package
       - name: Update NPX package version
         id: update-version
+        env:
+          VERSION_OVERRIDE: ${{ github.event.inputs.version_override || '' }}
         run: |
           PACKAGES_VERSION="${{ steps.fetch-latest.outputs.packages_version }}"
           CURRENT_NPX_VERSION="${{ steps.extract-version.outputs.version }}"
-          
+
           echo "Packages version: $PACKAGES_VERSION"
           echo "Current NPX version: $CURRENT_NPX_VERSION"
-          
-          # Determine new version
-          if [[ "$PACKAGES_VERSION" != "$(date +%Y.%m.%d)" ]]; then
-            # This is a versioned package, use package version
-            NEW_VERSION="$PACKAGES_VERSION"
-            echo "Using package version: $NEW_VERSION"
+
+          # Use manual version override if provided
+          if [ -n "$VERSION_OVERRIDE" ]; then
+            NEW_VERSION="$VERSION_OVERRIDE"
+            echo "Using manual version override: $NEW_VERSION"
           else
-            # This is a manual/dated package, increment NPX version
-            # Extract version parts and increment patch
-            IFS='.' read -ra PARTS <<< "$CURRENT_NPX_VERSION"
-            MAJOR="${PARTS[0]}"
-            MINOR="${PARTS[1]}"
-            PATCH="${PARTS[2]}"
-            ((PATCH++))
-            NEW_VERSION="$MAJOR.$MINOR.$PATCH"
-            echo "Incremented NPX version: $NEW_VERSION"
+            # Determine new version
+            if [[ "$PACKAGES_VERSION" != "$(date +%Y.%m.%d)" ]]; then
+              # This is a versioned package, use package version
+              NEW_VERSION="$PACKAGES_VERSION"
+              echo "Using package version: $NEW_VERSION"
+            else
+              # This is a manual/dated package, increment NPX version
+              # Extract version parts and increment patch
+              IFS='.' read -ra PARTS <<< "$CURRENT_NPX_VERSION"
+              MAJOR="${PARTS[0]}"
+              MINOR="${PARTS[1]}"
+              PATCH="${PARTS[2]}"
+              ((PATCH++))
+              NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+              echo "Incremented NPX version: $NEW_VERSION"
+            fi
           fi
-          
+
           # Update package.json
           cd npx
           npm version "$NEW_VERSION" --no-git-tag-version
           cd ..
-          
+
           # Output new version
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "Updated NPX package to version: $NEW_VERSION"
@@ -271,15 +313,16 @@ jobs:
         env:
           VERSION: ${{ steps.update-version.outputs.new_version }}
           PACKAGES_BRANCH: ${{ steps.fetch-latest.outputs.packages_branch }}
+          IS_MANUAL: ${{ github.event.inputs.packages_branch != '' && 'true' || 'false' }}
         run: |
           # Clone the repository
           TEMP_DIR=$(mktemp -d)
           git clone "git@github.com:tingly-dev/tingly-box-release.git" "$TEMP_DIR"
           cd "$TEMP_DIR"
-          
+
           # Switch to main branch
           git checkout main
-          
+
           # Update or create LATEST.json
           if [ -f "LATEST.json" ]; then
             echo "Updating existing LATEST.json..."
@@ -287,7 +330,8 @@ jobs:
             jq --arg version "$VERSION" \
                --arg branch "npx-v$VERSION" \
                --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-               '.npx_latest_branch = $branch | .npx_version = $version | .npx_updated_at = $timestamp' \
+               --arg manual "$IS_MANUAL" \
+               '.npx_latest_branch = $branch | .npx_version = $version | .npx_updated_at = $timestamp | .npx_is_manual = ($manual == "true")' \
                LATEST.json > LATEST.tmp && mv LATEST.tmp LATEST.json
           else
             echo "Creating new LATEST.json..."
@@ -296,6 +340,7 @@ jobs:
             "packages_latest_branch": "$PACKAGES_BRANCH",
             "npx_latest_branch": "npx-v$VERSION",
             "npx_version": "$VERSION",
+            "npx_is_manual": $IS_MANUAL,
             "updated_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
             "workflow_run": "${{ github.workflow }}",
             "repository": "${{ github.repository }}",
@@ -303,25 +348,33 @@ jobs:
           }
           EOF
           fi
-          
+
           # Show updated content
           echo "Updated LATEST.json:"
           cat LATEST.json
-          
+
           # Add and commit the changes
           git add LATEST.json
-          git commit -m "Update LATEST.json with NPX package v$VERSION
-          
+          COMMIT_MSG="Update LATEST.json with NPX package v$VERSION"
+
+          if [ "$IS_MANUAL" = "true" ]; then
+            COMMIT_MSG="$COMMIT_MSG (MANUAL RELEASE)"
+          fi
+
+          COMMIT_MSG="$COMMIT_MSG
+
           - NPX version: $VERSION
           - NPX branch: npx-v$VERSION
           - Based on packages branch: $PACKAGES_BRANCH
           - Updated at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          
+
+          git commit -m "$COMMIT_MSG"
+
           # Push changes to main branch
           git push origin main
-          
+
           echo "✅ Successfully updated LATEST.json"
-          
+
           # Cleanup
           cd /
           rm -rf "$TEMP_DIR"
