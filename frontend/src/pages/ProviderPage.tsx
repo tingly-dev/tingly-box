@@ -8,7 +8,7 @@ import { PageLayout } from '../components/PageLayout';
 import UnifiedCard from '../components/UnifiedCard';
 import { api } from '../services/api';
 
-const CredentialPage = () => {
+const ProviderPage = () => {
     const [providers, setProviders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [snackbar, setSnackbar] = useState<{
@@ -147,25 +147,14 @@ const CredentialPage = () => {
                         </Stack>
                     }
                 >
-                    {providers.length > 0 ? (
-                        <Box sx={{ flex: 1 }}>
-                            <CredentialTable
-                                providers={providers}
-                                onEdit={handleEditProvider}
-                                onToggle={handleToggleProvider}
-                                onDelete={handleDeleteProvider}
-                            />
-                        </Box>
-                    ) : (
-                        <Box textAlign="center" py={5}>
-                            <Typography variant="h6" color="text.secondary" gutterBottom>
-                                No Model API Key Configured
-                            </Typography>
-                            <Typography color="text.secondary">
-                                Add your first API token or key using the button above to get started.
-                            </Typography>
-                        </Box>
-                    )}
+                    <Box sx={{ flex: 1 }}>
+                        <CredentialTable
+                            providers={providers}
+                            onEdit={handleEditProvider}
+                            onToggle={handleToggleProvider}
+                            onDelete={handleDeleteProvider}
+                        />
+                    </Box>
                 </UnifiedCard>
             )}
 
@@ -230,4 +219,4 @@ const CredentialPage = () => {
     );
 };
 
-export default CredentialPage;
+export default ProviderPage;
