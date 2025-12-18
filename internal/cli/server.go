@@ -10,8 +10,8 @@ import (
 	"tingly-box/internal/config"
 	"tingly-box/internal/manage"
 	"tingly-box/internal/server"
+	"tingly-box/internal/util"
 
-	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
 )
 
@@ -107,9 +107,12 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 	}()
 
 	fmt.Printf("Server starting on port %d...\n", port)
-	fmt.Printf("API endpoint: http://localhost:%d/v1/chat/completions\n", port)
+
+	// Resolve host for display
+	resolvedHost := util.ResolveHost(opts.Host)
+	fmt.Printf("API endpoint: http://%s:%d/v1/chat/completions\n", resolvedHost, port)
 	if opts.EnableUI {
-		fmt.Printf("Web UI: http://localhost:%d/dashboard\n", port)
+		fmt.Printf("Web UI: http://%s:%d/dashboard\n", resolvedHost, port)
 	}
 
 	// Wait for either server error, shutdown signal, or web UI stop request
@@ -129,51 +132,6 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 		defer pidManager.RemovePIDFile()
 		return serverManager.Stop()
 	}
-}
-
-// startServerNonBlocking starts the server in non-blocking mode (for restart command)
-func startServerNonBlocking(appConfig *config.AppConfig, opts startServerOptions) error {
-	// Set port if provided
-	var port int = opts.Port
-	if port == 0 {
-		port = appConfig.GetServerPort()
-	} else {
-		appConfig.SetServerPort(port)
-	}
-
-	// Create PID manager
-	pidManager := config.NewPIDManager(appConfig.ConfigDir())
-
-	// Create PID file before starting server
-	if err := pidManager.CreatePIDFile(); err != nil {
-		return fmt.Errorf("failed to create PID file: %w", err)
-	}
-
-	if opts.EnableDebug {
-		gin.SetMode(gin.DebugMode)
-	} else {
-		gin.SetMode(gin.ReleaseMode)
-	}
-
-	// Create a new server manager for starting
-	newServerManager := manage.NewServerManager(appConfig)
-
-	// Start server with new configuration
-	fmt.Println("Starting server...")
-	if err := newServerManager.Start(); err != nil {
-		// Clean up PID file on error
-		pidManager.RemovePIDFile()
-		return fmt.Errorf("failed to start server: %w", err)
-	}
-
-	serverPort := appConfig.GetServerPort()
-	fmt.Printf("Server started successfully on port %d\n", serverPort)
-	fmt.Printf("OpenAI Style API Endpoint: http://localhost:%d/openai/v1/chat/completions\n", serverPort)
-	fmt.Printf("Anthropic Style API Endpoint: http://localhost:%d/anthropic/v1/messages\n", serverPort)
-	fmt.Printf("Web UI: http://localhost:%d/dashboard\n", serverPort)
-	fmt.Println("Use 'tingly status' to check server status")
-
-	return nil
 }
 
 // StartCommand represents the start server command
@@ -307,6 +265,7 @@ show configuration information including number of providers and server port.`,
 // RestartCommand represents the restart server command
 func RestartCommand(appConfig *config.AppConfig) *cobra.Command {
 	var port int
+	var host string
 
 	cmd := &cobra.Command{
 		Use:   "restart",
@@ -336,13 +295,16 @@ The restart is graceful - ongoing requests will be completed before shutdown.`,
 			}
 
 			// Start new server using non-blocking mode
-			return startServerNonBlocking(appConfig, startServerOptions{
-				Port:     port,
-				EnableUI: true, // Always enable UI for restart
+			return startServer(appConfig, startServerOptions{
+				Host:        host,
+				Port:        port,
+				EnableUI:    true,
+				EnableDebug: true,
 			})
 		},
 	}
 
+	cmd.Flags().StringVar(&host, "host", "localhost", "Server host")
 	cmd.Flags().IntVarP(&port, "port", "p", 12580, "Server port (default: 12580)")
 	return cmd
 }
