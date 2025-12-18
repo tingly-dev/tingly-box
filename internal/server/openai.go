@@ -107,6 +107,11 @@ func (s *Server) ChatCompletions(c *gin.Context) {
 		return
 	}
 
+	// Set the rule and provider in context so middleware can use the same rule
+	if rule != nil {
+		c.Set("rule", rule)
+	}
+
 	actualModel := selectedService.Model
 	responseModel := rule.ResponseModel
 	req.Model = actualModel

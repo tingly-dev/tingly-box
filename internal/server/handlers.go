@@ -168,10 +168,22 @@ func (s *Server) DetermineProviderAndModel(modelName string) (*config.Provider, 
 	// Check if this is the request model name first
 	c := s.config
 	if c != nil && c.IsRequestModel(modelName) {
-		// Get the Rule for this specific request model
+		// Get the Rule for this specific request model using the same method as middleware
 		uuid := c.GetUUIDByRequestModel(modelName)
-		rule := c.GetRequestConfigByRequestModel(uuid)
+		rules := c.GetRequestConfigs()
+		var rule *config.Rule
+		for i := range rules {
+			if rules[i].UUID == uuid && rules[i].Active {
+				rule = &rules[i] // Get pointer to actual rule in config
+				break
+			}
+		}
+
 		if rule != nil && rule.Active {
+			// Set the rule in the context so middleware can use the same rule
+			// We need to pass this context to the actual HTTP handler, but this function
+			// doesn't have access to the Gin context. For now, we'll use a different approach.
+
 			// Use the load balancer to select service
 			selectedService, err := s.loadBalancer.SelectService(rule)
 			if err != nil {
