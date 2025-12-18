@@ -146,12 +146,12 @@ jobs:
           cd npx
           
           # Read the current bin.js and update the BINARY_RELEASE_BRANCH variable
-          if grep -q "BINARY_RELEASE_BRANCH" bin.js; then
-            # Update existing branch reference
-            sed -i.bak "s|const BINARY_RELEASE_BRANCH = '[^']*'|const BINARY_RELEASE_BRANCH = '$PACKAGES_BRANCH'|g" bin.js
+          if grep -q "const BINARY_RELEASE_BRANCH" bin.js; then
+            # Replace the entire line that defines BINARY_RELEASE_BRANCH
+            sed -i.bak "s|const BINARY_RELEASE_BRANCH = .*|const BINARY_RELEASE_BRANCH = '$PACKAGES_BRANCH';|g" bin.js
           else
-            # Add branch reference after the first line
-            sed -i.bak "1a\\nconst BINARY_RELEASE_BRANCH = '$PACKAGES_BRANCH';" bin.js
+            # Add branch reference after line 10 (after BASE_URL definition)
+            sed -i.bak "10a\\nconst BINARY_RELEASE_BRANCH = '$PACKAGES_BRANCH';" bin.js
           fi
           
           # Show the updated content

@@ -11,7 +11,7 @@ const BASE_URL = "https://github.com/tingly-dev/tingly-box-release/raw/refs/head
 
 // Default branch to use when not specified via transport version
 // This will be replaced during the NPX build process
-const BINARY_RELEASE_BRANCH = "packages-latest";
+const BINARY_RELEASE_BRANCH = "latest";
 
 // Parse transport version from command line arguments
 function parseTransportVersion() {
