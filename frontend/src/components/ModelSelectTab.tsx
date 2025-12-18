@@ -184,7 +184,7 @@ export default function ModelSelectTab({
                 <Tabs
                     value={currentTab}
                     onChange={handleTabChange}
-                    aria-label="Credential selection tabs"
+                    aria-label="Provider selection tabs"
                     variant="scrollable"
                     scrollButtons="auto"
                     allowScrollButtonsMobile

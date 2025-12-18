@@ -78,7 +78,7 @@ const ProviderPage = () => {
             });
 
         if (result.success) {
-            showNotification(`Credential ${dialogMode === 'add' ? 'added' : 'updated'} successfully!`, 'success');
+            showNotification(`Provider ${dialogMode === 'add' ? 'added' : 'updated'} successfully!`, 'success');
             setDialogOpen(false);
             loadProviders();
         } else {
@@ -90,7 +90,7 @@ const ProviderPage = () => {
         const result = await api.deleteProvider(name);
 
         if (result.success) {
-            showNotification('Credential deleted successfully!', 'success');
+            showNotification('Provider deleted successfully!', 'success');
             loadProviders();
         } else {
             showNotification(`Failed to delete provider: ${result.error}`, 'error');
@@ -132,7 +132,7 @@ const ProviderPage = () => {
             {providers.length > 0 && (
                 <UnifiedCard
                     title="Providers"
-                    subtitle={providers.length > 0 ? `Managing ${providers.length} credential(s)` : "No model API key configured yet"}
+                    subtitle={providers.length > 0 ? `Managing ${providers.length} providers and api keys` : "No model API key configured yet"}
                     size="full"
                     rightAction={
                         <Stack direction="row" spacing={1} alignItems="center">
@@ -174,7 +174,7 @@ const ProviderPage = () => {
                             onClick={() => setDialogOpen(true)}
                             sx={{ mt: 2 }}
                         >
-                            Add Your First Credential
+                            Add Your First Provider
                         </Button>
                     </Box>
                 </UnifiedCard>

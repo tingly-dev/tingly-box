@@ -40,8 +40,8 @@ export const ProviderDialog = ({
     onProviderApiStyleChange,
     providerToken,
     onProviderTokenChange,
-    title = "Add New Credential",
-    submitText = "Add Credential",
+    title = "Add New Provider",
+    submitText = "Add Provider",
 }: ProviderDialogProps) => {
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -51,7 +51,7 @@ export const ProviderDialog = ({
                     <Stack spacing={2} mt={1}>
                         <TextField
                             fullWidth
-                            label="Credential Name"
+                            label="Provider Name"
                             value={providerName}
                             onChange={(e) => onProviderNameChange(e.target.value)}
                             required
