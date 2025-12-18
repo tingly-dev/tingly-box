@@ -45,6 +45,7 @@ func (s *Server) GenerateToken(c *gin.Context) {
 		return
 	}
 
+	token = "tingly-box-" + token
 	err = s.config.SetModelToken(token)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{

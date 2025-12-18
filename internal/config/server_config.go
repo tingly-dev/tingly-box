@@ -14,6 +14,8 @@ import (
 	"sync"
 	"time"
 
+	"tingly-box/internal/auth"
+
 	"github.com/google/uuid"
 )
 
@@ -77,7 +79,7 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 			// Create a default Rule
 			cfg.Rules = []Rule{
 				{
-					UUID:          generateUUID(),
+					UUID:          "tingly",
 					RequestModel:  "tingly",
 					ResponseModel: "",
 					Services:      []Service{}, // Empty services initially
@@ -94,7 +96,11 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 				cfg.UserToken = "tingly-box-user-token"
 			}
 			if cfg.ModelToken == "" {
-				cfg.ModelToken = "tingly-box-model-token"
+				modelToken, err := auth.NewJWTManager(cfg.JWTSecret).GenerateToken("tingly-box")
+				if err != nil {
+					cfg.ModelToken = "tingly-box-model-token"
+				}
+				cfg.ModelToken = "tingly-box-" + modelToken
 			}
 			// Initialize merged fields with defaults
 			cfg.Providers = make(map[string]*Provider)
@@ -111,30 +117,32 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 	}
 
 	// Ensure tokens exist even for existing configs
-	tokensUpdated := false
+	updated := false
+	if cfg.JWTSecret == "" {
+		cfg.JWTSecret = generateSecret()
+		updated = true
+	}
 	if cfg.UserToken == "" {
 		cfg.UserToken = "tingly-box-user-token"
-		tokensUpdated = true
+		updated = true
 	}
 	if cfg.ModelToken == "" {
-		cfg.ModelToken = "tingly-box-model-token"
-		tokensUpdated = true
+		modelToken, err := auth.NewJWTManager(cfg.JWTSecret).GenerateToken("tingly-box")
+		if err != nil {
+			cfg.ModelToken = "tingly-box-model-token"
+		}
+		cfg.ModelToken = modelToken
+		updated = true
 	}
-	// Ensure merged fields are initialized for existing configs
-	mergedFieldsUpdated := false
 	if cfg.Providers == nil {
 		cfg.Providers = make(map[string]*Provider)
-		mergedFieldsUpdated = true
+		updated = true
 	}
 	if cfg.ServerPort == 0 {
 		cfg.ServerPort = 12580
-		mergedFieldsUpdated = true
+		updated = true
 	}
-	if cfg.JWTSecret == "" {
-		cfg.JWTSecret = generateSecret()
-		mergedFieldsUpdated = true
-	}
-	if tokensUpdated || mergedFieldsUpdated {
+	if updated {
 		if err := cfg.save(); err != nil {
 			return nil, fmt.Errorf("failed to set default values: %w", err)
 		}
