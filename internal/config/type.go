@@ -29,7 +29,9 @@ type Rule struct {
 	LBTactic Tactic `json:"lb_tactic" yaml:"lb_tactic"`
 	Active   bool   `json:"active" yaml:"active"`
 	// Deprecated fields kept for Unmarshal migration logic only
-	Tactic       string                 `yaml:"tactic" json:"tactic"` // Load balancing strategy (round_robin, token_based, hybrid)
+	// Deprecated
+	Tactic string `yaml:"tactic" json:"tactic"` // Load balancing strategy (round_robin, token_based, hybrid)
+	// Deprecated
 	TacticParams map[string]interface{} `yaml:"tactic_params" json:"tactic_params,omitempty"`
 }
 
@@ -48,8 +50,8 @@ func (r *Rule) ToJSON() interface{} {
 		"active":                r.Active,
 	}
 
-	// Use lb_tactic if it's configured
-	if r.LBTactic.Type != 0 {
+	// Use lb_tactic if it's configured (check if params are not nil or if it's not the default empty tactic)
+	if r.LBTactic.Params != nil {
 		jsonRule["lb_tactic"] = r.LBTactic
 	} else {
 		// Fall back to deprecated fields for backward compatibility
@@ -78,7 +80,7 @@ func (r *Rule) GetServices() []Service {
 
 // GetDefaultProvider returns the provider from the currently selected service using load balancing tactic
 func (r *Rule) GetDefaultProvider() string {
-	service := r.GetSelectedService()
+	service := r.GetCurrentService()
 	if service != nil {
 		return service.Provider
 	}
@@ -87,20 +89,15 @@ func (r *Rule) GetDefaultProvider() string {
 
 // GetDefaultModel returns the model from the currently selected service using load balancing tactic
 func (r *Rule) GetDefaultModel() string {
-	service := r.GetSelectedService()
+	service := r.GetCurrentService()
 	if service != nil {
 		return service.Model
 	}
 	return ""
 }
 
-// GetSelectedService returns the currently selected service using the load balancing tactic
-func (r *Rule) GetSelectedService() *Service {
-	if len(r.Services) == 0 {
-		return nil
-	}
-
-	// Filter active services and initialize stats
+// GetActiveServices returns all active services with initialized stats
+func (r *Rule) GetActiveServices() []*Service {
 	var activeServices []*Service
 	for i := range r.Services {
 		if r.Services[i].Active {
@@ -108,41 +105,18 @@ func (r *Rule) GetSelectedService() *Service {
 			activeServices = append(activeServices, &r.Services[i])
 		}
 	}
+	return activeServices
+}
 
+// GetCurrentService returns the current active service based on CurrentServiceIndex
+func (r *Rule) GetCurrentService() *Service {
+	activeServices := r.GetActiveServices()
 	if len(activeServices) == 0 {
 		return nil
 	}
 
-	// Use existing LBTactic if available
-	var tactic LoadBalancingTactic
-	if r.LBTactic.Type != 0 {
-		// New format - use the Tactic struct directly
-		tactic = r.LBTactic.Instantiate()
-	} else {
-		// Backward compatibility - migrate from old fields
-		if r.Tactic != "" {
-			// Convert old format to new Tactic struct
-			r.LBTactic = Tactic{
-				Type: ParseTacticType(r.Tactic),
-			}
-
-			// Convert old tactic_params to proper typed parameters
-			if r.TacticParams != nil {
-				r.LBTactic.Params = convertLegacyParams(r.Tactic, r.TacticParams)
-			}
-
-			// Clear old fields after migration
-			r.Tactic = ""
-			r.TacticParams = nil
-
-			tactic = r.LBTactic.Instantiate()
-		} else {
-			// Default to round robin
-			tactic = defaultRoundRobinTactic
-		}
-	}
-
-	return tactic.SelectService(r)
+	currentIndex := r.CurrentServiceIndex % len(activeServices)
+	return activeServices[currentIndex]
 }
 
 // convertLegacyParams converts legacy map[string]interface{} to proper TacticParams

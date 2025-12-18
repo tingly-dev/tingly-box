@@ -71,12 +71,19 @@ func (sm *StatsMiddleware) extractAndRecordUsage(c *gin.Context, responseBody st
 		return
 	}
 
+	// Get the rule information from context (set by handlers)
+	if rule, exists := c.Get("rule"); exists {
+		if rulePtr, ok := rule.(*config.Rule); ok {
+			// Record usage directly on the rule's services (same rule as handler used)
+			inputTokens, outputTokens := sm.extractTokenUsage(responseBody, c.Request.URL.Path)
+			sm.RecordUsageOnRule(rulePtr, provider, model, inputTokens, outputTokens)
+			return
+		}
+	}
+
+	// Fallback: search by provider/model (old behavior)
 	serviceID := fmt.Sprintf("%s:%s", provider, model)
-
-	// Extract token usage from response
 	inputTokens, outputTokens := sm.extractTokenUsage(responseBody, c.Request.URL.Path)
-
-	// Record the usage
 	sm.RecordUsage(serviceID, inputTokens, outputTokens)
 }
 
@@ -196,9 +203,10 @@ func (sm *StatsMiddleware) RecordUsage(serviceID string, inputTokens, outputToke
 	}
 	provider, model := parts[0], parts[1]
 
-	// Find the rule that contains this service
+	// Find the rule that contains this service and update it directly in the config
 	rules := sm.config.GetRequestConfigs()
-	for _, rule := range rules {
+	for ruleIdx := range rules {
+		rule := &rules[ruleIdx] // Get pointer to actual rule in config
 		if !rule.Active {
 			continue
 		}
@@ -209,8 +217,24 @@ func (sm *StatsMiddleware) RecordUsage(serviceID string, inputTokens, outputToke
 			if service.Active && service.Provider == provider && service.Model == model {
 				// Found the service, record usage in its embedded stats
 				service.RecordUsage(inputTokens, outputTokens)
+
+				// Save the updated config to persist changes
+				sm.config.UpdateRequestConfigAt(ruleIdx, *rule)
 				return
 			}
+		}
+	}
+}
+
+// RecordUsageOnRule records usage directly on a specific rule's services
+func (sm *StatsMiddleware) RecordUsageOnRule(rule *config.Rule, provider, model string, inputTokens, outputTokens int) {
+	// Look through the services in the specific rule to find the matching one
+	for i := range rule.Services {
+		service := &rule.Services[i]
+		if service.Active && service.Provider == provider && service.Model == model {
+			// Found the service, record usage in its embedded stats
+			service.RecordUsage(inputTokens, outputTokens)
+			return
 		}
 	}
 }

@@ -992,3 +992,110 @@ func TestLoadBalancer_WithMockProvider(t *testing.T) {
 		t.Errorf("Expected RequestCount = 1, got %d", statsCopy.RequestCount)
 	}
 }
+
+func TestLoadBalancer_RoundRobinThreshold2(t *testing.T) {
+	// Create a minimal config for testing
+	appConfig, err := config.NewAppConfigWithDir(t.TempDir())
+	require.NoError(t, err)
+
+	// Create stats middleware
+	statsMW := middleware.NewStatsMiddleware(appConfig.GetGlobalConfig())
+	defer statsMW.Stop()
+
+	// Create load balancer
+	lb := server.NewLoadBalancer(statsMW, appConfig.GetGlobalConfig())
+	defer lb.Stop()
+
+	// Create test rule with 3 services to make the rotation more interesting
+	rule := &config.Rule{
+		RequestModel: "test",
+		UUID:         uuid.New().String(),
+		Services: []config.Service{
+			{
+				Provider:   "provider-A",
+				Model:      "model-A",
+				Weight:     1,
+				Active:     true,
+				TimeWindow: 300,
+			},
+			{
+				Provider:   "provider-B",
+				Model:      "model-B",
+				Weight:     1,
+				Active:     true,
+				TimeWindow: 300,
+			},
+			{
+				Provider:   "provider-C",
+				Model:      "model-C",
+				Weight:     1,
+				Active:     true,
+				TimeWindow: 300,
+			},
+		},
+		CurrentServiceIndex: 0, // Start with first service
+		LBTactic: config.Tactic{
+			Type:   config.TacticRoundRobin,
+			Params: &config.RoundRobinParams{RequestThreshold: 2}, // Threshold of 2 requests
+		},
+		Active: true,
+	}
+
+	// Test round-robin selection with threshold 2
+	// Expected pattern with threshold 2: A, A, B, B, C, C (2 requests per provider before rotation)
+	var selectedProviders []string
+	totalRequests := 6
+
+	t.Logf("Testing round-robin with threshold=2 and %d total requests", totalRequests)
+
+	for i := 0; i < totalRequests; i++ {
+		service, err := lb.SelectService(rule)
+		if err != nil {
+			t.Fatalf("SelectService failed: %v", err)
+		}
+
+		if service == nil {
+			t.Fatal("SelectService returned nil")
+		}
+
+		selectedProviders = append(selectedProviders, service.Provider)
+
+		// Record usage directly on the service to trigger round-robin logic
+		service.RecordUsage(10, 10)
+
+		t.Logf("Request %d: Selected provider %s (index %d)", i+1, service.Provider, rule.CurrentServiceIndex)
+	}
+
+	// Expected pattern with threshold 2: A, A, B, B, C, C
+	expectedPattern := []string{"provider-A", "provider-A", "provider-B", "provider-B", "provider-C", "provider-C"}
+
+	for i, expected := range expectedPattern {
+		if selectedProviders[i] != expected {
+			t.Errorf("Request %d: expected provider %s, got %s", i+1, expected, selectedProviders[i])
+		}
+	}
+
+	// Count selections for each provider
+	providerCounts := make(map[string]int)
+	for _, provider := range selectedProviders {
+		providerCounts[provider]++
+	}
+
+	// With 6 requests and threshold 2, we should have 2 requests per provider
+	if providerCounts["provider-A"] != 2 || providerCounts["provider-B"] != 2 || providerCounts["provider-C"] != 2 {
+		t.Errorf("Expected 2 selections each, got provider-A: %d, provider-B: %d, provider-C: %d",
+			providerCounts["provider-A"], providerCounts["provider-B"], providerCounts["provider-C"])
+	}
+
+	// Test that the CurrentServiceIndex is correctly maintained
+	// After 6 requests with threshold 2, the index should be 2 (pointing to provider-C)
+	expectedFinalIndex := 2
+	if rule.CurrentServiceIndex != expectedFinalIndex {
+		t.Errorf("Expected CurrentServiceIndex = %d, got %d", expectedFinalIndex, rule.CurrentServiceIndex)
+	}
+
+	t.Logf("✅ Round-robin test passed!")
+	t.Logf("Final distribution: provider-A: %d, provider-B: %d, provider-C: %d",
+		providerCounts["provider-A"], providerCounts["provider-B"], providerCounts["provider-C"])
+	t.Logf("Final CurrentServiceIndex: %d", rule.CurrentServiceIndex)
+}

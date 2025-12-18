@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"math/rand"
 	"strings"
+	"sync"
 )
 
 // Tactic bundles the strategy type and its parameters together
@@ -158,7 +159,10 @@ type LoadBalancingTactic interface {
 
 // RoundRobinTactic implements round-robin load balancing based on request count
 type RoundRobinTactic struct {
-	RequestThreshold int64 // Number of requests per service before switching
+	// Number of requests per service before switching
+	RequestThreshold int64
+	// Map of Rule Pointer -> Current Streak count
+	streaks sync.Map
 }
 
 // NewRoundRobinTactic creates a new round-robin tactic with optional threshold parameter
@@ -172,36 +176,33 @@ func NewRoundRobinTactic(requestThreshold ...int64) *RoundRobinTactic {
 
 // SelectService selects the next service based on round-robin with request threshold
 func (rr *RoundRobinTactic) SelectService(rule *Rule) *Service {
-	if len(rule.Services) == 0 {
-		return nil
-	}
-
-	// Filter active services
-	var activeServices []*Service
-	for i := range rule.Services {
-		if rule.Services[i].Active {
-			rule.Services[i].InitializeStats()
-			activeServices = append(activeServices, &rule.Services[i])
-		}
-	}
-
+	// Get active services once to avoid duplicate filtering
+	activeServices := rule.GetActiveServices()
 	if len(activeServices) == 0 {
 		return nil
 	}
 
-	// Check if current service has exceeded the request threshold
+	// Get current service from the already filtered list
 	currentIndex := rule.CurrentServiceIndex % len(activeServices)
 	currentService := activeServices[currentIndex]
+
+	// Get current streak for this specific rule (not service)
+	val, _ := rr.streaks.LoadOrStore(rule, int64(0))
+	currentStreak := val.(int64)
 	requests, _ := currentService.GetWindowStats()
 
-	// If current service hasn't exceeded threshold, keep using it
+	// If current service hasn't exceeded threshold, keep using it and increment streak
 	if requests < rr.RequestThreshold {
+		rr.streaks.Store(rule, currentStreak+1)
 		return currentService
 	}
 
-	// Current service exceeded threshold, move to next service
+	// Current service exceeded threshold, move to next service AND reset streak
 	rule.CurrentServiceIndex = (rule.CurrentServiceIndex + 1) % len(activeServices)
 	nextService := activeServices[rule.CurrentServiceIndex]
+
+	// Reset streak for the new service (start counting from 1, not 0)
+	rr.streaks.Store(rule, 1)
 
 	return nextService
 }
@@ -229,25 +230,18 @@ func NewTokenBasedTactic(tokenThreshold int64) *TokenBasedTactic {
 
 // SelectService selects service based on token consumption thresholds
 func (tb *TokenBasedTactic) SelectService(rule *Rule) *Service {
-	if len(rule.Services) == 0 {
-		return nil
-	}
-
-	// Filter active services
-	var activeServices []*Service
-	for i := range rule.Services {
-		if rule.Services[i].Active {
-			activeServices = append(activeServices, &rule.Services[i])
-		}
-	}
-
+	// Get active services once to avoid duplicate filtering
+	activeServices := rule.GetActiveServices()
 	if len(activeServices) == 0 {
 		return nil
 	}
 
-	// Check current service token usage
+	// Get current service from the already filtered list
 	currentIndex := rule.CurrentServiceIndex % len(activeServices)
 	currentService := activeServices[currentIndex]
+	if currentService == nil {
+		return nil
+	}
 
 	_, windowTokens := currentService.GetWindowStats()
 
@@ -301,25 +295,18 @@ func NewHybridTactic(requestThreshold, tokenThreshold int64) *HybridTactic {
 
 // SelectService selects service based on both request count and token consumption
 func (ht *HybridTactic) SelectService(rule *Rule) *Service {
-	if len(rule.Services) == 0 {
-		return nil
-	}
-
-	// Filter active services
-	var activeServices []*Service
-	for i := range rule.Services {
-		if rule.Services[i].Active {
-			activeServices = append(activeServices, &rule.Services[i])
-		}
-	}
-
+	// Get active services once to avoid duplicate filtering
+	activeServices := rule.GetActiveServices()
 	if len(activeServices) == 0 {
 		return nil
 	}
 
-	// Check current service usage
+	// Get current service from the already filtered list
 	currentIndex := rule.CurrentServiceIndex % len(activeServices)
 	currentService := activeServices[currentIndex]
+	if currentService == nil {
+		return nil
+	}
 
 	requests, tokens := currentService.GetWindowStats()
 
@@ -364,24 +351,17 @@ func NewRandomTactic() *RandomTactic {
 
 // SelectService selects a service randomly based on weights
 func (rt *RandomTactic) SelectService(rule *Rule) *Service {
-	if len(rule.Services) == 0 {
-		return nil
-	}
-
-	// Filter active services
-	var activeServices []*Service
-	var totalWeight int
-	for i := range rule.Services {
-		if rule.Services[i].Active {
-			activeServices = append(activeServices, &rule.Services[i])
-			if rule.Services[i].Weight > 0 {
-				totalWeight += rule.Services[i].Weight
-			}
-		}
-	}
-
+	// Use the rule's method to get active services
+	activeServices := rule.GetActiveServices()
 	if len(activeServices) == 0 {
 		return nil
+	}
+
+	var totalWeight int
+	for _, service := range activeServices {
+		if service.Weight > 0 {
+			totalWeight += service.Weight
+		}
 	}
 
 	// If no weights or all weights are 0, select randomly
