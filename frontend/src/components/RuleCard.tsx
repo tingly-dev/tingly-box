@@ -137,7 +137,7 @@ const RuleCard: React.FC<RuleCardProps> = ({
             <SummarySection onClick={onToggleExpanded}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1 }}>
                     <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                        {record.requestModel || 'Local Model Name'}
+                        {record.requestModel || 'Specified model name'}
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Chip
@@ -260,10 +260,11 @@ const RuleCard: React.FC<RuleCardProps> = ({
                             </Typography>
                             <Stack direction="row" spacing={1}>
                                 <TextField
+                                    id={`request-model-${record.uuid}`}
                                     label="Request Model"
                                     value={record.requestModel}
                                     onChange={(e) => onUpdateRecord('requestModel', e.target.value)}
-                                    helperText="Model name to match"
+                                    helperText="Enter specified model name"
                                     size="small"
                                     disabled={!record.active}
                                     fullWidth

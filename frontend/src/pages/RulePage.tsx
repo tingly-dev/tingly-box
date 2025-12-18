@@ -173,6 +173,16 @@ const RulePage = () => {
             ],
         };
         setConfigRecords([...configRecords, newRecord]);
+        // Automatically expand the new card
+        setExpandedCards(prev => new Set(prev).add(newRecord.uuid));
+
+        // Focus on the request model input field after a short delay to ensure the field is rendered
+        setTimeout(() => {
+            const requestModelInput = document.getElementById(`request-model-${newRecord.uuid}`) as HTMLInputElement;
+            if (requestModelInput) {
+                requestModelInput.focus();
+            }
+        }, 100);
     };
 
     const deleteRule = (recordId: string) => {
