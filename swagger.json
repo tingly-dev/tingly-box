@@ -13,7 +13,7 @@
     },
     "version": "1.0.0"
   },
-  "host": "localhost:8080",
+  "host": "localhost:12580",
   "basePath": "/",
   "schemes": [
     "http",
@@ -1231,13 +1231,9 @@
           "format": "int64",
           "description": "Field current_service_index"
         },
-        "default_model": {
-          "type": "string",
-          "description": "Field default_model"
-        },
-        "provider": {
-          "type": "string",
-          "description": "Field provider"
+        "lb_tactic": {
+          "description": "Field lb_tactic",
+          "$ref": "#/definitions/Tactic"
         },
         "request_model": {
           "type": "string",
@@ -1276,8 +1272,9 @@
         "response_model",
         "services",
         "current_service_index",
-        "tactic",
-        "active"
+        "lb_tactic",
+        "active",
+        "tactic"
       ]
     },
     "SetRuleResponse": {
@@ -1382,6 +1379,24 @@
       "required": [
         "success",
         "data"
+      ]
+    },
+    "Tactic": {
+      "type": "object",
+      "properties": {
+        "params": {
+          "type": "object",
+          "description": "Field params"
+        },
+        "type": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field type"
+        }
+      },
+      "required": [
+        "type",
+        "params"
       ]
     },
     "ToggleProviderResponse": {
@@ -1496,14 +1511,6 @@
   },
   "tags": [
     {
-      "name": "rules",
-      "description": "Operations related to rules"
-    },
-    {
-      "name": "history",
-      "description": "Operations related to history"
-    },
-    {
       "name": "models",
       "description": "Operations related to models"
     },
@@ -1522,6 +1529,14 @@
     {
       "name": "server",
       "description": "Operations related to server"
+    },
+    {
+      "name": "rules",
+      "description": "Operations related to rules"
+    },
+    {
+      "name": "history",
+      "description": "Operations related to history"
     }
   ]
 }

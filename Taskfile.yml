@@ -15,6 +15,8 @@ vars:
   
   PACKAGE_PATH: ./internal/wails3
   
+  PORT: 12580
+  
   APP_NAME: "TinglyBox"
   BIN_NAME: "tingly-box"
   BIN_DIR: "bin"
@@ -76,7 +78,7 @@ tasks:
   swagger:
     cmds:
       - |
-        curl -s http://localhost:8080/swagger.json > swagger.json
+        curl -s http://localhost:{{.PORT}}/swagger.json > swagger.json
   
   start:
     cmds:
