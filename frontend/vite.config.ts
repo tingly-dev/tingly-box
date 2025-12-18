@@ -34,7 +34,7 @@ export default defineConfig({
     server: {
         proxy: useMock ? {} : {
             '/api': {
-                target: 'http://localhost:8080',
+                target: 'http://localhost:12580',
                 changeOrigin: true,
                 secure: false,
                 // Rewrite the path to remove /api prefix if your backend doesn't expect it
