@@ -17,8 +17,10 @@ const StopTimeout = time.Second * 10
 
 // ServerManager manages the HTTP server lifecycle
 type ServerManager struct {
-	appConfig     *config.AppConfig
-	server        *server.Server
+	appConfig *config.AppConfig
+	server    *server.Server
+
+	host          string
 	enableUI      bool
 	enableAdaptor bool
 	enableDebug   bool
@@ -47,6 +49,12 @@ func WithAdaptor(enabled bool) ServerManagerOption {
 func WithDebug(enabled bool) ServerManagerOption {
 	return func(sm *ServerManager) {
 		sm.enableDebug = enabled
+	}
+}
+
+func WithHost(host string) ServerManagerOption {
+	return func(sm *ServerManager) {
+		sm.host = host
 	}
 }
 
@@ -94,7 +102,7 @@ func (sm *ServerManager) Setup(port int) error {
 	sm.appConfig.GetGlobalConfig().SetDebug(sm.enableDebug)
 
 	// Create server with UI and adaptor options
-	sm.server = server.NewServerWithAllOptions(sm.appConfig.GetGlobalConfig(), sm.enableUI, sm.enableAdaptor)
+	sm.server = server.NewServer(sm.appConfig.GetGlobalConfig(), server.WithUI(sm.enableUI), server.WithAdaptor(sm.enableAdaptor), server.WithHost(sm.host))
 
 	// Set global server instance for web UI control
 	server.SetGlobalServer(sm.server)

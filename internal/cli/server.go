@@ -58,6 +58,7 @@ func stopServerWithPIDManager(pidManager *config.PIDManager) error {
 
 // startServerOptions contains options for starting the server
 type startServerOptions struct {
+	Host          string
 	Port          int
 	EnableUI      bool
 	EnableDebug   bool
@@ -92,6 +93,7 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 		manage.WithUI(opts.EnableUI),
 		manage.WithAdaptor(opts.enableAdaptor),
 		manage.WithDebug(opts.EnableDebug),
+		manage.WithHost(opts.Host),
 	)
 
 	// Setup signal handling for graceful shutdown
@@ -179,6 +181,7 @@ func StartCommand(appConfig *config.AppConfig) *cobra.Command {
 	var port int
 	var enableUI bool
 	var enableDebug bool
+	var host string
 
 	cmd := &cobra.Command{
 		Use:   "start",
@@ -187,6 +190,7 @@ func StartCommand(appConfig *config.AppConfig) *cobra.Command {
 The server will handle request routing to configured AI providers.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return startServer(appConfig, startServerOptions{
+				Host:        host,
 				Port:        port,
 				EnableUI:    enableUI,
 				EnableDebug: enableDebug,
@@ -195,6 +199,7 @@ The server will handle request routing to configured AI providers.`,
 	}
 
 	cmd.Flags().IntVarP(&port, "port", "p", 12580, "Server port (default: 12580)")
+	cmd.Flags().StringVar(&host, "host", "localhost", "Server host")
 	cmd.Flags().BoolVarP(&enableUI, "ui", "u", true, "Enable web UI (default: true)")
 	cmd.Flags().BoolVar(&enableDebug, "debug", false, "Enable debug logging and Gin debug mode (default: false)")
 	return cmd
@@ -310,9 +315,9 @@ func RestartCommand(appConfig *config.AppConfig) *cobra.Command {
 This command will stop the current server (if running) and start a new instance.
 The restart is graceful - ongoing requests will be completed before shutdown.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-            if err := appConfig.SetServerPort(port); err != nil {
-                return fmt.Errorf("failed to set server port: %w", err)
-            }
+			if err := appConfig.SetServerPort(port); err != nil {
+				return fmt.Errorf("failed to set server port: %w", err)
+			}
 
 			pidManager := config.NewPIDManager(appConfig.ConfigDir())
 			wasRunning := pidManager.IsRunning()
