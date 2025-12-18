@@ -7,7 +7,7 @@ import Layout from './layout/Layout';
 import Home from './pages/Home.tsx';
 import History from "./pages/History";
 import Login from './pages/Login';
-import CredentialPage from './pages/CredentialPage.tsx';
+import ProviderPage from './pages/ProviderPage.tsx';
 import RulePage from './pages/RulePage.tsx';
 import System from './pages/System';
 import theme from './theme';
@@ -28,8 +28,8 @@ function App() {
                                             <Route path="/" element={<Home />} />
                                             <Route path="/home" element={<Home />} />
                                             <Route path="/dashboard" element={<Home />} />
-                                            <Route path="/credential" element={<CredentialPage />} />
-                                            <Route path="/provider" element={<CredentialPage />} />
+                                            <Route path="/credential" element={<ProviderPage />} />
+                                            <Route path="/provider" element={<ProviderPage />} />
                                             <Route path="/rule" element={<RulePage />} />
                                             <Route path="/system" element={<System />} />
                                             <Route path="/history" element={<History />} />
