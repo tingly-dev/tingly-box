@@ -1,4 +1,4 @@
-import { AccountCircle as AccountIcon, Dashboard as DashboardIcon, History as HistoryIcon, Key as KeyIcon, Logout as LogoutIcon, Menu as MenuIcon, RuleOutlined, Settings as SettingsIcon } from '@mui/icons-material';
+import { AccountCircle as AccountIcon, Dashboard as DashboardIcon, ForkRight, Key as KeyIcon, Logout as LogoutIcon, Menu as MenuIcon } from '@mui/icons-material';
 import { Box, Drawer, IconButton, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Typography } from '@mui/material';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
@@ -42,9 +42,9 @@ const Layout = ({ children }: LayoutProps) => {
 
     const menuItems = [
         { path: '/', label: 'Home', icon: <DashboardIcon /> },
-        { path: '/credential', label: 'API Keys', icon: <KeyIcon /> },
-        { path: '/rule', label: 'Rules', icon: <RuleOutlined /> },
-        { path: '/system', label: 'System', icon: <SettingsIcon /> },
+        { path: '/credential', label: 'Provider', icon: <KeyIcon /> },
+        { path: '/rule', label: 'Routing', icon: <ForkRight sx={{ transform: 'rotate(45deg)' }} /> },
+        // { path: '/system', label: 'System', icon: <SettingsIcon /> },
         // { path: '/history', label: 'History', icon: <HistoryIcon /> },
     ];
 

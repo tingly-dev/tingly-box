@@ -296,8 +296,8 @@ const RulePage = () => {
             }}
         >
             <UnifiedCard
-                title="Proxy Rule Configuration"
-                subtitle="Configure api request to models"
+                title="Routing Configuration"
+                subtitle="Forwarding local model to remote providers"
                 size="full"
                 rightAction={
                     <Button
@@ -306,7 +306,7 @@ const RulePage = () => {
                         startIcon={<AddIcon />}
                         onClick={addConfigRecord}
                     >
-                        Add Rule
+                        Add Forwarding Rule
                     </Button>
                 }
             >
