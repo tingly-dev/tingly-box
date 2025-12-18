@@ -194,7 +194,7 @@ The server will handle request routing to configured AI providers.`,
 		},
 	}
 
-	cmd.Flags().IntVarP(&port, "port", "p", 8080, "Server port (default: 8080)")
+	cmd.Flags().IntVarP(&port, "port", "p", 12580, "Server port (default: 12580)")
 	cmd.Flags().BoolVarP(&enableUI, "ui", "u", true, "Enable web UI (default: true)")
 	cmd.Flags().BoolVar(&enableDebug, "debug", false, "Enable debug logging and Gin debug mode (default: false)")
 	return cmd
@@ -310,12 +310,9 @@ func RestartCommand(appConfig *config.AppConfig) *cobra.Command {
 This command will stop the current server (if running) and start a new instance.
 The restart is graceful - ongoing requests will be completed before shutdown.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Set port if provided
-			if port != 8080 {
-				if err := appConfig.SetServerPort(port); err != nil {
-					return fmt.Errorf("failed to set server port: %w", err)
-				}
-			}
+            if err := appConfig.SetServerPort(port); err != nil {
+                return fmt.Errorf("failed to set server port: %w", err)
+            }
 
 			pidManager := config.NewPIDManager(appConfig.ConfigDir())
 			wasRunning := pidManager.IsRunning()
@@ -341,6 +338,6 @@ The restart is graceful - ongoing requests will be completed before shutdown.`,
 		},
 	}
 
-	cmd.Flags().IntVarP(&port, "port", "p", 8080, "Server port (default: 8080)")
+	cmd.Flags().IntVarP(&port, "port", "p", 12580, "Server port (default: 12580)")
 	return cmd
 }

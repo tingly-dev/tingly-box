@@ -70,13 +70,13 @@ func TestMockServerDefaultResponses(t *testing.T) {
 
 func TestBenchmarkClient(t *testing.T) {
 	client := NewBenchmarkClient(&BenchmarkOptions{
-		BaseURL:  "http://localhost:8080",
+		BaseURL:  "http://localhost:12580",
 		Provider: "openai",
 		Timeout:  5 * time.Second,
 	})
 
-	if client.baseURL != "http://localhost:8080" {
-		t.Errorf("Expected baseURL 'http://localhost:8080', got '%s'", client.baseURL)
+	if client.baseURL != "http://localhost:12580" {
+		t.Errorf("Expected baseURL 'http://localhost:12580', got '%s'", client.baseURL)
 	}
 
 	if client.provider != "openai" {

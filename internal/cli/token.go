@@ -28,7 +28,7 @@ These keys are used for different purposes:
 			if globalConfig.HasUserToken() {
 				fmt.Printf("UI Key: %s\n", globalConfig.GetUserToken())
 				fmt.Println("\nUsage:")
-				fmt.Printf("  Dashboard URL: http://localhost:8080/dashboard?user_auth_token=%s\n", globalConfig.GetUserToken())
+				fmt.Printf("  Dashboard URL: http://localhost:12580/dashboard?user_auth_token=%s\n", globalConfig.GetUserToken())
 			} else {
 				fmt.Println("No UI management key configured.")
 				fmt.Println("The server will auto-generate one on startup if needed.")
