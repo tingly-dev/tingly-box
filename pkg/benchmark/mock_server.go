@@ -11,7 +11,7 @@ import (
 
 // Default configuration constants
 const (
-	DefaultPort           = 8080
+	DefaultPort           = 12580
 	DefaultChatDelayMs    = 100
 	DefaultMessageDelayMs = 150
 	DefaultRandomDelayMin = 10

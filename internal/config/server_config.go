@@ -98,7 +98,7 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 			}
 			// Initialize merged fields with defaults
 			cfg.Providers = make(map[string]*Provider)
-			cfg.ServerPort = 8080
+			cfg.ServerPort = 12580
 			cfg.JWTSecret = generateSecret()
 			if err := cfg.save(); err != nil {
 				return nil, fmt.Errorf("failed to create default global cfg: %w", err)
@@ -127,7 +127,7 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 		mergedFieldsUpdated = true
 	}
 	if cfg.ServerPort == 0 {
-		cfg.ServerPort = 8080
+		cfg.ServerPort = 12580
 		mergedFieldsUpdated = true
 	}
 	if cfg.JWTSecret == "" {

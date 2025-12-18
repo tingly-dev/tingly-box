@@ -184,7 +184,7 @@ type StatusResponse struct {
 	Success bool `json:"success" example:"true"`
 	Data    struct {
 		ServerRunning    bool `json:"server_running" example:"true"`
-		Port             int  `json:"port" example:"8080"`
+		Port             int  `json:"port" example:"12580"`
 		ProvidersTotal   int  `json:"providers_total" example:"3"`
 		ProvidersEnabled int  `json:"providers_enabled" example:"2"`
 		RequestCount     int  `json:"request_count" example:"100"`

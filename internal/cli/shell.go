@@ -275,11 +275,11 @@ func handleServerManagement(appConfig *config.AppConfig, reader *bufio.Reader, l
 			fmt.Println("⚠️ Server is already running!")
 			return
 		}
-		fmt.Print("Enter port (default 8080): ")
+		fmt.Print("Enter port (default 12580): ")
 		portInput, _ := reader.ReadString('\n')
 		portInput = strings.TrimSpace(strings.TrimSuffix(portInput, "\n"))
 
-		port := 8080
+		port := 12580
 		if portInput != "" {
 			if p, err := strconv.Atoi(portInput); err == nil {
 				port = p
@@ -325,11 +325,11 @@ func handleServerManagement(appConfig *config.AppConfig, reader *bufio.Reader, l
 		}
 
 	case "3":
-		fmt.Print("Enter port for restart (default 8080): ")
+		fmt.Print("Enter port for restart (default 12580): ")
 		portInput, _ := reader.ReadString('\n')
 		portInput = strings.TrimSpace(strings.TrimSuffix(portInput, "\n"))
 
-		port := 8080
+		port := 12580
 		if portInput != "" {
 			if p, err := strconv.Atoi(portInput); err == nil {
 				port = p
