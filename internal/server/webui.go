@@ -41,19 +41,6 @@ func GetGlobalServer() *Server {
 
 // Init sets up Server routes and templates on the main server engine
 func (s *Server) UseUIEndpoints() {
-
-	// Middleware
-	s.engine.Use(gin.Logger())
-	s.engine.Use(gin.Recovery())
-
-	s.engine.Use(func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization")
-	})
-
-	// Dashboard endpoints
-
 	// UI page routes
 	s.engine.GET("/home", s.UseIndex)
 	s.engine.GET("/credential", s.UseIndex)
