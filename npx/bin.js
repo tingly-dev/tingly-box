@@ -7,7 +7,7 @@ import { join } from "path";
 import { Readable } from "stream";
 
 // Configuration for binary downloads
-const BASE_URL = "https://github.com/tingly-dev/tingly-box-release/raw";
+const BASE_URL = "https://github.com/tingly-dev/tingly-box-release/raw/refs/heads";
 
 // Default branch to use when not specified via transport version
 // This will be replaced during the NPX build process
@@ -69,36 +69,42 @@ async function getPlatformArchAndBinary() {
 	let platformDir;
 	let archDir;
 	let binaryName;
+	binaryName = "tingly-box";
+	let suffix = ""
 
 	if (platform === "darwin") {
-		platformDir = "darwin";
+		platformDir = "macos";
 		if (arch === "arm64") archDir = "arm64";
 		else archDir = "amd64";
-		binaryName = "bifrost-http";
 	} else if (platform === "linux") {
 		platformDir = "linux";
 		if (arch === "x64") archDir = "amd64";
 		else if (arch === "ia32") archDir = "386";
 		else archDir = arch; // fallback
-		binaryName = "bifrost-http";
 	} else if (platform === "win32") {
 		platformDir = "windows";
 		if (arch === "x64") archDir = "amd64";
 		else if (arch === "ia32") archDir = "386";
 		else archDir = arch; // fallback
-		binaryName = "bifrost-http.exe";
+		suffix = ".exe";
 	} else {
 		console.error(`Unsupported platform/arch: ${platform}/${arch}`);
 		process.exit(1);
 	}
 
-	return { platformDir, archDir, binaryName };
+	return { platformDir, archDir, binaryName, suffix };
 }
 
 async function downloadBinary(url, dest) {
 	// console.log(`🔄 Downloading binary from ${url}...`);
 
-	const res = await fetch(url);
+	// Fetch with redirect following
+	const res = await fetch(url, {
+		redirect: 'follow', // Automatically follow redirects
+		headers: {
+			'User-Agent': 'tingly-box-npx'
+		}
+	});
 
 	if (!res.ok) {
 		console.error(`❌ Download failed: ${res.status} ${res.statusText}`);
@@ -169,7 +175,7 @@ function cacheDir() {
 
 // gets the latest version number for transport
 async function getLatestVersion() {
-	const releaseUrl = "https://getbifrost.ai/latest-release";
+	const releaseUrl = "";
 	const res = await fetch(releaseUrl);
 	if (!res.ok) {
 		return null;
@@ -188,7 +194,7 @@ function formatBytes(bytes) {
 
 (async () => {
 	const platformInfo = await getPlatformArchAndBinary();
-	const { platformDir, archDir, binaryName } = platformInfo;
+	const { platformDir, archDir, binaryName, suffix } = platformInfo;
 
 	const namedVersion = VERSION === "latest" ? BINARY_RELEASE_BRANCH : VERSION;
 
@@ -198,26 +204,27 @@ function formatBytes(bytes) {
 	// For future use when we want to add multiple fallback binaries
 	const downloadUrls = [];
 
-	downloadUrls.push(`${BASE_URL}/${branchName}/${platformDir}/${archDir}/${binaryName}`);
+	downloadUrls.push(`${BASE_URL}/${branchName}/${binaryName}-${platformDir}-${archDir}${suffix}`);
 
 	let lastError = null;
 	let binaryWorking = false;
 
 	// Use branch name for caching
-	const bifrostBinDir = join(cacheDir(), "bifrost", branchName, "bin");
+	const tinglyBinDir = join(cacheDir(), "tingly-box", branchName, "bin");
 
 	// if the binary directory doesn't exist, create it
 	try {
-		if (!existsSync(bifrostBinDir)) {
-			mkdirSync(bifrostBinDir, { recursive: true });
+		if (!existsSync(tinglyBinDir)) {
+			mkdirSync(tinglyBinDir, { recursive: true });
 		}
 	} catch (mkdirError) {
-		console.error(`❌ Failed to create directory ${bifrostBinDir}:`, mkdirError.message);
+		console.error(`❌ Failed to create directory ${tinglyBinDir}:`, mkdirError.message);
 		process.exit(1);
 	}
 
 	for (let i = 0; i < downloadUrls.length; i++) {
-		const binaryPath = join(bifrostBinDir, `${binaryName}-${i}`);
+		const binaryPath = join(tinglyBinDir, `${binaryName}-${i}`);
+		console.log("🚧 downloading", binaryPath)
 
 		if (!existsSync(binaryPath)) {
 			await downloadBinary(downloadUrls[i], binaryPath);
@@ -241,7 +248,7 @@ function formatBytes(bytes) {
 	}
 
 	if (!binaryWorking) {
-		console.error(`❌ Failed to start Bifrost. Error:`, lastError.message);
+		console.error(`❌ Failed to start Tingly-Box. Error:`, lastError.message);
 
 		// Show critical error details for troubleshooting
 		if (lastError.code) {
