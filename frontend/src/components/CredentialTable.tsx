@@ -425,11 +425,11 @@ const CredentialTable = ({
                     }}
                 >
                     <Typography id="delete-modal-title" variant="h6" component="h2" sx={{mb: 2}}>
-                        Delete Credential
+                        Delete Provider
                     </Typography>
 
                     <Typography id="delete-modal-description" variant="body2" sx={{mb: 3}}>
-                        Are you sure you want to delete the credential "{deleteModal.providerName}"? This action cannot
+                        Are you sure you want to delete the provider "{deleteModal.providerName}"? This action cannot
                         be undone.
                     </Typography>
 
