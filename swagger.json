@@ -801,9 +801,7 @@
         "messages": {
           "type": "array",
           "description": "Field messages",
-          "items": {
-            "type": "object"
-          }
+          "items": {}
         },
         "model": {
           "type": "string",
@@ -936,12 +934,67 @@
         "time_cost"
       ]
     },
+    "ProviderModelInfo": {
+      "type": "object",
+      "properties": {
+        "api_base": {
+          "type": "string",
+          "description": "Field api_base",
+          "example": "https://api.openai.com/v1"
+        },
+        "custom_model": {
+          "type": "array",
+          "description": "Field custom_model",
+          "items": {
+            "type": "string"
+          },
+          "example": [
+            "custom-gpt-model"
+          ]
+        },
+        "last_updated": {
+          "type": "string",
+          "description": "Field last_updated",
+          "example": "2024-01-15 10:30:00"
+        },
+        "models": {
+          "type": "array",
+          "description": "Field models",
+          "items": {
+            "type": "string"
+          },
+          "example": [
+            "gpt-3.5-turbo",
+            "gpt-4"
+          ]
+        },
+        "star_models": {
+          "type": "array",
+          "description": "Field star_models",
+          "items": {
+            "type": "string"
+          },
+          "example": [
+            "gpt-4"
+          ]
+        }
+      },
+      "required": [
+        "models",
+        "star_models",
+        "custom_model",
+        "api_base"
+      ]
+    },
     "ProviderModelsResponse": {
       "type": "object",
       "properties": {
         "data": {
           "type": "object",
-          "description": "Field data"
+          "description": "Field data",
+          "additionalProperties": {
+            "$ref": "#/definitions/ProviderModelInfo"
+          }
         },
         "success": {
           "type": "boolean",
@@ -1207,7 +1260,10 @@
         },
         "tactic_params": {
           "type": "object",
-          "description": "Field tactic_params"
+          "description": "Field tactic_params",
+          "additionalProperties": {
+            "type": "object"
+          }
         },
         "uuid": {
           "type": "string",
@@ -1440,14 +1496,6 @@
   },
   "tags": [
     {
-      "name": "providers",
-      "description": "Operations related to providers"
-    },
-    {
-      "name": "server",
-      "description": "Operations related to server"
-    },
-    {
       "name": "rules",
       "description": "Operations related to rules"
     },
@@ -1466,6 +1514,14 @@
     {
       "name": "token",
       "description": "Operations related to token"
+    },
+    {
+      "name": "providers",
+      "description": "Operations related to providers"
+    },
+    {
+      "name": "server",
+      "description": "Operations related to server"
     }
   ]
 }

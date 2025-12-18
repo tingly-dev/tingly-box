@@ -18,7 +18,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { ProbeResponse } from '../client';
 import CardGrid from '../components/CardGrid.tsx';
-import CredentialFormDialog, { type ProviderFormData } from '../components/CredentialFormDialog.tsx';
+import ProviderFormDialog, { type ProviderFormData } from '../components/ProviderFormDialog.tsx';
+import PresetProviderFormDialog, { type EnhancedProviderFormData } from '../components/PresetProviderFormDialog.tsx';
 import { HomeHeader } from '../components/HomeHeader.tsx';
 import ModelSelectTab, { type ProviderSelectTabOption } from "../components/ModelSelectTab.tsx";
 import { PageLayout } from '../components/PageLayout';
@@ -322,6 +323,13 @@ const Home = () => {
         }));
     };
 
+    const handleEnhanceProviderFormChange = (field: keyof EnhancedProviderFormData, value: any) => {
+        setProviderFormData(prev => ({
+            ...prev,
+            [field]: value,
+        }));
+    };
+
     const handleAddProvider = async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -540,12 +548,21 @@ const Home = () => {
             <ApiKeyModal></ApiKeyModal>
 
             {/* Add Provider Dialog */}
-            <CredentialFormDialog
+            <ProviderFormDialog
                 open={addDialogOpen}
                 onClose={() => setAddDialogOpen(false)}
                 onSubmit={handleAddProvider}
                 data={providerFormData}
                 onChange={handleProviderFormChange}
+                mode="add"
+            />
+
+            <PresetProviderFormDialog
+                open={addDialogOpen}
+                onClose={() => setAddDialogOpen(false)}
+                onSubmit={handleAddProvider}
+                data={providerFormData}
+                onChange={handleEnhanceProviderFormChange}
                 mode="add"
             />
         </PageLayout>

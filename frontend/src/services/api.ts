@@ -1,10 +1,12 @@
 // API service layer for communicating with the backend
 
+import ProxyService from "@/bindings";
 import {
     Configuration,
     type FetchProviderModelsResponse,
     HistoryApi,
     ModelsApi,
+    type ProviderModelsResponse,
     type ProviderResponse,
     ProvidersApi,
     RulesApi,
@@ -12,7 +14,6 @@ import {
     TestingApi,
     TokenApi
 } from '../client';
-import ProxyService from "@/bindings";
 
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -240,17 +241,18 @@ export const api = {
         }
     },
 
-    getProviderModels: async (): Promise<any> => {
+    getProviderModels: async (): Promise<ProviderModelsResponse> => {
         try {
             const apiInstances = await getApiInstances();
             const response = await apiInstances.modelsApi.apiV1ProviderModelsGet();
-            const body = response.data;
+            const body: ProviderModelsResponse = response.data;
             if (body.success && body.data) {
                 // Sort models within each provider alphabetically by model name
-                Object.keys(response.data).forEach(providerName => {
-                    if (Array.isArray(body.data[providerName])) {
-                        body.data[providerName].sort((a: any, b: any) =>
-                            (a.model || a.name || '').localeCompare(b.model || b.name || '')
+                Object.keys(body.data).forEach(providerName => {
+                    const providerData = body.data[providerName];
+                    if (providerData && Array.isArray(providerData.models)) {
+                        providerData.models.sort((a: string, b: string) =>
+                            a.localeCompare(b)
                         );
                     }
                 });

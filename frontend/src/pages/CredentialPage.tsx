@@ -1,9 +1,10 @@
 import { Add } from '@mui/icons-material';
 import { Alert, Box, Button, Snackbar, Stack, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
-import { PageLayout } from '../components/PageLayout';
+import { type ProviderFormData } from '../components/ProviderFormDialog.tsx';
 import CredentialTable from '../components/CredentialTable.tsx';
-import CredentialFormDialog, { type ProviderFormData } from '../components/CredentialFormDialog.tsx';
+import PresetProviderFormDialog from '../components/PresetProviderFormDialog.tsx';
+import { PageLayout } from '../components/PageLayout';
 import UnifiedCard from '../components/UnifiedCard';
 import { api } from '../services/api';
 
@@ -72,9 +73,9 @@ const CredentialPage = () => {
         const result = dialogMode === 'add'
             ? await api.addProvider(providerData)
             : await api.updateProvider(providerFormData.name, {
-                  ...providerData,
-                  token: providerFormData.token || undefined,
-              });
+                ...providerData,
+                token: providerFormData.token || undefined,
+            });
 
         if (result.success) {
             showNotification(`Credential ${dialogMode === 'add' ? 'added' : 'updated'} successfully!`, 'success');
@@ -141,19 +142,19 @@ const CredentialPage = () => {
                                 onClick={handleAddProviderClick}
                                 size="small"
                             >
-                                Add Credential
+                                Add API Key
                             </Button>
                         </Stack>
                     }
                 >
                     {providers.length > 0 ? (
                         <Box sx={{ flex: 1 }}>
-                                <CredentialTable
-                                    providers={providers}
-                                    onEdit={handleEditProvider}
-                                    onToggle={handleToggleProvider}
-                                    onDelete={handleDeleteProvider}
-                                />
+                            <CredentialTable
+                                providers={providers}
+                                onEdit={handleEditProvider}
+                                onToggle={handleToggleProvider}
+                                onDelete={handleDeleteProvider}
+                            />
                         </Box>
                     ) : (
                         <Box textAlign="center" py={5}>
@@ -191,7 +192,16 @@ const CredentialPage = () => {
             )}
 
             {/* Provider Dialog */}
-            <CredentialFormDialog
+            {/* <CredentialFormDialog
+                open={dialogOpen}
+                onClose={() => setDialogOpen(false)}
+                onSubmit={handleProviderSubmit}
+                data={providerFormData}
+                onChange={(field, value) => setProviderFormData(prev => ({ ...prev, [field]: value }))}
+                mode={dialogMode}
+            /> */}
+
+            <PresetProviderFormDialog
                 open={dialogOpen}
                 onClose={() => setDialogOpen(false)}
                 onSubmit={handleProviderSubmit}

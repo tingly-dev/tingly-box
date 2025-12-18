@@ -1,3 +1,9 @@
+# codegen
+internal/web/dist
+internal/gui/dist
+frontend/src/client
+frontend/src/bindings
+
 # wails3
 .task
 bin

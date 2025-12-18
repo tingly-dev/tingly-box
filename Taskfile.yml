@@ -89,10 +89,13 @@ tasks:
       - task: go:build
   
   go:build:
+    env:
+      ARCH:
+      OS:
     cmds:
       - |
         mkdir -p build
-        go build -o ./build/{{.BIN_NAME}} ./cmd/tingly-box
+        GOOS={{.OS}} GOARCH={{.ARCH}} go build -o ./build/{{.BIN_NAME}} ./cmd/tingly-box
   
   go:test:
     cmds:

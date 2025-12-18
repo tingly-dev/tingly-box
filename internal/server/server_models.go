@@ -286,10 +286,19 @@ type ServerActionResponse struct {
 	Message string `json:"message" example:"Server stopped successfully"`
 }
 
+// ProviderModelInfo represents model information for a specific provider
+type ProviderModelInfo struct {
+	Models      []string `json:"models" example:"gpt-3.5-turbo,gpt-4"`
+	StarModels  []string `json:"star_models" example:"gpt-4"`
+	CustomModel []string `json:"custom_model" example:"custom-gpt-model"`
+	APIBase     string   `json:"api_base" example:"https://api.openai.com/v1"`
+	LastUpdated string   `json:"last_updated,omitempty" example:"2024-01-15 10:30:00"`
+}
+
 // ProviderModelsResponse represents the response for getting provider models
 type ProviderModelsResponse struct {
-	Success bool                   `json:"success" example:"true"`
-	Data    map[string]interface{} `json:"data"`
+	Success bool                          `json:"success" example:"true"`
+	Data    map[string]*ProviderModelInfo `json:"data"`
 }
 
 // FetchProviderModelsResponse represents the response for fetching provider models

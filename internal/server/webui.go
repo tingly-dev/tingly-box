@@ -842,16 +842,16 @@ func (s *Server) GetProviderModels(c *gin.Context) {
 	}
 
 	providers := providerModelManager.GetAllProviders()
-	providerModels := make(map[string]interface{})
+	providerModels := make(map[string]*ProviderModelInfo)
 
 	for _, providerName := range providers {
 		models := providerModelManager.GetModels(providerName)
 		apiBase, lastUpdated, _ := providerModelManager.GetProviderInfo(providerName)
 
-		providerModels[providerName] = map[string]interface{}{
-			"models":       models,
-			"api_base":     apiBase,
-			"last_updated": lastUpdated,
+		providerModels[providerName] = &ProviderModelInfo{
+			Models:      models,
+			APIBase:     apiBase,
+			LastUpdated: lastUpdated,
 		}
 	}
 
