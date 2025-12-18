@@ -326,7 +326,7 @@ const RulePage = () => {
         >
             <UnifiedCard
                 title="Routing Configuration"
-                subtitle="Forwarding local model to remote providers"
+                subtitle="Config local model which forwarding to remote providers"
                 size="full"
                 rightAction={
                     <Button
