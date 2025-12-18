@@ -135,7 +135,7 @@ jobs:
           
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "branch_suffix=$BRANCH_SUFFIX" >> $GITHUB_OUTPUT
-          echo "branch_name=packages-$BRANCH_SUFFIX" >> $GITHUB_OUTPUT
+          echo "branch_name=$BRANCH_SUFFIX" >> $GITHUB_OUTPUT
       
       - name: Commit and push packages to release repository
         env:
@@ -146,7 +146,7 @@ jobs:
 
           # Run the commit script with the repository name instead of full SSH URL
           # The script will handle the SSH URL construction
-          .github/workflows/scripts/commit-packages-to-branch.sh "packages-${{ steps.branch-info.outputs.branch_suffix }}" "tingly-dev/tingly-box-release"
+          .github/workflows/scripts/commit-packages-to-branch.sh "${{ steps.branch-info.outputs.branch_suffix }}" "tingly-dev/tingly-box-release"
       
       - name: List created branch
         run: |
