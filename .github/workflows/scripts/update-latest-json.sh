@@ -17,7 +17,7 @@ BRANCH_NAME="$2"
 REPOSITORY="${3:-tingly-dev/tingly-box-release}"
 
 # Validate branch name format
-#if [[ ! "$BRANCH_NAME" =~ ^packages-[a-zA-Z0-9_-]+$ ]]; then
+#if [[ ! "$BRANCH_NAME" =~ ^[a-zA-Z0-9_-]+$ ]]; then
 #    echo "Error: Invalid branch name format. Expected: packages-<suffix>"
 #    exit 1
 #fi

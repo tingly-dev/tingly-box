@@ -38,19 +38,19 @@ fi
 
 echo "Extracted packages branch: $PACKAGES_BRANCH"
 
-# Validate branch name format
-if [[ ! "$PACKAGES_BRANCH" =~ ^packages-[a-zA-Z0-9_-]+$ ]]; then
-    echo "Error: Invalid packages branch format: $PACKAGES_BRANCH"
-    rm -rf "$TEMP_DIR"
-    exit 1
-fi
+## Validate branch name format
+#if [[ ! "$PACKAGES_BRANCH" =~ ^packages-[a-zA-Z0-9_-]+$ ]]; then
+#    echo "Error: Invalid packages branch format: $PACKAGES_BRANCH"
+#    rm -rf "$TEMP_DIR"
+#    exit 1
+#fi
 
 # Extract version from branch name
 # Handle both formats: packages-v1.0.0 and packages-20241218-123456
-if [[ "$PACKAGES_BRANCH" =~ ^packages-v([0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?)$ ]]; then
+if [[ "$PACKAGES_BRANCH" =~ ^v([0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?)$ ]]; then
     VERSION="${BASH_REMATCH[1]}"
     echo "Extracted version from versioned branch: $VERSION"
-elif [[ "$PACKAGES_BRANCH" =~ ^packages-manual-([0-9]{8}-[0-9]{6})$ ]]; then
+elif [[ "$PACKAGES_BRANCH" =~ ^manual-([0-9]{8}-[0-9]{6})$ ]]; then
     # For manual branches, use current date or a default version
     VERSION="$(date +%Y.%m.%d)"
     echo "Using date-based version for manual branch: $VERSION"
