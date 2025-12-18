@@ -58,7 +58,7 @@ export const getBaseUrl = async (): Promise<string> => {
         }
     } else {
         const host = window.location.host.replace(/\/$/, "")
-        basePath = `http;//${host}`
+        basePath = `http://${host}`
     }
 
     return basePath
