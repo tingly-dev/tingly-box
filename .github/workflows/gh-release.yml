@@ -65,7 +65,7 @@ jobs:
       - name: Install openapi-generator-cli
         run: npm install -g @openapitools/openapi-generator-cli
 
-      - name: Build frontend and run codegen
+      - name: Run codegen Build frontend
         run: |
           openapi-generator-cli generate -g typescript-axios -i ../swagger.json -o ./src/client
           pnpm build && mkdir -p ../internal/web/dist && cp -R dist/* ../internal/web/dist/
