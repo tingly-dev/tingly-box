@@ -68,7 +68,7 @@ jobs:
       - name: Build frontend and run codegen
         run: |
           openapi-generator-cli generate -g typescript-axios -i ../swagger.json -o ./src/client
-          pnpm build && mkdir -p ../internal/server/web/dist && cp -R dist/* ../internal/server/web/dist/
+          pnpm build && mkdir -p ../internal/web/dist && cp -R dist/* ../internal/web/dist/
         working-directory: ./frontend
 
       - name: Build Go binaries
