@@ -106,6 +106,8 @@ jobs:
       - name: Package binaries with proper extensions
         run: |
           cd dist
+          
+          chmod +x dist/*
 
           # Create packages directory
           mkdir -p packages
