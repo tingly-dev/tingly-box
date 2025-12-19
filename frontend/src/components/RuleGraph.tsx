@@ -311,6 +311,16 @@ const ProviderNodeComponent: React.FC<{
 
     return (
         <ProviderNode>
+            {/* API Style Chip */}
+            {provider.provider && (
+                <Chip
+                    label={apiStyle}
+                    size="small"
+                    variant="outlined"
+                    sx={{ fontSize: '0.7rem', height: 20, mb: 1.5 }}
+                />
+            )}
+
             {/* Provider Select */}
             <Box sx={{ width: '100%', mb: 1.5 }}>
                 {editMode.provider ? (
@@ -376,16 +386,6 @@ const ProviderNodeComponent: React.FC<{
                 )}
             </Box>
 
-            {/* API Style Chip */}
-            {provider.provider && (
-                <Chip
-                    label={apiStyle}
-                    size="small"
-                    variant="outlined"
-                    sx={{ fontSize: '0.7rem', height: 20, mb: 1.5 }}
-                />
-            )}
-
             {/* Model Select */}
             {provider.provider && (
                 <Box sx={{ width: '100%', mb: 1.5 }}>
@@ -435,14 +435,14 @@ const ProviderNodeComponent: React.FC<{
                 </Box>
             )}
 
-            {/* Weight indicator */}
-            {provider.weight && (
-                <Chip
-                    label={`weight: ${provider.weight}`}
-                    size="small"
-                    sx={{ fontSize: '0.7rem', height: 20, backgroundColor: 'grey.100', mt: 'auto' }}
-                />
-            )}
+            {/*/!* Weight indicator *!/*/}
+            {/*{provider.weight && (*/}
+            {/*    <Chip*/}
+            {/*        label={`weight: ${provider.weight}`}*/}
+            {/*        size="small"*/}
+            {/*        sx={{ fontSize: '0.7rem', height: 20, backgroundColor: 'grey.100', mt: 'auto' }}*/}
+            {/*    />*/}
+            {/*)}*/}
 
             {/* Action Menu Button */}
             <IconButton
