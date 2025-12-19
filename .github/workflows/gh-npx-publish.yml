@@ -205,7 +205,7 @@ jobs:
           RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          FULL_TAG="npx-v$VERSION"
+          FULL_TAG="npx-$VERSION"
 
           echo "Creating NPX tag and release for $FULL_TAG"
 
@@ -282,7 +282,7 @@ jobs:
             echo "Updating existing LATEST.json..."
             jq --arg version "$VERSION" \
                --arg release_tag "$RELEASE_TAG" \
-               --arg npx_tag "npx-v$VERSION" \
+               --arg npx_tag "npx-$VERSION" \
                --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
                '.release_tag = $release_tag | .npx_latest_tag = $npx_tag | .npx_version = $version | .npx_updated_at = $timestamp' \
                LATEST.json > LATEST.tmp && mv LATEST.tmp LATEST.json
@@ -291,7 +291,7 @@ jobs:
             cat > LATEST.json << EOF
           {
             "release_tag": "$RELEASE_TAG",
-            "npx_latest_tag": "npx-v$VERSION",
+            "npx_latest_tag": "npx-$VERSION",
             "npx_version": "$VERSION",
             "updated_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
             "workflow_run": "${{ github.workflow }}",
@@ -310,7 +310,7 @@ jobs:
           git commit -m "Update LATEST.json with NPX package v$VERSION based on $RELEASE_TAG
 
           - Release tag: $RELEASE_TAG
-          - NPX tag: npx-v$VERSION
+          - NPX tag: npx-$VERSION
           - NPX version: $VERSION
           - Updated at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
