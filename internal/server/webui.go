@@ -791,9 +791,10 @@ func (s *Server) FetchProviderModels(c *gin.Context) {
 			}, false, err.Error())
 		}
 
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   err.Error(),
+		c.JSON(http.StatusInternalServerError, FetchProviderModelsResponse{
+			Success: false,
+			Message: fmt.Sprintf("Failed to fetch models from provider %s: %s", providerName, err.Error()),
+			Data:    nil,
 		})
 		return
 	}
@@ -1069,7 +1070,7 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 	)
 
 	// Probe endpoint
-	authAPI.POST("/probe", (s.HandleProbe),
+	authAPI.POST("/probe", s.HandleProbe,
 		swagger.WithDescription("Test a rule configuration by sending a sample request"),
 		swagger.WithTags("testing"),
 		swagger.WithRequestModel(ProbeRequest{}),
