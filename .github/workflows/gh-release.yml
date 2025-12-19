@@ -109,9 +109,6 @@ jobs:
           
           chmod +x dist/*
 
-          # Create packages directory
-          mkdir -p packages
-
           # Package Linux binaries as zip
           zip tingly-box-linux-amd64.zip tingly-box-linux-amd64
           zip tingly-box-linux-arm64.zip tingly-box-linux-arm64
