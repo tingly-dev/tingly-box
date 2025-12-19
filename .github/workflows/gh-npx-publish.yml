@@ -1,1 +1,409 @@
 
+name: GitHub Release and NPX Package Publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version_override:
+        description: 'NPX package version (leave empty to use tag version)'
+        required: false
+        type: string
+        default: ''
+      force_publish:
+        description: 'Force publish even if version exists'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  GO_VERSION: '1.25'
+  NODE_VERSION: '20'
+
+jobs:
+  # Build and create GitHub Release
+  build-and-release:
+    name: Build and Create GitHub Release
+    runs-on: ubuntu-latest
+    outputs:
+      tag_name: ${{ steps.get-tag.outputs.tag_name }}
+      version: ${{ steps.get-tag.outputs.version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get tag information
+        id: get-tag
+        run: |
+          # Extract version from tag or use manual input
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ github.event.inputs.version_override }}" ]; then
+            VERSION="${{ github.event.inputs.version_override }}"
+            TAG_NAME="v$VERSION"
+          else
+            TAG_NAME=${GITHUB_REF#refs/tags/}
+            VERSION=${TAG_NAME#v}
+          fi
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Tag: $TAG_NAME, Version: $VERSION"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: ./frontend
+
+      - name: Install openapi-generator-cli
+        run: npm install -g @openapitools/openapi-generator-cli
+
+      - name: Build frontend and run codegen
+        run: |
+          openapi-generator-cli generate -g typescript-axios -i ../swagger.json -o ./src/client
+          pnpm build && mkdir -p ../internal/server/web/dist && cp -R dist/* ../internal/server/web/dist/
+        working-directory: ./frontend
+
+      - name: Build Go binaries
+        run: |
+          # Create build directory
+          mkdir -p dist
+
+          # Build Linux binaries
+          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version=${{ steps.get-tag.outputs.version }}" -o ./dist/tingly-box-linux-amd64 ./cmd/tingly-box
+          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X main.version=${{ steps.get-tag.outputs.version }}" -o ./dist/tingly-box-linux-arm64 ./cmd/tingly-box
+
+          # Build macOS binaries
+          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X main.version=${{ steps.get-tag.outputs.version }}" -o ./dist/tingly-box-macos-amd64 ./cmd/tingly-box
+          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X main.version=${{ steps.get-tag.outputs.version }}" -o ./dist/tingly-box-macos-arm64 ./cmd/tingly-box
+
+          # Build Windows binaries
+          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.version=${{ steps.get-tag.outputs.version }}" -o ./dist/tingly-box-windows-amd64.exe ./cmd/tingly-box
+
+          # Make Linux/macOS binaries executable
+          chmod +x ./dist/tingly-box-linux-*
+          chmod +x ./dist/tingly-box-macos-*
+
+      - name: Package binaries
+        run: |
+          cd dist
+          mkdir -p ../packages
+
+          # Package Linux binaries as zip
+          zip ../packages/tingly-box-linux-amd64.zip tingly-box-linux-amd64
+          zip ../packages/tingly-box-linux-arm64.zip tingly-box-linux-arm64
+
+          # Package macOS binaries as zip
+          zip ../packages/tingly-box-macos-amd64.zip tingly-box-macos-amd64
+          zip ../packages/tingly-box-macos-arm64.zip tingly-box-macos-arm64
+
+          # Package Windows binary as zip
+          zip ../packages/tingly-box-windows-amd64.zip tingly-box-windows-amd64.exe
+
+          # Create checksums for all packages
+          cd ../packages
+          sha256sum *.zip > checksums.txt
+
+      - name: Generate changelog
+        run: |
+          VERSION="${{ steps.get-tag.outputs.version }}"
+          echo "## 🚀 Tingly Box v$VERSION" > release-notes.md
+          echo "" >> release-notes.md
+          echo "### ✨ Changes" >> release-notes.md
+
+          # Get commits since last tag
+          if LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null); then
+            git log --pretty=format:"- %s (%h)" $LAST_TAG..HEAD >> release-notes.md
+          else
+            echo "- Initial release" >> release-notes.md
+          fi
+
+          echo "" >> release-notes.md
+          echo "### 📦 Downloads" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "| Platform | Architecture | Download |" >> release-notes.md
+          echo "|----------|--------------|----------|" >> release-notes.md
+          echo "| Linux | AMD64 | [tingly-box-linux-amd64.zip](https://github.com/tingly-dev/tingly-box/releases/download/v${VERSION}/tingly-box-linux-amd64.zip) |" >> release-notes.md
+          echo "| Linux | ARM64 | [tingly-box-linux-arm64.zip](https://github.com/tingly-dev/tingly-box/releases/download/v${VERSION}/tingly-box-linux-arm64.zip) |" >> release-notes.md
+          echo "| macOS | Intel (AMD64) | [tingly-box-macos-amd64.zip](https://github.com/tingly-dev/tingly-box/releases/download/v${VERSION}/tingly-box-macos-amd64.zip) |" >> release-notes.md
+          echo "| macOS | Apple Silicon (ARM64) | [tingly-box-macos-arm64.zip](https://github.com/tingly-dev/tingly-box/releases/download/v${VERSION}/tingly-box-macos-arm64.zip) |" >> release-notes.md
+          echo "| Windows | AMD64 | [tingly-box-windows-amd64.zip](https://github.com/tingly-dev/tingly-box/releases/download/v${VERSION}/tingly-box-windows-amd64.zip) |" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "### 🚀 Quick Start" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "\`\`\`bash" >> release-notes.md
+          echo "# Download and extract for your platform" >> release-notes.md
+          echo "# Or use with npx (no installation needed):" >> release-notes.md
+          echo "npx @tinglydev/tingly-box --help" >> release-notes.md
+          echo "\`\`\`" >> release-notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            packages/*
+          body_path: release-notes.md
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload build artifacts for NPX job
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-packages
+          path: ./packages/
+          retention-days: 7
+
+  # Publish NPX Package
+  publish-npx:
+    name: Publish NPX Package
+    needs: build-and-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write # Required for npm provenance
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download release packages
+        uses: actions/download-artifact@v4
+        with:
+          name: release-packages
+          path: ./downloaded-packages
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+          cache: "npm"
+          cache-dependency-path: |
+            npx-gh/package-lock.json
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Determine NPX version
+        id: version
+        run: |
+          # Use the version from the release job
+          VERSION="${{ needs.build-and-release.outputs.version }}"
+          echo "npx_version=$VERSION" >> $GITHUB_OUTPUT
+          echo "NPX version: $VERSION"
+
+      - name: Update NPX package.json with new version
+        run: |
+          VERSION="${{ steps.version.outputs.npx_version }}"
+          cd npx-gh
+          npm version "$VERSION" --no-git-tag-version
+          echo "Updated NPX package to version: $VERSION"
+          cd ..
+
+      - name: Update bin.js to reference the correct release
+        run: |
+          TAG_NAME="${{ needs.build-and-release.outputs.tag_name }}"
+          echo "Updating bin.js to reference release tag: $TAG_NAME"
+
+          cd npx-gh
+
+          # Update BASE_URL to point to GitHub releases instead of raw content
+          sed -i.bak 's|https://github.com/tingly-dev/tingly-box-release/raw/refs/heads|https://github.com/tingly-dev/tingly-box/releases/download|g' bin.js
+
+          # Update the BINARY_RELEASE_BRANCH to the tag name
+          sed -i.bak "s|const BINARY_RELEASE_BRANCH = .*|const BINARY_RELEASE_BRANCH = '$TAG_NAME';|g" bin.js
+
+          # Show the updated content
+          echo "Updated bin.js content:"
+          head -20 bin.js
+
+          # Clean up backup
+          rm -f bin.js.bak
+          cd ..
+
+      - name: Install dependencies
+        working-directory: npx-gh
+        run: npm ci
+
+      - name: Run tests
+        working-directory: npx-gh
+        run: |
+          if [ -f "package.json" ] && npm run | grep -q "test"; then
+            echo "🧪 Running tests..."
+            npm test
+          else
+            echo "⏭️ No tests found, skipping..."
+          fi
+
+      - name: Publish to npm
+        working-directory: npx-gh
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.npx_version }}"
+          FORCE_PUBLISH="${{ github.event.inputs.force_publish || 'false' }}"
+
+          echo "📦 Publishing @tinglydev/tingly-box@${VERSION} to npm..."
+
+          # Check if version already exists
+          if npm view @tinglydev/tingly-box@"${VERSION}" version >/dev/null 2>&1; then
+            if [ "$FORCE_PUBLISH" = "true" ]; then
+              echo "⚠️ Version exists but force publishing is enabled"
+              npm publish --force --provenance --access public
+            else
+              echo "ℹ️ @tinglydev/tingly-box@${VERSION} already exists on npm. Skipping publish."
+              echo "To force publish, run this workflow with force_publish=true"
+            fi
+          else
+            npm publish --provenance --access public
+          fi
+
+      - name: Create NPX tag and release
+        env:
+          VERSION: ${{ steps.version.outputs.npx_version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          FULL_TAG="npx-v$VERSION"
+          TAG_NAME="${{ needs.build-and-release.outputs.tag_name }}"
+
+          echo "Creating NPX tag and release for $FULL_TAG"
+
+          # Check if tag already exists
+          if git rev-parse "$FULL_TAG" >/dev/null 2>&1; then
+            echo "Tag $FULL_TAG already exists"
+          else
+            # Create and push tag
+            git tag "$FULL_TAG"
+            git push origin "$FULL_TAG"
+          fi
+
+          # Create release body
+          cat > npx_release_notes.md << EOF
+          ## 📦 NPX Package Release - v$VERSION
+
+          ### 🚀 Installation
+
+          \`\`\`bash
+          # Install globally
+          npm install -g @tinglydev/tingly-box@$VERSION
+
+          # Or use with npx (no installation needed)
+          npx @tinglydev/tingly-box@$VERSION --help
+          \`\`\`
+
+          ### 🔗 Links
+          - 📦 [View on npm](https://www.npmjs.com/package/@tinglydev/tingly-box/v/$VERSION)
+          - 🏷️ [GitHub Release](https://github.com/tingly-dev/tingly-box/releases/tag/$TAG_NAME)
+
+          ---
+          _This NPX package was automatically published based on release $TAG_NAME_
+          EOF
+
+          # Check if release already exists
+          if gh release view "$FULL_TAG" >/dev/null 2>&1; then
+            echo "Release $FULL_TAG already exists, updating..."
+            gh release edit "$FULL_TAG" --notes-file npx_release_notes.md --title "NPX Package v$VERSION"
+          else
+            # Create new release
+            PRERELEASE_FLAG=""
+            if [[ "$VERSION" == *-* ]]; then
+              PRERELEASE_FLAG="--prerelease"
+            fi
+            gh release create "$FULL_TAG" \
+              --title "NPX Package v$VERSION" \
+              --notes-file npx_release_notes.md \
+              ${PRERELEASE_FLAG}
+          fi
+
+      - name: Update release repository with NPX info
+        env:
+          VERSION: ${{ steps.version.outputs.npx_version }}
+          TAG_NAME: ${{ needs.build-and-release.outputs.tag_name }}
+          SSH_PRIVATE_KEY: ${{ secrets.RELEASE_REPO_SSH_KEY }}
+        run: |
+          # Setup SSH
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+          # Clone the repository
+          TEMP_DIR=$(mktemp -d)
+          git clone "git@github.com:tingly-dev/tingly-box-release.git" "$TEMP_DIR"
+          cd "$TEMP_DIR"
+          git checkout main
+
+          # Update or create LATEST.json
+          if [ -f "LATEST.json" ]; then
+            echo "Updating existing LATEST.json..."
+            jq --arg version "$VERSION" \
+               --arg tag "$TAG_NAME" \
+               --arg npx_tag "npx-v$VERSION" \
+               --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+               '.packages_latest_tag = $tag | .npx_latest_tag = $npx_tag | .npx_version = $version | .npx_updated_at = $timestamp' \
+               LATEST.json > LATEST.tmp && mv LATEST.tmp LATEST.json
+          else
+            echo "Creating new LATEST.json..."
+            cat > LATEST.json << EOF
+          {
+            "packages_latest_tag": "$TAG_NAME",
+            "npx_latest_tag": "npx-v$VERSION",
+            "npx_version": "$VERSION",
+            "updated_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "workflow_run": "${{ github.workflow }}",
+            "repository": "${{ github.repository }}",
+            "commit_sha": "${{ github.sha }}"
+          }
+          EOF
+          fi
+
+          # Show updated content
+          echo "Updated LATEST.json:"
+          cat LATEST.json
+
+          # Add and commit the changes
+          git add LATEST.json
+          git commit -m "Update LATEST.json with NPX package v$VERSION based on $TAG_NAME
+
+          - Package version: $VERSION
+          - Package tag: $TAG_NAME
+          - NPX tag: npx-v$VERSION
+          - Updated at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          # Push changes to main branch
+          git push origin main
+
+          echo "✅ Successfully updated LATEST.json"
+
+          # Cleanup
+          cd /
+          rm -rf "$TEMP_DIR"
