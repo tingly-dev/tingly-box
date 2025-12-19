@@ -108,11 +108,10 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 
 	fmt.Printf("Server starting on port %d...\n", port)
 
-	// Resolve host for display
-	resolvedHost := util.ResolveHost(opts.Host)
-	fmt.Printf("API endpoint: http://%s:%d/v1/chat/completions\n", resolvedHost, port)
-	if opts.EnableUI {
-		fmt.Printf("Web UI: http://%s:%d/dashboard\n", resolvedHost, port)
+	if !opts.EnableUI {
+		// Resolve host for display
+		resolvedHost := util.ResolveHost(opts.Host)
+		fmt.Printf("API endpoint: http://%s:%d/v1/chat/completions\n", resolvedHost, port)
 	}
 
 	// Wait for either server error, shutdown signal, or web UI stop request
