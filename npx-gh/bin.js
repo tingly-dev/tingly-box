@@ -297,7 +297,7 @@ function formatBytes(bytes) {
 	}
 
 	// The extracted binary path
-	const binaryPath = join(tinglyBinDir, binaryName + suffix);
+	const binaryPath = join(tinglyBinDir, `${binaryName}-${platformDir}-${archDir}${suffix}`);
 
 	// If binary doesn't exist, download and extract ZIP
 	if (!existsSync(binaryPath)) {
