@@ -19,7 +19,7 @@ AI providers with dynamic configuration management.`,
 }
 
 // Set by compiler
-var versionString string
+var version string
 
 func init() {
 	// Add global flags
