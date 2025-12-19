@@ -130,3 +130,55 @@ func (s *Server) ModelAuthMiddleware() gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+// authMiddleware validates the authentication token
+func (s *Server) authMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Get the auth token from global config
+		cfg := s.config
+		if cfg == nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Global config not available",
+			})
+			c.Abort()
+			return
+		}
+
+		expectedToken := cfg.GetUserToken()
+		if expectedToken == "" {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "User auth token not configured",
+			})
+			c.Abort()
+			return
+		}
+
+		// Get token from Authorization header
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"success": false,
+				"error":   "Authorization header required",
+			})
+			c.Abort()
+			return
+		}
+
+		// Support both "Bearer token" and just "token" formats
+		token := strings.TrimPrefix(authHeader, "Bearer ")
+		token = strings.TrimSpace(token)
+
+		if token != expectedToken {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"success": false,
+				"error":   "Invalid authentication token",
+			})
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}
