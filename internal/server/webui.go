@@ -477,6 +477,20 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 		swagger.WithResponseModel(ProbeResponse{}),
 	)
 
+	authAPI.POST("/probe/model", s.HandleProbeModel,
+		swagger.WithDescription("Test a model forwarding by sending a sample request"),
+		swagger.WithTags("testing"),
+		swagger.WithRequestModel(ProbeRequest{}),
+		swagger.WithResponseModel(ProbeResponse{}),
+	)
+
+	authAPI.POST("/probe/provider", s.HandleProbeProvider,
+		swagger.WithDescription("Test api key for the provider"),
+		swagger.WithTags("testing"),
+		swagger.WithRequestModel(ProbeProviderRequest{}),
+		swagger.WithResponseModel(ProbeProviderResponse{}),
+	)
+
 	// Token Management
 	authAPI.POST("/token", (s.GenerateToken),
 		swagger.WithDescription("Generate a new API token"),

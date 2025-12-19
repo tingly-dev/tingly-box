@@ -2,9 +2,11 @@ package server
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 	"tingly-box/internal/config"
+	"tingly-box/internal/obs"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
@@ -12,6 +14,109 @@ import (
 	"github.com/openai/openai-go/v3"
 	openaiOption "github.com/openai/openai-go/v3/option"
 )
+
+// HandleProbeProvider tests a provider's API key and connectivity
+func (s *Server) HandleProbeProvider(c *gin.Context) {
+	var req ProbeProviderRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ProbeProviderResponse{
+			Success: false,
+			Error: &ErrorDetail{
+				Message: "Invalid request body: " + err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
+	// Validate required fields
+	if req.Name == "" || req.APIBase == "" || req.APIStyle == "" || req.Token == "" {
+		c.JSON(http.StatusBadRequest, ProbeProviderResponse{
+			Success: false,
+			Error: &ErrorDetail{
+				Message: "All fields (name, api_base, api_style, token) are required",
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
+	// Start timing
+	startTime := time.Now()
+
+	// Test the provider by calling their models endpoint
+	valid, message, modelsCount, err := s.testProviderConnectivity(&req)
+	responseTime := time.Since(startTime).Milliseconds()
+
+	if err != nil {
+		if s.logger != nil {
+			s.logger.LogAction(obs.ActionFetchModels, map[string]interface{}{
+				"provider": req.Name,
+				"api_base": req.APIBase,
+			}, false, err.Error())
+		}
+
+		c.JSON(http.StatusOK, ProbeProviderResponse{
+			Success: false,
+			Error: &ErrorDetail{
+				Message: err.Error(),
+				Type:    "provider_test_failed",
+			},
+		})
+		return
+	}
+
+	// Log successful test
+	if s.logger != nil {
+		s.logger.LogAction(obs.ActionFetchModels, map[string]interface{}{
+			"provider":      req.Name,
+			"api_base":      req.APIBase,
+			"valid":         valid,
+			"models_count":  modelsCount,
+			"response_time": responseTime,
+		}, true, message)
+	}
+
+	// Determine test result
+	testResult := "models_endpoint_success"
+	if !valid {
+		testResult = "models_endpoint_invalid"
+	}
+
+	c.JSON(http.StatusOK, ProbeProviderResponse{
+		Success: true,
+		Data: &ProbeProviderResponseData{
+			Provider:     req.Name,
+			APIBase:      req.APIBase,
+			APIStyle:     req.APIStyle,
+			Valid:        valid,
+			Message:      message,
+			TestResult:   testResult,
+			ResponseTime: responseTime,
+			ModelsCount:  modelsCount,
+		},
+	})
+}
+
+// testProviderConnectivity tests if a provider's API key and connectivity are working
+func (s *Server) testProviderConnectivity(req *ProbeProviderRequest) (bool, string, int, error) {
+	// Create a temporary provider config
+	provider := &config.Provider{
+		Name:     req.Name,
+		APIBase:  req.APIBase,
+		APIStyle: config.APIStyle(req.APIStyle),
+		Token:    req.Token,
+		Enabled:  true,
+	}
+
+	// Try to fetch models from the provider
+	models, err := s.getProviderModelsForProbe(provider)
+	if err != nil {
+		return false, fmt.Sprintf("Failed to connect to provider: %s", err.Error()), 0, err
+	}
+
+	return true, "API key is valid and accessible", len(models), nil
+}
 
 // probeWithOpenAI handles probe requests for OpenAI-style APIs
 func probeWithOpenAI(c *gin.Context, provider *config.Provider, model string) (string, ProbeUsage, error) {

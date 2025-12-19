@@ -181,6 +181,33 @@ type ProbeRequest struct {
 	Model    string `json:"model" binding:"required" description:"Model name to test against" example:"gpt-4-latest"`
 }
 
+// ProbeProviderRequest represents the request to probe/test a provider's API key and connectivity
+type ProbeProviderRequest struct {
+	Name     string `json:"name" binding:"required" description:"Provider name" example:"openai"`
+	APIBase  string `json:"api_base" binding:"required" description:"API base URL" example:"https://api.openai.com/v1"`
+	APIStyle string `json:"api_style" binding:"required,oneof=openai anthropic" description:"API style" example:"openai"`
+	Token    string `json:"token" binding:"required" description:"API token to test" example:"sk-..."`
+}
+
+// ProbeProviderResponse represents the response from provider probing
+type ProbeProviderResponse struct {
+	Success bool                       `json:"success" example:"true"`
+	Error   *ErrorDetail               `json:"error,omitempty"`
+	Data    *ProbeProviderResponseData `json:"data,omitempty"`
+}
+
+// ProbeProviderResponseData represents the data returned from provider probing
+type ProbeProviderResponseData struct {
+	Provider     string `json:"provider" example:"openai"`
+	APIBase      string `json:"api_base" example:"https://api.openai.com/v1"`
+	APIStyle     string `json:"api_style" example:"openai"`
+	Valid        bool   `json:"valid" example:"true"`
+	Message      string `json:"message" example:"API key is valid and accessible"`
+	TestResult   string `json:"test_result" example:"models_endpoint_success"`
+	ResponseTime int64  `json:"response_time_ms" example:"250"`
+	ModelsCount  int    `json:"models_count,omitempty" example:"150"`
+}
+
 // ProviderResponse represents a provider configuration with masked token
 type ProviderResponse struct {
 	Name     string `json:"name" example:"openai"`
