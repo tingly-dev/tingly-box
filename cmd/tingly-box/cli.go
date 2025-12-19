@@ -11,7 +11,7 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "tingly",
+	Use:   "tingly-box",
 	Short: "Tingly Box - AI Service API Key Management and Proxy CLI",
 	Long: `Tingly Box is a CLI tool for managing AI service API keys and acting as a proxy.
 It provides a unified OpenAI-compatible endpoint that routes requests to configured
