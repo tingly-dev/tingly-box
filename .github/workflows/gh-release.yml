@@ -4,6 +4,13 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag (e.g., v1.0.0)'
+        required: true
+        type: string
+        default: 'v1.0.0'
       
 env:
   GO_VERSION: '1.25'
@@ -17,6 +24,16 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Set up tag environment
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "RELEASE_TAG=${{ github.event.inputs.release_tag }}" >> $GITHUB_ENV
+            echo "TAG_EXISTS=$(git tag -l "${{ github.event.inputs.release_tag }}" | wc -l)" >> $GITHUB_ENV
+          else
+            echo "RELEASE_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+            echo "TAG_EXISTS=1" >> $GITHUB_ENV
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -77,7 +94,7 @@ jobs:
 
       - name: Upload build artifacts
         if: |
-          startsWith(github.ref, 'refs/tags/v')
+          startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: binaries
@@ -88,7 +105,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: |
-      startsWith(github.ref, 'refs/tags/v')
+      startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     permissions:
       contents: write
     steps:
@@ -96,6 +113,16 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Set up tag environment
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "RELEASE_TAG=${{ github.event.inputs.release_tag }}" >> $GITHUB_ENV
+            echo "TAG_EXISTS=$(git tag -l "${{ github.event.inputs.release_tag }}" | wc -l)" >> $GITHUB_ENV
+          else
+            echo "RELEASE_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+            echo "TAG_EXISTS=1" >> $GITHUB_ENV
+          fi
 
       - name: Download build artifacts
         uses: actions/download-artifact@v4
@@ -106,8 +133,9 @@ jobs:
       - name: Package binaries with proper extensions
         run: |
           cd dist
-          
-          chmod +x dist/*
+
+          chmod +x tingly-box-linux-*
+          chmod +x tingly-box-macos-*
 
           # Package Linux binaries as zip
           zip tingly-box-linux-amd64.zip tingly-box-linux-amd64
@@ -129,20 +157,13 @@ jobs:
 
       - name: Generate changelog
         run: |
-          # Extract version from tag or input
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ github.event.inputs.release_tag }}" ]; then
-            VERSION="${{ github.event.inputs.release_tag }}"
-          else
-            VERSION=${GITHUB_REF#refs/tags/}
-          fi
-          echo "## Changes in version $VERSION" > release-notes.md
-
-          # Get commits since last tag
-          # git log --pretty=format:"- %s" $(git describe --tags --abbrev=0 HEAD^)..HEAD >> release-notes.md 2>/dev/null || echo "- Initial release" >> release-notes.md
+          # Use the release tag from environment
+          echo "## Changes in version $RELEASE_TAG" > release-notes.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
           files: |
             *.zip
             checksums.txt
