@@ -43,6 +43,50 @@
         }
       }
     },
+    "/api/v1/info/config": {
+      "get": {
+        "tags": [
+          "api"
+        ],
+        "summary": "Get config info about this application",
+        "description": "Get config info about this application",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ConfigInfoResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/info/health": {
+      "get": {
+        "tags": [
+          "api"
+        ],
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/HealthInfoResponse"
+            }
+          }
+        }
+      }
+    },
     "/api/v1/probe": {
       "post": {
         "tags": [
@@ -72,6 +116,74 @@
             "description": "Successful response",
             "schema": {
               "$ref": "#/definitions/ProbeResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/probe/model": {
+      "post": {
+        "tags": [
+          "testing"
+        ],
+        "summary": "Test a model forwarding by sending a sample request",
+        "description": "Test a model forwarding by sending a sample request",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "request",
+            "in": "body",
+            "description": "Request body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ProbeRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ProbeResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/probe/provider": {
+      "post": {
+        "tags": [
+          "testing"
+        ],
+        "summary": "Test api key for the provider",
+        "description": "Test api key for the provider",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "request",
+            "in": "body",
+            "description": "Request body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ProbeProviderRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ProbeProviderResponse"
             }
           }
         }
@@ -657,6 +769,43 @@
         "data"
       ]
     },
+    "ConfigInfo": {
+      "type": "object",
+      "properties": {
+        "config_dir": {
+          "type": "string",
+          "description": "Field config_dir",
+          "example": "/Users/user/.tingly-box"
+        },
+        "config_path": {
+          "type": "string",
+          "description": "Field config_path",
+          "example": "/Users/user/.tingly-box/config.json"
+        }
+      },
+      "required": [
+        "config_path",
+        "config_dir"
+      ]
+    },
+    "ConfigInfoResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "description": "Field data",
+          "$ref": "#/definitions/ConfigInfo"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    },
     "DeleteProviderResponse": {
       "type": "object",
       "properties": {
@@ -753,6 +902,31 @@
         "client_id"
       ]
     },
+    "HealthInfoResponse": {
+      "type": "object",
+      "properties": {
+        "health": {
+          "type": "boolean",
+          "description": "Field health",
+          "example": false
+        },
+        "service": {
+          "type": "string",
+          "description": "Field service",
+          "example": "tingly-box"
+        },
+        "status": {
+          "type": "string",
+          "description": "Field status",
+          "example": "healthy"
+        }
+      },
+      "required": [
+        "status",
+        "service",
+        "health"
+      ]
+    },
     "HistoryResponse": {
       "type": "object",
       "properties": {
@@ -769,6 +943,118 @@
       "required": [
         "success",
         "data"
+      ]
+    },
+    "ProbeProviderRequest": {
+      "type": "object",
+      "properties": {
+        "api_base": {
+          "type": "string",
+          "description": "API base URL",
+          "example": "https://api.openai.com/v1"
+        },
+        "api_style": {
+          "type": "string",
+          "description": "API style",
+          "enum": [
+            "openai",
+            "anthropic"
+          ],
+          "example": "openai"
+        },
+        "name": {
+          "type": "string",
+          "description": "Provider name",
+          "example": "openai"
+        },
+        "token": {
+          "type": "string",
+          "description": "API token to test",
+          "example": "sk-..."
+        }
+      },
+      "required": [
+        "name",
+        "api_base",
+        "api_style",
+        "token"
+      ]
+    },
+    "ProbeProviderResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "description": "Field data",
+          "$ref": "#/definitions/ProbeProviderResponseData"
+        },
+        "error": {
+          "description": "Field error",
+          "$ref": "#/definitions/ErrorDetail"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success"
+      ]
+    },
+    "ProbeProviderResponseData": {
+      "type": "object",
+      "properties": {
+        "api_base": {
+          "type": "string",
+          "description": "Field api_base",
+          "example": "https://api.openai.com/v1"
+        },
+        "api_style": {
+          "type": "string",
+          "description": "Field api_style",
+          "example": "openai"
+        },
+        "message": {
+          "type": "string",
+          "description": "Field message",
+          "example": "API key is valid and accessible"
+        },
+        "models_count": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field models_count",
+          "example": 150
+        },
+        "provider": {
+          "type": "string",
+          "description": "Field provider",
+          "example": "openai"
+        },
+        "response_time_ms": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field response_time_ms",
+          "example": 250
+        },
+        "test_result": {
+          "type": "string",
+          "description": "Field test_result",
+          "example": "models_endpoint_success"
+        },
+        "valid": {
+          "type": "boolean",
+          "description": "Field valid",
+          "example": true
+        }
+      },
+      "required": [
+        "provider",
+        "api_base",
+        "api_style",
+        "valid",
+        "message",
+        "test_result",
+        "response_time_ms"
       ]
     },
     "ProbeRequest": {
@@ -1515,10 +1801,6 @@
       "description": "Operations related to models"
     },
     {
-      "name": "testing",
-      "description": "Operations related to testing"
-    },
-    {
       "name": "token",
       "description": "Operations related to token"
     },
@@ -1537,6 +1819,14 @@
     {
       "name": "history",
       "description": "Operations related to history"
+    },
+    {
+      "name": "testing",
+      "description": "Operations related to testing"
+    },
+    {
+      "name": "api",
+      "description": "Operations related to api"
     }
   ]
 }
