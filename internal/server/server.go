@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"path/filepath"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"tingly-box/internal/obs"
 
 	"github.com/gin-gonic/gin"
+	"github.com/pkg/browser"
 )
 
 // Server represents the HTTP server
@@ -307,26 +309,67 @@ func (s *Server) Start(port int) error {
 			log.Println("Configuration hot-reload enabled")
 		}
 	}
-
+	addr := fmt.Sprintf("%s:%d", s.host, port)
 	s.httpServer = &http.Server{
-		Addr:    fmt.Sprintf("%s:%d", s.host, port),
+		Addr:    addr,
 		Handler: s.engine,
 	}
 
 	resolvedHost := util.ResolveHost(s.host)
+	if !s.enableUI {
+		fmt.Printf("OpenAI v1 Chat API endpoint: http://%s:%d/openai/v1/chat/completions\n", resolvedHost, port)
+		fmt.Printf("Anthropic v1 Message API endpoint: http://%s:%d/anthropic/v1/messages\n", resolvedHost, port)
+		//Fixme:: we should not hardcode it here
+		fmt.Printf("Mode name: %s\n", "tingly")
+		fmt.Printf("Model API key: %s\n", s.config.GetModelToken())
+		return s.httpServer.ListenAndServe()
+	}
 
-	fmt.Printf("OpenAI v1 Chat API endpoint: http://%s:%d/openai/v1/chat/completions\n", resolvedHost, port)
-	fmt.Printf("Anthropic v1 Message API endpoint: http://%s:%d/anthropic/v1/messages\n", resolvedHost, port)
-
-	// Get user token for Web UI URL
+	// CASE 2: Web UI Mode ---
 	webUIURL := fmt.Sprintf("http://%s:%d", resolvedHost, port)
 	if s.config.HasUserToken() {
-		userToken := s.config.GetUserToken()
-		webUIURL = fmt.Sprintf("http://%s:%d/?user_auth_token=%s", resolvedHost, port, userToken)
+		webUIURL = fmt.Sprintf("%s/?user_auth_token=%s", webUIURL, s.config.GetUserToken())
 	}
-	fmt.Printf("Web UI: %s\n", webUIURL)
 
-	return s.httpServer.ListenAndServe()
+	fmt.Printf("Web UI: %s\n", webUIURL)
+	fmt.Printf("Starting server and opening browser...\n")
+
+	// Use a channel to capture the immediate error if ListenAndServe fails
+	serverError := make(chan error, 1)
+	go func() {
+		serverError <- s.httpServer.ListenAndServe()
+	}()
+
+	// Instead of a fixed 100ms sleep, we poll the port
+	if err := waitForPort(addr, 2*time.Second); err != nil {
+		// Check if the server goroutine already caught a "port in use" error
+		select {
+		case e := <-serverError:
+			return e
+		default:
+			return fmt.Errorf("timeout: server did not start on %s: %v", addr, err)
+		}
+	}
+
+	// Server is up, now open browser
+	browser.OpenURL(webUIURL)
+
+	// Block until server shuts down or errors out
+	return <-serverError
+}
+
+// Helper: Polls the port to ensure it's open before browser opens
+func waitForPort(addr string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		conn, err := net.DialTimeout("tcp", addr, 100*time.Millisecond)
+		if err == nil {
+			conn.Close()
+			return nil
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return fmt.Errorf("port %s not reachable", addr)
 }
 
 // GetRouter returns the Gin engine for testing purposes

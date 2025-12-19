@@ -18,6 +18,9 @@ It provides a unified OpenAI-compatible endpoint that routes requests to configu
 AI providers with dynamic configuration management.`,
 }
 
+// Set by compiler
+var versionString string
+
 func init() {
 	// Add global flags
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "verbose output")
