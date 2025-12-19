@@ -75,18 +75,29 @@ jobs:
         run: |
           # Create build directory
           mkdir -p dist
+          
+          # Get build info
+          VERSION="${{ env.RELEASE_TAG }}"
+          GIT_COMMIT="$(git rev-parse HEAD 2>/dev/null || echo 'unknown')"
+          BUILD_TIME="$(date -u '+%Y-%m-%d-%H-%M-%S' 2>/dev/null || echo 'unknown')"
+          GO_VERSION="$(go version | awk '{print $3}' | sed 's/go//' 2>/dev/null || echo 'unknown')"
+          PLATFORM="${OS}/${ARCH}"
+  
+          # Build with ldflags
+          mkdir -p build
+          LDFLAGS="-s -w -X main.version='${VERSION}' -X main.gitCommit='${GIT_COMMIT}' -X main.buildTime='${BUILD_TIME}' -X main.goVersion='${GO_VERSION}' -X main.platform='${PLATFORM}'"
 
           # Build Linux binaries
-          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o ./dist/tingly-box-linux-amd64 ./cmd/tingly-box
-          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o ./dist/tingly-box-linux-arm64 ./cmd/tingly-box
+          GOOS=linux GOARCH=amd64 go build -ldflags='${LDFLAGS}' -o ./dist/tingly-box-linux-amd64 ./cmd/tingly-box
+          GOOS=linux GOARCH=arm64 go build -ldflags='${LDFLAGS}' -o ./dist/tingly-box-linux-arm64 ./cmd/tingly-box
 
           # Build macOS binaries
-          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o ./dist/tingly-box-macos-amd64 ./cmd/tingly-box
-          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o ./dist/tingly-box-macos-arm64 ./cmd/tingly-box
+          GOOS=darwin GOARCH=amd64 go build -ldflags='${LDFLAGS}' -o ./dist/tingly-box-macos-amd64 ./cmd/tingly-box
+          GOOS=darwin GOARCH=arm64 go build -ldflags='${LDFLAGS}' -o ./dist/tingly-box-macos-arm64 ./cmd/tingly-box
 
           # Build Windows binaries
-          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o ./dist/tingly-box-windows-amd64.exe ./cmd/tingly-box
-          # GOOS=windows GOARCH=arm64 go build -ldflags="-s -w" -o ./dist/tingly-box-windows-arm64.exe ./cmd/tingly-box
+          GOOS=windows GOARCH=amd64 go build -ldflags='${LDFLAGS}' -o ./dist/tingly-box-windows-amd64.exe ./cmd/tingly-box
+          # GOOS=windows GOARCH=arm64 go build -ldflags='${LDFLAGS}' -o ./dist/tingly-box-windows-arm64.exe ./cmd/tingly-box
 
           # Make Linux binaries executable
           chmod +x ./dist/tingly-box-linux-*
