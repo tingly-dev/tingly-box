@@ -133,7 +133,7 @@ const Layout = ({ children }: LayoutProps) => {
                     fontStyle: 'italic'
                 }}
             >
-                version 0.1.0
+                {/*version 0.1.0*/}
             </Typography>
 
             {/* Bottom Section - Slogan and User */}
