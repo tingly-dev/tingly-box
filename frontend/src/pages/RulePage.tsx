@@ -13,11 +13,13 @@ import {
     Typography
 } from '@mui/material';
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { PageLayout } from '../components/PageLayout';
-import RuleCard from '../components/RuleCard';
+import RuleGraph from '../components/RuleGraph'
 import UnifiedCard from '../components/UnifiedCard';
 import { api } from '../services/api';
 
+const RuleCard = RuleGraph
 
 interface ConfigProvider {
     uuid: string;
@@ -38,6 +40,7 @@ interface ConfigRecord {
 }
 
 const RulePage = () => {
+    const [searchParams] = useSearchParams();
     const [rules, setRules] = useState<any>({});
     const [providers, setProviders] = useState<any[]>([]);
     const [providerModels, setProviderModels] = useState<any>({});
@@ -101,10 +104,20 @@ const RulePage = () => {
                 };
             });
             setConfigRecords(records);
+
+            // Check for expand parameter in URL and auto-expand cards
+            const expandParam = searchParams.get('expand');
+            if (expandParam) {
+                const uuidsToExpand = expandParam.split(',').map(uuid => uuid.trim()).filter(uuid => uuid);
+                const validUuids = uuidsToExpand.filter(uuid => records.some(record => record.uuid === uuid));
+                if (validUuids.length > 0) {
+                    setExpandedCards(new Set(validUuids));
+                }
+            }
         } else {
             setConfigRecords([]);
         }
-    }, [rules]);
+    }, [rules, searchParams]);
 
     const handleSaveRule = async (record: ConfigRecord) => {
         console.log(record)
@@ -173,16 +186,8 @@ const RulePage = () => {
             ],
         };
         setConfigRecords([...configRecords, newRecord]);
-        // Automatically expand the new card
-        setExpandedCards(prev => new Set(prev).add(newRecord.uuid));
-
-        // Focus on the request model input field after a short delay to ensure the field is rendered
-        setTimeout(() => {
-            const requestModelInput = document.getElementById(`request-model-${newRecord.uuid}`) as HTMLInputElement;
-            if (requestModelInput) {
-                requestModelInput.focus();
-            }
-        }, 100);
+        // Don't automatically expand to avoid render issues
+        // Users can manually expand when needed
     };
 
     const deleteRule = (recordId: string) => {
@@ -284,6 +289,8 @@ const RulePage = () => {
             }
             return next;
         });
+        // Don't update URL to avoid page jumps
+        // URL params are only for initial load from bookmarks
     };
 
     const handleRefreshProviderModels = async (providerName: string) => {
@@ -362,14 +369,15 @@ const RulePage = () => {
                                 <RuleCard
                                     key={record.uuid}
                                     record={record}
+                                    recordUuid={record.uuid}
                                     providers={providers}
                                     providerModels={providerModels}
                                     saving={savingRecords.has(record.uuid)}
                                     expanded={expandedCards.has(record.uuid)}
                                     onUpdateRecord={(field, value) => updateConfigRecord(record.uuid, field, value)}
-                                    onUpdateProvider={(providerId, field, value) => updateProvider(record.uuid, providerId, field, value)}
+                                    onUpdateProvider={(recordId, providerId, field, value) => updateProvider(recordId, providerId, field, value)}
                                     onAddProvider={() => addProvider(record.uuid)}
-                                    onDeleteProvider={(providerId) => deleteProvider(record.uuid, providerId)}
+                                    onDeleteProvider={(recordId, providerId) => deleteProvider(recordId, providerId)}
                                     onRefreshModels={handleRefreshProviderModels}
                                     onSave={() => handleSaveRule(record)}
                                     onDelete={() => deleteRule(record.uuid)}

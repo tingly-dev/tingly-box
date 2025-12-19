@@ -1,5 +1,6 @@
 import {
     ContentCopy as CopyIcon,
+    Edit as EditIcon,
     Refresh as RefreshIcon,
     Terminal as TerminalIcon
 } from '@mui/icons-material';
@@ -20,6 +21,7 @@ import {
     Typography
 } from '@mui/material';
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ApiConfigRow } from './ApiConfigRow';
 
 interface HomeHeaderProps {
@@ -46,6 +48,7 @@ export const HomeHeader: React.FC<HomeHeaderProps> = ({
                                                           copyToClipboard
                                                       }) => {
     const [showRefreshConfirmation, setShowRefreshConfirmation] = useState(false);
+    const navigate = useNavigate();
 
     const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
         setActiveTab(newValue);
@@ -131,6 +134,14 @@ export const HomeHeader: React.FC<HomeHeaderProps> = ({
                 isClickable={true}
             >
                 <Box sx={{ display: 'flex', gap: 0.5, ml: 'auto' }}>
+                    <Tooltip title="Edit Rule">
+                        <IconButton
+                            onClick={() => navigate('/rule?expand=tingly')}
+                            size="small"
+                        >
+                            <EditIcon fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
                     <IconButton
                         onClick={() => copyToClipboard('tingly', 'LLM API Model')}
                         size="small"
