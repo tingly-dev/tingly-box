@@ -121,9 +121,6 @@ func (sm *ServerManager) Start() error {
 		return fmt.Errorf("server is already running")
 	}
 
-	// Start server synchronously (blocking)
-	fmt.Printf("Starting server on port %d...\n", sm.appConfig.GetServerPort())
-
 	gin.SetMode(gin.ReleaseMode)
 	err := sm.server.Start(sm.appConfig.GetServerPort())
 	if err != nil {
