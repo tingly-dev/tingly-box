@@ -39,6 +39,7 @@ const Home = () => {
     const [loading, setLoading] = useState(true);
     const [selectedOption, setSelectedOption] = useState<any>({ provider: "", model: "" });
     const [baseUrl, setBaseUrl] = useState<string>("");
+    const [refreshingProviders, setRefreshingProviders] = useState<string[]>([]);
 
     // Server info states
     const [generatedToken, setGeneratedToken] = useState<string>('');
@@ -291,6 +292,9 @@ const Home = () => {
 
     const handleModelRefresh = async (provider: any) => {
         try {
+            // Add provider to refreshing list
+            setRefreshingProviders(prev => [...prev, provider.name]);
+
             const result = await api.getProviderModelsByName(provider.name);
             if (result.success) {
                 await loadProviders();
@@ -302,6 +306,9 @@ const Home = () => {
         } catch (error) {
             console.error("Error refreshing models:", error);
             showNotification(`Error refreshing models for ${provider.name}`, 'error');
+        } finally {
+            // Remove provider from refreshing list
+            setRefreshingProviders(prev => prev.filter(p => p !== provider.name));
         }
     };
 
@@ -518,6 +525,7 @@ const Home = () => {
                                 selectedModel={selectedOption?.model}
                                 onSelected={(opt: ProviderSelectTabOption) => handleModelSelect(opt.provider, opt.model || "")}
                                 onRefresh={handleModelRefresh}
+                                refreshingProviders={refreshingProviders}
                             />
 
                             {/* Probe Component - only show when provider and model are selected */}

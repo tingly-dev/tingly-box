@@ -7,6 +7,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import {
     Box,
     Button,
+    CircularProgress,
     Dialog,
     DialogActions,
     DialogContent,
@@ -43,6 +44,7 @@ interface ProviderSelectTabProps {
     onSelected?: (option: ProviderSelectTabOption) => void;
     onRefresh?: (provider: Provider) => void;
     onCustomModelSave?: (provider: Provider, customModel: string) => void;
+    refreshingProviders?: string[];
 }
 
 export default function ModelSelectTab({
@@ -54,6 +56,7 @@ export default function ModelSelectTab({
     onSelected,
     onRefresh,
     onCustomModelSave,
+    refreshingProviders = [],
 }: ProviderSelectTabProps) {
     const [internalCurrentTab, setInternalCurrentTab] = useState(0);
     const [isInitialized, setIsInitialized] = useState(false);
@@ -230,6 +233,7 @@ export default function ModelSelectTab({
 
                 const isProviderSelected = selectedProvider === provider.name;
                 const pagination = getPaginatedData(standardModelsForDisplay, provider.name);
+                const isRefreshing = refreshingProviders.includes(provider.name);
 
                 const backendCustomModel = providerModels?.[provider.name]?.custom_model;
                 const localStorageCustomModels = customModels[provider.name] || [];
@@ -274,24 +278,24 @@ export default function ModelSelectTab({
                                     </Button>
                                     <Button
                                         variant="outlined"
-                                        startIcon={<RefreshIcon />}
+                                        startIcon={isRefreshing ? <CircularProgress size={16} /> : <RefreshIcon />}
                                         onClick={() => onRefresh && onRefresh(provider)}
-                                        disabled={!onRefresh}
+                                        disabled={!onRefresh || isRefreshing}
                                         sx={{
                                             height: 40,
-                                            borderColor: 'primary.main',
-                                            color: 'primary.main',
-                                            '&:hover': {
+                                            borderColor: isRefreshing ? 'grey.300' : 'primary.main',
+                                            color: isRefreshing ? 'grey.500' : 'primary.main',
+                                            '&:hover': !isRefreshing ? {
                                                 backgroundColor: 'primary.50',
                                                 borderColor: 'primary.dark',
-                                            },
+                                            } : {},
                                             '&:disabled': {
                                                 borderColor: 'grey.300',
                                                 color: 'grey.500',
                                             }
                                         }}
                                     >
-                                        Fetch Model List
+                                        {isRefreshing ? 'Fetching...' : 'Fetch Model List'}
                                     </Button>
                                 </Stack>
 
