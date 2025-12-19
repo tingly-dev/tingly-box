@@ -13,11 +13,13 @@ import {
     Typography
 } from '@mui/material';
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { PageLayout } from '../components/PageLayout';
 import RuleCard from '../components/RuleCard';
 import UnifiedCard from '../components/UnifiedCard';
 import { api } from '../services/api';
 
+const RuleCard = RuleGraph
 
 interface ConfigProvider {
     uuid: string;
@@ -38,6 +40,7 @@ interface ConfigRecord {
 }
 
 const RulePage = () => {
+    const [searchParams, setSearchParams] = useSearchParams();
     const [rules, setRules] = useState<any>({});
     const [providers, setProviders] = useState<any[]>([]);
     const [providerModels, setProviderModels] = useState<any>({});
@@ -101,10 +104,20 @@ const RulePage = () => {
                 };
             });
             setConfigRecords(records);
+
+            // Check for expand parameter in URL and auto-expand cards
+            const expandParam = searchParams.get('expand');
+            if (expandParam) {
+                const uuidsToExpand = expandParam.split(',').map(uuid => uuid.trim()).filter(uuid => uuid);
+                const validUuids = uuidsToExpand.filter(uuid => records.some(record => record.uuid === uuid));
+                if (validUuids.length > 0) {
+                    setExpandedCards(new Set(validUuids));
+                }
+            }
         } else {
             setConfigRecords([]);
         }
-    }, [rules]);
+    }, [rules, searchParams]);
 
     const handleSaveRule = async (record: ConfigRecord) => {
         console.log(record)
@@ -174,7 +187,12 @@ const RulePage = () => {
         };
         setConfigRecords([...configRecords, newRecord]);
         // Automatically expand the new card
-        setExpandedCards(prev => new Set(prev).add(newRecord.uuid));
+        setExpandedCards(prev => {
+            const next = new Set(prev).add(newRecord.uuid);
+            // Update URL to include the new expanded card
+            setSearchParams({ expand: Array.from(next).join(',') });
+            return next;
+        });
 
         // Focus on the request model input field after a short delay to ensure the field is rendered
         setTimeout(() => {
@@ -282,6 +300,14 @@ const RulePage = () => {
             } else {
                 next.add(recordId);
             }
+
+            // Update URL query parameter to reflect current expanded cards
+            if (next.size > 0) {
+                setSearchParams({ expand: Array.from(next).join(',') });
+            } else {
+                setSearchParams({});
+            }
+
             return next;
         });
     };
