@@ -366,46 +366,46 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 		swagger.WithResponseModel(ProvidersResponse{}),
 	)
 
-	authAPI.GET("/providers/:name", (s.GetProvider),
+	authAPI.GET("/providers/:name", s.GetProvider,
 		swagger.WithDescription("Get specific provider details with masked token"),
 		swagger.WithTags("providers"),
 		swagger.WithResponseModel(ProviderResponse{}),
 	)
 
-	authAPI.POST("/providers", (s.AddProvider),
+	authAPI.POST("/providers", s.AddProvider,
 		swagger.WithDescription("Add a new provider configuration"),
 		swagger.WithTags("providers"),
 		swagger.WithRequestModel(AddProviderRequest{}),
 		swagger.WithResponseModel(AddProviderResponse{}),
 	)
 
-	authAPI.PUT("/providers/:name", (s.UpdateProvider),
+	authAPI.PUT("/providers/:name", s.UpdateProvider,
 		swagger.WithDescription("Update existing provider configuration"),
 		swagger.WithTags("providers"),
 		swagger.WithRequestModel(UpdateProviderRequest{}),
 		swagger.WithResponseModel(UpdateProviderResponse{}),
 	)
 
-	authAPI.POST("/providers/:name/toggle", (s.ToggleProvider),
+	authAPI.POST("/providers/:name/toggle", s.ToggleProvider,
 		swagger.WithDescription("Toggle provider enabled/disabled status"),
 		swagger.WithTags("providers"),
 		swagger.WithResponseModel(ToggleProviderResponse{}),
 	)
 
-	authAPI.DELETE("/providers/:name", (s.DeleteProvider),
+	authAPI.DELETE("/providers/:name", s.DeleteProvider,
 		swagger.WithDescription("Delete a provider configuration"),
 		swagger.WithTags("providers"),
 		swagger.WithResponseModel(DeleteProviderResponse{}),
 	)
 
 	// Server Management
-	authAPI.GET("/status", (s.GetStatus),
+	authAPI.GET("/status", s.GetStatus,
 		swagger.WithDescription("Get server status and statistics"),
 		swagger.WithTags("server"),
 		swagger.WithResponseModel(StatusResponse{}),
 	)
 
-	authAPI.POST("/server/start", (s.StartServer),
+	authAPI.POST("/server/start", s.StartServer,
 		swagger.WithDescription("Start the server"),
 		swagger.WithTags("server"),
 		swagger.WithResponseModel(ServerActionResponse{}),

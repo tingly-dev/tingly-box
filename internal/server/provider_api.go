@@ -249,7 +249,7 @@ func (s *Server) GetProvider(c *gin.Context) {
 		Name:     provider.Name,
 		APIBase:  provider.APIBase,
 		APIStyle: string(provider.APIStyle),
-		Token:    maskToken(provider.Token),
+		Token:    provider.Token, // Security: Token:    maskToken(provider.Token),
 		Enabled:  provider.Enabled,
 	}
 
