@@ -84,7 +84,7 @@ jobs:
   
           # Build with ldflags
           mkdir -p build
-          LDFLAGS='-s -w -X main.version=${VERSION} -X main.gitCommit=${GIT_COMMIT} -X main.buildTime=${BUILD_TIME} -X main.goVersion=${GO_VERSION}'
+          LDFLAGS="-X main.version=${VERSION} -X main.gitCommit=${GIT_COMMIT} -X main.buildTime=${BUILD_TIME} -X main.goVersion=${GO_VERSION}"
 
           # Build Linux binaries
           PLATFORM=linux/amd64 GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS} -X main.platform=${PLATFORM}" -o ./dist/tingly-box-linux-amd64 ./cmd/tingly-box
