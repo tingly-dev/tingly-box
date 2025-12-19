@@ -705,7 +705,7 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                                 {record.providers.length > 0 ? (
                                     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
                                         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                            Forwarding to Provider Nodes
+                                            Forwarding to Providers
                                         </Typography>
                                         <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center' }}>
                                             {record.providers.map((provider) => (
