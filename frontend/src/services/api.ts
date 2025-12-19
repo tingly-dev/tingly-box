@@ -553,6 +553,23 @@ export const api = {
         }
     },
 
+    probeProvider: async (api_base: string, api_style: string, token: string): Promise<any> => {
+        try {
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.testingApi.apiV1ProbeProviderPost({
+                name: "placeholder", api_style: api_style, api_base: api_base, token: token
+            });
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                localStorage.removeItem('user_auth_token');
+                window.location.href = '/login';
+                return {success: false, error: 'Authentication required'};
+            }
+            return {success: false, error: error.message};
+        }
+    },
+
     // Model API calls (OpenAI/Anthropic compatible)
     openAIChatCompletions: (data: any): Promise<any> => fetchModelAPI('/openai/v1/chat/completions', {
         method: 'POST',
