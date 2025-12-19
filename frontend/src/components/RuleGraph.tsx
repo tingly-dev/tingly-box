@@ -58,10 +58,11 @@ interface RuleGraphProps {
     providerModels: any;
     saving: boolean;
     expanded: boolean;
+    recordUuid: string;  // Add recordUuid prop
     onUpdateRecord: (field: keyof ConfigRecord, value: any) => void;
-    onUpdateProvider: (providerId: string, field: keyof ConfigProvider, value: any) => void;
+    onUpdateProvider: (recordId: string, providerId: string, field: keyof ConfigProvider, value: any) => void;
     onAddProvider: () => void;
-    onDeleteProvider: (providerId: string) => void;
+    onDeleteProvider: (recordId: string, providerId: string) => void;
     onRefreshModels: (providerName: string) => void;
     onSave: () => void;
     onDelete: () => void;
@@ -506,6 +507,7 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
     providerModels,
     saving,
     expanded,
+    recordUuid,
     onUpdateRecord,
     onUpdateProvider,
     onAddProvider,
@@ -716,8 +718,8 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                                                     availableProviders={providers}
                                                     providerModels={providerModels}
                                                     active={record.active && provider.active !== false}
-                                                    onUpdate={(field, value) => onUpdateProvider(provider.uuid, field, value)}
-                                                    onDelete={() => onDeleteProvider(provider.uuid)}
+                                                    onUpdate={(field, value) => onUpdateProvider(recordUuid, provider.uuid, field, value)}
+                                                    onDelete={() => onDeleteProvider(recordUuid, provider.uuid)}
                                                     onRefreshModels={() => onRefreshModels(provider.provider)}
                                                 />
                                             ))}
@@ -758,42 +760,6 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                                         </Tooltip>
                                     </Box>
                                 )}
-
-                                 <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                        </Typography>
-                                        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center' }}>
-                                            {/* Add Provider Button */}
-                                            <Tooltip title="Add new provider">
-                                                <IconButton
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        onAddProvider();
-                                                    }}
-                                                    disabled={!record.active || saving}
-                                                    sx={{
-                                                        width: 48,
-                                                        height: 48,
-                                                        border: '2px dashed',
-                                                        borderColor: 'divider',
-                                                        borderRadius: 2,
-                                                        backgroundColor: 'background.paper',
-                                                        '&:hover': {
-                                                            borderColor: 'primary.main',
-                                                            backgroundColor: 'action.hover',
-                                                            borderStyle: 'solid',
-                                                        },
-                                                        '&:disabled': {
-                                                            borderColor: 'action.disabled',
-                                                            backgroundColor: 'action.disabledBackground',
-                                                        }
-                                                    }}
-                                                >
-                                                    <AddIcon sx={{ fontSize: 28, color: 'text.secondary' }} />
-                                                </IconButton>
-                                            </Tooltip>
-                                        </Box>
-                                    </Box>
 
                                 {/* Arrow to Response */}
                                 {record.providers.length > 0 && record.responseModel && (
