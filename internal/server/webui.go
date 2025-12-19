@@ -948,6 +948,16 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 	authAPI := manager.NewGroup("api", "v1", "")
 	authAPI.Router.Use(s.UserAuthMiddleware())
 
+	// Health check endpoint
+	authAPI.GET("/info/health", s.GetHealthInfo,
+		swagger.WithResponseModel(HealthInfoResponse{}),
+	)
+
+	authAPI.GET("/info/config", s.GetInfoConfig,
+		swagger.WithDescription("Get config info about this application"),
+		swagger.WithResponseModel(ConfigInfoResponse{}),
+	)
+
 	// Provider Management
 	authAPI.GET("/providers", (s.GetProviders),
 		swagger.WithDescription("Get all configured providers with masked tokens"),
