@@ -3,6 +3,7 @@ package config
 import (
 	"path/filepath"
 	"time"
+	"tingly-box/internal/util"
 )
 
 const (
@@ -21,12 +22,17 @@ const (
 	RequestTimeout = 60 * time.Second
 )
 
-// GetTinglyConfDir returns the config directory path
+// GetTinglyConfDir returns the config directory path (default: ~/.tingly-box)
 func GetTinglyConfDir() string {
-	return ConfigDirName
+	homeDir, err := util.GetUserPath()
+	if err != nil {
+		// Fallback to current directory if home directory is not accessible
+		return ConfigDirName
+	}
+	return filepath.Join(homeDir, ConfigDirName)
 }
 
 // GetModelsDir returns the models directory path
 func GetModelsDir() string {
-	return filepath.Join(ConfigDirName, ModelsDirName)
+	return filepath.Join(GetTinglyConfDir(), ModelsDirName)
 }

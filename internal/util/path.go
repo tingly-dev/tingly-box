@@ -1,10 +1,35 @@
 package util
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
+
+// ExpandConfigDir expands ~ to user home directory and returns absolute path
+func ExpandConfigDir(path string) (string, error) {
+	if path == "" {
+		return path, nil
+	}
+
+	// Expand ~ to user home directory
+	if strings.HasPrefix(path, "~/") || path == "~" {
+		homeDir, err := GetUserPath()
+		if err != nil {
+			return "", fmt.Errorf("failed to get user home directory: %w", err)
+		}
+		if path == "~" {
+			path = homeDir
+		} else {
+			path = filepath.Join(homeDir, path[2:])
+		}
+	}
+
+	// Convert to absolute path
+	return filepath.Abs(path)
+}
 
 // GetUserPath returns the user's home directory path across all platforms
 // It provides a consistent way to get the user directory regardless of the operating system

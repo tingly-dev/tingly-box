@@ -3,9 +3,9 @@ package main
 import (
 	"fmt"
 	"os"
-
 	"tingly-box/internal/cli"
 	"tingly-box/internal/config"
+	"tingly-box/internal/util"
 
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
@@ -27,11 +27,15 @@ var (
 	buildTime = "unknown"
 	goVersion = "unknown"
 	platform  = "unknown"
+
+	// Global configuration directory flag
+	configDir string
 )
 
 func init() {
 	// Add global flags
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "verbose output")
+	rootCmd.PersistentFlags().StringVar(&configDir, "config-dir", "", "configuration directory (default: ~/.tingly-box)")
 
 	// Add version command
 	versionCmd := &cobra.Command{
@@ -50,8 +54,23 @@ func init() {
 
 	gin.SetMode(gin.ReleaseMode)
 
-	// Initialize app config
-	appConfig, err := config.NewAppConfig()
+	// Initialize app config with optional custom config directory
+	var appConfig *config.AppConfig
+	var err error
+
+	if configDir != "" {
+		// Expand and use custom config directory
+		expandedDir, err := util.ExpandConfigDir(configDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error expanding config directory path: %v\n", err)
+			os.Exit(1)
+		}
+		appConfig, err = config.NewAppConfig(config.WithConfigDir(expandedDir))
+	} else {
+		// Use default config directory
+		appConfig, err = config.NewAppConfig()
+	}
+
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error initializing config: %v\n", err)
 		os.Exit(1)
