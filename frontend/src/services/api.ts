@@ -6,6 +6,7 @@ import {
     type FetchProviderModelsResponse,
     HistoryApi,
     ModelsApi,
+    ProbeProviderRequestApiStyleEnum,
     type ProviderModelsResponse,
     type ProviderResponse,
     ProvidersApi,
@@ -553,11 +554,11 @@ export const api = {
         }
     },
 
-    probeProvider: async (api_base: string, api_style: string, token: string): Promise<any> => {
+    probeProvider: async (api_style: string, api_base: string, token: string): Promise<any> => {
         try {
             const apiInstances = await getApiInstances();
             const response = await apiInstances.testingApi.apiV1ProbeProviderPost({
-                name: "placeholder", api_style: api_style, api_base: api_base, token: token
+                name: "placeholder", api_style: (api_style) as ProbeProviderRequestApiStyleEnum, api_base: api_base, token: token
             });
             return response.data;
         } catch (error: any) {
