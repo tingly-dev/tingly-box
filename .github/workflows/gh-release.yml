@@ -4,7 +4,7 @@ on:
   push:
     tags:
       - 'v*'
-  
+      
 env:
   GO_VERSION: '1.25'
   NODE_VERSION: '20'
@@ -112,23 +112,23 @@ jobs:
           # Create packages directory
           mkdir -p packages
 
-          # Package Linux binaries as tar.gz
-          tar -czf tingly-box-linux-amd64.tar.gz tingly-box-linux-amd64
-          tar -czf tingly-box-linux-arm64.tar.gz tingly-box-linux-arm64
+          # Package Linux binaries as zip
+          zip tingly-box-linux-amd64.zip tingly-box-linux-amd64
+          zip tingly-box-linux-arm64.zip tingly-box-linux-arm64
 
-          # Package macOS binaries as tar.gz
-          tar -czf tingly-box-macos-amd64.tar.gz tingly-box-macos-amd64
-          tar -czf tingly-box-macos-arm64.tar.gz tingly-box-macos-arm64
+          # Package macOS binaries as zip
+          zip tingly-box-macos-amd64.zip tingly-box-macos-amd64
+          zip tingly-box-macos-arm64.zip tingly-box-macos-arm64
 
           # Package Windows binary as zip
           zip tingly-box-windows-amd64.zip tingly-box-windows-amd64.exe
 
           # Move packages to dist root
-          mv *.tar.gz *.zip ../
+          mv *.zip ../
 
           # Create checksums for all files
           cd ..
-          sha256sum *.tar.gz *.zip > checksums.txt
+          sha256sum *.zip > checksums.txt
 
       - name: Generate changelog
         run: |
@@ -147,7 +147,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            *.tar.gz
             *.zip
             checksums.txt
           body_path: release-notes.md
