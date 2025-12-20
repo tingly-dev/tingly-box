@@ -351,6 +351,10 @@ const Home = () => {
             });
             setAddDialogOpen(false);
             await loadProviders();
+
+            // Automatically fetch models for the newly added provider
+            const newProvider = { name: providerData.name };
+            await handleModelRefresh(newProvider);
         } else {
             showNotification(`Failed to add provider: ${result.error}`, 'error');
         }
