@@ -329,7 +329,7 @@ export const api = {
         }
     },
 
-    getProvider: async (name: string) => {
+    getProvider: async (name: string): Promise<ProviderResponse> => {
         // Note: The generated client has an issue with path parameters
         const apiInstances = await getApiInstances();
         const response = await apiInstances.providersApi.apiV1ProvidersNameGet(name);

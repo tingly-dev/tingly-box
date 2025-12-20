@@ -1,4 +1,4 @@
-import {Cancel, CheckCircle, ContentCopy, Delete, Edit, Visibility} from '@mui/icons-material';
+import { Cancel, CheckCircle, ContentCopy, Delete, Edit, Visibility } from '@mui/icons-material';
 import {
     Box,
     Button,
@@ -19,8 +19,9 @@ import {
     Tooltip,
     Typography
 } from '@mui/material';
-import {useState} from 'react';
-import type {Provider, ProviderModelsData} from '../types/provider';
+import { useState } from 'react';
+import api from '../services/api';
+import type { Provider, ProviderModelsData } from '../types/provider';
 
 
 interface ProviderTableProps {
@@ -42,6 +43,7 @@ interface TokenModalState {
     open: boolean;
     providerName: string;
     token: string;
+    loading: boolean;
 }
 
 interface DeleteModalState {
@@ -50,21 +52,37 @@ interface DeleteModalState {
 }
 
 const CredentialTable = ({
-                           providers,
-                           onEdit,
-                           onToggle,
-                           onDelete,
-                       }: ProviderTableProps) => {
+    providers,
+    onEdit,
+    onToggle,
+    onDelete,
+}: ProviderTableProps) => {
     const [tokenStates, setTokenStates] = useState<{ [key: string]: TokenMenuState }>({});
     const [tokenModal, setTokenModal] = useState<TokenModalState>({
         open: false,
         providerName: '',
-        token: ''
+        token: '',
+        loading: false
     });
     const [deleteModal, setDeleteModal] = useState<DeleteModalState>({
         open: false,
         providerName: ''
     });
+
+    // Function to fetch full token for a provider
+    const fetchFullToken = async (providerName: string): Promise<string> => {
+        try {
+            const response = await api.getProvider(providerName)
+            if (!response.success) {
+                throw new Error(`Failed to fetch token for ${providerName}`);
+            }
+            const data = response.data;
+            return data.token || '';
+        } catch (error) {
+            console.error('Error fetching full token:', error);
+            throw error;
+        }
+    };
 
     const handleTokenMenuClick = (event: React.MouseEvent<HTMLElement>, providerName: string) => {
         setTokenStates(prev => ({
@@ -86,14 +104,33 @@ const CredentialTable = ({
         }));
     };
 
-    const handleViewToken = (providerName: string) => {
-        const provider = providers.find(p => p.name === providerName);
-        if (provider && provider.token) {
-            setTokenModal({
-                open: true,
-                providerName: providerName,
-                token: provider.token
-            });
+    const handleViewToken = async (providerName: string) => {
+        // Open modal with loading state
+        setTokenModal({
+            open: true,
+            providerName: providerName,
+            token: '',
+            loading: true
+        });
+
+        try {
+            // Fetch the full token from API
+            const fullToken = await fetchFullToken(providerName);
+
+            // Update modal with the fetched token
+            setTokenModal(prev => ({
+                ...prev,
+                token: fullToken,
+                loading: false
+            }));
+        } catch (error) {
+            console.error('Failed to fetch token:', error);
+            // Update modal with error state
+            setTokenModal(prev => ({
+                ...prev,
+                token: '',
+                loading: false
+            }));
         }
         handleTokenMenuClose(providerName);
     };
@@ -102,7 +139,8 @@ const CredentialTable = ({
         setTokenModal({
             open: false,
             providerName: '',
-            token: ''
+            token: '',
+            loading: false
         });
     };
 
@@ -127,17 +165,6 @@ const CredentialTable = ({
         handleCloseDeleteModal();
     };
 
-    const handleCopyToken = async (provider: Provider) => {
-        if (provider.token) {
-            try {
-                await navigator.clipboard.writeText(provider.token);
-            } catch (err) {
-                console.error('Failed to copy token:', err);
-            }
-        }
-        handleTokenMenuClose(provider.name);
-    };
-
     const formatTokenDisplay = (provider: Provider) => {
         const tokenState = tokenStates[provider.name];
         const showToken = tokenState?.showToken || false;
@@ -152,16 +179,16 @@ const CredentialTable = ({
     };
 
     return (
-        <TableContainer component={Paper} elevation={0} sx={{border: 1, borderColor: 'divider'}}>
+        <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
             <Table>
                 <TableHead>
                     <TableRow>
-                        <TableCell sx={{fontWeight: 600, minWidth: 150}}>Name</TableCell>
-                        <TableCell sx={{fontWeight: 600, minWidth: 150}}>API Key</TableCell>
-                        <TableCell sx={{fontWeight: 600, minWidth: 200}}>API Base</TableCell>
-                        <TableCell sx={{fontWeight: 600, minWidth: 120}}>API Style</TableCell>
-                        <TableCell sx={{fontWeight: 600, minWidth: 120}}>Actions</TableCell>
-                        <TableCell sx={{fontWeight: 600, minWidth: 120}}>Status</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 150 }}>Name</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 150 }}>API Key</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 200 }}>API Base</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>API Style</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Actions</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Status</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -170,11 +197,11 @@ const CredentialTable = ({
                             <TableCell>
                                 <Stack direction="row" alignItems="center" spacing={1}>
                                     {provider.enabled ? (
-                                        <CheckCircle color="success" fontSize="small"/>
+                                        <CheckCircle color="success" fontSize="small" />
                                     ) : (
-                                        <Cancel color="error" fontSize="small"/>
+                                        <Cancel color="error" fontSize="small" />
                                     )}
-                                    <Typography variant="body2" sx={{fontWeight: 500}}>
+                                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
                                         {provider.name}
                                     </Typography>
                                 </Stack>
@@ -198,18 +225,9 @@ const CredentialTable = ({
                                                 <IconButton
                                                     size="small"
                                                     onClick={() => handleViewToken(provider.name)}
-                                                    sx={{p: 0.25}}
+                                                    sx={{ p: 0.25 }}
                                                 >
-                                                    <Visibility fontSize="small"/>
-                                                </IconButton>
-                                            </Tooltip>
-                                            <Tooltip title="Copy Token">
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={() => handleCopyToken(provider)}
-                                                    sx={{p: 0.25}}
-                                                >
-                                                    <ContentCopy fontSize="small"/>
+                                                    <Visibility fontSize="small" />
                                                 </IconButton>
                                             </Tooltip>
                                             {/* <IconButton
@@ -260,7 +278,7 @@ const CredentialTable = ({
                                                 color="primary"
                                                 onClick={() => onEdit(provider.name)}
                                             >
-                                                <Edit fontSize="small"/>
+                                                <Edit fontSize="small" />
                                             </IconButton>
                                         </Tooltip>
                                     )}
@@ -271,7 +289,7 @@ const CredentialTable = ({
                                                 color="error"
                                                 onClick={() => handleDeleteClick(provider.name)}
                                             >
-                                                <Delete fontSize="small"/>
+                                                <Delete fontSize="small" />
                                             </IconButton>
                                         </Tooltip>
                                     )}
@@ -291,7 +309,7 @@ const CredentialTable = ({
                                         label=""
                                     />
                                     <Typography variant="body2"
-                                                color={provider.enabled ? 'success.main' : 'error.main'}>
+                                        color={provider.enabled ? 'success.main' : 'error.main'}>
                                         {provider.enabled ? 'Enabled' : 'Disabled'}
                                     </Typography>
                                 </Stack>
@@ -318,15 +336,8 @@ const CredentialTable = ({
                     }}
                 >
                     <MenuItem onClick={() => handleViewToken(providerName)}>
-                        <Visibility fontSize="small" sx={{mr: 1}}/>
+                        <Visibility fontSize="small" sx={{ mr: 1 }} />
                         View Token
-                    </MenuItem>
-                    <MenuItem onClick={() => {
-                        const provider = providers.find(p => p.name === providerName);
-                        if (provider) handleCopyToken(provider);
-                    }}>
-                        <ContentCopy fontSize="small" sx={{mr: 1}}/>
-                        Copy Token
                     </MenuItem>
                 </Menu>
             ))}
@@ -352,34 +363,39 @@ const CredentialTable = ({
                         borderRadius: 2,
                     }}
                 >
-                    <Typography id="token-modal-title" variant="h6" component="h2" sx={{mb: 2}}>
+                    <Typography id="token-modal-title" variant="h6" component="h2" sx={{ mb: 2 }}>
                         API Key - {tokenModal.providerName}
                     </Typography>
 
-                    <Box sx={{mb: 3}}>
-                        <Typography id="token-modal-description" variant="body2" color="text.secondary" sx={{mb: 2}}>
-                            Full token for {tokenModal.providerName}:
-                        </Typography>
-
-                        <Box
-                            sx={{
-                                p: 2,
-                                bgcolor: 'grey.100',
-                                borderRadius: 1,
-                                fontFamily: 'monospace',
-                                fontSize: '0.875rem',
-                                wordBreak: 'break-all',
-                                border: '1px solid',
-                                borderColor: 'divider'
-                            }}
-                        >
-                            {tokenModal.token}
+                    {tokenModal.loading ? (
+                        <Box sx={{ mb: 3, textAlign: 'center', py: 4 }}>
+                            <Typography variant="body2" color="text.secondary">
+                                Loading API key...
+                            </Typography>
                         </Box>
-                    </Box>
+                    ) : (
+                        <Box sx={{ mb: 3 }}>
+                            <Box
+                                sx={{
+                                    p: 2,
+                                    bgcolor: 'grey.100',
+                                    borderRadius: 1,
+                                    fontFamily: 'monospace',
+                                    fontSize: '0.875rem',
+                                    wordBreak: 'break-all',
+                                    border: '1px solid',
+                                    borderColor: 'divider'
+                                }}
+                            >
+                                {tokenModal.token || 'Failed to load token'}
+                            </Box>
+                        </Box>
+                    )}
 
                     <Stack direction="row" spacing={2} justifyContent="flex-end">
                         <IconButton
                             color="primary"
+                            disabled={tokenModal.loading || !tokenModal.token}
                             onClick={async () => {
                                 if (tokenModal.token) {
                                     try {
@@ -389,14 +405,14 @@ const CredentialTable = ({
                                     }
                                 }
                             }}
-                            title="Copy Token"
+                            title={tokenModal.loading ? "Loading..." : "Copy Token"}
                         >
-                            <ContentCopy/>
+                            <ContentCopy />
                         </IconButton>
 
                         <Tooltip title="Close">
                             <IconButton onClick={handleCloseTokenModal}>
-                                <Cancel/>
+                                <Cancel />
                             </IconButton>
                         </Tooltip>
                     </Stack>
@@ -424,11 +440,11 @@ const CredentialTable = ({
                         borderRadius: 2,
                     }}
                 >
-                    <Typography id="delete-modal-title" variant="h6" component="h2" sx={{mb: 2}}>
+                    <Typography id="delete-modal-title" variant="h6" component="h2" sx={{ mb: 2 }}>
                         Delete Provider
                     </Typography>
 
-                    <Typography id="delete-modal-description" variant="body2" sx={{mb: 3}}>
+                    <Typography id="delete-modal-description" variant="body2" sx={{ mb: 3 }}>
                         Are you sure you want to delete the provider "{deleteModal.providerName}"? This action cannot
                         be undone.
                     </Typography>
