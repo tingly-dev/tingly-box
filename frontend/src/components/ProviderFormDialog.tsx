@@ -17,7 +17,7 @@ import {
 export interface ProviderFormData {
     name: string;
     apiBase: string;
-    apiStyle: 'openai' | 'anthropic';
+    apiStyle: 'openai' | 'anthropic' | undefined;
     token: string;
     enabled?: boolean;
 }

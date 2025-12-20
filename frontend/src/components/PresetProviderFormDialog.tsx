@@ -13,8 +13,6 @@ import {
     IconButton,
     Stack,
     Switch,
-    Tab,
-    Tabs,
     TextField,
     Typography,
 } from '@mui/material';
@@ -23,32 +21,11 @@ import { getProviderBaseUrl } from '../data/providerUtils';
 import { getProvidersByStyle, getServiceProvider } from '../data/serviceProviders';
 import api from '../services/api';
 
-interface TabPanelProps {
-    children?: React.ReactNode;
-    index: number;
-    value: number;
-}
-
-function TabPanel(props: TabPanelProps) {
-    const { children, value, index, ...other } = props;
-
-    return (
-        <div
-            role="tabpanel"
-            hidden={value !== index}
-            id={`provider-tabpanel-${index}`}
-            aria-labelledby={`provider-tab-${index}`}
-            {...other}
-        >
-            {value === index && <Box sx={{ pt: 1 }}>{children}</Box>}
-        </div>
-    );
-}
 
 export interface EnhancedProviderFormData {
     name: string;
     apiBase: string;
-    apiStyle: 'openai' | 'anthropic';
+    apiStyle: 'openai' | 'anthropic' | undefined;
     token: string;
     enabled?: boolean;
 }
@@ -77,7 +54,6 @@ const PresetProviderFormDialog = ({
     const defaultTitle = mode === 'add' ? 'Add New API Key' : 'Edit API Key';
     const defaultSubmitText = mode === 'add' ? 'Add API Key' : 'Save Changes';
 
-    const [tabValue, setTabValue] = useState(data.apiStyle === 'anthropic' ? 1 : 0);
     const [verifying, setVerifying] = useState(false);
     const [verificationResult, setVerificationResult] = useState<{
         success: boolean;
@@ -89,14 +65,6 @@ const PresetProviderFormDialog = ({
 
     const openaiProviders = getProvidersByStyle('openai');
     const anthropicProviders = getProvidersByStyle('anthropic');
-
-    const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
-        setTabValue(newValue);
-        const apiStyle = newValue === 0 ? 'openai' : 'anthropic';
-        onChange('apiStyle', apiStyle);
-        // Clear verification result when changing tabs
-        setVerificationResult(null);
-    };
 
     // Handle provider selection
     const handleProviderSelect = (providerValue: string, apiStyle: 'openai' | 'anthropic') => {
@@ -165,18 +133,53 @@ const PresetProviderFormDialog = ({
             <form onSubmit={onSubmit}>
                 <DialogContent sx={{ pb: 1 }}>
                     <Stack spacing={2.5}>
-                        {/* API Style Tabs */}
-                        <Tabs
-                            value={tabValue}
-                            onChange={handleTabChange}
-                            variant="fullWidth"
-                            sx={{ borderBottom: 1, borderColor: 'divider' }}
+                        {/* API Style Selection - Form Field Style */}
+                        <TextField
+                            select
+                            fullWidth
+                            size="small"
+                            label="API Style"
+                            value={data.apiStyle || undefined}
+                            onChange={(e) => {
+                                onChange('apiStyle', e.target.value as 'openai' | 'anthropic' | '');
+                                setVerificationResult(null);
+                            }}
+                            slotProps={{
+                                select: {
+                                    native: true,
+                                    displayEmpty: false,
+                                    sx: {
+                                        '& .MuiOutlinedInput-notchedOutline': {
+                                            borderColor: 'divider',
+                                        },
+                                        '&:hover .MuiOutlinedInput-notchedOutline': {
+                                            borderColor: 'primary.main',
+                                        },
+                                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                            borderColor: 'primary.main',
+                                            borderWidth: 2,
+                                        },
+                                    },
+                                }
+                            }}
+                            helperText={
+                                data.apiStyle === 'openai'
+                                    ? "Supports models from OpenAI, Azure OpenAI, and many other providers"
+                                    : data.apiStyle === 'anthropic'
+                                        ? "For Claude API and Claude-compatible AI providers"
+                                        : "Please select an API style to continue"
+                            }
+                            required={mode === 'add'}
                         >
-                            <Tab label="OpenAI Compatible" />
-                            <Tab label="Anthropic Compatible" />
-                        </Tabs>
+                            <option value={undefined}>
+                                Select API style...
+                            </option>
+                            <option value="openai">🤖 OpenAI Compatible</option>
+                            <option value="anthropic">🧠 Anthropic Compatible</option>
+                        </TextField>
 
-                        <TabPanel value={tabValue} index={0}>
+                        {/* Provider Selection based on API Style */}
+                        {data.apiStyle === 'openai' && (
                             <Autocomplete
                                 size="small"
                                 options={openaiProviders}
@@ -194,9 +197,8 @@ const PresetProviderFormDialog = ({
                                     />
                                 )}
                             />
-                        </TabPanel>
-
-                        <TabPanel value={tabValue} index={1}>
+                        )}
+                        {data.apiStyle === 'anthropic' && (
                             <Autocomplete
                                 size="small"
                                 options={anthropicProviders}
@@ -214,7 +216,7 @@ const PresetProviderFormDialog = ({
                                     />
                                 )}
                             />
-                        </TabPanel>
+                        )}
 
                         {/* Configuration Fields */}
                         <Stack spacing={2}>
@@ -241,7 +243,7 @@ const PresetProviderFormDialog = ({
                                 }}
                                 required
                                 placeholder={
-                                    tabValue === 0
+                                    data.apiStyle === 'openai'
                                         ? "https://api.openai.com/v1"
                                         : "https://api.anthropic.com"
                                 }

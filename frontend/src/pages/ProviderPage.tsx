@@ -23,7 +23,7 @@ const ProviderPage = () => {
     const [providerFormData, setProviderFormData] = useState<ProviderFormData>({
         name: '',
         apiBase: '',
-        apiStyle: 'openai',
+        apiStyle: undefined,
         token: '',
         enabled: true,
     });
@@ -41,7 +41,7 @@ const ProviderPage = () => {
         setProviderFormData({
             name: '',
             apiBase: '',
-            apiStyle: 'openai',
+            apiStyle: undefined,
             token: '',
             enabled: true,
         });

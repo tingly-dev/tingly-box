@@ -18,7 +18,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { ProbeResponse } from '../client';
 import CardGrid from '../components/CardGrid.tsx';
-import ProviderFormDialog, { type ProviderFormData } from '../components/ProviderFormDialog.tsx';
 import PresetProviderFormDialog, { type EnhancedProviderFormData } from '../components/PresetProviderFormDialog.tsx';
 import { HomeHeader } from '../components/HomeHeader.tsx';
 import ModelSelectTab, { type ProviderSelectTabOption } from "../components/ModelSelectTab.tsx";
@@ -137,10 +136,10 @@ const Home = () => {
 
     // Add provider dialog state
     const [addDialogOpen, setAddDialogOpen] = useState(false);
-    const [providerFormData, setProviderFormData] = useState<ProviderFormData>({
+    const [providerFormData, setProviderFormData] = useState<EnhancedProviderFormData>({
         name: '',
         apiBase: '',
-        apiStyle: 'openai',
+        apiStyle: '',
         token: '',
     });
 
@@ -301,7 +300,7 @@ const Home = () => {
                 await loadProviderModels();
                 showNotification(`Models for ${provider.name} refreshed successfully!`, 'success');
             } else {
-                showNotification(`Failed to refresh models for ${provider.name}`, 'error');
+                showNotification(`Failed to refresh models for ${provider.name}.\nPlease check base_url and api_key.`, 'error');
             }
         } catch (error) {
             console.error("Error refreshing models:", error);
@@ -317,17 +316,10 @@ const Home = () => {
         setProviderFormData({
             name: '',
             apiBase: '',
-            apiStyle: 'openai',
+            apiStyle: '',
             token: '',
         });
         setAddDialogOpen(true);
-    };
-
-    const handleProviderFormChange = (field: keyof ProviderFormData, value: any) => {
-        setProviderFormData(prev => ({
-            ...prev,
-            [field]: value,
-        }));
     };
 
     const handleEnhanceProviderFormChange = (field: keyof EnhancedProviderFormData, value: any) => {
@@ -354,7 +346,7 @@ const Home = () => {
             setProviderFormData({
                 name: '',
                 apiBase: '',
-                apiStyle: 'openai',
+                apiStyle: undefined,
                 token: '',
             });
             setAddDialogOpen(false);
@@ -556,15 +548,6 @@ const Home = () => {
             <ApiKeyModal></ApiKeyModal>
 
             {/* Add Provider Dialog */}
-            <ProviderFormDialog
-                open={addDialogOpen}
-                onClose={() => setAddDialogOpen(false)}
-                onSubmit={handleAddProvider}
-                data={providerFormData}
-                onChange={handleProviderFormChange}
-                mode="add"
-            />
-
             <PresetProviderFormDialog
                 open={addDialogOpen}
                 onClose={() => setAddDialogOpen(false)}
