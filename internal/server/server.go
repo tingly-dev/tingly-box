@@ -254,9 +254,6 @@ func (s *Server) setupRoutes() {
 		s.UseUIEndpoints()
 	}
 
-	// Health check endpoint
-	s.engine.GET("/health", s.HealthCheck)
-
 	// Models endpoint
 	//s.engine.GET("/v1/models", s.ListModels)
 
@@ -401,4 +398,17 @@ func (s *Server) Stop(ctx context.Context) error {
 
 	fmt.Println("Shutting down server...")
 	return s.httpServer.Shutdown(ctx)
+}
+
+func (s *Server) GetInfoConfig(c *gin.Context) {
+	// Return configuration information
+	configInfo := ConfigInfo{
+		ConfigPath: s.config.ConfigFile,
+		ConfigDir:  s.config.ConfigDir,
+	}
+
+	c.JSON(http.StatusOK, ConfigInfoResponse{
+		Success: true,
+		Data:    configInfo,
+	})
 }

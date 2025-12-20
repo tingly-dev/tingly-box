@@ -662,15 +662,18 @@ func (c *Config) FetchAndSaveProviderModels(providerName string) error {
 		return fmt.Errorf("provider %s not found", providerName)
 	}
 
-	// This is a placeholder - in a real implementation, you would make an HTTP request
-	// to the provider's /models endpoint. For now, we'll create a basic implementation.
-	models := c.getProviderModelsFromAPI(provider)
+	// Fetch models from provider API
+	models, err := c.getProviderModelsFromAPI(provider)
+	if err != nil {
+		return fmt.Errorf("%w", err)
+	}
 
+	// Save models to local storage
 	return c.modelManager.SaveModels(providerName, provider.APIBase, models)
 }
 
 // getProviderModelsFromAPI fetches models from provider API via real HTTP requests
-func (c *Config) getProviderModelsFromAPI(provider *Provider) []string {
+func (c *Config) getProviderModelsFromAPI(provider *Provider) ([]string, error) {
 	// Construct the models endpoint URL
 	// For Anthropic-style providers, ensure they have a version suffix
 	apiBase := strings.TrimSuffix(provider.APIBase, "/")
@@ -690,15 +693,13 @@ func (c *Config) getProviderModelsFromAPI(provider *Provider) []string {
 	}
 	modelsURL, err := url.Parse(apiBase + "/models")
 	if err != nil {
-		fmt.Printf("Failed to parse models URL for provider %s: %v\n", provider.Name, err)
-		return []string{}
+		return nil, fmt.Errorf("failed to parse models URL: %w", err)
 	}
 
 	// Create HTTP request
 	req, err := http.NewRequest("GET", modelsURL.String(), nil)
 	if err != nil {
-		fmt.Printf("Failed to create request for provider %s: %v\n", provider.Name, err)
-		return []string{}
+		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
 	}
 
 	// Set headers based on provider style
@@ -717,22 +718,20 @@ func (c *Config) getProviderModelsFromAPI(provider *Provider) []string {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Printf("Failed to fetch models from provider %s: %v\n", provider.Name, err)
-		return []string{}
+		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	// Check response status
 	if resp.StatusCode != http.StatusOK {
-		fmt.Printf("Provider %s returned status %d\n", provider.Name, resp.StatusCode)
-		return []string{}
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("provider returned status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	// Parse response body
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Printf("Failed to read response from provider %s: %v\n", provider.Name, err)
-		return []string{}
+		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
 	// Parse JSON response based on OpenAI-compatible format
@@ -747,14 +746,12 @@ func (c *Config) getProviderModelsFromAPI(provider *Provider) []string {
 	}
 
 	if err := json.Unmarshal(body, &modelsResponse); err != nil {
-		fmt.Printf("Failed to parse JSON response from provider %s: %v\n", provider.Name, err)
-		return []string{}
+		return nil, fmt.Errorf("failed to parse JSON response: %w", err)
 	}
 
 	// Check for API error
 	if modelsResponse.Error != nil {
-		fmt.Printf("Provider %s API error: %s\n", provider.Name, modelsResponse.Error.Message)
-		return []string{}
+		return nil, fmt.Errorf("API error: %s (type: %s)", modelsResponse.Error.Message, modelsResponse.Error.Type)
 	}
 
 	// Extract model IDs
@@ -766,12 +763,10 @@ func (c *Config) getProviderModelsFromAPI(provider *Provider) []string {
 	}
 
 	if len(models) == 0 {
-		fmt.Printf("No models found for provider %s\n", provider.Name)
-		return []string{}
+		return nil, fmt.Errorf("no models found in provider response")
 	}
 
-	fmt.Printf("Successfully fetched %d models for provider %s\n", len(models), provider.Name)
-	return models
+	return models, nil
 }
 
 func (c *Config) GetModelManager() *ModelListManager {

@@ -6,6 +6,7 @@ import {
     type FetchProviderModelsResponse,
     HistoryApi,
     ModelsApi,
+    ProbeProviderRequestApiStyleEnum,
     type ProviderModelsResponse,
     type ProviderResponse,
     ProvidersApi,
@@ -328,7 +329,7 @@ export const api = {
         }
     },
 
-    getProvider: async (name: string) => {
+    getProvider: async (name: string): Promise<ProviderResponse> => {
         // Note: The generated client has an issue with path parameters
         const apiInstances = await getApiInstances();
         const response = await apiInstances.providersApi.apiV1ProvidersNameGet(name);
@@ -541,6 +542,23 @@ export const api = {
             const response = await apiInstances.testingApi.apiV1ProbePost({
                 provider: provider,
                 model: model
+            });
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                localStorage.removeItem('user_auth_token');
+                window.location.href = '/login';
+                return {success: false, error: 'Authentication required'};
+            }
+            return {success: false, error: error.message};
+        }
+    },
+
+    probeProvider: async (api_style: string, api_base: string, token: string): Promise<any> => {
+        try {
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.testingApi.apiV1ProbeProviderPost({
+                name: "placeholder", api_style: (api_style) as ProbeProviderRequestApiStyleEnum, api_base: api_base, token: token
             });
             return response.data;
         } catch (error: any) {

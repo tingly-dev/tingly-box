@@ -7,6 +7,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import {
     Box,
     Button,
+    CircularProgress,
     Dialog,
     DialogActions,
     DialogContent,
@@ -43,6 +44,7 @@ interface ProviderSelectTabProps {
     onSelected?: (option: ProviderSelectTabOption) => void;
     onRefresh?: (provider: Provider) => void;
     onCustomModelSave?: (provider: Provider, customModel: string) => void;
+    refreshingProviders?: string[];
 }
 
 export default function ModelSelectTab({
@@ -54,11 +56,13 @@ export default function ModelSelectTab({
     onSelected,
     onRefresh,
     onCustomModelSave,
+    refreshingProviders = [],
 }: ProviderSelectTabProps) {
     const [internalCurrentTab, setInternalCurrentTab] = useState(0);
     const [isInitialized, setIsInitialized] = useState(false);
     const { customModels, saveCustomModel, removeCustomModel } = useCustomModels();
     const gridLayout = useGridLayout();
+    const [autoFetchedProviders, setAutoFetchedProviders] = useState<Set<string>>(new Set());
 
     // Pagination and search
     const { searchTerms, currentPage, setCurrentPage, handleSearchChange, handlePageChange, getPaginatedData } =
@@ -75,6 +79,13 @@ export default function ModelSelectTab({
         provider: null,
         value: ''
     });
+
+    // Reset auto-fetched providers when provider models are updated
+    useEffect(() => {
+        // Clear the auto-fetched set when provider models change
+        // This allows auto-fetching again if models were cleared
+        setAutoFetchedProviders(new Set());
+    }, [providerModels]);
 
     // Listen for custom model updates from other components
     useEffect(() => {
@@ -110,9 +121,27 @@ export default function ModelSelectTab({
             setInternalCurrentTab(newValue);
         }
 
-        // Auto-navigate to page containing selected model when switching tabs
+        // Get the target provider
         const targetProvider = (providers || []).filter(provider => provider.enabled)[newValue];
-        if (targetProvider && selectedProvider === targetProvider.name && selectedModel) {
+        if (!targetProvider) return;
+
+        // Auto-fetch models if the provider has no models and hasn't been auto-fetched before
+        const providerModelData = providerModels?.[targetProvider.name];
+        const hasModels = providerModelData && (
+            (providerModelData.models && providerModelData.models.length > 0) ||
+            (providerModelData.star_models && providerModelData.star_models.length > 0) ||
+            providerModelData.custom_model
+        );
+
+        if (!hasModels && !autoFetchedProviders.has(targetProvider.name) && onRefresh && !refreshingProviders.includes(targetProvider.name)) {
+            // Mark as auto-fetched to avoid repeated requests
+            setAutoFetchedProviders(prev => new Set([...prev, targetProvider.name]));
+            // Trigger model fetch
+            onRefresh(targetProvider);
+        }
+
+        // Auto-navigate to page containing selected model when switching tabs
+        if (selectedProvider === targetProvider.name && selectedModel) {
             const modelTypeInfo = getModelTypeInfo(targetProvider, providerModels, customModels);
             const { isCustomModel, allModelsForSearch } = modelTypeInfo;
 
@@ -230,6 +259,7 @@ export default function ModelSelectTab({
 
                 const isProviderSelected = selectedProvider === provider.name;
                 const pagination = getPaginatedData(standardModelsForDisplay, provider.name);
+                const isRefreshing = refreshingProviders.includes(provider.name);
 
                 const backendCustomModel = providerModels?.[provider.name]?.custom_model;
                 const localStorageCustomModels = customModels[provider.name] || [];
@@ -274,24 +304,24 @@ export default function ModelSelectTab({
                                     </Button>
                                     <Button
                                         variant="outlined"
-                                        startIcon={<RefreshIcon />}
+                                        startIcon={isRefreshing ? <CircularProgress size={16} /> : <RefreshIcon />}
                                         onClick={() => onRefresh && onRefresh(provider)}
-                                        disabled={!onRefresh}
+                                        disabled={!onRefresh || isRefreshing}
                                         sx={{
                                             height: 40,
-                                            borderColor: 'primary.main',
-                                            color: 'primary.main',
-                                            '&:hover': {
+                                            borderColor: isRefreshing ? 'grey.300' : 'primary.main',
+                                            color: isRefreshing ? 'grey.500' : 'primary.main',
+                                            '&:hover': !isRefreshing ? {
                                                 backgroundColor: 'primary.50',
                                                 borderColor: 'primary.dark',
-                                            },
+                                            } : {},
                                             '&:disabled': {
                                                 borderColor: 'grey.300',
                                                 color: 'grey.500',
                                             }
                                         }}
                                     >
-                                        Fetch Model List
+                                        {isRefreshing ? 'Fetching...' : 'Fetch Model List'}
                                     </Button>
                                 </Stack>
 

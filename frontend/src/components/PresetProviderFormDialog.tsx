@@ -1,48 +1,31 @@
+import { CheckCircle, Error, Refresh } from '@mui/icons-material';
 import {
+    Alert,
     Autocomplete,
     Box,
     Button,
+    CircularProgress,
     Dialog,
     DialogActions,
     DialogContent,
     DialogTitle,
     FormControlLabel,
+    IconButton,
     Stack,
     Switch,
-    Tab,
-    Tabs,
     TextField,
+    Typography,
 } from '@mui/material';
 import React, { useState } from 'react';
 import { getProviderBaseUrl } from '../data/providerUtils';
 import { getProvidersByStyle, getServiceProvider } from '../data/serviceProviders';
+import api from '../services/api';
 
-interface TabPanelProps {
-    children?: React.ReactNode;
-    index: number;
-    value: number;
-}
-
-function TabPanel(props: TabPanelProps) {
-    const { children, value, index, ...other } = props;
-
-    return (
-        <div
-            role="tabpanel"
-            hidden={value !== index}
-            id={`provider-tabpanel-${index}`}
-            aria-labelledby={`provider-tab-${index}`}
-            {...other}
-        >
-            {value === index && <Box sx={{ pt: 1 }}>{children}</Box>}
-        </div>
-    );
-}
 
 export interface EnhancedProviderFormData {
     name: string;
     apiBase: string;
-    apiStyle: 'openai' | 'anthropic';
+    apiStyle: 'openai' | 'anthropic' | undefined;
     token: string;
     enabled?: boolean;
 }
@@ -71,16 +54,17 @@ const PresetProviderFormDialog = ({
     const defaultTitle = mode === 'add' ? 'Add New API Key' : 'Edit API Key';
     const defaultSubmitText = mode === 'add' ? 'Add API Key' : 'Save Changes';
 
-    const [tabValue, setTabValue] = useState(data.apiStyle === 'anthropic' ? 1 : 0);
+    const [verifying, setVerifying] = useState(false);
+    const [verificationResult, setVerificationResult] = useState<{
+        success: boolean;
+        message: string;
+        details?: string;
+        responseTime?: number;
+        modelsCount?: number;
+    } | null>(null);
 
     const openaiProviders = getProvidersByStyle('openai');
     const anthropicProviders = getProvidersByStyle('anthropic');
-
-    const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
-        setTabValue(newValue);
-        const apiStyle = newValue === 0 ? 'openai' : 'anthropic';
-        onChange('apiStyle', apiStyle);
-    };
 
     // Handle provider selection
     const handleProviderSelect = (providerValue: string, apiStyle: 'openai' | 'anthropic') => {
@@ -93,6 +77,54 @@ const PresetProviderFormDialog = ({
             onChange('name', provider.name);
             onChange('apiBase', getProviderBaseUrl(provider, apiStyle));
         }
+        // Clear verification result when changing provider
+        setVerificationResult(null);
+    };
+
+    // Handle verification
+    const handleVerify = async () => {
+        if (!data.name || !data.apiBase || !data.token) {
+            setVerificationResult({
+                success: false,
+                message: 'Please fill in all required fields (Name, API Base URL, API Key)',
+            });
+            return;
+        }
+
+        setVerifying(true);
+        setVerificationResult(null);
+
+        try {
+            const result = await api.probeProvider(
+                data.apiStyle,
+                data.apiBase,
+                data.token,
+            )
+
+            if (result.success && result.data) {
+                setVerificationResult({
+                    success: true,
+                    message: result.data.message,
+                    details: `Test result: ${result.data.test_result}`,
+                    responseTime: result.data.response_time_ms,
+                    modelsCount: result.data.models_count,
+                });
+            } else {
+                setVerificationResult({
+                    success: false,
+                    message: result.error?.message || 'Verification failed',
+                    details: result.error?.type,
+                });
+            }
+        } catch (error) {
+            setVerificationResult({
+                success: false,
+                message: 'Network error or unable to connect to verification service',
+                details: error instanceof Error ? error.message : 'Unknown error',
+            });
+        } finally {
+            setVerifying(false);
+        }
     };
 
     return (
@@ -101,18 +133,53 @@ const PresetProviderFormDialog = ({
             <form onSubmit={onSubmit}>
                 <DialogContent sx={{ pb: 1 }}>
                     <Stack spacing={2.5}>
-                        {/* API Style Tabs */}
-                        <Tabs
-                            value={tabValue}
-                            onChange={handleTabChange}
-                            variant="fullWidth"
-                            sx={{ borderBottom: 1, borderColor: 'divider' }}
+                        {/* API Style Selection - Form Field Style */}
+                        <TextField
+                            select
+                            fullWidth
+                            size="small"
+                            label="API Style"
+                            value={data.apiStyle || undefined}
+                            onChange={(e) => {
+                                onChange('apiStyle', e.target.value as 'openai' | 'anthropic' | '');
+                                setVerificationResult(null);
+                            }}
+                            slotProps={{
+                                select: {
+                                    native: true,
+                                    displayEmpty: false,
+                                    sx: {
+                                        '& .MuiOutlinedInput-notchedOutline': {
+                                            borderColor: 'divider',
+                                        },
+                                        '&:hover .MuiOutlinedInput-notchedOutline': {
+                                            borderColor: 'primary.main',
+                                        },
+                                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                            borderColor: 'primary.main',
+                                            borderWidth: 2,
+                                        },
+                                    },
+                                }
+                            }}
+                            helperText={
+                                data.apiStyle === 'openai'
+                                    ? "Supports models from OpenAI, Azure OpenAI, and many other providers"
+                                    : data.apiStyle === 'anthropic'
+                                        ? "For Claude API and Claude-compatible AI providers"
+                                        : "Please select an API style to continue"
+                            }
+                            required={mode === 'add'}
                         >
-                            <Tab label="OpenAI Compatible" />
-                            <Tab label="Anthropic Compatible" />
-                        </Tabs>
+                            <option value={undefined}>
+                                Select API style...
+                            </option>
+                            <option value="openai">🤖 OpenAI Compatible</option>
+                            <option value="anthropic">🧠 Anthropic Compatible</option>
+                        </TextField>
 
-                        <TabPanel value={tabValue} index={0}>
+                        {/* Provider Selection based on API Style */}
+                        {data.apiStyle === 'openai' && (
                             <Autocomplete
                                 size="small"
                                 options={openaiProviders}
@@ -130,9 +197,8 @@ const PresetProviderFormDialog = ({
                                     />
                                 )}
                             />
-                        </TabPanel>
-
-                        <TabPanel value={tabValue} index={1}>
+                        )}
+                        {data.apiStyle === 'anthropic' && (
                             <Autocomplete
                                 size="small"
                                 options={anthropicProviders}
@@ -150,7 +216,7 @@ const PresetProviderFormDialog = ({
                                     />
                                 )}
                             />
-                        </TabPanel>
+                        )}
 
                         {/* Configuration Fields */}
                         <Stack spacing={2}>
@@ -159,7 +225,10 @@ const PresetProviderFormDialog = ({
                                 fullWidth
                                 label="API Key Name"
                                 value={data.name}
-                                onChange={(e) => onChange('name', e.target.value)}
+                                onChange={(e) => {
+                                    onChange('name', e.target.value);
+                                    setVerificationResult(null);
+                                }}
                                 required
                                 placeholder="e.g., OpenAI"
                             />
@@ -168,10 +237,13 @@ const PresetProviderFormDialog = ({
                                 fullWidth
                                 label="API Base URL"
                                 value={data.apiBase}
-                                onChange={(e) => onChange('apiBase', e.target.value)}
+                                onChange={(e) => {
+                                    onChange('apiBase', e.target.value);
+                                    setVerificationResult(null);
+                                }}
                                 required
                                 placeholder={
-                                    tabValue === 0
+                                    data.apiStyle === 'openai'
                                         ? "https://api.openai.com/v1"
                                         : "https://api.anthropic.com"
                                 }
@@ -185,11 +257,50 @@ const PresetProviderFormDialog = ({
                             label="API Key"
                             type="password"
                             value={data.token}
-                            onChange={(e) => onChange('token', e.target.value)}
+                            onChange={(e) => {
+                                onChange('token', e.target.value);
+                                // Clear verification result when token changes
+                                setVerificationResult(null);
+                            }}
                             required={mode === 'add'}
                             placeholder={mode === 'add' ? 'Your API token' : 'Leave empty to keep current token'}
                             helperText={mode === 'edit' && 'Leave empty to keep current token'}
                         />
+
+                        {/* Verification Result */}
+                        {verificationResult && (
+                            <Alert
+                                severity={verificationResult.success ? 'success' : 'error'}
+                                sx={{ mt: 1 }}
+                                action={
+                                    <IconButton
+                                        aria-label="close"
+                                        color="inherit"
+                                        size="small"
+                                        onClick={() => setVerificationResult(null)}
+                                    >
+                                        ×
+                                    </IconButton>
+                                }
+                            >
+                                <Box>
+                                    <Typography variant="body2" fontWeight="bold">
+                                        {verificationResult.message}
+                                    </Typography>
+                                    {verificationResult.details && (
+                                        <Typography variant="caption" display="block">
+                                            {verificationResult.details}
+                                        </Typography>
+                                    )}
+                                    {verificationResult.responseTime && (
+                                        <Typography variant="caption" display="block">
+                                            Response time: {verificationResult.responseTime}ms
+                                            {verificationResult.modelsCount && ` • ${verificationResult.modelsCount} models available`}
+                                        </Typography>
+                                    )}
+                                </Box>
+                            </Alert>
+                        )}
 
                         {/* Enabled Toggle (Edit mode only) */}
                         {mode === 'edit' && (
@@ -208,9 +319,29 @@ const PresetProviderFormDialog = ({
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2 }}>
                     <Button onClick={onClose}>Cancel</Button>
+                    <Button
+                        variant="outlined"
+                        onClick={handleVerify}
+                        disabled={verifying}
+                        size="small"
+                        startIcon={
+                            verifying ? (
+                                <CircularProgress size={16} />
+                            ) : verificationResult?.success ? (
+                                <CheckCircle color="success" />
+                            ) : verificationResult?.success === false ? (
+                                <Error color="error" />
+                            ) : (
+                                <Refresh />
+                            )
+                        }
+                    >
+                        {verifying ? 'Verifying...' : verificationResult?.success ? 'Verified' : verificationResult?.success === false ? 'Verify' : 'Verify'}
+                    </Button>
                     <Button type="submit" variant="contained" size="small">
                         {submitText || defaultSubmitText}
                     </Button>
+
                 </DialogActions>
             </form>
         </Dialog>
