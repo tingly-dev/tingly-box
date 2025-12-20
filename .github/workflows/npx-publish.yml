@@ -227,9 +227,10 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           VERSION="${{ steps.update-version.outputs.new_version }}"
-          echo "📦 Publishing @tinglydev/tingly-box@${VERSION} to npm..."
-          if npm view @tinglydev/tingly-box@"${VERSION}" version >/dev/null 2>&1; then
-            echo "ℹ️ @tinglydev/tingly-box@${VERSION} already exists on npm. Skipping publish."
+          
+          echo "📦 Publishing tingly-box@${VERSION} to npm..."
+          if npm view tingly-box@"${VERSION}" version >/dev/null 2>&1; then
+            echo "ℹ️ tingly-box@${VERSION} already exists on npm. Skipping publish."
           else
             npm publish --provenance --access public
           fi

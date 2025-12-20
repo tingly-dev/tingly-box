@@ -1,5 +1,5 @@
 {
-  "name": "@tinglydev/tingly-box",
+  "name": "tingly-box",
   "version": "1.6.1",
   "description": "High-performance AI gateway CLI - connect to multiple AI providers through a single API",
   "keywords": ["ai", "gateway", "openai", "anthropic", "claude", "cli", "tingly"],
