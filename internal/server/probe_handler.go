@@ -1,6 +1,8 @@
 package server
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -101,7 +103,7 @@ func (s *Server) HandleProbeProvider(c *gin.Context) {
 	})
 }
 
-// testProviderConnectivity tests if a provider's API key and connectivity are working
+// testProviderConnectivity tests if a provider's API key and connectivity are working using cascading validation
 func (s *Server) testProviderConnectivity(req *ProbeProviderRequest) (bool, string, int, error) {
 	// Create a temporary provider config
 	provider := &config.Provider{
@@ -112,13 +114,33 @@ func (s *Server) testProviderConnectivity(req *ProbeProviderRequest) (bool, stri
 		Enabled:  true,
 	}
 
-	// Try to fetch models from the provider
-	models, err := s.getProviderModelsForProbe(provider)
-	if err != nil {
-		return false, fmt.Sprintf("Failed to connect to provider: %s", err.Error()), 0, err
-	}
+	var lastErr error
 
-	return true, "API key is valid and accessible", len(models), nil
+	// Tier 1: Try models list endpoint
+	models, err := s.getProviderModelsForProbe(provider)
+	if err == nil && len(models) > 0 {
+		return true, "API key is valid and models endpoint accessible", len(models), nil
+	}
+	lastErr = err
+
+	// Tier 2: Try chat completion with minimal message
+	if err = s.probeChatEndpoint(provider); err == nil {
+		return true, "API key is valid and chat endpoint accessible", 0, nil
+	}
+	lastErr = err
+
+	// Tier 3: Try OPTIONS request for basic connectivity
+	if err = s.probeOptionsEndpoint(provider); err == nil {
+		return true, "API key is valid and endpoint accessible", 0, nil
+	}
+	lastErr = err
+
+	return false, fmt.Sprintf("Failed to connect to provider: %s", func() string {
+		if lastErr != nil {
+			return lastErr.Error()
+		}
+		return "unknown error"
+	}()), 0, lastErr
 }
 
 // getProviderModelsForProbe is a simplified version of getProviderModelsFromAPI for probing
@@ -363,4 +385,141 @@ func probeWithAnthropic(c *gin.Context, provider *config.Provider, model string)
 	}
 
 	return responseContent, tokenUsage, nil
+}
+
+// probeChatEndpoint tests chat completion with minimal request
+func (s *Server) probeChatEndpoint(provider *config.Provider) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	switch provider.APIStyle {
+	case config.APIStyleOpenAI:
+		return s.probeOpenAIChat(ctx, provider)
+	case config.APIStyleAnthropic:
+		return s.probeAnthropicChat(ctx, provider)
+	default:
+		return fmt.Errorf("unsupported API style: %s", provider.APIStyle)
+	}
+}
+
+// probeOptionsEndpoint tests with OPTIONS request
+func (s *Server) probeOptionsEndpoint(provider *config.Provider) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "OPTIONS", provider.APIBase, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create OPTIONS request: %w", err)
+	}
+
+	// Set authentication headers
+	if provider.APIStyle == config.APIStyleAnthropic {
+		req.Header.Set("x-api-key", provider.Token)
+		req.Header.Set("anthropic-version", "2023-06-01")
+	} else {
+		req.Header.Set("Authorization", "Bearer "+provider.Token)
+	}
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("OPTIONS request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Consider any 2xx status as success for OPTIONS
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return nil
+	}
+
+	return fmt.Errorf("OPTIONS request failed with status: %d", resp.StatusCode)
+}
+
+// probeOpenAIChat tests OpenAI chat endpoint with minimal message
+func (s *Server) probeOpenAIChat(ctx context.Context, provider *config.Provider) error {
+	apiBase := strings.TrimSuffix(provider.APIBase, "/")
+	if !strings.Contains(apiBase, "/v1") {
+		apiBase = apiBase + "/v1"
+	}
+
+	chatURL := apiBase + "/chat/completions"
+
+	requestBody := map[string]interface{}{
+		"model": "gpt-3.5-turbo", // Use common model name
+		"messages": []map[string]string{
+			{"role": "user", "content": "test"},
+		},
+		"max_tokens": 5,
+	}
+
+	bodyBytes, err := json.Marshal(requestBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", chatURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+provider.Token)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("chat request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusTooManyRequests {
+		return nil
+	}
+
+	return fmt.Errorf("chat endpoint failed with status: %d", resp.StatusCode)
+}
+
+// probeAnthropicChat tests Anthropic messages endpoint with minimal message
+func (s *Server) probeAnthropicChat(ctx context.Context, provider *config.Provider) error {
+	apiBase := strings.TrimSuffix(provider.APIBase, "/")
+	if !strings.Contains(apiBase, "/v1") {
+		apiBase = apiBase + "/v1"
+	}
+
+	messagesURL := apiBase + "/messages"
+
+	requestBody := map[string]interface{}{
+		"model": "claude-3-haiku-20240307", // Use common model name
+		"messages": []map[string]string{
+			{"role": "user", "content": "test"},
+		},
+		"max_tokens": 5,
+	}
+
+	bodyBytes, err := json.Marshal(requestBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", messagesURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("x-api-key", provider.Token)
+	req.Header.Set("anthropic-version", "2023-06-01")
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("messages request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusTooManyRequests {
+		return nil
+	}
+
+	return fmt.Errorf("messages endpoint failed with status: %d", resp.StatusCode)
 }
