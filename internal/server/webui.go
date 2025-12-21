@@ -43,8 +43,8 @@ func GetGlobalServer() *Server {
 func (s *Server) UseUIEndpoints() {
 	// UI page routes
 	s.engine.GET("/home", s.UseIndexHTML)
-	s.engine.GET("/credential", s.UseIndexHTML)
-	s.engine.GET("/rule", s.UseIndexHTML)
+	s.engine.GET("/provider", s.UseIndexHTML)
+	s.engine.GET("/routing", s.UseIndexHTML)
 	s.engine.GET("/system", s.UseIndexHTML)
 	s.engine.GET("/history", s.UseIndexHTML)
 
