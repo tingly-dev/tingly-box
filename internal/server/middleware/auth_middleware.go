@@ -1,14 +1,43 @@
-package server
+package middleware
 
 import (
 	"net/http"
 	"strings"
 
+	"tingly-box/internal/auth"
+	"tingly-box/internal/config"
+
 	"github.com/gin-gonic/gin"
 )
 
+// AuthMiddleware provides authentication middleware for different types of authentication
+type AuthMiddleware struct {
+	config     *config.Config
+	jwtManager *auth.JWTManager
+}
+
+// ErrorResponse represents an error response
+type ErrorResponse struct {
+	Error ErrorDetail `json:"error"`
+}
+
+// ErrorDetail represents error details
+type ErrorDetail struct {
+	Message string `json:"message"`
+	Type    string `json:"type"`
+	Code    string `json:"code,omitempty"`
+}
+
+// NewAuthMiddleware creates a new authentication middleware
+func NewAuthMiddleware(cfg *config.Config, jwtManager *auth.JWTManager) *AuthMiddleware {
+	return &AuthMiddleware{
+		config:     cfg,
+		jwtManager: jwtManager,
+	}
+}
+
 // UserAuthMiddleware middleware for UI and control API authentication
-func (s *Server) UserAuthMiddleware() gin.HandlerFunc {
+func (am *AuthMiddleware) UserAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -38,9 +67,9 @@ func (s *Server) UserAuthMiddleware() gin.HandlerFunc {
 		token := tokenParts[1]
 
 		// Check against global config user token first
-		globalConfig := s.config
-		if globalConfig != nil && globalConfig.HasUserToken() {
-			configToken := globalConfig.GetUserToken()
+		cfg := am.config
+		if cfg != nil && cfg.HasUserToken() {
+			configToken := cfg.GetUserToken()
 
 			// Remove "Bearer " prefix if present in the token
 			if strings.HasPrefix(token, "Bearer ") {
@@ -57,7 +86,7 @@ func (s *Server) UserAuthMiddleware() gin.HandlerFunc {
 		}
 
 		// If not matching global config user token, validate as JWT token
-		claims, err := s.jwtManager.ValidateAPIKey(token)
+		claims, err := am.jwtManager.ValidateAPIKey(token)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, ErrorResponse{
 				Error: ErrorDetail{
@@ -77,7 +106,7 @@ func (s *Server) UserAuthMiddleware() gin.HandlerFunc {
 
 // ModelAuthMiddleware middleware for OpenAI and Anthropic API authentication
 // The auth will support both `Authorization` and `X-Api-Key`
-func (s *Server) ModelAuthMiddleware() gin.HandlerFunc {
+func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		xApiKey := c.GetHeader("X-Api-Key")
@@ -99,9 +128,9 @@ func (s *Server) ModelAuthMiddleware() gin.HandlerFunc {
 		}
 
 		// Check against global config model token first
-		globalConfig := s.config
-		if globalConfig != nil && globalConfig.HasModelToken() {
-			configToken := globalConfig.GetModelToken()
+		cfg := am.config
+		if cfg != nil && cfg.HasModelToken() {
+			configToken := cfg.GetModelToken()
 
 			// Direct token comparison
 			if token == configToken || xApiKey == configToken {
@@ -113,7 +142,7 @@ func (s *Server) ModelAuthMiddleware() gin.HandlerFunc {
 		}
 
 		// If not matching global config model token, validate as JWT token
-		claims, err := s.jwtManager.ValidateAPIKey(token)
+		claims, err := am.jwtManager.ValidateAPIKey(token)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, ErrorResponse{
 				Error: ErrorDetail{
@@ -131,11 +160,11 @@ func (s *Server) ModelAuthMiddleware() gin.HandlerFunc {
 	}
 }
 
-// authMiddleware validates the authentication token
-func (s *Server) authMiddleware() gin.HandlerFunc {
+// AuthMiddleware validates the authentication token
+func (am *AuthMiddleware) AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get the auth token from global config
-		cfg := s.config
+		cfg := am.config
 		if cfg == nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,

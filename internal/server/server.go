@@ -31,6 +31,7 @@ type Server struct {
 	// middleware
 	statsMW         *middleware.StatsMiddleware
 	debugMW         *middleware.DebugMiddleware
+	authMW          *middleware.AuthMiddleware
 	loadBalancer    *LoadBalancer
 	loadBalancerAPI *LoadBalancerAPI
 
@@ -147,6 +148,9 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize statistics middleware with server reference
 	statsMW := middleware.NewStatsMiddleware(cfg)
 
+	// Initialize auth middleware
+	authMW := middleware.NewAuthMiddleware(cfg, jwtManager)
+
 	// Initialize load balancer
 	loadBalancer := NewLoadBalancer(statsMW, cfg)
 
@@ -155,6 +159,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 
 	// Update server with dependencies
 	server.statsMW = statsMW
+	server.authMW = authMW
 	server.loadBalancer = loadBalancer
 	server.loadBalancerAPI = loadBalancerAPI
 
@@ -261,7 +266,7 @@ func (s *Server) setupRoutes() {
 	openaiV1 := s.engine.Group("/openai/v1")
 	{
 		// Chat completions endpoint (OpenAI compatible)
-		openaiV1.POST("/chat/completions", s.ModelAuthMiddleware(), s.OpenAIChatCompletions)
+		openaiV1.POST("/chat/completions", s.authMW.ModelAuthMiddleware(), s.OpenAIChatCompletions)
 		// Models endpoint (OpenAI compatible)
 		//openaiV1.GET("/models", s.ModelAuthMiddleware(), s.ListModels)
 	}
@@ -270,7 +275,7 @@ func (s *Server) setupRoutes() {
 	openai := s.engine.Group("/openai")
 	{
 		// Chat completions endpoint (OpenAI compatible)
-		openai.POST("/chat/completions", s.ModelAuthMiddleware(), s.OpenAIChatCompletions)
+		openai.POST("/chat/completions", s.authMW.ModelAuthMiddleware(), s.OpenAIChatCompletions)
 		// Models endpoint (OpenAI compatible)
 		//openai.GET("/models", s.ModelAuthMiddleware(), s.ListModels)
 	}
@@ -279,16 +284,16 @@ func (s *Server) setupRoutes() {
 	anthropicV1 := s.engine.Group("/anthropic/v1")
 	{
 		// Chat completions endpoint (Anthropic compatible)
-		anthropicV1.POST("/messages", s.ModelAuthMiddleware(), s.AnthropicMessages)
+		anthropicV1.POST("/messages", s.authMW.ModelAuthMiddleware(), s.AnthropicMessages)
 		// Count tokens endpoint (Anthropic compatible)
-		anthropicV1.POST("/messages/count_tokens", s.ModelAuthMiddleware(), s.AnthropicCountTokens)
+		anthropicV1.POST("/messages/count_tokens", s.authMW.ModelAuthMiddleware(), s.AnthropicCountTokens)
 		// Models endpoint (Anthropic compatible)
 		//anthropicV1.GET("/models", s.ModelAuthMiddleware(), s.AnthropicModels)
 	}
 
 	// API routes for load balancer management
 	api := s.engine.Group("/api")
-	api.Use(s.UserAuthMiddleware()) // Require user authentication for management APIs
+	api.Use(s.authMW.UserAuthMiddleware()) // Require user authentication for management APIs
 	{
 		// Load balancer API routes
 		s.loadBalancerAPI.RegisterRoutes(api.Group("/v1"))

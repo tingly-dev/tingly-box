@@ -347,7 +347,7 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 
 	// Create authenticated API group
 	authAPI := manager.NewGroup("api", "v1", "")
-	authAPI.Router.Use(s.UserAuthMiddleware())
+	authAPI.Router.Use(s.authMW.UserAuthMiddleware())
 
 	// Health check endpoint
 	authAPI.GET("/info/health", s.GetHealthInfo,
