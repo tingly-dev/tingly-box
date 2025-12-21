@@ -370,6 +370,7 @@ func NewMockProviderTestSuite(t *testing.T) *MockProviderTestSuite {
 
 	// Add provider through the config
 	provider := &config.Provider{
+		UUID:    providerName,
 		Name:    providerName,
 		APIBase: suite.mockServer.GetURL(),
 		Token:   "mock-token",
