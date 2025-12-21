@@ -244,194 +244,6 @@
         }
       }
     },
-    "/api/v1/providers": {
-      "get": {
-        "tags": [
-          "providers"
-        ],
-        "summary": "Get all configured providers with masked tokens",
-        "description": "Get all configured providers with masked tokens",
-        "consumes": [
-          "application/json"
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "schema": {
-              "$ref": "#/definitions/ProvidersResponse"
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "providers"
-        ],
-        "summary": "Add a new provider configuration",
-        "description": "Add a new provider configuration",
-        "consumes": [
-          "application/json"
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "parameters": [
-          {
-            "name": "request",
-            "in": "body",
-            "description": "Request body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/AddProviderRequest"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "schema": {
-              "$ref": "#/definitions/AddProviderResponse"
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/providers/{name}": {
-      "get": {
-        "tags": [
-          "providers"
-        ],
-        "summary": "Get specific provider details with masked token",
-        "description": "Get specific provider details with masked token",
-        "consumes": [
-          "application/json"
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "parameters": [
-          {
-            "name": "name",
-            "in": "path",
-            "description": "Resource name",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "schema": {
-              "$ref": "#/definitions/ProviderResponse"
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "providers"
-        ],
-        "summary": "Update existing provider configuration",
-        "description": "Update existing provider configuration",
-        "consumes": [
-          "application/json"
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "parameters": [
-          {
-            "name": "name",
-            "in": "path",
-            "description": "Resource name",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "request",
-            "in": "body",
-            "description": "Request body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/UpdateProviderRequest"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "schema": {
-              "$ref": "#/definitions/UpdateProviderResponse"
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "providers"
-        ],
-        "summary": "Delete a provider configuration",
-        "description": "Delete a provider configuration",
-        "consumes": [
-          "application/json"
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "parameters": [
-          {
-            "name": "name",
-            "in": "path",
-            "description": "Resource name",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "schema": {
-              "$ref": "#/definitions/DeleteProviderResponse"
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/providers/{name}/toggle": {
-      "post": {
-        "tags": [
-          "providers"
-        ],
-        "summary": "Toggle provider enabled/disabled status",
-        "description": "Toggle provider enabled/disabled status",
-        "consumes": [
-          "application/json"
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "parameters": [
-          {
-            "name": "name",
-            "in": "path",
-            "description": "Resource name",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "schema": {
-              "$ref": "#/definitions/ToggleProviderResponse"
-            }
-          }
-        }
-      }
-    },
     "/api/v1/rule/{uuid}": {
       "get": {
         "tags": [
@@ -701,6 +513,198 @@
             "description": "Successful response",
             "schema": {
               "$ref": "#/definitions/TokenResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/providers": {
+      "get": {
+        "tags": [
+          "providers"
+        ],
+        "summary": "Get all configured providers with masked tokens",
+        "description": "Get all configured providers with masked tokens",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ProvidersResponse"
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "providers"
+        ],
+        "summary": "Add a new provider configuration",
+        "description": "Add a new provider configuration",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "request",
+            "in": "body",
+            "description": "Request body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/AddProviderRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/AddProviderResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/providers/{uuid}": {
+      "get": {
+        "tags": [
+          "providers"
+        ],
+        "summary": "Get specific provider details with masked token",
+        "description": "Get specific provider details with masked token",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "description": "Unique identifier (UUID)",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ProviderResponse"
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "providers"
+        ],
+        "summary": "Update existing provider configuration",
+        "description": "Update existing provider configuration",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "description": "Unique identifier (UUID)",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          },
+          {
+            "name": "request",
+            "in": "body",
+            "description": "Request body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/UpdateProviderRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/UpdateProviderResponse"
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "providers"
+        ],
+        "summary": "Delete a provider configuration",
+        "description": "Delete a provider configuration",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "description": "Unique identifier (UUID)",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/DeleteProviderResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/providers/{uuid}/toggle": {
+      "post": {
+        "tags": [
+          "providers"
+        ],
+        "summary": "Toggle provider enabled/disabled status",
+        "description": "Toggle provider enabled/disabled status",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "description": "Unique identifier (UUID)",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ToggleProviderResponse"
             }
           }
         }
@@ -1320,9 +1324,15 @@
           "type": "string",
           "description": "Field token",
           "example": "sk-***...***"
+        },
+        "uuid": {
+          "type": "string",
+          "description": "Field uuid",
+          "example": "0123456789ABCDEF"
         }
       },
       "required": [
+        "uuid",
         "name",
         "api_base",
         "api_style",
@@ -1797,18 +1807,6 @@
   },
   "tags": [
     {
-      "name": "models",
-      "description": "Operations related to models"
-    },
-    {
-      "name": "token",
-      "description": "Operations related to token"
-    },
-    {
-      "name": "providers",
-      "description": "Operations related to providers"
-    },
-    {
       "name": "server",
       "description": "Operations related to server"
     },
@@ -1821,8 +1819,20 @@
       "description": "Operations related to history"
     },
     {
+      "name": "models",
+      "description": "Operations related to models"
+    },
+    {
       "name": "testing",
       "description": "Operations related to testing"
+    },
+    {
+      "name": "providers",
+      "description": "Operations related to providers"
+    },
+    {
+      "name": "token",
+      "description": "Operations related to token"
     },
     {
       "name": "api",
