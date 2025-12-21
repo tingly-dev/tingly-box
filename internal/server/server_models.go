@@ -210,6 +210,7 @@ type ProbeProviderResponseData struct {
 
 // ProviderResponse represents a provider configuration with masked token
 type ProviderResponse struct {
+	UUID     string `json:"uuid" example:"0123456789ABCDEF"`
 	Name     string `json:"name" example:"openai"`
 	APIBase  string `json:"api_base" example:"https://api.openai.com/v1"`
 	APIStyle string `json:"api_style" example:"openai"`
