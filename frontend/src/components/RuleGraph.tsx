@@ -56,6 +56,7 @@ interface RuleGraphProps {
     record: ConfigRecord;
     providers: any[];
     providerModels: any;
+    providerUuidToName: { [uuid: string]: string };
     saving: boolean;
     expanded: boolean;
     recordUuid: string;  // Add recordUuid prop
@@ -63,7 +64,7 @@ interface RuleGraphProps {
     onUpdateProvider: (recordId: string, providerId: string, field: keyof ConfigProvider, value: any) => void;
     onAddProvider: () => void;
     onDeleteProvider: (recordId: string, providerId: string) => void;
-    onRefreshModels: (providerName: string) => void;
+    onRefreshModels: (providerUuid: string) => void;
     onSave: () => void;
     onDelete: () => void;
     onReset: () => void;
@@ -283,7 +284,8 @@ const ProviderNodeComponent: React.FC<{
     active: boolean;
     onDelete: () => void;
     onRefreshModels: () => void;
-}> = ({ provider, apiStyle, availableProviders, onUpdate, providerModels, active, onDelete, onRefreshModels }) => {
+    providerUuidToName: { [uuid: string]: string };
+}> = ({ provider, apiStyle, availableProviders, onUpdate, providerModels, active, onDelete, onRefreshModels, providerUuidToName }) => {
     const [editMode, setEditMode] = React.useState({
         provider: false,
         model: false
@@ -328,9 +330,9 @@ const ProviderNodeComponent: React.FC<{
                     <TextField
                         select
                         label="Provider"
-                        value={provider.provider}
+                        value={provider.provider} // This is UUID
                         onChange={(e) => {
-                            onUpdate('provider', e.target.value);
+                            onUpdate('provider', e.target.value); // Store UUID
                             setEditMode({ ...editMode, provider: false });
                         }}
                         onBlur={() => setEditMode({ ...editMode, provider: false })}
@@ -347,8 +349,8 @@ const ProviderNodeComponent: React.FC<{
                         }}
                     >
                         {availableProviders.map((p) => (
-                            <MenuItem key={p.name} value={p.name}>
-                                {p.name}
+                            <MenuItem key={p.uuid} value={p.uuid}> {/* Use UUID as value */}
+                                {p.name} {/* Display provider name */}
                             </MenuItem>
                         ))}
                     </TextField>
@@ -381,7 +383,7 @@ const ProviderNodeComponent: React.FC<{
                                 fontSize: '0.9rem'
                             }}
                         >
-                            {provider.provider || 'Select provider'}
+                            {providerUuidToName[provider.provider] || 'Select provider'} {/* Convert UUID to name for display */}
                         </Typography>
                     </Box>
                 )}
@@ -404,7 +406,7 @@ const ProviderNodeComponent: React.FC<{
                             fullWidth
                             autoFocus
                         >
-                            {(providerModels[provider.provider]?.models || []).map((model: string) => (
+                            {(providerModels[providerUuidToName[provider.provider]]?.models || []).map((model: string) => (
                                 <MenuItem key={model} value={model}>
                                     {model}
                                 </MenuItem>
@@ -505,6 +507,7 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
     record,
     providers,
     providerModels,
+    providerUuidToName,
     saving,
     expanded,
     recordUuid,
@@ -551,8 +554,8 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
         }, 100);
     };
 
-    const getApiStyle = (providerName: string) => {
-        const provider = providers.find(p => p.name === providerName);
+    const getApiStyle = (providerUuid: string) => {
+        const provider = providers.find(p => p.uuid === providerUuid);
         return provider?.api_style || 'openai';
     };
 
@@ -721,6 +724,7 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                                                     onUpdate={(field, value) => onUpdateProvider(recordUuid, provider.uuid, field, value)}
                                                     onDelete={() => onDeleteProvider(recordUuid, provider.uuid)}
                                                     onRefreshModels={() => onRefreshModels(provider.provider)}
+                                                    providerUuidToName={providerUuidToName}
                                                 />
                                             ))}
                                         </Box>
@@ -848,6 +852,7 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                                 providers={record.providers}
                                 availableProviders={providers}
                                 providerModels={providerModels}
+                                providerUuidToName={providerUuidToName}
                                 active={record.active}
                                 onAddProvider={onAddProvider}
                                 onDeleteProvider={onDeleteProvider}

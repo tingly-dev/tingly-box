@@ -21,6 +21,7 @@ const ProviderPage = () => {
     const [dialogOpen, setDialogOpen] = useState(false);
     const [dialogMode, setDialogMode] = useState<'add' | 'edit'>('add');
     const [providerFormData, setProviderFormData] = useState<ProviderFormData>({
+        uuid: undefined,
         name: '',
         apiBase: '',
         apiStyle: undefined,
@@ -39,6 +40,7 @@ const ProviderPage = () => {
     const handleAddProviderClick = () => {
         setDialogMode('add');
         setProviderFormData({
+            uuid: undefined,
             name: '',
             apiBase: '',
             apiStyle: undefined,
@@ -72,7 +74,7 @@ const ProviderPage = () => {
 
         const result = dialogMode === 'add'
             ? await api.addProvider(providerData)
-            : await api.updateProvider(providerFormData.name, {
+            : await api.updateProvider(providerFormData.uuid!, {
                 ...providerData,
                 token: providerFormData.token || undefined,
             });
@@ -86,8 +88,8 @@ const ProviderPage = () => {
         }
     };
 
-    const handleDeleteProvider = async (name: string) => {
-        const result = await api.deleteProvider(name);
+    const handleDeleteProvider = async (uuid: string) => {
+        const result = await api.deleteProvider(uuid);
 
         if (result.success) {
             showNotification('Provider deleted successfully!', 'success');
@@ -97,8 +99,8 @@ const ProviderPage = () => {
         }
     };
 
-    const handleToggleProvider = async (name: string) => {
-        const result = await api.toggleProvider(name);
+    const handleToggleProvider = async (uuid: string) => {
+        const result = await api.toggleProvider(uuid);
 
         if (result.success) {
             showNotification(result.message, 'success');
@@ -108,13 +110,14 @@ const ProviderPage = () => {
         }
     };
 
-    const handleEditProvider = async (name: string) => {
-        const result = await api.getProvider(name);
+    const handleEditProvider = async (uuid: string) => {
+        const result = await api.getProvider(uuid);
 
         if (result.success) {
             const provider = result.data;
             setDialogMode('edit');
             setProviderFormData({
+                uuid: provider.uuid,
                 name: provider.name,
                 apiBase: provider.api_base,
                 apiStyle: provider.api_style || 'openai',

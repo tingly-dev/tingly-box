@@ -36,9 +36,9 @@ const Home = () => {
     const [rule, setRule] = useState<any>({});
     const [providerModels, setProviderModels] = useState<any>({});
     const [loading, setLoading] = useState(true);
-    const [selectedOption, setSelectedOption] = useState<any>({ provider: "", model: "" });
+    const [selectedOption, setSelectedOption] = useState<any>({ provider: "", model: "" }); // provider is now UUID
     const [baseUrl, setBaseUrl] = useState<string>("");
-    const [refreshingProviders, setRefreshingProviders] = useState<string[]>([]);
+    const [refreshingProviders, setRefreshingProviders] = useState<string[]>([]); // These are UUIDs
 
     // Server info states
     const [generatedToken, setGeneratedToken] = useState<string>('');
@@ -50,6 +50,15 @@ const Home = () => {
     const [bannerProvider, setBannerProvider] = useState<string>('');
     const [bannerModel, setBannerModel] = useState<string>('');
     const [showBanner, setShowBanner] = useState(false);
+
+    // Create lookup maps for provider UUID to name
+    const providerUuidToName = React.useMemo(() => {
+        const map: { [uuid: string]: string } = {};
+        providers.forEach(provider => {
+            map[provider.uuid] = provider.name;
+        });
+        return map;
+    }, [providers]);
 
     // Unified notification state
     const [notification, setNotification] = useState<{
@@ -73,8 +82,13 @@ const Home = () => {
         setProbeResult(null);
 
         try {
-            console.log(selectedOption.provider, selectedOption.model);
-            const result = await api.probeModel(selectedOption.provider, selectedOption.model);
+            const providerName = providerUuidToName[selectedOption.provider];
+            if (!providerName) {
+                throw new Error('Provider not found');
+            }
+
+            console.log(providerName, selectedOption.model);
+            const result = await api.probeModel(providerName, selectedOption.model);
             setProbeResult(result);
         } catch (error) {
             console.error('Probe error:', error);
@@ -88,7 +102,7 @@ const Home = () => {
         } finally {
             setIsProbing(false);
         }
-    }, [selectedOption.provider, selectedOption.model]);
+    }, [selectedOption.provider, selectedOption.model, providerUuidToName]);
 
     // Helper function to show notifications
     const showNotification = (message: string, severity: 'success' | 'info' | 'warning' | 'error' = 'info', autoHideDuration: number = 6000) => {
@@ -235,7 +249,7 @@ const Home = () => {
 
     // Composition handlers for provider select
     const handleModelSelect = async (provider: any, model: string) => {
-        setSelectedOption({ provider: provider.name, model: model });
+        setSelectedOption({ provider: provider.uuid, model: model });
 
         try {
             // Update the "tingly" rule with the selected provider and model
@@ -245,7 +259,7 @@ const Home = () => {
                 active: true,
                 services: [
                     {
-                        provider: provider.name,
+                        provider: provider.uuid,
                         model: model,
                         weight: 0,
                         active: true,
@@ -291,8 +305,8 @@ const Home = () => {
 
     const handleModelRefresh = async (provider: any) => {
         try {
-            // Add provider to refreshing list
-            setRefreshingProviders(prev => [...prev, provider.name]);
+            // Add provider UUID to refreshing list
+            setRefreshingProviders(prev => [...prev, provider.uuid]);
 
             const result = await api.getProviderModelsByName(provider.name);
             if (result.success) {
@@ -306,8 +320,8 @@ const Home = () => {
             console.error("Error refreshing models:", error);
             showNotification(`Error refreshing models for ${provider.name}`, 'error');
         } finally {
-            // Remove provider from refreshing list
-            setRefreshingProviders(prev => prev.filter(p => p !== provider.name));
+            // Remove provider UUID from refreshing list
+            setRefreshingProviders(prev => prev.filter(p => p !== provider.uuid));
         }
     };
 
@@ -522,6 +536,7 @@ const Home = () => {
                                 onSelected={(opt: ProviderSelectTabOption) => handleModelSelect(opt.provider, opt.model || "")}
                                 onRefresh={handleModelRefresh}
                                 refreshingProviders={refreshingProviders}
+                                providerUuidToName={providerUuidToName}
                             />
 
                             {/* Probe Component - only show when provider and model are selected */}

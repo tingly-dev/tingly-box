@@ -35,25 +35,27 @@ interface ProviderConfigProps {
     providers: ConfigProvider[];
     availableProviders: any[];
     providerModels: any;
+    providerUuidToName: { [uuid: string]: string };
     active: boolean;
     onAddProvider: () => void;
     onDeleteProvider: (providerId: string) => void;
     onUpdateProvider: (providerId: string, field: keyof ConfigProvider, value: any) => void;
-    onRefreshModels: (providerName: string) => void;
+    onRefreshModels: (providerUuid: string) => void;
 }
 
 const ProviderConfig: React.FC<ProviderConfigProps> = ({
     providers,
     availableProviders,
     providerModels,
+    providerUuidToName,
     active,
     onAddProvider,
     onDeleteProvider,
     onUpdateProvider,
     onRefreshModels
 }) => {
-    const getApiStyle = (providerName: string) => {
-        const provider = availableProviders.find(p => p.name === providerName);
+    const getApiStyle = (providerUuid: string) => {
+        const provider = availableProviders.find(p => p.uuid === providerUuid);
         return provider?.api_style || 'openai';
     };
 
@@ -110,12 +112,13 @@ const ProviderConfig: React.FC<ProviderConfigProps> = ({
                             key={provider.uuid}
                             provider={provider}
                             apiStyle={getApiStyle(provider.provider)}
-                            models={providerModels[provider.provider]?.models || []}
+                            models={providerModels[providerUuidToName[provider.provider]]?.models || []}
                             availableProviders={availableProviders}
                             active={active}
                             onUpdate={(field, value) => onUpdateProvider(provider.uuid, field, value)}
                             onDelete={() => onDeleteProvider(provider.uuid)}
                             onRefreshModels={() => onRefreshModels(provider.provider)}
+                            providerUuidToName={providerUuidToName}
                         />
                     ))}
                 </Box>
@@ -133,6 +136,7 @@ interface ProviderRowProps {
     onUpdate: (field: keyof ConfigProvider, value: any) => void;
     onDelete: () => void;
     onRefreshModels: () => void;
+    providerUuidToName: { [uuid: string]: string };
 }
 
 const ProviderRow: React.FC<ProviderRowProps> = ({
@@ -143,7 +147,8 @@ const ProviderRow: React.FC<ProviderRowProps> = ({
     active,
     onUpdate,
     onDelete,
-    onRefreshModels
+    onRefreshModels,
+    providerUuidToName
 }) => {
     const { saveCustomModel, getCustomModels } = useCustomModels();
 
@@ -209,7 +214,7 @@ const ProviderRow: React.FC<ProviderRowProps> = ({
             <FormControl size="small" disabled={!active} fullWidth>
                 <InputLabel shrink sx={{ fontSize: '0.875rem',backgroundColor: 'white',  }}>Provider</InputLabel>
                 <Select
-                    value={provider.provider}
+                    value={provider.provider} // This is UUID
                     onChange={(e) => onUpdate('provider', e.target.value)}
                     label="Key"
                     size="small"
@@ -225,8 +230,8 @@ const ProviderRow: React.FC<ProviderRowProps> = ({
                 >
                     <MenuItem value="">Select API Key</MenuItem>
                     {availableProviders.map((p) => (
-                        <MenuItem key={p.name} value={p.name}>
-                            {p.name}
+                        <MenuItem key={p.uuid} value={p.uuid}> {/* Use UUID as value */}
+                            {p.name} {/* Display provider name */}
                         </MenuItem>
                     ))}
                 </Select>

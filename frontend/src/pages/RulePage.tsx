@@ -12,7 +12,7 @@ import {
     Stack,
     Typography
 } from '@mui/material';
-import { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { PageLayout } from '../components/PageLayout';
 import RuleGraph from '../components/RuleGraph'
@@ -51,6 +51,23 @@ const RulePage = () => {
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [recordToDelete, setRecordToDelete] = useState<string | null>(null);
     const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+
+    // Create lookup maps for provider UUID to name and name to UUID
+    const providerUuidToName = useMemo(() => {
+        const map: { [uuid: string]: string } = {};
+        providers.forEach(provider => {
+            map[provider.uuid] = provider.name;
+        });
+        return map;
+    }, [providers]);
+
+    const providerNameToUuid = useMemo(() => {
+        const map: { [name: string]: string } = {};
+        providers.forEach(provider => {
+            map[provider.name] = provider.uuid;
+        });
+        return map;
+    }, [providers]);
 
     const loadData = useCallback(async () => {
         setLoading(true);
@@ -94,7 +111,7 @@ const RulePage = () => {
                     providers: (rule.services || []).map((service: any) => ({
                         // Use service identifier if available, otherwise generate one
                         uuid: service.id || service.uuid || crypto.randomUUID(),
-                        provider: service.provider || '',
+                        provider: service.provider || '', // This is now UUID, not name
                         model: service.model || '',
                         isManualInput: false,
                         weight: service.weight || 0,
@@ -128,7 +145,8 @@ const RulePage = () => {
 
         for (const provider of record.providers) {
             if (provider.provider && !provider.model) {
-                setMessage({ type: 'error', text: `Please select a model for provider ${provider.provider}` });
+                const providerName = providerUuidToName[provider.provider] || provider.provider;
+                setMessage({ type: 'error', text: `Please select a model for provider ${providerName}` });
                 return;
             }
         }
@@ -142,7 +160,7 @@ const RulePage = () => {
                 response_model: record.responseModel,
                 active: record.active,
                 services: record.providers.map(provider => ({
-                    provider: provider.provider,
+                    provider: provider.provider, // This is now UUID
                     model: provider.model,
                     weight: provider.weight || 0,
                     active: provider.active !== undefined ? provider.active : true,
@@ -293,7 +311,10 @@ const RulePage = () => {
         // URL params are only for initial load from bookmarks
     };
 
-    const handleRefreshProviderModels = async (providerName: string) => {
+    const handleRefreshProviderModels = async (providerUuid: string) => {
+        if (!providerUuid) return;
+
+        const providerName = providerUuidToName[providerUuid];
         if (!providerName) return;
 
         try {
@@ -372,6 +393,7 @@ const RulePage = () => {
                                     recordUuid={record.uuid}
                                     providers={providers}
                                     providerModels={providerModels}
+                                    providerUuidToName={providerUuidToName}
                                     saving={savingRecords.has(record.uuid)}
                                     expanded={expandedCards.has(record.uuid)}
                                     onUpdateRecord={(field, value) => updateConfigRecord(record.uuid, field, value)}

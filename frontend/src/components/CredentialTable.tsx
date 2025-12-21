@@ -27,11 +27,11 @@ import type { Provider, ProviderModelsData } from '../types/provider';
 interface ProviderTableProps {
     providers: Provider[];
     providerModels?: ProviderModelsData;
-    onEdit?: (providerName: string) => void;
-    onToggle?: (providerName: string) => void;
-    onDelete?: (providerName: string) => void;
-    onSetDefault?: (providerName: string) => void;
-    onFetchModels?: (providerName: string) => void;
+    onEdit?: (providerUuid: string) => void;
+    onToggle?: (providerUuid: string) => void;
+    onDelete?: (providerUuid: string) => void;
+    onSetDefault?: (providerUuid: string) => void;
+    onFetchModels?: (providerUuid: string) => void;
 }
 
 interface TokenMenuState {
@@ -48,6 +48,7 @@ interface TokenModalState {
 
 interface DeleteModalState {
     open: boolean;
+    providerUuid: string;
     providerName: string;
 }
 
@@ -66,15 +67,16 @@ const CredentialTable = ({
     });
     const [deleteModal, setDeleteModal] = useState<DeleteModalState>({
         open: false,
+        providerUuid: '',
         providerName: ''
     });
 
     // Function to fetch full token for a provider
-    const fetchFullToken = async (providerName: string): Promise<string> => {
+    const fetchFullToken = async (providerUuid: string): Promise<string> => {
         try {
-            const response = await api.getProvider(providerName)
+            const response = await api.getProvider(providerUuid)
             if (!response.success) {
-                throw new Error(`Failed to fetch token for ${providerName}`);
+                throw new Error(`Failed to fetch token for provider ${providerUuid}`);
             }
             const data = response.data;
             return data.token || '';
@@ -84,45 +86,55 @@ const CredentialTable = ({
         }
     };
 
-    const handleTokenMenuClick = (event: React.MouseEvent<HTMLElement>, providerName: string) => {
+    const handleTokenMenuClick = (event: React.MouseEvent<HTMLElement>, providerUuid: string) => {
         setTokenStates(prev => ({
             ...prev,
-            [providerName]: {
+            [providerUuid]: {
                 anchor: event.currentTarget,
-                showToken: prev[providerName]?.showToken || false
+                showToken: prev[providerUuid]?.showToken || false
             }
         }));
     };
 
-    const handleTokenMenuClose = (providerName: string) => {
+    const handleTokenMenuClose = (providerUuid: string) => {
         setTokenStates(prev => ({
             ...prev,
-            [providerName]: {
-                ...prev[providerName],
+            [providerUuid]: {
+                ...prev[providerUuid],
                 anchor: null
             }
         }));
     };
 
-    const handleViewToken = async (providerName: string) => {
+    const handleViewToken = async (providerUuid: string) => {
         // Open modal with loading state
         setTokenModal({
             open: true,
-            providerName: providerName,
+            providerName: '', // Will be set later after we get provider data
             token: '',
             loading: true
         });
 
         try {
             // Fetch the full token from API
-            const fullToken = await fetchFullToken(providerName);
+            const fullToken = await fetchFullToken(providerUuid);
 
-            // Update modal with the fetched token
-            setTokenModal(prev => ({
-                ...prev,
-                token: fullToken,
-                loading: false
-            }));
+            // Also fetch provider data to get the name for display
+            const providerResponse = await api.getProvider(providerUuid);
+            if (providerResponse.success) {
+                setTokenModal(prev => ({
+                    ...prev,
+                    providerName: providerResponse.data.name,
+                    token: fullToken,
+                    loading: false
+                }));
+            } else {
+                setTokenModal(prev => ({
+                    ...prev,
+                    token: fullToken,
+                    loading: false
+                }));
+            }
         } catch (error) {
             console.error('Failed to fetch token:', error);
             // Update modal with error state
@@ -132,7 +144,7 @@ const CredentialTable = ({
                 loading: false
             }));
         }
-        handleTokenMenuClose(providerName);
+        handleTokenMenuClose(providerUuid);
     };
 
     const handleCloseTokenModal = () => {
@@ -144,9 +156,14 @@ const CredentialTable = ({
         });
     };
 
-    const handleDeleteClick = (providerName: string) => {
+    const handleDeleteClick = async (providerUuid: string) => {
+        // Get provider name for display in the delete modal
+        const provider = providers.find(p => p.uuid === providerUuid);
+        const providerName = provider?.name || 'Unknown Provider';
+
         setDeleteModal({
             open: true,
+            providerUuid,
             providerName
         });
     };
@@ -154,19 +171,20 @@ const CredentialTable = ({
     const handleCloseDeleteModal = () => {
         setDeleteModal({
             open: false,
+            providerUuid: '',
             providerName: ''
         });
     };
 
     const handleConfirmDelete = () => {
-        if (onDelete && deleteModal.providerName) {
-            onDelete(deleteModal.providerName);
+        if (onDelete && deleteModal.providerUuid) {
+            onDelete(deleteModal.providerUuid);
         }
         handleCloseDeleteModal();
     };
 
     const formatTokenDisplay = (provider: Provider) => {
-        const tokenState = tokenStates[provider.name];
+        const tokenState = tokenStates[provider.uuid];
         const showToken = tokenState?.showToken || false;
 
         if (!provider.token) return 'Not set';
@@ -193,7 +211,7 @@ const CredentialTable = ({
                 </TableHead>
                 <TableBody>
                     {providers.map((provider) => (
-                        <TableRow key={provider.name}>
+                        <TableRow key={provider.uuid}>
                             <TableCell>
                                 <Stack direction="row" alignItems="center" spacing={1}>
                                     {provider.enabled ? (
@@ -224,7 +242,7 @@ const CredentialTable = ({
                                             <Tooltip title="View Token">
                                                 <IconButton
                                                     size="small"
-                                                    onClick={() => handleViewToken(provider.name)}
+                                                    onClick={() => handleViewToken(provider.uuid)}
                                                     sx={{ p: 0.25 }}
                                                 >
                                                     <Visibility fontSize="small" />
@@ -232,7 +250,7 @@ const CredentialTable = ({
                                             </Tooltip>
                                             {/* <IconButton
                                                 size="small"
-                                                onClick={(e) => handleTokenMenuClick(e, provider.name)}
+                                                onClick={(e) => handleTokenMenuClick(e, provider.uuid)}
                                                 sx={{ p: 0.25 }}
                                             >
                                                 <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
@@ -276,7 +294,7 @@ const CredentialTable = ({
                                             <IconButton
                                                 size="small"
                                                 color="primary"
-                                                onClick={() => onEdit(provider.name)}
+                                                onClick={() => onEdit(provider.uuid)}
                                             >
                                                 <Edit fontSize="small" />
                                             </IconButton>
@@ -287,7 +305,7 @@ const CredentialTable = ({
                                             <IconButton
                                                 size="small"
                                                 color="error"
-                                                onClick={() => handleDeleteClick(provider.name)}
+                                                onClick={() => handleDeleteClick(provider.uuid)}
                                             >
                                                 <Delete fontSize="small" />
                                             </IconButton>
@@ -301,7 +319,7 @@ const CredentialTable = ({
                                         control={
                                             <Switch
                                                 checked={provider.enabled}
-                                                onChange={() => onToggle?.(provider.name)}
+                                                onChange={() => onToggle?.(provider.uuid)}
                                                 size="small"
                                                 color="success"
                                             />
@@ -320,12 +338,12 @@ const CredentialTable = ({
             </Table>
 
             {/* Token context menus for each provider */}
-            {Object.entries(tokenStates).map(([providerName, tokenState]) => (
+            {Object.entries(tokenStates).map(([providerUuid, tokenState]) => (
                 <Menu
-                    key={providerName}
+                    key={providerUuid}
                     anchorEl={tokenState.anchor}
                     open={Boolean(tokenState.anchor)}
-                    onClose={() => handleTokenMenuClose(providerName)}
+                    onClose={() => handleTokenMenuClose(providerUuid)}
                     anchorOrigin={{
                         vertical: 'bottom',
                         horizontal: 'right',
@@ -335,7 +353,7 @@ const CredentialTable = ({
                         horizontal: 'right',
                     }}
                 >
-                    <MenuItem onClick={() => handleViewToken(providerName)}>
+                    <MenuItem onClick={() => handleViewToken(providerUuid)}>
                         <Visibility fontSize="small" sx={{ mr: 1 }} />
                         View Token
                     </MenuItem>

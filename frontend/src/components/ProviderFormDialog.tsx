@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 
 export interface ProviderFormData {
+    uuid?: string; // Only used for edit mode
     name: string;
     apiBase: string;
     apiStyle: 'openai' | 'anthropic' | undefined;

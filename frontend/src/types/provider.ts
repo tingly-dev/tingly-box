@@ -1,5 +1,6 @@
 
 export interface Provider {
+    uuid: string;
     name: string;
     enabled: boolean;
     api_base: string;
