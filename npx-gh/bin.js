@@ -9,6 +9,9 @@ import { Readable } from "stream";
 // Configuration for binary downloads
 const BASE_URL = "https://github.com/tingly-dev/tingly-box/releases/download/";
 
+// GitHub API endpoint for getting latest release info
+const LATEST_RELEASE_API_URL = "https://github.com/tingly-dev/tingly-box/releases/download/";
+
 // Default branch to use when not specified via transport version
 // This will be replaced during the NPX build process
 const BINARY_RELEASE_BRANCH = "latest";
@@ -250,13 +253,13 @@ function cacheDir() {
 
 // gets the latest version number for transport
 async function getLatestVersion() {
-	const releaseUrl = "";
-	const res = await fetch(releaseUrl);
-	if (!res.ok) {
-		return null;
-	}
-	const data = await res.json();
-	return data.name;
+    const releaseUrl = LATEST_RELEASE_API_URL;
+    const res = await fetch(releaseUrl);
+    if (!res.ok) {
+        return null;
+    }
+    const data = await res.json();
+    return data.name;
 }
 
 function formatBytes(bytes) {
@@ -311,35 +314,85 @@ function formatBytes(bytes) {
 		console.log(`✅ Downloaded and extracted to ${binaryPath}`);
 	}
 
-	// Test if the binary can execute
-	try {
-		execFileSync(binaryPath, remainingArgs, { stdio: "inherit" });
-		binaryWorking = true;
-	} catch (execError) {
-		lastError = execError;
-		binaryWorking = false;
-	}
+    // Test if the binary can execute
+    // Debug: Show binary location
+    console.log(`🔍 Executing binary: ${binaryPath}`);
 
-	if (!binaryWorking) {
-		console.error(`❌ Failed to start Tingly-Box. Error:`, lastError.message);
+    try {
+        execFileSync(binaryPath, remainingArgs, {
+            stdio: "inherit",
+            encoding: 'utf8'
+        });
 
-		// Show critical error details for troubleshooting
-		if (lastError.code) {
-			console.error(`Error code: ${lastError.code}`);
-		}
-		if (lastError.errno) {
-			console.error(`System error: ${lastError.errno}`);
-		}
-		if (lastError.signal) {
-			console.error(`Signal: ${lastError.signal}`);
-		}
+        // If we reach here, the binary executed successfully
+        binaryWorking = true;
 
-		// For specific Linux issues, show diagnostic info
-		if (process.platform === "linux" && (lastError.code === "ENOENT" || lastError.code === "ETXTBSY")) {
-			console.error(`\n💡 This appears to be a Linux compatibility issue.`);
-			console.error(`   The binary may be incompatible with your Linux distribution.`);
-		}
+        // If execFileSync completes without throwing, the binary exited with code 0
+        // No need to explicitly exit here, let the script continue
+    } catch (execError) {
+        lastError = execError;
+        binaryWorking = false;
 
-		process.exit(lastError.status || 1);
-	}
+        // Extract detailed error information
+        const errorCode = execError.code;
+        const errorSignal = execError.signal;
+        const errorMessage = execError.message;
+        const errorStatus = execError.status;
+
+        // Create comprehensive error output
+        console.error(`\n❌ Tingly-Box execution failed`);
+        console.error(`┌─ Error Details:`);
+        console.error(`│  Message: ${errorMessage}`);
+
+        if (errorCode) {
+            console.error(`│  Code: ${errorCode}`);
+            // Provide specific guidance for common error codes
+            switch (errorCode) {
+                case 'ENOENT':
+                    console.error(`│  └─ Binary not found at: ${binaryPath}`);
+                    console.error(`│     Try removing the cached binary: rm -rf "${join(cacheDir(), 'tingly-box')}"`);
+                    break;
+                case 'EACCES':
+                    console.error(`│  └─ Permission denied. Check binary permissions.`);
+                    break;
+                case 'ETXTBSY':
+                    console.error(`│  └─ Binary file is busy or being modified.`);
+                    break;
+                default:
+                    console.error(`│  └─ System error occurred.`);
+            }
+        }
+
+        if (errorStatus !== null && errorStatus !== undefined) {
+            console.error(`│  Exit Code: ${errorStatus}`);
+            console.error(`│  └─ The binary exited with non-zero status code.`);
+        }
+
+        if (errorSignal) {
+            console.error(`│  Signal: ${errorSignal}`);
+            console.error(`│  └─ The binary was terminated by a signal.`);
+        }
+
+        console.error(`└─ Binary Path: ${binaryPath}`);
+        console.error(`   Platform: ${process.platform} (${process.arch})`);
+
+        // Provide additional help for common scenarios
+        if (process.platform === "linux") {
+            console.error(`\n💡 Linux Troubleshooting:`);
+            console.error(`   • Check if required libraries are installed:`);
+            console.error(`     - For glibc issues: try on a different Linux distribution`);
+            console.error(`     - For missing dependencies: install required system packages`);
+            console.error(`   • Try running with strace: strace -o trace.log "${binaryPath}"`);
+        }
+
+        // Suggest retry
+        console.error(`\n🔄 To retry, run: npx tingly-box ${remainingArgs.join(' ')}`);
+        console.error(`   Or clear cache first: rm -rf "${join(cacheDir(), 'tingly-box')}"`);
+    }
+
+    if (!binaryWorking) {
+        // Exit with the binary's exit code if available, otherwise default to 1
+        const exitCode = lastError.status !== undefined ? lastError.status : 1;
+        process.exit(exitCode);
+    }
 })();
