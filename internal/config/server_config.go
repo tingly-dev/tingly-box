@@ -568,6 +568,19 @@ func (c *Config) GetProvider(uuid string) (*Provider, error) {
 	return nil, fmt.Errorf("provider '%s' not found", uuid)
 }
 
+func (c *Config) GetProviderByName(name string) (*Provider, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	for _, p := range c.Providers {
+		if p.Name == name {
+			return p, nil
+		}
+	}
+
+	return nil, fmt.Errorf("provider with name '%s' not found", name)
+}
+
 // ListProviders returns all providers
 func (c *Config) ListProviders() []*Provider {
 	c.mu.RLock()

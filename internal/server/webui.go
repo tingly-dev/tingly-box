@@ -510,7 +510,7 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 
 func useV2Provider(s *Server, api *swagger.RouteGroup) {
 
-	api.GET("/providers", (s.GetProviders),
+	api.GET("/providers", s.GetProviders,
 		swagger.WithDescription("Get all configured providers with masked tokens"),
 		swagger.WithTags("providers"),
 		swagger.WithResponseModel(ProvidersResponse{}),

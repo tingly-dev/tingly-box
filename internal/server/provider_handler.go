@@ -17,6 +17,7 @@ func (s *Server) GetProviders(c *gin.Context) {
 
 	for i, provider := range providers {
 		maskedProviders[i] = ProviderResponse{
+			UUID:     provider.UUID,
 			Name:     provider.Name,
 			APIBase:  provider.APIBase,
 			APIStyle: string(provider.APIStyle),
@@ -45,6 +46,16 @@ func (s *Server) AddProvider(c *gin.Context) {
 		return
 	}
 
+	// check existing
+	_, err := s.config.GetProviderByName(req.Name)
+	if err == nil {
+		c.JSON(http.StatusConflict, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("provider with name '%s' already exists", req.Name),
+		})
+		return
+	}
+
 	// Set default enabled status if not provided
 	if !req.Enabled {
 		req.Enabled = true
@@ -63,7 +74,7 @@ func (s *Server) AddProvider(c *gin.Context) {
 		Enabled:  req.Enabled,
 	}
 
-	err := s.config.AddProvider(provider)
+	err = s.config.AddProvider(provider)
 	if err != nil {
 		if s.logger != nil {
 			s.logger.LogAction(obs.ActionAddProvider, map[string]interface{}{
@@ -156,6 +167,19 @@ func (s *Server) UpdateProvider(c *gin.Context) {
 		return
 	}
 
+	// check existing
+	if req.Name != nil {
+		name := *req.Name
+		_, err := s.config.GetProviderByName(name)
+		if err == nil {
+			c.JSON(http.StatusConflict, gin.H{
+				"success": false,
+				"error":   fmt.Sprintf("provider with name '%s' already exists", name),
+			})
+			return
+		}
+	}
+
 	// Get existing provider
 	provider, err := s.config.GetProvider(uid)
 	if err != nil {
@@ -208,6 +232,7 @@ func (s *Server) UpdateProvider(c *gin.Context) {
 
 	// Return masked provider data
 	responseProvider := ProviderResponse{
+		UUID:     provider.UUID,
 		Name:     provider.Name,
 		APIBase:  provider.APIBase,
 		APIStyle: string(provider.APIStyle),
