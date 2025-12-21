@@ -554,8 +554,8 @@ func (c *Config) AddProviderByName(name, apiBase, token string) error {
 	return c.save()
 }
 
-// GetProvider returns a provider
-func (c *Config) GetProvider(uuid string) (*Provider, error) {
+// GetProviderByUUID returns a provider
+func (c *Config) GetProviderByUUID(uuid string) (*Provider, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 

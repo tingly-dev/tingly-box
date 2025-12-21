@@ -181,7 +181,7 @@ func (s *Server) UpdateProvider(c *gin.Context) {
 	}
 
 	// Get existing provider
-	provider, err := s.config.GetProvider(uid)
+	provider, err := s.config.GetProviderByUUID(uid)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,
@@ -260,7 +260,7 @@ func (s *Server) GetProvider(c *gin.Context) {
 		return
 	}
 
-	provider, err := s.config.GetProvider(uid)
+	provider, err := s.config.GetProviderByUUID(uid)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,
@@ -301,7 +301,7 @@ func (s *Server) ToggleProvider(c *gin.Context) {
 		return
 	}
 
-	provider, err := s.config.GetProvider(uid)
+	provider, err := s.config.GetProviderByUUID(uid)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,

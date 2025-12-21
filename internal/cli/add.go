@@ -6,8 +6,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"tingly-box/internal/config"
+
+	"github.com/spf13/cobra"
 )
 
 // APIStyle represents the API style/version for a provider
@@ -101,7 +102,7 @@ func runAdd(appConfig *config.AppConfig, args []string) error {
 	}
 
 	// Check if provider already exists
-	if existingProvider, err := appConfig.GetProvider(name); err == nil && existingProvider != nil {
+	if existingProvider, err := appConfig.GetProviderByName(name); err == nil && existingProvider != nil {
 		fmt.Printf("Provider '%s' already exists. Please use a different name or update the existing provider.\n", name)
 		return fmt.Errorf("provider already exists")
 	}
@@ -162,7 +163,7 @@ func addProviderWithConfirmation(appConfig *config.AppConfig, reader *bufio.Read
 	}
 
 	// Update the provider to set the API style
-	if provider, err := appConfig.GetProvider(name); err == nil {
+	if provider, err := appConfig.GetProviderByName(name); err == nil {
 		provider.APIStyle = config.APIStyle(apiStyle)
 		// Save the configuration
 		if saveErr := appConfig.Save(); saveErr != nil {

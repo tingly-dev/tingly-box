@@ -117,10 +117,10 @@ func (ts *TestServer) AddTestProviders(t *testing.T) {
 }
 
 // GetProviderToken returns the appropriate token for Anthropic API requests
-func (ts *TestServer) GetProviderToken(providerName string, isRealConfig bool) string {
+func (ts *TestServer) GetProviderToken(uid string, isRealConfig bool) string {
 	if isRealConfig {
 		// Use Anthropic provider token for real config
-		provider, err := ts.appConfig.GetProvider(providerName)
+		provider, err := ts.appConfig.GetProviderByUUID(uid)
 		if err == nil {
 			return provider.Token
 		}

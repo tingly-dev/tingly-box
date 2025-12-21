@@ -369,7 +369,7 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 	//	swagger.WithResponseModel(ProvidersResponse{}),
 	//)
 	//
-	//apiV1.GET("/providers/:name", s.GetProvider,
+	//apiV1.GET("/providers/:name", s.GetProviderByName,
 	//	swagger.WithDescription("Get specific provider details with masked token"),
 	//	swagger.WithTags("providers"),
 	//	swagger.WithResponseModel(ProviderResponse{}),

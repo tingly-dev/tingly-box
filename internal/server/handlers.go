@@ -198,7 +198,7 @@ func (s *Server) DetermineProviderAndModel(modelName string) (*config.Provider, 
 			}
 
 			// Verify the provider exists and is enabled
-			provider, err := c.GetProvider(selectedService.Provider)
+			provider, err := c.GetProviderByUUID(selectedService.Provider)
 			if err != nil {
 				return nil, nil, nil, fmt.Errorf("provider '%s' not found: %w", selectedService.Provider, err)
 			}
