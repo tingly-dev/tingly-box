@@ -96,85 +96,87 @@ func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams) anthro
 	var systemParts []string
 
 	for _, msg := range req.Messages {
-		rolePtr := msg.GetRole()
-		if rolePtr == nil {
-			continue
-		}
-		role := *rolePtr
-
-		// Marshal to map for flexible access
+		// For Union types, we need to use JSON serialization/deserialization
+		// to properly extract the content and role
 		raw, _ := json.Marshal(msg)
 		var m map[string]interface{}
 		if err := json.Unmarshal(raw, &m); err != nil {
 			continue
 		}
 
-		// Extract text content
-		content, _ := m["content"].(string)
+		role, _ := m["role"].(string)
 
-		//1 SYSTEM → params.System
-		if role == "system" {
-			if content != "" {
+		switch role {
+		case "system":
+			// System message → params.System
+			if content, ok := m["content"].(string); ok && content != "" {
 				systemParts = append(systemParts, content)
 			}
-			continue
-		}
 
-		var blocks []anthropic.ContentBlockParamUnion
+		case "user":
+			// User message
+			var blocks []anthropic.ContentBlockParamUnion
 
-		//2 Normal text content
-		if content, ok := m["content"].(string); ok && content != "" {
-			blocks = append(blocks, anthropic.NewTextBlock(content))
-		}
+			if content, ok := m["content"].(string); ok && content != "" {
+				// Simple text content
+				blocks = append(blocks, anthropic.NewTextBlock(content))
+			} else if contentParts, ok := m["content"].([]interface{}); ok {
+				// Array of content parts (multimodal)
+				for _, part := range contentParts {
+					if partMap, ok := part.(map[string]interface{}); ok {
+						if text, ok := partMap["text"].(string); ok {
+							blocks = append(blocks, anthropic.NewTextBlock(text))
+						}
+					}
+				}
+			}
 
-		//3 Assistant tool calls → tool_use blocks
-		if role == "assistant" {
+			if len(blocks) > 0 {
+				messages = append(messages, anthropic.NewUserMessage(blocks...))
+			}
+
+		case "assistant":
+			// Assistant message
+			var blocks []anthropic.ContentBlockParamUnion
+
+			// Add text content if present
+			if content, ok := m["content"].(string); ok && content != "" {
+				blocks = append(blocks, anthropic.NewTextBlock(content))
+			}
+
+			// Convert tool calls to tool_use blocks
 			if toolCalls, ok := m["tool_calls"].([]interface{}); ok {
 				for _, tc := range toolCalls {
-					call := tc.(map[string]interface{})
-					fn := call["function"].(map[string]interface{})
+					if call, ok := tc.(map[string]interface{}); ok {
+						if fn, ok := call["function"].(map[string]interface{}); ok {
+							id, _ := call["id"].(string)
+							name, _ := fn["name"].(string)
 
-					// Parse the arguments as JSON to maintain proper structure
-					var argsInput interface{}
-					if argsStr, ok := fn["arguments"].(string); ok {
-						json.Unmarshal([]byte(argsStr), &argsInput)
+							var argsInput interface{}
+							if argsStr, ok := fn["arguments"].(string); ok {
+								_ = json.Unmarshal([]byte(argsStr), &argsInput)
+							}
+
+							blocks = append(blocks,
+								anthropic.NewToolUseBlock(id, argsInput, name),
+							)
+						}
 					}
-
-					blocks = append(blocks,
-						anthropic.NewToolUseBlock(
-							call["id"].(string),
-							argsInput,
-							fn["name"].(string),
-						),
-					)
 				}
 			}
 
 			if len(blocks) > 0 {
 				messages = append(messages, anthropic.NewAssistantMessage(blocks...))
 			}
-			continue
-		}
 
-		//4 Tool result message → tool_result block (must be USER role)
-		if role == "tool" {
-			toolID, _ := m["tool_call_id"].(string)
+		case "tool":
+			// Tool result message → tool_result block (must be USER role)
+			toolCallID, _ := m["tool_call_id"].(string)
 			content, _ := m["content"].(string)
 
-			blocks = append(blocks,
-				anthropic.NewToolResultBlock(
-					toolID,
-					content,
-					false, // is_error
-				),
-			)
-
-			messages = append(messages, anthropic.NewUserMessage(blocks...))
-			continue
-		}
-
-		//5 Normal user message
-		if (role == "user") && len(blocks) > 0 {
+			blocks := []anthropic.ContentBlockParamUnion{
+				anthropic.NewToolResultBlock(toolCallID, content, false),
+			}
 			messages = append(messages, anthropic.NewUserMessage(blocks...))
 		}
 	}
@@ -183,6 +185,26 @@ func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams) anthro
 		Model:     anthropic.Model(req.Model),
 		Messages:  messages,
 		MaxTokens: req.MaxTokens.Value,
+	}
+
+	// Add system parts if any
+	if len(systemParts) > 0 {
+		params.System = make([]anthropic.TextBlockParam, len(systemParts))
+		for i, part := range systemParts {
+			params.System[i] = anthropic.TextBlockParam{Text: part}
+		}
+	}
+
+	// Convert tools from OpenAI format to Anthropic format
+	if len(req.Tools) > 0 {
+		params.Tools = ConvertOpenAIToolsToAnthropic(req.Tools)
+	}
+
+	// Convert tool choice
+	// ToolChoice is a Union type, check if any field is set
+	if req.ToolChoice.OfAuto.Value != "" || req.ToolChoice.OfAllowedTools != nil ||
+		req.ToolChoice.OfFunctionToolChoice != nil || req.ToolChoice.OfCustomToolChoice != nil {
+		params.ToolChoice = ConvertOpenAIToolChoice(&req.ToolChoice)
 	}
 
 	return params
