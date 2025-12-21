@@ -2,6 +2,7 @@ package adaptor
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -280,6 +281,16 @@ func TestConvertOpenAIToAnthropicRequest(t *testing.T) {
 			// Count tool_use blocks
 			toolCount := len(result.Tools)
 			assert.Equal(t, tt.expectedTools, toolCount)
+
+			for _, tool := range tt.req.Tools {
+				data, _ := json.MarshalIndent(tool, "", "  ")
+				fmt.Printf("%s\n", data)
+			}
+
+			for _, tool := range result.Tools {
+				data, _ := json.MarshalIndent(tool, "", "  ")
+				fmt.Printf("%s\n", data)
+			}
 		})
 	}
 }
