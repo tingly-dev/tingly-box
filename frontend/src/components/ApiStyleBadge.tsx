@@ -24,6 +24,7 @@ export const ApiStyleBadge = ({apiStyle, sx = {}}: ApiStyleBadgeProps) => {
             sx={{
                 display: 'inline-flex',
                 alignItems: 'center',
+                justifyContent: 'center',
                 gap: 2,
                 px: 1,
                 py: 0.25,
