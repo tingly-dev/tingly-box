@@ -2,6 +2,7 @@ import React, {useState} from 'react';
 import {
     Add as AddIcon,
     ArrowForward as ArrowForwardIcon,
+    ArrowBack as ArrowBackIcon,
     CheckCircle as CheckCircleIcon,
     Delete as DeleteIcon,
     Edit as EditIcon,
@@ -156,7 +157,8 @@ const ModelNode: React.FC<{
     editable?: boolean;
     onUpdate?: (value: string) => void;
     showStatusIcon?: boolean;
-}> = ({ active, label, value, editable = false, onUpdate, showStatusIcon = true }) => {
+    compact?: boolean;
+}> = ({ active, label, value, editable = false, onUpdate, showStatusIcon = true, compact = false }) => {
     const [editMode, setEditMode] = useState(false);
     const [tempValue, setTempValue] = useState(value);
 
@@ -186,7 +188,7 @@ const ModelNode: React.FC<{
 
     return (
         <Box sx={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 1 }}>
-            <StyledModelNode>
+            <StyledModelNode compact={compact}>
                 {editMode && editable ? (
                     <TextField
                         value={tempValue}
@@ -218,7 +220,7 @@ const ModelNode: React.FC<{
                         sx={{
                             cursor: editable ? 'pointer' : 'default',
                             width: '100%',
-                            py: 1.5,
+                            py: compact ? 0.5 : 1.5,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -257,19 +259,21 @@ const ModelNode: React.FC<{
 };
 
 // Styled model node with unified fixed size
-const StyledModelNode = styled(Box)(({ theme }) => ({
+const StyledModelNode = styled(Box, {
+    shouldForwardProp: (prop) => prop !== 'compact',
+})<{ compact?: boolean }>(({ compact, theme }) => ({
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing(2.5),
+    padding: theme.spacing(compact ? 1.5 : 2.5),
     borderRadius: theme.shape.borderRadius,
     border: '1px solid',
     borderColor: 'divider',
     backgroundColor: 'background.paper',
     textAlign: 'center',
     width: 180,  // Fixed width
-    height: 200,  // Fixed height - same as provider nodes
+    height: compact ? 100 : 200,  // Dynamic height - half when compact
     boxShadow: theme.shadows[2],
     transition: 'all 0.2s ease-in-out',
     position: 'relative',
@@ -736,25 +740,96 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                             </Typography>
 
                             <GraphRow>
-                                {/* Request Model Node */}
+                                {/* Model Node(s) Container */}
                                 <NodeContainer>
-                                    <Typography variant="caption" sx={{ color: 'text.secondary', mb: 1 }}>
-                                        Request Local Model
-                                    </Typography>
-                                    <ModelNode
-                                        active={record.active}
-                                        label="Unspecified"
-                                        value={record.requestModel}
-                                        editable={record.active}
-                                        onUpdate={(value) => onUpdateRecord('requestModel', value)}
-                                    />
+                                    {record.responseModel ? (
+                                        // Split display when response model is configured
+                                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                                            {/* Request Model Card */}
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                {/* Left arrow for request model */}
+                                                {/*<Box sx={{*/}
+                                                {/*    display: 'flex',*/}
+                                                {/*    justifyContent: 'center',*/}
+                                                {/*    minWidth: '30px'*/}
+                                                {/*}}>*/}
+                                                {/*    <ArrowForwardIcon />*/}
+                                                {/*</Box>*/}
+                                                <Box sx={{ flex: 1 }}>
+                                                    <Typography variant="caption" sx={{ color: 'text.secondary', mb: 1, textAlign: 'center', display: 'block' }}>
+                                                        Request Local Model
+                                                    </Typography>
+                                                    <ModelNode
+                                                        active={record.active}
+                                                        label="Unspecified"
+                                                        value={record.requestModel}
+                                                        editable={record.active}
+                                                        onUpdate={(value) => onUpdateRecord('requestModel', value)}
+                                                        compact={true}
+                                                    />
+                                                </Box>
+                                            </Box>
+
+                                            {/* Response Model Card */}
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                {/* Left arrow for response model */}
+                                                {/*<Box sx={{*/}
+                                                {/*    display: 'flex',*/}
+                                                {/*    justifyContent: 'center',*/}
+                                                {/*    minWidth: '30px'*/}
+                                                {/*}}>*/}
+                                                {/*    <ArrowBackIcon/>*/}
+                                                {/*</Box>*/}
+                                                <Box sx={{ flex: 1 }}>
+                                                    <Typography variant="caption" sx={{ color: 'text.secondary', mb: 1, textAlign: 'center', display: 'block' }}>
+                                                        Response Model
+                                                    </Typography>
+                                                    <ModelNode
+                                                        active={record.active}
+                                                        label=""
+                                                        value={record.responseModel}
+                                                        editable={true}
+                                                        onUpdate={(value) => onUpdateRecord('responseModel', value)}
+                                                        compact={true}
+                                                    />
+                                                </Box>
+                                            </Box>
+                                        </Box>
+                                    ) : (
+                                        // Single display when no response model
+                                        <Box>
+                                            <Typography variant="caption" sx={{ color: 'text.secondary', mb: 1, textAlign: 'center', display: 'block' }}>
+                                                Request Local Model
+                                            </Typography>
+                                            <ModelNode
+                                                active={record.active}
+                                                label="Unspecified"
+                                                value={record.requestModel}
+                                                editable={record.active}
+                                                onUpdate={(value) => onUpdateRecord('requestModel', value)}
+                                            />
+                                        </Box>
+                                    )}
                                 </NodeContainer>
 
-                                {/* Arrow */}
+                                {/* Arrow from model(s) to providers */}
                                 {record.providers.length > 0 && (
-                                    <ConnectionLine>
-                                        <ArrowForwardIcon />
-                                    </ConnectionLine>
+                                    record.responseModel ? (
+                                        // When response model exists: show two rotated arrows to indicate connection
+                                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                                            <ConnectionLine>
+                                                <ArrowForwardIcon sx={{ transform: 'rotate(45deg)' }} />
+                                            </ConnectionLine>
+                                            <ConnectionLine>
+                                                <ArrowBackIcon sx={{ transform: 'rotate(-45deg)' }} />
+                                            </ConnectionLine>
+                                        </Box>
+                                    ) : (
+                                        // When no response model: show only forward arrow
+                                        <ConnectionLine>
+                                            <ArrowForwardIcon />
+                                        </ConnectionLine>
+                                    )
                                 )}
 
                                 {/* Providers Container */}
@@ -857,28 +932,6 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                                     </Box>
                                 )}
 
-                                {/* Arrow to Response */}
-                                {record.providers.length > 0 && record.responseModel && (
-                                    <ConnectionLine>
-                                        <ArrowForwardIcon />
-                                    </ConnectionLine>
-                                )}
-
-                                {/* Response Model Node - Only show if configured */}
-                                {record.responseModel && (
-                                    <NodeContainer>
-                                        <Typography variant="caption" sx={{ color: 'text.secondary', mb: 1 }}>
-                                            Response Model
-                                        </Typography>
-                                        <ModelNode
-                                            active={record.active}
-                                            label=""
-                                            value={record.responseModel}
-                                            editable={true} // Allow editing for consistency
-                                            onUpdate={(value) => onUpdateRecord('responseModel', value)}
-                                        />
-                                    </NodeContainer>
-                                )}
                             </GraphRow>
 
                             {/* Legend */}
