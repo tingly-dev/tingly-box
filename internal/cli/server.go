@@ -158,7 +158,7 @@ The server will handle request routing to configured AI providers.`,
 	cmd.Flags().IntVarP(&port, "port", "p", 12580, "Server port (default: 12580)")
 	cmd.Flags().StringVar(&host, "host", "localhost", "Server host")
 	cmd.Flags().BoolVarP(&enableUI, "ui", "u", true, "Enable web UI (default: true)")
-	cmd.Flags().BoolVar(&enableDebug, "debug", false, "Enable debug logging and Gin debug mode (default: false)")
+	cmd.Flags().BoolVar(&enableDebug, "debug", false, "Enable debug mode including gin, low level logging and so on (default: false)")
 	return cmd
 }
 
