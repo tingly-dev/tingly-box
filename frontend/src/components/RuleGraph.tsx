@@ -238,13 +238,14 @@ const ModelNode: React.FC<{
                             } : {}
                         }}
                     >
-                        {showStatusIcon && (
-                            active ? (
-                                <CheckCircleIcon sx={{ fontSize: 16, color: 'success.main' }} />
-                            ) : (
-                                <RadioButtonUncheckedIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
-                            )
-                        )}
+                        {/*{showStatusIcon && (*/}
+                        {/*    active ? (*/}
+                        {/*        <CheckCircleIcon sx={{ fontSize: 16, color: 'success.main' }} />*/}
+                        {/*    ) : (*/}
+                        {/*        <RadioButtonUncheckedIcon sx={{ fontSize: 16, color: 'text.disabled' }} />*/}
+                        {/*    )*/}
+                        {/*)}*/}
+                        {/*<EditIcon sx={{ fontWeight: 600, fontSize: '0.9rem' }}></EditIcon>*/}
                         <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', fontSize: '0.9rem' }}>
                             {value || label}
                         </Typography>
