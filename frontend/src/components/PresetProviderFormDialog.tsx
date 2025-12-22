@@ -11,6 +11,7 @@ import {
     DialogTitle,
     FormControlLabel,
     IconButton,
+    MenuItem,
     Stack,
     Switch,
     TextField,
@@ -20,7 +21,8 @@ import React, { useState } from 'react';
 import { getProviderBaseUrl } from '../data/providerUtils';
 import { getProvidersByStyle, getServiceProvider } from '../data/serviceProviders';
 import api from '../services/api';
-
+import { OpenAI } from '@lobehub/icons';
+import { Anthropic } from '@lobehub/icons';
 
 export interface EnhancedProviderFormData {
     name: string;
@@ -139,28 +141,22 @@ const PresetProviderFormDialog = ({
                             fullWidth
                             size="small"
                             label="API Style"
-                            value={data.apiStyle || undefined}
+                            value={data.apiStyle || ''}
                             onChange={(e) => {
                                 onChange('apiStyle', e.target.value as 'openai' | 'anthropic' | '');
                                 setVerificationResult(null);
                             }}
-                            slotProps={{
-                                select: {
-                                    native: true,
-                                    displayEmpty: false,
-                                    sx: {
-                                        '& .MuiOutlinedInput-notchedOutline': {
-                                            borderColor: 'divider',
-                                        },
-                                        '&:hover .MuiOutlinedInput-notchedOutline': {
-                                            borderColor: 'primary.main',
-                                        },
-                                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                                            borderColor: 'primary.main',
-                                            borderWidth: 2,
-                                        },
-                                    },
-                                }
+                            sx={{
+                                '& .MuiOutlinedInput-notchedOutline': {
+                                    borderColor: 'divider',
+                                },
+                                '&:hover .MuiOutlinedInput-notchedOutline': {
+                                    borderColor: 'primary.main',
+                                },
+                                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                    borderColor: 'primary.main',
+                                    borderWidth: 2,
+                                },
                             }}
                             helperText={
                                 data.apiStyle === 'openai'
@@ -171,11 +167,21 @@ const PresetProviderFormDialog = ({
                             }
                             required={mode === 'add'}
                         >
-                            <option value={undefined}>
-                                Select API style...
-                            </option>
-                            <option value="openai">🤖 OpenAI Compatible</option>
-                            <option value="anthropic">🧠 Anthropic Compatible</option>
+                            <MenuItem value="">
+                                <em>Select API style...</em>
+                            </MenuItem>
+                            <MenuItem value="openai">
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <OpenAI size={16} />
+                                    OpenAI Compatible
+                                </Box>
+                            </MenuItem>
+                            <MenuItem value="anthropic">
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Anthropic size={16} />
+                                    Anthropic Compatible
+                                </Box>
+                            </MenuItem>
                         </TextField>
 
                         {/* Provider Selection based on API Style */}
