@@ -44,14 +44,17 @@ type Server struct {
 	host          string
 }
 
-// NewServerWithAllOptions creates a new HTTP server with UI and adaptor options
-// Deprecated: Use NewServerWithFunctionalOptions instead
-func NewServerWithAllOptions(cfg *config.Config, enableUI bool, enableAdaptor bool) *Server {
-	return NewServer(cfg, WithUI(enableUI), WithAdaptor(enableAdaptor))
-}
-
 // ServerOption defines a functional option for Server configuration
 type ServerOption func(*Server)
+
+// WithDefault applies all default server options
+func WithDefault() ServerOption {
+	return func(s *Server) {
+		s.enableUI = true       // Default: UI enabled
+		s.enableAdaptor = false // Default: adaptor disabled
+		s.host = ""             // Default: empty host (resolves to localhost)
+	}
+}
 
 // WithUI enables or disables the UI for the server
 func WithUI(enabled bool) ServerOption {
@@ -75,15 +78,16 @@ func WithAdaptor(enabled bool) ServerOption {
 
 // NewServer creates a new HTTP server instance with functional options
 func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
+	// Start with default options
+	allOpts := append([]ServerOption{WithDefault()}, opts...)
+
 	// Default options
 	server := &Server{
-		config:        cfg,
-		enableUI:      true,  // Default: UI enabled
-		enableAdaptor: false, // Default: adaptor disabled
+		config: cfg,
 	}
 
-	// Apply provided options
-	for _, opt := range opts {
+	// Apply all options (defaults + provided)
+	for _, opt := range allOpts {
 		opt(server)
 	}
 
