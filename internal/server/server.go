@@ -8,12 +8,12 @@ import (
 	"net/http"
 	"path/filepath"
 	"time"
-	"tingly-box/internal/server/middleware"
-	"tingly-box/internal/util"
 
 	"tingly-box/internal/auth"
 	"tingly-box/internal/config"
 	"tingly-box/internal/obs"
+	"tingly-box/internal/server/middleware"
+	"tingly-box/internal/util"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/browser"
@@ -30,7 +30,7 @@ type Server struct {
 
 	// middleware
 	statsMW         *middleware.StatsMiddleware
-	debugMW         *middleware.DebugMiddleware
+	errorMW         *middleware.ErrorLogMiddleware
 	authMW          *middleware.AuthMiddleware
 	loadBalancer    *LoadBalancer
 	loadBalancerAPI *LoadBalancerAPI
@@ -131,19 +131,17 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	}
 
 	// Initialize debug middleware (only if debug mode is enabled)
-	var debugMW *middleware.DebugMiddleware
-	if cfg.GetDebug() {
-		debugLogPath := filepath.Join(cfg.ConfigDir, config.LogDirName, config.DebugLogFileName)
-		debugMW = middleware.NewDebugMiddleware(debugLogPath, 10)
-		log.Printf("Debug middleware initialized (debug=true in config), logging to: %s", debugLogPath)
-	}
+	var errorMW *middleware.ErrorLogMiddleware
+	errorLogPath := filepath.Join(cfg.ConfigDir, config.LogDirName, config.DebugLogFileName)
+	errorMW = middleware.NewErrorLogMiddleware(errorLogPath, 10)
+	log.Printf("Error middleware initialized (debug=true in config), logging to: %s", errorLogPath)
 
 	// Create server struct first with applied options
 	server.jwtManager = jwtManager
 	server.engine = gin.New()
 	server.logger = memoryLogger
 	server.clientPool = NewClientPool() // Initialize client pool
-	server.debugMW = debugMW
+	server.errorMW = errorMW
 
 	// Initialize statistics middleware with server reference
 	statsMW := middleware.NewStatsMiddleware(cfg)
@@ -205,26 +203,17 @@ func (s *Server) setupMiddleware() {
 	s.engine.Use(gin.Recovery())
 
 	// Debug middleware for logging requests/responses (only if enabled)
-	if s.debugMW != nil {
-		s.engine.Use(s.debugMW.Middleware())
+	if s.errorMW != nil {
+		s.engine.Use(s.errorMW.Middleware())
 	}
 
 	// Statistics middleware for load balancing
-	s.engine.Use(s.statsMW.Middleware())
+	if s.statsMW != nil {
+		s.engine.Use(s.statsMW.Middleware())
+	}
 
 	// CORS middleware
-	s.engine.Use(func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization")
-
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(http.StatusNoContent)
-			return
-		}
-
-		c.Next()
-	})
+	s.engine.Use(middleware.CORS())
 }
 
 func RequestLoggerMiddleware() gin.HandlerFunc {
@@ -391,8 +380,8 @@ func (s *Server) Stop(ctx context.Context) error {
 	}
 
 	// Stop debug middleware
-	if s.debugMW != nil {
-		s.debugMW.Stop()
+	if s.errorMW != nil {
+		s.errorMW.Stop()
 	}
 
 	// Stop configuration watcher

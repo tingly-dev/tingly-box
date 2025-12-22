@@ -847,21 +847,6 @@ func (c *Config) migrateRules() {
 	}
 }
 
-// GetDebug returns whether debug logging is enabled
-func (c *Config) GetDebug() bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.Debug
-}
-
-// SetDebug sets the debug logging flag
-func (c *Config) SetDebug(debug bool) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.Debug = debug
-	return c.save()
-}
-
 func (c *Config) DeleteRule(ruleUUID string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()

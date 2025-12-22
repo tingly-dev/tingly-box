@@ -149,6 +149,7 @@ tasks:
 
   web:dist-dev:
     cmds:
+      - task: codegen
       - |
         cd frontend;
         if [ "$CI" = "true" ]; then
