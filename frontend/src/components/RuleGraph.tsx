@@ -11,7 +11,9 @@ import {
     Edit as EditIcon,
     CheckCircle as CheckCircleIcon,
     RadioButtonUnchecked as RadioButtonUncheckedIcon,
-    Add as AddIcon
+    Add as AddIcon,
+    Business as BusinessIcon,
+    Memory as MemoryIcon
 } from '@mui/icons-material';
 import {
     Box,
@@ -314,43 +316,61 @@ const ProviderNodeComponent: React.FC<{
 
     return (
         <ProviderNode>
-            {/* API Style Chip */}
+            {/* API Style Title */}
             {provider.provider && (
-                <Chip
-                    label={apiStyle}
-                    size="small"
-                    variant="outlined"
-                    sx={{ fontSize: '0.7rem', height: 20, mb: 1.5 }}
-                />
+                <Box sx={{ width: '100%', mb: 2 }}>
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            p: 1,
+                            // border: '1px solid',
+                            // borderColor: 'text.primary',
+                            borderRadius: 1,
+                            backgroundColor: 'primary.light',
+                            transition: 'all 0.2s',
+                            width: '100%',
+                            minHeight: '32px'
+                        }}
+                    >
+                        <Typography variant="body2" color="white">
+                            {apiStyle} style
+                        </Typography>
+                    </Box>
+                </Box>
             )}
 
-            {/* Provider Select */}
-            <Box sx={{ width: '100%', mb: 1.5 }}>
+            {/* Provider Section */}
+            <Box sx={{ width: '100%', mb: 2 }}>
+                {/*<Box sx={{*/}
+                {/*    display: 'flex',*/}
+                {/*    alignItems: 'center',*/}
+                {/*    gap: 0.5,*/}
+                {/*    mb: 0.5*/}
+                {/*}}>*/}
+                {/*    <BusinessIcon sx={{ fontSize: 12, color: 'text.primary' }} />*/}
+                {/*    <Typography variant="caption" color="text.primary">*/}
+                {/*        PROVIDER*/}
+                {/*    </Typography>*/}
+                {/*</Box>*/}
                 {editMode.provider ? (
                     <TextField
                         select
                         label="Provider"
-                        value={provider.provider} // This is UUID
+                        value={provider.provider}
                         onChange={(e) => {
-                            onUpdate('provider', e.target.value); // Store UUID
+                            onUpdate('provider', e.target.value);
                             setEditMode({ ...editMode, provider: false });
                         }}
                         onBlur={() => setEditMode({ ...editMode, provider: false })}
                         size="small"
                         fullWidth
                         autoFocus
-                        sx={{
-                            '& .MuiInputLabel-root': {
-                                fontSize: '0.75rem',
-                            },
-                            '& .MuiSelect-select': {
-                                fontSize: '0.8rem',
-                            }
-                        }}
                     >
                         {availableProviders.map((p) => (
-                            <MenuItem key={p.uuid} value={p.uuid}> {/* Use UUID as value */}
-                                {p.name} {/* Display provider name */}
+                            <MenuItem key={p.uuid} value={p.uuid}>
+                                {p.name}
                             </MenuItem>
                         ))}
                     </TextField>
@@ -359,39 +379,44 @@ const ProviderNodeComponent: React.FC<{
                         onClick={() => active && setEditMode({ ...editMode, provider: true })}
                         sx={{
                             cursor: active ? 'pointer' : 'default',
-                            '&:hover': active ? { backgroundColor: 'action.hover', borderRadius: 1 } : {},
+                            '&:hover': active ? {
+                                backgroundColor: 'action.hover'
+                            } : {},
                             p: 1,
-                            transition: 'background-color 0.2s',
+                            border: '1px solid',
+                            borderColor: 'text.primary',
+                            borderRadius: 1,
+                            backgroundColor: 'background.paper',
+                            transition: 'all 0.2s',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             gap: 0.5,
-                            width: '100%'
+                            width: '100%',
+                            minHeight: '32px'
                         }}
                     >
-                        {active ? (
-                            <CheckCircleIcon sx={{ fontSize: 14, color: 'success.main' }} />
-                        ) : (
-                            <RadioButtonUncheckedIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
-                        )}
-                        <Typography
-                            variant="body2"
-                            sx={{
-                                fontWeight: 600,
-                                color: 'text.primary',
-                                textAlign: 'center',
-                                fontSize: '0.9rem'
-                            }}
-                        >
-                            {providerUuidToName[provider.provider] || 'Select provider'} {/* Convert UUID to name for display */}
+                        <Typography variant="body2" color="text.primary">
+                            {providerUuidToName[provider.provider] || 'Select provider'}
                         </Typography>
                     </Box>
                 )}
             </Box>
 
-            {/* Model Select */}
+            {/* Model Section */}
             {provider.provider && (
                 <Box sx={{ width: '100%', mb: 1.5 }}>
+                    {/*<Box sx={{*/}
+                    {/*    display: 'flex',*/}
+                    {/*    alignItems: 'center',*/}
+                    {/*    gap: 0.5,*/}
+                    {/*    mb: 0.5*/}
+                    {/*}}>*/}
+                    {/*    <MemoryIcon sx={{ fontSize: 12, color: 'text.primary' }} />*/}
+                    {/*    <Typography variant="caption" color="text.primary">*/}
+                    {/*        MODEL*/}
+                    {/*    </Typography>*/}
+                    {/*</Box>*/}
                     {editMode.model ? (
                         <TextField
                             select
@@ -417,19 +442,26 @@ const ProviderNodeComponent: React.FC<{
                             onClick={() => active && setEditMode({ ...editMode, model: true })}
                             sx={{
                                 cursor: active ? 'pointer' : 'default',
-                                '&:hover': active ? { backgroundColor: 'action.hover', borderRadius: 1 } : {},
+                                '&:hover': active ? {
+                                    backgroundColor: 'action.hover'
+                                } : {},
                                 p: 1,
-                                transition: 'background-color 0.2s',
-                                textAlign: 'center'
+                                border: '1px dashed',
+                                borderColor: 'text.primary',
+                                borderRadius: 1,
+                                backgroundColor: 'background.paper',
+                                transition: 'all 0.2s',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '100%',
+                                minHeight: '32px'
                             }}
                         >
                             <Typography
                                 variant="body2"
-                                sx={{
-                                    color: 'text.secondary',
-                                    fontSize: '0.8rem',
-                                    fontStyle: !provider.model ? 'italic' : 'normal'
-                                }}
+                                color="text.primary"
+                                sx={{ fontStyle: !provider.model ? 'italic' : 'normal' }}
                             >
                                 {provider.model || 'Select model'}
                             </Typography>
@@ -447,7 +479,7 @@ const ProviderNodeComponent: React.FC<{
             {/*    />*/}
             {/*)}*/}
 
-            {/* Action Menu Button */}
+            {/* More Options Button - Moved to bottom right */}
             <IconButton
                 size="small"
                 onClick={handleMenuClick}
@@ -455,15 +487,17 @@ const ProviderNodeComponent: React.FC<{
                     position: 'absolute',
                     bottom: 4,
                     right: 4,
+                    zIndex: 10,
                     p: 0.5,
-                    color: 'text.secondary',
+                    opacity: 0.6,
+                    color: 'text.primary',
                     '&:hover': {
-                        backgroundColor: 'action.hover',
-                        color: 'text.primary',
+                        opacity: 1,
+                        backgroundColor: 'primary.main'
                     }
                 }}
             >
-                <MoreVertIcon fontSize="small" />
+                <MoreVertIcon />
             </IconButton>
 
             {/* Action Menu */}
@@ -477,7 +511,7 @@ const ProviderNodeComponent: React.FC<{
             >
                 <MenuItem onClick={handleRefresh} disabled={!provider.provider || !active}>
                     <ListItemIcon>
-                        <RefreshIcon fontSize="small" />
+                        <RefreshIcon />
                     </ListItemIcon>
                     <ListItemText>Refresh Models</ListItemText>
                 </MenuItem>
@@ -487,13 +521,13 @@ const ProviderNodeComponent: React.FC<{
                     setEditMode({ provider: true, model: false });
                 }} disabled={!active}>
                     <ListItemIcon>
-                        <EditIcon fontSize="small" />
+                        <EditIcon />
                     </ListItemIcon>
                     <ListItemText>Edit Provider</ListItemText>
                 </MenuItem>
                 <MenuItem onClick={handleDelete} disabled={!active}>
                     <ListItemIcon>
-                        <DeleteIcon fontSize="small" color="error" />
+                        <DeleteIcon color="error" />
                     </ListItemIcon>
                     <ListItemText sx={{ color: 'error.main' }}>Delete Provider</ListItemText>
                 </MenuItem>
@@ -727,6 +761,47 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                                                     providerUuidToName={providerUuidToName}
                                                 />
                                             ))}
+                                            {/* Add Provider Button */}
+                                            <Tooltip title="Add another provider">
+                                                <IconButton
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onAddProvider();
+                                                    }}
+                                                    disabled={!record.active || saving}
+                                                    sx={{
+                                                        width: 180,  // Same width as provider nodes
+                                                        height: 200, // Same height as provider nodes
+                                                        border: '2px dashed',
+                                                        borderColor: 'divider',
+                                                        borderRadius: 2,
+                                                        backgroundColor: 'background.paper',
+                                                        boxShadow: theme => theme.shadows[2],
+                                                        transition: 'all 0.2s ease-in-out',
+                                                        display: 'flex',
+                                                        flexDirection: 'column',
+                                                        justifyContent: 'center',
+                                                        alignItems: 'center',
+                                                        gap: 1,
+                                                        '&:hover': {
+                                                            borderColor: 'primary.main',
+                                                            backgroundColor: 'action.hover',
+                                                            borderStyle: 'solid',
+                                                            boxShadow: theme => theme.shadows[4],
+                                                            transform: 'translateY(-2px)',
+                                                        },
+                                                        '&:disabled': {
+                                                            borderColor: 'action.disabled',
+                                                            backgroundColor: 'action.disabledBackground',
+                                                        }
+                                                    }}
+                                                >
+                                                    <AddIcon sx={{ fontSize: 40, color: 'text.secondary' }} />
+                                                    <Typography variant="body2" color="text.secondary" textAlign="center">
+                                                        Add Provider
+                                                    </Typography>
+                                                </IconButton>
+                                            </Tooltip>
                                         </Box>
                                     </Box>
                                 ) : (
@@ -855,8 +930,8 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                                 providerUuidToName={providerUuidToName}
                                 active={record.active}
                                 onAddProvider={onAddProvider}
-                                onDeleteProvider={onDeleteProvider}
-                                onUpdateProvider={onUpdateProvider}
+                                onDeleteProvider={(providerId) => onDeleteProvider(recordUuid, providerId)}
+                                onUpdateProvider={(providerId, field, value) => onUpdateProvider(recordUuid, providerId, field, value)}
                                 onRefreshModels={onRefreshModels}
                             />
                         </Stack>
