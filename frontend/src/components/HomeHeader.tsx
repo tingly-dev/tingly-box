@@ -22,6 +22,7 @@ import {
 } from '@mui/material';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { OpenAI, Anthropic } from '@lobehub/icons';
 import { ApiConfigRow } from './ApiConfigRow';
 
 interface HomeHeaderProps {
@@ -176,8 +177,16 @@ export const HomeHeader: React.FC<HomeHeaderProps> = ({
         <>
             <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
                 <Tabs value={activeTab} onChange={handleTabChange} aria-label="API configuration tabs">
-                    <Tab label="Use OpenAI" />
-                    <Tab label="Use Anthropic" />
+                    <Tab
+                        icon={<OpenAI size={16} />}
+                        label="Use OpenAI"
+                        iconPosition="start"
+                    />
+                    <Tab
+                        icon={<Anthropic size={16} />}
+                        label="Use Anthropic"
+                        iconPosition="start"
+                    />
                 </Tabs>
             </Box>
             {activeTab === 0 && <OpenAITab />}

@@ -4,6 +4,7 @@ import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
+import { OpenAI, Anthropic } from '@lobehub/icons';
 import {
     Box,
     Button,
@@ -65,6 +66,41 @@ export default function ModelSelectTab({
     const { customModels, saveCustomModel, removeCustomModel } = useCustomModels();
     const gridLayout = useGridLayout();
     const [autoFetchedProviders, setAutoFetchedProviders] = useState<Set<string>>(new Set());
+
+    // Helper function to render API style badge with icon and colored background
+    const renderApiStyleBadge = (apiStyle: string) => {
+        const isOpenAI = apiStyle === 'openai';
+        const isAnthropic = apiStyle === 'anthropic';
+
+        if (!isOpenAI && !isAnthropic) {
+            return null; // Don't show badge for unknown styles
+        }
+
+        const backgroundColor = isOpenAI ? '#1578FF' : '#E97B37';
+        const Icon = isOpenAI ? OpenAI : Anthropic;
+        const label = isOpenAI ? 'OpenAI' : 'Anthropic';
+
+        return (
+            <Box
+                sx={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 2,
+                    px: 1,
+                    py: 0.25,
+                    borderRadius: 1,
+                    backgroundColor,
+                    color: 'white',
+                    fontSize: '10px',
+                    fontWeight: 500,
+                    height: '18px',
+                }}
+            >
+                {/*<Icon size={10} />*/}
+                <span>{label} Style</span>
+            </Box>
+        );
+    };
 
     // Create provider name to UUID mapping for search functionality
     const providerNameToUuid = React.useMemo(() => {
@@ -237,16 +273,21 @@ export default function ModelSelectTab({
                             <Tab
                                 key={provider.uuid} // Use UUID as key
                                 label={
-                                    <Stack direction="row" alignItems="center" spacing={1}>
-                                        <Typography variant="body1" fontWeight={600}>
-                                            {provider.name}
-                                        </Typography>
-                                        <Typography variant="caption" color="text.secondary">
-                                            ({modelTypeInfo.totalModelsCount})
-                                        </Typography>
-                                        {isProviderSelected && (
-                                            <CheckCircle color="primary" sx={{ fontSize: 16 }} />
-                                        )}
+                                    <Stack direction="column" alignItems="center" spacing={0.5}>
+                                        <Stack direction="row" alignItems="center" spacing={1}>
+                                            <Typography variant="body1" fontWeight={600}>
+                                                {provider.name}
+                                            </Typography>
+                                            {isProviderSelected && (
+                                                <CheckCircle color="primary" sx={{ fontSize: 16 }} />
+                                            )}
+                                        </Stack>
+                                        <Stack direction="row" alignItems="center" spacing={1}>
+                                            {/*<Typography variant="caption" color="text.secondary">*/}
+                                            {/*    ({modelTypeInfo.totalModelsCount})*/}
+                                            {/*</Typography>*/}
+                                            {provider.api_style && renderApiStyleBadge(provider.api_style)}
+                                        </Stack>
                                     </Stack>
                                 }
                                 {...a11yProps(index)}
