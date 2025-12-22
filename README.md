@@ -1,6 +1,6 @@
 # Tingly Box
 
-**Tingly Box** is a high‑performance LLM proxy that provides a **unified OpenAI‑compatible API** for hundreds of model providers. It enables centralized credential management, routing, and load balancing with low latency.
+**Tingly Box** is a high‑performance desktop LLM proxy designed for personal or local use, providing a **unified OpenAI‑compatible API** for hundreds of model providers. It enables centralized credential management, routing, and load balancing with low latency.
 
 > Think of Tingly Box as a *model gateway* between your applications and multiple LLM vendors.
 
@@ -80,29 +80,30 @@ docker run -d \
 from openai import OpenAI
 
 client = OpenAI(
-    api_key="sk-tingly-model-token",
+    api_key="your-tingly-model-token",
     base_url="http://localhost:12580/openai/v1"
 )
 
 response = client.chat.completions.create(
-    model="gpt-3.5-turbo",
+// To pass litellm model name validation, use "gpt-3.5-turbo"
+    model="tingly",
     messages=[{"role": "user", "content": "Hello!"}]
 )
 print(response)
 ```
 
-**Claude CLI**
+**Claude Code**
 
 ```bash
-# Option 1: Environment variables
-export OPENAI_API_BASE="http://localhost:12580/openai/v1"
-export OPENAI_API_KEY="sk-tingly-model-token"
-
-# Option 2: Settings file (~/.claude/settings.json)
+# Settings file (~/.claude/settings.json)
 {
-  "api": {
-    "baseUrl": "http://localhost:12580/openai/v1",
-    "apiKey": "sk-tingly-model-token"
+  "env": {
+    "ANTHROPIC_AUTH_TOKEN": "{content after tingly token cmd 'Current API Key from Global Config'}",
+    "ANTHROPIC_BASE_URL": "http://localhost:12580/anthropic",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "tingly",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "tingly",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "tingly",
+    "ANTHROPIC_MODEL": "tingly"
   }
 }
 ```
