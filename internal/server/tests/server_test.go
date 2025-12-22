@@ -25,7 +25,12 @@ func containsStatus(actual int, expected []int) bool {
 func runSystemTests(t *testing.T, ts *TestServer, isRealConfig bool) {
 	// Test 1: Health check endpoint
 	t.Run("Health_Check", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", "/health", nil)
+		globalConfig := ts.appConfig.GetGlobalConfig()
+		userToken := globalConfig.GetUserToken()
+
+		req, _ := http.NewRequest("GET", "/api/v1/info/health", nil)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+userToken)
 		w := httptest.NewRecorder()
 		ts.ginEngine.ServeHTTP(w, req)
 
@@ -184,7 +189,7 @@ func runSystemTests(t *testing.T, ts *TestServer, isRealConfig bool) {
 		globalConfig := ts.appConfig.GetGlobalConfig()
 		userToken := globalConfig.GetUserToken()
 
-		req, _ := http.NewRequest("GET", "/api/v1/providers", nil)
+		req, _ := http.NewRequest("GET", "/api/v2/providers", nil)
 		req.Header.Set("Authorization", "Bearer "+userToken)
 		w := httptest.NewRecorder()
 		ts.ginEngine.ServeHTTP(w, req)
@@ -198,7 +203,7 @@ func runSystemTests(t *testing.T, ts *TestServer, isRealConfig bool) {
 
 	// Test 11: Providers endpoint without authentication
 	t.Run("Providers_Endpoint_Without_Auth", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", "/api/v1/providers", nil)
+		req, _ := http.NewRequest("GET", "/api/v2/providers", nil)
 		w := httptest.NewRecorder()
 		ts.ginEngine.ServeHTTP(w, req)
 
@@ -277,8 +282,9 @@ func runSystemTests(t *testing.T, ts *TestServer, isRealConfig bool) {
 		globalConfig := ts.appConfig.GetGlobalConfig()
 		userToken := globalConfig.GetUserToken()
 
-		req, _ := http.NewRequest("POST", "/api/v1/rule/test-rule", CreateJSONBody(map[string]interface{}{
-			"uuid":           "test-rule",
+		req, _ := http.NewRequest("POST", "/api/v1/rule/test-rule-uuid", CreateJSONBody(map[string]interface{}{
+			"name":           "test-name",
+			"uuid":           "test-rule-uuid",
 			"response_model": "gpt-4",
 			"provider":       "openai",
 			"default_model":  "gpt-4-turbo",
@@ -1037,7 +1043,7 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 
 		// Add a rule that routes to Anthropic-style provider (glm)
 		rule := map[string]interface{}{
-			"uuid":           "real-test-anthropic-rule",
+			"uuid":           "test-rule-uuid",
 			"request_model":  "real-anthropic-test",
 			"response_model": "glm-4.5-air",
 			"services": []map[string]interface{}{
@@ -1115,7 +1121,7 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 
 		// Add a rule that routes to OpenAI-style provider (qwen)
 		rule := map[string]interface{}{
-			"uuid":           "real-test-openai-rule",
+			"uuid":           "test-rule-uuid",
 			"request_model":  "real-openai-test",
 			"response_model": "qwen-plus",
 			"services": []map[string]interface{}{
@@ -1194,7 +1200,7 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 
 		// Add a rule that routes to Anthropic-style provider (glm)
 		rule := map[string]interface{}{
-			"uuid":           "real-test-func-rule",
+			"uuid":           "test-rule-uuid",
 			"request_model":  "real-func-test",
 			"response_model": "glm-4.5-air",
 			"services": []map[string]interface{}{

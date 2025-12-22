@@ -27,10 +27,8 @@ function App() {
                                         <Routes>
                                             <Route path="/" element={<Home />} />
                                             <Route path="/home" element={<Home />} />
-                                            <Route path="/dashboard" element={<Home />} />
-                                            <Route path="/credential" element={<ProviderPage />} />
                                             <Route path="/provider" element={<ProviderPage />} />
-                                            <Route path="/rule" element={<RulePage />} />
+                                            <Route path="/routing" element={<RulePage />} />
                                             <Route path="/system" element={<System />} />
                                             <Route path="/history" element={<History />} />
                                         </Routes>

@@ -225,7 +225,7 @@ export const api = {
     getProviders: async (): Promise<any> => {
         try {
             const apiInstances = await getApiInstances();
-            const response = await apiInstances.providersApi.apiV1ProvidersGet();
+            const response = await apiInstances.providersApi.apiV2ProvidersGet();
             const body = response.data;
             if (body.success && body.data) {
                 // Sort providers alphabetically by name to reduce UI changes
@@ -317,7 +317,7 @@ export const api = {
     addProvider: async (data: any): Promise<any> => {
         try {
             const apiInstances = await getApiInstances();
-            const response = await apiInstances.providersApi.apiV1ProvidersPost(data);
+            const response = await apiInstances.providersApi.apiV2ProvidersPost(data);
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
@@ -332,7 +332,7 @@ export const api = {
     getProvider: async (name: string): Promise<ProviderResponse> => {
         // Note: The generated client has an issue with path parameters
         const apiInstances = await getApiInstances();
-        const response = await apiInstances.providersApi.apiV1ProvidersNameGet(name);
+        const response = await apiInstances.providersApi.apiV2ProvidersUuidGet(name);
         return response.data;
     },
 
@@ -340,7 +340,7 @@ export const api = {
         try {
             // Note: The generated client has an issue with path parameters
             const apiInstances = await getApiInstances();
-            const response = await apiInstances.providersApi.apiV1ProvidersNamePut(name, data);
+            const response = await apiInstances.providersApi.apiV2ProvidersUuidPut(name, data);
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
@@ -356,7 +356,7 @@ export const api = {
         try {
             // Note: The generated client has an issue with path parameters
             const apiInstances = await getApiInstances();
-            const response = await apiInstances.providersApi.apiV1ProvidersNameDelete(name);
+            const response = await apiInstances.providersApi.apiV2ProvidersUuidDelete(name);
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
@@ -372,7 +372,7 @@ export const api = {
         try {
             // Note: The generated client has an issue with path parameters
             const apiInstances = await getApiInstances();
-            const response = await apiInstances.providersApi.apiV1ProvidersNameTogglePost(name);
+            const response = await apiInstances.providersApi.apiV2ProvidersUuidTogglePost(name);
             return response.data
         } catch (error: any) {
             if (error.response?.status === 401) {

@@ -136,7 +136,7 @@ export const HomeHeader: React.FC<HomeHeaderProps> = ({
                 <Box sx={{ display: 'flex', gap: 0.5, ml: 'auto' }}>
                     <Tooltip title="Edit Rule">
                         <IconButton
-                            onClick={() => navigate('/rule?expand=tingly')}
+                            onClick={() => navigate('/routing?expand=tingly')}
                             size="small"
                         >
                             <EditIcon fontSize="small" />

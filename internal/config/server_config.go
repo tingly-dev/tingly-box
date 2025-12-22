@@ -28,10 +28,11 @@ type Config struct {
 	EncryptProviders bool   `yaml:"encrypt_providers" json:"encrypt_providers"`   // Whether to encrypt provider info (default false)
 
 	// Merged fields from Config struct
-	Providers  map[string]*Provider `json:"providers"`
-	ServerPort int                  `json:"server_port"`
-	JWTSecret  string               `json:"jwt_secret"`
-	Debug      bool                 `yaml:"debug" json:"debug"` // Enable debug logging
+	ProvidersV1 map[string]*Provider `json:"providers"`
+	Providers   []*Provider          `json:"providers_v2,omitempty"`
+	ServerPort  int                  `json:"server_port"`
+	JWTSecret   string               `json:"jwt_secret"`
+	Debug       bool                 `yaml:"debug" json:"debug"` // Enable debug logging
 
 	ConfigFile string `yaml:"-" json:"-"` // Not serialized to YAML (exported to preserve field)
 	ConfigDir  string `yaml:"-" json:"-"`
@@ -103,7 +104,8 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 				cfg.ModelToken = "tingly-box-" + modelToken
 			}
 			// Initialize merged fields with defaults
-			cfg.Providers = make(map[string]*Provider)
+			cfg.ProvidersV1 = make(map[string]*Provider)
+			cfg.Providers = make([]*Provider, 0)
 			cfg.ServerPort = 12580
 			cfg.JWTSecret = generateSecret()
 			if err := cfg.save(); err != nil {
@@ -135,7 +137,8 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 		updated = true
 	}
 	if cfg.Providers == nil {
-		cfg.Providers = make(map[string]*Provider)
+		cfg.ProvidersV1 = make(map[string]*Provider)
+		cfg.Providers = make([]*Provider, 0)
 		updated = true
 	}
 	if cfg.ServerPort == 0 {
@@ -177,6 +180,7 @@ func (c *Config) load() error {
 
 	// Migration: Ensure all rules have a tactic set
 	c.migrateRules()
+	c.migrateProviders()
 
 	return nil
 }
@@ -536,7 +540,8 @@ func (c *Config) AddProviderByName(name, apiBase, token string) error {
 		return errors.New("API token cannot be empty")
 	}
 
-	c.Providers[name] = &Provider{
+	provider := &Provider{
+		UUID:     generateUUID(), // Generate a new UUID for the provider
 		Name:     name,
 		APIBase:  apiBase,
 		APIStyle: APIStyleOpenAI, // default to openai
@@ -544,20 +549,36 @@ func (c *Config) AddProviderByName(name, apiBase, token string) error {
 		Enabled:  true,
 	}
 
+	c.Providers = append(c.Providers, provider)
+
 	return c.save()
 }
 
-// GetProvider returns a provider by name
-func (c *Config) GetProvider(name string) (*Provider, error) {
+// GetProviderByUUID returns a provider
+func (c *Config) GetProviderByUUID(uuid string) (*Provider, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	provider, exists := c.Providers[name]
-	if !exists {
-		return nil, fmt.Errorf("provider '%s' not found", name)
+	for _, p := range c.Providers {
+		if p.UUID == uuid {
+			return p, nil
+		}
 	}
 
-	return provider, nil
+	return nil, fmt.Errorf("provider '%s' not found", uuid)
+}
+
+func (c *Config) GetProviderByName(name string) (*Provider, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	for _, p := range c.Providers {
+		if p.Name == name {
+			return p, nil
+		}
+	}
+
+	return nil, fmt.Errorf("provider with name '%s' not found", name)
 }
 
 // ListProviders returns all providers
@@ -565,12 +586,7 @@ func (c *Config) ListProviders() []*Provider {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	providers := make([]*Provider, 0, len(c.Providers))
-	for _, provider := range c.Providers {
-		providers = append(providers, provider)
-	}
-
-	return providers
+	return c.Providers
 }
 
 // AddProvider adds a new provider using Provider struct
@@ -588,41 +604,41 @@ func (c *Config) AddProvider(provider *Provider) error {
 		return errors.New("API token cannot be empty")
 	}
 
-	c.Providers[provider.Name] = provider
+	c.Providers = append(c.Providers, provider)
 
 	return c.save()
 }
 
-// UpdateProvider updates an existing provider
-func (c *Config) UpdateProvider(originalName string, provider *Provider) error {
+// UpdateProvider updates an existing provider by UUID
+func (c *Config) UpdateProvider(uuid string, provider *Provider) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if _, exists := c.Providers[originalName]; !exists {
-		return fmt.Errorf("provider '%s' not found", originalName)
+	for i, p := range c.Providers {
+		if p.UUID == uuid {
+			// Preserve the UUID
+			provider.UUID = uuid
+			c.Providers[i] = provider
+			return c.save()
+		}
 	}
 
-	// If name is being changed, remove the old entry and add new one
-	if originalName != provider.Name {
-		delete(c.Providers, originalName)
-	}
-
-	c.Providers[provider.Name] = provider
-
-	return c.save()
+	return fmt.Errorf("provider with UUID '%s' not found", uuid)
 }
 
-// DeleteProvider removes a provider by name
-func (c *Config) DeleteProvider(name string) error {
+// DeleteProvider removes a provider by UUID
+func (c *Config) DeleteProvider(uuid string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if _, exists := c.Providers[name]; !exists {
-		return fmt.Errorf("provider '%s' not found", name)
+	for i, p := range c.Providers {
+		if p.UUID == uuid {
+			c.Providers = append(c.Providers[:i], c.Providers[i+1:]...)
+			return c.save()
+		}
 	}
 
-	delete(c.Providers, name)
-	return c.save()
+	return fmt.Errorf("provider with UUID '%s' not found", uuid)
 }
 
 // Server configuration methods (merged from AppConfig)
@@ -653,13 +669,19 @@ func (c *Config) SetServerPort(port int) error {
 }
 
 // FetchAndSaveProviderModels fetches models from a provider and saves them
-func (c *Config) FetchAndSaveProviderModels(providerName string) error {
+func (c *Config) FetchAndSaveProviderModels(uid string) error {
 	c.mu.RLock()
-	provider, exists := c.Providers[providerName]
+	var provider *Provider
+	for _, p := range c.Providers {
+		if p.UUID == uid {
+			provider = p
+			break
+		}
+	}
 	c.mu.RUnlock()
 
-	if !exists {
-		return fmt.Errorf("provider %s not found", providerName)
+	if provider == nil {
+		return fmt.Errorf("provider with UUID %s not found", uid)
 	}
 
 	// Fetch models from provider API
@@ -669,7 +691,7 @@ func (c *Config) FetchAndSaveProviderModels(providerName string) error {
 	}
 
 	// Save models to local storage
-	return c.modelManager.SaveModels(providerName, provider.APIBase, models)
+	return c.modelManager.SaveModels(provider.UUID, provider.APIBase, models)
 }
 
 // getProviderModelsFromAPI fetches models from provider API via real HTTP requests
@@ -875,4 +897,60 @@ func generateUUID() string {
 		return fmt.Sprintf("uuid-%d", time.Now().UnixNano())
 	}
 	return id.String()
+}
+
+// migrateProviders migrates provider configurations from v1 to v2 format
+func (c *Config) migrateProviders() {
+	needsSave := false
+
+	// Skip migration if Providers is already populated
+	if len(c.Providers) > 0 {
+		return
+	}
+
+	// Check if there are v1 providers to migrate
+	if len(c.ProvidersV1) == 0 {
+		return
+	}
+
+	// Initialize Providers slice
+	c.Providers = make([]*Provider, 0, len(c.Providers))
+
+	// Migrate each v1 provider to v2
+	for _, pv1 := range c.ProvidersV1 {
+		providerV2 := &Provider{
+			UUID:        pv1.UUID,
+			Name:        pv1.Name,
+			APIBase:     pv1.APIBase,
+			APIStyle:    pv1.APIStyle,
+			Token:       pv1.Token,
+			Enabled:     pv1.Enabled,
+			ProxyURL:    pv1.ProxyURL,
+			Timeout:     30 * time.Minute, // Default timeout: 30 minute
+			Tags:        []string{},       // Empty tags
+			Models:      []string{},       // Empty models initially
+			LastUpdated: time.Now().Format(time.RFC3339),
+		}
+
+		// Generate UUID if not present in v1
+		if providerV2.UUID == "" {
+			providerV2.UUID = generateUUID()
+		}
+
+		c.Providers = append(c.Providers, providerV2)
+	}
+
+	// Only mark for save if migration actually occurred
+	if len(c.Providers) > 0 {
+		needsSave = true
+	}
+
+	// Save if migration occurred
+	if needsSave {
+		// Call save without acquiring lock since this is called within load()
+		data, err := json.MarshalIndent(c, "", "  ")
+		if err == nil {
+			_ = os.WriteFile(c.ConfigFile, data, 0644)
+		}
+	}
 }

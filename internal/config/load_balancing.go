@@ -8,7 +8,7 @@ import (
 
 // Service represents a provider-model combination for load balancing
 type Service struct {
-	Provider   string       `yaml:"provider" json:"provider"`       // Provider name
+	Provider   string       `yaml:"provider" json:"provider"`       // Provider name / uuid
 	Model      string       `yaml:"model" json:"model"`             // Model name
 	Weight     int          `yaml:"weight" json:"weight"`           // Weight for load balancing
 	Active     bool         `yaml:"active" json:"active"`           // Whether this service is active

@@ -42,8 +42,8 @@ const Layout = ({ children }: LayoutProps) => {
 
     const menuItems = [
         { path: '/', label: 'Home', icon: <DashboardIcon /> },
-        { path: '/credential', label: 'Provider', icon: <KeyIcon /> },
-        { path: '/rule', label: 'Routing', icon: <ForkRight sx={{ transform: 'rotate(45deg)' }} /> },
+        { path: '/provider', label: 'Provider', icon: <KeyIcon /> },
+        { path: '/routing', label: 'Routing', icon: <ForkRight sx={{ transform: 'rotate(45deg)' }} /> },
         // { path: '/system', label: 'System', icon: <SettingsIcon /> },
         // { path: '/history', label: 'History', icon: <HistoryIcon /> },
     ];

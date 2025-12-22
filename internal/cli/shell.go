@@ -187,7 +187,7 @@ func addProviderInteractive(appConfig *config.AppConfig, reader *bufio.Reader, l
 	}
 
 	// Update the provider to set the API style
-	if provider, err := appConfig.GetProvider(name); err == nil {
+	if provider, err := appConfig.GetProviderByName(name); err == nil {
 		provider.APIStyle = apiStyle
 		// Save the configuration
 		if saveErr := appConfig.Save(); saveErr != nil {

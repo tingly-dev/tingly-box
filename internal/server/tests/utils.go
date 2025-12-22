@@ -36,6 +36,11 @@ func NewTestServerWithConfigDir(t *testing.T, configDir string) *TestServer {
 		t.Fatalf("Failed to create app config: %v", err)
 	}
 
+	// use name to set provider uuid for testing
+	for _, p := range appConfig.GetGlobalConfig().ListProviders() {
+		p.UUID = p.Name
+	}
+
 	return createTestServer(t, appConfig)
 }
 
@@ -93,18 +98,20 @@ func NewTestServerWithAdaptor(t *testing.T, enableAdaptor bool) *TestServer {
 // AddTestProviders adds test providers to the configuration
 func (ts *TestServer) AddTestProviders(t *testing.T) {
 	providers := []struct {
+		uuid    string
 		name    string
 		apiBase string
 		token   string
 	}{
-		{"openai", "https://api.openai.com/v1", "sk-test-openai"},
-		{"alibaba", "https://dashscope.aliyuncs.com/compatible-mode/v1", "sk-test-alibaba"},
-		{"anthropic", "https://api.anthropic.com", "sk-test-anthropic"},
-		{"glm", "https://open.bigmodel.cn/api/paas/v4", "sk-test-glm"},
+		{"openai", "openai", "https://api.openai.com/v1", "sk-test-openai"},
+		{"alibaba", "alibaba", "https://dashscope.aliyuncs.com/compatible-mode/v1", "sk-test-alibaba"},
+		{"anthropic", "anthropic", "https://api.anthropic.com", "sk-test-anthropic"},
+		{"glm", "glm", "https://open.bigmodel.cn/api/paas/v4", "sk-test-glm"},
 	}
 
 	for _, p := range providers {
 		provider := &config.Provider{
+			UUID:    p.uuid,
 			Name:    p.name,
 			APIBase: p.apiBase,
 			Token:   p.token,
@@ -117,10 +124,10 @@ func (ts *TestServer) AddTestProviders(t *testing.T) {
 }
 
 // GetProviderToken returns the appropriate token for Anthropic API requests
-func (ts *TestServer) GetProviderToken(providerName string, isRealConfig bool) string {
+func (ts *TestServer) GetProviderToken(uid string, isRealConfig bool) string {
 	if isRealConfig {
 		// Use Anthropic provider token for real config
-		provider, err := ts.appConfig.GetProvider(providerName)
+		provider, err := ts.appConfig.GetProviderByUUID(uid)
 		if err == nil {
 			return provider.Token
 		}
@@ -205,6 +212,7 @@ func CaptureRequest(handler gin.HandlerFunc) (*http.Request, map[string]interfac
 // AddTestProvider adds a single test provider
 func (ts *TestServer) AddTestProvider(t *testing.T, name, apiBase, apiStyle string, enabled bool) {
 	provider := &config.Provider{
+		UUID:     name, // for test, use name as uuid for convenience
 		Name:     name,
 		APIBase:  apiBase,
 		APIStyle: config.APIStyle(apiStyle),
@@ -219,6 +227,7 @@ func (ts *TestServer) AddTestProvider(t *testing.T, name, apiBase, apiStyle stri
 // AddTestProviderWithURL adds a provider with a specific URL
 func (ts *TestServer) AddTestProviderWithURL(t *testing.T, name, url, apiStyle string, enabled bool) {
 	provider := &config.Provider{
+		UUID:     name, // use name as uuid for convenience
 		Name:     name,
 		APIBase:  url,
 		APIStyle: config.APIStyle(apiStyle),
@@ -234,7 +243,7 @@ func (ts *TestServer) AddTestProviderWithURL(t *testing.T, name, url, apiStyle s
 func (ts *TestServer) AddTestRule(t *testing.T, requestModel, providerName, model string) {
 	// Create a simple rule
 	rule := config.Rule{
-		UUID:          requestModel + "-uuid",
+		UUID:          requestModel,
 		RequestModel:  requestModel,
 		ResponseModel: model,
 		Services: []config.Service{

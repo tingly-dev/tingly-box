@@ -43,8 +43,8 @@ func GetGlobalServer() *Server {
 func (s *Server) UseUIEndpoints() {
 	// UI page routes
 	s.engine.GET("/home", s.UseIndexHTML)
-	s.engine.GET("/credential", s.UseIndexHTML)
-	s.engine.GET("/rule", s.UseIndexHTML)
+	s.engine.GET("/provider", s.UseIndexHTML)
+	s.engine.GET("/routing", s.UseIndexHTML)
 	s.engine.GET("/system", s.UseIndexHTML)
 	s.engine.GET("/history", s.UseIndexHTML)
 
@@ -346,145 +346,144 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 	)
 
 	// Create authenticated API group
-	authAPI := manager.NewGroup("api", "v1", "")
-	authAPI.Router.Use(s.UserAuthMiddleware())
+	apiV1 := manager.NewGroup("api", "v1", "")
+	apiV1.Router.Use(s.authMW.UserAuthMiddleware())
+
+	apiV2 := manager.NewGroup("api", "v2", "")
+	apiV2.Router.Use(s.authMW.UserAuthMiddleware())
 
 	// Health check endpoint
-	authAPI.GET("/info/health", s.GetHealthInfo,
+	apiV1.GET("/info/health", s.GetHealthInfo,
 		swagger.WithResponseModel(HealthInfoResponse{}),
 	)
 
-	authAPI.GET("/info/config", s.GetInfoConfig,
+	apiV1.GET("/info/config", s.GetInfoConfig,
 		swagger.WithDescription("Get config info about this application"),
 		swagger.WithResponseModel(ConfigInfoResponse{}),
 	)
 
 	// Provider Management
-	authAPI.GET("/providers", (s.GetProviders),
-		swagger.WithDescription("Get all configured providers with masked tokens"),
-		swagger.WithTags("providers"),
-		swagger.WithResponseModel(ProvidersResponse{}),
-	)
+	//apiV1.GET("/providers", (s.GetProviders),
+	//	swagger.WithDescription("Get all configured providers with masked tokens"),
+	//	swagger.WithTags("providers"),
+	//	swagger.WithResponseModel(ProvidersResponse{}),
+	//)
+	//
+	//apiV1.GET("/providers/:name", s.GetProviderByName,
+	//	swagger.WithDescription("Get specific provider details with masked token"),
+	//	swagger.WithTags("providers"),
+	//	swagger.WithResponseModel(ProviderResponse{}),
+	//)
+	//
+	//apiV1.POST("/providers", s.AddProvider,
+	//	swagger.WithDescription("Add a new provider configuration"),
+	//	swagger.WithTags("providers"),
+	//	swagger.WithRequestModel(AddProviderRequest{}),
+	//	swagger.WithResponseModel(AddProviderResponse{}),
+	//)
+	//
+	//apiV1.PUT("/providers/:name", s.UpdateProvider,
+	//	swagger.WithDescription("Update existing provider configuration"),
+	//	swagger.WithTags("providers"),
+	//	swagger.WithRequestModel(UpdateProviderRequest{}),
+	//	swagger.WithResponseModel(UpdateProviderResponse{}),
+	//)
+	//
+	//apiV1.POST("/providers/:name/toggle", s.ToggleProvider,
+	//	swagger.WithDescription("Toggle provider enabled/disabled status"),
+	//	swagger.WithTags("providers"),
+	//	swagger.WithResponseModel(ToggleProviderResponse{}),
+	//)
 
-	authAPI.GET("/providers/:name", s.GetProvider,
-		swagger.WithDescription("Get specific provider details with masked token"),
-		swagger.WithTags("providers"),
-		swagger.WithResponseModel(ProviderResponse{}),
-	)
-
-	authAPI.POST("/providers", s.AddProvider,
-		swagger.WithDescription("Add a new provider configuration"),
-		swagger.WithTags("providers"),
-		swagger.WithRequestModel(AddProviderRequest{}),
-		swagger.WithResponseModel(AddProviderResponse{}),
-	)
-
-	authAPI.PUT("/providers/:name", s.UpdateProvider,
-		swagger.WithDescription("Update existing provider configuration"),
-		swagger.WithTags("providers"),
-		swagger.WithRequestModel(UpdateProviderRequest{}),
-		swagger.WithResponseModel(UpdateProviderResponse{}),
-	)
-
-	authAPI.POST("/providers/:name/toggle", s.ToggleProvider,
-		swagger.WithDescription("Toggle provider enabled/disabled status"),
-		swagger.WithTags("providers"),
-		swagger.WithResponseModel(ToggleProviderResponse{}),
-	)
-
-	authAPI.DELETE("/providers/:name", s.DeleteProvider,
-		swagger.WithDescription("Delete a provider configuration"),
-		swagger.WithTags("providers"),
-		swagger.WithResponseModel(DeleteProviderResponse{}),
-	)
+	useV2Provider(s, apiV2)
 
 	// Server Management
-	authAPI.GET("/status", s.GetStatus,
+	apiV1.GET("/status", s.GetStatus,
 		swagger.WithDescription("Get server status and statistics"),
 		swagger.WithTags("server"),
 		swagger.WithResponseModel(StatusResponse{}),
 	)
 
-	authAPI.POST("/server/start", s.StartServer,
+	apiV1.POST("/server/start", s.StartServer,
 		swagger.WithDescription("Start the server"),
 		swagger.WithTags("server"),
 		swagger.WithResponseModel(ServerActionResponse{}),
 	)
 
-	authAPI.POST("/server/stop", (s.StopServer),
+	apiV1.POST("/server/stop", (s.StopServer),
 		swagger.WithDescription("Stop the server gracefully"),
 		swagger.WithTags("server"),
 		swagger.WithResponseModel(ServerActionResponse{}),
 	)
 
-	authAPI.POST("/server/restart", (s.RestartServer),
+	apiV1.POST("/server/restart", (s.RestartServer),
 		swagger.WithDescription("Restart the server"),
 		swagger.WithTags("server"),
 		swagger.WithResponseModel(ServerActionResponse{}),
 	)
 
 	// Rule Management
-	authAPI.GET("/rules", (s.GetRules),
+	apiV1.GET("/rules", (s.GetRules),
 		swagger.WithDescription("Get all configured rules"),
 		swagger.WithTags("rules"),
 		swagger.WithResponseModel(RulesResponse{}),
 	)
 
-	authAPI.GET("/rule/:uuid", (s.GetRule),
+	apiV1.GET("/rule/:uuid", (s.GetRule),
 		swagger.WithDescription("Get specific rule by UUID"),
 		swagger.WithTags("rules"),
 		swagger.WithResponseModel(RuleResponse{}),
 	)
 
-	authAPI.POST("/rule/:uuid", (s.SetRule),
+	apiV1.POST("/rule/:uuid", (s.SetRule),
 		swagger.WithDescription("Create or update a rule configuration"),
 		swagger.WithTags("rules"),
 		swagger.WithRequestModel(SetRuleRequest{}),
 		swagger.WithResponseModel(SetRuleResponse{}),
 	)
 
-	authAPI.DELETE("/rule/:uuid", (s.DeleteRule),
+	apiV1.DELETE("/rule/:uuid", (s.DeleteRule),
 		swagger.WithDescription("Delete a rule configuration"),
 		swagger.WithTags("rules"),
 		swagger.WithResponseModel(DeleteRuleResponse{}),
 	)
 
 	// History
-	authAPI.GET("/history", (s.GetHistory),
+	apiV1.GET("/history", (s.GetHistory),
 		swagger.WithDescription("Get request history"),
 		swagger.WithTags("history"),
 		swagger.WithResponseModel(HistoryResponse{}),
 	)
 
 	// Provider Models Management
-	authAPI.GET("/provider-models", (s.GetProviderModels),
+	apiV1.GET("/provider-models", (s.GetProviderModels),
 		swagger.WithDescription("Get all provider models"),
 		swagger.WithTags("models"),
 		swagger.WithResponseModel(ProviderModelsResponse{}),
 	)
 
-	authAPI.POST("/provider-models/:name", (s.FetchProviderModels),
+	apiV1.POST("/provider-models/:name", (s.FetchProviderModels),
 		swagger.WithDescription("Fetch models for a specific provider"),
 		swagger.WithTags("models"),
 		swagger.WithResponseModel(FetchProviderModelsResponse{}),
 	)
 
 	// Probe endpoint
-	authAPI.POST("/probe", s.HandleProbeModel,
+	apiV1.POST("/probe", s.HandleProbeModel,
 		swagger.WithDescription("Test a rule configuration by sending a sample request"),
 		swagger.WithTags("testing"),
 		swagger.WithRequestModel(ProbeRequest{}),
 		swagger.WithResponseModel(ProbeResponse{}),
 	)
 
-	authAPI.POST("/probe/model", s.HandleProbeModel,
+	apiV1.POST("/probe/model", s.HandleProbeModel,
 		swagger.WithDescription("Test a model forwarding by sending a sample request"),
 		swagger.WithTags("testing"),
 		swagger.WithRequestModel(ProbeRequest{}),
 		swagger.WithResponseModel(ProbeResponse{}),
 	)
 
-	authAPI.POST("/probe/provider", s.HandleProbeProvider,
+	apiV1.POST("/probe/provider", s.HandleProbeProvider,
 		swagger.WithDescription("Test api key for the provider"),
 		swagger.WithTags("testing"),
 		swagger.WithRequestModel(ProbeProviderRequest{}),
@@ -492,14 +491,14 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 	)
 
 	// Token Management
-	authAPI.POST("/token", (s.GenerateToken),
+	apiV1.POST("/token", (s.GenerateToken),
 		swagger.WithDescription("Generate a new API token"),
 		swagger.WithTags("token"),
 		swagger.WithRequestModel(GenerateTokenRequest{}),
 		swagger.WithResponseModel(TokenResponse{}),
 	)
 
-	authAPI.GET("/token", (s.GetToken),
+	apiV1.GET("/token", (s.GetToken),
 		swagger.WithDescription("Get existing API token or generate new one"),
 		swagger.WithTags("token"),
 		swagger.WithResponseModel(TokenResponse{}),
@@ -507,6 +506,47 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 
 	// Setup Swagger documentation endpoint
 	manager.SetupSwaggerEndpoints()
+}
+
+func useV2Provider(s *Server, api *swagger.RouteGroup) {
+
+	api.GET("/providers", s.GetProviders,
+		swagger.WithDescription("Get all configured providers with masked tokens"),
+		swagger.WithTags("providers"),
+		swagger.WithResponseModel(ProvidersResponse{}),
+	)
+
+	api.GET("/providers/:uuid", s.GetProvider,
+		swagger.WithDescription("Get specific provider details with masked token"),
+		swagger.WithTags("providers"),
+		swagger.WithResponseModel(ProviderResponse{}),
+	)
+
+	api.POST("/providers", s.AddProvider,
+		swagger.WithDescription("Add a new provider configuration"),
+		swagger.WithTags("providers"),
+		swagger.WithRequestModel(AddProviderRequest{}),
+		swagger.WithResponseModel(AddProviderResponse{}),
+	)
+
+	api.PUT("/providers/:uuid", s.UpdateProvider,
+		swagger.WithDescription("Update existing provider configuration"),
+		swagger.WithTags("providers"),
+		swagger.WithRequestModel(UpdateProviderRequest{}),
+		swagger.WithResponseModel(UpdateProviderResponse{}),
+	)
+
+	api.POST("/providers/:uuid/toggle", s.ToggleProvider,
+		swagger.WithDescription("Toggle provider enabled/disabled status"),
+		swagger.WithTags("providers"),
+		swagger.WithResponseModel(ToggleProviderResponse{}),
+	)
+
+	api.DELETE("/providers/:uuid", s.DeleteProvider,
+		swagger.WithDescription("Delete a provider configuration"),
+		swagger.WithTags("providers"),
+		swagger.WithResponseModel(DeleteProviderResponse{}),
+	)
 }
 
 func (s *Server) useWebStaticEndpoints(engine *gin.Engine) {

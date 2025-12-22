@@ -133,9 +133,14 @@ func (ac *AppConfig) AddProviderByName(name, apiBase, token string) error {
 	return ac.config.AddProviderByName(name, apiBase, token)
 }
 
-// GetProvider returns a provider by name
-func (ac *AppConfig) GetProvider(name string) (*Provider, error) {
-	return ac.config.GetProvider(name)
+// GetProviderByUUID returns a provider by uuid
+func (ac *AppConfig) GetProviderByUUID(uuid string) (*Provider, error) {
+	return ac.config.GetProviderByUUID(uuid)
+}
+
+// GetProviderByName returns a provider by name
+func (ac *AppConfig) GetProviderByName(name string) (*Provider, error) {
+	return ac.config.GetProviderByName(name)
 }
 
 // ListProviders returns all providers

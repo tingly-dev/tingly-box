@@ -38,31 +38,42 @@ export interface ProviderSelectTabOption {
 interface ProviderSelectTabProps {
     providers: Provider[];
     providerModels?: ProviderModelsData;
-    selectedProvider?: string;
+    selectedProvider?: string; // This is now UUID
     selectedModel?: string;
     activeTab?: number;
     onSelected?: (option: ProviderSelectTabOption) => void;
     onRefresh?: (provider: Provider) => void;
     onCustomModelSave?: (provider: Provider, customModel: string) => void;
-    refreshingProviders?: string[];
+    refreshingProviders?: string[]; // These are UUIDs
+    providerUuidToName?: { [uuid: string]: string }; // Add lookup map
 }
 
 export default function ModelSelectTab({
     providers,
     providerModels,
-    selectedProvider,
+    selectedProvider, // This is now UUID
     selectedModel,
     activeTab: externalActiveTab,
     onSelected,
     onRefresh,
     onCustomModelSave,
-    refreshingProviders = [],
+    refreshingProviders = [], // These are UUIDs
+    providerUuidToName = {}, // Add lookup map
 }: ProviderSelectTabProps) {
     const [internalCurrentTab, setInternalCurrentTab] = useState(0);
     const [isInitialized, setIsInitialized] = useState(false);
     const { customModels, saveCustomModel, removeCustomModel } = useCustomModels();
     const gridLayout = useGridLayout();
     const [autoFetchedProviders, setAutoFetchedProviders] = useState<Set<string>>(new Set());
+
+    // Create provider name to UUID mapping for search functionality
+    const providerNameToUuid = React.useMemo(() => {
+        const map: { [name: string]: string } = {};
+        providers.forEach(provider => {
+            map[provider.name] = provider.uuid;
+        });
+        return map;
+    }, [providers]);
 
     // Pagination and search
     const { searchTerms, currentPage, setCurrentPage, handleSearchChange, handlePageChange, getPaginatedData } =
@@ -133,15 +144,15 @@ export default function ModelSelectTab({
             providerModelData.custom_model
         );
 
-        if (!hasModels && !autoFetchedProviders.has(targetProvider.name) && onRefresh && !refreshingProviders.includes(targetProvider.name)) {
+        if (!hasModels && !autoFetchedProviders.has(targetProvider.uuid) && onRefresh && !refreshingProviders.includes(targetProvider.uuid)) {
             // Mark as auto-fetched to avoid repeated requests
-            setAutoFetchedProviders(prev => new Set([...prev, targetProvider.name]));
+            setAutoFetchedProviders(prev => new Set([...prev, targetProvider.uuid]));
             // Trigger model fetch
             onRefresh(targetProvider);
         }
 
         // Auto-navigate to page containing selected model when switching tabs
-        if (selectedProvider === targetProvider.name && selectedModel) {
+        if (selectedProvider === targetProvider.uuid && selectedModel) {
             const modelTypeInfo = getModelTypeInfo(targetProvider, providerModels, customModels);
             const { isCustomModel, allModelsForSearch } = modelTypeInfo;
 
@@ -180,7 +191,7 @@ export default function ModelSelectTab({
     React.useEffect(() => {
         if (!isInitialized && selectedProvider) {
             const enabledProviders = (providers || []).filter(provider => provider.enabled);
-            const targetProviderIndex = enabledProviders.findIndex(provider => provider.name === selectedProvider);
+            const targetProviderIndex = enabledProviders.findIndex(provider => provider.uuid === selectedProvider);
 
             // Auto-switch to the selected provider's tab
             if (targetProviderIndex !== -1) {
@@ -220,11 +231,11 @@ export default function ModelSelectTab({
                 >
                     {(providers || []).filter(provider => provider.enabled).map((provider, index) => {
                         const modelTypeInfo = getModelTypeInfo(provider, providerModels, customModels);
-                        const isProviderSelected = selectedProvider === provider.name;
+                        const isProviderSelected = selectedProvider === provider.uuid; // Compare UUIDs
 
                         return (
                             <Tab
-                                key={provider.name}
+                                key={provider.uuid} // Use UUID as key
                                 label={
                                     <Stack direction="row" alignItems="center" spacing={1}>
                                         <Typography variant="body1" fontWeight={600}>
@@ -257,15 +268,15 @@ export default function ModelSelectTab({
                 const modelTypeInfo = getModelTypeInfo(provider, providerModels, customModels);
                 const { standardModelsForDisplay, isCustomModel } = modelTypeInfo;
 
-                const isProviderSelected = selectedProvider === provider.name;
+                const isProviderSelected = selectedProvider === provider.uuid; // Compare UUIDs
                 const pagination = getPaginatedData(standardModelsForDisplay, provider.name);
-                const isRefreshing = refreshingProviders.includes(provider.name);
+                const isRefreshing = refreshingProviders.includes(provider.uuid); // Use UUID
 
                 const backendCustomModel = providerModels?.[provider.name]?.custom_model;
                 const localStorageCustomModels = customModels[provider.name] || [];
 
                 return (
-                    <TabPanel key={provider.name} value={currentTab} index={index}>
+                    <TabPanel key={provider.uuid} value={currentTab} index={index}> {/* Use UUID as key */}
                         {/* Search and Pagination Controls */}
                         <Box sx={{ mb: 3 }}>
                             <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2}>

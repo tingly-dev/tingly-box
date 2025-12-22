@@ -17,6 +17,7 @@ func (s *Server) GetProviders(c *gin.Context) {
 
 	for i, provider := range providers {
 		maskedProviders[i] = ProviderResponse{
+			UUID:     provider.UUID,
 			Name:     provider.Name,
 			APIBase:  provider.APIBase,
 			APIStyle: string(provider.APIStyle),
@@ -45,6 +46,16 @@ func (s *Server) AddProvider(c *gin.Context) {
 		return
 	}
 
+	// check existing
+	_, err := s.config.GetProviderByName(req.Name)
+	if err == nil {
+		c.JSON(http.StatusConflict, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("provider with name '%s' already exists", req.Name),
+		})
+		return
+	}
+
 	// Set default enabled status if not provided
 	if !req.Enabled {
 		req.Enabled = true
@@ -63,7 +74,7 @@ func (s *Server) AddProvider(c *gin.Context) {
 		Enabled:  req.Enabled,
 	}
 
-	err := s.config.AddProvider(provider)
+	err = s.config.AddProvider(provider)
 	if err != nil {
 		if s.logger != nil {
 			s.logger.LogAction(obs.ActionAddProvider, map[string]interface{}{
@@ -97,8 +108,8 @@ func (s *Server) AddProvider(c *gin.Context) {
 
 // DeleteProvider removes a provider
 func (s *Server) DeleteProvider(c *gin.Context) {
-	providerName := c.Param("name")
-	if providerName == "" {
+	uid := c.Param("uuid")
+	if uid == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"error":   "Provider name is required",
@@ -106,11 +117,11 @@ func (s *Server) DeleteProvider(c *gin.Context) {
 		return
 	}
 
-	err := s.config.DeleteProvider(providerName)
+	err := s.config.DeleteProvider(uid)
 	if err != nil {
 		if s.logger != nil {
 			s.logger.LogAction(obs.ActionDeleteProvider, map[string]interface{}{
-				"name": providerName,
+				"name": uid,
 			}, false, err.Error())
 		}
 
@@ -123,8 +134,8 @@ func (s *Server) DeleteProvider(c *gin.Context) {
 
 	if s.logger != nil {
 		s.logger.LogAction(obs.ActionDeleteProvider, map[string]interface{}{
-			"name": providerName,
-		}, true, fmt.Sprintf("Provider %s deleted successfully", providerName))
+			"name": uid,
+		}, true, fmt.Sprintf("Provider %s deleted successfully", uid))
 	}
 
 	response := DeleteProviderResponse{
@@ -137,8 +148,8 @@ func (s *Server) DeleteProvider(c *gin.Context) {
 
 // UpdateProvider updates an existing provider
 func (s *Server) UpdateProvider(c *gin.Context) {
-	providerName := c.Param("name")
-	if providerName == "" {
+	uid := c.Param("uuid")
+	if uid == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"error":   "Provider name is required",
@@ -156,8 +167,21 @@ func (s *Server) UpdateProvider(c *gin.Context) {
 		return
 	}
 
+	// check existing
+	if req.Name != nil {
+		name := *req.Name
+		_, err := s.config.GetProviderByName(name)
+		if err == nil {
+			c.JSON(http.StatusConflict, gin.H{
+				"success": false,
+				"error":   fmt.Sprintf("provider with name '%s' already exists", name),
+			})
+			return
+		}
+	}
+
 	// Get existing provider
-	provider, err := s.config.GetProvider(providerName)
+	provider, err := s.config.GetProviderByUUID(uid)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,
@@ -184,11 +208,11 @@ func (s *Server) UpdateProvider(c *gin.Context) {
 		provider.Enabled = *req.Enabled
 	}
 
-	err = s.config.UpdateProvider(providerName, provider)
+	err = s.config.UpdateProvider(uid, provider)
 	if err != nil {
 		if s.logger != nil {
 			s.logger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
-				"name":    providerName,
+				"name":    uid,
 				"updates": req,
 			}, false, err.Error())
 		}
@@ -202,12 +226,13 @@ func (s *Server) UpdateProvider(c *gin.Context) {
 
 	if s.logger != nil {
 		s.logger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
-			"name": providerName,
-		}, true, fmt.Sprintf("Provider %s updated successfully", providerName))
+			"name": uid,
+		}, true, fmt.Sprintf("Provider %s updated successfully", uid))
 	}
 
 	// Return masked provider data
 	responseProvider := ProviderResponse{
+		UUID:     provider.UUID,
 		Name:     provider.Name,
 		APIBase:  provider.APIBase,
 		APIStyle: string(provider.APIStyle),
@@ -226,8 +251,8 @@ func (s *Server) UpdateProvider(c *gin.Context) {
 
 // GetProvider returns details for a specific provider (with masked token)
 func (s *Server) GetProvider(c *gin.Context) {
-	providerName := c.Param("name")
-	if providerName == "" {
+	uid := c.Param("uuid")
+	if uid == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"error":   "Provider name is required",
@@ -235,7 +260,7 @@ func (s *Server) GetProvider(c *gin.Context) {
 		return
 	}
 
-	provider, err := s.config.GetProvider(providerName)
+	provider, err := s.config.GetProviderByUUID(uid)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,
@@ -246,6 +271,7 @@ func (s *Server) GetProvider(c *gin.Context) {
 
 	// Mask the token for security
 	responseProvider := ProviderResponse{
+		UUID:     provider.UUID,
 		Name:     provider.Name,
 		APIBase:  provider.APIBase,
 		APIStyle: string(provider.APIStyle),
@@ -266,8 +292,8 @@ func (s *Server) GetProvider(c *gin.Context) {
 
 // ToggleProvider enables/disables a provider
 func (s *Server) ToggleProvider(c *gin.Context) {
-	providerName := c.Param("name")
-	if providerName == "" {
+	uid := c.Param("uuid")
+	if uid == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"error":   "Provider name is required",
@@ -275,7 +301,7 @@ func (s *Server) ToggleProvider(c *gin.Context) {
 		return
 	}
 
-	provider, err := s.config.GetProvider(providerName)
+	provider, err := s.config.GetProviderByUUID(uid)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,
@@ -287,11 +313,11 @@ func (s *Server) ToggleProvider(c *gin.Context) {
 	// Toggle enabled status
 	provider.Enabled = !provider.Enabled
 
-	err = s.config.UpdateProvider(providerName, provider)
+	err = s.config.UpdateProvider(uid, provider)
 	if err != nil {
 		if s.logger != nil {
 			s.logger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
-				"name":    providerName,
+				"name":    uid,
 				"enabled": provider.Enabled,
 			}, false, err.Error())
 		}
@@ -310,14 +336,14 @@ func (s *Server) ToggleProvider(c *gin.Context) {
 
 	if s.logger != nil {
 		s.logger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
-			"name":    providerName,
+			"name":    uid,
 			"enabled": provider.Enabled,
-		}, true, fmt.Sprintf("Provider %s %s successfully", providerName, action))
+		}, true, fmt.Sprintf("Provider %s %s successfully", uid, action))
 	}
 
 	response := ToggleProviderResponse{
 		Success: true,
-		Message: fmt.Sprintf("Provider %s %s successfully", providerName, action),
+		Message: fmt.Sprintf("Provider %s %s successfully", uid, action),
 	}
 	response.Data.Enabled = provider.Enabled
 
@@ -325,9 +351,9 @@ func (s *Server) ToggleProvider(c *gin.Context) {
 }
 
 func (s *Server) FetchProviderModels(c *gin.Context) {
-	providerName := c.Param("name")
+	uid := c.Param("uuid")
 
-	if providerName == "" {
+	if uid == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"error":   "Provider name is required",
@@ -336,17 +362,17 @@ func (s *Server) FetchProviderModels(c *gin.Context) {
 	}
 
 	// Fetch and save models
-	err := s.config.FetchAndSaveProviderModels(providerName)
+	err := s.config.FetchAndSaveProviderModels(uid)
 	if err != nil {
 		if s.logger != nil {
 			s.logger.LogAction(obs.ActionFetchModels, map[string]interface{}{
-				"provider": providerName,
+				"provider": uid,
 			}, false, err.Error())
 		}
 
 		c.JSON(http.StatusInternalServerError, FetchProviderModelsResponse{
 			Success: false,
-			Message: fmt.Sprintf("Failed to fetch models from provider %s: %s", providerName, err.Error()),
+			Message: fmt.Sprintf("Failed to fetch models from provider %s: %s", uid, err.Error()),
 			Data:    nil,
 		})
 		return
@@ -354,18 +380,18 @@ func (s *Server) FetchProviderModels(c *gin.Context) {
 
 	// Get the updated models
 	modelManager := s.config.GetModelManager()
-	models := modelManager.GetModels(providerName)
+	models := modelManager.GetModels(uid)
 
 	if s.logger != nil {
 		s.logger.LogAction(obs.ActionFetchModels, map[string]interface{}{
-			"provider":     providerName,
+			"provider":     uid,
 			"models_count": len(models),
-		}, true, fmt.Sprintf("Successfully fetched %d models for provider %s", len(models), providerName))
+		}, true, fmt.Sprintf("Successfully fetched %d models for provider %s", len(models), uid))
 	}
 
 	response := FetchProviderModelsResponse{
 		Success: true,
-		Message: fmt.Sprintf("Successfully fetched %d models for provider %s", len(models), providerName),
+		Message: fmt.Sprintf("Successfully fetched %d models for provider %s", len(models), uid),
 		Data:    models,
 	}
 
@@ -385,11 +411,11 @@ func (s *Server) GetProviderModels(c *gin.Context) {
 	providers := providerModelManager.GetAllProviders()
 	providerModels := make(map[string]*ProviderModelInfo)
 
-	for _, providerName := range providers {
-		models := providerModelManager.GetModels(providerName)
-		apiBase, lastUpdated, _ := providerModelManager.GetProviderInfo(providerName)
+	for _, uid := range providers {
+		models := providerModelManager.GetModels(uid)
+		apiBase, lastUpdated, _ := providerModelManager.GetProviderInfo(uid)
 
-		providerModels[providerName] = &ProviderModelInfo{
+		providerModels[uid] = &ProviderModelInfo{
 			Models:      models,
 			APIBase:     apiBase,
 			LastUpdated: lastUpdated,
