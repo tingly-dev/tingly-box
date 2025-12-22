@@ -10,7 +10,16 @@ export const themeOptions: ThemeOptions = {
       contrastText: '#fff',
     },
     secondary: {
-      main: '#dc004e',
+      main: '#7c4dff',
+      light: '#b388ff',
+      dark: '#651fff',
+      contrastText: '#fff',
+    },
+    info: {
+      main: '#0288d1',
+      light: '#29b6f6',
+      dark: '#0277bd',
+      contrastText: '#fff',
     },
     success: {
       main: '#2e7d32',

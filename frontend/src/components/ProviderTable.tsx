@@ -278,6 +278,9 @@ const ProviderTable = ({
 
                             <TableCell>
                                 <ApiStyleBadge
+                                    sx={{
+                                        minWidth: "110px"
+                                    }}
                                     apiStyle={provider.api_style}
                                 ></ApiStyleBadge>
                             </TableCell>

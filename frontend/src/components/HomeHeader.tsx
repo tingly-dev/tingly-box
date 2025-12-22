@@ -113,7 +113,6 @@ export const HomeHeader: React.FC<HomeHeaderProps> = ({
                         <IconButton
                             onClick={handleRefreshToken}
                             size="small"
-                            title="Generate New Token"
                         >
                             <RefreshIcon fontSize="small" />
                         </IconButton>
@@ -189,6 +188,7 @@ export const HomeHeader: React.FC<HomeHeaderProps> = ({
                     />
                 </Tabs>
             </Box>
+
             {activeTab === 0 && <OpenAITab />}
             {activeTab === 1 && <AnthropicTab />}
 

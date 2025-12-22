@@ -353,7 +353,7 @@ const RulePage = () => {
             }}
         >
             <UnifiedCard
-                title="Routing Configuration"
+                title="Advance Proxy Configuration"
                 subtitle="Config local model which forwarding to remote providers"
                 size="full"
                 rightAction={
