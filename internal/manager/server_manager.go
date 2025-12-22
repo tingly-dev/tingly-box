@@ -99,7 +99,11 @@ func (sm *ServerManager) Setup(port int) error {
 		}
 	}
 
-	sm.appConfig.GetGlobalConfig().SetDebug(sm.enableDebug)
+	if sm.enableDebug {
+		gin.SetMode(gin.DebugMode)
+	} else {
+		gin.SetMode(gin.ReleaseMode)
+	}
 
 	// Create server with UI and adaptor options
 	sm.server = server.NewServer(sm.appConfig.GetGlobalConfig(), server.WithUI(sm.enableUI), server.WithAdaptor(sm.enableAdaptor), server.WithHost(sm.host))
@@ -121,7 +125,12 @@ func (sm *ServerManager) Start() error {
 		return fmt.Errorf("server is already running")
 	}
 
-	gin.SetMode(gin.ReleaseMode)
+	if sm.enableDebug {
+		gin.SetMode(gin.DebugMode)
+	} else {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
 	err := sm.server.Start(sm.appConfig.GetServerPort())
 	if err != nil {
 		return err
