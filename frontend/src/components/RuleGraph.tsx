@@ -74,8 +74,13 @@ interface RuleGraphProps {
 
 const StyledCard = styled(Card, {
     shouldForwardProp: (prop) => prop !== 'active',
-})<{ active: boolean }>(({ active }) => ({
+})<{ active: boolean }>(({ active, theme }) => ({
     transition: 'all 0.2s ease-in-out',
+    opacity: active ? 1 : 0.6,
+    filter: active ? 'none' : 'grayscale(0.3)',
+    '&:hover': {
+        boxShadow: active ? theme.shadows[4] : theme.shadows[1],
+    },
 }));
 
 const SummarySection = styled(Box)(({ theme }) => ({
@@ -191,12 +196,12 @@ const ModelNode: React.FC<{
                         size="small"
                         fullWidth
                         autoFocus
+                        label="Model Name"
                         sx={{
                             '& .MuiInputBase-input': {
                                 color: 'text.primary',
                                 fontWeight: 'inherit',
                                 fontSize: 'inherit',
-                                textAlign: 'center',
                                 backgroundColor: 'transparent',
                             },
                             '& .MuiOutlinedInput-notchedOutline': {
@@ -591,7 +596,10 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
             {/* Header Section - RuleCard Style */}
             <SummarySection onClick={onToggleExpanded}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary' }}>
+                    <Typography variant="h6" sx={{
+                        fontWeight: 600,
+                        color: record.active ? 'text.primary' : 'text.disabled'
+                    }}>
                         {record.requestModel || 'Specified model name'}
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -599,16 +607,37 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                             label={`use ${record.providers.length} keys`}
                             size="small"
                             variant="outlined"
+                            sx={{
+                                opacity: record.active ? 1 : 0.5,
+                                borderColor: record.active ? 'inherit' : 'text.disabled',
+                                color: record.active ? 'inherit' : 'text.disabled'
+                            }}
                         />
                         <Chip
-                            label={record.active ? 'Active' : 'Inactive'}
-                            color={record.active ? 'success' : 'default'}
+                            label={record.active ? "Active" : "Inactive"}
                             size="small"
+                            color={record.active ? "success" : "default"}
+                            variant={record.active ? "filled" : "outlined"}
+                            sx={{
+                                opacity: record.active ? 1 : 0.7,
+                            }}
+                        />
+                        <Switch
+                            checked={record.active}
+                            onChange={(e) => onUpdateRecord('active', e.target.checked)}
+                            disabled={saving}
+                            size="small"
+                            onClick={(e) => e.stopPropagation()}
                         />
                         {record.responseModel && <Chip
                             label={`Response as ${record.responseModel}`}
                             size="small"
-                            color={'info'}
+                            color="info"
+                            sx={{
+                                opacity: record.active ? 1 : 0.5,
+                                backgroundColor: record.active ? 'info.main' : 'action.disabled',
+                                color: record.active ? 'info.contrastText' : 'text.disabled'
+                            }}
                         />}
                     </Box>
                 </Box>
@@ -682,13 +711,6 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                             </MenuItem>
                         </Menu>
                     </Box>
-                    <Switch
-                        checked={record.active}
-                        onChange={(e) => onUpdateRecord('active', e.target.checked)}
-                        size="small"
-                        disabled={saving}
-                        onClick={(e) => e.stopPropagation()}
-                    />
                     <IconButton
                         size="small"
                         onClick={(e) => {
@@ -861,14 +883,6 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                             <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3, mt: 3, pt: 2, borderTop: '1px solid', borderColor: 'divider', flexWrap: 'wrap' }}>
                                 <Typography variant="caption" color="text.secondary">
                                     • Click any node to edit
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                    <CheckCircleIcon sx={{ fontSize: 14, color: 'success.main' }} />
-                                    Active
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                    <RadioButtonUncheckedIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
-                                    Inactive
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary">
                                     • Weight affects load balancing
