@@ -7,6 +7,7 @@ import (
 	"tingly-box/internal/obs"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 func (s *Server) GetProviders(c *gin.Context) {
@@ -66,7 +67,16 @@ func (s *Server) AddProvider(c *gin.Context) {
 		req.APIStyle = "openai"
 	}
 
+	uid, err := uuid.NewUUID()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, AddProviderResponse{
+			Success: false,
+			Message: "Provider UUID generate failed: " + err.Error(),
+		})
+		return
+	}
 	provider := &config.Provider{
+		UUID:     uid.String(),
 		Name:     req.Name,
 		APIBase:  req.APIBase,
 		APIStyle: config.APIStyle(req.APIStyle),
