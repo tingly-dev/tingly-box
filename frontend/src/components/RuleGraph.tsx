@@ -627,6 +627,7 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                             onChange={(e) => onUpdateRecord('active', e.target.checked)}
                             disabled={saving}
                             size="small"
+                            color="success"
                             onClick={(e) => e.stopPropagation()}
                         />
                         {record.responseModel && <Chip
