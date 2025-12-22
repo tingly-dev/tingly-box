@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"tingly-box/internal/config"
-	"tingly-box/internal/manage"
+	"tingly-box/internal/manager"
 	"tingly-box/internal/server"
 	"tingly-box/internal/util"
 
@@ -88,12 +88,12 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 		return fmt.Errorf("failed to create PID file: %w", err)
 	}
 
-	serverManager := manage.NewServerManager(
+	serverManager := manager.NewServerManager(
 		appConfig,
-		manage.WithUI(opts.EnableUI),
-		manage.WithAdaptor(opts.enableAdaptor),
-		manage.WithDebug(opts.EnableDebug),
-		manage.WithHost(opts.Host),
+		manager.WithUI(opts.EnableUI),
+		manager.WithAdaptor(opts.enableAdaptor),
+		manager.WithDebug(opts.EnableDebug),
+		manager.WithHost(opts.Host),
 	)
 
 	// Setup signal handling for graceful shutdown
