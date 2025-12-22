@@ -30,9 +30,10 @@ export const ApiStyleBadge = ({apiStyle, sx = {}}: ApiStyleBadgeProps) => {
                 borderRadius: 1,
                 backgroundColor,
                 color: 'white',
-                fontSize: '10px',
-                fontWeight: 500,
-                height: '18px',
+                fontSize: '11px',
+                fontWeight: 600,
+                height: '20px',
+                minWidth: '110px',
                 ...sx,
             }}
         >
