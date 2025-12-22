@@ -708,7 +708,7 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                         {/* Graph Visualization */}
                         <GraphContainer>
                             <Typography variant="h6" sx={{ mb: 3, textAlign: 'center', color: 'text.primary' }}>
-                                Request Routing Visualization
+                                Request Proxy Visualization
                             </Typography>
 
                             <GraphRow>
