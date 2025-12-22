@@ -320,13 +320,3 @@ func (ac *AppConfig) GetProviderModelManager() *ModelListManager {
 func (ac *AppConfig) FetchAndSaveProviderModels(providerName string) error {
 	return ac.config.FetchAndSaveProviderModels(providerName)
 }
-
-// GetDebug returns whether debug logging is enabled
-func (ac *AppConfig) GetDebug() bool {
-	return ac.config.GetDebug()
-}
-
-// SetDebug sets the debug logging flag
-func (ac *AppConfig) SetDebug(debug bool) error {
-	return ac.config.SetDebug(debug)
-}

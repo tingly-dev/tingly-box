@@ -7,7 +7,6 @@ import (
 	"tingly-box/internal/config"
 	"tingly-box/internal/util"
 
-	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
 )
 
@@ -51,8 +50,6 @@ func init() {
 		},
 	}
 	rootCmd.AddCommand(versionCmd)
-
-	gin.SetMode(gin.ReleaseMode)
 
 	// Initialize app config with optional custom config directory
 	var appConfig *config.AppConfig
