@@ -4,7 +4,6 @@ import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
-import { OpenAI, Anthropic } from '@lobehub/icons';
 import {
     Box,
     Button,
@@ -29,7 +28,8 @@ import type { Provider, ProviderModelsData } from '../types/provider';
 import { getModelTypeInfo, navigateToModelPage } from '../utils/modelUtils';
 import CustomModelCard from './CustomModelCard';
 import ModelCard from './ModelCard';
-import { TabPanel, a11yProps } from './TabPanel';
+import {a11yProps, TabPanel} from './TabPanel';
+import {ApiStyleBadge} from "../components/ApiStyleBadge.tsx";
 
 export interface ProviderSelectTabOption {
     provider: Provider;
@@ -63,44 +63,10 @@ export default function ModelSelectTab({
 }: ProviderSelectTabProps) {
     const [internalCurrentTab, setInternalCurrentTab] = useState(0);
     const [isInitialized, setIsInitialized] = useState(false);
-    const { customModels, saveCustomModel, removeCustomModel } = useCustomModels();
+    const {customModels, saveCustomModel, removeCustomModel} = useCustomModels();
     const gridLayout = useGridLayout();
     const [autoFetchedProviders, setAutoFetchedProviders] = useState<Set<string>>(new Set());
 
-    // Helper function to render API style badge with icon and colored background
-    const renderApiStyleBadge = (apiStyle: string) => {
-        const isOpenAI = apiStyle === 'openai';
-        const isAnthropic = apiStyle === 'anthropic';
-
-        if (!isOpenAI && !isAnthropic) {
-            return null; // Don't show badge for unknown styles
-        }
-
-        const backgroundColor = isOpenAI ? '#1578FF' : '#E97B37';
-        const Icon = isOpenAI ? OpenAI : Anthropic;
-        const label = isOpenAI ? 'OpenAI' : 'Anthropic';
-
-        return (
-            <Box
-                sx={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 2,
-                    px: 1,
-                    py: 0.25,
-                    borderRadius: 1,
-                    backgroundColor,
-                    color: 'white',
-                    fontSize: '10px',
-                    fontWeight: 500,
-                    height: '18px',
-                }}
-            >
-                {/*<Icon size={10} />*/}
-                <span>{label} Style</span>
-            </Box>
-        );
-    };
 
     // Create provider name to UUID mapping for search functionality
     const providerNameToUuid = React.useMemo(() => {
@@ -286,7 +252,7 @@ export default function ModelSelectTab({
                                             {/*<Typography variant="caption" color="text.secondary">*/}
                                             {/*    ({modelTypeInfo.totalModelsCount})*/}
                                             {/*</Typography>*/}
-                                            {provider.api_style && renderApiStyleBadge(provider.api_style)}
+                                            {provider.api_style && <ApiStyleBadge apiStyle={provider.api_style}/>}
                                         </Stack>
                                     </Stack>
                                 }

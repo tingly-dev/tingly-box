@@ -1,19 +1,17 @@
-import React, { useState } from 'react';
+import React, {useState} from 'react';
 import {
+    Add as AddIcon,
+    ArrowForward as ArrowForwardIcon,
+    CheckCircle as CheckCircleIcon,
     Delete as DeleteIcon,
+    Edit as EditIcon,
     ExpandLess as ExpandLessIcon,
     ExpandMore as ExpandMoreIcon,
-    Save as SaveIcon,
     MoreVert as MoreVertIcon,
-    Settings as SettingsIcon,
-    Refresh as RefreshIcon,
-    ArrowForward as ArrowForwardIcon,
-    Edit as EditIcon,
-    CheckCircle as CheckCircleIcon,
     RadioButtonUnchecked as RadioButtonUncheckedIcon,
-    Add as AddIcon,
-    Business as BusinessIcon,
-    Memory as MemoryIcon
+    Refresh as RefreshIcon,
+    Save as SaveIcon,
+    Settings as SettingsIcon
 } from '@mui/icons-material';
 import {
     Box,
@@ -23,18 +21,19 @@ import {
     Chip,
     Collapse,
     IconButton,
+    ListItemIcon,
+    ListItemText,
+    Menu,
+    MenuItem,
     Stack,
     Switch,
     TextField,
-    Typography,
-    Menu,
-    MenuItem,
-    ListItemIcon,
-    ListItemText,
-    Tooltip
+    Tooltip,
+    Typography
 } from '@mui/material';
-import { styled } from '@mui/material/styles';
+import {styled} from '@mui/material/styles';
 import ProviderConfig from './ProviderConfig';
+import {ApiStyleBadge} from "../components/ApiStyleBadge.tsx";
 
 interface ConfigProvider {
     uuid: string;
@@ -318,26 +317,20 @@ const ProviderNodeComponent: React.FC<{
         <ProviderNode>
             {/* API Style Title */}
             {provider.provider && (
-                <Box sx={{ width: '100%', mb: 2 }}>
-                    <Box
+                <Box sx={{width: '100%', mb: 2}}>
+                    <ApiStyleBadge
+                        apiStyle={apiStyle}
                         sx={{
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             p: 1,
-                            // border: '1px solid',
-                            // borderColor: 'text.primary',
                             borderRadius: 1,
-                            backgroundColor: 'primary.light',
                             transition: 'all 0.2s',
                             width: '100%',
                             minHeight: '32px'
                         }}
-                    >
-                        <Typography variant="body2" color="white">
-                            {apiStyle} style
-                        </Typography>
-                    </Box>
+                    />
                 </Box>
             )}
 
