@@ -1,151 +1,180 @@
 # Tingly Box
 
-[![](https://img.shields.io/badge/Go-1.21+-blue.svg)](https://golang.org)
-[![](https://img.shields.io/badge/React-19+-blue.svg)](https://reactjs.org)
-[![](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
+**Tingly Box** is a high‑performance LLM proxy that provides a **unified OpenAI‑compatible API** for hundreds of model providers. It enables centralized credential management, routing, and load balancing with low latency.
 
-A **provider-agnostic AI model proxy** that exposes a unified OpenAI-compatible API endpoint while routing requests to multiple configured AI providers.
+> Think of Tingly Box as a *model gateway* between your applications and multiple LLM vendors.
+
+---
+
+![Tingly Box Web UI Demo](https://raw.githubusercontent.com/andreasfoo/images/main/uPic/2025%2012%2022%2014%2045.gif)
+
+## ✨ Key Features
+
+- **Unified API** – Single OpenAI‑compatible endpoint for many providers
+- **Load Balancing** – Distribute traffic across multiple API tokens using routing tactics
+- **Auto API Translation** – Seamlessly translate between OpenAI‑ and Anthropic‑style APIs
+- **High Performance** – Additional latency typically **< 1ms**
+- **JWT Authentication** – Separate user tokens and model tokens
+- **Web Management UI** – Visual provider, routing, and model management
+
+---
 
 ## 🚀 Quick Start
 
-### Prerequisites
-- Go 1.21+
-- Node.js 18+ (for web UI development)
+### Install
 
-### Installation
+**From npm (recommended)**
 
 ```bash
-# Build from source
-git clone https://github.com/tingly-dev/tingly-box.git
-cd tingly-box
-go build ./cmd/tingly-box
-
-# Or with Docker
-docker build -t tingly-box:latest .
+# install and run
+npx tingly-box@latest start
 ```
 
-### Basic Usage
+**From source code**
+
+*Requires: Go 1.21+, Node.js 18+, pnpm, task, openapi-generator-cli*
 
 ```bash
-# Add providers
-./tingly-box add openai https://api.openai.com/v1 sk-your-token
-./tingly-box add anthropic https://api.anthropic.com sk-your-token
+# Install dependencies
+# - Go: https://go.dev/doc/install
+# - Node.js: https://nodejs.org/
+# - pnpm: npm install -g pnpm
+# - task: https://taskfile.dev/installation/
+# - openapi-generator-cli: npm install @openapitools/openapi-generator-cli -g
 
-# Start server
-./tingly-box start --port 8080
+# Build CLI binary
+task go:build
 
-# Generate token
-./tingly-box token
+# Build with frontend
+task cli:build
 
-# Use API
-curl -X POST http://localhost:8080/openai/v1/chat/completions \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"model":"gpt-3.5-turbo","messages":[{"role":"user","content":"Hello"}]}'
+# Run with gui
+task start
 ```
 
-## 📌 Key Features
-
-- **Multi-Provider Support** - OpenAI, Anthropic, and custom providers
-- **Unified API** - Single OpenAI-compatible endpoint
-- **Load Balancing** - Distribute requests across providers
-- **Web Management UI** - Intuitive provider configuration
-- **JWT Authentication** - Secure token-based access
-
-## 🐳 Docker Deployment
+**From Docker**
 
 ```bash
-# Build image
+# Build Docker image
 docker build -t tingly-box:latest .
 
 # Run container
 docker run -d \
   --name tingly-box \
-  -p 8080:8080 \
+  -p 12580:12580 \
   -v $(pwd)/data/.tingly-box:/app/.tingly-box \
   -v $(pwd)/data/logs:/app/logs \
   -v $(pwd)/data/memory:/app/memory \
   tingly-box:latest
 ```
 
-## 🔧 CLI Commands
 
-```bash
-# Provider management
-tingly-box add <name> <api-base> <token>      # Add provider
-tingly-box list                               # List providers
-tingly-box delete <name>                      # Remove provider
-
-# Server management
-tingly-box start [--port <port>]              # Start server
-tingly-box stop                               # Stop server
-tingly-box restart [--port <port>]            # Restart server
-tingly-box status                             # Check status
-
-# Utilities
-tingly-box token                              # Generate JWT token
-tingly-box ui                                 # Open web interface
-```
-
-## 📚 Documentation
-
-- **[User Manual](docs/user-manual.md)** - Detailed guide for installation, configuration, and troubleshooting
-
-## 🔌 API Endpoints
-
-### OpenAI-Compatible
-- `POST /openai/v1/chat/completions` - Chat completions
-- `GET /v1/models` - List models
-
-### Anthropic-Compatible
-- `POST /anthropic/v1/messages` - Messages API
-- `GET /anthropic/v1/models` - List models
-
-### Management
-- `GET /health` - Health check
-- `GET /api/providers` - List providers
-- `POST /api/providers` - Add provider
-
-## 🏗️ Architecture
-
-```
-Application → Tingly Box → AI Providers
-               ↓
-           Web Management UI
-```
-
-## 📁 Project Structure
-
-```
-tingly-box/
-├── cmd/tingly-box/      # CLI entry point
-├── internal/
-│   ├── auth/            # JWT authentication
-│   ├── cli/             # CLI commands
-│   ├── config/          # Configuration management
-│   └── server/          # HTTP server
-├── frontend/            # React web UI
-├── docs/                # Documentation
-└── Dockerfile           # Container definition
-```
-
-## 🧪 Development
-
-```bash
-# Run tests
-go test ./...
-
-# Build frontend
-cd frontend && pnpm install && pnpm build
-
-# Development mode
-cd frontend && pnpm dev
-```
-
-## 📄 License
-
-Apache 2.0
 
 ---
 
-For detailed setup instructions and troubleshooting, see the **[User Manual](docs/user-manual.md)**.
+## **🔌 Use with OpenAI SDK or Claude CLI**
+
+**Python OpenAI SDK**
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-tingly-model-token",
+    base_url="http://localhost:12580/openai/v1"
+)
+
+response = client.chat.completions.create(
+    model="gpt-3.5-turbo",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+print(response)
+```
+
+**Claude CLI**
+
+```bash
+# Option 1: Environment variables
+export OPENAI_API_BASE="http://localhost:12580/openai/v1"
+export OPENAI_API_KEY="sk-tingly-model-token"
+
+# Option 2: Settings file (~/.claude/settings.json)
+{
+  "api": {
+    "baseUrl": "http://localhost:12580/openai/v1",
+    "apiKey": "sk-tingly-model-token"
+  }
+}
+```
+
+> Tingly Box proxies requests transparently for SDKs and CLI tools.
+
+---
+
+
+
+## 🖥 Web Management UI
+
+```bash
+tingly-box start
+```
+
+---
+
+## 📚 Documentation
+
+- **User Manual** – Installation, configuration, and operations
+
+------
+
+## **🧩 Philosophy**
+
+- **One endpoint, many providers** – Consolidates multiple providers behind a single API with minimal configuration.
+- **Seamless integration** – Works with SDKs and CLI tools with minimal setup.
+
+------
+
+## **🤝 How to Contribute**
+
+We welcome contributions! Follow these steps, inspired by popular open-source repositories:
+
+1. **Fork the repository** – Click the “Fork” button on GitHub.
+
+2. **Clone your fork**
+
+   ```bash
+   git clone https://github.com/your-username/tingly-box.git
+   cd tingly-box
+   ```
+
+3. **Create a new branch**
+
+   ```bash
+   git checkout -b feature/my-new-feature
+   ```
+
+4. **Make your changes** – Follow existing code style and add tests if applicable.
+
+5. **Run tests**
+
+   ```bash
+   task test
+   ```
+
+6. **Commit your changes**
+
+   ```bash
+   git commit -m "Add concise description of your change"
+   ```
+
+7. **Push your branch**
+
+   ```bash
+   git push origin feature/my-new-feature
+   ```
+
+8. **Open a Pull Request** – Go to the GitHub repository and open a PR against `main`.
+
+------
+
+Apache-2.0 License · © Tingly
