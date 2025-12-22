@@ -8,12 +8,12 @@ import (
 	"net/http"
 	"path/filepath"
 	"time"
-	"tingly-box/internal/server/middleware"
-	"tingly-box/internal/util"
 
 	"tingly-box/internal/auth"
 	"tingly-box/internal/config"
 	"tingly-box/internal/obs"
+	"tingly-box/internal/server/middleware"
+	"tingly-box/internal/util"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/browser"
@@ -208,21 +208,12 @@ func (s *Server) setupMiddleware() {
 	}
 
 	// Statistics middleware for load balancing
-	s.engine.Use(s.statsMW.Middleware())
+	if s.statsMW != nil {
+		s.engine.Use(s.statsMW.Middleware())
+	}
 
 	// CORS middleware
-	s.engine.Use(func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization")
-
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(http.StatusNoContent)
-			return
-		}
-
-		c.Next()
-	})
+	s.engine.Use(middleware.CORS())
 }
 
 func RequestLoggerMiddleware() gin.HandlerFunc {
