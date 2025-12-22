@@ -557,7 +557,7 @@ func (s *Server) useWebStaticEndpoints(engine *gin.Engine) {
 	st, _ := fs.Sub(assets.WebDistAssets, "web/dist/assets")
 	engine.StaticFS("/assets", http.FS(st))
 
-	engine.StaticFile("/vite.svg", "web/dist/vite.svg")
+	engine.StaticFile("/icon.svg", "web/dist/icon.svg")
 
 	engine.NoRoute(func(c *gin.Context) {
 		// Don't serve index.html for API routes - let them return 404s
