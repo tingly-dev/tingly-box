@@ -86,7 +86,7 @@ func NewTestServerWithAdaptor(t *testing.T, enableAdaptor bool) *TestServer {
 	}
 
 	// Create server instance with adaptor flag
-	httpServer := server.NewServerWithAllOptions(appConfig.GetGlobalConfig(), true, enableAdaptor)
+	httpServer := server.NewServer(appConfig.GetGlobalConfig(), server.WithAdaptor(enableAdaptor))
 
 	return &TestServer{
 		appConfig: appConfig,
@@ -267,7 +267,7 @@ func (ts *TestServer) AddTestRule(t *testing.T, requestModel, providerName, mode
 // NewTestServerWithAdaptorFromConfig creates a new test server with adaptor flag using existing app config
 func NewTestServerWithAdaptorFromConfig(t *testing.T, appConfig *config.AppConfig, enableAdaptor bool) *TestServer {
 	// Create server instance with adaptor flag
-	httpServer := server.NewServerWithAllOptions(appConfig.GetGlobalConfig(), true, enableAdaptor)
+	httpServer := server.NewServer(appConfig.GetGlobalConfig(), server.WithAdaptor(enableAdaptor))
 
 	return &TestServer{
 		appConfig: appConfig,
