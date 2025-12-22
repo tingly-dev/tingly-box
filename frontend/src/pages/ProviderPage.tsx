@@ -1,7 +1,7 @@
 import { Add } from '@mui/icons-material';
 import { Alert, Box, Button, Snackbar, Stack, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
-import CredentialTable from '../components/CredentialTable.tsx';
+import ProviderTable from '../components/ProviderTable.tsx';
 import { PageLayout } from '../components/PageLayout';
 import PresetProviderFormDialog from '../components/PresetProviderFormDialog.tsx';
 import { type ProviderFormData } from '../components/ProviderFormDialog.tsx';
@@ -151,7 +151,7 @@ const ProviderPage = () => {
                     }
                 >
                     <Box sx={{ flex: 1 }}>
-                        <CredentialTable
+                        <ProviderTable
                             providers={providers}
                             onEdit={handleEditProvider}
                             onToggle={handleToggleProvider}

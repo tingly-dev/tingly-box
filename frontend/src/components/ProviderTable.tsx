@@ -22,6 +22,7 @@ import {
 import { useState } from 'react';
 import api from '../services/api';
 import type { Provider, ProviderModelsData } from '../types/provider';
+import {ApiStyleBadge} from "@/components/ApiStyleBadge.tsx";
 
 
 interface ProviderTableProps {
@@ -52,7 +53,7 @@ interface DeleteModalState {
     providerName: string;
 }
 
-const CredentialTable = ({
+const ProviderTable = ({
     providers,
     onEdit,
     onToggle,
@@ -276,14 +277,9 @@ const CredentialTable = ({
                             </TableCell>
 
                             <TableCell>
-                                <Typography
-                                    variant="body2"
-                                    sx={{
-                                        fontFamily: 'monospace'
-                                    }}
-                                >
-                                    {provider.api_style || 'openai'}
-                                </Typography>
+                                <ApiStyleBadge
+                                    apiStyle={provider.api_style}
+                                ></ApiStyleBadge>
                             </TableCell>
 
 
@@ -481,4 +477,4 @@ const CredentialTable = ({
     );
 };
 
-export default CredentialTable;
+export default ProviderTable;
