@@ -1,5 +1,5 @@
 import {Anthropic, OpenAI} from '@lobehub/icons';
-import {Box} from '@mui/material';
+import {Box, useTheme, alpha} from '@mui/material';
 import type {SxProps, Theme} from '@mui/material';
 
 interface ApiStyleBadgeProps {
@@ -9,6 +9,7 @@ interface ApiStyleBadgeProps {
 
 // Helper function to render API style badge with icon and colored background
 export const ApiStyleBadge = ({apiStyle, sx = {}}: ApiStyleBadgeProps) => {
+    const theme = useTheme();
     const isOpenAI = apiStyle === 'openai';
     const isAnthropic = apiStyle === 'anthropic';
 
@@ -16,8 +17,30 @@ export const ApiStyleBadge = ({apiStyle, sx = {}}: ApiStyleBadgeProps) => {
         return null; // Don't show badge for unknown styles
     }
 
-    const backgroundColor = isOpenAI ? '#1578FF' : '#E97B37';
+    // Use theme colors for better consistency
+    const getBadgeStyles = () => {
+        if (isOpenAI) {
+            return {
+                backgroundColor: alpha(theme.palette.info.main, 0.1),
+                color: theme.palette.info.main,
+                borderColor: alpha(theme.palette.info.main, 0.3),
+            };
+        } else if (isAnthropic) {
+            return {
+                backgroundColor: alpha(theme.palette.error.main, 0.1),
+                color: theme.palette.secondary.main,
+                borderColor: alpha(theme.palette.error.main, 0.3),
+            };
+        }
+        return {
+            backgroundColor: alpha(theme.palette.grey[500], 0.1),
+            color: theme.palette.text.secondary,
+            borderColor: alpha(theme.palette.grey[500], 0.3),
+        };
+    };
+
     const label = isOpenAI ? 'OpenAI' : 'Anthropic';
+    const badgeStyles = getBadgeStyles();
 
     return (
         <Box
@@ -25,16 +48,24 @@ export const ApiStyleBadge = ({apiStyle, sx = {}}: ApiStyleBadgeProps) => {
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: 2,
-                px: 1,
-                py: 0.25,
-                borderRadius: 1,
-                backgroundColor,
-                color: 'white',
+                gap: 1,
+                px: 1.5,
+                py: 0.75,
+                borderRadius: theme.shape.borderRadius,
                 fontSize: '11px',
                 fontWeight: 600,
-                height: '20px',
-                minWidth: '110px',
+                height: '24px',
+                minWidth: '80px',
+                border: `1px solid ${badgeStyles.borderColor}`,
+                backgroundColor: badgeStyles.backgroundColor,
+                color: badgeStyles.color,
+                transition: theme.transitions.create(['background-color', 'color', 'border-color'], {
+                    duration: theme.transitions.duration.shorter,
+                }),
+                '&:hover': {
+                    backgroundColor: alpha(badgeStyles.color, 0.15),
+                    borderColor: alpha(badgeStyles.color, 0.5),
+                },
                 ...sx,
             }}
         >
