@@ -14,8 +14,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// DebugMiddleware logs requests and responses to a file when debug mode is enabled
-type DebugMiddleware struct {
+// ErrorLogMiddleware logs requests and responses to a file when debug mode is enabled
+type ErrorLogMiddleware struct {
 	logFile   *os.File
 	logPath   string
 	mu        sync.RWMutex
@@ -24,9 +24,9 @@ type DebugMiddleware struct {
 	rotateLog bool
 }
 
-// NewDebugMiddleware creates a new debug middleware
-func NewDebugMiddleware(logPath string, maxSizeMB int) *DebugMiddleware {
-	dm := &DebugMiddleware{
+// NewErrorLogMiddleware creates a new debug middleware
+func NewErrorLogMiddleware(logPath string, maxSizeMB int) *ErrorLogMiddleware {
+	dm := &ErrorLogMiddleware{
 		logPath:   logPath,
 		maxSize:   int64(maxSizeMB) * 1024 * 1024, // Convert MB to bytes
 		rotateLog: true,
@@ -48,7 +48,7 @@ func NewDebugMiddleware(logPath string, maxSizeMB int) *DebugMiddleware {
 }
 
 // Enable enables debug logging
-func (dm *DebugMiddleware) Enable() error {
+func (dm *ErrorLogMiddleware) Enable() error {
 	dm.mu.Lock()
 	defer dm.mu.Unlock()
 
@@ -61,7 +61,7 @@ func (dm *DebugMiddleware) Enable() error {
 }
 
 // Disable disables debug logging
-func (dm *DebugMiddleware) Disable() {
+func (dm *ErrorLogMiddleware) Disable() {
 	dm.mu.Lock()
 	defer dm.mu.Unlock()
 
@@ -77,14 +77,14 @@ func (dm *DebugMiddleware) Disable() {
 }
 
 // IsEnabled returns whether debug logging is enabled
-func (dm *DebugMiddleware) IsEnabled() bool {
+func (dm *ErrorLogMiddleware) IsEnabled() bool {
 	dm.mu.RLock()
 	defer dm.mu.RUnlock()
 	return dm.enabled
 }
 
 // openLogFile opens or creates the log file
-func (dm *DebugMiddleware) openLogFile() error {
+func (dm *ErrorLogMiddleware) openLogFile() error {
 	if dm.logFile != nil {
 		dm.logFile.Close()
 	}
@@ -110,13 +110,13 @@ func (dm *DebugMiddleware) openLogFile() error {
 }
 
 // fileExists checks if a file exists
-func (dm *DebugMiddleware) fileExists(path string) bool {
+func (dm *ErrorLogMiddleware) fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
 }
 
 // rotateLogFile rotates the current log file
-func (dm *DebugMiddleware) rotateLogFile() error {
+func (dm *ErrorLogMiddleware) rotateLogFile() error {
 	// Rename current log file with timestamp
 	timestamp := time.Now().Format("20060102-150405")
 	oldPath := fmt.Sprintf("%s.%s", dm.logPath, timestamp)
@@ -143,7 +143,7 @@ func (dm *DebugMiddleware) rotateLogFile() error {
 }
 
 // Middleware returns the Gin middleware function
-func (dm *DebugMiddleware) Middleware() gin.HandlerFunc {
+func (dm *ErrorLogMiddleware) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if !dm.IsEnabled() {
 			c.Next()
@@ -210,7 +210,7 @@ type logEntry struct {
 }
 
 // logEntry writes a log entry to the file
-func (dm *DebugMiddleware) logEntry(entry *logEntry) {
+func (dm *ErrorLogMiddleware) logEntry(entry *logEntry) {
 	dm.mu.RLock()
 	defer dm.mu.RUnlock()
 
@@ -310,7 +310,7 @@ func getHeaders(c *gin.Context) map[string]string {
 }
 
 // Stop closes the log file
-func (dm *DebugMiddleware) Stop() {
+func (dm *ErrorLogMiddleware) Stop() {
 	dm.mu.Lock()
 	defer dm.mu.Unlock()
 
