@@ -166,26 +166,26 @@ const Layout = ({ children }: LayoutProps) => {
                     >
                         <AccountIcon />
                     </IconButton>
-                    <Menu
-                        anchorEl={anchorEl}
-                        open={Boolean(anchorEl)}
-                        onClose={handleMenuClose}
-                        anchorOrigin={{
-                            vertical: 'top',
-                            horizontal: 'right',
-                        }}
-                        transformOrigin={{
-                            vertical: 'bottom',
-                            horizontal: 'right',
-                        }}
-                    >
-                        <MenuItem onClick={handleLogout}>
-                            <ListItemIcon>
-                                <LogoutIcon fontSize="small" />
-                            </ListItemIcon>
-                            <ListItemText>Logout</ListItemText>
-                        </MenuItem>
-                    </Menu>
+                    {/*<Menu*/}
+                    {/*    anchorEl={anchorEl}*/}
+                    {/*    open={Boolean(anchorEl)}*/}
+                    {/*    onClose={handleMenuClose}*/}
+                    {/*    anchorOrigin={{*/}
+                    {/*        vertical: 'top',*/}
+                    {/*        horizontal: 'right',*/}
+                    {/*    }}*/}
+                    {/*    transformOrigin={{*/}
+                    {/*        vertical: 'bottom',*/}
+                    {/*        horizontal: 'right',*/}
+                    {/*    }}*/}
+                    {/*>*/}
+                    {/*    <MenuItem onClick={handleLogout}>*/}
+                    {/*        <ListItemIcon>*/}
+                    {/*            <LogoutIcon fontSize="small" />*/}
+                    {/*        </ListItemIcon>*/}
+                    {/*        <ListItemText>Logout</ListItemText>*/}
+                    {/*    </MenuItem>*/}
+                    {/*</Menu>*/}
                 </Box>
 
 
