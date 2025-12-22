@@ -16,6 +16,7 @@
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
+    "@lobehub/icons": "^3.0.0",
     "@mui/icons-material": "^7.3.6",
     "@mui/material": "^7.3.6",
     "@types/react": "^19.2.7",
