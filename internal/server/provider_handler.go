@@ -170,8 +170,8 @@ func (s *Server) UpdateProvider(c *gin.Context) {
 	// check existing
 	if req.Name != nil {
 		name := *req.Name
-		_, err := s.config.GetProviderByName(name)
-		if err == nil {
+		existed, err := s.config.GetProviderByName(name)
+		if err == nil && uid != existed.UUID {
 			c.JSON(http.StatusConflict, gin.H{
 				"success": false,
 				"error":   fmt.Sprintf("provider with name '%s' already exists", name),
