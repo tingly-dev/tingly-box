@@ -2,6 +2,7 @@ import react from '@vitejs/plugin-react-swc';
 import wails from "@wailsio/runtime/plugins/vite";
 import {defineConfig} from 'vite';
 import {viteMockServe} from 'vite-plugin-mock';
+import path from 'path';
 
 // Check if we should use mock data
 const useMock = process.env.USE_MOCK === 'true'
@@ -28,7 +29,8 @@ export default defineConfig({
             // Provide fallback for bindings in non-GUI builds
             '@/bindings': useGUI ?
                 '/src/bindings-wails' :
-                '/src/bindings-web'
+                '/src/bindings-web',
+            '@': path.resolve(__dirname, './src'),
         }
     },
     server: {
