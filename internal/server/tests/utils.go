@@ -33,7 +33,7 @@ func NewTestServerWithConfigDir(t *testing.T, configDir string) *TestServer {
 		t.Fatalf("Failed to create config directory %s: %v", configDir, err)
 	}
 
-	appConfig, err := config.NewAppConfigWithDir(configDir)
+	appConfig, err := config.NewAppConfig(config.WithConfigDir(configDir))
 	if err != nil {
 		t.Fatalf("Failed to create app config: %v", err)
 	}
@@ -48,13 +48,18 @@ func NewTestServerWithConfigDir(t *testing.T, configDir string) *TestServer {
 
 // NewTestServer creates a new test server
 func NewTestServer(t *testing.T) *TestServer {
-	// Create test config directory
-	configDir := ".tingly-box"
-	if err := os.MkdirAll(configDir, 0700); err != nil {
-		t.Fatalf("Failed to create test config directory: %v", err)
+	// Create temp config directory
+	configDir, err := os.MkdirTemp("", "tingly-box-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp config directory: %v", err)
 	}
 
-	appConfig, err := config.NewAppConfig()
+	// Register cleanup
+	t.Cleanup(func() {
+		os.RemoveAll(configDir)
+	})
+
+	appConfig, err := config.NewAppConfig(config.WithConfigDir(configDir))
 	if err != nil {
 		t.Fatalf("Failed to create app config: %v", err)
 	}
@@ -76,13 +81,18 @@ func createTestServer(t *testing.T, appConfig *config.AppConfig) *TestServer {
 
 // NewTestServerWithAdaptor creates a new test server with adaptor flag
 func NewTestServerWithAdaptor(t *testing.T, enableAdaptor bool) *TestServer {
-	// Create test config directory
-	configDir := ".tingly-box"
-	if err := os.MkdirAll(configDir, 0700); err != nil {
-		t.Fatalf("Failed to create test config directory: %v", err)
+	// Create temp config directory
+	configDir, err := os.MkdirTemp("", "tingly-box-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp config directory: %v", err)
 	}
 
-	appConfig, err := config.NewAppConfig()
+	// Register cleanup
+	t.Cleanup(func() {
+		os.RemoveAll(configDir)
+	})
+
+	appConfig, err := config.NewAppConfig(config.WithConfigDir(configDir))
 	if err != nil {
 		t.Fatalf("Failed to create app config: %v", err)
 	}

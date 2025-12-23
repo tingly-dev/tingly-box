@@ -31,8 +31,14 @@ func TestBasicFunctionality(t *testing.T) {
 	})
 
 	t.Run("Health_Check", func(t *testing.T) {
+		// Get user token for authentication
+		globalConfig := ts.appConfig.GetGlobalConfig()
+		userToken := globalConfig.GetUserToken()
+
 		// Routes are already registered, just make the request
-		req, _ := http.NewRequest("GET", "/health", nil)
+		req, _ := http.NewRequest("GET", "/api/v1/info/health", nil)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+userToken)
 		w := httptest.NewRecorder()
 		ts.ginEngine.ServeHTTP(w, req)
 
