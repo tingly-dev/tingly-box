@@ -691,7 +691,7 @@ func (c *Config) FetchAndSaveProviderModels(uid string) error {
 	}
 
 	// Save models to local storage
-	return c.modelManager.SaveModels(provider.UUID, provider.APIBase, models)
+	return c.modelManager.SaveModels(provider, provider.APIBase, models)
 }
 
 // getProviderModelsFromAPI fetches models from provider API via real HTTP requests

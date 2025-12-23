@@ -14,6 +14,7 @@ import (
 // ModelList represents the models available for a specific provider
 type ModelList struct {
 	Provider    string   `yaml:"provider"`
+	UUID        string   `yaml:"uuid"`
 	APIBase     string   `yaml:"api_base"`
 	Models      []string `yaml:"models"`
 	LastUpdated string   `yaml:"last_updated"`
@@ -96,9 +97,10 @@ func (mm *ModelListManager) loadProviderModels(providerName string) error {
 }
 
 // SaveModels saves models for a provider
-func (mm *ModelListManager) SaveModels(providerName, apiBase string, models []string) error {
+func (mm *ModelListManager) SaveModels(provider *Provider, apiBase string, models []string) error {
 	providerModels := &ModelList{
-		Provider:    providerName,
+		Provider:    provider.Name,
+		UUID:        provider.UUID,
 		APIBase:     apiBase,
 		Models:      models,
 		LastUpdated: time.Now().Format("2006-01-02 15:04:05"),
@@ -111,25 +113,25 @@ func (mm *ModelListManager) SaveModels(providerName, apiBase string, models []st
 	}
 
 	// Write to file
-	filename := filepath.Join(mm.configDir, fmt.Sprintf("provider_%s.yaml", providerName))
+	filename := filepath.Join(mm.configDir, fmt.Sprintf("provider_%s.yaml", provider.Name))
 	if err := ioutil.WriteFile(filename, data, 0644); err != nil {
 		return fmt.Errorf("failed to save provider models file: %w", err)
 	}
 
 	// Update in-memory cache
 	mm.mutex.Lock()
-	mm.models[providerName] = providerModels
+	mm.models[provider.UUID] = providerModels
 	mm.mutex.Unlock()
 
 	return nil
 }
 
 // GetModels returns models for a provider
-func (mm *ModelListManager) GetModels(providerName string) []string {
+func (mm *ModelListManager) GetModels(uid string) []string {
 	mm.mutex.RLock()
 	defer mm.mutex.RUnlock()
 
-	if providerModels, exists := mm.models[providerName]; exists {
+	if providerModels, exists := mm.models[uid]; exists {
 		return providerModels.Models
 	}
 
@@ -176,11 +178,11 @@ func (mm *ModelListManager) RemoveProvider(providerName string) error {
 }
 
 // GetProviderInfo returns basic info about a provider
-func (mm *ModelListManager) GetProviderInfo(providerName string) (apiBase string, lastUpdated string, exists bool) {
+func (mm *ModelListManager) GetProviderInfo(uid string) (apiBase string, lastUpdated string, exists bool) {
 	mm.mutex.RLock()
 	defer mm.mutex.RUnlock()
 
-	if providerModels, exists := mm.models[providerName]; exists {
+	if providerModels, exists := mm.models[uid]; exists {
 		return providerModels.APIBase, providerModels.LastUpdated, true
 	}
 
