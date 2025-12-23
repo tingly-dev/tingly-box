@@ -7,7 +7,6 @@ import {
     HistoryApi,
     ModelsApi,
     ProbeProviderRequestApiStyleEnum,
-    type ProviderModelsResponse,
     type ProviderResponse,
     ProvidersApi,
     RulesApi,
@@ -251,11 +250,9 @@ export const api = {
             const body = response.data
             if (body.success && body.data) {
                 // Sort models alphabetically by model name to reduce UI changes
-                if (Array.isArray(body.data)) {
-                    body.data.sort((a: any, b: any) =>
-                        (a.model || a.name || '').localeCompare(b.model || b.name || '')
-                    );
-                }
+                body.data.models.sort((a: any, b: any) =>
+                    a.localeCompare(b)
+                );
             }
             return body;
         } catch (error: any) {
@@ -272,11 +269,9 @@ export const api = {
             const body = response.data
             if (body.success && body.data) {
                 // Sort models alphabetically by model name to reduce UI changes
-                if (Array.isArray(body.data)) {
-                    body.data.sort((a: any, b: any) =>
-                        (a.model || a.name || '').localeCompare(b.model || b.name || '')
-                    );
-                }
+                body.data.models.sort((a: any, b: any) =>
+                    a.localeCompare(b)
+                );
             }
             return body;
         } catch (error: any) {
@@ -544,7 +539,10 @@ export const api = {
         try {
             const apiInstances = await getApiInstances();
             const response = await apiInstances.testingApi.apiV1ProbeProviderPost({
-                name: "placeholder", api_style: (api_style) as ProbeProviderRequestApiStyleEnum, api_base: api_base, token: token
+                name: "placeholder",
+                api_style: (api_style) as ProbeProviderRequestApiStyleEnum,
+                api_base: api_base,
+                token: token
             });
             return response.data;
         } catch (error: any) {
