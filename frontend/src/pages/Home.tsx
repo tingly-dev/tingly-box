@@ -132,7 +132,7 @@ const Home = () => {
                 ),
                 severity: 'info',
                 onClose: () => {
-                    setShowBanner(false);
+        setShowBanner(false);
                     setNotification(prev => ({ ...prev, open: false }));
                 }
             });
@@ -287,7 +287,6 @@ const Home = () => {
                 // Show banner with selected provider and model info
                 setBannerProvider(provider.name);
                 setBannerModel(model);
-                setBannerApiStyle(provider.api_style || '');
                 setShowBanner(true);
                 showNotification(`Successfully updated tingly rule to use ${provider.name}:${model}`, 'success');
                 // Reload rule to get updated data

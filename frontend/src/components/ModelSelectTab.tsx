@@ -46,7 +46,6 @@ interface ProviderSelectTabProps {
     onRefresh?: (provider: Provider) => void;
     onCustomModelSave?: (provider: Provider, customModel: string) => void;
     refreshingProviders?: string[]; // These are UUIDs
-    providerUuidToName?: { [uuid: string]: string }; // Add lookup map
 }
 
 export default function ModelSelectTab({
@@ -59,7 +58,6 @@ export default function ModelSelectTab({
     onRefresh,
     onCustomModelSave,
     refreshingProviders = [], // These are UUIDs
-    providerUuidToName = {}, // Add lookup map
 }: ProviderSelectTabProps) {
     const [internalCurrentTab, setInternalCurrentTab] = useState(0);
     const [isInitialized, setIsInitialized] = useState(false);
