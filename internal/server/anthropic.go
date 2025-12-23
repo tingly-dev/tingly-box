@@ -29,18 +29,18 @@ type (
 	AnthropicMessagesResponse = anthropic.Message
 	AnthropicUsage            = anthropic.Usage
 
-	// Model types - SDK doesn't provide a models list, so we define our own
+	// Model types - based on Anthropic's official models API format
 	AnthropicModel struct {
-		ID           string   `json:"id"`
-		Object       string   `json:"object"`
-		Created      int64    `json:"created"`
-		DisplayName  string   `json:"display_name"`
-		Type         string   `json:"type"`
-		MaxTokens    int      `json:"max_tokens"`
-		Capabilities []string `json:"capabilities"`
+		ID          string `json:"id"`
+		CreatedAt   string `json:"created_at"`
+		DisplayName string `json:"display_name"`
+		Type        string `json:"type"`
 	}
 	AnthropicModelsResponse struct {
-		Data []AnthropicModel `json:"data"`
+		Data    []AnthropicModel `json:"data"`
+		FirstID string           `json:"first_id"`
+		HasMore bool             `json:"has_more"`
+		LastID  string           `json:"last_id"`
 	}
 )
 
@@ -206,15 +206,67 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 	}
 }
 
-// AnthropicModels handles Anthropic v1 models endpoint
-func (s *Server) AnthropicModels(c *gin.Context) {
-	c.JSON(http.StatusInternalServerError, ErrorResponse{
-		Error: ErrorDetail{
-			Message: "Model manager not available",
-			Type:    "internal_error",
-		},
+// AnthropicListModels handles Anthropic v1 models endpoint
+func (s *Server) AnthropicListModels(c *gin.Context) {
+	cfg := s.config
+	if cfg == nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Config not available",
+				Type:    "internal_error",
+			},
+		})
+		return
+	}
+
+	rules := cfg.GetRequestConfigs()
+
+	var models []AnthropicModel
+	for _, rule := range rules {
+		if !rule.Active {
+			continue
+		}
+
+		// Build display name with provider info
+		displayName := rule.RequestModel
+		services := rule.GetServices()
+		if len(services) > 0 {
+			providerNames := make([]string, 0, len(services))
+			for i := range services {
+				svc := &services[i]
+				if svc.Active {
+					provider, err := cfg.GetProviderByUUID(svc.Provider)
+					if err == nil {
+						providerNames = append(providerNames, provider.Name)
+					}
+				}
+			}
+			if len(providerNames) > 0 {
+				displayName += fmt.Sprintf(" (via %v)", providerNames)
+			}
+		}
+
+		models = append(models, AnthropicModel{
+			ID:          rule.RequestModel,
+			CreatedAt:   "2024-01-01T00:00:00Z",
+			DisplayName: displayName,
+			Type:        "model",
+		})
+	}
+
+	firstID := ""
+	lastID := ""
+	if len(models) > 0 {
+		firstID = models[0].ID
+		lastID = models[len(models)-1].ID
+	}
+
+	c.JSON(http.StatusOK, AnthropicModelsResponse{
+		Data:    models,
+		FirstID: firstID,
+		HasMore: false,
+		LastID:  lastID,
 	})
-	return
 }
 
 // AnthropicCountTokens handles Anthropic v1 count_tokens endpoint

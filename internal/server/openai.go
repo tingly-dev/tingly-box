@@ -14,15 +14,60 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// ListModels handles the /v1/models endpoint (OpenAI compatible)
-func (s *Server) ListModels(c *gin.Context) {
-	c.JSON(http.StatusInternalServerError, ErrorResponse{
-		Error: ErrorDetail{
-			Message: "Model manager not available",
-			Type:    "internal_error",
-		},
+// OpenAIListModels handles the /v1/models endpoint (OpenAI compatible)
+func (s *Server) OpenAIListModels(c *gin.Context) {
+	cfg := s.config
+	if cfg == nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Config not available",
+				Type:    "internal_error",
+			},
+		})
+		return
+	}
+
+	rules := cfg.GetRequestConfigs()
+
+	var models []OpenAIModel
+	for _, rule := range rules {
+		if !rule.Active {
+			continue
+		}
+
+		// Build description from rule's services
+		ownedBy := "tingly-box"
+		services := rule.GetServices()
+		if len(services) > 0 {
+			providerDesc := make([]string, 0, len(services))
+			for i := range services {
+				svc := &services[i]
+				if svc.Active {
+					provider, err := cfg.GetProviderByUUID(svc.Provider)
+					if err == nil {
+						providerDesc = append(providerDesc, provider.Name)
+					} else {
+						providerDesc = append(providerDesc, svc.Provider)
+					}
+				}
+			}
+			if len(providerDesc) > 0 {
+				ownedBy += " via " + fmt.Sprintf("%v", providerDesc)
+			}
+		}
+
+		models = append(models, OpenAIModel{
+			ID:      rule.RequestModel,
+			Object:  "model",
+			Created: 0,
+			OwnedBy: ownedBy,
+		})
+	}
+
+	c.JSON(http.StatusOK, OpenAIModelsResponse{
+		Object: "list",
+		Data:   models,
 	})
-	return
 }
 
 // OpenAIChatCompletions handles OpenAI v1 chat completion requests
