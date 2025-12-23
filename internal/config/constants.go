@@ -19,7 +19,7 @@ const (
 	DebugLogFileName = "bad_requests.log"
 
 	// RequestTimeout is the default timeout for HTTP requests in seconds
-	RequestTimeout = 60 * time.Second
+	RequestTimeout = 6000 * time.Second
 
 	// DefaultMaxTokens is the default max_tokens value for API requests
 	DefaultMaxTokens = 8192
