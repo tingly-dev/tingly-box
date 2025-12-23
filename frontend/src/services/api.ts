@@ -16,7 +16,7 @@ import {
 } from '../client';
 
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+const API_BASE_URL = window.location.origin || '';
 
 // Type definition for API instances
 interface ApiInstances {
@@ -67,7 +67,7 @@ export const getBaseUrl = async (): Promise<string> => {
 // Create API configuration
 const createApiConfig = async () => {
     let token = getUserAuthToken();
-    let basePath = API_BASE_URL || undefined;
+    let basePath = API_BASE_URL || "";
 
     // Check if we're in GUI mode
     if (import.meta.env.VITE_PKG_MODE === "gui") {
@@ -89,6 +89,9 @@ const createApiConfig = async () => {
                 console.error('Failed to get configuration from ProxyService:', err);
             }
         }
+    } else {
+        const host = window.location.host.replace(/\/$/, "")
+        basePath = `http://${host}`
     }
 
     return new Configuration({
