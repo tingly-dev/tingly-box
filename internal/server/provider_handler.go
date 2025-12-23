@@ -100,6 +100,9 @@ func (s *Server) AddProvider(c *gin.Context) {
 		return
 	}
 
+	// update models for current provider here too, try once and ignore error
+	s.config.FetchAndSaveProviderModels(provider.UUID)
+
 	if s.logger != nil {
 		s.logger.LogAction(obs.ActionAddProvider, map[string]interface{}{
 			"name":     req.Name,
