@@ -6,8 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"tingly-box/internal/config"
-
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
 )
@@ -95,7 +93,7 @@ func ConvertAnthropicResponseToOpenAI(
 }
 
 // ConvertOpenAIToAnthropicRequest converts OpenAI ChatCompletionNewParams to Anthropic SDK format
-func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams) anthropic.MessageNewParams {
+func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams, defaultMaxTokens int64) anthropic.MessageNewParams {
 	messages := make([]anthropic.MessageParam, 0, len(req.Messages))
 	var systemParts []string
 
@@ -188,7 +186,7 @@ func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams) anthro
 	// Determine max_tokens - use default if not set
 	maxTokens := req.MaxTokens.Value
 	if maxTokens == 0 {
-		maxTokens = config.DefaultMaxTokens
+		maxTokens = defaultMaxTokens
 	}
 
 	params := anthropic.MessageNewParams{

@@ -136,7 +136,7 @@ func (s *Server) ChatCompletions(c *gin.Context) {
 			return
 		}
 
-		anthropicReq := adaptor.ConvertOpenAIToAnthropicRequest(&req)
+		anthropicReq := adaptor.ConvertOpenAIToAnthropicRequest(&req, int64(s.config.GetDefaultMaxTokens()))
 
 		// 🔥 REQUIRED: forward tool_choice
 		if req.ToolChoice.OfAuto.Value != "" || req.ToolChoice.OfAllowedTools != nil || req.ToolChoice.OfFunctionToolChoice != nil || req.ToolChoice.OfCustomToolChoice != nil {
