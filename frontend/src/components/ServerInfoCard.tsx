@@ -59,7 +59,7 @@ const ServerInfoCard = ({ currentToken }: ServerInfoCardProps) => {
         }
     };
 
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || window.location.origin;
+    const baseUrl = window.location.origin;
     const openaiBaseUrl = `${baseUrl}/openai/v1`;
     const anthropicBaseUrl = `${baseUrl}/anthropic/v1`;
     const token = generatedToken || modelToken
