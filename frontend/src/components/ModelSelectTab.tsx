@@ -184,9 +184,14 @@ export default function ModelSelectTab({
                     setInternalCurrentTab(targetProviderIndex);
                 }
 
+                // Fetch models for the selected provider on initial load
+                const targetProvider = enabledProviders[targetProviderIndex];
+                if (onProviderChange) {
+                    onProviderChange(targetProvider);
+                }
+
                 // Auto-navigate to selected model if also provided
                 if (selectedModel) {
-                    const targetProvider = enabledProviders[targetProviderIndex];
                     const modelTypeInfo = getModelTypeInfo(targetProvider, providerModels, customModels);
                     const { isCustomModel, allModelsForSearch } = modelTypeInfo;
 
@@ -201,7 +206,7 @@ export default function ModelSelectTab({
             // Mark as initialized to prevent further automatic switching
             setIsInitialized(true);
         }
-    }, [isInitialized, selectedProvider, selectedModel, providers, providerModels, externalActiveTab, customModels, gridLayout.modelsPerPage]);
+    }, [isInitialized, selectedProvider, selectedModel, providers, providerModels, externalActiveTab, customModels, gridLayout.modelsPerPage, onProviderChange]);
 
     return (
         <Box sx={{ width: '100%' }}>
