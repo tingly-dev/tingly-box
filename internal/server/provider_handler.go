@@ -360,7 +360,7 @@ func (s *Server) ToggleProvider(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-func (s *Server) FetchProviderModels(c *gin.Context) {
+func (s *Server) UpdateProviderModelsByUUID(c *gin.Context) {
 	uid := c.Param("uuid")
 
 	if uid == "" {
@@ -399,16 +399,22 @@ func (s *Server) FetchProviderModels(c *gin.Context) {
 		}, true, fmt.Sprintf("Successfully fetched %d models for provider %s", len(models), uid))
 	}
 
-	response := FetchProviderModelsResponse{
+	providerModels := ProviderModelInfo{
+		Models: models,
+	}
+
+	response := ProviderModelsResponse{
 		Success: true,
 		Message: fmt.Sprintf("Successfully fetched %d models for provider %s", len(models), uid),
-		Data:    models,
+		Data:    providerModels,
 	}
 
 	c.JSON(http.StatusOK, response)
 }
 
-func (s *Server) GetProviderModels(c *gin.Context) {
+func (s *Server) GetProviderModelsByUUID(c *gin.Context) {
+	uid := c.Param("uuid")
+
 	providerModelManager := s.config.GetModelManager()
 	if providerModelManager == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -418,18 +424,9 @@ func (s *Server) GetProviderModels(c *gin.Context) {
 		return
 	}
 
-	providers := providerModelManager.GetAllProviders()
-	providerModels := make(map[string]*ProviderModelInfo)
-
-	for _, uid := range providers {
-		models := providerModelManager.GetModels(uid)
-		apiBase, lastUpdated, _ := providerModelManager.GetProviderInfo(uid)
-
-		providerModels[uid] = &ProviderModelInfo{
-			Models:      models,
-			APIBase:     apiBase,
-			LastUpdated: lastUpdated,
-		}
+	models := providerModelManager.GetModels(uid)
+	providerModels := ProviderModelInfo{
+		Models: models,
 	}
 
 	response := ProviderModelsResponse{

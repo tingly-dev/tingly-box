@@ -456,16 +456,16 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 	)
 
 	// Provider Models Management
-	apiV1.GET("/provider-models", s.GetProviderModels,
+	apiV1.GET("/provider-models/:uuid", s.GetProviderModelsByUUID,
 		swagger.WithDescription("Get all provider models"),
 		swagger.WithTags("models"),
 		swagger.WithResponseModel(ProviderModelsResponse{}),
 	)
 
-	apiV1.POST("/provider-models/:uuid", s.FetchProviderModels,
+	apiV1.POST("/provider-models/:uuid", s.UpdateProviderModelsByUUID,
 		swagger.WithDescription("Fetch models for a specific provider"),
 		swagger.WithTags("models"),
-		swagger.WithResponseModel(FetchProviderModelsResponse{}),
+		swagger.WithResponseModel(ProviderModelsResponse{}),
 	)
 
 	// Probe endpoint

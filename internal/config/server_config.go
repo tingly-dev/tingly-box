@@ -634,6 +634,12 @@ func (c *Config) DeleteProvider(uuid string) error {
 	for i, p := range c.Providers {
 		if p.UUID == uuid {
 			c.Providers = append(c.Providers[:i], c.Providers[i+1:]...)
+
+			// Delete the associated model file
+			if c.modelManager != nil {
+				_ = c.modelManager.RemoveProvider(uuid)
+			}
+
 			return c.save()
 		}
 	}

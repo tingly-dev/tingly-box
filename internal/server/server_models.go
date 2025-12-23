@@ -342,8 +342,9 @@ type ProviderModelInfo struct {
 
 // ProviderModelsResponse represents the response for getting provider models
 type ProviderModelsResponse struct {
-	Success bool                          `json:"success" example:"true"`
-	Data    map[string]*ProviderModelInfo `json:"data"`
+	Success bool              `json:"success" example:"true"`
+	Message string            `json:"message" example:"Provider models successfully"`
+	Data    ProviderModelInfo `json:"data"`
 }
 
 // FetchProviderModelsResponse represents the response for fetching provider models
