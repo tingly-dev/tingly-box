@@ -20,6 +20,9 @@ const (
 
 	// RequestTimeout is the default timeout for HTTP requests in seconds
 	RequestTimeout = 60 * time.Second
+
+	// DefaultMaxTokens is the default max_tokens value for API requests
+	DefaultMaxTokens = 8192
 )
 
 // GetTinglyConfDir returns the config directory path (default: ~/.tingly-box)

@@ -138,11 +138,6 @@ func (s *Server) ChatCompletions(c *gin.Context) {
 
 		anthropicReq := adaptor.ConvertOpenAIToAnthropicRequest(&req)
 
-		// 🔥 REQUIRED: forward tools
-		if len(req.Tools) > 0 {
-			anthropicReq.Tools = adaptor.ConvertOpenAIToolsToAnthropic(req.Tools)
-		}
-
 		// 🔥 REQUIRED: forward tool_choice
 		if req.ToolChoice.OfAuto.Value != "" || req.ToolChoice.OfAllowedTools != nil || req.ToolChoice.OfFunctionToolChoice != nil || req.ToolChoice.OfCustomToolChoice != nil {
 			anthropicReq.ToolChoice = adaptor.ConvertOpenAIToolChoice(&req.ToolChoice)

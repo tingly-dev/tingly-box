@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"tingly-box/internal/config"
+
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
 )
@@ -51,10 +53,12 @@ func ConvertAnthropicResponseToOpenAI(
 		}
 	}
 
+	// Set role from Anthropic response (required by OpenAI format)
+	message["role"] = string(anthropicResp.Role)
+
 	if textContent != "" {
 		message["content"] = textContent
 	}
-
 	if len(toolCalls) > 0 {
 		message["tool_calls"] = toolCalls
 	}
@@ -181,10 +185,16 @@ func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams) anthro
 		}
 	}
 
+	// Determine max_tokens - use default if not set
+	maxTokens := req.MaxTokens.Value
+	if maxTokens == 0 {
+		maxTokens = config.DefaultMaxTokens
+	}
+
 	params := anthropic.MessageNewParams{
 		Model:     anthropic.Model(req.Model),
 		Messages:  messages,
-		MaxTokens: req.MaxTokens.Value,
+		MaxTokens: maxTokens,
 	}
 
 	// Add system parts if any

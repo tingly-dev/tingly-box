@@ -19,11 +19,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const (
-	// DefaultMaxTokens is the default max_tokens value for Anthropic API requests
-	DefaultMaxTokens = 4000
-)
-
 // Use official Anthropic SDK types directly
 type (
 	// Request types
@@ -127,7 +122,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 	req.Model = anthropic.Model(actualModel)
 	// Ensure max_tokens is set (Anthropic API requires this)
 	if req.MaxTokens == 0 {
-		req.MaxTokens = DefaultMaxTokens
+		req.MaxTokens = config.DefaultMaxTokens
 	}
 
 	// Set provider and model information in context for statistics middleware
@@ -409,7 +404,7 @@ func (s *Server) forwardAnthropicRequestRaw(provider *config.Provider, rawReq ma
 		}
 	} else {
 		// Set default max_tokens if not provided (Anthropic API requires this)
-		params.MaxTokens = DefaultMaxTokens
+		params.MaxTokens = config.DefaultMaxTokens
 	}
 
 	// Make the request using Anthropic SDK with timeout

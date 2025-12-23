@@ -32,7 +32,6 @@ type Config struct {
 	Providers   []*Provider          `json:"providers_v2,omitempty"`
 	ServerPort  int                  `json:"server_port"`
 	JWTSecret   string               `json:"jwt_secret"`
-	Debug       bool                 `yaml:"debug" json:"debug"` // Enable debug logging
 
 	ConfigFile string `yaml:"-" json:"-"` // Not serialized to YAML (exported to preserve field)
 	ConfigDir  string `yaml:"-" json:"-"`
