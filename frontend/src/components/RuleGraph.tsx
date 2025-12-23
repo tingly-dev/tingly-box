@@ -8,6 +8,7 @@ import {
     Edit as EditIcon,
     ExpandLess as ExpandLessIcon,
     ExpandMore as ExpandMoreIcon,
+    Info as InfoIcon,
     MoreVert as MoreVertIcon,
     RadioButtonUnchecked as RadioButtonUncheckedIcon,
     Refresh as RefreshIcon,
@@ -578,17 +579,30 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
 
     const handleConfigureResponseModel = () => {
         handleMenuClose();
+
+        // If no response model exists, set a placeholder to trigger the split display immediately
+        if (!record.responseModel) {
+            onUpdateRecord('responseModel', 'Click to edit...');
+        }
+
+        // Show the field and expand if needed
         setShowResponseField(true);
         if (!expanded) {
             onToggleExpanded();
         }
+
+        // Focus on the response model field at the bottom
         setTimeout(() => {
             const responseField = document.getElementById(`response-model-${record.uuid}`) as HTMLInputElement;
             if (responseField) {
                 responseField.focus();
                 responseField.select();
+                // Select all text to make it easy to replace
+                if (responseField.value === 'Click to edit...') {
+                    responseField.select();
+                }
             }
-        }, 100);
+        }, 200);
     };
 
     const getApiStyle = (providerUuid: string) => {
@@ -747,18 +761,15 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                                             {/* Request Model Card */}
                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                {/* Left arrow for request model */}
-                                                {/*<Box sx={{*/}
-                                                {/*    display: 'flex',*/}
-                                                {/*    justifyContent: 'center',*/}
-                                                {/*    minWidth: '30px'*/}
-                                                {/*}}>*/}
-                                                {/*    <ArrowForwardIcon />*/}
-                                                {/*</Box>*/}
                                                 <Box sx={{ flex: 1 }}>
-                                                    <Typography variant="caption" sx={{ color: 'text.secondary', mb: 1, textAlign: 'center', display: 'block' }}>
-                                                        Request Local Model
-                                                    </Typography>
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5, mb: 1 }}>
+                                                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                                            Request Local Model
+                                                        </Typography>
+                                                        <Tooltip title="The model name that clients use to make requests. This will be matched against incoming API calls.">
+                                                            <InfoIcon sx={{ fontSize: '0.9rem', color: 'text.secondary', cursor: 'help' }} />
+                                                        </Tooltip>
+                                                    </Box>
                                                     <ModelNode
                                                         active={record.active}
                                                         label="Unspecified"
@@ -772,18 +783,15 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
 
                                             {/* Response Model Card */}
                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                {/* Left arrow for response model */}
-                                                {/*<Box sx={{*/}
-                                                {/*    display: 'flex',*/}
-                                                {/*    justifyContent: 'center',*/}
-                                                {/*    minWidth: '30px'*/}
-                                                {/*}}>*/}
-                                                {/*    <ArrowBackIcon/>*/}
-                                                {/*</Box>*/}
                                                 <Box sx={{ flex: 1 }}>
-                                                    <Typography variant="caption" sx={{ color: 'text.secondary', mb: 1, textAlign: 'center', display: 'block' }}>
-                                                        Response Model
-                                                    </Typography>
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5, mb: 1 }}>
+                                                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                                            Response Model
+                                                        </Typography>
+                                                        <Tooltip title="The model name returned to clients. Responses from upstream providers will be transformed to show this model name instead.">
+                                                            <InfoIcon sx={{ fontSize: '0.9rem', color: 'text.secondary', cursor: 'help' }} />
+                                                        </Tooltip>
+                                                    </Box>
                                                     <ModelNode
                                                         active={record.active}
                                                         label=""
