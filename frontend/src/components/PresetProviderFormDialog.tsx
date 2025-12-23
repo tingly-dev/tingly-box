@@ -32,7 +32,7 @@ export interface EnhancedProviderFormData {
     enabled?: boolean;
 }
 
-interface EnhancedProviderFormDialogProps {
+interface PresetProviderFormDialogProps {
     open: boolean;
     onClose: () => void;
     onSubmit: (e: React.FormEvent) => void;
@@ -52,7 +52,7 @@ const PresetProviderFormDialog = ({
     mode,
     title,
     submitText,
-}: EnhancedProviderFormDialogProps) => {
+}: PresetProviderFormDialogProps) => {
     const defaultTitle = mode === 'add' ? 'Add New API Key' : 'Edit API Key';
     const defaultSubmitText = mode === 'add' ? 'Add API Key' : 'Save Changes';
 

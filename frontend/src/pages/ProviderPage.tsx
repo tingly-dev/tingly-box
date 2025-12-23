@@ -121,7 +121,7 @@ const ProviderPage = () => {
                 name: provider.name,
                 apiBase: provider.api_base,
                 apiStyle: provider.api_style || 'openai',
-                token: '',
+                token: provider.token || "",
                 enabled: provider.enabled,
             });
             setDialogOpen(true);

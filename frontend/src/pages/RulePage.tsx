@@ -72,17 +72,13 @@ const RulePage = () => {
     const loadData = useCallback(async () => {
         setLoading(true);
         try {
-            const [providersResult, modelsResult, rulesResult] = await Promise.all([
+            const [providersResult, rulesResult] = await Promise.all([
                 api.getProviders(),
-                api.getProviderModels(),
                 api.getRules(),
             ]);
 
             if (providersResult.success) {
                 setProviders(providersResult.data);
-            }
-            if (modelsResult.success) {
-                setProviderModels(modelsResult.data);
             }
             if (rulesResult.success) {
                 setRules(rulesResult.data);
@@ -311,35 +307,71 @@ const RulePage = () => {
         // URL params are only for initial load from bookmarks
     };
 
-    const handleRefreshProviderModels = async (providerUuid: string) => {
-        if (!providerUuid) return;
-
-        const providerName = providerUuidToName[providerUuid];
-        if (!providerName) return;
+    // Fetch models for a specific provider (lazy loading)
+    const fetchProviderModels = useCallback(async (providerUuid: string) => {
+        if (!providerUuid || providerModels[providerUuid]) {
+            // Already loaded or no UUID
+            return;
+        }
 
         try {
-            const result = await api.getProviderModelsByName(providerName);
-            console.log("found models", result.data)
-            if (result.success) {
-                // Update providerModels with the refreshed data
-                // The result from getProviderModelsByName is a direct array, not an object with models field
-                setProviderModels((prev: any) => {
-                    const updated = {
-                        ...prev,
-                        [providerName]: {
-                            models: result.data  // Wrap the array in a models object to match the expected structure
-                        }
-                    };
-                    return updated;
-                });
-                setMessage({ type: 'success', text: `Successfully refreshed models for ${providerName}` });
-            } else {
-                setMessage({ type: 'error', text: `Failed to refresh models for ${providerName}: ${result.message}` });
+            const result = await api.getProviderModelsByUUID(providerUuid);
+            if (result.success && result.data) {
+                setProviderModels((prev: any) => ({
+                    ...prev,
+                    [providerUuid]: {
+                        models: result.data.models || []
+                    }
+                }));
             }
         } catch (error) {
-            setMessage({ type: 'error', text: `Failed to refresh models for ${providerName}: ${error}` });
+            console.error(`Failed to fetch models for provider ${providerUuid}:`, error);
+        }
+    }, [providerModels]);
+
+    const handleRefreshProviderModels = async (uid: string) => {
+        if (!uid) return;
+
+        try {
+            const result = await api.getProviderModelsByUUID(uid);
+            if (result.success && result.data) {
+                // Update providerModels with UUID as key
+                setProviderModels((prev: any) => ({
+                    ...prev,
+                    [uid]: {
+                        models: result.data.models || []
+                    }
+                }));
+                setMessage({ type: 'success', text: `Successfully refreshed models for ${providerUuidToName[uid] || uid}` });
+            } else {
+                setMessage({ type: 'error', text: `Failed to refresh models: ${result.error || result.message}` });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: `Failed to refresh models: ${error}` });
         }
     };
+
+    // Fetch models for existing providers when rules are loaded (lazy - only for providers that are actually used)
+    useEffect(() => {
+        const loadUsedProviderModels = async () => {
+            const usedProviderUuids = new Set<string>();
+            configRecords.forEach(record => {
+                record.providers.forEach(p => {
+                    if (p.provider) {
+                        usedProviderUuids.add(p.provider);
+                    }
+                });
+            });
+
+            const loadPromises = Array.from(usedProviderUuids)
+                .filter(uuid => !providerModels[uuid]) // Only load if not already cached
+                .map(uuid => fetchProviderModels(uuid));
+
+            await Promise.all(loadPromises);
+        };
+
+        loadUsedProviderModels();
+    }, [configRecords, fetchProviderModels, providerModels]);
 
     return (
         <PageLayout
@@ -401,6 +433,7 @@ const RulePage = () => {
                                     onAddProvider={() => addProvider(record.uuid)}
                                     onDeleteProvider={(recordId, providerId) => deleteProvider(recordId, providerId)}
                                     onRefreshModels={handleRefreshProviderModels}
+                                    onFetchModels={fetchProviderModels}
                                     onSave={() => handleSaveRule(record)}
                                     onDelete={() => deleteRule(record.uuid)}
                                     onReset={() => resetRule(record.uuid)}

@@ -2,11 +2,13 @@ import React, {useState} from 'react';
 import {
     Add as AddIcon,
     ArrowForward as ArrowForwardIcon,
+    ArrowBack as ArrowBackIcon,
     CheckCircle as CheckCircleIcon,
     Delete as DeleteIcon,
     Edit as EditIcon,
     ExpandLess as ExpandLessIcon,
     ExpandMore as ExpandMoreIcon,
+    Info as InfoIcon,
     MoreVert as MoreVertIcon,
     RadioButtonUnchecked as RadioButtonUncheckedIcon,
     Refresh as RefreshIcon,
@@ -66,6 +68,7 @@ interface RuleGraphProps {
     onAddProvider: () => void;
     onDeleteProvider: (recordId: string, providerId: string) => void;
     onRefreshModels: (providerUuid: string) => void;
+    onFetchModels: (providerUuid: string) => void;
     onSave: () => void;
     onDelete: () => void;
     onReset: () => void;
@@ -156,7 +159,8 @@ const ModelNode: React.FC<{
     editable?: boolean;
     onUpdate?: (value: string) => void;
     showStatusIcon?: boolean;
-}> = ({ active, label, value, editable = false, onUpdate, showStatusIcon = true }) => {
+    compact?: boolean;
+}> = ({ active, label, value, editable = false, onUpdate, showStatusIcon = true, compact = false }) => {
     const [editMode, setEditMode] = useState(false);
     const [tempValue, setTempValue] = useState(value);
 
@@ -186,7 +190,7 @@ const ModelNode: React.FC<{
 
     return (
         <Box sx={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 1 }}>
-            <StyledModelNode>
+            <StyledModelNode compact={compact}>
                 {editMode && editable ? (
                     <TextField
                         value={tempValue}
@@ -218,7 +222,7 @@ const ModelNode: React.FC<{
                         sx={{
                             cursor: editable ? 'pointer' : 'default',
                             width: '100%',
-                            py: 1.5,
+                            py: compact ? 0.5 : 1.5,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -238,13 +242,14 @@ const ModelNode: React.FC<{
                             } : {}
                         }}
                     >
-                        {showStatusIcon && (
-                            active ? (
-                                <CheckCircleIcon sx={{ fontSize: 16, color: 'success.main' }} />
-                            ) : (
-                                <RadioButtonUncheckedIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
-                            )
-                        )}
+                        {/*{showStatusIcon && (*/}
+                        {/*    active ? (*/}
+                        {/*        <CheckCircleIcon sx={{ fontSize: 16, color: 'success.main' }} />*/}
+                        {/*    ) : (*/}
+                        {/*        <RadioButtonUncheckedIcon sx={{ fontSize: 16, color: 'text.disabled' }} />*/}
+                        {/*    )*/}
+                        {/*)}*/}
+                        {/*<EditIcon sx={{ fontWeight: 600, fontSize: '0.9rem' }}></EditIcon>*/}
                         <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', fontSize: '0.9rem' }}>
                             {value || label}
                         </Typography>
@@ -256,19 +261,21 @@ const ModelNode: React.FC<{
 };
 
 // Styled model node with unified fixed size
-const StyledModelNode = styled(Box)(({ theme }) => ({
+const StyledModelNode = styled(Box, {
+    shouldForwardProp: (prop) => prop !== 'compact',
+})<{ compact?: boolean }>(({ compact, theme }) => ({
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing(2.5),
+    padding: theme.spacing(compact ? 1.5 : 2.5),
     borderRadius: theme.shape.borderRadius,
     border: '1px solid',
     borderColor: 'divider',
     backgroundColor: 'background.paper',
     textAlign: 'center',
     width: 180,  // Fixed width
-    height: 200,  // Fixed height - same as provider nodes
+    height: compact ? 100 : 200,  // Dynamic height - half when compact
     boxShadow: theme.shadows[2],
     transition: 'all 0.2s ease-in-out',
     position: 'relative',
@@ -290,8 +297,9 @@ const ProviderNodeComponent: React.FC<{
     active: boolean;
     onDelete: () => void;
     onRefreshModels: () => void;
+    onFetchModels: (providerUuid: string) => void;
     providerUuidToName: { [uuid: string]: string };
-}> = ({ provider, apiStyle, availableProviders, onUpdate, providerModels, active, onDelete, onRefreshModels, providerUuidToName }) => {
+}> = ({ provider, apiStyle, availableProviders, onUpdate, providerModels, active, onDelete, onRefreshModels, onFetchModels, providerUuidToName }) => {
     const [editMode, setEditMode] = React.useState({
         provider: false,
         model: false
@@ -358,8 +366,13 @@ const ProviderNodeComponent: React.FC<{
                         label="Provider"
                         value={provider.provider}
                         onChange={(e) => {
-                            onUpdate('provider', e.target.value);
+                            const newProviderUuid = e.target.value;
+                            onUpdate('provider', newProviderUuid);
                             setEditMode({ ...editMode, provider: false });
+                            // Fetch models for the newly selected provider
+                            if (newProviderUuid) {
+                                onFetchModels(newProviderUuid);
+                            }
                         }}
                         onBlur={() => setEditMode({ ...editMode, provider: false })}
                         size="small"
@@ -429,7 +442,7 @@ const ProviderNodeComponent: React.FC<{
                             fullWidth
                             autoFocus
                         >
-                            {(providerModels[providerUuidToName[provider.provider]]?.models || []).map((model: string) => (
+                            {(providerModels[provider.provider]?.models || []).map((model: string) => (
                                 <MenuItem key={model} value={model}>
                                     {model}
                                 </MenuItem>
@@ -548,6 +561,7 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
     onAddProvider,
     onDeleteProvider,
     onRefreshModels,
+    onFetchModels,
     onSave,
     onDelete,
     onReset,
@@ -573,17 +587,30 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
 
     const handleConfigureResponseModel = () => {
         handleMenuClose();
+
+        // If no response model exists, set a placeholder to trigger the split display immediately
+        if (!record.responseModel) {
+            onUpdateRecord('responseModel', 'Click to edit...');
+        }
+
+        // Show the field and expand if needed
         setShowResponseField(true);
         if (!expanded) {
             onToggleExpanded();
         }
+
+        // Focus on the response model field at the bottom
         setTimeout(() => {
             const responseField = document.getElementById(`response-model-${record.uuid}`) as HTMLInputElement;
             if (responseField) {
                 responseField.focus();
                 responseField.select();
+                // Select all text to make it easy to replace
+                if (responseField.value === 'Click to edit...') {
+                    responseField.select();
+                }
             }
-        }, 100);
+        }, 200);
     };
 
     const getApiStyle = (providerUuid: string) => {
@@ -735,25 +762,90 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                             </Typography>
 
                             <GraphRow>
-                                {/* Request Model Node */}
+                                {/* Model Node(s) Container */}
                                 <NodeContainer>
-                                    <Typography variant="caption" sx={{ color: 'text.secondary', mb: 1 }}>
-                                        Request Local Model
-                                    </Typography>
-                                    <ModelNode
-                                        active={record.active}
-                                        label="Unspecified"
-                                        value={record.requestModel}
-                                        editable={record.active}
-                                        onUpdate={(value) => onUpdateRecord('requestModel', value)}
-                                    />
+                                    {record.responseModel ? (
+                                        // Split display when response model is configured
+                                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                                            {/* Request Model Card */}
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                <Box sx={{ flex: 1 }}>
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5, mb: 1 }}>
+                                                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                                            Request Local Model
+                                                        </Typography>
+                                                        <Tooltip title="The model name that clients use to make requests. This will be matched against incoming API calls.">
+                                                            <InfoIcon sx={{ fontSize: '0.9rem', color: 'text.secondary', cursor: 'help' }} />
+                                                        </Tooltip>
+                                                    </Box>
+                                                    <ModelNode
+                                                        active={record.active}
+                                                        label="Unspecified"
+                                                        value={record.requestModel}
+                                                        editable={record.active}
+                                                        onUpdate={(value) => onUpdateRecord('requestModel', value)}
+                                                        compact={true}
+                                                    />
+                                                </Box>
+                                            </Box>
+
+                                            {/* Response Model Card */}
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                <Box sx={{ flex: 1 }}>
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5, mb: 1 }}>
+                                                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                                            Response Model
+                                                        </Typography>
+                                                        <Tooltip title="The model name returned to clients. Responses from upstream providers will be transformed to show this model name instead.">
+                                                            <InfoIcon sx={{ fontSize: '0.9rem', color: 'text.secondary', cursor: 'help' }} />
+                                                        </Tooltip>
+                                                    </Box>
+                                                    <ModelNode
+                                                        active={record.active}
+                                                        label=""
+                                                        value={record.responseModel}
+                                                        editable={true}
+                                                        onUpdate={(value) => onUpdateRecord('responseModel', value)}
+                                                        compact={true}
+                                                    />
+                                                </Box>
+                                            </Box>
+                                        </Box>
+                                    ) : (
+                                        // Single display when no response model
+                                        <Box>
+                                            <Typography variant="caption" sx={{ color: 'text.secondary', mb: 1, textAlign: 'center', display: 'block' }}>
+                                                Request Local Model
+                                            </Typography>
+                                            <ModelNode
+                                                active={record.active}
+                                                label="Unspecified"
+                                                value={record.requestModel}
+                                                editable={record.active}
+                                                onUpdate={(value) => onUpdateRecord('requestModel', value)}
+                                            />
+                                        </Box>
+                                    )}
                                 </NodeContainer>
 
-                                {/* Arrow */}
+                                {/* Arrow from model(s) to providers */}
                                 {record.providers.length > 0 && (
-                                    <ConnectionLine>
-                                        <ArrowForwardIcon />
-                                    </ConnectionLine>
+                                    record.responseModel ? (
+                                        // When response model exists: show two rotated arrows to indicate connection
+                                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                                            <ConnectionLine>
+                                                <ArrowForwardIcon sx={{ transform: 'rotate(45deg)' }} />
+                                            </ConnectionLine>
+                                            <ConnectionLine>
+                                                <ArrowBackIcon sx={{ transform: 'rotate(-45deg)' }} />
+                                            </ConnectionLine>
+                                        </Box>
+                                    ) : (
+                                        // When no response model: show only forward arrow
+                                        <ConnectionLine>
+                                            <ArrowForwardIcon />
+                                        </ConnectionLine>
+                                    )
                                 )}
 
                                 {/* Providers Container */}
@@ -774,6 +866,7 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                                                     onUpdate={(field, value) => onUpdateProvider(recordUuid, provider.uuid, field, value)}
                                                     onDelete={() => onDeleteProvider(recordUuid, provider.uuid)}
                                                     onRefreshModels={() => onRefreshModels(provider.provider)}
+                                                    onFetchModels={onFetchModels}
                                                     providerUuidToName={providerUuidToName}
                                                 />
                                             ))}
@@ -856,28 +949,6 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                                     </Box>
                                 )}
 
-                                {/* Arrow to Response */}
-                                {record.providers.length > 0 && record.responseModel && (
-                                    <ConnectionLine>
-                                        <ArrowForwardIcon />
-                                    </ConnectionLine>
-                                )}
-
-                                {/* Response Model Node - Only show if configured */}
-                                {record.responseModel && (
-                                    <NodeContainer>
-                                        <Typography variant="caption" sx={{ color: 'text.secondary', mb: 1 }}>
-                                            Response Model
-                                        </Typography>
-                                        <ModelNode
-                                            active={record.active}
-                                            label=""
-                                            value={record.responseModel}
-                                            editable={true} // Allow editing for consistency
-                                            onUpdate={(value) => onUpdateRecord('responseModel', value)}
-                                        />
-                                    </NodeContainer>
-                                )}
                             </GraphRow>
 
                             {/* Legend */}
@@ -941,6 +1012,7 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                                 onDeleteProvider={(providerId) => onDeleteProvider(recordUuid, providerId)}
                                 onUpdateProvider={(providerId, field, value) => onUpdateProvider(recordUuid, providerId, field, value)}
                                 onRefreshModels={onRefreshModels}
+                                onFetchModels={onFetchModels}
                             />
                         </Stack>
                     </Stack>

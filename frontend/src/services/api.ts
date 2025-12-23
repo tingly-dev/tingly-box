@@ -7,7 +7,6 @@ import {
     HistoryApi,
     ModelsApi,
     ProbeProviderRequestApiStyleEnum,
-    type ProviderModelsResponse,
     type ProviderResponse,
     ProvidersApi,
     RulesApi,
@@ -242,55 +241,37 @@ export const api = {
         }
     },
 
-    getProviderModels: async (): Promise<ProviderModelsResponse> => {
-        try {
-            const apiInstances = await getApiInstances();
-            const response = await apiInstances.modelsApi.apiV1ProviderModelsGet();
-            const body: ProviderModelsResponse = response.data;
-            if (body.success && body.data) {
-                // Sort models within each provider alphabetically by model name
-                Object.keys(body.data).forEach(providerName => {
-                    const providerData = body.data[providerName];
-                    if (providerData && Array.isArray(providerData.models)) {
-                        providerData.models.sort((a: string, b: string) =>
-                            a.localeCompare(b)
-                        );
-                    }
-                });
-                // Sort provider keys alphabetically for consistent ordering
-                const sortedData: any = {};
-                Object.keys(body.data)
-                    .sort((a, b) => a.localeCompare(b))
-                    .forEach(providerName => {
-                        sortedData[providerName] = body.data[providerName];
-                    });
-                body.data = sortedData;
-            }
-            return body;
-        } catch (error: any) {
-            if (error.response?.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
-                return {success: false, error: 'Authentication required'};
-            }
-            return {success: false, error: error.message};
-        }
-    },
-
-    getProviderModelsByName: async (name: string): Promise<FetchProviderModelsResponse> => {
+    updateProviderModelsByUUID: async (uuid: string): Promise<FetchProviderModelsResponse> => {
         try {
             // Note: The generated client has an issue with path parameters
             // We need to manually handle this for now
             const apiInstances = await getApiInstances();
-            const response = await apiInstances.modelsApi.apiV1ProviderModelsNamePost(name);
+            const response = await apiInstances.modelsApi.apiV1ProviderModelsUuidPost(uuid);
             const body = response.data
             if (body.success && body.data) {
                 // Sort models alphabetically by model name to reduce UI changes
-                if (Array.isArray(body.data)) {
-                    body.data.sort((a: any, b: any) =>
-                        (a.model || a.name || '').localeCompare(b.model || b.name || '')
-                    );
-                }
+                body.data.models.sort((a: any, b: any) =>
+                    a.localeCompare(b)
+                );
+            }
+            return body;
+        } catch (error: any) {
+            return {success: false, error: error.message};
+        }
+    },
+
+    getProviderModelsByUUID: async (uuid: string): Promise<FetchProviderModelsResponse> => {
+        try {
+            // Note: The generated client has an issue with path parameters
+            // We need to manually handle this for now
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.modelsApi.apiV1ProviderModelsUuidGet(uuid);
+            const body = response.data
+            if (body.success && body.data) {
+                // Sort models alphabetically by model name to reduce UI changes
+                body.data.models.sort((a: any, b: any) =>
+                    a.localeCompare(b)
+                );
             }
             return body;
         } catch (error: any) {
@@ -558,7 +539,10 @@ export const api = {
         try {
             const apiInstances = await getApiInstances();
             const response = await apiInstances.testingApi.apiV1ProbeProviderPost({
-                name: "placeholder", api_style: (api_style) as ProbeProviderRequestApiStyleEnum, api_base: api_base, token: token
+                name: "placeholder",
+                api_style: (api_style) as ProbeProviderRequestApiStyleEnum,
+                api_base: api_base,
+                token: token
             });
             return response.data;
         } catch (error: any) {

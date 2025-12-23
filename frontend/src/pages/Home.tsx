@@ -25,6 +25,7 @@ import { PageLayout } from '../components/PageLayout';
 import Probe from '../components/Probe';
 import UnifiedCard from '../components/UnifiedCard';
 import { api, getBaseUrl } from '../services/api';
+import type { ProviderModelsDataByUuid } from '../types/provider';
 
 const defaultRule = "tingly"
 const defaultRuleUUID = "tingly"
@@ -34,7 +35,8 @@ const Home = () => {
     const navigate = useNavigate();
     const [providers, setProviders] = useState<any[]>([]);
     const [rule, setRule] = useState<any>({});
-    const [providerModels, setProviderModels] = useState<any>({});
+    // UUID-based provider models mapping
+    const [providerModelsByUuid, setProviderModelsByUuid] = useState<ProviderModelsDataByUuid>({});
     const [loading, setLoading] = useState(true);
     const [selectedOption, setSelectedOption] = useState<any>({ provider: "", model: "" }); // provider is now UUID
     const [baseUrl, setBaseUrl] = useState<string>("");
@@ -59,6 +61,18 @@ const Home = () => {
         });
         return map;
     }, [providers]);
+
+    // Transform UUID-based provider models to name-based for ModelSelectTab (legacy compatibility)
+    const providerModelsByName = React.useMemo(() => {
+        const nameBased: { [name: string]: any } = {};
+        Object.entries(providerModelsByUuid).forEach(([uuid, modelData]) => {
+            const providerName = providerUuidToName[uuid];
+            if (providerName) {
+                nameBased[providerName] = modelData;
+            }
+        });
+        return nameBased;
+    }, [providerModelsByUuid, providerUuidToName]);
 
     // Unified notification state
     const [notification, setNotification] = useState<{
@@ -132,7 +146,7 @@ const Home = () => {
                 ),
                 severity: 'info',
                 onClose: () => {
-                    setShowBanner(false);
+        setShowBanner(false);
                     setNotification(prev => ({ ...prev, open: false }));
                 }
             });
@@ -158,9 +172,9 @@ const Home = () => {
     });
 
     const loadBaseUrl = async () => {
-        const baseUrl = await getBaseUrl()
-        setBaseUrl(baseUrl)
-    }
+        const baseUrl = await getBaseUrl();
+        setBaseUrl(baseUrl);
+    };
 
     useEffect(() => {
         loadBaseUrl()
@@ -187,7 +201,6 @@ const Home = () => {
 
     const loadToken = async () => {
         const result = await api.getToken();
-        console.log(result)
         if (result.token) {
             setApiKey(result.token);
         }
@@ -198,7 +211,6 @@ const Home = () => {
         await Promise.all([
             loadBaseUrl(),
             loadProviders(),
-            loadProviderModels(),
             loadRule(),
         ]);
         setLoading(false);
@@ -219,12 +231,6 @@ const Home = () => {
         // Remove automatic rule creation - rule should only be created when user selects a provider/model
     };
 
-    const loadProviderModels = async () => {
-        const result = await api.getProviderModels();
-        if (result.success) {
-            setProviderModels(result.data);
-        }
-    };
 
     // Server info handlers
     const copyToClipboard = async (text: string, label: string) => {
@@ -303,15 +309,47 @@ const Home = () => {
         }
     };
 
+    const handleProviderChange = async (provider: any) => {
+        // Called when user switches to a provider tab
+        // Fetch models for this provider using UUID
+        try {
+            // Check if already refreshing to avoid duplicate requests
+            if (refreshingProviders.includes(provider.uuid)) {
+                return;
+            }
+
+            // Add provider UUID to refreshing list
+            setRefreshingProviders(prev => [...prev, provider.uuid]);
+
+            const result = await api.getProviderModelsByUUID(provider.uuid);
+            if (result.success && result.data) {
+                // Update UUID-based mapping with the fetched models
+                setProviderModelsByUuid(prev => ({
+                    ...prev,
+                    [provider.uuid]: result.data,
+                }));
+            }
+            // Note: We don't show notification here to avoid spamming user on tab switch
+        } catch (error) {
+            console.error("Error fetching models on provider change:", error);
+        } finally {
+            // Remove provider UUID from refreshing list
+            setRefreshingProviders(prev => prev.filter(p => p !== provider.uuid));
+        }
+    };
+
     const handleModelRefresh = async (provider: any) => {
         try {
             // Add provider UUID to refreshing list
             setRefreshingProviders(prev => [...prev, provider.uuid]);
 
-            const result = await api.getProviderModelsByName(provider.name);
-            if (result.success) {
-                await loadProviders();
-                await loadProviderModels();
+            const result = await api.updateProviderModelsByUUID(provider.uuid);
+            if (result.success && result.data) {
+                // Update UUID-based mapping with the fetched models
+                setProviderModelsByUuid(prev => ({
+                    ...prev,
+                    [provider.uuid]: result.data,
+                }));
                 showNotification(`Models for ${provider.name} refreshed successfully!`, 'success');
             } else {
                 showNotification(`Failed to refresh models for ${provider.name}.\nPlease check base_url and api_key.`, 'error');
@@ -330,7 +368,7 @@ const Home = () => {
         setProviderFormData({
             name: '',
             apiBase: '',
-            apiStyle: '',
+            apiStyle: undefined,
             token: '',
         });
         setAddDialogOpen(true);
@@ -486,9 +524,7 @@ const Home = () => {
                 {/* Server Information Header */}
                 <UnifiedCard
                     title="Proxy Configs"
-                    // subtitle={`Total: ${providers.length} providers | Enabled: ${providers.filter((p: any) => p.enabled).length}`}
                     size="header"
-
                 >
                     <HomeHeader
                         activeTab={activeTab}
@@ -530,21 +566,18 @@ const Home = () => {
                         <Stack spacing={3}>
                             <ModelSelectTab
                                 providers={providers}
-                                providerModels={providerModels}
+                                providerModels={providerModelsByName}
                                 selectedProvider={selectedOption?.provider}
                                 selectedModel={selectedOption?.model}
                                 onSelected={(opt: ProviderSelectTabOption) => handleModelSelect(opt.provider, opt.model || "")}
+                                onProviderChange={handleProviderChange}
                                 onRefresh={handleModelRefresh}
                                 refreshingProviders={refreshingProviders}
-                                providerUuidToName={providerUuidToName}
                             />
 
                             {/* Probe Component - only show when provider and model are selected */}
                             {selectedOption.provider && selectedOption.model && (
                                 <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                                    {/* <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, fontSize: '0.875rem' }}>
-                                    Connection Status
-                                </Typography> */}
                                     <Probe
                                         provider={selectedOption.provider}
                                         model={selectedOption.model}
@@ -557,14 +590,14 @@ const Home = () => {
                             )}
                         </Stack>
                     ) : (
-                        <Guiding></Guiding>
+                        <Guiding />
                     )}
 
                 </UnifiedCard>
             </CardGrid>
 
             {/* Token Modal */}
-            <ApiKeyModal></ApiKeyModal>
+            <ApiKeyModal />
 
             {/* Add Provider Dialog */}
             <PresetProviderFormDialog

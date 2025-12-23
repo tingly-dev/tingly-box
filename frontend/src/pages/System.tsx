@@ -69,15 +69,13 @@ const System = () => {
     };
 
     const loadProviderSelectionPanel = async () => {
-        const [providersResult, modelsResult, defaultsResult] = await Promise.all([
+        const [providersResult, defaultsResult] = await Promise.all([
             api.getProviders(),
-            api.getProviderModels(),
             api.getRules(),
         ]);
 
-        if (providersResult.success && modelsResult.success) {
+        if (providersResult.success) {
             setProviders(providersResult.data);
-            setProviderModels(modelsResult.data);
             if (defaultsResult.success) {
                 setRules(defaultsResult.data);
             }

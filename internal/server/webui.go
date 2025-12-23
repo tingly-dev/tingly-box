@@ -410,62 +410,62 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 		swagger.WithResponseModel(ServerActionResponse{}),
 	)
 
-	apiV1.POST("/server/stop", (s.StopServer),
+	apiV1.POST("/server/stop", s.StopServer,
 		swagger.WithDescription("Stop the server gracefully"),
 		swagger.WithTags("server"),
 		swagger.WithResponseModel(ServerActionResponse{}),
 	)
 
-	apiV1.POST("/server/restart", (s.RestartServer),
+	apiV1.POST("/server/restart", s.RestartServer,
 		swagger.WithDescription("Restart the server"),
 		swagger.WithTags("server"),
 		swagger.WithResponseModel(ServerActionResponse{}),
 	)
 
 	// Rule Management
-	apiV1.GET("/rules", (s.GetRules),
+	apiV1.GET("/rules", s.GetRules,
 		swagger.WithDescription("Get all configured rules"),
 		swagger.WithTags("rules"),
 		swagger.WithResponseModel(RulesResponse{}),
 	)
 
-	apiV1.GET("/rule/:uuid", (s.GetRule),
+	apiV1.GET("/rule/:uuid", s.GetRule,
 		swagger.WithDescription("Get specific rule by UUID"),
 		swagger.WithTags("rules"),
 		swagger.WithResponseModel(RuleResponse{}),
 	)
 
-	apiV1.POST("/rule/:uuid", (s.SetRule),
+	apiV1.POST("/rule/:uuid", s.SetRule,
 		swagger.WithDescription("Create or update a rule configuration"),
 		swagger.WithTags("rules"),
 		swagger.WithRequestModel(SetRuleRequest{}),
 		swagger.WithResponseModel(SetRuleResponse{}),
 	)
 
-	apiV1.DELETE("/rule/:uuid", (s.DeleteRule),
+	apiV1.DELETE("/rule/:uuid", s.DeleteRule,
 		swagger.WithDescription("Delete a rule configuration"),
 		swagger.WithTags("rules"),
 		swagger.WithResponseModel(DeleteRuleResponse{}),
 	)
 
 	// History
-	apiV1.GET("/history", (s.GetHistory),
+	apiV1.GET("/history", s.GetHistory,
 		swagger.WithDescription("Get request history"),
 		swagger.WithTags("history"),
 		swagger.WithResponseModel(HistoryResponse{}),
 	)
 
 	// Provider Models Management
-	apiV1.GET("/provider-models", (s.GetProviderModels),
+	apiV1.GET("/provider-models/:uuid", s.GetProviderModelsByUUID,
 		swagger.WithDescription("Get all provider models"),
 		swagger.WithTags("models"),
 		swagger.WithResponseModel(ProviderModelsResponse{}),
 	)
 
-	apiV1.POST("/provider-models/:name", (s.FetchProviderModels),
+	apiV1.POST("/provider-models/:uuid", s.UpdateProviderModelsByUUID,
 		swagger.WithDescription("Fetch models for a specific provider"),
 		swagger.WithTags("models"),
-		swagger.WithResponseModel(FetchProviderModelsResponse{}),
+		swagger.WithResponseModel(ProviderModelsResponse{}),
 	)
 
 	// Probe endpoint
@@ -491,14 +491,14 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 	)
 
 	// Token Management
-	apiV1.POST("/token", (s.GenerateToken),
+	apiV1.POST("/token", s.GenerateToken,
 		swagger.WithDescription("Generate a new API token"),
 		swagger.WithTags("token"),
 		swagger.WithRequestModel(GenerateTokenRequest{}),
 		swagger.WithResponseModel(TokenResponse{}),
 	)
 
-	apiV1.GET("/token", (s.GetToken),
+	apiV1.GET("/token", s.GetToken,
 		swagger.WithDescription("Get existing API token or generate new one"),
 		swagger.WithTags("token"),
 		swagger.WithResponseModel(TokenResponse{}),

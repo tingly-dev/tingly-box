@@ -41,6 +41,7 @@ interface ProviderConfigProps {
     onDeleteProvider: (providerId: string) => void;
     onUpdateProvider: (providerId: string, field: keyof ConfigProvider, value: any) => void;
     onRefreshModels: (providerUuid: string) => void;
+    onFetchModels: (providerUuid: string) => void;
 }
 
 const ProviderConfig: React.FC<ProviderConfigProps> = ({
@@ -52,7 +53,8 @@ const ProviderConfig: React.FC<ProviderConfigProps> = ({
     onAddProvider,
     onDeleteProvider,
     onUpdateProvider,
-    onRefreshModels
+    onRefreshModels,
+    onFetchModels
 }) => {
     const getApiStyle = (providerUuid: string) => {
         const provider = availableProviders.find(p => p.uuid === providerUuid);
@@ -112,12 +114,13 @@ const ProviderConfig: React.FC<ProviderConfigProps> = ({
                             key={provider.uuid}
                             provider={provider}
                             apiStyle={getApiStyle(provider.provider)}
-                            models={providerModels[providerUuidToName[provider.provider]]?.models || []}
+                            models={providerModels[provider.provider]?.models || []}
                             availableProviders={availableProviders}
                             active={active}
                             onUpdate={(field, value) => onUpdateProvider(provider.uuid, field, value)}
                             onDelete={() => onDeleteProvider(provider.uuid)}
                             onRefreshModels={() => onRefreshModels(provider.provider)}
+                            onFetchModels={() => onFetchModels(provider.provider)}
                             providerUuidToName={providerUuidToName}
                         />
                     ))}
@@ -136,6 +139,7 @@ interface ProviderRowProps {
     onUpdate: (field: keyof ConfigProvider, value: any) => void;
     onDelete: () => void;
     onRefreshModels: () => void;
+    onFetchModels: () => void;
     providerUuidToName: { [uuid: string]: string };
 }
 
@@ -148,6 +152,7 @@ const ProviderRow: React.FC<ProviderRowProps> = ({
     onUpdate,
     onDelete,
     onRefreshModels,
+    onFetchModels,
     providerUuidToName
 }) => {
     const { saveCustomModel, getCustomModels } = useCustomModels();
@@ -215,7 +220,14 @@ const ProviderRow: React.FC<ProviderRowProps> = ({
                 <InputLabel shrink sx={{ fontSize: '0.875rem',backgroundColor: 'white',  }}>Provider</InputLabel>
                 <Select
                     value={provider.provider} // This is UUID
-                    onChange={(e) => onUpdate('provider', e.target.value)}
+                    onChange={(e) => {
+                        const newProviderUuid = e.target.value;
+                        onUpdate('provider', newProviderUuid);
+                        // Fetch models for the newly selected provider
+                        if (newProviderUuid) {
+                            onFetchModels();
+                        }
+                    }}
                     label="Key"
                     size="small"
                     notched

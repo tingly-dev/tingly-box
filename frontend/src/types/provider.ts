@@ -4,15 +4,23 @@ export interface Provider {
     name: string;
     enabled: boolean;
     api_base: string;
-    api_style: string; // "openai" or "anthropic", defaults to "openai"
+    api_style: "openai" | "anthropic"; // "openai" or "anthropic", defaults to "openai"
     token?: string;
 }
 
+export interface ProviderModelData {
+    models: string[];
+    star_models?: string[];
+    last_updated?: string;
+    custom_model?: string;
+}
+
+// Provider models data indexed by provider name (legacy)
 export interface ProviderModelsData {
-    [providerName: string]: {
-        models: string[];
-        star_models?: string[];
-        last_updated?: string;
-        custom_model?: string;
-    };
+    [providerName: string]: ProviderModelData;
+}
+
+// Provider models data indexed by provider UUID (new)
+export interface ProviderModelsDataByUuid {
+    [providerUuid: string]: ProviderModelData;
 }
