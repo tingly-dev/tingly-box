@@ -1,9 +1,10 @@
 import { AccountCircle as AccountIcon, Dashboard as DashboardIcon, ForkRight, Key as KeyIcon, Logout as LogoutIcon, Menu as MenuIcon } from '@mui/icons-material';
 import { Box, Drawer, IconButton, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Typography } from '@mui/material';
 import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import api from '../services/api';
 
 interface LayoutProps {
     children: ReactNode;
@@ -17,6 +18,16 @@ const Layout = ({ children }: LayoutProps) => {
     const { logout } = useAuth();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+    const [version, setVersion] = useState<string>('Loading...');
+
+    useEffect(() => {
+        const fetchVersion = async () => {
+            const v = await api.getVersion();
+            setVersion(v);
+        };
+        fetchVersion();
+    }, []);
+
 
     const handleDrawerToggle = () => {
         setMobileOpen(!mobileOpen);
@@ -133,7 +144,7 @@ const Layout = ({ children }: LayoutProps) => {
                     fontStyle: 'italic'
                 }}
             >
-                {/*version 0.1.0*/}
+                version {version}
             </Typography>
 
             {/* Bottom Section - Slogan and User */}

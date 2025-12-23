@@ -73,6 +73,8 @@ func init() {
 		os.Exit(1)
 	}
 
+	appConfig.SetVersion(version)
+
 	// Add subcommands
 	rootCmd.AddCommand(cli.AddCommand(appConfig))
 	rootCmd.AddCommand(cli.ListCommand(appConfig))

@@ -42,6 +42,8 @@ type Server struct {
 	enableUI      bool
 	enableAdaptor bool
 	host          string
+
+	version string
 }
 
 // ServerOption defines a functional option for Server configuration
@@ -53,6 +55,12 @@ func WithDefault() ServerOption {
 		s.enableUI = true       // Default: UI enabled
 		s.enableAdaptor = false // Default: adaptor disabled
 		s.host = ""             // Default: empty host (resolves to localhost)
+	}
+}
+
+func WithVersion(version string) ServerOption {
+	return func(s *Server) {
+		s.version = version
 	}
 }
 
@@ -396,17 +404,4 @@ func (s *Server) Stop(ctx context.Context) error {
 
 	fmt.Println("Shutting down server...")
 	return s.httpServer.Shutdown(ctx)
-}
-
-func (s *Server) GetInfoConfig(c *gin.Context) {
-	// Return configuration information
-	configInfo := ConfigInfo{
-		ConfigPath: s.config.ConfigFile,
-		ConfigDir:  s.config.ConfigDir,
-	}
-
-	c.JSON(http.StatusOK, ConfigInfoResponse{
-		Success: true,
-		Data:    configInfo,
-	})
 }

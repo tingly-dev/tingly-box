@@ -20,6 +20,7 @@ type AppConfig struct {
 	configFile string
 	configDir  string
 	config     *Config
+	version    string
 	gcm        cipher.AEAD
 	mu         sync.RWMutex
 }
@@ -319,4 +320,12 @@ func (ac *AppConfig) GetProviderModelManager() *ModelListManager {
 // FetchAndSaveProviderModels fetches models from a provider and saves them
 func (ac *AppConfig) FetchAndSaveProviderModels(providerName string) error {
 	return ac.config.FetchAndSaveProviderModels(providerName)
+}
+
+func (ac *AppConfig) SetVersion(version string) {
+	ac.version = version
+}
+
+func (ac *AppConfig) GetVersion() string {
+	return ac.version
 }

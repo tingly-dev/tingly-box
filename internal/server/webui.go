@@ -354,12 +354,20 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 
 	// Health check endpoint
 	apiV1.GET("/info/health", s.GetHealthInfo,
+		swagger.WithTags("info"),
 		swagger.WithResponseModel(HealthInfoResponse{}),
 	)
 
 	apiV1.GET("/info/config", s.GetInfoConfig,
+		swagger.WithTags("info"),
 		swagger.WithDescription("Get config info about this application"),
 		swagger.WithResponseModel(ConfigInfoResponse{}),
+	)
+
+	apiV1.GET("/info/version", s.GetInfoVersion,
+		swagger.WithTags("info"),
+		swagger.WithDescription("Get version info about this application"),
+		swagger.WithResponseModel(VersionInfoResponse{}),
 	)
 
 	// Provider Management

@@ -5,6 +5,7 @@ import {
     Configuration,
     type FetchProviderModelsResponse,
     HistoryApi,
+    InfoApi,
     ModelsApi,
     ProbeProviderRequestApiStyleEnum,
     type ProviderResponse,
@@ -16,7 +17,7 @@ import {
 } from '../client';
 
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+const API_BASE_URL = window.location.origin || '';
 
 // Type definition for API instances
 interface ApiInstances {
@@ -27,6 +28,7 @@ interface ApiInstances {
     serverApi: ServerApi;
     testingApi: TestingApi;
     tokenApi: TokenApi;
+    infoApi: InfoApi;
 }
 
 
@@ -67,7 +69,7 @@ export const getBaseUrl = async (): Promise<string> => {
 // Create API configuration
 const createApiConfig = async () => {
     let token = getUserAuthToken();
-    let basePath = API_BASE_URL || undefined;
+    let basePath = API_BASE_URL || "";
 
     // Check if we're in GUI mode
     if (import.meta.env.VITE_PKG_MODE === "gui") {
@@ -89,6 +91,9 @@ const createApiConfig = async () => {
                 console.error('Failed to get configuration from ProxyService:', err);
             }
         }
+    } else {
+        const host = window.location.host.replace(/\/$/, "")
+        basePath = `http://${host}`
     }
 
     return new Configuration({
@@ -114,6 +119,7 @@ const createApiInstances = async () => {
         serverApi: new ServerApi(config),
         testingApi: new TestingApi(config),
         tokenApi: new TokenApi(config),
+        infoApi: new InfoApi(config),
     };
 };
 
@@ -552,6 +558,17 @@ export const api = {
                 return {success: false, error: 'Authentication required'};
             }
             return {success: false, error: error.message};
+        }
+    },
+
+    getVersion: async (): Promise<string> => {
+        try {
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.infoApi.apiV1InfoVersionGet();
+            return response.data.data.version;
+        } catch (error: any) {
+            console.error('Failed to get version:', error);
+            return 'Unknown';
         }
     },
 
