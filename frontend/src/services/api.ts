@@ -5,6 +5,7 @@ import {
     Configuration,
     type FetchProviderModelsResponse,
     HistoryApi,
+    InfoApi,
     ModelsApi,
     ProbeProviderRequestApiStyleEnum,
     type ProviderResponse,
@@ -27,6 +28,7 @@ interface ApiInstances {
     serverApi: ServerApi;
     testingApi: TestingApi;
     tokenApi: TokenApi;
+    infoApi: InfoApi;
 }
 
 
@@ -117,6 +119,7 @@ const createApiInstances = async () => {
         serverApi: new ServerApi(config),
         testingApi: new TestingApi(config),
         tokenApi: new TokenApi(config),
+        infoApi: new InfoApi(config),
     };
 };
 
@@ -555,6 +558,17 @@ export const api = {
                 return {success: false, error: 'Authentication required'};
             }
             return {success: false, error: error.message};
+        }
+    },
+
+    getVersion: async (): Promise<string> => {
+        try {
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.infoApi.apiV1InfoVersionGet();
+            return response.data.data.version;
+        } catch (error: any) {
+            console.error('Failed to get version:', error);
+            return 'Unknown';
         }
     },
 
