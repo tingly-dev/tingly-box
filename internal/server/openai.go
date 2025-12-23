@@ -75,6 +75,7 @@ func (s *Server) ChatCompletions(c *gin.Context) {
 	}
 
 	// Validate
+	proxyModel := req.Model
 	if req.Model == "" {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -113,7 +114,8 @@ func (s *Server) ChatCompletions(c *gin.Context) {
 	}
 
 	actualModel := selectedService.Model
-	responseModel := rule.ResponseModel
+	// FIXME: response as proxy / request
+	responseModel := proxyModel
 	req.Model = actualModel
 
 	c.Set("provider", provider.Name)
@@ -173,12 +175,12 @@ func (s *Server) ChatCompletions(c *gin.Context) {
 		openaiResp := adaptor.ConvertAnthropicResponseToOpenAI(anthropicResp, responseModel)
 		c.JSON(http.StatusOK, openaiResp)
 		return
-	}
-
-	if isStreaming {
-		s.handleStreamingRequest(c, provider, &req, responseModel)
 	} else {
-		s.handleNonStreamingRequest(c, provider, &req, responseModel)
+		if isStreaming {
+			s.handleStreamingRequest(c, provider, &req, responseModel)
+		} else {
+			s.handleNonStreamingRequest(c, provider, &req, responseModel)
+		}
 	}
 }
 

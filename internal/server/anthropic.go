@@ -90,8 +90,8 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 	}
 
 	// Get model from request
-	model := string(req.Model)
-	if model == "" {
+	proxyModel := string(req.Model)
+	if proxyModel == "" {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Model is required",
@@ -102,7 +102,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 	}
 
 	// Determine provider and model based on request
-	provider, selectedService, rule, err := s.DetermineProviderAndModel(model)
+	provider, selectedService, rule, err := s.DetermineProviderAndModel(proxyModel)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -150,7 +150,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 				return
 			}
 			// Handle the streaming response
-			s.handleAnthropicStreamResponse(c, stream)
+			s.handleAnthropicStreamResponse(c, stream, proxyModel)
 		} else {
 			// Handle non-streaming request
 			anthropicResp, err := s.forwardAnthropicRequest(provider, req)
@@ -163,6 +163,8 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 				})
 				return
 			}
+			// FIXME: now we use req model as resp model
+			anthropicResp.Model = anthropic.Model(proxyModel)
 			c.JSON(http.StatusOK, anthropicResp)
 		}
 		return
@@ -198,7 +200,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 				return
 			}
 			// Convert OpenAI response back to Anthropic format
-			anthropicResp := adaptor.ConvertOpenAIToAnthropic(response, model)
+			anthropicResp := adaptor.ConvertOpenAIToAnthropic(response, proxyModel)
 			c.JSON(http.StatusOK, anthropicResp)
 		}
 	}
@@ -451,7 +453,7 @@ func (s *Server) forwardAnthropicStreamRequest(provider *config.Provider, req an
 }
 
 // handleAnthropicStreamResponse processes the Anthropic streaming response and sends it to the client
-func (s *Server) handleAnthropicStreamResponse(c *gin.Context, stream *ssestream.Stream[anthropic.MessageStreamEventUnion]) {
+func (s *Server) handleAnthropicStreamResponse(c *gin.Context, stream *ssestream.Stream[anthropic.MessageStreamEventUnion], model string) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("Panic in Anthropic streaming handler: %v", r)
@@ -495,6 +497,8 @@ func (s *Server) handleAnthropicStreamResponse(c *gin.Context, stream *ssestream
 	// Process the stream
 	for stream.Next() {
 		event := stream.Current()
+
+		event.Message.Model = anthropic.Model(model)
 
 		// Convert the event to JSON
 		eventJSON, err := json.Marshal(event)
