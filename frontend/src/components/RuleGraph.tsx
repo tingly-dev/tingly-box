@@ -68,6 +68,7 @@ interface RuleGraphProps {
     onAddProvider: () => void;
     onDeleteProvider: (recordId: string, providerId: string) => void;
     onRefreshModels: (providerUuid: string) => void;
+    onFetchModels: (providerUuid: string) => void;
     onSave: () => void;
     onDelete: () => void;
     onReset: () => void;
@@ -296,8 +297,9 @@ const ProviderNodeComponent: React.FC<{
     active: boolean;
     onDelete: () => void;
     onRefreshModels: () => void;
+    onFetchModels: (providerUuid: string) => void;
     providerUuidToName: { [uuid: string]: string };
-}> = ({ provider, apiStyle, availableProviders, onUpdate, providerModels, active, onDelete, onRefreshModels, providerUuidToName }) => {
+}> = ({ provider, apiStyle, availableProviders, onUpdate, providerModels, active, onDelete, onRefreshModels, onFetchModels, providerUuidToName }) => {
     const [editMode, setEditMode] = React.useState({
         provider: false,
         model: false
@@ -364,8 +366,13 @@ const ProviderNodeComponent: React.FC<{
                         label="Provider"
                         value={provider.provider}
                         onChange={(e) => {
-                            onUpdate('provider', e.target.value);
+                            const newProviderUuid = e.target.value;
+                            onUpdate('provider', newProviderUuid);
                             setEditMode({ ...editMode, provider: false });
+                            // Fetch models for the newly selected provider
+                            if (newProviderUuid) {
+                                onFetchModels(newProviderUuid);
+                            }
                         }}
                         onBlur={() => setEditMode({ ...editMode, provider: false })}
                         size="small"
@@ -435,7 +442,7 @@ const ProviderNodeComponent: React.FC<{
                             fullWidth
                             autoFocus
                         >
-                            {(providerModels[providerUuidToName[provider.provider]]?.models || []).map((model: string) => (
+                            {(providerModels[provider.provider]?.models || []).map((model: string) => (
                                 <MenuItem key={model} value={model}>
                                     {model}
                                 </MenuItem>
@@ -554,6 +561,7 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
     onAddProvider,
     onDeleteProvider,
     onRefreshModels,
+    onFetchModels,
     onSave,
     onDelete,
     onReset,
@@ -858,6 +866,7 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                                                     onUpdate={(field, value) => onUpdateProvider(recordUuid, provider.uuid, field, value)}
                                                     onDelete={() => onDeleteProvider(recordUuid, provider.uuid)}
                                                     onRefreshModels={() => onRefreshModels(provider.provider)}
+                                                    onFetchModels={onFetchModels}
                                                     providerUuidToName={providerUuidToName}
                                                 />
                                             ))}
@@ -1003,6 +1012,7 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                                 onDeleteProvider={(providerId) => onDeleteProvider(recordUuid, providerId)}
                                 onUpdateProvider={(providerId, field, value) => onUpdateProvider(recordUuid, providerId, field, value)}
                                 onRefreshModels={onRefreshModels}
+                                onFetchModels={onFetchModels}
                             />
                         </Stack>
                     </Stack>
