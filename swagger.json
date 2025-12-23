@@ -212,7 +212,7 @@
         }
       }
     },
-    "/api/v1/provider-models/{name}": {
+    "/api/v1/provider-models/{uuid}": {
       "post": {
         "tags": [
           "models"
@@ -227,11 +227,12 @@
         ],
         "parameters": [
           {
-            "name": "name",
+            "name": "uuid",
             "in": "path",
-            "description": "Resource name",
+            "description": "Unique identifier (UUID)",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           }
         ],
         "responses": {
@@ -1807,8 +1808,16 @@
   },
   "tags": [
     {
+      "name": "api",
+      "description": "Operations related to api"
+    },
+    {
       "name": "server",
       "description": "Operations related to server"
+    },
+    {
+      "name": "testing",
+      "description": "Operations related to testing"
     },
     {
       "name": "rules",
@@ -1823,20 +1832,12 @@
       "description": "Operations related to models"
     },
     {
-      "name": "testing",
-      "description": "Operations related to testing"
-    },
-    {
-      "name": "providers",
-      "description": "Operations related to providers"
-    },
-    {
       "name": "token",
       "description": "Operations related to token"
     },
     {
-      "name": "api",
-      "description": "Operations related to api"
+      "name": "providers",
+      "description": "Operations related to providers"
     }
   ]
 }
