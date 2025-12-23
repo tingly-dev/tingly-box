@@ -46,7 +46,7 @@
     "/api/v1/info/config": {
       "get": {
         "tags": [
-          "api"
+          "info"
         ],
         "summary": "Get config info about this application",
         "description": "Get config info about this application",
@@ -69,7 +69,7 @@
     "/api/v1/info/health": {
       "get": {
         "tags": [
-          "api"
+          "info"
         ],
         "consumes": [
           "application/json"
@@ -82,6 +82,29 @@
             "description": "Successful response",
             "schema": {
               "$ref": "#/definitions/HealthInfoResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/info/version": {
+      "get": {
+        "tags": [
+          "info"
+        ],
+        "summary": "Get version info about this application",
+        "description": "Get version info about this application",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/VersionInfoResponse"
             }
           }
         }
@@ -1783,6 +1806,43 @@
         "message",
         "data"
       ]
+    },
+    "VersionInfo": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string",
+          "description": "Field version",
+          "example": "1.0.0"
+        }
+      },
+      "required": [
+        "version"
+      ]
+    },
+    "VersionInfoResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "description": "Field data",
+          "$ref": "#/definitions/VersionInfo"
+        },
+        "message": {
+          "type": "string",
+          "description": "Field message",
+          "example": "Provider models successfully"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "message",
+        "data"
+      ]
     }
   },
   "securityDefinitions": {
@@ -1795,28 +1855,20 @@
   },
   "tags": [
     {
-      "name": "models",
-      "description": "Operations related to models"
+      "name": "providers",
+      "description": "Operations related to providers"
     },
     {
-      "name": "testing",
-      "description": "Operations related to testing"
+      "name": "info",
+      "description": "Operations related to info"
     },
     {
       "name": "token",
       "description": "Operations related to token"
     },
     {
-      "name": "providers",
-      "description": "Operations related to providers"
-    },
-    {
       "name": "server",
       "description": "Operations related to server"
-    },
-    {
-      "name": "api",
-      "description": "Operations related to api"
     },
     {
       "name": "rules",
@@ -1825,6 +1877,14 @@
     {
       "name": "history",
       "description": "Operations related to history"
+    },
+    {
+      "name": "models",
+      "description": "Operations related to models"
+    },
+    {
+      "name": "testing",
+      "description": "Operations related to testing"
     }
   ]
 }
