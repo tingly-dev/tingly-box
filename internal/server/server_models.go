@@ -22,33 +22,6 @@ type ErrorDetail struct {
 }
 
 // =============================================
-// Health Check Models
-// =============================================
-
-// HealthInfoResponse represents the health check response
-type HealthInfoResponse struct {
-	Status  string `json:"status" example:"healthy"`
-	Service string `json:"service" example:"tingly-box"`
-	Health  bool   `json:"health" example:"healthy"`
-}
-
-// =============================================
-// Info API Models
-// =============================================
-
-// ConfigInfo represents configuration information
-type ConfigInfo struct {
-	ConfigPath string `json:"config_path" example:"/Users/user/.tingly-box/config.json"`
-	ConfigDir  string `json:"config_dir" example:"/Users/user/.tingly-box"`
-}
-
-// ConfigInfoResponse represents the response for config info endpoint
-type ConfigInfoResponse struct {
-	Success bool       `json:"success" example:"true"`
-	Data    ConfigInfo `json:"data"`
-}
-
-// =============================================
 // Token Management Models
 // =============================================
 

@@ -106,7 +106,13 @@ func (sm *ServerManager) Setup(port int) error {
 	}
 
 	// Create server with UI and adaptor options
-	sm.server = server.NewServer(sm.appConfig.GetGlobalConfig(), server.WithUI(sm.enableUI), server.WithAdaptor(sm.enableAdaptor), server.WithHost(sm.host))
+	sm.server = server.NewServer(
+		sm.appConfig.GetGlobalConfig(),
+		server.WithUI(sm.enableUI),
+		server.WithAdaptor(sm.enableAdaptor),
+		server.WithHost(sm.host),
+		server.WithVersion(sm.appConfig.GetVersion()),
+	)
 
 	// Set global server instance for web UI control
 	server.SetGlobalServer(sm.server)
