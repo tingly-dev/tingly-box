@@ -362,6 +362,11 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 		swagger.WithResponseModel(ConfigInfoResponse{}),
 	)
 
+	apiV1.GET("/info/version", s.GetInfoVersion,
+		swagger.WithDescription("Get version info about this application"),
+		swagger.WithResponseModel(VersionInfoResponse{}),
+	)
+
 	// Provider Management
 	//apiV1.GET("/providers", (s.GetProviders),
 	//	swagger.WithDescription("Get all configured providers with masked tokens"),

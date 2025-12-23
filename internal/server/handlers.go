@@ -10,15 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// GetHealthInfo handles health check requests
-func (s *Server) GetHealthInfo(c *gin.Context) {
-	c.JSON(http.StatusOK, HealthInfoResponse{
-		Health:  true,
-		Status:  "healthy",
-		Service: "tingly-box",
-	})
-}
-
 // GenerateToken handles token generation requests
 func (s *Server) GenerateToken(c *gin.Context) {
 	var req struct {
