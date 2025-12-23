@@ -29,7 +29,7 @@ import { getModelTypeInfo, navigateToModelPage } from '../utils/modelUtils';
 import CustomModelCard from './CustomModelCard';
 import ModelCard from './ModelCard';
 import {a11yProps, TabPanel} from './TabPanel';
-import {ApiStyleBadge} from "../components/ApiStyleBadge.tsx";
+import {ApiStyleBadge} from "./ApiStyleBadge";
 
 export interface ProviderSelectTabOption {
     provider: Provider;
@@ -76,10 +76,16 @@ export default function ModelSelectTab({
         return map;
     }, [providers]);
 
+    // Memoize enabled providers to avoid repeated filtering
+    const enabledProviders = React.useMemo(
+        () => (providers || []).filter(provider => provider.enabled),
+        [providers]
+    );
+
     // Pagination and search
-    const { searchTerms, currentPage, setCurrentPage, handleSearchChange, handlePageChange, getPaginatedData } =
+    const { searchTerms, setCurrentPage, handleSearchChange, handlePageChange, getPaginatedData } =
         usePagination(
-            (providers || []).filter(provider => provider.enabled).map(p => p.name),
+            enabledProviders.map(p => p.name),
             gridLayout.modelsPerPage
         );
 
@@ -127,7 +133,7 @@ export default function ModelSelectTab({
         }
 
         // Get the target provider
-        const targetProvider = (providers || []).filter(provider => provider.enabled)[newValue];
+        const targetProvider = enabledProviders[newValue];
         if (!targetProvider) return;
 
         // Notify parent component about provider change
@@ -175,7 +181,6 @@ export default function ModelSelectTab({
     // Auto-switch to selected provider tab and navigate to selected model on component mount (only once)
     React.useEffect(() => {
         if (!isInitialized && selectedProvider) {
-            const enabledProviders = (providers || []).filter(provider => provider.enabled);
             const targetProviderIndex = enabledProviders.findIndex(provider => provider.uuid === selectedProvider);
 
             // Auto-switch to the selected provider's tab
@@ -206,7 +211,7 @@ export default function ModelSelectTab({
             // Mark as initialized to prevent further automatic switching
             setIsInitialized(true);
         }
-    }, [isInitialized, selectedProvider, selectedModel, providers, providerModels, externalActiveTab, customModels, gridLayout.modelsPerPage, onProviderChange]);
+    }, [isInitialized, selectedProvider, selectedModel, enabledProviders, providerModels, externalActiveTab, customModels, gridLayout.modelsPerPage, onProviderChange]);
 
     return (
         <Box sx={{ width: '100%' }}>
@@ -219,7 +224,7 @@ export default function ModelSelectTab({
                     scrollButtons="auto"
                     allowScrollButtonsMobile
                 >
-                    {(providers || []).filter(provider => provider.enabled).map((provider, index) => {
+                    {enabledProviders.map((provider, index) => {
                         const modelTypeInfo = getModelTypeInfo(provider, providerModels, customModels);
                         const isProviderSelected = selectedProvider === provider.uuid; // Compare UUIDs
 
@@ -237,9 +242,6 @@ export default function ModelSelectTab({
                                             )}
                                         </Stack>
                                         <Stack direction="row" alignItems="center" spacing={1}>
-                                            {/*<Typography variant="caption" color="text.secondary">*/}
-                                            {/*    ({modelTypeInfo.totalModelsCount})*/}
-                                            {/*</Typography>*/}
                                             {provider.api_style && <ApiStyleBadge apiStyle={provider.api_style}/>}
                                         </Stack>
                                     </Stack>
@@ -259,7 +261,7 @@ export default function ModelSelectTab({
                 </Tabs>
             </Box>
 
-            {(providers || []).filter(provider => provider.enabled).map((provider, index) => {
+            {enabledProviders.map((provider, index) => {
                 const modelTypeInfo = getModelTypeInfo(provider, providerModels, customModels);
                 const { standardModelsForDisplay, isCustomModel } = modelTypeInfo;
 

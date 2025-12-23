@@ -172,9 +172,9 @@ const Home = () => {
     });
 
     const loadBaseUrl = async () => {
-        const baseUrl = await getBaseUrl()
-        setBaseUrl(baseUrl)
-    }
+        const baseUrl = await getBaseUrl();
+        setBaseUrl(baseUrl);
+    };
 
     useEffect(() => {
         loadBaseUrl()
@@ -201,7 +201,6 @@ const Home = () => {
 
     const loadToken = async () => {
         const result = await api.getToken();
-        console.log(result)
         if (result.token) {
             setApiKey(result.token);
         }
@@ -525,9 +524,7 @@ const Home = () => {
                 {/* Server Information Header */}
                 <UnifiedCard
                     title="Proxy Configs"
-                    // subtitle={`Total: ${providers.length} providers | Enabled: ${providers.filter((p: any) => p.enabled).length}`}
                     size="header"
-
                 >
                     <HomeHeader
                         activeTab={activeTab}
@@ -581,9 +578,6 @@ const Home = () => {
                             {/* Probe Component - only show when provider and model are selected */}
                             {selectedOption.provider && selectedOption.model && (
                                 <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                                    {/* <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, fontSize: '0.875rem' }}>
-                                    Connection Status
-                                </Typography> */}
                                     <Probe
                                         provider={selectedOption.provider}
                                         model={selectedOption.model}
@@ -596,14 +590,14 @@ const Home = () => {
                             )}
                         </Stack>
                     ) : (
-                        <Guiding></Guiding>
+                        <Guiding />
                     )}
 
                 </UnifiedCard>
             </CardGrid>
 
             {/* Token Modal */}
-            <ApiKeyModal></ApiKeyModal>
+            <ApiKeyModal />
 
             {/* Add Provider Dialog */}
             <PresetProviderFormDialog
