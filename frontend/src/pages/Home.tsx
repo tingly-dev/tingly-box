@@ -287,6 +287,7 @@ const Home = () => {
                 // Show banner with selected provider and model info
                 setBannerProvider(provider.name);
                 setBannerModel(model);
+                setBannerApiStyle(provider.api_style || '');
                 setShowBanner(true);
                 showNotification(`Successfully updated tingly rule to use ${provider.name}:${model}`, 'success');
                 // Reload rule to get updated data
@@ -308,7 +309,7 @@ const Home = () => {
             // Add provider UUID to refreshing list
             setRefreshingProviders(prev => [...prev, provider.uuid]);
 
-            const result = await api.getProviderModelsByName(provider.name);
+            const result = await api.getProviderModelsByUUID(provider.uuid);
             if (result.success) {
                 await loadProviders();
                 await loadProviderModels();

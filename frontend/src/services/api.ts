@@ -277,12 +277,12 @@ export const api = {
         }
     },
 
-    getProviderModelsByName: async (name: string): Promise<FetchProviderModelsResponse> => {
+    getProviderModelsByUUID: async (uuid: string): Promise<FetchProviderModelsResponse> => {
         try {
             // Note: The generated client has an issue with path parameters
             // We need to manually handle this for now
             const apiInstances = await getApiInstances();
-            const response = await apiInstances.modelsApi.apiV1ProviderModelsNamePost(name);
+            const response = await apiInstances.modelsApi.apiV1ProviderModelsUuidPost(uuid);
             const body = response.data
             if (body.success && body.data) {
                 // Sort models alphabetically by model name to reduce UI changes

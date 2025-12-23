@@ -311,33 +311,30 @@ const RulePage = () => {
         // URL params are only for initial load from bookmarks
     };
 
-    const handleRefreshProviderModels = async (providerUuid: string) => {
-        if (!providerUuid) return;
-
-        const providerName = providerUuidToName[providerUuid];
-        if (!providerName) return;
+    const handleRefreshProviderModels = async (uid: string) => {
+        if (!uid) return;
 
         try {
-            const result = await api.getProviderModelsByName(providerName);
+            const result = await api.getProviderModelsByUUID(uid);
             console.log("found models", result.data)
             if (result.success) {
                 // Update providerModels with the refreshed data
-                // The result from getProviderModelsByName is a direct array, not an object with models field
+                // The result from getProviderModelsByUUID is a direct array, not an object with models field
                 setProviderModels((prev: any) => {
                     const updated = {
                         ...prev,
-                        [providerName]: {
+                        [uid]: {
                             models: result.data  // Wrap the array in a models object to match the expected structure
                         }
                     };
                     return updated;
                 });
-                setMessage({ type: 'success', text: `Successfully refreshed models for ${providerName}` });
+                setMessage({ type: 'success', text: `Successfully refreshed models for ${uid}` });
             } else {
-                setMessage({ type: 'error', text: `Failed to refresh models for ${providerName}: ${result.message}` });
+                setMessage({ type: 'error', text: `Failed to refresh models for ${uid}: ${result.message}` });
             }
         } catch (error) {
-            setMessage({ type: 'error', text: `Failed to refresh models for ${providerName}: ${error}` });
+            setMessage({ type: 'error', text: `Failed to refresh models for ${uid}: ${error}` });
         }
     };
 
