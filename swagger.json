@@ -189,7 +189,7 @@
         }
       }
     },
-    "/api/v1/provider-models": {
+    "/api/v1/provider-models/{uuid}": {
       "get": {
         "tags": [
           "models"
@@ -202,6 +202,16 @@
         "produces": [
           "application/json"
         ],
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "description": "Unique identifier (UUID)",
+            "required": true,
+            "type": "string",
+            "format": "uuid"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -210,9 +220,7 @@
             }
           }
         }
-      }
-    },
-    "/api/v1/provider-models/{uuid}": {
+      },
       "post": {
         "tags": [
           "models"
@@ -239,7 +247,7 @@
           "200": {
             "description": "Successful response",
             "schema": {
-              "$ref": "#/definitions/FetchProviderModelsResponse"
+              "$ref": "#/definitions/ProviderModelsResponse"
             }
           }
         }
@@ -870,30 +878,6 @@
         "type"
       ]
     },
-    "FetchProviderModelsResponse": {
-      "type": "object",
-      "properties": {
-        "data": {
-          "type": "object",
-          "description": "Field data"
-        },
-        "message": {
-          "type": "string",
-          "description": "Field message",
-          "example": "Successfully fetched 150 models for provider openai"
-        },
-        "success": {
-          "type": "boolean",
-          "description": "Field success",
-          "example": true
-        }
-      },
-      "required": [
-        "success",
-        "message",
-        "data"
-      ]
-    },
     "GenerateTokenRequest": {
       "type": "object",
       "properties": {
@@ -1281,11 +1265,13 @@
       "type": "object",
       "properties": {
         "data": {
-          "type": "object",
           "description": "Field data",
-          "additionalProperties": {
-            "$ref": "#/definitions/ProviderModelInfo"
-          }
+          "$ref": "#/definitions/ProviderModelInfo"
+        },
+        "message": {
+          "type": "string",
+          "description": "Field message",
+          "example": "Provider models successfully"
         },
         "success": {
           "type": "boolean",
@@ -1295,6 +1281,7 @@
       },
       "required": [
         "success",
+        "message",
         "data"
       ]
     },
@@ -1808,28 +1795,12 @@
   },
   "tags": [
     {
-      "name": "api",
-      "description": "Operations related to api"
-    },
-    {
-      "name": "server",
-      "description": "Operations related to server"
+      "name": "models",
+      "description": "Operations related to models"
     },
     {
       "name": "testing",
       "description": "Operations related to testing"
-    },
-    {
-      "name": "rules",
-      "description": "Operations related to rules"
-    },
-    {
-      "name": "history",
-      "description": "Operations related to history"
-    },
-    {
-      "name": "models",
-      "description": "Operations related to models"
     },
     {
       "name": "token",
@@ -1838,6 +1809,22 @@
     {
       "name": "providers",
       "description": "Operations related to providers"
+    },
+    {
+      "name": "server",
+      "description": "Operations related to server"
+    },
+    {
+      "name": "api",
+      "description": "Operations related to api"
+    },
+    {
+      "name": "rules",
+      "description": "Operations related to rules"
+    },
+    {
+      "name": "history",
+      "description": "Operations related to history"
     }
   ]
 }
