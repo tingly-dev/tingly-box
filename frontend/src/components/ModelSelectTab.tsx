@@ -43,6 +43,7 @@ interface ProviderSelectTabProps {
     selectedModel?: string;
     activeTab?: number;
     onSelected?: (option: ProviderSelectTabOption) => void;
+    onProviderChange?: (provider: Provider) => void; // Called when switching to a provider tab
     onRefresh?: (provider: Provider) => void;
     onCustomModelSave?: (provider: Provider, customModel: string) => void;
     refreshingProviders?: string[]; // These are UUIDs
@@ -55,6 +56,7 @@ export default function ModelSelectTab({
     selectedModel,
     activeTab: externalActiveTab,
     onSelected,
+    onProviderChange,
     onRefresh,
     onCustomModelSave,
     refreshingProviders = [], // These are UUIDs
@@ -63,7 +65,6 @@ export default function ModelSelectTab({
     const [isInitialized, setIsInitialized] = useState(false);
     const {customModels, saveCustomModel, removeCustomModel} = useCustomModels();
     const gridLayout = useGridLayout();
-    const [autoFetchedProviders, setAutoFetchedProviders] = useState<Set<string>>(new Set());
 
 
     // Create provider name to UUID mapping for search functionality
@@ -90,13 +91,6 @@ export default function ModelSelectTab({
         provider: null,
         value: ''
     });
-
-    // Reset auto-fetched providers when provider models are updated
-    useEffect(() => {
-        // Clear the auto-fetched set when provider models change
-        // This allows auto-fetching again if models were cleared
-        setAutoFetchedProviders(new Set());
-    }, [providerModels]);
 
     // Listen for custom model updates from other components
     useEffect(() => {
@@ -136,19 +130,10 @@ export default function ModelSelectTab({
         const targetProvider = (providers || []).filter(provider => provider.enabled)[newValue];
         if (!targetProvider) return;
 
-        // Auto-fetch models if the provider has no models and hasn't been auto-fetched before
-        const providerModelData = providerModels?.[targetProvider.name];
-        const hasModels = providerModelData && (
-            (providerModelData.models && providerModelData.models.length > 0) ||
-            (providerModelData.star_models && providerModelData.star_models.length > 0) ||
-            providerModelData.custom_model
-        );
-
-        if (!hasModels && !autoFetchedProviders.has(targetProvider.uuid) && onRefresh && !refreshingProviders.includes(targetProvider.uuid)) {
-            // Mark as auto-fetched to avoid repeated requests
-            setAutoFetchedProviders(prev => new Set([...prev, targetProvider.uuid]));
-            // Trigger model fetch
-            onRefresh(targetProvider);
+        // Notify parent component about provider change
+        // Parent component can then fetch models for this provider using UUID
+        if (onProviderChange) {
+            onProviderChange(targetProvider);
         }
 
         // Auto-navigate to page containing selected model when switching tabs

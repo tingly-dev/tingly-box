@@ -72,17 +72,13 @@ const RulePage = () => {
     const loadData = useCallback(async () => {
         setLoading(true);
         try {
-            const [providersResult, modelsResult, rulesResult] = await Promise.all([
+            const [providersResult, rulesResult] = await Promise.all([
                 api.getProviders(),
-                api.getProviderModels(),
                 api.getRules(),
             ]);
 
             if (providersResult.success) {
                 setProviders(providersResult.data);
-            }
-            if (modelsResult.success) {
-                setProviderModels(modelsResult.data);
             }
             if (rulesResult.success) {
                 setRules(rulesResult.data);
@@ -315,7 +311,7 @@ const RulePage = () => {
         if (!uid) return;
 
         try {
-            const result = await api.getProviderModelsByUUID(uid);
+            const result = await api.updateProviderModelsByUUID(uid);
             console.log("found models", result.data)
             if (result.success) {
                 // Update providerModels with the refreshed data
