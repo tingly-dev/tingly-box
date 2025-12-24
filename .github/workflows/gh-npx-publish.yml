@@ -42,7 +42,7 @@ jobs:
           registry-url: "https://registry.npmjs.org"
           cache: "npm"
           cache-dependency-path: |
-            npx-gh/package-lock.json
+            npx/tingly-box/package-lock.json
 
       - name: Configure Git
         run: |
@@ -136,7 +136,7 @@ jobs:
       - name: Update NPX package.json with new version
         run: |
           VERSION="${{ steps.version.outputs.npx_version }}"
-          cd npx-gh
+          cd npx/tingly-box
           npm version "$VERSION" --no-git-tag-version
           echo "Updated NPX package to version: $VERSION"
           cd ..
@@ -146,7 +146,7 @@ jobs:
           RELEASE_TAG="${{ steps.version.outputs.release_tag }}"
           echo "Updating bin.js to reference release tag: $RELEASE_TAG"
 
-          cd npx-gh
+          cd npx/tingly-box
 
           # Update BASE_URL to point to GitHub releases
           # sed -i.bak 's|https://github.com/tingly-dev/tingly-box/releases/download/|https://github.com/tingly-dev/tingly-box/releases/download/|g' bin.js
@@ -163,11 +163,11 @@ jobs:
           cd ..
 
       - name: Install dependencies
-        working-directory: npx-gh
+        working-directory: npx/tingly-box
         run: npm ci
 
       - name: Run tests
-        working-directory: npx-gh
+        working-directory: npx/tingly-box
         run: |
           if [ -f "package.json" ] && npm run | grep -q "test"; then
             echo "🧪 Running tests..."
@@ -177,7 +177,7 @@ jobs:
           fi
 
       - name: Publish to npm
-        working-directory: npx-gh
+        working-directory: npx/tingly-box
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
