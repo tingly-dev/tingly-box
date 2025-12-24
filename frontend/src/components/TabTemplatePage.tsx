@@ -1,24 +1,16 @@
-import {
-    Add as AddIcon,
-    PlayArrow as ProbeIcon
-} from '@mui/icons-material';
-import {
-    Box,
-    Button,
-    Stack,
-    Typography
-} from '@mui/material';
-import React, { useCallback, useEffect, useState } from 'react';
+import {Add as AddIcon, PlayArrow as ProbeIcon} from '@mui/icons-material';
+import {Box, Button, Stack, Typography} from '@mui/material';
+import React, {useCallback, useEffect, useState} from 'react';
 import CardGrid from '../components/CardGrid.tsx';
-import PresetProviderFormDialog, { type EnhancedProviderFormData } from '../components/PresetProviderFormDialog.tsx';
+import PresetProviderFormDialog, {type EnhancedProviderFormData} from '../components/PresetProviderFormDialog.tsx';
 import Probe from '../components/Probe';
-import type { ProviderSelectTabOption } from '../components/ModelSelectTab';
+import type {ProviderSelectTabOption} from '../components/ModelSelectTab';
 import ModelSelectTab from '../components/ModelSelectTab';
 import UnifiedCard from '../components/UnifiedCard';
 import ApiKeyModal from '../components/ApiKeyModal';
-import { api } from '../services/api';
-import type { ProviderModelsDataByUuid } from '../types/provider';
-import type { ProbeResponse } from '../client';
+import {api} from '../services/api';
+import type {ProviderModelsDataByUuid} from '../types/provider';
+import type {ProbeResponse} from '../client';
 
 export interface TabTemplatePageProps {
     // Card title
@@ -26,7 +18,7 @@ export interface TabTemplatePageProps {
     // Optional subtitle/description
     subtitle?: string;
     // Rule name for API
-    ruleName: string;
+    rule: object;
     // Custom header component (optional - if not provided, will create default)
     header?: React.ReactNode;
     // Token modal state
@@ -41,21 +33,21 @@ export interface TabTemplatePageProps {
 }
 
 const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
-    title,
-    subtitle,
-    ruleName,
-    header,
-    showTokenModal,
-    setShowTokenModal,
-    token,
-    showNotification,
-    onModelSelect,
-    emptyState
-}) => {
+                                                             title,
+                                                             subtitle,
+                                                             rule,
+                                                             header,
+                                                             showTokenModal,
+                                                             setShowTokenModal,
+                                                             token,
+                                                             showNotification,
+                                                             onModelSelect,
+                                                             emptyState
+                                                         }) => {
     const [providers, setProviders] = useState<any[]>([]);
     const [providerModelsByUuid, setProviderModelsByUuid] = useState<ProviderModelsDataByUuid>({});
     const [loading, setLoading] = useState(true);
-    const [selectedOption, setSelectedOption] = useState<any>({ provider: "", model: "" });
+    const [selectedOption, setSelectedOption] = useState<any>({provider: "", model: ""});
     const [refreshingProviders, setRefreshingProviders] = useState<string[]>([]);
 
     // Probe state
@@ -151,51 +143,43 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
     }, [selectedOption.provider, selectedOption.model, providerUuidToName]);
 
     const handleModelSelect = async (provider: any, model: string) => {
-        setSelectedOption({ provider: provider.uuid, model: model });
+        setSelectedOption({provider: provider.uuid, model: model});
 
         if (onModelSelect) {
             onModelSelect(provider, model);
             return;
-        }
+        } else {
+            // Default behavior: update the rule
+            try {
+                const ruleData = {
+                    uuid: rule.uuid,
+                    request_model: rule.request_model,
+                    active: true,
+                    services: [
+                        {
+                            provider: provider.uuid,
+                            model: model,
+                            weight: 0,
+                            active: true,
+                            time_window: 0,
+                        }
+                    ],
+                };
 
-        // Default behavior: update the rule
-        try {
-            const ruleData = {
-                uuid: ruleName,
-                request_model: ruleName,
-                active: true,
-                services: [
-                    {
-                        provider: provider.uuid,
-                        model: model,
-                        weight: 0,
-                        active: true,
-                        time_window: 0,
-                    }
-                ],
-            };
-
-            const existingRule = await api.getRule(ruleName);
-            let result;
-            if (existingRule.success && existingRule.data.uuid) {
-                result = await api.updateRule(existingRule.data.uuid, ruleData);
-            } else {
-                const createResult = await api.createRule(
-                    ruleName,
-                    {
-                        name: ruleName,
-                        ...ruleData,
-                    });
-                result = createResult;
+                const existingRule = await api.getRule(rule.uuid);
+                let result;
+                if (existingRule.success && existingRule.data.uuid) {
+                    result = await api.updateRule(rule.uuid, ruleData);
+                }
+                if (result.success) {
+                    showNotification(`Successfully updated ${rule.request_model} forwarding to use ${provider.name}:${model}`, 'success');
+                } else {
+                    showNotification(`Failed to update rule ${rule.request_model}: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                console.error(`Error updating rule ${rule.request_model}:`, error);
+                showNotification(`Error updating rule ${rule.request_model} for ${provider.name}`, 'error');
             }
-            if (result.success) {
-                showNotification(`Successfully updated ${ruleName} rule to use ${provider.name}:${model}`, 'success');
-            } else {
-                showNotification(`Failed to update ${ruleName} rule: ${result.error}`, 'error');
-            }
-        } catch (error) {
-            console.error(`Error updating ${ruleName} rule:`, error);
-            showNotification(`Error updating ${ruleName} rule for ${provider.name}`, 'error');
         }
     };
 
@@ -283,7 +267,7 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
             setAddDialogOpen(false);
             await loadProviders();
 
-            const newProvider = { name: providerData.name };
+            const newProvider = {name: providerData.name};
             await handleModelRefresh(newProvider);
         } else {
             showNotification(`Failed to add provider: ${result.error}`, 'error');
@@ -294,7 +278,7 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
         <Box textAlign="center" py={8} width={"100%"}>
             <Button
                 variant="contained"
-                startIcon={<AddIcon />}
+                startIcon={<AddIcon/>}
                 onClick={handleAddProviderClick}
                 size="large"
                 sx={{
@@ -310,17 +294,17 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
                     },
                 }}
             >
-                <AddIcon sx={{ fontSize: 40 }} />
+                <AddIcon sx={{fontSize: 40}}/>
             </Button>
-            <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>
+            <Typography variant="h5" sx={{fontWeight: 600, mb: 2}}>
                 No API Keys Available
             </Typography>
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
+            <Typography variant="body1" color="text.secondary" sx={{mb: 3, maxWidth: 500, mx: 'auto'}}>
                 Get started by adding your first AI API Key.
             </Typography>
             <Button
                 variant="contained"
-                startIcon={<AddIcon />}
+                startIcon={<AddIcon/>}
                 onClick={handleAddProviderClick}
                 size="large"
             >
@@ -337,12 +321,12 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
                 size="header"
             >
                 {header || (
-                    <Box sx={{ p: 2 }}>
-                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                    <Box sx={{p: 2}}>
+                        <Typography variant="h6" sx={{fontWeight: 600}}>
                             {title}
                         </Typography>
                         {subtitle && (
-                            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                            <Typography variant="body2" color="text.secondary" sx={{mt: 0.5}}>
                                 {subtitle}
                             </Typography>
                         )}
@@ -355,12 +339,12 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
                 title="Providers"
                 size="full"
                 rightAction={
-                    <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Box sx={{display: 'flex', gap: 1}}>
                         <Button
                             variant="outlined"
                             onClick={handleProbe}
                             disabled={!selectedOption.provider || !selectedOption.model || isProbing}
-                            startIcon={<ProbeIcon />}
+                            startIcon={<ProbeIcon/>}
                         >
                             Test Connection
                         </Button>
@@ -387,7 +371,7 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
                         />
 
                         {selectedOption.provider && selectedOption.model && (
-                            <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                            <Box sx={{display: 'flex', justifyContent: 'center'}}>
                                 <Probe
                                     provider={selectedOption.provider}
                                     model={selectedOption.model}

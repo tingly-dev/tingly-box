@@ -5,7 +5,7 @@ import {Box, IconButton, Tooltip, Typography} from '@mui/material';
 import {useNavigate} from 'react-router-dom';
 import {ApiConfigRow} from '../components/ApiConfigRow';
 import TabTemplatePage from '../components/TabTemplatePage';
-import {getBaseUrl} from '../services/api';
+import {api, getBaseUrl} from '../services/api';
 
 interface UseOpenAIPageProps {
     showTokenModal: boolean;
@@ -14,7 +14,7 @@ interface UseOpenAIPageProps {
     showNotification: (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
 }
 
-const ruleName = "tingly/openai"
+const ruleId = "built-in-openai";
 
 const UseOpenAIPage: React.FC<UseOpenAIPageProps> = ({
                                                          showTokenModal,
@@ -23,6 +23,8 @@ const UseOpenAIPage: React.FC<UseOpenAIPageProps> = ({
                                                          showNotification
                                                      }) => {
     const [baseUrl, setBaseUrl] = React.useState<string>('');
+    const [rule, setRule] = React.useState<any>(null);
+    const [loadingRule, setLoadingRule] = React.useState(true);
     const navigate = useNavigate();
 
     const copyToClipboard = async (text: string, label: string) => {
@@ -34,15 +36,25 @@ const UseOpenAIPage: React.FC<UseOpenAIPageProps> = ({
         }
     };
 
+    const loadData = async () => {
+        const url = await getBaseUrl();
+        setBaseUrl(url);
+
+        // Fetch rule information
+        const result = await api.getRule(ruleId);
+        if (result.success) {
+            setRule(result.data);
+            console.log(rule)
+        }
+        setLoadingRule(false);
+    };
+
     React.useEffect(() => {
-        const loadBaseUrl = async () => {
-            const url = await getBaseUrl();
-            setBaseUrl(url);
-        };
-        loadBaseUrl();
+        loadData();
     }, []);
 
     const openaiBaseUrl = `${baseUrl}/openai`;
+    const modelName = rule?.request_model;
 
     const header = (
         <Box sx={{p: 2}}>
@@ -79,8 +91,8 @@ const UseOpenAIPage: React.FC<UseOpenAIPageProps> = ({
             </ApiConfigRow>
             <ApiConfigRow
                 label="Model Name"
-                value={ruleName}
-                onCopy={() => copyToClipboard('openai', 'Model Name')}
+                value={modelName}
+                onCopy={() => copyToClipboard(modelName, 'Model Name')}
                 isClickable={true}
             >
                 <Box sx={{display: 'flex', gap: 0.5, ml: 'auto'}}>
@@ -90,7 +102,7 @@ const UseOpenAIPage: React.FC<UseOpenAIPageProps> = ({
                         </IconButton>
                     </Tooltip>
                     <Tooltip title="Copy Model">
-                        <IconButton onClick={() => copyToClipboard('openai', 'Model Name')} size="small">
+                        <IconButton onClick={() => copyToClipboard(modelName, 'Model Name')} size="small">
                             <CopyIcon fontSize="small"/>
                         </IconButton>
                     </Tooltip>
@@ -102,7 +114,7 @@ const UseOpenAIPage: React.FC<UseOpenAIPageProps> = ({
     return (
         <TabTemplatePage
             title="OpenAI Configuration"
-            ruleName={ruleName}
+            rule={rule}
             header={header}
             showTokenModal={showTokenModal}
             setShowTokenModal={setShowTokenModal}

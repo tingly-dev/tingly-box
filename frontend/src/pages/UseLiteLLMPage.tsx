@@ -5,7 +5,7 @@ import {Box, IconButton, Tooltip, Typography} from '@mui/material';
 import {useNavigate} from 'react-router-dom';
 import {ApiConfigRow} from '../components/ApiConfigRow';
 import TabTemplatePage from '../components/TabTemplatePage';
-import {getBaseUrl} from '../services/api';
+import {api, getBaseUrl} from '../services/api';
 
 interface UseLiteLLMPageProps {
     showTokenModal: boolean;
@@ -14,6 +14,8 @@ interface UseLiteLLMPageProps {
     showNotification: (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
 }
 
+const ruleId = "build-in-tingly-litellm";
+
 const UseLiteLLMPage: React.FC<UseLiteLLMPageProps> = ({
                                                            showTokenModal,
                                                            setShowTokenModal,
@@ -21,6 +23,8 @@ const UseLiteLLMPage: React.FC<UseLiteLLMPageProps> = ({
                                                            showNotification
                                                        }) => {
     const [baseUrl, setBaseUrl] = React.useState<string>('');
+    const [rule, setRule] = React.useState<any>(null);
+    const [loadingRule, setLoadingRule] = React.useState(true);
     const navigate = useNavigate();
 
     const copyToClipboard = async (text: string, label: string) => {
@@ -32,15 +36,24 @@ const UseLiteLLMPage: React.FC<UseLiteLLMPageProps> = ({
         }
     };
 
+    const loadData = async () => {
+        const url = await getBaseUrl();
+        setBaseUrl(url);
+
+        // Fetch rule information
+        const result = await api.getRule(ruleId);
+        if (result.success) {
+            setRule(result.data);
+        }
+        setLoadingRule(false);
+    };
+
     React.useEffect(() => {
-        const loadBaseUrl = async () => {
-            const url = await getBaseUrl();
-            setBaseUrl(url);
-        };
-        loadBaseUrl();
+        loadData();
     }, []);
 
     const litellmBaseUrl = `${baseUrl}/litellm`;
+    const modelName = rule?.request_model;
 
     const header = (
         <Box sx={{p: 2}}>
@@ -77,8 +90,8 @@ const UseLiteLLMPage: React.FC<UseLiteLLMPageProps> = ({
             </ApiConfigRow>
             <ApiConfigRow
                 label="Model Name"
-                value="litellm"
-                onCopy={() => copyToClipboard('litellm', 'Model Name')}
+                value={modelName || ruleId}
+                onCopy={() => copyToClipboard(modelName || ruleId, 'Model Name')}
                 isClickable={true}
             >
                 <Box sx={{display: 'flex', gap: 0.5, ml: 'auto'}}>
@@ -88,7 +101,7 @@ const UseLiteLLMPage: React.FC<UseLiteLLMPageProps> = ({
                         </IconButton>
                     </Tooltip>
                     <Tooltip title="Copy Model">
-                        <IconButton onClick={() => copyToClipboard('litellm', 'Model Name')} size="small">
+                        <IconButton onClick={() => copyToClipboard(modelName || ruleId, 'Model Name')} size="small">
                             <CopyIcon fontSize="small"/>
                         </IconButton>
                     </Tooltip>
@@ -100,7 +113,7 @@ const UseLiteLLMPage: React.FC<UseLiteLLMPageProps> = ({
     return (
         <TabTemplatePage
             title="LiteLLM Configuration"
-            ruleName="litellm"
+            rule={rule}
             header={header}
             showTokenModal={showTokenModal}
             setShowTokenModal={setShowTokenModal}

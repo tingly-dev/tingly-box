@@ -1,23 +1,10 @@
 import React from 'react';
-import {ContentCopy as CopyIcon, Edit as EditIcon, ExpandMore as ExpandMoreIcon} from '@mui/icons-material';
-import VisibilityIcon from '@mui/icons-material/Visibility';
-import {
-    Accordion,
-    AccordionDetails,
-    AccordionSummary,
-    Box,
-    Button,
-    Chip,
-    IconButton,
-    Stack,
-    TextField,
-    Tooltip,
-    Typography
-} from '@mui/material';
+import {ContentCopy as CopyIcon} from '@mui/icons-material';
+import {Box, IconButton, Paper, Typography} from '@mui/material';
+import Grid from '@mui/material/Grid';
 import {useNavigate} from 'react-router-dom';
-import {ApiConfigRow} from '../components/ApiConfigRow';
 import TabTemplatePage from '../components/TabTemplatePage';
-import {getBaseUrl} from '../services/api';
+import {api, getBaseUrl} from '../services/api';
 
 interface UseClaudeCodePageProps {
     showTokenModal: boolean;
@@ -26,7 +13,7 @@ interface UseClaudeCodePageProps {
     showNotification: (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
 }
 
-const ruleName = "tingly/ide"
+const ruleId = "built-in-cc";
 
 const UseClaudeCodePage: React.FC<UseClaudeCodePageProps> = ({
                                                                  showTokenModal,
@@ -35,8 +22,10 @@ const UseClaudeCodePage: React.FC<UseClaudeCodePageProps> = ({
                                                                  showNotification
                                                              }) => {
     const [baseUrl, setBaseUrl] = React.useState<string>('');
-    const [configPath, setConfigPath] = React.useState('~/Library/Application Support/Claude/claude_desktop_config.json');
-    const [defaultModel, setDefaultModel] = React.useState(ruleName);
+    const [configPath] = React.useState('~/.claude/settings.json');
+    const [rule, setRule] = React.useState<any>(null);
+    const [defaultModel, setDefaultModel] = React.useState("");
+    const [loadingRule, setLoadingRule] = React.useState(true);
     const navigate = useNavigate();
 
     const copyToClipboard = async (text: string, label: string) => {
@@ -48,18 +37,33 @@ const UseClaudeCodePage: React.FC<UseClaudeCodePageProps> = ({
         }
     };
 
+    const loadData = async () => {
+        const url = await getBaseUrl();
+        setBaseUrl(url);
+
+        // Fetch rule information
+        const result = await api.getRule(ruleId);
+        if (result.success) {
+            setRule(result.data);
+        }
+        setLoadingRule(false);
+    };
+
     React.useEffect(() => {
-        const loadBaseUrl = async () => {
-            const url = await getBaseUrl();
-            setBaseUrl(url);
-        };
-        loadBaseUrl();
+        loadData();
     }, []);
+
+    // Update defaultModel when rule changes
+    React.useEffect(() => {
+        if (rule?.request_model) {
+            setDefaultModel(rule.request_model);
+        }
+    }, [rule]);
 
     const claudeCodeBaseUrl = `${baseUrl}/anthropic`;
 
     const generateConfig = () => {
-        return JSON.stringify({
+        let res = JSON.stringify({
             env: {
                 DISABLE_TELEMETRY: "1",
                 DISABLE_ERROR_REPORTING: "1",
@@ -73,174 +77,65 @@ const UseClaudeCodePage: React.FC<UseClaudeCodePageProps> = ({
                 ANTHROPIC_MODEL: defaultModel
             },
         }, null, 2);
+        return res.trim().substring(1, res.length - 1);
     };
 
     const header = (
         <Box sx={{p: 2}}>
-            <Typography variant="h6" sx={{fontWeight: 600, mb: 2}}>
-                Use Claude Code
-            </Typography>
 
-            <ApiConfigRow
-                label="Base URL"
-                value={claudeCodeBaseUrl}
-                onCopy={() => copyToClipboard(claudeCodeBaseUrl, 'Base URL')}
-                isClickable={true}
-            >
-                <Box sx={{display: 'flex', gap: 0.5, ml: 'auto'}}>
-                    <Tooltip title="Copy Base URL">
-                        <IconButton onClick={() => copyToClipboard(claudeCodeBaseUrl, 'Base URL')} size="small">
-                            <CopyIcon fontSize="small"/>
-                        </IconButton>
-                    </Tooltip>
-                </Box>
-            </ApiConfigRow>
 
-            <ApiConfigRow label="API Key" showEllipsis={true}>
-                <Box sx={{display: 'flex', gap: 0.5, ml: 'auto'}}>
-                    <Tooltip title="View Token">
-                        <IconButton onClick={() => setShowTokenModal(true)} size="small">
-                            <VisibilityIcon/>
-                        </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Copy Token">
-                        <IconButton onClick={() => copyToClipboard(token, 'API Token')} size="small">
-                            <CopyIcon fontSize="small"/>
-                        </IconButton>
-                    </Tooltip>
-                </Box>
-            </ApiConfigRow>
-
-            <ApiConfigRow
-                label="Model Name"
-                value={defaultModel}
-                onCopy={() => copyToClipboard(defaultModel, 'Model Name')}
-                isClickable={true}
-            >
-                <Box sx={{display: 'flex', gap: 0.5, ml: 'auto'}}>
-                    <Tooltip title="Edit Rule">
-                        <IconButton onClick={() => navigate('/routing?expand=claude-code')} size="small">
-                            <EditIcon fontSize="small"/>
-                        </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Copy Model">
-                        <IconButton onClick={() => copyToClipboard(defaultModel, 'Model Name')} size="small">
-                            <CopyIcon fontSize="small"/>
-                        </IconButton>
-                    </Tooltip>
-                </Box>
-            </ApiConfigRow>
-
-            <Box sx={{mt: 3}}>
-                <Typography variant="subtitle2" sx={{fontWeight: 600, mb: 2}}>
-                    Configuration Instructions
-                </Typography>
-
-                <Box sx={{mb: 2}}>
-                    <Typography variant="body2" color="text.secondary" sx={{mb: 1}}>
-                        Config file location:
+            <Grid container spacing={2} sx={{mt: 0.5}}>
+                <Grid>
+                    <Typography variant="subtitle2" sx={{fontWeight: 600}}>
+                        Add env config into claude code config file: <code
+                        style={{fontSize: '0.85rem'}}>{configPath}</code>
                     </Typography>
-                    <TextField
-                        fullWidth
-                        size="small"
-                        value={configPath}
-                        onChange={(e) => setConfigPath(e.target.value)}
-                        sx={{
-                            '& .MuiOutlinedInput-root': {
-                                fontFamily: 'monospace',
-                                fontSize: '0.85rem',
-                            }
-                        }}
-                    />
-                </Box>
-
-                <Accordion defaultExpanded>
-                    <AccordionSummary expandIcon={<ExpandMoreIcon/>}>
-                        <Box sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            width: '100%',
-                            mr: 1
-                        }}>
-                            <Typography variant="subtitle2" sx={{fontWeight: 600}}>
-                                Configuration JSON
-                            </Typography>
-                            <Chip label="Click to expand" size="small" variant="outlined" sx={{fontSize: '0.7rem'}}/>
-                        </Box>
-                    </AccordionSummary>
-                    <AccordionDetails>
-                        <Stack spacing={2}>
+                </Grid>
+                {/* Left: Config JSON */}
+                <Grid>
+                    <Paper sx={{p: 1.5, height: '100%'}}>
+                        <Box sx={{position: 'relative'}}>
+                            <IconButton
+                                size="small"
+                                onClick={() => copyToClipboard(generateConfig(), 'Configuration')}
+                                sx={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    right: 0,
+                                    bgcolor: 'grey.800',
+                                    color: 'grey.300',
+                                    '&:hover': {bgcolor: 'grey.700'},
+                                }}
+                            >
+                                <CopyIcon fontSize="small"/>
+                            </IconButton>
                             <Box
                                 sx={{
-                                    p: 2,
+                                    p: 1.5,
                                     bgcolor: 'grey.900',
                                     borderRadius: 1,
                                     fontFamily: 'monospace',
-                                    fontSize: '0.75rem',
+                                    fontSize: '0.7rem',
                                     color: 'grey.100',
                                     overflow: 'auto',
-                                    maxHeight: 300,
-                                    '&::-webkit-scrollbar': {width: '8px'},
-                                    '&::-webkit-scrollbar-track': {bgcolor: 'grey.800'},
-                                    '&::-webkit-scrollbar-thumb': {bgcolor: 'grey.600', borderRadius: 4},
+                                    maxHeight: 280,
                                 }}
                             >
-                                <pre style={{margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all'}}>
+                                <pre style={{margin: 0, whiteSpace: 'pre-wrap'}}>
                                     {generateConfig()}
                                 </pre>
                             </Box>
-
-                            <Button
-                                variant="contained"
-                                startIcon={<CopyIcon fontSize="small"/>}
-                                onClick={() => copyToClipboard(generateConfig(), 'Claude Code Configuration')}
-                                fullWidth
-                            >
-                                Copy Configuration
-                            </Button>
-
-                            <Box>
-                                <Typography variant="body2" color="text.secondary" sx={{mb: 1}}>
-                                    Default model name in config:
-                                </Typography>
-                                <TextField
-                                    size="small"
-                                    value={defaultModel}
-                                    onChange={(e) => setDefaultModel(e.target.value)}
-                                    placeholder="e.g., tingly, cc, claude-sonnet-4"
-                                    sx={{minWidth: 300}}
-                                />
-                            </Box>
-                        </Stack>
-                    </AccordionDetails>
-                </Accordion>
-
-                <Box sx={{mt: 2, p: 2, bgcolor: 'info.50', borderRadius: 1}}>
-                    <Typography variant="subtitle2" sx={{fontWeight: 600, mb: 1}}>
-                        Quick Tips:
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{mb: 0.5}}>
-                        • Copy the configuration JSON above
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{mb: 0.5}}>
-                        • Open the config file at the location shown
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{mb: 0.5}}>
-                        • Replace the content with the copied configuration
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                        • Restart Claude Code for changes to take effect
-                    </Typography>
-                </Box>
-            </Box>
+                        </Box>
+                    </Paper>
+                </Grid>
+            </Grid>
         </Box>
     );
 
     return (
         <TabTemplatePage
             title="Claude Code Configuration"
-            ruleName={ruleName}
+            rule={rule}
             header={header}
             showTokenModal={showTokenModal}
             setShowTokenModal={setShowTokenModal}

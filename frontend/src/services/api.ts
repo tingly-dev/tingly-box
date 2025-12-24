@@ -479,7 +479,7 @@ export const api = {
         try {
             // Note: The API uses POST to /rules but generated client expects different structure
             const apiInstances = await getApiInstances();
-            const response = await apiInstances.rulesApi.apiV1RuleUuidPost(uuid, data);
+            const response = await apiInstances.rulesApi.apiV1RulePost(data);
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {

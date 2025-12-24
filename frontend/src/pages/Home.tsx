@@ -97,6 +97,11 @@ const Home = () => {
         setActiveTab(newValue);
     };
 
+    // Scroll to top when tab changes
+    useEffect(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, [activeTab]);
+
     return (
         <PageLayout notification={notification}>
             {/* Main Tabs */}
@@ -117,11 +122,11 @@ const Home = () => {
                         label="Use Claude Code"
                         iconPosition="start"
                     />
-                    <Tab
-                        icon={<TerminalIcon fontSize="small" />}
-                        label="Use LiteLLM"
-                        iconPosition="start"
-                    />
+                    {/*<Tab*/}
+                    {/*    icon={<TerminalIcon fontSize="small" />}*/}
+                    {/*    label="Use LiteLLM"*/}
+                    {/*    iconPosition="start"*/}
+                    {/*/>*/}
                 </Tabs>
             </Box>
 

@@ -5,7 +5,7 @@ import {Box, IconButton, Tooltip, Typography} from '@mui/material';
 import {useNavigate} from 'react-router-dom';
 import {ApiConfigRow} from '../components/ApiConfigRow';
 import TabTemplatePage from '../components/TabTemplatePage';
-import {getBaseUrl} from '../services/api';
+import {api, getBaseUrl} from '../services/api';
 
 interface UseAnthropicPageProps {
     showTokenModal: boolean;
@@ -14,6 +14,7 @@ interface UseAnthropicPageProps {
     showNotification: (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
 }
 
+const ruleId = "built-in-anthropic";
 const ruleName = "tingly/anthropic"
 
 const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
@@ -23,6 +24,8 @@ const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
                                                                showNotification
                                                            }) => {
     const [baseUrl, setBaseUrl] = React.useState<string>('');
+    const [rule, setRule] = React.useState<any>(null);
+    const [loadingRule, setLoadingRule] = React.useState(true);
     const navigate = useNavigate();
 
     const copyToClipboard = async (text: string, label: string) => {
@@ -34,15 +37,24 @@ const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
         }
     };
 
+    const loadData = async () => {
+        const url = await getBaseUrl();
+        setBaseUrl(url);
+
+        // Fetch rule information
+        const result = await api.getRule(ruleId);
+        if (result.success) {
+            setRule(result.data);
+        }
+        setLoadingRule(false);
+    };
+
     React.useEffect(() => {
-        const loadBaseUrl = async () => {
-            const url = await getBaseUrl();
-            setBaseUrl(url);
-        };
-        loadBaseUrl();
+        loadData();
     }, []);
 
     const anthropicBaseUrl = `${baseUrl}/anthropic`;
+    const modelName = rule?.request_model;
 
     const header = (
         <Box sx={{p: 2}}>
@@ -80,8 +92,8 @@ const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
             </ApiConfigRow>
             <ApiConfigRow
                 label="Model Name"
-                value={ruleName}
-                onCopy={() => copyToClipboard('anthropic', 'Model Name')}
+                value={modelName}
+                onCopy={() => copyToClipboard(modelName, 'Model Name')}
                 isClickable={true}
             >
                 <Box sx={{display: 'flex', gap: 0.5, ml: 'auto'}}>
@@ -91,7 +103,7 @@ const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
                         </IconButton>
                     </Tooltip>
                     <Tooltip title="Copy Model">
-                        <IconButton onClick={() => copyToClipboard('anthropic', 'Model Name')} size="small">
+                        <IconButton onClick={() => copyToClipboard(modelName || ruleId, 'Model Name')} size="small">
                             <CopyIcon fontSize="small"/>
                         </IconButton>
                     </Tooltip>
@@ -103,7 +115,7 @@ const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
     return (
         <TabTemplatePage
             title="Anthropic Configuration"
-            ruleName={ruleName}
+            rule={rule}
             header={header}
             showTokenModal={showTokenModal}
             setShowTokenModal={setShowTokenModal}
