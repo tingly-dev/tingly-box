@@ -199,6 +199,21 @@ const Home = () => {
         }
     }, [rule]);
 
+    // Fetch models for the selected provider on initial load
+    useEffect(() => {
+        if (providers.length > 0) {
+            let provider;
+            if (selectedOption.provider) {
+                provider = providers.find(p => p.uuid === selectedOption.provider);
+            } else {
+                provider = providers.find(p => p.enabled);
+            }
+            if (provider && !providerModelsByUuid[provider.uuid]) {
+                handleProviderChange(provider);
+            }
+        }
+    }, [selectedOption.provider, providers]);
+
     const loadToken = async () => {
         const result = await api.getToken();
         if (result.token) {
