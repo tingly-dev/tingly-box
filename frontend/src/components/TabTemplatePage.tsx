@@ -184,80 +184,29 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
         }
     };
 
-    // RuleGraphV2 handlers
-    const handleUpdateRecord = (field: keyof ConfigRecord, value: any) => {
-        if (configRecord) {
-            setConfigRecord({
-                ...configRecord,
-                [field]: value
-            });
-        }
-    };
-
-    const handleUpdateProvider = (recordId: string, providerId: string, field: keyof ConfigProvider, value: any) => {
-        if (configRecord) {
-            setConfigRecord({
-                ...configRecord,
-                providers: configRecord.providers.map(p => {
-                    if (p.uuid === providerId) {
-                        const updated = { ...p, [field]: value };
-                        // If provider changed, reset model
-                        if (field === 'provider') {
-                            updated.model = '';
-                        }
-                        return updated;
-                    }
-                    return p;
-                })
-            });
-        }
-    };
-
-    const handleAddProviderWithValues = (providerUuid: string, model: string) => {
-        if (configRecord) {
-            setConfigRecord({
-                ...configRecord,
-                providers: [
-                    ...configRecord.providers,
-                    { uuid: crypto.randomUUID(), provider: providerUuid, model: model, isManualInput: false },
-                ],
-            });
-        }
-    };
-
-    const handleDeleteProvider = (_recordId: string, providerId: string) => {
-        if (configRecord) {
-            setConfigRecord({
-                ...configRecord,
-                providers: configRecord.providers.filter(p => p.uuid !== providerId),
-            });
-        }
-    };
-
-    const handleSave = async () => {
-        if (!configRecord || !configRecord.requestModel) {
-            showNotification('Request model name is required', 'error');
+    // Auto-save function
+    const autoSave = async (newConfigRecord: ConfigRecord) => {
+        if (!newConfigRecord.requestModel) {
             return;
         }
 
-        // Validate providers have both provider and model
-        for (const provider of configRecord.providers) {
+        // Validate providers have both provider and model before saving
+        for (const provider of newConfigRecord.providers) {
             if (provider.provider && !provider.model) {
-                showNotification(`Please select a model for all providers`, 'error');
+                // Don't save if provider is selected but model is not
                 return;
             }
         }
 
         setSaving(true);
         try {
-            // Update the rule on the server
             const ruleData = {
                 uuid: rule.uuid,
-                request_model: configRecord.requestModel,
-                response_model: configRecord.responseModel,
-                active: configRecord.active,
-                services: configRecord.providers
-                    .filter(p => p.provider) // Only include providers with provider selected
+                request_model: newConfigRecord.requestModel,
+                response_model: newConfigRecord.responseModel,
+                active: newConfigRecord.active,
+                services: newConfigRecord.providers
+                    .filter(p => p.provider && p.model) // Only include providers with both provider and model selected
                     .map(provider => ({
                         provider: provider.provider,
                         model: provider.model,
@@ -270,7 +219,7 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
             const result = await api.updateRule(rule.uuid, ruleData);
 
             if (result.success) {
-                showNotification(`Successfully updated ${configRecord.requestModel} configuration`, 'success');
+                showNotification(`Configuration saved successfully`, 'success');
             } else {
                 showNotification(`Failed to save: ${result.error || 'Unknown error'}`, 'error');
             }
@@ -282,43 +231,58 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
         }
     };
 
-    const handleReset = async () => {
-        // Reload rule from server
-        const result = await api.getRule(rule.uuid);
-        if (result.success) {
-            const updatedRule = result.data;
-            const services = updatedRule.services || [];
-            const providersList: ConfigProvider[] = services.map((service: any) => ({
-                uuid: service.id || service.uuid || crypto.randomUUID(),
-                provider: service.provider || '',
-                model: service.model || '',
-                isManualInput: false,
-                weight: service.weight || 0,
-                active: service.active !== undefined ? service.active : true,
-                time_window: service.time_window || 0,
-            }));
-
-            if (providersList.length === 0) {
-                providersList.push({
-                    uuid: crypto.randomUUID(),
-                    provider: '',
-                    model: '',
-                });
-            }
-
-            setConfigRecord({
-                uuid: updatedRule.uuid || crypto.randomUUID(),
-                requestModel: updatedRule.request_model || '',
-                responseModel: updatedRule.response_model || '',
-                active: updatedRule.active !== undefined ? updatedRule.active : true,
-                providers: providersList,
-            });
+    // RuleGraphV2 handlers
+    const handleUpdateRecord = (field: keyof ConfigRecord, value: any) => {
+        if (configRecord) {
+            const updated = {
+                ...configRecord,
+                [field]: value
+            };
+            setConfigRecord(updated);
+            autoSave(updated);
         }
-        showNotification('Reset to last saved state', 'success');
+    };
+
+    const handleUpdateProvider = (_recordId: string, providerId: string, field: keyof ConfigProvider, value: any) => {
+        if (configRecord) {
+            const updatedProviders = configRecord.providers.map(p => {
+                if (p.uuid === providerId) {
+                    const updated = { ...p, [field]: value };
+                    // If provider changed, reset model
+                    if (field === 'provider') {
+                        updated.model = '';
+                    }
+                    return updated;
+                }
+                return p;
+            });
+
+            const updated = {
+                ...configRecord,
+                providers: updatedProviders
+            };
+            setConfigRecord(updated);
+            autoSave(updated);
+        }
+    };
+
+    const handleDeleteProvider = (_recordId: string, providerId: string) => {
+        if (configRecord) {
+            const updated = {
+                ...configRecord,
+                providers: configRecord.providers.filter(p => p.uuid !== providerId),
+            };
+            setConfigRecord(updated);
+            autoSave(updated);
+        }
     };
 
     const handleDelete = () => {
         showNotification('Delete not supported in template mode', 'warning');
+    };
+
+    const handleReset = () => {
+        showNotification('Reset not supported in auto-save mode', 'warning');
     };
 
     // Convert UUID-based providerModels to name-based for ModelSelectTab
@@ -347,23 +311,46 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
         setModelSelectDialogOpen(true);
     };
 
-    // Handle model selection from ModelSelectTab
+    // Handle model selection from ModelSelectTab - auto save after selection
     const handleModelSelect = (option: ProviderSelectTabOption) => {
+        if (!configRecord) return;
+
+        let updated: ConfigRecord;
+
         if (modelSelectMode === 'add') {
             // Add new provider with selected values
-            handleAddProviderWithValues(option.provider.uuid, option.model || '');
+            updated = {
+                ...configRecord,
+                providers: [
+                    ...configRecord.providers,
+                    { uuid: crypto.randomUUID(), provider: option.provider.uuid, model: option.model || '', isManualInput: false },
+                ],
+            };
         } else if (modelSelectMode === 'edit' && editingProviderUuid) {
             // Update existing provider
-            handleUpdateProvider(configRecord!.uuid, editingProviderUuid, 'provider', option.provider.uuid);
-            handleUpdateProvider(configRecord!.uuid, editingProviderUuid, 'model', option.model || '');
+            updated = {
+                ...configRecord,
+                providers: configRecord.providers.map(p => {
+                    if (p.uuid === editingProviderUuid) {
+                        return { ...p, provider: option.provider.uuid, model: option.model || '' };
+                    }
+                    return p;
+                }),
+            };
+        } else {
+            updated = configRecord;
         }
+
+        setConfigRecord(updated);
+        setModelSelectDialogOpen(false);
 
         // Fetch models for the selected provider
         if (option.provider.uuid) {
             handleFetchModels(option.provider.uuid);
         }
 
-        setModelSelectDialogOpen(false);
+        // Auto save after model selection
+        autoSave(updated);
     };
 
     // Handle provider tab change in ModelSelectTab
@@ -395,13 +382,8 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
                         )}
                     </Box>
                 )}
-            </UnifiedCard>
 
-            {/* Rule Configuration using RuleGraphV2 */}
-            <UnifiedCard
-                title="Configuration"
-                size="full"
-            >
+                {/* Rule Configuration using RuleGraphV2 */}
                 <RuleGraphV2
                     record={configRecord}
                     recordUuid={configRecord.uuid}
@@ -412,7 +394,7 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
                     onUpdateRecord={handleUpdateRecord}
                     onDeleteProvider={handleDeleteProvider}
                     onRefreshModels={handleRefreshModels}
-                    onSave={handleSave}
+                    onSave={() => { }}
                     onDelete={handleDelete}
                     onReset={handleReset}
                     onToggleExpanded={() => { }}

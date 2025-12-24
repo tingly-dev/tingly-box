@@ -531,7 +531,7 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                 </Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     {/* Action Buttons */}
-                    <Box sx={{ display: 'flex', gap: 0.5, mr: 1 }}>
+                    {/* <Box sx={{ display: 'flex', gap: 0.5, mr: 1 }}>
                         <Button
                             variant="contained"
                             color="primary"
@@ -598,7 +598,7 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                         }}
                     >
                         {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                    </IconButton>
+                    </IconButton> */}
                 </Box>
             </SummarySection>
 

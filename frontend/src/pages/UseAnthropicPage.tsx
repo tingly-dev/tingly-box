@@ -61,9 +61,6 @@ const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
 
     const header = (
         <Box sx={{p: 2}}>
-            <Typography variant="h6" sx={{fontWeight: 600, mb: 2}}>
-                Use Anthropic
-            </Typography>
             <ApiConfigRow
                 label="Base URL"
                 value={anthropicBaseUrl}

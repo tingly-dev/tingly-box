@@ -1,9 +1,9 @@
+import { ContentCopy as CopyIcon } from '@mui/icons-material';
+import { Box, IconButton, Typography } from '@mui/material';
 import React from 'react';
-import {ContentCopy as CopyIcon} from '@mui/icons-material';
-import {Box, IconButton, Paper, Typography} from '@mui/material';
-import {useNavigate} from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import TabTemplatePage from '../components/TabTemplatePage';
-import {api, getBaseUrl} from '../services/api';
+import { api, getBaseUrl } from '../services/api';
 import type { Provider } from '../types/provider';
 
 interface UseClaudeCodePageProps {
@@ -83,53 +83,51 @@ const UseClaudeCodePage: React.FC<UseClaudeCodePageProps> = ({
     };
 
     const header = (
-        <Box sx={{p: 2}}>
-            <Box sx={{mb: 2}}>
+        <Box sx={{ p: 2 }}>
+            <Box sx={{ mb: 2 }}>
                 <Typography>
                     Add env config into claude code config file <code
-                    style={{fontSize: '0.85rem'}}>{configPath}</code>
+                        style={{ fontSize: '0.85rem' }}>{configPath}</code>
                 </Typography>
             </Box>
-            <Paper sx={{p: 1.5, height: '100%'}}>
-                <Box sx={{position: 'relative'}}>
-                    <IconButton
-                        size="small"
-                        onClick={() => copyToClipboard(generateConfig(), 'Configuration')}
-                        sx={{
-                            position: 'absolute',
-                            top: 0,
-                            right: 0,
-                            bgcolor: 'grey.800',
-                            color: 'grey.300',
-                            '&:hover': {bgcolor: 'grey.700'},
-                        }}
-                    >
-                        <CopyIcon fontSize="small"/>
-                    </IconButton>
-                    <Box
-                        sx={{
-                            p: 1.5,
-                            bgcolor: 'grey.900',
-                            borderRadius: 1,
-                            fontFamily: 'monospace',
-                            fontSize: '0.7rem',
-                            color: 'grey.100',
-                            overflow: 'auto',
-                            maxHeight: 280,
-                        }}
-                    >
-                                <pre style={{margin: 0, whiteSpace: 'pre-wrap'}}>
-                                    {generateConfig()}
-                                </pre>
-                    </Box>
+            <Box sx={{ position: 'relative' }}>
+                <IconButton
+                    size="small"
+                    onClick={() => copyToClipboard(generateConfig(), 'Configuration')}
+                    sx={{
+                        position: 'absolute',
+                        top: 0,
+                        right: 0,
+                        bgcolor: 'grey.800',
+                        color: 'grey.300',
+                        '&:hover': { bgcolor: 'grey.700' },
+                    }}
+                >
+                    <CopyIcon fontSize="small" />
+                </IconButton>
+                <Box
+                    sx={{
+                        p: 1.5,
+                        bgcolor: 'grey.900',
+                        borderRadius: 1,
+                        fontFamily: 'monospace',
+                        fontSize: '0.7rem',
+                        color: 'grey.100',
+                        overflow: 'auto',
+                        maxHeight: 280,
+                    }}
+                >
+                    <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+                        {generateConfig()}
+                    </pre>
                 </Box>
-            </Paper>
+            </Box>
         </Box>
     );
 
     return (
         <TabTemplatePage
-            title=""
+            title="Claude Code Config"
             rule={rule}
             header={header}
             showTokenModal={showTokenModal}

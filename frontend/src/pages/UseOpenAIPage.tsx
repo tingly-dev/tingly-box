@@ -61,9 +61,6 @@ const UseOpenAIPage: React.FC<UseOpenAIPageProps> = ({
 
     const header = (
         <Box sx={{p: 2}}>
-            <Typography variant="h6" sx={{fontWeight: 600, mb: 2}}>
-                Use OpenAI
-            </Typography>
             <ApiConfigRow
                 label="Base URL"
                 value={openaiBaseUrl}
