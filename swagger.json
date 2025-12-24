@@ -276,6 +276,40 @@
         }
       }
     },
+    "/api/v1/rule": {
+      "post": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "Create or update a rule configuration",
+        "description": "Create or update a rule configuration",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "request",
+            "in": "body",
+            "description": "Request body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/AddRuleRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/UpdateRuleResponse"
+            }
+          }
+        }
+      }
+    },
     "/api/v1/rule/{uuid}": {
       "get": {
         "tags": [
@@ -803,6 +837,69 @@
         "success",
         "message",
         "data"
+      ]
+    },
+    "AddRuleRequest": {
+      "type": "object",
+      "properties": {
+        "active": {
+          "type": "boolean",
+          "description": "Field active"
+        },
+        "current_service_index": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field current_service_index"
+        },
+        "description": {
+          "type": "string",
+          "description": "Field description"
+        },
+        "lb_tactic": {
+          "description": "Field lb_tactic",
+          "$ref": "#/definitions/Tactic"
+        },
+        "request_model": {
+          "type": "string",
+          "description": "Field request_model"
+        },
+        "response_model": {
+          "type": "string",
+          "description": "Field response_model"
+        },
+        "services": {
+          "type": "array",
+          "description": "Field services",
+          "items": {
+            "$ref": "#/definitions/Service"
+          }
+        },
+        "tactic": {
+          "type": "string",
+          "description": "Field tactic"
+        },
+        "tactic_params": {
+          "type": "object",
+          "description": "Field tactic_params",
+          "additionalProperties": {
+            "type": "object"
+          }
+        },
+        "uuid": {
+          "type": "string",
+          "description": "Field uuid"
+        }
+      },
+      "required": [
+        "uuid",
+        "request_model",
+        "response_model",
+        "description",
+        "services",
+        "current_service_index",
+        "lb_tactic",
+        "active",
+        "tactic"
       ]
     },
     "ConfigInfo": {
@@ -1785,9 +1882,14 @@
             "response_model": {
               "type": "string",
               "description": "Field response_model"
+            },
+            "uuid": {
+              "type": "string",
+              "description": "Field uuid"
             }
           },
           "required": [
+            "uuid",
             "request_model",
             "response_model",
             "provider",
@@ -1864,6 +1966,10 @@
       "description": "Operations related to history"
     },
     {
+      "name": "token",
+      "description": "Operations related to token"
+    },
+    {
       "name": "rules",
       "description": "Operations related to rules"
     },
@@ -1874,10 +1980,6 @@
     {
       "name": "testing",
       "description": "Operations related to testing"
-    },
-    {
-      "name": "token",
-      "description": "Operations related to token"
     },
     {
       "name": "providers",
