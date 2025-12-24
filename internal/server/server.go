@@ -260,16 +260,13 @@ func (s *Server) setupRoutes() {
 		s.UseUIEndpoints()
 	}
 
-	// Models endpoint
-	//s.engine.GET("/v1/models", s.ListModels)
-
 	// OpenAI v1 API group
 	openaiV1 := s.engine.Group("/openai/v1")
 	{
 		// Chat completions endpoint (OpenAI compatible)
 		openaiV1.POST("/chat/completions", s.authMW.ModelAuthMiddleware(), s.OpenAIChatCompletions)
 		// Models endpoint (OpenAI compatible)
-		//openaiV1.GET("/models", s.ModelAuthMiddleware(), s.ListModels)
+		openaiV1.GET("/models", s.authMW.ModelAuthMiddleware(), s.OpenAIListModels)
 	}
 
 	// OpenAI API alias (without version)
@@ -278,7 +275,7 @@ func (s *Server) setupRoutes() {
 		// Chat completions endpoint (OpenAI compatible)
 		openai.POST("/chat/completions", s.authMW.ModelAuthMiddleware(), s.OpenAIChatCompletions)
 		// Models endpoint (OpenAI compatible)
-		//openai.GET("/models", s.ModelAuthMiddleware(), s.ListModels)
+		openai.GET("/models", s.authMW.ModelAuthMiddleware(), s.OpenAIListModels)
 	}
 
 	// Anthropic v1 API group
@@ -289,7 +286,7 @@ func (s *Server) setupRoutes() {
 		// Count tokens endpoint (Anthropic compatible)
 		anthropicV1.POST("/messages/count_tokens", s.authMW.ModelAuthMiddleware(), s.AnthropicCountTokens)
 		// Models endpoint (Anthropic compatible)
-		//anthropicV1.GET("/models", s.ModelAuthMiddleware(), s.AnthropicModels)
+		anthropicV1.GET("/models", s.authMW.ModelAuthMiddleware(), s.AnthropicListModels)
 	}
 
 	// API routes for load balancer management

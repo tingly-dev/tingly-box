@@ -1,124 +1,57 @@
 import {
-    Add as AddIcon,
-    ContentCopy as CopyIcon,
-    PlayArrow as ProbeIcon
-} from '@mui/icons-material';
-import {
-    AlertTitle,
+    Alert,
     Box,
     Button,
     Dialog,
+    DialogActions,
     DialogContent,
+    DialogContentText,
     DialogTitle,
-    IconButton,
-    Stack,
+    Tab,
+    Tabs,
     Typography
 } from '@mui/material';
-import React, { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import type { ProbeResponse } from '../client';
-import CardGrid from '../components/CardGrid.tsx';
-import PresetProviderFormDialog, { type EnhancedProviderFormData } from '../components/PresetProviderFormDialog.tsx';
-import { HomeHeader } from '../components/HomeHeader.tsx';
-import ModelSelectTab, { type ProviderSelectTabOption } from "../components/ModelSelectTab.tsx";
+import React, { useEffect, useState } from 'react';
+import { OpenAI, Anthropic } from '@lobehub/icons';
+import CodeIcon from '@mui/icons-material/Code';
+import { Add as AddIcon } from '@mui/icons-material';
 import { PageLayout } from '../components/PageLayout';
-import Probe from '../components/Probe';
-import UnifiedCard from '../components/UnifiedCard';
-import { api, getBaseUrl } from '../services/api';
-import type { ProviderModelsDataByUuid } from '../types/provider';
-
-const defaultRule = "tingly"
-const defaultRuleUUID = "tingly"
-
+import PresetProviderFormDialog, { type EnhancedProviderFormData } from '../components/PresetProviderFormDialog';
+import { api } from '../services/api';
+import type { Provider } from '../types/provider';
+import UseOpenAIPage from './UseOpenAIPage';
+import UseAnthropicPage from './UseAnthropicPage';
+import UseClaudeCodePage from './UseClaudeCodePage';
+import UseLiteLLMPage from './UseLiteLLMPage';
 
 const Home = () => {
-    const navigate = useNavigate();
-    const [providers, setProviders] = useState<any[]>([]);
-    const [rule, setRule] = useState<any>({});
-    // UUID-based provider models mapping
-    const [providerModelsByUuid, setProviderModelsByUuid] = useState<ProviderModelsDataByUuid>({});
-    const [loading, setLoading] = useState(true);
-    const [selectedOption, setSelectedOption] = useState<any>({ provider: "", model: "" }); // provider is now UUID
-    const [baseUrl, setBaseUrl] = useState<string>("");
-    const [refreshingProviders, setRefreshingProviders] = useState<string[]>([]); // These are UUIDs
-
-    // Server info states
+    const [activeTab, setActiveTab] = useState(0);
     const [generatedToken, setGeneratedToken] = useState<string>('');
     const [apiKey, setApiKey] = useState<string>('');
     const [showTokenModal, setShowTokenModal] = useState(false);
-    const [activeTab, setActiveTab] = useState(0);
-
-    // Banner state for provider/model selection
-    const [bannerProvider, setBannerProvider] = useState<string>('');
-    const [bannerModel, setBannerModel] = useState<string>('');
-    const [showBanner, setShowBanner] = useState(false);
-
-    // Create lookup maps for provider UUID to name
-    const providerUuidToName = React.useMemo(() => {
-        const map: { [uuid: string]: string } = {};
-        providers.forEach(provider => {
-            map[provider.uuid] = provider.name;
-        });
-        return map;
-    }, [providers]);
-
-    // Transform UUID-based provider models to name-based for ModelSelectTab (legacy compatibility)
-    const providerModelsByName = React.useMemo(() => {
-        const nameBased: { [name: string]: any } = {};
-        Object.entries(providerModelsByUuid).forEach(([uuid, modelData]) => {
-            const providerName = providerUuidToName[uuid];
-            if (providerName) {
-                nameBased[providerName] = modelData;
-            }
-        });
-        return nameBased;
-    }, [providerModelsByUuid, providerUuidToName]);
-
-    // Unified notification state
+    const [showRefreshConfirmation, setShowRefreshConfirmation] = useState(false);
     const [notification, setNotification] = useState<{
         open: boolean;
         message?: string;
         severity?: 'success' | 'info' | 'warning' | 'error';
         autoHideDuration?: number;
-        customContent?: React.ReactNode;
         onClose?: () => void;
     }>({ open: false });
 
-    // Probe state and logic
-    const [isProbing, setIsProbing] = useState(false);
-    const [probeResult, setProbeResult] = useState<ProbeResponse | null>(null);
-    const [detailsExpanded, setDetailsExpanded] = useState(false);
+    // Provider state
+    const [providers, setProviders] = useState<Provider[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [addDialogOpen, setAddDialogOpen] = useState(false);
+    const [providerFormData, setProviderFormData] = useState<EnhancedProviderFormData>({
+        name: '',
+        apiBase: '',
+        apiStyle: undefined,
+        token: '',
+    });
 
-    const handleProbe = useCallback(async () => {
-        if (!selectedOption.provider || !selectedOption.model) return;
+    const token = generatedToken || apiKey;
+    const hasProviders = providers.length > 0;
 
-        setIsProbing(true);
-        setProbeResult(null);
-
-        try {
-            const providerName = providerUuidToName[selectedOption.provider];
-            if (!providerName) {
-                throw new Error('Provider not found');
-            }
-
-            console.log(providerName, selectedOption.model);
-            const result = await api.probeModel(providerName, selectedOption.model);
-            setProbeResult(result);
-        } catch (error) {
-            console.error('Probe error:', error);
-            setProbeResult({
-                success: false,
-                error: {
-                    message: (error as Error).message,
-                    type: 'client_error'
-                }
-            });
-        } finally {
-            setIsProbing(false);
-        }
-    }, [selectedOption.provider, selectedOption.model, providerUuidToName]);
-
-    // Helper function to show notifications
     const showNotification = (message: string, severity: 'success' | 'info' | 'warning' | 'error' = 'info', autoHideDuration: number = 6000) => {
         setNotification({
             open: true,
@@ -129,75 +62,14 @@ const Home = () => {
         });
     };
 
-    // Helper function to show banner notification
-    const showBannerNotification = () => {
-        if (showBanner && bannerProvider && bannerModel) {
-            setNotification({
-                open: true,
-                autoHideDuration: 0, // Don't auto-hide banner notification
-                customContent: (
-                    <>
-                        <AlertTitle>Active Provider & Model</AlertTitle>
-                        <Typography variant="body2">
-                            <strong>Request:</strong> tingly {" -> "}
-                            <strong>Provider:</strong> {bannerProvider} | <strong>Model:</strong> {bannerModel}
-                        </Typography>
-                    </>
-                ),
-                severity: 'info',
-                onClose: () => {
-        setShowBanner(false);
-                    setNotification(prev => ({ ...prev, open: false }));
-                }
-            });
+    const copyToClipboard = async (text: string, label: string) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            showNotification(`${label} copied to clipboard!`, 'success');
+        } catch (err) {
+            showNotification('Failed to copy to clipboard', 'error');
         }
     };
-
-    // Show banner notification when banner should be displayed
-    React.useEffect(() => {
-        if (showBanner) {
-            showBannerNotification();
-        } else {
-            setNotification(prev => ({ ...prev, open: false }));
-        }
-    }, [showBanner, bannerProvider, bannerModel]);
-
-    // Add provider dialog state
-    const [addDialogOpen, setAddDialogOpen] = useState(false);
-    const [providerFormData, setProviderFormData] = useState<EnhancedProviderFormData>({
-        name: '',
-        apiBase: '',
-        apiStyle: '',
-        token: '',
-    });
-
-    const loadBaseUrl = async () => {
-        const baseUrl = await getBaseUrl();
-        setBaseUrl(baseUrl);
-    };
-
-    useEffect(() => {
-        loadBaseUrl()
-        loadData();
-        loadToken();
-    }, []);
-
-
-    // Update selected option when rules are loaded
-    useEffect(() => {
-        if (rule && rule.services && rule.services.length > 0) {
-            const firstService = rule.services[0];
-            setSelectedOption({
-                provider: firstService.provider,
-                model: firstService.model
-            });
-        } else {
-            setSelectedOption({
-                provider: '',
-                model: ''
-            });
-        }
-    }, [rule]);
 
     const loadToken = async () => {
         const result = await api.getToken();
@@ -206,40 +78,16 @@ const Home = () => {
         }
     };
 
-    const loadData = async () => {
-        setLoading(true);
-        await Promise.all([
-            loadBaseUrl(),
-            loadProviders(),
-            loadRule(),
-        ]);
-        setLoading(false);
-    };
-
     const loadProviders = async () => {
         const result = await api.getProviders();
         if (result.success) {
             setProviders(result.data);
         }
+        setLoading(false);
     };
 
-    const loadRule = async () => {
-        const result = await api.getRule(defaultRule);
-        if (result.success) {
-            setRule(result.data);
-        }
-        // Remove automatic rule creation - rule should only be created when user selects a provider/model
-    };
-
-
-    // Server info handlers
-    const copyToClipboard = async (text: string, label: string) => {
-        try {
-            await navigator.clipboard.writeText(text);
-            showNotification(`${label} copied to clipboard!`, 'success');
-        } catch (err) {
-            showNotification('Failed to copy to clipboard', 'error');
-        }
+    const loadData = async () => {
+        await Promise.all([loadToken(), loadProviders()]);
     };
 
     const generateToken = async () => {
@@ -253,117 +101,16 @@ const Home = () => {
         }
     };
 
-    // Composition handlers for provider select
-    const handleModelSelect = async (provider: any, model: string) => {
-        setSelectedOption({ provider: provider.uuid, model: model });
-
-        try {
-            // Update the "tingly" rule with the selected provider and model
-            const ruleData = {
-                uuid: defaultRuleUUID,
-                request_model: defaultRule,
-                active: true,
-                services: [
-                    {
-                        provider: provider.uuid,
-                        model: model,
-                        weight: 0,
-                        active: true,
-                        time_window: 0,
-                    }
-                ],
-            };
-
-            const existingRule = await api.getRule(defaultRuleUUID);
-            let result;
-            if (existingRule.success && existingRule.data.uuid) {
-                // Update existing rule using uuid
-                result = await api.updateRule(existingRule.data.uuid, ruleData);
-            } else {
-                // Create new rule if it doesn't exist
-                const createResult = await api.createRule(
-                    defaultRuleUUID,
-                    {
-                        name: 'tingly',
-                        ...ruleData,
-                    });
-                result = createResult;
-            }
-            if (result.success) {
-                // Show banner with selected provider and model info
-                setBannerProvider(provider.name);
-                setBannerModel(model);
-                setShowBanner(true);
-                showNotification(`Successfully updated tingly rule to use ${provider.name}:${model}`, 'success');
-                // Reload rule to get updated data
-                const reloadResult = await api.getRule('tingly');
-                if (reloadResult.success) {
-                    setRule(reloadResult.data);
-                }
-            } else {
-                showNotification(`Failed to update tingly rule: ${result.error}`, 'error');
-            }
-        } catch (error) {
-            console.error("Error updating tingly rule:", error);
-            showNotification(`Error updating tingly rule for ${provider.name}`, 'error');
-        }
+    const handleRefreshToken = () => {
+        setShowRefreshConfirmation(true);
     };
 
-    const handleProviderChange = async (provider: any) => {
-        // Called when user switches to a provider tab
-        // Fetch models for this provider using UUID
-        try {
-            // Check if already refreshing to avoid duplicate requests
-            if (refreshingProviders.includes(provider.uuid)) {
-                return;
-            }
-
-            // Add provider UUID to refreshing list
-            setRefreshingProviders(prev => [...prev, provider.uuid]);
-
-            const result = await api.getProviderModelsByUUID(provider.uuid);
-            if (result.success && result.data) {
-                // Update UUID-based mapping with the fetched models
-                setProviderModelsByUuid(prev => ({
-                    ...prev,
-                    [provider.uuid]: result.data,
-                }));
-            }
-            // Note: We don't show notification here to avoid spamming user on tab switch
-        } catch (error) {
-            console.error("Error fetching models on provider change:", error);
-        } finally {
-            // Remove provider UUID from refreshing list
-            setRefreshingProviders(prev => prev.filter(p => p !== provider.uuid));
-        }
+    const confirmRefreshToken = () => {
+        setShowRefreshConfirmation(false);
+        generateToken();
     };
 
-    const handleModelRefresh = async (provider: any) => {
-        try {
-            // Add provider UUID to refreshing list
-            setRefreshingProviders(prev => [...prev, provider.uuid]);
-
-            const result = await api.updateProviderModelsByUUID(provider.uuid);
-            if (result.success && result.data) {
-                // Update UUID-based mapping with the fetched models
-                setProviderModelsByUuid(prev => ({
-                    ...prev,
-                    [provider.uuid]: result.data,
-                }));
-                showNotification(`Models for ${provider.name} refreshed successfully!`, 'success');
-            } else {
-                showNotification(`Failed to refresh models for ${provider.name}.\nPlease check base_url and api_key.`, 'error');
-            }
-        } catch (error) {
-            console.error("Error refreshing models:", error);
-            showNotification(`Error refreshing models for ${provider.name}`, 'error');
-        } finally {
-            // Remove provider UUID from refreshing list
-            setRefreshingProviders(prev => prev.filter(p => p !== provider.uuid));
-        }
-    };
-
-    // Provider dialog handlers
+    // Add provider dialog handlers
     const handleAddProviderClick = () => {
         setProviderFormData({
             name: '',
@@ -374,14 +121,14 @@ const Home = () => {
         setAddDialogOpen(true);
     };
 
-    const handleEnhanceProviderFormChange = (field: keyof EnhancedProviderFormData, value: any) => {
+    const handleProviderFormChange = (field: keyof EnhancedProviderFormData, value: any) => {
         setProviderFormData(prev => ({
             ...prev,
             [field]: value,
         }));
     };
 
-    const handleAddProvider = async (e: React.FormEvent) => {
+    const handleAddProviderSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
         const providerData = {
@@ -403,211 +150,160 @@ const Home = () => {
             });
             setAddDialogOpen(false);
             await loadProviders();
-
-            // Automatically fetch models for the newly added provider
-            const newProvider = { name: providerData.name };
-            await handleModelRefresh(newProvider);
         } else {
             showNotification(`Failed to add provider: ${result.error}`, 'error');
         }
     };
 
-    const openaiBaseUrl = `${baseUrl}/openai`;
-    const anthropicBaseUrl = `${baseUrl}/anthropic`;
-    const token = generatedToken || apiKey;
+    useEffect(() => {
+        loadData();
+    }, []);
 
-    const ApiKeyModal = () => {
-        return (
-            <Dialog
-                open={showTokenModal}
-                onClose={() => setShowTokenModal(false)}
-                maxWidth="md"
-                fullWidth
+    const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
+        setActiveTab(newValue);
+    };
+
+    // Scroll to top when tab changes
+    useEffect(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, [activeTab]);
+
+    // Empty state component
+    const emptyState = (
+        <Box textAlign="center" py={8} width="100%">
+            <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={handleAddProviderClick}
+                size="large"
+                sx={{
+                    backgroundColor: 'primary.main',
+                    color: 'white',
+                    width: 80,
+                    height: 80,
+                    borderRadius: 2,
+                    mb: 3,
+                    '&:hover': {
+                        backgroundColor: 'primary.dark',
+                        transform: 'scale(1.05)',
+                    },
+                }}
             >
-                <DialogTitle>API Key</DialogTitle>
-                <DialogContent>
-                    <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                            Your authentication token:
-                        </Typography>
-                        <Box
-                            onClick={() => copyToClipboard(token, 'API Key')}
-                            sx={{
-                                p: 2,
-                                bgcolor: 'grey.100',
-                                borderRadius: 1,
-                                fontFamily: 'monospace',
-                                fontSize: '0.85rem',
-                                wordBreak: 'break-all',
-                                border: '1px solid',
-                                borderColor: 'grey.300',
-                                cursor: 'pointer',
-                                '&:hover': {
-                                    backgroundColor: 'grey.200',
-                                    borderColor: 'primary.main'
-                                },
-                                transition: 'all 0.2s ease-in-out',
-                                title: 'Click to copy token'
-                            }}
-                        >
-                            {token}
-                        </Box>
-                    </Box>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                        <Button
-                            variant="outlined"
-                            onClick={() => copyToClipboard(token, 'API Key')}
-                            startIcon={<CopyIcon fontSize="small" />}
-                        >
-                            Copy Token
-                        </Button>
-                    </Box>
-                </DialogContent>
-            </Dialog>
-
-        )
-    }
-
-    const Guiding = () => {
-        return (
-            <Box textAlign="center" py={8} width={"100%"}>
-                <IconButton
-                    size="large"
-                    onClick={handleAddProviderClick}
-                    sx={{
-                        backgroundColor: 'primary.main',
-                        color: 'white',
-                        width: 80,
-                        height: 80,
-                        mb: 3,
-                        '&:hover': {
-                            backgroundColor: 'primary.dark',
-                            transform: 'scale(1.05)',
-                        },
-                    }}
-                >
-                    <AddIcon sx={{ fontSize: 40 }} />
-                </IconButton>
-                <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>
-                    No API Keys Available
-                </Typography>
-                <Typography variant="body1" color="text.secondary"
-                    sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
-                    Get started by adding your first AI API Key.
-                    You can connect to OpenAI, Anthropic, or any compatible API endpoint.
-                </Typography>
-                <Typography variant="body2" color="text.secondary"
-                    sx={{ mb: 4, maxWidth: 400, mx: 'auto' }}>
-                    <strong>Steps to get started:</strong><br />
-                    1. Click the + button to add model api key<br />
-                    2. Select your preferred model
-                    3. Use tingly box model config to access
-                </Typography>
-                <Button
-                    variant="contained"
-                    startIcon={<AddIcon />}
-                    onClick={handleAddProviderClick}
-                    size="large"
-                >
-                    Add Your First API Key
-                </Button>
-            </Box>
-        )
-    }
+                <AddIcon sx={{ fontSize: 40 }} />
+            </Button>
+            <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>
+                No API Keys Available
+            </Typography>
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
+                Get started by adding your first AI API Key to use the service.
+            </Typography>
+            <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={handleAddProviderClick}
+                size="large"
+            >
+                Add Your First API Key
+            </Button>
+        </Box>
+    );
 
     return (
-        <PageLayout
-            loading={loading}
-            notification={notification}
-        >
-            <CardGrid>
-                {/* Server Information Header */}
-                <UnifiedCard
-                    title="Proxy Configs"
-                    size="header"
-                >
-                    <HomeHeader
-                        activeTab={activeTab}
-                        setActiveTab={setActiveTab}
-                        openaiBaseUrl={openaiBaseUrl}
-                        anthropicBaseUrl={anthropicBaseUrl}
-                        token={token}
-                        showTokenModal={showTokenModal}
-                        setShowTokenModal={setShowTokenModal}
-                        generateToken={generateToken}
-                        copyToClipboard={copyToClipboard}
+        <PageLayout notification={notification} loading={loading}>
+            {/* Main Tabs */}
+            <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+                <Tabs value={activeTab} onChange={handleTabChange} aria-label="Plugin tabs">
+                    <Tab
+                        icon={<OpenAI size={16} />}
+                        label="Use OpenAI"
+                        iconPosition="start"
                     />
-                </UnifiedCard>
+                    <Tab
+                        icon={<Anthropic size={16} />}
+                        label="Use Anthropic"
+                        iconPosition="start"
+                    />
+                    <Tab
+                        icon={<CodeIcon fontSize="small" />}
+                        label="Use Claude Code"
+                        iconPosition="start"
+                    />
+                </Tabs>
+            </Box>
 
-                <UnifiedCard
-                    title="Providers"
-                    size="full"
-                    rightAction={
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                            <Button
-                                variant="outlined"
-                                onClick={handleProbe}
-                                disabled={!selectedOption.provider || !selectedOption.model || isProbing}
-                                startIcon={<ProbeIcon />}
-                            >
-                                Test Connection
-                            </Button>
-                            <Button
-                                variant="contained"
-                                onClick={handleAddProviderClick}
-                            >
-                                Add API Key
-                            </Button>
-                        </Box>
-                    }
-                >
-
-                    {providers.length > 0 ? (
-                        <Stack spacing={3}>
-                            <ModelSelectTab
-                                providers={providers}
-                                providerModels={providerModelsByName}
-                                selectedProvider={selectedOption?.provider}
-                                selectedModel={selectedOption?.model}
-                                onSelected={(opt: ProviderSelectTabOption) => handleModelSelect(opt.provider, opt.model || "")}
-                                onProviderChange={handleProviderChange}
-                                onRefresh={handleModelRefresh}
-                                refreshingProviders={refreshingProviders}
-                            />
-
-                            {/* Probe Component - only show when provider and model are selected */}
-                            {selectedOption.provider && selectedOption.model && (
-                                <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                                    <Probe
-                                        provider={selectedOption.provider}
-                                        model={selectedOption.model}
-                                        isProbing={isProbing}
-                                        probeResult={probeResult}
-                                        onToggleDetails={() => setDetailsExpanded(!detailsExpanded)}
-                                        detailsExpanded={detailsExpanded}
-                                    />
-                                </Box>
-                            )}
-                        </Stack>
-                    ) : (
-                        <Guiding />
+            {/* Show empty state if no providers, otherwise show tab content */}
+            {!hasProviders ? (
+                emptyState
+            ) : (
+                <>
+                    {/* Tab Content */}
+                    {activeTab === 0 && (
+                        <UseOpenAIPage
+                            showTokenModal={showTokenModal}
+                            setShowTokenModal={setShowTokenModal}
+                            token={token}
+                            showNotification={showNotification}
+                            providers={providers}
+                        />
                     )}
-
-                </UnifiedCard>
-            </CardGrid>
-
-            {/* Token Modal */}
-            <ApiKeyModal />
+                    {activeTab === 1 && (
+                        <UseAnthropicPage
+                            showTokenModal={showTokenModal}
+                            setShowTokenModal={setShowTokenModal}
+                            token={token}
+                            showNotification={showNotification}
+                            providers={providers}
+                        />
+                    )}
+                    {activeTab === 2 && (
+                        <UseClaudeCodePage
+                            showTokenModal={showTokenModal}
+                            setShowTokenModal={setShowTokenModal}
+                            token={token}
+                            showNotification={showNotification}
+                            providers={providers}
+                        />
+                    )}
+                </>
+            )}
 
             {/* Add Provider Dialog */}
             <PresetProviderFormDialog
                 open={addDialogOpen}
                 onClose={() => setAddDialogOpen(false)}
-                onSubmit={handleAddProvider}
+                onSubmit={handleAddProviderSubmit}
                 data={providerFormData}
-                onChange={handleEnhanceProviderFormChange}
+                onChange={handleProviderFormChange}
                 mode="add"
             />
+
+            {/* Token Refresh Confirmation Dialog */}
+            <Dialog
+                open={showRefreshConfirmation}
+                onClose={() => setShowRefreshConfirmation(false)}
+                aria-labelledby="refresh-token-dialog-title"
+                aria-describedby="refresh-token-dialog-description"
+            >
+                <DialogTitle id="refresh-token-dialog-title">
+                    Confirm Token Refresh
+                </DialogTitle>
+                <DialogContent>
+                    <Alert severity="warning" sx={{ mb: 2 }}>
+                        Important Reminder
+                    </Alert>
+                    <DialogContentText id="refresh-token-dialog-description">
+                        Modifying the token will cause configured tools to become unavailable. Are you sure you want to continue generating a new token?
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setShowRefreshConfirmation(false)} color="primary">
+                        Cancel
+                    </Button>
+                    <Button onClick={confirmRefreshToken} color="error" variant="contained">
+                        Confirm Refresh
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </PageLayout>
     );
 };

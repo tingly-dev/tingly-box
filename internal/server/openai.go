@@ -14,15 +14,60 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// ListModels handles the /v1/models endpoint (OpenAI compatible)
-func (s *Server) ListModels(c *gin.Context) {
-	c.JSON(http.StatusInternalServerError, ErrorResponse{
-		Error: ErrorDetail{
-			Message: "Model manager not available",
-			Type:    "internal_error",
-		},
+// OpenAIListModels handles the /v1/models endpoint (OpenAI compatible)
+func (s *Server) OpenAIListModels(c *gin.Context) {
+	cfg := s.config
+	if cfg == nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Config not available",
+				Type:    "internal_error",
+			},
+		})
+		return
+	}
+
+	rules := cfg.GetRequestConfigs()
+
+	var models []OpenAIModel
+	for _, rule := range rules {
+		if !rule.Active {
+			continue
+		}
+
+		// Build description from rule's services
+		ownedBy := "tingly-box"
+		services := rule.GetServices()
+		if len(services) > 0 {
+			providerDesc := make([]string, 0, len(services))
+			for i := range services {
+				svc := &services[i]
+				if svc.Active {
+					provider, err := cfg.GetProviderByUUID(svc.Provider)
+					if err == nil {
+						providerDesc = append(providerDesc, provider.Name)
+					} else {
+						providerDesc = append(providerDesc, svc.Provider)
+					}
+				}
+			}
+			if len(providerDesc) > 0 {
+				ownedBy += " via " + fmt.Sprintf("%v", providerDesc)
+			}
+		}
+
+		models = append(models, OpenAIModel{
+			ID:      rule.RequestModel,
+			Object:  "model",
+			Created: 0,
+			OwnedBy: ownedBy,
+		})
+	}
+
+	c.JSON(http.StatusOK, OpenAIModelsResponse{
+		Object: "list",
+		Data:   models,
 	})
-	return
 }
 
 // OpenAIChatCompletions handles OpenAI v1 chat completion requests
@@ -75,6 +120,7 @@ func (s *Server) ChatCompletions(c *gin.Context) {
 	}
 
 	// Validate
+	proxyModel := req.Model
 	if req.Model == "" {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -113,7 +159,8 @@ func (s *Server) ChatCompletions(c *gin.Context) {
 	}
 
 	actualModel := selectedService.Model
-	responseModel := rule.ResponseModel
+	// FIXME: response as proxy / request
+	responseModel := proxyModel
 	req.Model = actualModel
 
 	// Set provider UUID in context (Service.Provider uses UUID, not name)
@@ -174,12 +221,12 @@ func (s *Server) ChatCompletions(c *gin.Context) {
 		openaiResp := adaptor.ConvertAnthropicResponseToOpenAI(anthropicResp, responseModel)
 		c.JSON(http.StatusOK, openaiResp)
 		return
-	}
-
-	if isStreaming {
-		s.handleStreamingRequest(c, provider, &req, responseModel)
 	} else {
-		s.handleNonStreamingRequest(c, provider, &req, responseModel)
+		if isStreaming {
+			s.handleStreamingRequest(c, provider, &req, responseModel)
+		} else {
+			s.handleNonStreamingRequest(c, provider, &req, responseModel)
+		}
 	}
 }
 

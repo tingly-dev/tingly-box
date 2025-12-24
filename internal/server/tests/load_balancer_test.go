@@ -788,7 +788,7 @@ func TestLoadBalancerFunctionality(t *testing.T) {
 
 	// Test that the rule was created correctly
 	t.Run("VerifyRuleCreation", func(t *testing.T) {
-		retrievedRule := ts.appConfig.GetGlobalConfig().GetRequestConfigByRequestModel(testRule.UUID)
+		retrievedRule := ts.appConfig.GetGlobalConfig().GetRuleByUUID(testRule.UUID)
 		assert.NotNil(t, retrievedRule)
 		assert.Equal(t, "tingly", retrievedRule.RequestModel)
 		assert.Equal(t, 2, len(retrievedRule.GetServices()))
@@ -803,7 +803,7 @@ func TestLoadBalancerFunctionality(t *testing.T) {
 			return
 		}
 
-		rule := ts.appConfig.GetGlobalConfig().GetRequestConfigByRequestModel(testRule.UUID)
+		rule := ts.appConfig.GetGlobalConfig().GetRuleByUUID(testRule.UUID)
 		assert.NotNil(t, rule)
 
 		// Test multiple selections to verify round-robin

@@ -383,11 +383,11 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 	//	swagger.WithResponseModel(ProviderResponse{}),
 	//)
 	//
-	//apiV1.POST("/providers", s.AddProvider,
+	//apiV1.POST("/providers", s.CreateProvider,
 	//	swagger.WithDescription("Add a new provider configuration"),
 	//	swagger.WithTags("providers"),
-	//	swagger.WithRequestModel(AddProviderRequest{}),
-	//	swagger.WithResponseModel(AddProviderResponse{}),
+	//	swagger.WithRequestModel(CreateProviderRequest{}),
+	//	swagger.WithResponseModel(CreateProviderResponse{}),
 	//)
 	//
 	//apiV1.PUT("/providers/:name", s.UpdateProvider,
@@ -443,11 +443,18 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 		swagger.WithResponseModel(RuleResponse{}),
 	)
 
-	apiV1.POST("/rule/:uuid", s.SetRule,
+	apiV1.POST("/rule/:uuid", s.UpdateRule,
 		swagger.WithDescription("Create or update a rule configuration"),
 		swagger.WithTags("rules"),
-		swagger.WithRequestModel(SetRuleRequest{}),
-		swagger.WithResponseModel(SetRuleResponse{}),
+		swagger.WithRequestModel(UpdateRuleRequest{}),
+		swagger.WithResponseModel(UpdateRuleResponse{}),
+	)
+
+	apiV1.POST("/rule", s.CreateRule,
+		swagger.WithDescription("Create or update a rule configuration"),
+		swagger.WithTags("rules"),
+		swagger.WithRequestModel(CreateRuleRequest{}),
+		swagger.WithResponseModel(UpdateRuleResponse{}),
 	)
 
 	apiV1.DELETE("/rule/:uuid", s.DeleteRule,
@@ -530,11 +537,11 @@ func useV2Provider(s *Server, api *swagger.RouteGroup) {
 		swagger.WithResponseModel(ProviderResponse{}),
 	)
 
-	api.POST("/providers", s.AddProvider,
-		swagger.WithDescription("Add a new provider configuration"),
+	api.POST("/providers", s.CreateProvider,
+		swagger.WithDescription("Create a new provider configuration"),
 		swagger.WithTags("providers"),
-		swagger.WithRequestModel(AddProviderRequest{}),
-		swagger.WithResponseModel(AddProviderResponse{}),
+		swagger.WithRequestModel(CreateProviderRequest{}),
+		swagger.WithResponseModel(CreateProviderResponse{}),
 	)
 
 	api.PUT("/providers/:uuid", s.UpdateProvider,
