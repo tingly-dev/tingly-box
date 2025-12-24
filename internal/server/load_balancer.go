@@ -191,7 +191,14 @@ func (lb *LoadBalancer) ClearAllStats() {
 		stats.ResetWindow()
 	}
 
-	// Also clear stats from all rules in the config and persist
+	// Clear persisted stats from the dedicated stats store
+	if lb.config != nil {
+		if store := lb.config.GetStatsStore(); store != nil {
+			_ = store.ClearAll()
+		}
+	}
+
+	// Also clear stats from all rules in memory
 	if lb.config != nil {
 		rules := lb.config.GetRequestConfigs()
 		for ruleIdx, rule := range rules {
@@ -215,7 +222,7 @@ func (lb *LoadBalancer) ClearAllStats() {
 				modified = true
 			}
 			if modified {
-				lb.config.UpdateRequestConfigAt(ruleIdx, rule)
+				rules[ruleIdx] = rule
 			}
 		}
 	}

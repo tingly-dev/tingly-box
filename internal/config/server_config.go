@@ -41,6 +41,7 @@ type Config struct {
 	ConfigDir  string `yaml:"-" json:"-"`
 
 	modelManager *ModelListManager
+	statsStore   *StatsStore
 
 	mu sync.RWMutex
 }
@@ -76,6 +77,13 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 		ConfigDir:  configDir,
 	}
 
+	// Initialize stats store before loading config so load can hydrate runtime stats
+	statsStore, err := NewStatsStore(filepath.Join(configDir, StateDirName))
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize stats store: %w", err)
+	}
+	cfg.statsStore = statsStore
+
 	// Load existing cfg if exists
 	if err := cfg.load(); err != nil {
 		// If file doesn't exist, create default cfg
@@ -93,6 +101,11 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 
 	cfg.InsertDefaultRule()
 	cfg.save()
+
+	// Hydrate stats from the store and migrate any embedded stats
+	if err := cfg.refreshStatsFromStore(); err != nil {
+		return nil, fmt.Errorf("failed to refresh stats store: %w", err)
+	}
 
 	// Ensure tokens exist even for existing configs
 	updated := false
@@ -166,7 +179,7 @@ func (c *Config) load() error {
 	c.migrateRules()
 	c.migrateProviders()
 
-	return nil
+	return c.refreshStatsFromStore()
 }
 
 // save saves the global configuration to file
@@ -174,12 +187,99 @@ func (c *Config) save() error {
 	if c.ConfigFile == "" {
 		return fmt.Errorf("ConfigFile is empty")
 	}
-	data, err := json.MarshalIndent(c, "", "  ")
+	data, err := c.marshalWithoutRuntime()
 	if err != nil {
 		return err
 	}
+	err = os.WriteFile(c.ConfigFile, data, 0644)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
-	return os.WriteFile(c.ConfigFile, data, 0644)
+// marshalWithoutRuntime produces a config JSON payload without runtime-only fields like stats.
+func (c *Config) marshalWithoutRuntime() ([]byte, error) {
+	persistable := c.persistableCopy()
+	return json.MarshalIndent(persistable, "", "  ")
+}
+
+// persistableCopy clones the config while stripping runtime-only fields prior to persistence.
+// NOTE: Must be called while holding the config mutex (either RLock or Lock).
+// This method does NOT acquire a lock itself to avoid deadlock when called from save()
+// which is already called from methods holding a write lock.
+func (c *Config) persistableCopy() *Config {
+	// Don't acquire lock here - caller must already hold it to avoid deadlock
+	// This is called from save() which is always called from methods that already hold the lock
+	copyCfg := *c
+	// Remove runtime-only pointers from the copy
+	copyCfg.modelManager = nil
+	copyCfg.statsStore = nil
+
+	// Deep copy rules and strip stats
+	if len(c.Rules) > 0 {
+		copyCfg.Rules = make([]Rule, len(c.Rules))
+		for i, rule := range c.Rules {
+			copyCfg.Rules[i] = rule
+			if len(rule.Services) > 0 {
+				copyCfg.Rules[i].Services = make([]Service, len(rule.Services))
+				for j, service := range rule.Services {
+					service.Stats = ServiceStats{}
+					copyCfg.Rules[i].Services[j] = service
+				}
+			}
+		}
+	}
+
+	return &copyCfg
+}
+
+// refreshStatsFromStore migrates any embedded stats into the stats store and hydrates services.
+func (c *Config) refreshStatsFromStore() error {
+	if c.statsStore == nil {
+		return nil
+	}
+
+	if err := c.migrateEmbeddedStatsToStore(); err != nil {
+		return err
+	}
+
+	return c.statsStore.HydrateRules(c.Rules)
+}
+
+// migrateEmbeddedStatsToStore moves legacy embedded stats into the dedicated stats store.
+func (c *Config) migrateEmbeddedStatsToStore() error {
+	if c.statsStore == nil {
+		return nil
+	}
+
+	for i := range c.Rules {
+		rule := &c.Rules[i]
+		for j := range rule.Services {
+			service := &rule.Services[j]
+			if hasStatsData(&service.Stats) {
+				if err := c.statsStore.UpsertFromService(rule.UUID, service); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func hasStatsData(stat *ServiceStats) bool {
+	if stat == nil {
+		return false
+	}
+
+	return stat.RequestCount != 0 ||
+		stat.WindowRequestCount != 0 ||
+		stat.WindowTokensConsumed != 0 ||
+		stat.WindowInputTokens != 0 ||
+		stat.WindowOutputTokens != 0 ||
+		!stat.LastUsed.IsZero() ||
+		!stat.WindowStart.IsZero()
 }
 
 // AddRule updates the default Rule
@@ -481,6 +581,14 @@ func (c *Config) GetModelToken() string {
 	defer c.mu.RUnlock()
 
 	return c.ModelToken
+}
+
+// GetStatsStore returns the dedicated stats store (may be nil in tests).
+func (c *Config) GetStatsStore() *StatsStore {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.statsStore
 }
 
 // HasModelToken checks if a model token is configured
