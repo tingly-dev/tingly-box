@@ -29,18 +29,18 @@ type (
 	AnthropicMessagesResponse = anthropic.Message
 	AnthropicUsage            = anthropic.Usage
 
-	// Model types - SDK doesn't provide a models list, so we define our own
+	// Model types - based on Anthropic's official models API format
 	AnthropicModel struct {
-		ID           string   `json:"id"`
-		Object       string   `json:"object"`
-		Created      int64    `json:"created"`
-		DisplayName  string   `json:"display_name"`
-		Type         string   `json:"type"`
-		MaxTokens    int      `json:"max_tokens"`
-		Capabilities []string `json:"capabilities"`
+		ID          string `json:"id"`
+		CreatedAt   string `json:"created_at"`
+		DisplayName string `json:"display_name"`
+		Type        string `json:"type"`
 	}
 	AnthropicModelsResponse struct {
-		Data []AnthropicModel `json:"data"`
+		Data    []AnthropicModel `json:"data"`
+		FirstID string           `json:"first_id"`
+		HasMore bool             `json:"has_more"`
+		LastID  string           `json:"last_id"`
 	}
 )
 
@@ -90,8 +90,8 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 	}
 
 	// Get model from request
-	model := string(req.Model)
-	if model == "" {
+	proxyModel := string(req.Model)
+	if proxyModel == "" {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Model is required",
@@ -102,7 +102,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 	}
 
 	// Determine provider and model based on request
-	provider, selectedService, rule, err := s.DetermineProviderAndModel(model)
+	provider, selectedService, rule, err := s.DetermineProviderAndModel(proxyModel)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -150,7 +150,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 				return
 			}
 			// Handle the streaming response
-			s.handleAnthropicStreamResponse(c, stream)
+			s.handleAnthropicStreamResponse(c, stream, proxyModel)
 		} else {
 			// Handle non-streaming request
 			anthropicResp, err := s.forwardAnthropicRequest(provider, req)
@@ -163,6 +163,8 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 				})
 				return
 			}
+			// FIXME: now we use req model as resp model
+			anthropicResp.Model = anthropic.Model(proxyModel)
 			c.JSON(http.StatusOK, anthropicResp)
 		}
 		return
@@ -198,21 +200,73 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 				return
 			}
 			// Convert OpenAI response back to Anthropic format
-			anthropicResp := adaptor.ConvertOpenAIToAnthropic(response, model)
+			anthropicResp := adaptor.ConvertOpenAIToAnthropic(response, proxyModel)
 			c.JSON(http.StatusOK, anthropicResp)
 		}
 	}
 }
 
-// AnthropicModels handles Anthropic v1 models endpoint
-func (s *Server) AnthropicModels(c *gin.Context) {
-	c.JSON(http.StatusInternalServerError, ErrorResponse{
-		Error: ErrorDetail{
-			Message: "Model manager not available",
-			Type:    "internal_error",
-		},
+// AnthropicListModels handles Anthropic v1 models endpoint
+func (s *Server) AnthropicListModels(c *gin.Context) {
+	cfg := s.config
+	if cfg == nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Config not available",
+				Type:    "internal_error",
+			},
+		})
+		return
+	}
+
+	rules := cfg.GetRequestConfigs()
+
+	var models []AnthropicModel
+	for _, rule := range rules {
+		if !rule.Active {
+			continue
+		}
+
+		// Build display name with provider info
+		displayName := rule.RequestModel
+		services := rule.GetServices()
+		if len(services) > 0 {
+			providerNames := make([]string, 0, len(services))
+			for i := range services {
+				svc := &services[i]
+				if svc.Active {
+					provider, err := cfg.GetProviderByUUID(svc.Provider)
+					if err == nil {
+						providerNames = append(providerNames, provider.Name)
+					}
+				}
+			}
+			if len(providerNames) > 0 {
+				displayName += fmt.Sprintf(" (via %v)", providerNames)
+			}
+		}
+
+		models = append(models, AnthropicModel{
+			ID:          rule.RequestModel,
+			CreatedAt:   "2024-01-01T00:00:00Z",
+			DisplayName: displayName,
+			Type:        "model",
+		})
+	}
+
+	firstID := ""
+	lastID := ""
+	if len(models) > 0 {
+		firstID = models[0].ID
+		lastID = models[len(models)-1].ID
+	}
+
+	c.JSON(http.StatusOK, AnthropicModelsResponse{
+		Data:    models,
+		FirstID: firstID,
+		HasMore: false,
+		LastID:  lastID,
 	})
-	return
 }
 
 // AnthropicCountTokens handles Anthropic v1 count_tokens endpoint
@@ -451,7 +505,7 @@ func (s *Server) forwardAnthropicStreamRequest(provider *config.Provider, req an
 }
 
 // handleAnthropicStreamResponse processes the Anthropic streaming response and sends it to the client
-func (s *Server) handleAnthropicStreamResponse(c *gin.Context, stream *ssestream.Stream[anthropic.MessageStreamEventUnion]) {
+func (s *Server) handleAnthropicStreamResponse(c *gin.Context, stream *ssestream.Stream[anthropic.MessageStreamEventUnion], model string) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("Panic in Anthropic streaming handler: %v", r)
@@ -495,6 +549,8 @@ func (s *Server) handleAnthropicStreamResponse(c *gin.Context, stream *ssestream
 	// Process the stream
 	for stream.Next() {
 		event := stream.Current()
+
+		event.Message.Model = anthropic.Model(model)
 
 		// Convert the event to JSON
 		eventJSON, err := json.Marshal(event)

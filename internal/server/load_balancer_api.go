@@ -51,7 +51,7 @@ func (api *LoadBalancerAPI) RegisterRoutes(router *gin.RouterGroup) {
 func (api *LoadBalancerAPI) GetRule(c *gin.Context) {
 	ruleId := c.Param("ruleId")
 
-	rule := api.config.GetRequestConfigByRequestModel(ruleId)
+	rule := api.config.GetRuleByUUID(ruleId)
 	if rule == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
 		return
@@ -64,7 +64,7 @@ func (api *LoadBalancerAPI) GetRule(c *gin.Context) {
 func (api *LoadBalancerAPI) GetRuleSummary(c *gin.Context) {
 	ruleId := c.Param("ruleId")
 
-	rule := api.config.GetRequestConfigByRequestModel(ruleId)
+	rule := api.config.GetRuleByUUID(ruleId)
 	if rule == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
 		return
@@ -88,7 +88,7 @@ func (api *LoadBalancerAPI) UpdateRuleTactic(c *gin.Context) {
 		return
 	}
 
-	rule := api.config.GetRequestConfigByRequestModel(ruleId)
+	rule := api.config.GetRuleByUUID(ruleId)
 	if rule == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
 		return
@@ -115,7 +115,7 @@ func (api *LoadBalancerAPI) UpdateRuleTactic(c *gin.Context) {
 func (api *LoadBalancerAPI) GetRuleStats(c *gin.Context) {
 	ruleId := c.Param("ruleId")
 
-	rule := api.config.GetRequestConfigByRequestModel(ruleId)
+	rule := api.config.GetRuleByUUID(ruleId)
 	if rule == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
 		return
@@ -138,7 +138,7 @@ func (api *LoadBalancerAPI) GetRuleStats(c *gin.Context) {
 func (api *LoadBalancerAPI) ClearRuleStats(c *gin.Context) {
 	ruleId := c.Param("ruleId")
 
-	rule := api.config.GetRequestConfigByRequestModel(ruleId)
+	rule := api.config.GetRuleByUUID(ruleId)
 	if rule == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
 		return
@@ -158,7 +158,7 @@ func (api *LoadBalancerAPI) GetServiceStats(c *gin.Context) {
 	serviceId := c.Param("serviceId")
 
 	// Validate that the service belongs to the rule
-	rule := api.config.GetRequestConfigByRequestModel(ruleId)
+	rule := api.config.GetRuleByUUID(ruleId)
 	if rule == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
 		return
@@ -193,7 +193,7 @@ func (api *LoadBalancerAPI) ClearServiceStats(c *gin.Context) {
 	serviceId := c.Param("serviceId")
 
 	// Validate that the service belongs to the rule
-	rule := api.config.GetRequestConfigByRequestModel(ruleId)
+	rule := api.config.GetRuleByUUID(ruleId)
 	if rule == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
 		return
@@ -233,7 +233,7 @@ func (api *LoadBalancerAPI) ClearAllStats(c *gin.Context) {
 func (api *LoadBalancerAPI) GetCurrentService(c *gin.Context) {
 	ruleId := c.Param("ruleId")
 
-	rule := api.config.GetRequestConfigByRequestModel(ruleId)
+	rule := api.config.GetRuleByUUID(ruleId)
 	if rule == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
 		return
@@ -271,7 +271,7 @@ func (api *LoadBalancerAPI) GetCurrentService(c *gin.Context) {
 func (api *LoadBalancerAPI) GetServiceHealth(c *gin.Context) {
 	ruleId := c.Param("ruleId")
 
-	rule := api.config.GetRequestConfigByRequestModel(ruleId)
+	rule := api.config.GetRuleByUUID(ruleId)
 	if rule == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
 		return

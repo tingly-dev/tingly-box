@@ -276,6 +276,40 @@
         }
       }
     },
+    "/api/v1/rule": {
+      "post": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "Create or update a rule configuration",
+        "description": "Create or update a rule configuration",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "request",
+            "in": "body",
+            "description": "Request body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/CreateRuleRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/UpdateRuleResponse"
+            }
+          }
+        }
+      }
+    },
     "/api/v1/rule/{uuid}": {
       "get": {
         "tags": [
@@ -335,7 +369,7 @@
             "description": "Request body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/SetRuleRequest"
+              "$ref": "#/definitions/UpdateRuleRequest"
             }
           }
         ],
@@ -343,7 +377,7 @@
           "200": {
             "description": "Successful response",
             "schema": {
-              "$ref": "#/definitions/SetRuleResponse"
+              "$ref": "#/definitions/UpdateRuleResponse"
             }
           }
         }
@@ -576,8 +610,8 @@
         "tags": [
           "providers"
         ],
-        "summary": "Add a new provider configuration",
-        "description": "Add a new provider configuration",
+        "summary": "Create a new provider configuration",
+        "description": "Create a new provider configuration",
         "consumes": [
           "application/json"
         ],
@@ -591,7 +625,7 @@
             "description": "Request body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/AddProviderRequest"
+              "$ref": "#/definitions/CreateProviderRequest"
             }
           }
         ],
@@ -599,7 +633,7 @@
           "200": {
             "description": "Successful response",
             "schema": {
-              "$ref": "#/definitions/AddProviderResponse"
+              "$ref": "#/definitions/CreateProviderResponse"
             }
           }
         }
@@ -744,7 +778,44 @@
     }
   },
   "definitions": {
-    "AddProviderRequest": {
+    "ConfigInfo": {
+      "type": "object",
+      "properties": {
+        "config_dir": {
+          "type": "string",
+          "description": "Field config_dir",
+          "example": "/Users/user/.tingly-box"
+        },
+        "config_path": {
+          "type": "string",
+          "description": "Field config_path",
+          "example": "/Users/user/.tingly-box/config.json"
+        }
+      },
+      "required": [
+        "config_path",
+        "config_dir"
+      ]
+    },
+    "ConfigInfoResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "description": "Field data",
+          "$ref": "#/definitions/ConfigInfo"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    },
+    "CreateProviderRequest": {
       "type": "object",
       "properties": {
         "api_base": {
@@ -781,7 +852,7 @@
         "enabled"
       ]
     },
-    "AddProviderResponse": {
+    "CreateProviderResponse": {
       "type": "object",
       "properties": {
         "data": {
@@ -805,41 +876,67 @@
         "data"
       ]
     },
-    "ConfigInfo": {
+    "CreateRuleRequest": {
       "type": "object",
       "properties": {
-        "config_dir": {
-          "type": "string",
-          "description": "Field config_dir",
-          "example": "/Users/user/.tingly-box"
-        },
-        "config_path": {
-          "type": "string",
-          "description": "Field config_path",
-          "example": "/Users/user/.tingly-box/config.json"
-        }
-      },
-      "required": [
-        "config_path",
-        "config_dir"
-      ]
-    },
-    "ConfigInfoResponse": {
-      "type": "object",
-      "properties": {
-        "data": {
-          "description": "Field data",
-          "$ref": "#/definitions/ConfigInfo"
-        },
-        "success": {
+        "active": {
           "type": "boolean",
-          "description": "Field success",
-          "example": true
+          "description": "Field active"
+        },
+        "current_service_index": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field current_service_index"
+        },
+        "description": {
+          "type": "string",
+          "description": "Field description"
+        },
+        "lb_tactic": {
+          "description": "Field lb_tactic",
+          "$ref": "#/definitions/Tactic"
+        },
+        "request_model": {
+          "type": "string",
+          "description": "Field request_model"
+        },
+        "response_model": {
+          "type": "string",
+          "description": "Field response_model"
+        },
+        "services": {
+          "type": "array",
+          "description": "Field services",
+          "items": {
+            "$ref": "#/definitions/Service"
+          }
+        },
+        "tactic": {
+          "type": "string",
+          "description": "Field tactic"
+        },
+        "tactic_params": {
+          "type": "object",
+          "description": "Field tactic_params",
+          "additionalProperties": {
+            "type": "object"
+          }
+        },
+        "uuid": {
+          "type": "string",
+          "description": "Field uuid"
         }
       },
       "required": [
-        "success",
-        "data"
+        "uuid",
+        "request_model",
+        "response_model",
+        "description",
+        "services",
+        "current_service_index",
+        "lb_tactic",
+        "active",
+        "tactic"
       ]
     },
     "DeleteProviderResponse": {
@@ -1526,117 +1623,6 @@
         "time_window"
       ]
     },
-    "SetRuleRequest": {
-      "type": "object",
-      "properties": {
-        "active": {
-          "type": "boolean",
-          "description": "Field active"
-        },
-        "current_service_index": {
-          "type": "integer",
-          "format": "int64",
-          "description": "Field current_service_index"
-        },
-        "lb_tactic": {
-          "description": "Field lb_tactic",
-          "$ref": "#/definitions/Tactic"
-        },
-        "request_model": {
-          "type": "string",
-          "description": "Field request_model"
-        },
-        "response_model": {
-          "type": "string",
-          "description": "Field response_model"
-        },
-        "services": {
-          "type": "array",
-          "description": "Field services",
-          "items": {
-            "$ref": "#/definitions/Service"
-          }
-        },
-        "tactic": {
-          "type": "string",
-          "description": "Field tactic"
-        },
-        "tactic_params": {
-          "type": "object",
-          "description": "Field tactic_params",
-          "additionalProperties": {
-            "type": "object"
-          }
-        },
-        "uuid": {
-          "type": "string",
-          "description": "Field uuid"
-        }
-      },
-      "required": [
-        "uuid",
-        "request_model",
-        "response_model",
-        "services",
-        "current_service_index",
-        "lb_tactic",
-        "active",
-        "tactic"
-      ]
-    },
-    "SetRuleResponse": {
-      "type": "object",
-      "properties": {
-        "data": {
-          "type": "object",
-          "description": "Field data",
-          "properties": {
-            "active": {
-              "type": "boolean",
-              "description": "Field active"
-            },
-            "default_model": {
-              "type": "string",
-              "description": "Field default_model"
-            },
-            "provider": {
-              "type": "string",
-              "description": "Field provider"
-            },
-            "request_model": {
-              "type": "string",
-              "description": "Field request_model"
-            },
-            "response_model": {
-              "type": "string",
-              "description": "Field response_model"
-            }
-          },
-          "required": [
-            "request_model",
-            "response_model",
-            "provider",
-            "default_model",
-            "active"
-          ]
-        },
-        "message": {
-          "type": "string",
-          "description": "Field message",
-          "example": "Rule saved successfully"
-        },
-        "success": {
-          "type": "boolean",
-          "description": "Field success",
-          "example": true
-        }
-      },
-      "required": [
-        "success",
-        "message",
-        "data"
-      ]
-    },
     "StatusResponse": {
       "type": "object",
       "properties": {
@@ -1807,6 +1793,127 @@
         "data"
       ]
     },
+    "UpdateRuleRequest": {
+      "type": "object",
+      "properties": {
+        "active": {
+          "type": "boolean",
+          "description": "Field active"
+        },
+        "current_service_index": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field current_service_index"
+        },
+        "description": {
+          "type": "string",
+          "description": "Field description"
+        },
+        "lb_tactic": {
+          "description": "Field lb_tactic",
+          "$ref": "#/definitions/Tactic"
+        },
+        "request_model": {
+          "type": "string",
+          "description": "Field request_model"
+        },
+        "response_model": {
+          "type": "string",
+          "description": "Field response_model"
+        },
+        "services": {
+          "type": "array",
+          "description": "Field services",
+          "items": {
+            "$ref": "#/definitions/Service"
+          }
+        },
+        "tactic": {
+          "type": "string",
+          "description": "Field tactic"
+        },
+        "tactic_params": {
+          "type": "object",
+          "description": "Field tactic_params",
+          "additionalProperties": {
+            "type": "object"
+          }
+        },
+        "uuid": {
+          "type": "string",
+          "description": "Field uuid"
+        }
+      },
+      "required": [
+        "uuid",
+        "request_model",
+        "response_model",
+        "description",
+        "services",
+        "current_service_index",
+        "lb_tactic",
+        "active",
+        "tactic"
+      ]
+    },
+    "UpdateRuleResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "description": "Field data",
+          "properties": {
+            "active": {
+              "type": "boolean",
+              "description": "Field active"
+            },
+            "default_model": {
+              "type": "string",
+              "description": "Field default_model"
+            },
+            "provider": {
+              "type": "string",
+              "description": "Field provider"
+            },
+            "request_model": {
+              "type": "string",
+              "description": "Field request_model"
+            },
+            "response_model": {
+              "type": "string",
+              "description": "Field response_model"
+            },
+            "uuid": {
+              "type": "string",
+              "description": "Field uuid"
+            }
+          },
+          "required": [
+            "uuid",
+            "request_model",
+            "response_model",
+            "provider",
+            "default_model",
+            "active"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "description": "Field message",
+          "example": "Rule saved successfully"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "message",
+        "data"
+      ]
+    },
     "VersionInfo": {
       "type": "object",
       "properties": {
@@ -1859,12 +1966,16 @@
       "description": "Operations related to providers"
     },
     {
-      "name": "info",
-      "description": "Operations related to info"
+      "name": "history",
+      "description": "Operations related to history"
     },
     {
-      "name": "token",
-      "description": "Operations related to token"
+      "name": "testing",
+      "description": "Operations related to testing"
+    },
+    {
+      "name": "info",
+      "description": "Operations related to info"
     },
     {
       "name": "server",
@@ -1875,16 +1986,12 @@
       "description": "Operations related to rules"
     },
     {
-      "name": "history",
-      "description": "Operations related to history"
-    },
-    {
       "name": "models",
       "description": "Operations related to models"
     },
     {
-      "name": "testing",
-      "description": "Operations related to testing"
+      "name": "token",
+      "description": "Operations related to token"
     }
   ]
 }

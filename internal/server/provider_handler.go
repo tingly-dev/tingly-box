@@ -35,9 +35,9 @@ func (s *Server) GetProviders(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// AddProvider adds a new provider
-func (s *Server) AddProvider(c *gin.Context) {
-	var req AddProviderRequest
+// CreateProvider adds a new provider
+func (s *Server) CreateProvider(c *gin.Context) {
+	var req CreateProviderRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -69,7 +69,7 @@ func (s *Server) AddProvider(c *gin.Context) {
 
 	uid, err := uuid.NewUUID()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, AddProviderResponse{
+		c.JSON(http.StatusInternalServerError, CreateProviderResponse{
 			Success: false,
 			Message: "Provider UUID generate failed: " + err.Error(),
 		})
@@ -110,7 +110,7 @@ func (s *Server) AddProvider(c *gin.Context) {
 		}, true, fmt.Sprintf("Provider %s added successfully", req.Name))
 	}
 
-	response := AddProviderResponse{
+	response := CreateProviderResponse{
 		Success: true,
 		Message: "Provider added successfully",
 		Data:    provider,

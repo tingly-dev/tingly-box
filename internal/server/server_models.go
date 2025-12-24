@@ -229,14 +229,17 @@ type RulesResponse struct {
 	Data    interface{} `json:"data"`
 }
 
-// SetRuleRequest represents the request to set/update a rule
-type SetRuleRequest config.Rule
+type CreateRuleRequest config.Rule
 
-// SetRuleResponse represents the response for setting/updating a rule
-type SetRuleResponse struct {
+// UpdateRuleRequest represents the request to set/update a rule
+type UpdateRuleRequest config.Rule
+
+// UpdateRuleResponse represents the response for setting/updating a rule
+type UpdateRuleResponse struct {
 	Success bool   `json:"success" example:"true"`
 	Message string `json:"message" example:"Rule saved successfully"`
 	Data    struct {
+		UUID          string `json:"uuid"`
 		RequestModel  string `json:"request_model" example:"gpt-3.5-turbo"`
 		ResponseModel string `json:"response_model" example:"gpt-3.5-turbo"`
 		Provider      string `json:"provider" example:"openai"`
@@ -251,8 +254,8 @@ type DeleteRuleResponse struct {
 	Message string `json:"message" example:"Rule deleted successfully"`
 }
 
-// AddProviderRequest represents the request to add a new provider
-type AddProviderRequest struct {
+// CreateProviderRequest represents the request to add a new provider
+type CreateProviderRequest struct {
 	Name     string `json:"name" binding:"required" description:"Provider name" example:"openai"`
 	APIBase  string `json:"api_base" binding:"required" description:"API base URL" example:"https://api.openai.com/v1"`
 	APIStyle string `json:"api_style" description:"API style" example:"openai"`
@@ -260,8 +263,8 @@ type AddProviderRequest struct {
 	Enabled  bool   `json:"enabled" description:"Whether provider is enabled" example:"true"`
 }
 
-// AddProviderResponse represents the response for adding a provider
-type AddProviderResponse struct {
+// CreateProviderResponse represents the response for adding a provider
+type CreateProviderResponse struct {
 	Success bool        `json:"success" example:"true"`
 	Message string      `json:"message" example:"Provider added successfully"`
 	Data    interface{} `json:"data"`
@@ -325,6 +328,20 @@ type FetchProviderModelsResponse struct {
 	Success bool        `json:"success" example:"true"`
 	Message string      `json:"message" example:"Successfully fetched 150 models for provider openai"`
 	Data    interface{} `json:"data"`
+}
+
+// OpenAIModel represents a model in OpenAI's models API format
+type OpenAIModel struct {
+	ID      string `json:"id"`
+	Object  string `json:"object"`
+	Created int64  `json:"created"`
+	OwnedBy string `json:"owned_by"`
+}
+
+// OpenAIModelsResponse represents OpenAI's models API response format
+type OpenAIModelsResponse struct {
+	Object string        `json:"object"`
+	Data   []OpenAIModel `json:"data"`
 }
 
 // =============================================
