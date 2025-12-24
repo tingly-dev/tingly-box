@@ -67,8 +67,8 @@ func (s *Server) GetRule(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// SetRule creates or updates a rule
-func (s *Server) SetRule(c *gin.Context) {
+// UpdateRule creates or updates a rule
+func (s *Server) UpdateRule(c *gin.Context) {
 	ruleUUID := c.Param("uuid")
 	if ruleUUID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -97,7 +97,7 @@ func (s *Server) SetRule(c *gin.Context) {
 		return
 	}
 
-	if err := cfg.SetDefaultRequestConfig(rule); err != nil {
+	if err := cfg.AddRule(rule); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Failed to save rule: " + err.Error(),
@@ -112,7 +112,7 @@ func (s *Server) SetRule(c *gin.Context) {
 		}, true, fmt.Sprintf("Rule %s updated successfully", ruleUUID))
 	}
 
-	response := SetRuleResponse{
+	response := UpdateRuleResponse{
 		Success: true,
 		Message: "Rule saved successfully",
 	}

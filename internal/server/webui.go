@@ -443,11 +443,11 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 		swagger.WithResponseModel(RuleResponse{}),
 	)
 
-	apiV1.POST("/rule/:uuid", s.SetRule,
+	apiV1.POST("/rule/:uuid", s.UpdateRule,
 		swagger.WithDescription("Create or update a rule configuration"),
 		swagger.WithTags("rules"),
-		swagger.WithRequestModel(SetRuleRequest{}),
-		swagger.WithResponseModel(SetRuleResponse{}),
+		swagger.WithRequestModel(UpdateRuleRequest{}),
+		swagger.WithResponseModel(UpdateRuleResponse{}),
 	)
 
 	apiV1.DELETE("/rule/:uuid", s.DeleteRule,
