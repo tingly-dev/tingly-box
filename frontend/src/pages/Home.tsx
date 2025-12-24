@@ -8,14 +8,17 @@ import {
     DialogContentText,
     DialogTitle,
     Tab,
-    Tabs
+    Tabs,
+    Typography
 } from '@mui/material';
 import React, { useEffect, useState } from 'react';
 import { OpenAI, Anthropic } from '@lobehub/icons';
-import TerminalIcon from '@mui/icons-material/Terminal';
 import CodeIcon from '@mui/icons-material/Code';
+import { Add as AddIcon } from '@mui/icons-material';
 import { PageLayout } from '../components/PageLayout';
-import { api, getBaseUrl } from '../services/api';
+import PresetProviderFormDialog, { type EnhancedProviderFormData } from '../components/PresetProviderFormDialog';
+import { api } from '../services/api';
+import type { Provider } from '../types/provider';
 import UseOpenAIPage from './UseOpenAIPage';
 import UseAnthropicPage from './UseAnthropicPage';
 import UseClaudeCodePage from './UseClaudeCodePage';
@@ -23,7 +26,6 @@ import UseLiteLLMPage from './UseLiteLLMPage';
 
 const Home = () => {
     const [activeTab, setActiveTab] = useState(0);
-    const [baseUrl, setBaseUrl] = useState<string>('');
     const [generatedToken, setGeneratedToken] = useState<string>('');
     const [apiKey, setApiKey] = useState<string>('');
     const [showTokenModal, setShowTokenModal] = useState(false);
@@ -33,9 +35,22 @@ const Home = () => {
         message?: string;
         severity?: 'success' | 'info' | 'warning' | 'error';
         autoHideDuration?: number;
+        onClose?: () => void;
     }>({ open: false });
 
+    // Provider state
+    const [providers, setProviders] = useState<Provider[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [addDialogOpen, setAddDialogOpen] = useState(false);
+    const [providerFormData, setProviderFormData] = useState<EnhancedProviderFormData>({
+        name: '',
+        apiBase: '',
+        apiStyle: undefined,
+        token: '',
+    });
+
     const token = generatedToken || apiKey;
+    const hasProviders = providers.length > 0;
 
     const showNotification = (message: string, severity: 'success' | 'info' | 'warning' | 'error' = 'info', autoHideDuration: number = 6000) => {
         setNotification({
@@ -56,16 +71,23 @@ const Home = () => {
         }
     };
 
-    const loadBaseUrl = async () => {
-        const baseUrl = await getBaseUrl();
-        setBaseUrl(baseUrl);
-    };
-
     const loadToken = async () => {
         const result = await api.getToken();
         if (result.token) {
             setApiKey(result.token);
         }
+    };
+
+    const loadProviders = async () => {
+        const result = await api.getProviders();
+        if (result.success) {
+            setProviders(result.data);
+        }
+        setLoading(false);
+    };
+
+    const loadData = async () => {
+        await Promise.all([loadToken(), loadProviders()]);
     };
 
     const generateToken = async () => {
@@ -88,9 +110,53 @@ const Home = () => {
         generateToken();
     };
 
+    // Add provider dialog handlers
+    const handleAddProviderClick = () => {
+        setProviderFormData({
+            name: '',
+            apiBase: '',
+            apiStyle: undefined,
+            token: '',
+        });
+        setAddDialogOpen(true);
+    };
+
+    const handleProviderFormChange = (field: keyof EnhancedProviderFormData, value: any) => {
+        setProviderFormData(prev => ({
+            ...prev,
+            [field]: value,
+        }));
+    };
+
+    const handleAddProviderSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        const providerData = {
+            name: providerFormData.name,
+            api_base: providerFormData.apiBase,
+            api_style: providerFormData.apiStyle,
+            token: providerFormData.token,
+        };
+
+        const result = await api.addProvider(providerData);
+
+        if (result.success) {
+            showNotification('Provider added successfully!', 'success');
+            setProviderFormData({
+                name: '',
+                apiBase: '',
+                apiStyle: undefined,
+                token: '',
+            });
+            setAddDialogOpen(false);
+            await loadProviders();
+        } else {
+            showNotification(`Failed to add provider: ${result.error}`, 'error');
+        }
+    };
+
     useEffect(() => {
-        loadBaseUrl();
-        loadToken();
+        loadData();
     }, []);
 
     const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
@@ -102,8 +168,48 @@ const Home = () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }, [activeTab]);
 
+    // Empty state component
+    const emptyState = (
+        <Box textAlign="center" py={8} width="100%">
+            <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={handleAddProviderClick}
+                size="large"
+                sx={{
+                    backgroundColor: 'primary.main',
+                    color: 'white',
+                    width: 80,
+                    height: 80,
+                    borderRadius: 2,
+                    mb: 3,
+                    '&:hover': {
+                        backgroundColor: 'primary.dark',
+                        transform: 'scale(1.05)',
+                    },
+                }}
+            >
+                <AddIcon sx={{ fontSize: 40 }} />
+            </Button>
+            <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>
+                No API Keys Available
+            </Typography>
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
+                Get started by adding your first AI API Key to use the service.
+            </Typography>
+            <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={handleAddProviderClick}
+                size="large"
+            >
+                Add Your First API Key
+            </Button>
+        </Box>
+    );
+
     return (
-        <PageLayout notification={notification}>
+        <PageLayout notification={notification} loading={loading}>
             {/* Main Tabs */}
             <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
                 <Tabs value={activeTab} onChange={handleTabChange} aria-label="Plugin tabs">
@@ -122,47 +228,54 @@ const Home = () => {
                         label="Use Claude Code"
                         iconPosition="start"
                     />
-                    {/*<Tab*/}
-                    {/*    icon={<TerminalIcon fontSize="small" />}*/}
-                    {/*    label="Use LiteLLM"*/}
-                    {/*    iconPosition="start"*/}
-                    {/*/>*/}
                 </Tabs>
             </Box>
 
-            {/* Tab Content */}
-            {activeTab === 0 && (
-                <UseOpenAIPage
-                    showTokenModal={showTokenModal}
-                    setShowTokenModal={setShowTokenModal}
-                    token={token}
-                    showNotification={showNotification}
-                />
+            {/* Show empty state if no providers, otherwise show tab content */}
+            {!hasProviders ? (
+                emptyState
+            ) : (
+                <>
+                    {/* Tab Content */}
+                    {activeTab === 0 && (
+                        <UseOpenAIPage
+                            showTokenModal={showTokenModal}
+                            setShowTokenModal={setShowTokenModal}
+                            token={token}
+                            showNotification={showNotification}
+                            providers={providers}
+                        />
+                    )}
+                    {activeTab === 1 && (
+                        <UseAnthropicPage
+                            showTokenModal={showTokenModal}
+                            setShowTokenModal={setShowTokenModal}
+                            token={token}
+                            showNotification={showNotification}
+                            providers={providers}
+                        />
+                    )}
+                    {activeTab === 2 && (
+                        <UseClaudeCodePage
+                            showTokenModal={showTokenModal}
+                            setShowTokenModal={setShowTokenModal}
+                            token={token}
+                            showNotification={showNotification}
+                            providers={providers}
+                        />
+                    )}
+                </>
             )}
-            {activeTab === 1 && (
-                <UseAnthropicPage
-                    showTokenModal={showTokenModal}
-                    setShowTokenModal={setShowTokenModal}
-                    token={token}
-                    showNotification={showNotification}
-                />
-            )}
-            {activeTab === 2 && (
-                <UseClaudeCodePage
-                    showTokenModal={showTokenModal}
-                    setShowTokenModal={setShowTokenModal}
-                    token={token}
-                    showNotification={showNotification}
-                />
-            )}
-            {activeTab === 3 && (
-                <UseLiteLLMPage
-                    showTokenModal={showTokenModal}
-                    setShowTokenModal={setShowTokenModal}
-                    token={token}
-                    showNotification={showNotification}
-                />
-            )}
+
+            {/* Add Provider Dialog */}
+            <PresetProviderFormDialog
+                open={addDialogOpen}
+                onClose={() => setAddDialogOpen(false)}
+                onSubmit={handleAddProviderSubmit}
+                data={providerFormData}
+                onChange={handleProviderFormChange}
+                mode="add"
+            />
 
             {/* Token Refresh Confirmation Dialog */}
             <Dialog

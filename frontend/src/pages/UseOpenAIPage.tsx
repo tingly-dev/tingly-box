@@ -6,22 +6,25 @@ import {useNavigate} from 'react-router-dom';
 import {ApiConfigRow} from '../components/ApiConfigRow';
 import TabTemplatePage from '../components/TabTemplatePage';
 import {api, getBaseUrl} from '../services/api';
+import type { Provider } from '../types/provider';
 
 interface UseOpenAIPageProps {
     showTokenModal: boolean;
     setShowTokenModal: (show: boolean) => void;
     token: string;
     showNotification: (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
+    providers: Provider[];
 }
 
 const ruleId = "built-in-openai";
 
 const UseOpenAIPage: React.FC<UseOpenAIPageProps> = ({
-                                                         showTokenModal,
-                                                         setShowTokenModal,
-                                                         token,
-                                                         showNotification
-                                                     }) => {
+    showTokenModal,
+    setShowTokenModal,
+    token,
+    showNotification,
+    providers
+}) => {
     const [baseUrl, setBaseUrl] = React.useState<string>('');
     const [rule, setRule] = React.useState<any>(null);
     const [loadingRule, setLoadingRule] = React.useState(true);
@@ -120,6 +123,7 @@ const UseOpenAIPage: React.FC<UseOpenAIPageProps> = ({
             setShowTokenModal={setShowTokenModal}
             token={token}
             showNotification={showNotification}
+            providers={providers}
         />
     );
 };
