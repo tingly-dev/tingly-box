@@ -3,11 +3,11 @@
 import ProxyService from "@/bindings";
 import {
     Configuration,
-    type FetchProviderModelsResponse,
     HistoryApi,
     InfoApi,
     ModelsApi,
     ProbeProviderRequestApiStyleEnum,
+    type ProviderModelsResponse,
     type ProviderResponse,
     ProvidersApi,
     RulesApi,
@@ -247,7 +247,7 @@ export const api = {
         }
     },
 
-    updateProviderModelsByUUID: async (uuid: string): Promise<FetchProviderModelsResponse> => {
+    updateProviderModelsByUUID: async (uuid: string): Promise<ProviderModelsResponse> => {
         try {
             // Note: The generated client has an issue with path parameters
             // We need to manually handle this for now
@@ -266,7 +266,7 @@ export const api = {
         }
     },
 
-    getProviderModelsByUUID: async (uuid: string): Promise<FetchProviderModelsResponse> => {
+    getProviderModelsByUUID: async (uuid: string): Promise<ProviderModelsResponse> => {
         try {
             // Note: The generated client has an issue with path parameters
             // We need to manually handle this for now
