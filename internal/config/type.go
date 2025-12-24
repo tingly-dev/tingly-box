@@ -30,6 +30,7 @@ type Rule struct {
 	UUID                string    `json:"uuid"`
 	RequestModel        string    `json:"request_model" yaml:"request_model"`
 	ResponseModel       string    `json:"response_model" yaml:"response_model"`
+	Description         string    `json:"description"`
 	Services            []Service `json:"services" yaml:"services"`
 	CurrentServiceIndex int       `json:"current_service_index" yaml:"current_service_index"`
 	// Unified Tactic Configuration
