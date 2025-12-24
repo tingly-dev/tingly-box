@@ -2,10 +2,15 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"math/rand"
 	"strings"
 	"sync"
 )
+
+// Global state for round-robin tactics (keyed by rule UUID)
+// This allows multiple tactic instances to share the same state
+var globalRoundRobinStreaks sync.Map
 
 // Tactic bundles the strategy type and its parameters together
 type Tactic struct {
@@ -53,6 +58,64 @@ func (tc *Tactic) Instantiate() LoadBalancingTactic {
 		return defaultRoundRobinTactic
 	}
 	return CreateTacticWithTypedParams(tc.Type, tc.Params)
+}
+
+// ParseTacticFromMap creates a Tactic from a tactic type and parameter map.
+// This is useful for parsing API request parameters into a Tactic configuration.
+func ParseTacticFromMap(tacticType TacticType, params map[string]interface{}) Tactic {
+	var tacticParams TacticParams
+	switch tacticType {
+	case TacticRoundRobin:
+		if params != nil {
+			tacticParams = &RoundRobinParams{
+				RequestThreshold: getIntParamFromMap(params, "request_threshold", DefaultRequestThreshold),
+			}
+		} else {
+			tacticParams = DefaultRoundRobinParams()
+		}
+	case TacticRandom:
+		tacticParams = DefaultRandomParams()
+	case TacticTokenBased:
+		if params != nil {
+			tacticParams = &TokenBasedParams{
+				TokenThreshold: getIntParamFromMap(params, "token_threshold", DefaultTokenThreshold),
+			}
+		} else {
+			tacticParams = DefaultTokenBasedParams()
+		}
+	case TacticHybrid:
+		if params != nil {
+			tacticParams = &HybridParams{
+				RequestThreshold: getIntParamFromMap(params, "request_threshold", DefaultRequestThreshold),
+				TokenThreshold:   getIntParamFromMap(params, "token_threshold", DefaultTokenThreshold),
+			}
+		} else {
+			tacticParams = DefaultHybridParams()
+		}
+	default:
+		tacticParams = DefaultRoundRobinParams()
+	}
+
+	return Tactic{
+		Type:   tacticType,
+		Params: tacticParams,
+	}
+}
+
+// getIntParamFromMap safely extracts an int64 parameter from a map.
+// Supports float64 (JSON numbers), int, and int64 types.
+func getIntParamFromMap(params map[string]interface{}, key string, defaultValue int64) int64 {
+	if val, ok := params[key]; ok {
+		switch v := val.(type) {
+		case float64:
+			return int64(v)
+		case int:
+			return int64(v)
+		case int64:
+			return v
+		}
+	}
+	return defaultValue
 }
 
 // TacticParams represents parameters for different load balancing tactics
@@ -111,17 +174,17 @@ func NewRandomParams() TacticParams {
 
 // DefaultParams returns default parameters for each tactic type
 func DefaultRoundRobinParams() TacticParams {
-	return RoundRobinParams{RequestThreshold: 100}
+	return RoundRobinParams{RequestThreshold: DefaultRequestThreshold}
 }
 
 func DefaultTokenBasedParams() TacticParams {
-	return TokenBasedParams{TokenThreshold: 10000}
+	return TokenBasedParams{TokenThreshold: DefaultTokenThreshold}
 }
 
 func DefaultHybridParams() TacticParams {
 	return HybridParams{
-		RequestThreshold: 100,
-		TokenThreshold:   10000,
+		RequestThreshold: DefaultRequestThreshold,
+		TokenThreshold:   DefaultTokenThreshold,
 	}
 }
 
@@ -159,15 +222,12 @@ type LoadBalancingTactic interface {
 
 // RoundRobinTactic implements round-robin load balancing based on request count
 type RoundRobinTactic struct {
-	// Number of requests per service before switching
-	RequestThreshold int64
-	// Map of Rule Pointer -> Current Streak count
-	streaks sync.Map
+	RequestThreshold int64 // Number of requests per service before switching
 }
 
 // NewRoundRobinTactic creates a new round-robin tactic with optional threshold parameter
 func NewRoundRobinTactic(requestThreshold ...int64) *RoundRobinTactic {
-	threshold := int64(100) // Default 100 requests per service
+	threshold := DefaultRequestThreshold // Default 100 requests per service
 	if len(requestThreshold) > 0 && requestThreshold[0] > 0 {
 		threshold = requestThreshold[0]
 	}
@@ -182,18 +242,33 @@ func (rr *RoundRobinTactic) SelectService(rule *Rule) *Service {
 		return nil
 	}
 
+	// Use rule UUID as key for global streaks (allows state sharing across tactic instances)
+	ruleKey := rule.UUID
+	if ruleKey == "" {
+		// Fallback to rule pointer if UUID is empty (shouldn't happen in normal operation)
+		ruleKey = string(fmt.Sprintf("%p", rule))
+	}
+
+	// Get current streak for this specific rule (tracks consecutive requests to current service)
+	val, _ := globalRoundRobinStreaks.LoadOrStore(ruleKey, int64(0))
+	// Handle both int and int64 types for compatibility
+	var currentStreak int64
+	switch v := val.(type) {
+	case int64:
+		currentStreak = v
+	case int:
+		currentStreak = int64(v)
+	default:
+		currentStreak = 0
+	}
+
 	// Get current service from the already filtered list
 	currentIndex := rule.CurrentServiceIndex % len(activeServices)
 	currentService := activeServices[currentIndex]
 
-	// Get current streak for this specific rule (not service)
-	val, _ := rr.streaks.LoadOrStore(rule, int64(0))
-	currentStreak := val.(int64)
-	requests, _ := currentService.GetWindowStats()
-
 	// If current service hasn't exceeded threshold, keep using it and increment streak
-	if requests < rr.RequestThreshold {
-		rr.streaks.Store(rule, currentStreak+1)
+	if currentStreak < rr.RequestThreshold {
+		globalRoundRobinStreaks.Store(ruleKey, currentStreak+1)
 		return currentService
 	}
 
@@ -201,8 +276,8 @@ func (rr *RoundRobinTactic) SelectService(rule *Rule) *Service {
 	rule.CurrentServiceIndex = (rule.CurrentServiceIndex + 1) % len(activeServices)
 	nextService := activeServices[rule.CurrentServiceIndex]
 
-	// Reset streak for the new service (start counting from 1, not 0)
-	rr.streaks.Store(rule, 1)
+	// Reset streak for the new service (set to 1 because we're using it now)
+	globalRoundRobinStreaks.Store(ruleKey, int64(1))
 
 	return nextService
 }
@@ -223,7 +298,7 @@ type TokenBasedTactic struct {
 // NewTokenBasedTactic creates a new token-based tactic
 func NewTokenBasedTactic(tokenThreshold int64) *TokenBasedTactic {
 	if tokenThreshold <= 0 {
-		tokenThreshold = 10000 // Default threshold
+		tokenThreshold = DefaultTokenThreshold // Default threshold
 	}
 	return &TokenBasedTactic{TokenThreshold: tokenThreshold}
 }
@@ -282,10 +357,10 @@ type HybridTactic struct {
 // NewHybridTactic creates a new hybrid tactic
 func NewHybridTactic(requestThreshold, tokenThreshold int64) *HybridTactic {
 	if requestThreshold <= 0 {
-		requestThreshold = 100 // Default
+		requestThreshold = DefaultRequestThreshold // Default
 	}
 	if tokenThreshold <= 0 {
-		tokenThreshold = 10000 // Default
+		tokenThreshold = DefaultTokenThreshold // Default
 	}
 	return &HybridTactic{
 		RequestThreshold: requestThreshold,
@@ -395,8 +470,8 @@ func (rt *RandomTactic) GetType() TacticType {
 // Pre-created singleton tactic instances
 var (
 	defaultRoundRobinTactic = NewRoundRobinTactic()
-	defaultTokenBasedTactic = NewTokenBasedTactic(10000)
-	defaultHybridTactic     = NewHybridTactic(100, 10000)
+	defaultTokenBasedTactic = NewTokenBasedTactic(DefaultTokenThreshold)
+	defaultHybridTactic     = NewHybridTactic(DefaultRequestThreshold, DefaultTokenThreshold)
 	defaultRandomTactic     = NewRandomTactic()
 )
 

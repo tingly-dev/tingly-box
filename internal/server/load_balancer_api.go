@@ -79,7 +79,8 @@ func (api *LoadBalancerAPI) UpdateRuleTactic(c *gin.Context) {
 	ruleId := c.Param("ruleId")
 
 	var req struct {
-		Tactic string `json:"tactic" binding:"required"`
+		Tactic string                 `json:"tactic" binding:"required"`
+		Params map[string]interface{} `json:"params,omitempty"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -94,13 +95,14 @@ func (api *LoadBalancerAPI) UpdateRuleTactic(c *gin.Context) {
 	}
 
 	// Validate tactic
+	tacticType := config.ParseTacticType(req.Tactic)
 	if !config.IsValidTactic(req.Tactic) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported tactic: " + req.Tactic})
 		return
 	}
 
-	// Update rule
-	rule.Tactic = req.Tactic
+	// Create tactic with params using the helper function
+	rule.LBTactic = config.ParseTacticFromMap(tacticType, req.Params)
 	if err := api.config.UpdateRequestConfigByUUID(ruleId, *rule); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update rule: " + err.Error()})
 		return

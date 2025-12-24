@@ -125,8 +125,8 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		req.MaxTokens = int64(s.config.GetDefaultMaxTokens())
 	}
 
-	// Set provider and model information in context for statistics middleware
-	c.Set("provider", provider.Name)
+	// Set provider UUID in context (Service.Provider uses UUID, not name)
+	c.Set("provider", provider.UUID)
 	c.Set("model", selectedService.Model)
 
 	// Check provider's API style to decide which path to take
@@ -300,8 +300,8 @@ func (s *Server) AnthropicCountTokens(c *gin.Context) {
 	actualModel := selectedService.Model
 	req.Model = anthropic.Model(actualModel)
 
-	// Set provider and model information in context for statistics middleware
-	c.Set("provider", provider.Name)
+	// Set provider UUID in context (Service.Provider uses UUID, not name)
+	c.Set("provider", provider.UUID)
 	c.Set("model", selectedService.Model)
 
 	// Check provider's API style to decide which path to take

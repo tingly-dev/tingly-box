@@ -35,14 +35,9 @@ type Rule struct {
 	// Unified Tactic Configuration
 	LBTactic Tactic `json:"lb_tactic" yaml:"lb_tactic"`
 	Active   bool   `json:"active" yaml:"active"`
-	// Deprecated fields kept for Unmarshal migration logic only
-	// Deprecated
-	Tactic string `yaml:"tactic" json:"tactic"` // Load balancing strategy (round_robin, token_based, hybrid)
-	// Deprecated
-	TacticParams map[string]interface{} `yaml:"tactic_params" json:"tactic_params,omitempty"`
 }
 
-// ToJSON implementation with backward compatibility
+// ToJSON implementation
 func (r *Rule) ToJSON() interface{} {
 	// Ensure Services is populated
 	services := r.GetServices()
@@ -54,24 +49,8 @@ func (r *Rule) ToJSON() interface{} {
 		"response_model":        r.ResponseModel,
 		"services":              services,
 		"current_service_index": r.CurrentServiceIndex,
+		"lb_tactic":             r.LBTactic,
 		"active":                r.Active,
-	}
-
-	// Use lb_tactic if it's configured (check if params are not nil or if it's not the default empty tactic)
-	if r.LBTactic.Params != nil {
-		jsonRule["lb_tactic"] = r.LBTactic
-	} else {
-		// Fall back to deprecated fields for backward compatibility
-		if r.Tactic != "" {
-			jsonRule["tactic"] = r.Tactic
-			jsonRule["tactic_params"] = r.TacticParams
-		} else {
-			// Default tactic if none is set
-			jsonRule["tactic"] = "round_robin"
-			jsonRule["tactic_params"] = map[string]interface{}{
-				"request_threshold": 100,
-			}
-		}
 	}
 
 	return jsonRule
@@ -126,68 +105,11 @@ func (r *Rule) GetCurrentService() *Service {
 	return activeServices[currentIndex]
 }
 
-// convertLegacyParams converts legacy map[string]interface{} to proper TacticParams
-func convertLegacyParams(tacticStr string, legacyParams map[string]interface{}) TacticParams {
-	tacticType := ParseTacticType(tacticStr)
-
-	switch tacticType {
-	case TacticRoundRobin:
-		if rt, ok := legacyParams["request_threshold"].(int64); ok {
-			return &RoundRobinParams{RequestThreshold: rt}
-		} else if rt, ok := legacyParams["request_threshold"].(float64); ok {
-			return &RoundRobinParams{RequestThreshold: int64(rt)}
-		}
-		return &RoundRobinParams{RequestThreshold: 100}
-
-	case TacticTokenBased:
-		if tt, ok := legacyParams["token_threshold"].(int64); ok {
-			return &TokenBasedParams{TokenThreshold: tt}
-		} else if tt, ok := legacyParams["token_threshold"].(float64); ok {
-			return &TokenBasedParams{TokenThreshold: int64(tt)}
-		}
-		return &TokenBasedParams{TokenThreshold: 10000}
-
-	case TacticHybrid:
-		requestThreshold := int64(100)
-		tokenThreshold := int64(10000)
-
-		if rt, ok := legacyParams["request_threshold"].(int64); ok {
-			requestThreshold = rt
-		} else if rt, ok := legacyParams["request_threshold"].(float64); ok {
-			requestThreshold = int64(rt)
-		}
-
-		if tt, ok := legacyParams["token_threshold"].(int64); ok {
-			tokenThreshold = tt
-		} else if tt, ok := legacyParams["token_threshold"].(float64); ok {
-			tokenThreshold = int64(tt)
-		}
-
-		return &HybridParams{
-			RequestThreshold: requestThreshold,
-			TokenThreshold:   tokenThreshold,
-		}
-
-	case TacticRandom:
-		return &RandomParams{}
-
-	default:
-		return &RoundRobinParams{RequestThreshold: 100}
-	}
-}
-
 // GetTacticType returns the load balancing tactic type
 func (r *Rule) GetTacticType() TacticType {
-	// Check new LBTactic field first
 	if r.LBTactic.Type != 0 {
 		return r.LBTactic.Type
 	}
-
-	// Fall back to deprecated Tactic field
-	if r.Tactic != "" {
-		return ParseTacticType(r.Tactic)
-	}
-
 	// Default to round robin
 	return TacticRoundRobin
 }

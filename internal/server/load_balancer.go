@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"sync"
+	"time"
 	"tingly-box/internal/server/middleware"
 
 	"tingly-box/internal/config"
@@ -75,7 +76,8 @@ func (lb *LoadBalancer) SelectService(rule *config.Rule) (*config.Service, error
 		return &activeServices[0], nil
 	}
 
-	// Use the LBTactic from the rule
+	// Always instantiate tactic from rule's params to ensure correct parameters
+	// State is now stored globally (globalRoundRobinStreaks) so this is safe
 	actualTactic := rule.LBTactic.Instantiate()
 
 	// Select service using the tactic
@@ -148,10 +150,26 @@ func (lb *LoadBalancer) GetServiceStats(provider, model string) *config.ServiceS
 func (lb *LoadBalancer) GetAllServiceStats() map[string]*config.ServiceStats {
 	result := make(map[string]*config.ServiceStats)
 
-	// Iterate through all services in the load balancer's internal stats map
-	for serviceID, stats := range lb.stats {
-		statsCopy := stats.GetStats()
-		result[serviceID] = &statsCopy
+	// Read from config file (source of truth)
+	if lb.config != nil {
+		rules := lb.config.GetRequestConfigs()
+		for _, rule := range rules {
+			if !rule.Active {
+				continue
+			}
+			for i := range rule.Services {
+				service := &rule.Services[i]
+				if service.Active {
+					// Use a composite key with rule UUID to ensure uniqueness
+					// Format: ruleUUID:provider:model
+					uniqueServiceID := fmt.Sprintf("%s:%s:%s", rule.UUID, service.Provider, service.Model)
+					statsCopy := service.Stats.GetStats()
+					// Update the ServiceID in the returned stats to match our key
+					statsCopy.ServiceID = uniqueServiceID
+					result[uniqueServiceID] = &statsCopy
+				}
+			}
+		}
 	}
 
 	return result
@@ -166,11 +184,40 @@ func (lb *LoadBalancer) ClearServiceStats(provider, model string) {
 	}
 }
 
-// ClearAllStats clears all statistics
+// ClearAllStats clears all statistics (both in-memory and persisted in config)
 func (lb *LoadBalancer) ClearAllStats() {
 	// Clear from internal stats map
 	for _, stats := range lb.stats {
 		stats.ResetWindow()
+	}
+
+	// Also clear stats from all rules in the config and persist
+	if lb.config != nil {
+		rules := lb.config.GetRequestConfigs()
+		for ruleIdx, rule := range rules {
+			modified := false
+			for i := range rule.Services {
+				stats := &rule.Services[i].Stats
+				if stats.RequestCount > 0 || stats.WindowRequestCount > 0 {
+					stats.RequestCount = 0
+					stats.WindowRequestCount = 0
+					stats.WindowTokensConsumed = 0
+					stats.WindowInputTokens = 0
+					stats.WindowOutputTokens = 0
+					stats.WindowStart = time.Now()
+					stats.LastUsed = time.Time{}
+					modified = true
+				}
+			}
+			// Reset current service index to 0
+			if rule.CurrentServiceIndex != 0 {
+				rule.CurrentServiceIndex = 0
+				modified = true
+			}
+			if modified {
+				lb.config.UpdateRequestConfigAt(ruleIdx, rule)
+			}
+		}
 	}
 }
 

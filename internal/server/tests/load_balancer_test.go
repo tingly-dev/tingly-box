@@ -216,7 +216,6 @@ func TestLoadBalancer_RecordUsage(t *testing.T) {
 				TimeWindow: 300,
 			},
 		},
-		Tactic: "round_robin",
 		Active: true,
 	}
 
@@ -274,7 +273,6 @@ func TestLoadBalancer_ValidateRule(t *testing.T) {
 				TimeWindow: 300,
 			},
 		},
-		Tactic: "round_robin",
 		Active: true,
 	}
 
@@ -286,7 +284,6 @@ func TestLoadBalancer_ValidateRule(t *testing.T) {
 	invalidRule1 := &config.Rule{
 		RequestModel: "test",
 		Services:     []config.Service{},
-		Tactic:       "round_robin",
 		Active:       true,
 	}
 
@@ -306,7 +303,6 @@ func TestLoadBalancer_ValidateRule(t *testing.T) {
 				TimeWindow: 300,
 			},
 		},
-		Tactic: "round_robin",
 		Active: true,
 	}
 
@@ -332,6 +328,10 @@ func TestLoadBalancer_GetRuleSummary(t *testing.T) {
 	rule := &config.Rule{
 		RequestModel: "test",
 		UUID:         uuid.New().String(),
+		LBTactic: config.Tactic{
+			Type:   config.TacticHybrid,
+			Params: config.DefaultHybridParams(),
+		},
 		Services: []config.Service{
 			{
 				Provider:   "provider1",
@@ -341,7 +341,6 @@ func TestLoadBalancer_GetRuleSummary(t *testing.T) {
 				TimeWindow: 300,
 			},
 		},
-		Tactic: "hybrid",
 		Active: true,
 	}
 
@@ -431,7 +430,6 @@ func TestLoadBalancerAPI_RuleManagement(t *testing.T) {
 				TimeWindow: 300,
 			},
 		},
-		Tactic: "round_robin",
 		Active: true,
 	}
 
@@ -462,8 +460,13 @@ func TestLoadBalancerAPI_RuleManagement(t *testing.T) {
 		ruleMap := ruleData.(map[string]interface{})
 		assert.Equal(t, ruleName, ruleMap["request_model"])
 		assert.Equal(t, ruleUUID, ruleMap["uuid"])
-		assert.Equal(t, "round_robin", ruleMap["tactic"])
 		assert.Equal(t, true, ruleMap["active"])
+
+		// Check lb_tactic structure
+		lbTactic, exists := ruleMap["lb_tactic"]
+		require.True(t, exists)
+		lbTacticMap := lbTactic.(map[string]interface{})
+		assert.Equal(t, "round_robin", lbTacticMap["type"])
 	})
 
 	t.Run("Get_NonExistent_Rule", func(t *testing.T) {
@@ -594,7 +597,6 @@ func TestLoadBalancerAPI_CurrentService(t *testing.T) {
 				TimeWindow: 300,
 			},
 		},
-		Tactic: "round_robin",
 		Active: true,
 	}
 
@@ -679,7 +681,6 @@ func TestLoadBalancerAPI_Authentication(t *testing.T) {
 				TimeWindow: 300,
 			},
 		},
-		Tactic: "round_robin",
 		Active: true,
 	}
 
@@ -775,9 +776,9 @@ func TestLoadBalancerFunctionality(t *testing.T) {
 			},
 		},
 		CurrentServiceIndex: 0,
-		Tactic:              "round_robin",
-		TacticParams: map[string]interface{}{
-			"request_threshold": int64(1),
+		LBTactic: config.Tactic{
+			Type:   config.TacticRoundRobin,
+			Params: config.DefaultRoundRobinParams(),
 		},
 		Active: true,
 	}
@@ -791,7 +792,7 @@ func TestLoadBalancerFunctionality(t *testing.T) {
 		assert.NotNil(t, retrievedRule)
 		assert.Equal(t, "tingly", retrievedRule.RequestModel)
 		assert.Equal(t, 2, len(retrievedRule.GetServices()))
-		assert.Equal(t, "round_robin", retrievedRule.Tactic)
+		assert.Equal(t, "round_robin", retrievedRule.GetTacticType().String())
 	})
 
 	// Test service selection through the load balancer
@@ -946,7 +947,6 @@ func TestLoadBalancer_WithMockProvider(t *testing.T) {
 				TimeWindow: 300,
 			},
 		},
-		Tactic: "round_robin",
 		Active: true,
 	}
 

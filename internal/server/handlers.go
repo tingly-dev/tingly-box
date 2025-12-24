@@ -166,9 +166,11 @@ func (s *Server) DetermineProviderAndModel(modelName string) (*config.Provider, 
 		uuid := c.GetUUIDByRequestModel(modelName)
 		rules := c.GetRequestConfigs()
 		var rule *config.Rule
+		var ruleIdx int = -1
 		for i := range rules {
 			if rules[i].UUID == uuid && rules[i].Active {
 				rule = &rules[i] // Get pointer to actual rule in config
+				ruleIdx = i
 				break
 			}
 		}
@@ -200,6 +202,15 @@ func (s *Server) DetermineProviderAndModel(modelName string) (*config.Provider, 
 
 			// Update the current service index for the rule
 			s.loadBalancer.UpdateServiceIndex(rule, selectedService)
+
+			// Persist the updated CurrentServiceIndex to config
+			// This is critical for round-robin to work correctly across requests
+			if ruleIdx >= 0 {
+				if err := c.UpdateRequestConfigAt(ruleIdx, *rule); err != nil {
+					// Log error but don't fail the request
+					fmt.Printf("Warning: failed to persist CurrentServiceIndex: %v\n", err)
+				}
+			}
 
 			// Return provider, selected service, and rule
 			return provider, selectedService, rule, nil

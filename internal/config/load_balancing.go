@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -161,6 +162,27 @@ const (
 	TacticHybrid                       // Hybrid: request count or tokens, whichever comes first
 	TacticRandom                       // Random selection with weighted probability
 )
+
+// MarshalJSON implements json.Marshaler for TacticType
+func (tt TacticType) MarshalJSON() ([]byte, error) {
+	return json.Marshal(tt.String())
+}
+
+// UnmarshalJSON implements json.Unmarshaler for TacticType
+func (tt *TacticType) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		// Try unmarshaling as integer for backward compatibility
+		var i int
+		if err2 := json.Unmarshal(data, &i); err2 != nil {
+			return err
+		}
+		*tt = TacticType(i)
+		return nil
+	}
+	*tt = ParseTacticType(s)
+	return nil
+}
 
 // String returns string representation of TacticType
 func (tt TacticType) String() string {

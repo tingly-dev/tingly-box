@@ -116,7 +116,8 @@ func (s *Server) ChatCompletions(c *gin.Context) {
 	responseModel := rule.ResponseModel
 	req.Model = actualModel
 
-	c.Set("provider", provider.Name)
+	// Set provider UUID in context (Service.Provider uses UUID, not name)
+	c.Set("provider", provider.UUID)
 	c.Set("model", actualModel)
 
 	apiStyle := string(provider.APIStyle)

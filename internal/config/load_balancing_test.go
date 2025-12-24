@@ -204,10 +204,13 @@ func TestRule_GetServices_New(t *testing.T) {
 }
 
 func TestRule_GetTacticType(t *testing.T) {
-	// Rule with explicit tactic
+	// Rule with explicit tactic (token_based)
 	ruleWithTactic := &Rule{
 		RequestModel: "test",
-		Tactic:       "token_based",
+		LBTactic: Tactic{
+			Type:   TacticTokenBased,
+			Params: DefaultTokenBasedParams(),
+		},
 	}
 	if ruleWithTactic.GetTacticType() != TacticTokenBased {
 		t.Errorf("Expected TacticTokenBased, got %v", ruleWithTactic.GetTacticType())
@@ -216,18 +219,13 @@ func TestRule_GetTacticType(t *testing.T) {
 	// Rule without tactic (should default to round robin)
 	ruleWithoutTactic := &Rule{
 		RequestModel: "test",
+		LBTactic: Tactic{
+			Type:   0, // Type 0 means uninitialized
+			Params: nil,
+		},
 	}
 	if ruleWithoutTactic.GetTacticType() != TacticRoundRobin {
 		t.Errorf("Expected TacticRoundRobin as default, got %v", ruleWithoutTactic.GetTacticType())
-	}
-
-	// Rule with invalid tactic (should default to round robin)
-	ruleWithInvalidTactic := &Rule{
-		RequestModel: "test",
-		Tactic:       "invalid_tactic",
-	}
-	if ruleWithInvalidTactic.GetTacticType() != TacticRoundRobin {
-		t.Errorf("Expected TacticRoundRobin for invalid tactic, got %v", ruleWithInvalidTactic.GetTacticType())
 	}
 }
 
