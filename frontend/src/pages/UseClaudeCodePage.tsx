@@ -1,7 +1,6 @@
 import React from 'react';
 import {ContentCopy as CopyIcon} from '@mui/icons-material';
 import {Box, IconButton, Paper, Typography} from '@mui/material';
-import Grid from '@mui/material/Grid';
 import {useNavigate} from 'react-router-dom';
 import TabTemplatePage from '../components/TabTemplatePage';
 import {api, getBaseUrl} from '../services/api';
@@ -84,57 +83,51 @@ const UseClaudeCodePage: React.FC<UseClaudeCodePageProps> = ({
         <Box sx={{p: 2}}>
 
 
-            <Grid container spacing={2} sx={{mt: 0.5}}>
-                <Grid>
-                    <Typography variant="subtitle2" sx={{fontWeight: 600}}>
-                        Add env config into claude code config file: <code
-                        style={{fontSize: '0.85rem'}}>{configPath}</code>
-                    </Typography>
-                </Grid>
-                {/* Left: Config JSON */}
-                <Grid>
-                    <Paper sx={{p: 1.5, height: '100%'}}>
-                        <Box sx={{position: 'relative'}}>
-                            <IconButton
-                                size="small"
-                                onClick={() => copyToClipboard(generateConfig(), 'Configuration')}
-                                sx={{
-                                    position: 'absolute',
-                                    top: 0,
-                                    right: 0,
-                                    bgcolor: 'grey.800',
-                                    color: 'grey.300',
-                                    '&:hover': {bgcolor: 'grey.700'},
-                                }}
-                            >
-                                <CopyIcon fontSize="small"/>
-                            </IconButton>
-                            <Box
-                                sx={{
-                                    p: 1.5,
-                                    bgcolor: 'grey.900',
-                                    borderRadius: 1,
-                                    fontFamily: 'monospace',
-                                    fontSize: '0.7rem',
-                                    color: 'grey.100',
-                                    overflow: 'auto',
-                                    maxHeight: 280,
-                                }}
-                            >
+            <Paper sx={{p: 1.5, height: '100%'}}>
+                <Box sx={{position: 'relative'}}>
+                    <IconButton
+                        size="small"
+                        onClick={() => copyToClipboard(generateConfig(), 'Configuration')}
+                        sx={{
+                            position: 'absolute',
+                            top: 0,
+                            right: 0,
+                            bgcolor: 'grey.800',
+                            color: 'grey.300',
+                            '&:hover': {bgcolor: 'grey.700'},
+                        }}
+                    >
+                        <CopyIcon fontSize="small"/>
+                    </IconButton>
+                    <Box
+                        sx={{
+                            p: 1.5,
+                            bgcolor: 'grey.900',
+                            borderRadius: 1,
+                            fontFamily: 'monospace',
+                            fontSize: '0.7rem',
+                            color: 'grey.100',
+                            overflow: 'auto',
+                            maxHeight: 280,
+                        }}
+                    >
                                 <pre style={{margin: 0, whiteSpace: 'pre-wrap'}}>
                                     {generateConfig()}
                                 </pre>
-                            </Box>
-                        </Box>
-                    </Paper>
-                </Grid>
-            </Grid>
+                    </Box>
+                </Box>
+            </Paper>
         </Box>
     );
 
     return (
         <TabTemplatePage
-            title="Claude Code Configuration"
+            title={
+                <Typography variant="subtitle2" sx={{fontWeight: 600}}>
+                    Add env config into claude code config file <code
+                    style={{fontSize: '0.85rem'}}>{configPath}</code>
+                </Typography>
+            }
             rule={rule}
             header={header}
             showTokenModal={showTokenModal}

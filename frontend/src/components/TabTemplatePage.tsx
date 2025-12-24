@@ -14,7 +14,7 @@ import type {ProbeResponse} from '../client';
 
 export interface TabTemplatePageProps {
     // Card title
-    title: string;
+    title: string | React.ReactNode;
     // Optional subtitle/description
     subtitle?: string;
     // Rule name for API
