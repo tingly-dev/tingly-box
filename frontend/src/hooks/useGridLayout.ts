@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import {useEffect, useState} from 'react';
 
 interface GridLayout {
     columns: number;
@@ -27,14 +27,14 @@ export const useGridLayout = () => {
 
         // Calculate rows based on available height
         const maxRows = Math.floor(availableHeight / cardHeight);
-        const rows = Math.min(2, maxRows);
+        const rows = Math.min(4, maxRows); // Increased from 2 to 4 rows
 
         const modelsPerPage = columns * rows;
 
         return {
             columns,
             rows,
-            modelsPerPage: Math.max(12, Math.min(48, modelsPerPage)), // Ensure reasonable range
+            modelsPerPage: Math.max(8 * 4, Math.min(96, modelsPerPage)), // Increased range: 24-96 models per page
             cardWidth: `${100 / columns}%` // Responsive width
         };
     };
