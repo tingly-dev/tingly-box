@@ -266,7 +266,7 @@ func TestConvertOpenAIToAnthropicRequest(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ConvertOpenAIToAnthropicRequest(tt.req)
+			result := ConvertOpenAIToAnthropicRequest(tt.req, 8192) // Use default max tokens
 
 			assert.Equal(t, anthropic.Model(tt.expectedModel), result.Model)
 			assert.Equal(t, tt.expectedMaxTokens, result.MaxTokens)
@@ -591,6 +591,6 @@ func BenchmarkConvertOpenAIToAnthropicRequest(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ConvertOpenAIToAnthropicRequest(req)
+		ConvertOpenAIToAnthropicRequest(req, 8192)
 	}
 }

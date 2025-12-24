@@ -25,7 +25,7 @@ import (
 
 func TestLoadBalancer_RoundRobin(t *testing.T) {
 	// Create a minimal config for testing
-	appConfig, err := config.NewAppConfigWithDir(t.TempDir())
+	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
 	// Create stats middleware
@@ -123,7 +123,7 @@ func TestLoadBalancer_RoundRobin(t *testing.T) {
 
 func TestLoadBalancer_EnabledFilter(t *testing.T) {
 	// Create a minimal config for testing
-	appConfig, err := config.NewAppConfigWithDir(t.TempDir())
+	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
 	// Create stats middleware
@@ -192,7 +192,7 @@ func TestLoadBalancer_EnabledFilter(t *testing.T) {
 
 func TestLoadBalancer_RecordUsage(t *testing.T) {
 	// Create a minimal config for testing
-	appConfig, err := config.NewAppConfigWithDir(t.TempDir())
+	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
 	// Create stats middleware
@@ -250,7 +250,7 @@ func TestLoadBalancer_RecordUsage(t *testing.T) {
 
 func TestLoadBalancer_ValidateRule(t *testing.T) {
 	// Create a minimal config for testing
-	appConfig, err := config.NewAppConfigWithDir(t.TempDir())
+	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
 	// Create stats middleware
@@ -317,7 +317,7 @@ func TestLoadBalancer_ValidateRule(t *testing.T) {
 
 func TestLoadBalancer_GetRuleSummary(t *testing.T) {
 	// Create a minimal config for testing
-	appConfig, err := config.NewAppConfigWithDir(t.TempDir())
+	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
 	// Create stats middleware
@@ -834,7 +834,7 @@ func TestLoadBalancerFunctionality(t *testing.T) {
 
 func TestLoadBalancer_WeightedRandom(t *testing.T) {
 	// Create a minimal config for testing
-	appConfig, err := config.NewAppConfigWithDir(t.TempDir())
+	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
 	// Create stats middleware
@@ -995,7 +995,7 @@ func TestLoadBalancer_WithMockProvider(t *testing.T) {
 
 func TestLoadBalancer_RoundRobinThreshold2(t *testing.T) {
 	// Create a minimal config for testing
-	appConfig, err := config.NewAppConfigWithDir(t.TempDir())
+	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
 	// Create stats middleware

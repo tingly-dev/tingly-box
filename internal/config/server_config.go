@@ -32,7 +32,10 @@ type Config struct {
 	Providers   []*Provider          `json:"providers_v2,omitempty"`
 	ServerPort  int                  `json:"server_port"`
 	JWTSecret   string               `json:"jwt_secret"`
-	Debug       bool                 `yaml:"debug" json:"debug"` // Enable debug logging
+
+	// Server settings
+	RequestTimeout   int `json:"request_timeout"`    // Request timeout in seconds
+	DefaultMaxTokens int `json:"default_max_tokens"` // Default max_tokens for anthropic API requests
 
 	ConfigFile string `yaml:"-" json:"-"` // Not serialized to YAML (exported to preserve field)
 	ConfigDir  string `yaml:"-" json:"-"`
@@ -143,6 +146,14 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 	}
 	if cfg.ServerPort == 0 {
 		cfg.ServerPort = 12580
+		updated = true
+	}
+	if cfg.RequestTimeout == 0 {
+		cfg.RequestTimeout = int(RequestTimeout.Seconds())
+		updated = true
+	}
+	if cfg.DefaultMaxTokens == 0 {
+		cfg.DefaultMaxTokens = DefaultMaxTokens
 		updated = true
 	}
 	if updated {
@@ -671,6 +682,40 @@ func (c *Config) SetServerPort(port int) error {
 	defer c.mu.Unlock()
 
 	c.ServerPort = port
+	return c.save()
+}
+
+// GetRequestTimeout returns the configured request timeout in seconds
+func (c *Config) GetRequestTimeout() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.RequestTimeout
+}
+
+// SetRequestTimeout updates the request timeout in seconds
+func (c *Config) SetRequestTimeout(timeout int) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.RequestTimeout = timeout
+	return c.save()
+}
+
+// GetDefaultMaxTokens returns the configured default max_tokens
+func (c *Config) GetDefaultMaxTokens() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.DefaultMaxTokens
+}
+
+// SetDefaultMaxTokens updates the default max_tokens
+func (c *Config) SetDefaultMaxTokens(maxTokens int) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.DefaultMaxTokens = maxTokens
 	return c.save()
 }
 

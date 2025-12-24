@@ -62,7 +62,7 @@ type startServerOptions struct {
 	Port          int
 	EnableUI      bool
 	EnableDebug   bool
-	enableAdaptor bool
+	EnableAdaptor bool
 }
 
 // startServer handles the server starting logic
@@ -91,7 +91,7 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 	serverManager := manager.NewServerManager(
 		appConfig,
 		manager.WithUI(opts.EnableUI),
-		manager.WithAdaptor(opts.enableAdaptor),
+		manager.WithAdaptor(opts.EnableAdaptor),
 		manager.WithDebug(opts.EnableDebug),
 		manager.WithHost(opts.Host),
 	)
@@ -123,12 +123,12 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 	case <-sigChan:
 		fmt.Println("\nReceived shutdown signal, stopping server...")
 		// Clean up PID file on shutdown
-		defer pidManager.RemovePIDFile()
+		pidManager.RemovePIDFile()
 		return serverManager.Stop()
 	case <-server.GetShutdownChannel():
 		fmt.Println("\nReceived stop request from web UI, stopping server...")
 		// Clean up PID file on shutdown
-		defer pidManager.RemovePIDFile()
+		pidManager.RemovePIDFile()
 		return serverManager.Stop()
 	}
 }
@@ -139,6 +139,7 @@ func StartCommand(appConfig *config.AppConfig) *cobra.Command {
 	var enableUI bool
 	var enableDebug bool
 	var host string
+	var enableStyleTransform bool
 
 	cmd := &cobra.Command{
 		Use:   "start",
@@ -147,10 +148,11 @@ func StartCommand(appConfig *config.AppConfig) *cobra.Command {
 The server will handle request routing to configured AI providers.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return startServer(appConfig, startServerOptions{
-				Host:        host,
-				Port:        port,
-				EnableUI:    enableUI,
-				EnableDebug: enableDebug,
+				Host:          host,
+				Port:          port,
+				EnableUI:      enableUI,
+				EnableDebug:   enableDebug,
+				EnableAdaptor: enableStyleTransform,
 			})
 		},
 	}
@@ -159,6 +161,7 @@ The server will handle request routing to configured AI providers.`,
 	cmd.Flags().StringVar(&host, "host", "localhost", "Server host")
 	cmd.Flags().BoolVarP(&enableUI, "ui", "u", true, "Enable web UI (default: true)")
 	cmd.Flags().BoolVar(&enableDebug, "debug", false, "Enable debug mode including gin, low level logging and so on (default: false)")
+	cmd.Flags().BoolVar(&enableStyleTransform, "adaptor", false, "Enable API style transformation (default: false)")
 	return cmd
 }
 

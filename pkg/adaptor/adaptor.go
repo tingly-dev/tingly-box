@@ -51,10 +51,12 @@ func ConvertAnthropicResponseToOpenAI(
 		}
 	}
 
+	// Set role from Anthropic response (required by OpenAI format)
+	message["role"] = string(anthropicResp.Role)
+
 	if textContent != "" {
 		message["content"] = textContent
 	}
-
 	if len(toolCalls) > 0 {
 		message["tool_calls"] = toolCalls
 	}
@@ -91,7 +93,7 @@ func ConvertAnthropicResponseToOpenAI(
 }
 
 // ConvertOpenAIToAnthropicRequest converts OpenAI ChatCompletionNewParams to Anthropic SDK format
-func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams) anthropic.MessageNewParams {
+func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams, defaultMaxTokens int64) anthropic.MessageNewParams {
 	messages := make([]anthropic.MessageParam, 0, len(req.Messages))
 	var systemParts []string
 
@@ -181,10 +183,16 @@ func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams) anthro
 		}
 	}
 
+	// Determine max_tokens - use default if not set
+	maxTokens := req.MaxTokens.Value
+	if maxTokens == 0 {
+		maxTokens = defaultMaxTokens
+	}
+
 	params := anthropic.MessageNewParams{
 		Model:     anthropic.Model(req.Model),
 		Messages:  messages,
-		MaxTokens: req.MaxTokens.Value,
+		MaxTokens: maxTokens,
 	}
 
 	// Add system parts if any

@@ -19,11 +19,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const (
-	// DefaultMaxTokens is the default max_tokens value for Anthropic API requests
-	DefaultMaxTokens = 4000
-)
-
 // Use official Anthropic SDK types directly
 type (
 	// Request types
@@ -127,7 +122,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 	req.Model = anthropic.Model(actualModel)
 	// Ensure max_tokens is set (Anthropic API requires this)
 	if req.MaxTokens == 0 {
-		req.MaxTokens = DefaultMaxTokens
+		req.MaxTokens = int64(s.config.GetDefaultMaxTokens())
 	}
 
 	// Set provider and model information in context for statistics middleware
@@ -321,7 +316,7 @@ func (s *Server) AnthropicCountTokens(c *gin.Context) {
 		client := s.clientPool.GetAnthropicClient(provider)
 
 		// Make the request using Anthropic SDK with timeout
-		ctx, cancel := context.WithTimeout(context.Background(), config.RequestTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(s.config.GetRequestTimeout())*time.Second)
 		defer cancel()
 		message, err := client.Messages.CountTokens(ctx, req)
 		if err != nil {
@@ -409,11 +404,11 @@ func (s *Server) forwardAnthropicRequestRaw(provider *config.Provider, rawReq ma
 		}
 	} else {
 		// Set default max_tokens if not provided (Anthropic API requires this)
-		params.MaxTokens = DefaultMaxTokens
+		params.MaxTokens = int64(s.config.GetDefaultMaxTokens())
 	}
 
 	// Make the request using Anthropic SDK with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), config.RequestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(s.config.GetRequestTimeout())*time.Second)
 	defer cancel()
 	message, err := client.Messages.New(ctx, params)
 	if err != nil {
@@ -429,7 +424,7 @@ func (s *Server) forwardAnthropicRequest(provider *config.Provider, req anthropi
 	client := s.clientPool.GetAnthropicClient(provider)
 
 	// Make the request using Anthropic SDK with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), config.RequestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(s.config.GetRequestTimeout())*time.Second)
 	defer cancel()
 	message, err := client.Messages.New(ctx, req)
 	if err != nil {

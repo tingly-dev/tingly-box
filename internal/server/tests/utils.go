@@ -9,12 +9,14 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"tingly-box/internal/config"
 	"tingly-box/internal/server"
 
 	"github.com/gin-gonic/gin"
+	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -31,7 +33,7 @@ func NewTestServerWithConfigDir(t *testing.T, configDir string) *TestServer {
 		t.Fatalf("Failed to create config directory %s: %v", configDir, err)
 	}
 
-	appConfig, err := config.NewAppConfigWithDir(configDir)
+	appConfig, err := config.NewAppConfig(config.WithConfigDir(configDir))
 	if err != nil {
 		t.Fatalf("Failed to create app config: %v", err)
 	}
@@ -46,13 +48,18 @@ func NewTestServerWithConfigDir(t *testing.T, configDir string) *TestServer {
 
 // NewTestServer creates a new test server
 func NewTestServer(t *testing.T) *TestServer {
-	// Create test config directory
-	configDir := ".tingly-box"
-	if err := os.MkdirAll(configDir, 0700); err != nil {
-		t.Fatalf("Failed to create test config directory: %v", err)
+	// Create temp config directory
+	configDir, err := os.MkdirTemp("", "tingly-box-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp config directory: %v", err)
 	}
 
-	appConfig, err := config.NewAppConfig()
+	// Register cleanup
+	t.Cleanup(func() {
+		os.RemoveAll(configDir)
+	})
+
+	appConfig, err := config.NewAppConfig(config.WithConfigDir(configDir))
 	if err != nil {
 		t.Fatalf("Failed to create app config: %v", err)
 	}
@@ -74,13 +81,18 @@ func createTestServer(t *testing.T, appConfig *config.AppConfig) *TestServer {
 
 // NewTestServerWithAdaptor creates a new test server with adaptor flag
 func NewTestServerWithAdaptor(t *testing.T, enableAdaptor bool) *TestServer {
-	// Create test config directory
-	configDir := ".tingly-box"
-	if err := os.MkdirAll(configDir, 0700); err != nil {
-		t.Fatalf("Failed to create test config directory: %v", err)
+	// Create temp config directory
+	configDir, err := os.MkdirTemp("", "tingly-box-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp config directory: %v", err)
 	}
 
-	appConfig, err := config.NewAppConfig()
+	// Register cleanup
+	t.Cleanup(func() {
+		os.RemoveAll(configDir)
+	})
+
+	appConfig, err := config.NewAppConfig(config.WithConfigDir(configDir))
 	if err != nil {
 		t.Fatalf("Failed to create app config: %v", err)
 	}
@@ -294,4 +306,61 @@ func FindGoModRoot() (string, error) {
 		}
 		dir = parent
 	}
+}
+
+// copyConfigDir copies a config directory, skipping test config subdirectories
+func copyConfigDir(src, dst string) error {
+	// Use the otiai10/copy library with options to skip test directories
+	opts := copy.Options{
+		Skip: func(srcinfo os.FileInfo, src string, dest string) (bool, error) {
+			// Skip directories containing "-test-" in the path
+			if srcinfo.IsDir() && strings.Contains(src, "-test-") {
+				return true, nil
+			}
+			return false, nil
+		},
+	}
+	return copy.Copy(src, dst, opts)
+}
+
+// TestConfigDir represents a temporary config directory for testing
+type TestConfigDir struct {
+	path string
+}
+
+// NewTestConfigDirCopy creates a temporary copy of the real config directory
+// for testing purposes. It automatically cleans up the temporary directory
+// when the test finishes.
+func NewTestConfigDirCopy(t *testing.T) *TestConfigDir {
+	// Get the real config directory path
+	realConfigDir := config.GetTinglyConfDir()
+
+	// Check if real config directory exists
+	if _, err := os.Stat(realConfigDir); os.IsNotExist(err) {
+		t.Skipf("Real config directory not found at %s, skipping test", realConfigDir)
+	}
+
+	// Create a temporary directory for the test config
+	tempDir, err := os.MkdirTemp("", "tingly-box-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+
+	// Copy the real config to the temp directory
+	if err := copyConfigDir(realConfigDir, tempDir); err != nil {
+		os.RemoveAll(tempDir)
+		t.Fatalf("Failed to copy config directory: %v", err)
+	}
+
+	// Register cleanup function to remove the temp directory when test finishes
+	t.Cleanup(func() {
+		os.RemoveAll(tempDir)
+	})
+
+	return &TestConfigDir{path: tempDir}
+}
+
+// Path returns the path to the temporary config directory
+func (td *TestConfigDir) Path() string {
+	return td.path
 }

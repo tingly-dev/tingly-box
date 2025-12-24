@@ -72,7 +72,7 @@ docker run -d \
 
 ---
 
-## **🔌 Use with OpenAI SDK or Claude CLI**
+## **🔌 Use with OpenAI SDK or Claude Code**
 
 **Python OpenAI SDK**
 
@@ -85,7 +85,7 @@ client = OpenAI(
 )
 
 response = client.chat.completions.create(
-// To pass litellm model name validation, use "gpt-3.5-turbo"
+# To pass litellm model name validation, use "gpt-3.5-turbo"
     model="tingly",
     messages=[{"role": "user", "content": "Hello!"}]
 )
@@ -124,7 +124,7 @@ tingly-box start
 
 ## 📚 Documentation
 
-- **User Manual** – Installation, configuration, and operations
+**[User Manual](https://chatgpt.com/c/docs/user_manual.md)** – Installation, configuration, and operational guide
 
 ------
 
