@@ -277,14 +277,6 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
         }
     };
 
-    const handleDelete = () => {
-        showNotification('Delete not supported in template mode', 'warning');
-    };
-
-    const handleReset = () => {
-        showNotification('Reset not supported in auto-save mode', 'warning');
-    };
-
     // Convert UUID-based providerModels to name-based for ModelSelectTab
     const nameBasedProviderModels = React.useMemo(() => {
         const converted: any = {};
@@ -394,9 +386,6 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
                     onUpdateRecord={handleUpdateRecord}
                     onDeleteProvider={handleDeleteProvider}
                     onRefreshModels={handleRefreshModels}
-                    onSave={() => { }}
-                    onDelete={handleDelete}
-                    onReset={handleReset}
                     onToggleExpanded={() => { }}
                     onProviderNodeClick={handleProviderNodeClick}
                     onAddProviderButtonClick={handleAddProviderButtonClick}

@@ -3,17 +3,12 @@ import {
     ArrowBack as ArrowBackIcon,
     ArrowForward as ArrowForwardIcon,
     Delete as DeleteIcon,
-    ExpandLess as ExpandLessIcon,
-    ExpandMore as ExpandMoreIcon,
     Info as InfoIcon,
     MoreVert as MoreVertIcon,
-    Refresh as RefreshIcon,
-    Save as SaveIcon,
-    Settings as SettingsIcon
+    Refresh as RefreshIcon
 } from '@mui/icons-material';
 import {
     Box,
-    Button,
     Card,
     CardContent,
     Chip,
@@ -45,9 +40,6 @@ interface RuleGraphProps {
     onUpdateRecord: (field: keyof ConfigRecord, value: any) => void;
     onDeleteProvider: (recordId: string, providerId: string) => void;
     onRefreshModels: (providerUuid: string) => void;
-    onSave: () => void;
-    onDelete: () => void;
-    onReset: () => void;
     onToggleExpanded: () => void;
     onProviderNodeClick: (providerUuid: string) => void;
     onAddProviderButtonClick: () => void;
@@ -449,30 +441,10 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
     onUpdateRecord,
     onDeleteProvider,
     onRefreshModels,
-    onSave,
-    onDelete,
-    onReset,
     onToggleExpanded,
     onProviderNodeClick,
     onAddProviderButtonClick
 }) => {
-    const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
-    const menuOpen = Boolean(menuAnchorEl);
-
-    const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
-        event.stopPropagation();
-        setMenuAnchorEl(event.currentTarget);
-    };
-
-    const handleMenuClose = () => {
-        setMenuAnchorEl(null);
-    };
-
-    const handleConfigureResponse = () => {
-        handleMenuClose();
-        console.log('Configure response for:', record.responseModel);
-    };
-
     const getApiStyle = (providerUuid: string) => {
         const provider = providers.find(p => p.uuid === providerUuid);
         return provider?.api_style || 'openai';
@@ -489,116 +461,45 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                     }}>
                         {record.requestModel || 'Specified model name'}
                     </Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Chip
-                            label={`use ${record.providers.length} keys`}
-                            size="small"
-                            variant="outlined"
-                            sx={{
-                                opacity: record.active ? 1 : 0.5,
-                                borderColor: record.active ? 'inherit' : 'text.disabled',
-                                color: record.active ? 'inherit' : 'text.disabled'
-                            }}
-                        />
-                        <Chip
-                            label={record.active ? "Active" : "Inactive"}
-                            size="small"
-                            color={record.active ? "success" : "default"}
-                            variant={record.active ? "filled" : "outlined"}
-                            sx={{
-                                opacity: record.active ? 1 : 0.7,
-                            }}
-                        />
-                        <Switch
-                            checked={record.active}
-                            onChange={(e) => onUpdateRecord('active', e.target.checked)}
-                            disabled={saving}
-                            size="small"
-                            color="success"
-                            onClick={(e) => e.stopPropagation()}
-                        />
-                        {record.responseModel && <Chip
-                            label={`Response as ${record.responseModel}`}
-                            size="small"
-                            color="info"
-                            sx={{
-                                opacity: record.active ? 1 : 0.5,
-                                backgroundColor: record.active ? 'info.main' : 'action.disabled',
-                                color: record.active ? 'info.contrastText' : 'text.disabled'
-                            }}
-                        />}
-                    </Box>
                 </Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    {/* Action Buttons */}
-                    {/* <Box sx={{ display: 'flex', gap: 0.5, mr: 1 }}>
-                        <Button
-                            variant="contained"
-                            color="primary"
-                            size="small"
-                            startIcon={<SaveIcon />}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onSave();
-                            }}
-                            disabled={saving}
-                            sx={{ minWidth: 'auto', px: 1.5 }}
-                        >
-                            {saving ? 'Saving...' : 'Save'}
-                        </Button>
-                        <Button
-                            startIcon={<RefreshIcon />}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onReset();
-                            }}
-                            variant="outlined"
-                            size="small"
-                            disabled={saving}
-                            sx={{ minWidth: 'auto', px: 1.5 }}
-                        >
-                            Reset
-                        </Button>
-                        <IconButton
-                            size="small"
-                            onClick={handleMenuClick}
-                            disabled={saving}
-                            sx={{ ml: 0.5 }}
-                        >
-                            <MoreVertIcon />
-                        </IconButton>
-                        <Menu
-                            anchorEl={menuAnchorEl}
-                            open={menuOpen}
-                            onClose={handleMenuClose}
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            <MenuItem onClick={handleConfigureResponse}>
-                                <ListItemIcon>
-                                    <SettingsIcon fontSize="small" />
-                                </ListItemIcon>
-                                <ListItemText>Configure Response</ListItemText>
-                            </MenuItem>
-                            <MenuItem onClick={(e) => {
-                                e.stopPropagation();
-                                onDelete();
-                            }}>
-                                <ListItemIcon>
-                                    <DeleteIcon fontSize="small" />
-                                </ListItemIcon>
-                                <ListItemText>Delete Rule</ListItemText>
-                            </MenuItem>
-                        </Menu>
-                    </Box>
-                    <IconButton
+                    <Chip
+                        label={`use ${record.providers.length} keys`}
                         size="small"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onToggleExpanded();
+                        variant="outlined"
+                        sx={{
+                            opacity: record.active ? 1 : 0.5,
+                            borderColor: record.active ? 'inherit' : 'text.disabled',
+                            color: record.active ? 'inherit' : 'text.disabled'
                         }}
-                    >
-                        {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                    </IconButton> */}
+                    />
+                    <Chip
+                        label={record.active ? "Active" : "Inactive"}
+                        size="small"
+                        color={record.active ? "success" : "default"}
+                        variant={record.active ? "filled" : "outlined"}
+                        sx={{
+                            opacity: record.active ? 1 : 0.7,
+                        }}
+                    />
+                    <Switch
+                        checked={record.active}
+                        onChange={(e) => onUpdateRecord('active', e.target.checked)}
+                        disabled={saving}
+                        size="small"
+                        color="success"
+                        onClick={(e) => e.stopPropagation()}
+                    />
+                    {record.responseModel && <Chip
+                        label={`Response as ${record.responseModel}`}
+                        size="small"
+                        color="info"
+                        sx={{
+                            opacity: record.active ? 1 : 0.5,
+                            backgroundColor: record.active ? 'info.main' : 'action.disabled',
+                            color: record.active ? 'info.contrastText' : 'text.disabled'
+                        }}
+                    />}
                 </Box>
             </SummarySection>
 
