@@ -1,4 +1,4 @@
-import { CheckCircle, Error, Refresh } from '@mui/icons-material';
+import { Refresh } from '@mui/icons-material';
 import {
     Alert,
     Autocomplete,
@@ -328,21 +328,11 @@ const PresetProviderFormDialog = ({
                     <Button
                         variant="outlined"
                         onClick={handleVerify}
-                        disabled={verifying}
+                        disabled={verifying || !data.apiStyle || !data.apiBase || !data.token}
                         size="small"
-                        startIcon={
-                            verifying ? (
-                                <CircularProgress size={16} />
-                            ) : verificationResult?.success ? (
-                                <CheckCircle color="success" />
-                            ) : verificationResult?.success === false ? (
-                                <Error color="error" />
-                            ) : (
-                                <Refresh />
-                            )
-                        }
+                        startIcon={verifying ? <CircularProgress size={16} /> : <Refresh />}
                     >
-                        {verifying ? 'Verifying...' : verificationResult?.success ? 'Verified' : verificationResult?.success === false ? 'Verify' : 'Verify'}
+                        {verifying ? 'Verifying...' : 'Verify'}
                     </Button>
                     <Button type="submit" variant="contained" size="small">
                         {submitText || defaultSubmitText}
