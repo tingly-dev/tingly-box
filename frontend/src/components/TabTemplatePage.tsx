@@ -22,6 +22,7 @@ export interface TabTemplatePageProps {
     token: string;
     showNotification: (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
     providers: Provider[];
+    onRuleChange?: (updatedRule: Rule) => void;
 }
 
 const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
@@ -33,7 +34,8 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
     setShowTokenModal,
     token,
     showNotification,
-    providers
+    providers,
+    onRuleChange
 }) => {
     const [providerModelsByUuid, setProviderModelsByUuid] = useState<ProviderModelsDataByUuid>({});
     const [configRecord, setConfigRecord] = useState<ConfigRecord | null>(null);
@@ -220,6 +222,14 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
 
             if (result.success) {
                 showNotification(`Configuration saved successfully`, 'success');
+                // Notify parent of the updated rule
+                onRuleChange?.({
+                    ...rule,
+                    request_model: ruleData.request_model,
+                    response_model: ruleData.response_model,
+                    active: ruleData.active,
+                    services: ruleData.services,
+                });
             } else {
                 showNotification(`Failed to save: ${result.error || 'Unknown error'}`, 'error');
             }

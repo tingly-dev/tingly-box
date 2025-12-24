@@ -119,6 +119,7 @@ const UseLiteLLMPage: React.FC<UseLiteLLMPageProps> = ({
             setShowTokenModal={setShowTokenModal}
             token={token}
             showNotification={showNotification}
+            onRuleChange={setRule}
         />
     );
 };

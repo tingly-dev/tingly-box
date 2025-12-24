@@ -135,6 +135,7 @@ const UseClaudeCodePage: React.FC<UseClaudeCodePageProps> = ({
             token={token}
             showNotification={showNotification}
             providers={providers}
+            onRuleChange={setRule}
         />
     );
 };

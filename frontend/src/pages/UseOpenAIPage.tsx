@@ -121,6 +121,7 @@ const UseOpenAIPage: React.FC<UseOpenAIPageProps> = ({
             token={token}
             showNotification={showNotification}
             providers={providers}
+            onRuleChange={setRule}
         />
     );
 };

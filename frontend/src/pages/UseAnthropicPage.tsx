@@ -122,6 +122,7 @@ const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
             token={token}
             showNotification={showNotification}
             providers={providers}
+            onRuleChange={setRule}
         />
     );
 };
