@@ -81,8 +81,12 @@ const UseClaudeCodePage: React.FC<UseClaudeCodePageProps> = ({
 
     const header = (
         <Box sx={{p: 2}}>
-
-
+            <Box sx={{mb: 2}}>
+                <Typography>
+                    Add env config into claude code config file <code
+                    style={{fontSize: '0.85rem'}}>{configPath}</code>
+                </Typography>
+            </Box>
             <Paper sx={{p: 1.5, height: '100%'}}>
                 <Box sx={{position: 'relative'}}>
                     <IconButton
@@ -122,12 +126,7 @@ const UseClaudeCodePage: React.FC<UseClaudeCodePageProps> = ({
 
     return (
         <TabTemplatePage
-            title={
-                <Typography variant="subtitle2" sx={{fontWeight: 600}}>
-                    Add env config into claude code config file <code
-                    style={{fontSize: '0.85rem'}}>{configPath}</code>
-                </Typography>
-            }
+            title=""
             rule={rule}
             header={header}
             showTokenModal={showTokenModal}

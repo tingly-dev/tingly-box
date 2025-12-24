@@ -100,6 +100,25 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
         loadData();
     }, []);
 
+    // Initialize selectedOption from rule when both rule and providers are loaded
+    useEffect(() => {
+        if (!loading && providers.length > 0 && rule && rule.services && rule.services.length > 0) {
+            const service = rule.services[0];
+            const providerUuid = service.provider;
+            const model = service.model;
+
+            // Verify the provider exists and is enabled
+            const provider = providers.find(p => p.uuid === providerUuid && p.enabled);
+            const targetProviderUuid = provider ? providerUuid : (providers.find(p => p.enabled)?.uuid || "");
+            const targetModel = provider ? model : "";
+
+            // Check if we need to update (different from current selection)
+            if (selectedOption.provider !== targetProviderUuid || selectedOption.model !== targetModel) {
+                setSelectedOption({provider: targetProviderUuid, model: targetModel});
+            }
+        }
+    }, [loading, providers, rule]);
+
     useEffect(() => {
         if (providers.length > 0) {
             let provider;
