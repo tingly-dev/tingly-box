@@ -1046,6 +1046,42 @@ func init() {
 			Active: true,
 		},
 		{
+			UUID:          "tingly/anthropic",
+			RequestModel:  "tingly/anthropic",
+			ResponseModel: "",
+			Description:   "Default proxy rule in tingly-box for general use with Anthropic",
+			Services:      []Service{}, // Empty services initially
+			LBTactic: Tactic{ // Initialize with default round-robin tactic
+				Type:   TacticRoundRobin,
+				Params: DefaultRoundRobinParams(),
+			},
+			Active: true,
+		},
+		{
+			UUID:          "tingly/openai",
+			RequestModel:  "tingly/openai",
+			ResponseModel: "",
+			Description:   "Default proxy rule in tingly-box for general use with OpenAI",
+			Services:      []Service{}, // Empty services initially
+			LBTactic: Tactic{ // Initialize with default round-robin tactic
+				Type:   TacticRoundRobin,
+				Params: DefaultRoundRobinParams(),
+			},
+			Active: true,
+		},
+		{
+			UUID:          "tingly/ide",
+			RequestModel:  "tingly/ide",
+			ResponseModel: "",
+			Description:   "Default proxy rule for IDE, like Claude Code and so on",
+			Services:      []Service{}, // Empty services initially
+			LBTactic: Tactic{ // Initialize with default round-robin tactic
+				Type:   TacticRoundRobin,
+				Params: DefaultRoundRobinParams(),
+			},
+			Active: true,
+		},
+		{
 			UUID:          "claude-code",
 			RequestModel:  "claude-code",
 			ResponseModel: "",
