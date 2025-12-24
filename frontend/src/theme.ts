@@ -212,6 +212,15 @@ const theme = createTheme({
         },
       },
     },
+    MuiTabs: {
+      styleOverrides: {
+        indicator: {
+          height: 4,
+          borderRadius: 2,
+          backgroundColor: '#2563eb',
+        },
+      },
+    },
   },
 });
 
