@@ -229,11 +229,11 @@ type RulesResponse struct {
 	Data    interface{} `json:"data"`
 }
 
-// SetRuleRequest represents the request to set/update a rule
-type SetRuleRequest config.Rule
+// UpdateRuleRequest represents the request to set/update a rule
+type UpdateRuleRequest config.Rule
 
-// SetRuleResponse represents the response for setting/updating a rule
-type SetRuleResponse struct {
+// UpdateRuleResponse represents the response for setting/updating a rule
+type UpdateRuleResponse struct {
 	Success bool   `json:"success" example:"true"`
 	Message string `json:"message" example:"Rule saved successfully"`
 	Data    struct {
