@@ -37,7 +37,7 @@ func (s *Server) GetRule(c *gin.Context) {
 	if ruleUUID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"error":   "Rule name is required",
+			"error":   "Rule UUID is required",
 		})
 		return
 	}
@@ -51,7 +51,7 @@ func (s *Server) GetRule(c *gin.Context) {
 		return
 	}
 
-	rule := cfg.GetRequestConfigByRequestModel(ruleUUID)
+	rule := cfg.GetRuleByUUID(ruleUUID)
 	if rule == nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,

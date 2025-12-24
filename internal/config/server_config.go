@@ -303,27 +303,14 @@ func (c *Config) GetUUIDByRequestModel(requestModel string) string {
 	return ""
 }
 
-// GetRequestConfigByRequestModel returns the Rule for the given request uuid
-func (c *Config) GetRequestConfigByRequestModel(UUID string) *Rule {
+// GetRuleByUUID returns the Rule for the given request uuid
+func (c *Config) GetRuleByUUID(UUID string) *Rule {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	for idx := range c.Rules {
-		if c.Rules[idx].UUID == UUID {
-			return &c.Rules[idx]
-		}
-	}
-	return nil
-}
-
-// GetRuleByRequestModel returns the Rule for the given request model name
-func (c *Config) GetRuleByRequestModel(requestModel string) *Rule {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	for idx := range c.Rules {
-		if c.Rules[idx].RequestModel == requestModel {
-			return &c.Rules[idx]
+	for _, rule := range c.Rules {
+		if rule.UUID == UUID {
+			return &rule
 		}
 	}
 	return nil
