@@ -15,7 +15,7 @@ import {
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { PageLayout } from '../components/PageLayout';
-import RuleGraph from '../components/RuleGraph'
+import RuleGraph from '../components/RuleGraphV2'
 import UnifiedCard from '../components/UnifiedCard';
 import { api } from '../services/api';
 
@@ -247,6 +247,28 @@ const RulePage = () => {
         );
     };
 
+    const addProviderWithValues = (recordId: string, providerUuid: string, model: string) => {
+        setConfigRecords(
+            configRecords.map((record) =>
+                record.uuid === recordId
+                    ? {
+                        ...record,
+                        providers: [
+                            ...record.providers,
+                            {
+                                uuid: crypto.randomUUID(),
+                                provider: providerUuid,
+                                model: model,
+                                isManualInput: false,
+                                active: true,
+                            },
+                        ],
+                    }
+                    : record
+            )
+        );
+    };
+
     const deleteProvider = (recordId: string, providerId: string) => {
         setConfigRecords(
             configRecords.map((record) =>
@@ -431,6 +453,7 @@ const RulePage = () => {
                                     onUpdateRecord={(field, value) => updateConfigRecord(record.uuid, field, value)}
                                     onUpdateProvider={(recordId, providerId, field, value) => updateProvider(recordId, providerId, field, value)}
                                     onAddProvider={() => addProvider(record.uuid)}
+                                    onAddProviderWithValues={(providerUuid: string, model: string) => addProviderWithValues(record.uuid, providerUuid, model)}
                                     onDeleteProvider={(recordId, providerId) => deleteProvider(recordId, providerId)}
                                     onRefreshModels={handleRefreshProviderModels}
                                     onFetchModels={fetchProviderModels}

@@ -1,53 +1,46 @@
-import {Add as AddIcon, PlayArrow as ProbeIcon} from '@mui/icons-material';
-import {Box, Button, Stack, Typography} from '@mui/material';
-import React, {useCallback, useEffect, useState} from 'react';
-import CardGrid from '../components/CardGrid.tsx';
-import PresetProviderFormDialog, {type EnhancedProviderFormData} from '../components/PresetProviderFormDialog.tsx';
-import Probe from '../components/Probe';
-import type {ProviderSelectTabOption} from '../components/ModelSelectTab';
-import ModelSelectTab from '../components/ModelSelectTab';
-import UnifiedCard from '../components/UnifiedCard';
+import { Add as AddIcon, PlayArrow as ProbeIcon } from '@mui/icons-material';
+import { Box, Button, Dialog, DialogContent, DialogTitle, Typography } from '@mui/material';
+import React, { useCallback, useEffect, useState } from 'react';
+import type { ProbeResponse } from '../client';
 import ApiKeyModal from '../components/ApiKeyModal';
-import {api} from '../services/api';
-import type {ProviderModelsDataByUuid} from '../types/provider';
-import type {ProbeResponse} from '../client';
+import CardGrid from '../components/CardGrid.tsx';
+import PresetProviderFormDialog, { type EnhancedProviderFormData } from '../components/PresetProviderFormDialog.tsx';
+import Probe from '../components/Probe';
+import RuleGraphV2 from '../components/RuleGraphV2';
+import UnifiedCard from '../components/UnifiedCard';
+import { api } from '../services/api';
+import type { Provider, ProviderModelsDataByUuid } from '../types/provider';
+import ModelSelectTab, { type ProviderSelectTabOption } from './ModelSelectTab';
+import type { ConfigProvider, ConfigRecord, Rule } from './RuleGraphTypes.ts';
 
 export interface TabTemplatePageProps {
-    // Card title
     title: string | React.ReactNode;
-    // Optional subtitle/description
     subtitle?: string;
-    // Rule name for API
-    rule: object;
-    // Custom header component (optional - if not provided, will create default)
+    rule: Rule;
     header?: React.ReactNode;
-    // Token modal state
     showTokenModal: boolean;
     setShowTokenModal: (show: boolean) => void;
     token: string;
     showNotification: (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
-    // Custom model select handler (optional)
-    onModelSelect?: (provider: any, model: string) => void;
-    // Empty state content (optional)
     emptyState?: React.ReactNode;
 }
 
 const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
-                                                             title,
-                                                             subtitle,
-                                                             rule,
-                                                             header,
-                                                             showTokenModal,
-                                                             setShowTokenModal,
-                                                             token,
-                                                             showNotification,
-                                                             onModelSelect,
-                                                             emptyState
-                                                         }) => {
+    title,
+    subtitle,
+    rule,
+    header,
+    showTokenModal,
+    setShowTokenModal,
+    token,
+    showNotification,
+    emptyState
+}) => {
     const [providers, setProviders] = useState<any[]>([]);
     const [providerModelsByUuid, setProviderModelsByUuid] = useState<ProviderModelsDataByUuid>({});
     const [loading, setLoading] = useState(true);
-    const [selectedOption, setSelectedOption] = useState<any>({provider: "", model: ""});
+    const [configRecord, setConfigRecord] = useState<ConfigRecord | null>(null);
+    const [saving, setSaving] = useState(false);
     const [refreshingProviders, setRefreshingProviders] = useState<string[]>([]);
 
     // Probe state
@@ -64,6 +57,11 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
         token: '',
     });
 
+    // ModelSelectTab dialog state for provider selection
+    const [modelSelectDialogOpen, setModelSelectDialogOpen] = useState(false);
+    const [modelSelectMode, setModelSelectMode] = useState<'edit' | 'add'>('add');
+    const [editingProviderUuid, setEditingProviderUuid] = useState<string | null>(null);
+
     const providerUuidToName = React.useMemo(() => {
         const map: { [uuid: string]: string } = {};
         providers.forEach(provider => {
@@ -71,17 +69,6 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
         });
         return map;
     }, [providers]);
-
-    const providerModelsByName = React.useMemo(() => {
-        const nameBased: { [name: string]: any } = {};
-        Object.entries(providerModelsByUuid).forEach(([uuid, modelData]) => {
-            const providerName = providerUuidToName[uuid];
-            if (providerName) {
-                nameBased[providerName] = modelData;
-            }
-        });
-        return nameBased;
-    }, [providerModelsByUuid, providerUuidToName]);
 
     const loadProviders = async () => {
         const result = await api.getProviders();
@@ -100,52 +87,75 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
         loadData();
     }, []);
 
-    // Initialize selectedOption from rule when both rule and providers are loaded
+    // Convert rule to ConfigRecord format when rule or providers change
     useEffect(() => {
-        if (!loading && providers.length > 0 && rule && rule.services && rule.services.length > 0) {
-            const service = rule.services[0];
-            const providerUuid = service.provider;
-            const model = service.model;
+        if (!loading && rule && providers.length > 0 && !configRecord) {
+            const services = rule.services || [];
+            const providersList: ConfigProvider[] = services.map((service: any) => ({
+                uuid: service.id || service.uuid || crypto.randomUUID(),
+                provider: service.provider || '',
+                model: service.model || '',
+                isManualInput: false,
+                weight: service.weight || 0,
+                active: service.active !== undefined ? service.active : true,
+                time_window: service.time_window || 0,
+            }));
 
-            // Verify the provider exists and is enabled
-            const provider = providers.find(p => p.uuid === providerUuid && p.enabled);
-            const targetProviderUuid = provider ? providerUuid : (providers.find(p => p.enabled)?.uuid || "");
-            const targetModel = provider ? model : "";
-
-            // Check if we need to update (different from current selection)
-            if (selectedOption.provider !== targetProviderUuid || selectedOption.model !== targetModel) {
-                setSelectedOption({provider: targetProviderUuid, model: targetModel});
+            // If no providers, add an empty one
+            if (providersList.length === 0) {
+                providersList.push({
+                    uuid: crypto.randomUUID(),
+                    provider: '',
+                    model: '',
+                });
             }
-        }
-    }, [loading, providers, rule]);
 
+            setConfigRecord({
+                uuid: rule.uuid || crypto.randomUUID(),
+                requestModel: rule.request_model || '',
+                responseModel: rule.response_model || '',
+                active: rule.active !== undefined ? rule.active : true,
+                providers: providersList,
+            });
+        }
+    }, [loading, rule, providers, configRecord]);
+
+    // Fetch models for providers when configRecord changes
     useEffect(() => {
-        if (providers.length > 0) {
-            let provider;
-            if (selectedOption.provider) {
-                provider = providers.find(p => p.uuid === selectedOption.provider);
-            } else {
-                provider = providers.find(p => p.enabled);
-            }
-            if (provider && !providerModelsByUuid[provider.uuid]) {
-                handleProviderChange(provider);
-            }
+        if (configRecord && providers.length > 0) {
+            const usedProviderUuids = new Set<string>();
+            configRecord.providers.forEach(p => {
+                if (p.provider) {
+                    usedProviderUuids.add(p.provider);
+                }
+            });
+
+            usedProviderUuids.forEach(uuid => {
+                if (!providerModelsByUuid[uuid]) {
+                    handleFetchModels(uuid);
+                }
+            });
         }
-    }, [selectedOption.provider, providers]);
+    }, [configRecord]);
 
     const handleProbe = useCallback(async () => {
-        if (!selectedOption.provider || !selectedOption.model) return;
+        if (!configRecord?.providers.length || !configRecord.providers[0].provider || !configRecord.providers[0].model) {
+            return;
+        }
+
+        const providerUuid = configRecord.providers[0].provider;
+        const model = configRecord.providers[0].model;
 
         setIsProbing(true);
         setProbeResult(null);
 
         try {
-            const providerName = providerUuidToName[selectedOption.provider];
+            const providerName = providerUuidToName[providerUuid];
             if (!providerName) {
                 throw new Error('Provider not found');
             }
 
-            const result = await api.probeModel(providerName, selectedOption.model);
+            const result = await api.probeModel(providerName, model);
             setProbeResult(result);
         } catch (error) {
             console.error('Probe error:', error);
@@ -159,91 +169,156 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
         } finally {
             setIsProbing(false);
         }
-    }, [selectedOption.provider, selectedOption.model, providerUuidToName]);
+    }, [configRecord, providerUuidToName]);
 
-    const handleModelSelect = async (provider: any, model: string) => {
-        setSelectedOption({provider: provider.uuid, model: model});
-
-        if (onModelSelect) {
-            onModelSelect(provider, model);
+    const handleFetchModels = async (providerUuid: string) => {
+        if (!providerUuid || providerModelsByUuid[providerUuid]) {
             return;
-        } else {
-            // Default behavior: update the rule
-            try {
-                const ruleData = {
-                    uuid: rule.uuid,
-                    request_model: rule.request_model,
-                    active: true,
-                    services: [
-                        {
-                            provider: provider.uuid,
-                            model: model,
-                            weight: 0,
-                            active: true,
-                            time_window: 0,
-                        }
-                    ],
-                };
+        }
 
-                const existingRule = await api.getRule(rule.uuid);
-                let result;
-                if (existingRule.success && existingRule.data.uuid) {
-                    result = await api.updateRule(rule.uuid, ruleData);
-                }
-                if (result.success) {
-                    showNotification(`Successfully updated ${rule.request_model} forwarding to use ${provider.name}:${model}`, 'success');
-                } else {
-                    showNotification(`Failed to update rule ${rule.request_model}: ${result.error}`, 'error');
-                }
-            } catch (error) {
-                console.error(`Error updating rule ${rule.request_model}:`, error);
-                showNotification(`Error updating rule ${rule.request_model} for ${provider.name}`, 'error');
+        try {
+            const result = await api.getProviderModelsByUUID(providerUuid);
+            if (result.success && result.data) {
+                setProviderModelsByUuid((prev: any) => ({
+                    ...prev,
+                    [providerUuid]: result.data,
+                }));
             }
+        } catch (error) {
+            console.error(`Failed to fetch models for provider ${providerUuid}:`, error);
         }
     };
 
-    const handleProviderChange = async (provider: any) => {
+    const handleRefreshModels = async (providerUuid: string) => {
+        if (!providerUuid) return;
+
         try {
-            if (refreshingProviders.includes(provider.uuid)) {
+            setRefreshingProviders(prev => [...prev, providerUuid]);
+
+            const result = await api.updateProviderModelsByUUID(providerUuid);
+            if (result.success && result.data) {
+                setProviderModelsByUuid((prev: any) => ({
+                    ...prev,
+                    [providerUuid]: result.data,
+                }));
+                showNotification(`Models refreshed successfully!`, 'success');
+            } else {
+                showNotification(`Failed to refresh models: ${result.error}`, 'error');
+            }
+        } catch (error) {
+            console.error('Error refreshing models:', error);
+            showNotification(`Error refreshing models`, 'error');
+        } finally {
+            setRefreshingProviders(prev => prev.filter(p => p !== providerUuid));
+        }
+    };
+
+    // RuleGraphV2 handlers
+    const handleUpdateRecord = (field: keyof ConfigRecord, value: any) => {
+        if (configRecord) {
+            setConfigRecord({
+                ...configRecord,
+                [field]: value
+            });
+        }
+    };
+
+    const handleUpdateProvider = (recordId: string, providerId: string, field: keyof ConfigProvider, value: any) => {
+        if (configRecord) {
+            setConfigRecord({
+                ...configRecord,
+                providers: configRecord.providers.map(p => {
+                    if (p.uuid === providerId) {
+                        const updated = { ...p, [field]: value };
+                        // If provider changed, reset model
+                        if (field === 'provider') {
+                            updated.model = '';
+                        }
+                        return updated;
+                    }
+                    return p;
+                })
+            });
+        }
+    };
+
+    const handleAddProviderWithValues = (providerUuid: string, model: string) => {
+        if (configRecord) {
+            setConfigRecord({
+                ...configRecord,
+                providers: [
+                    ...configRecord.providers,
+                    { uuid: crypto.randomUUID(), provider: providerUuid, model: model, isManualInput: false },
+                ],
+            });
+        }
+    };
+
+    const handleDeleteProvider = (_recordId: string, providerId: string) => {
+        if (configRecord) {
+            setConfigRecord({
+                ...configRecord,
+                providers: configRecord.providers.filter(p => p.uuid !== providerId),
+            });
+        }
+    };
+
+    const handleSave = async () => {
+        if (!configRecord || !configRecord.requestModel) {
+            showNotification('Request model name is required', 'error');
+            return;
+        }
+
+        // Validate providers have both provider and model
+        for (const provider of configRecord.providers) {
+            if (provider.provider && !provider.model) {
+                showNotification(`Please select a model for all providers`, 'error');
                 return;
             }
+        }
 
-            setRefreshingProviders(prev => [...prev, provider.uuid]);
+        setSaving(true);
+        try {
+            // Update the rule on the server
+            const ruleData = {
+                uuid: rule.uuid,
+                request_model: configRecord.requestModel,
+                response_model: configRecord.responseModel,
+                active: configRecord.active,
+                services: configRecord.providers
+                    .filter(p => p.provider) // Only include providers with provider selected
+                    .map(provider => ({
+                        provider: provider.provider,
+                        model: provider.model,
+                        weight: provider.weight || 0,
+                        active: provider.active !== undefined ? provider.active : true,
+                        time_window: provider.time_window || 0,
+                    })),
+            };
 
-            const result = await api.getProviderModelsByUUID(provider.uuid);
-            if (result.success && result.data) {
-                setProviderModelsByUuid(prev => ({
-                    ...prev,
-                    [provider.uuid]: result.data,
-                }));
+            const result = await api.updateRule(rule.uuid, ruleData);
+
+            if (result.success) {
+                showNotification(`Successfully updated ${configRecord.requestModel} configuration`, 'success');
+            } else {
+                showNotification(`Failed to save: ${result.error || 'Unknown error'}`, 'error');
             }
         } catch (error) {
-            console.error("Error fetching models on provider change:", error);
+            console.error('Error saving rule:', error);
+            showNotification(`Error saving configuration`, 'error');
         } finally {
-            setRefreshingProviders(prev => prev.filter(p => p !== provider.uuid));
+            setSaving(false);
         }
     };
 
-    const handleModelRefresh = async (provider: any) => {
-        try {
-            setRefreshingProviders(prev => [...prev, provider.uuid]);
+    const handleReset = async () => {
+        // Reload from server
+        await loadData();
+        showNotification('Reset to last saved state', 'success');
+    };
 
-            const result = await api.updateProviderModelsByUUID(provider.uuid);
-            if (result.success && result.data) {
-                setProviderModelsByUuid(prev => ({
-                    ...prev,
-                    [provider.uuid]: result.data,
-                }));
-                showNotification(`Models for ${provider.name} refreshed successfully!`, 'success');
-            } else {
-                showNotification(`Failed to refresh models for ${provider.name}.\nPlease check base_url and api_key.`, 'error');
-            }
-        } catch (error) {
-            console.error("Error refreshing models:", error);
-            showNotification(`Error refreshing models for ${provider.name}`, 'error');
-        } finally {
-            setRefreshingProviders(prev => prev.filter(p => p !== provider.uuid));
-        }
+    const handleDelete = () => {
+        showNotification('Delete not supported in template mode', 'warning');
     };
 
     const handleAddProviderClick = () => {
@@ -263,7 +338,7 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
         }));
     };
 
-    const handleAddProvider = async (e: React.FormEvent) => {
+    const handleAddProviderSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
         const providerData = {
@@ -286,18 +361,68 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
             setAddDialogOpen(false);
             await loadProviders();
 
-            const newProvider = {name: providerData.name};
-            await handleModelRefresh(newProvider);
+            // Refresh models for the newly added provider
+            await handleRefreshModels(result.data.uuid);
         } else {
             showNotification(`Failed to add provider: ${result.error}`, 'error');
         }
+    };
+
+    // Convert UUID-based providerModels to name-based for ModelSelectTab
+    const nameBasedProviderModels = React.useMemo(() => {
+        const converted: any = {};
+        Object.entries(providerModelsByUuid || {}).forEach(([uuid, data]: [string, any]) => {
+            const providerName = providerUuidToName[uuid];
+            if (providerName) {
+                converted[providerName] = data;
+            }
+        });
+        return converted;
+    }, [providerModelsByUuid, providerUuidToName]);
+
+    // Handle provider node click in RuleGraphV2 - open edit dialog
+    const handleProviderNodeClick = (providerUuid: string) => {
+        setEditingProviderUuid(providerUuid);
+        setModelSelectMode('edit');
+        setModelSelectDialogOpen(true);
+    };
+
+    // Handle add provider button click in RuleGraphV2 - open add dialog
+    const handleAddProviderButtonClick = () => {
+        setEditingProviderUuid(null);
+        setModelSelectMode('add');
+        setModelSelectDialogOpen(true);
+    };
+
+    // Handle model selection from ModelSelectTab
+    const handleModelSelect = (option: ProviderSelectTabOption) => {
+        if (modelSelectMode === 'add') {
+            // Add new provider with selected values
+            handleAddProviderWithValues(option.provider.uuid, option.model || '');
+        } else if (modelSelectMode === 'edit' && editingProviderUuid) {
+            // Update existing provider
+            handleUpdateProvider(configRecord!.uuid, editingProviderUuid, 'provider', option.provider.uuid);
+            handleUpdateProvider(configRecord!.uuid, editingProviderUuid, 'model', option.model || '');
+        }
+
+        // Fetch models for the selected provider
+        if (option.provider.uuid) {
+            handleFetchModels(option.provider.uuid);
+        }
+
+        setModelSelectDialogOpen(false);
+    };
+
+    // Handle provider tab change in ModelSelectTab
+    const handleProviderTabChange = (provider: Provider) => {
+        handleFetchModels(provider.uuid);
     };
 
     const defaultEmptyState = (
         <Box textAlign="center" py={8} width={"100%"}>
             <Button
                 variant="contained"
-                startIcon={<AddIcon/>}
+                startIcon={<AddIcon />}
                 onClick={handleAddProviderClick}
                 size="large"
                 sx={{
@@ -313,17 +438,17 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
                     },
                 }}
             >
-                <AddIcon sx={{fontSize: 40}}/>
+                <AddIcon sx={{ fontSize: 40 }} />
             </Button>
-            <Typography variant="h5" sx={{fontWeight: 600, mb: 2}}>
+            <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>
                 No API Keys Available
             </Typography>
-            <Typography variant="body1" color="text.secondary" sx={{mb: 3, maxWidth: 500, mx: 'auto'}}>
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
                 Get started by adding your first AI API Key.
             </Typography>
             <Button
                 variant="contained"
-                startIcon={<AddIcon/>}
+                startIcon={<AddIcon />}
                 onClick={handleAddProviderClick}
                 size="large"
             >
@@ -340,12 +465,12 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
                 size="header"
             >
                 {header || (
-                    <Box sx={{p: 2}}>
-                        <Typography variant="h6" sx={{fontWeight: 600}}>
+                    <Box sx={{ p: 2 }}>
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
                             {title}
                         </Typography>
                         {subtitle && (
-                            <Typography variant="body2" color="text.secondary" sx={{mt: 0.5}}>
+                            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                                 {subtitle}
                             </Typography>
                         )}
@@ -353,68 +478,125 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
                 )}
             </UnifiedCard>
 
-            {/* Provider Selection */}
-            <UnifiedCard
-                title="Providers"
-                size="full"
-                rightAction={
-                    <Box sx={{display: 'flex', gap: 1}}>
-                        <Button
-                            variant="outlined"
-                            onClick={handleProbe}
-                            disabled={!selectedOption.provider || !selectedOption.model || isProbing}
-                            startIcon={<ProbeIcon/>}
-                        >
-                            Test Connection
-                        </Button>
-                        <Button
-                            variant="contained"
-                            onClick={handleAddProviderClick}
-                        >
-                            Add API Key
-                        </Button>
-                    </Box>
-                }
-            >
-                {providers.length > 0 ? (
-                    <Stack spacing={3}>
-                        <ModelSelectTab
+            {/* Rule Configuration using RuleGraphV2 */}
+            {providers.length > 0 && configRecord ? (
+                <>
+                    <UnifiedCard
+                        title="Configuration"
+                        size="full"
+                        rightAction={
+                            <Box sx={{ display: 'flex', gap: 1 }}>
+                                <Button
+                                    variant="outlined"
+                                    onClick={handleProbe}
+                                    disabled={!configRecord.providers[0]?.provider || !configRecord.providers[0]?.model || isProbing}
+                                    startIcon={<ProbeIcon />}
+                                >
+                                    Test Connection
+                                </Button>
+                                <Button
+                                    variant="contained"
+                                    onClick={handleAddProviderClick}
+                                >
+                                    Add API Key
+                                </Button>
+                            </Box>
+                        }
+                    >
+                        <RuleGraphV2
+                            record={configRecord}
+                            recordUuid={configRecord.uuid}
                             providers={providers}
-                            providerModels={providerModelsByName}
-                            selectedProvider={selectedOption?.provider}
-                            selectedModel={selectedOption?.model}
-                            onSelected={(opt: ProviderSelectTabOption) => handleModelSelect(opt.provider, opt.model || "")}
-                            onProviderChange={handleProviderChange}
-                            onRefresh={handleModelRefresh}
-                            refreshingProviders={refreshingProviders}
+                            providerUuidToName={providerUuidToName}
+                            saving={saving}
+                            expanded={true}
+                            onUpdateRecord={handleUpdateRecord}
+                            onDeleteProvider={handleDeleteProvider}
+                            onRefreshModels={handleRefreshModels}
+                            onSave={handleSave}
+                            onDelete={handleDelete}
+                            onReset={handleReset}
+                            onToggleExpanded={() => { }}
+                            onProviderNodeClick={handleProviderNodeClick}
+                            onAddProviderButtonClick={handleAddProviderButtonClick}
                         />
+                    </UnifiedCard>
 
-                        {selectedOption.provider && selectedOption.model && (
-                            <Box sx={{display: 'flex', justifyContent: 'center'}}>
+                    {/* Probe Result Section */}
+                    {configRecord.providers[0]?.provider && configRecord.providers[0]?.model && (
+                        <UnifiedCard
+                            title="Connection Test"
+                            size="full"
+                        >
+                            <Box sx={{ display: 'flex', justifyContent: 'center' }}>
                                 <Probe
-                                    provider={selectedOption.provider}
-                                    model={selectedOption.model}
+                                    provider={configRecord.providers[0].provider}
+                                    model={configRecord.providers[0].model}
                                     isProbing={isProbing}
                                     probeResult={probeResult}
                                     onToggleDetails={() => setDetailsExpanded(!detailsExpanded)}
                                     detailsExpanded={detailsExpanded}
                                 />
                             </Box>
-                        )}
-                    </Stack>
-                ) : (
-                    emptyState || defaultEmptyState
-                )}
-            </UnifiedCard>
+                        </UnifiedCard>
+                    )}
+                </>
+            ) : (
+                <UnifiedCard
+                    title="Configuration"
+                    size="full"
+                    rightAction={
+                        <Button
+                            variant="contained"
+                            onClick={handleAddProviderClick}
+                        >
+                            Add API Key
+                        </Button>
+                    }
+                >
+                    {emptyState || defaultEmptyState}
+                </UnifiedCard>
+            )}
 
             <PresetProviderFormDialog
                 open={addDialogOpen}
                 onClose={() => setAddDialogOpen(false)}
-                onSubmit={handleAddProvider}
+                onSubmit={handleAddProviderSubmit}
                 data={providerFormData}
                 onChange={handleEnhanceProviderFormChange}
                 mode="add"
             />
+
+            {/* ModelSelectTab Dialog for provider selection */}
+            <Dialog
+                open={modelSelectDialogOpen}
+                onClose={() => setModelSelectDialogOpen(false)}
+                maxWidth="lg"
+                fullWidth
+                PaperProps={{
+                    sx: { height: '80vh' }
+                }}
+            >
+                <DialogTitle>
+                    {modelSelectMode === 'add' ? 'Add Provider' : 'Edit Provider'}
+                </DialogTitle>
+                <DialogContent>
+                    <ModelSelectTab
+                        providers={providers}
+                        providerModels={nameBasedProviderModels}
+                        selectedProvider={modelSelectMode === 'edit' && editingProviderUuid
+                            ? configRecord?.providers.find(p => p.uuid === editingProviderUuid)?.provider
+                            : undefined}
+                        selectedModel={modelSelectMode === 'edit' && editingProviderUuid
+                            ? configRecord?.providers.find(p => p.uuid === editingProviderUuid)?.model
+                            : undefined}
+                        onSelected={handleModelSelect}
+                        onProviderChange={handleProviderTabChange}
+                        onRefresh={(p) => handleRefreshModels(p.uuid)}
+                        refreshingProviders={refreshingProviders}
+                    />
+                </DialogContent>
+            </Dialog>
 
             <ApiKeyModal
                 open={showTokenModal}
