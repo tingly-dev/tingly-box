@@ -1,7 +1,7 @@
-import { ContentCopy as CopyIcon } from '@mui/icons-material';
-import { Box, IconButton, Typography } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import CodeBlock from '../components/CodeBlock';
 import TabTemplatePage from '../components/TabTemplatePage';
 import { api, getBaseUrl } from '../services/api';
 import type { Provider } from '../types/provider';
@@ -79,7 +79,7 @@ const UseClaudeCodePage: React.FC<UseClaudeCodePageProps> = ({
                 ANTHROPIC_MODEL: defaultModel
             },
         }, null, 2);
-        return res.trim().substring(1, res.length - 1);
+        return res.trim().substring(1, res.length - 1).trim();
     };
 
     const header = (
@@ -90,38 +90,13 @@ const UseClaudeCodePage: React.FC<UseClaudeCodePageProps> = ({
                         style={{ fontSize: '0.85rem' }}>{configPath}</code>
                 </Typography>
             </Box>
-            <Box sx={{ position: 'relative' }}>
-                <IconButton
-                    size="small"
-                    onClick={() => copyToClipboard(generateConfig(), 'Configuration')}
-                    sx={{
-                        position: 'absolute',
-                        top: 0,
-                        right: 0,
-                        bgcolor: 'grey.800',
-                        color: 'grey.300',
-                        '&:hover': { bgcolor: 'grey.700' },
-                    }}
-                >
-                    <CopyIcon fontSize="small" />
-                </IconButton>
-                <Box
-                    sx={{
-                        p: 1.5,
-                        bgcolor: 'grey.900',
-                        borderRadius: 1,
-                        fontFamily: 'monospace',
-                        fontSize: '0.7rem',
-                        color: 'grey.100',
-                        overflow: 'auto',
-                        maxHeight: 280,
-                    }}
-                >
-                    <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
-                        {generateConfig()}
-                    </pre>
-                </Box>
-            </Box>
+            <CodeBlock
+                code={generateConfig()}
+                language="json"
+                filename="settings.json"
+                onCopy={(code) => copyToClipboard(code, 'Configuration')}
+                maxHeight={280}
+            />
         </Box>
     );
 
