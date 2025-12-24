@@ -68,7 +68,7 @@ func (s *Server) GetRule(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-func (s *Server) AddRule(c *gin.Context) {
+func (s *Server) CreateRule(c *gin.Context) {
 	var rule config.Rule
 	if err := c.ShouldBindJSON(&rule); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
