@@ -308,7 +308,7 @@ export default function ModelSelectTab({
                                             }
                                         }}
                                     >
-                                        Custom Model
+                                        Customize
                                     </Button>
                                     <Button
                                         variant="outlined"
