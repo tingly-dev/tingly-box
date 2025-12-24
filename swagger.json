@@ -296,7 +296,7 @@
             "description": "Request body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/AddRuleRequest"
+              "$ref": "#/definitions/CreateRuleRequest"
             }
           }
         ],
@@ -610,8 +610,8 @@
         "tags": [
           "providers"
         ],
-        "summary": "Add a new provider configuration",
-        "description": "Add a new provider configuration",
+        "summary": "Create a new provider configuration",
+        "description": "Create a new provider configuration",
         "consumes": [
           "application/json"
         ],
@@ -625,7 +625,7 @@
             "description": "Request body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/AddProviderRequest"
+              "$ref": "#/definitions/CreateProviderRequest"
             }
           }
         ],
@@ -633,7 +633,7 @@
           "200": {
             "description": "Successful response",
             "schema": {
-              "$ref": "#/definitions/AddProviderResponse"
+              "$ref": "#/definitions/CreateProviderResponse"
             }
           }
         }
@@ -778,7 +778,44 @@
     }
   },
   "definitions": {
-    "AddProviderRequest": {
+    "ConfigInfo": {
+      "type": "object",
+      "properties": {
+        "config_dir": {
+          "type": "string",
+          "description": "Field config_dir",
+          "example": "/Users/user/.tingly-box"
+        },
+        "config_path": {
+          "type": "string",
+          "description": "Field config_path",
+          "example": "/Users/user/.tingly-box/config.json"
+        }
+      },
+      "required": [
+        "config_path",
+        "config_dir"
+      ]
+    },
+    "ConfigInfoResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "description": "Field data",
+          "$ref": "#/definitions/ConfigInfo"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    },
+    "CreateProviderRequest": {
       "type": "object",
       "properties": {
         "api_base": {
@@ -815,7 +852,7 @@
         "enabled"
       ]
     },
-    "AddProviderResponse": {
+    "CreateProviderResponse": {
       "type": "object",
       "properties": {
         "data": {
@@ -839,7 +876,7 @@
         "data"
       ]
     },
-    "AddRuleRequest": {
+    "CreateRuleRequest": {
       "type": "object",
       "properties": {
         "active": {
@@ -900,43 +937,6 @@
         "lb_tactic",
         "active",
         "tactic"
-      ]
-    },
-    "ConfigInfo": {
-      "type": "object",
-      "properties": {
-        "config_dir": {
-          "type": "string",
-          "description": "Field config_dir",
-          "example": "/Users/user/.tingly-box"
-        },
-        "config_path": {
-          "type": "string",
-          "description": "Field config_path",
-          "example": "/Users/user/.tingly-box/config.json"
-        }
-      },
-      "required": [
-        "config_path",
-        "config_dir"
-      ]
-    },
-    "ConfigInfoResponse": {
-      "type": "object",
-      "properties": {
-        "data": {
-          "description": "Field data",
-          "$ref": "#/definitions/ConfigInfo"
-        },
-        "success": {
-          "type": "boolean",
-          "description": "Field success",
-          "example": true
-        }
-      },
-      "required": [
-        "success",
-        "data"
       ]
     },
     "DeleteProviderResponse": {
@@ -1962,12 +1962,24 @@
   },
   "tags": [
     {
+      "name": "providers",
+      "description": "Operations related to providers"
+    },
+    {
       "name": "history",
       "description": "Operations related to history"
     },
     {
-      "name": "token",
-      "description": "Operations related to token"
+      "name": "testing",
+      "description": "Operations related to testing"
+    },
+    {
+      "name": "info",
+      "description": "Operations related to info"
+    },
+    {
+      "name": "server",
+      "description": "Operations related to server"
     },
     {
       "name": "rules",
@@ -1978,20 +1990,8 @@
       "description": "Operations related to models"
     },
     {
-      "name": "testing",
-      "description": "Operations related to testing"
-    },
-    {
-      "name": "providers",
-      "description": "Operations related to providers"
-    },
-    {
-      "name": "info",
-      "description": "Operations related to info"
-    },
-    {
-      "name": "server",
-      "description": "Operations related to server"
+      "name": "token",
+      "description": "Operations related to token"
     }
   ]
 }
