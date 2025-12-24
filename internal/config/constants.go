@@ -23,6 +23,10 @@ const (
 
 	// DefaultMaxTokens is the default max_tokens value for API requests
 	DefaultMaxTokens = 8192
+
+	// Load balancing threshold defaults
+	DefaultRequestThreshold = int64(100)   // Default request threshold for round-robin and hybrid tactics
+	DefaultTokenThreshold   = int64(10000) // Default token threshold for token-based and hybrid tactics
 )
 
 // GetTinglyConfDir returns the config directory path (default: ~/.tingly-box)

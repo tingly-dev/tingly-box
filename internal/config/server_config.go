@@ -861,30 +861,14 @@ func (c *Config) migrateRules() {
 		}
 
 		// Ensure LBTactic is properly initialized
-		if c.Rules[i].LBTactic.Params == nil {
-			// If LBTactic has no params but old Tactic field exists, migrate it
-			if c.Rules[i].Tactic != "" {
-				c.Rules[i].LBTactic = Tactic{
-					Type: ParseTacticType(c.Rules[i].Tactic),
-				}
-
-				// Convert old tactic_params to proper typed parameters
-				if c.Rules[i].TacticParams != nil {
-					c.Rules[i].LBTactic.Params = convertLegacyParams(c.Rules[i].Tactic, c.Rules[i].TacticParams)
-				}
-
-				// Clear old fields after migration
-				c.Rules[i].Tactic = ""
-				c.Rules[i].TacticParams = nil
-				needsSave = true
-			} else {
-				// Set default tactic if none exists
-				c.Rules[i].LBTactic = Tactic{
-					Type:   TacticRoundRobin,
-					Params: DefaultRoundRobinParams(),
-				}
-				needsSave = true
+		// Check if params are nil or have invalid zero values
+		if !isTacticValid(&c.Rules[i].LBTactic) {
+			// Set default tactic if params are invalid
+			c.Rules[i].LBTactic = Tactic{
+				Type:   TacticRoundRobin,
+				Params: DefaultRoundRobinParams(),
 			}
+			needsSave = true
 		}
 	}
 
@@ -895,6 +879,29 @@ func (c *Config) migrateRules() {
 		if err == nil {
 			os.WriteFile(c.ConfigFile, data, 0644)
 		}
+	}
+}
+
+// isTacticValid checks if the tactic params are valid (not zero values)
+func isTacticValid(tactic *Tactic) bool {
+	if tactic.Params == nil {
+		return false
+	}
+
+	// Check for invalid zero values in params
+	switch p := tactic.Params.(type) {
+	case *RoundRobinParams:
+		return p.RequestThreshold > 0
+	case *TokenBasedParams:
+		return p.TokenThreshold > 0
+	case *HybridParams:
+		return p.RequestThreshold > 0 && p.TokenThreshold > 0
+	case *RandomParams:
+		// Random params has no fields, always valid if not nil
+		return true
+	default:
+		// Unknown params type, treat as invalid
+		return false
 	}
 }
 

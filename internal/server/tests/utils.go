@@ -253,22 +253,25 @@ func (ts *TestServer) AddTestProviderWithURL(t *testing.T, name, url, apiStyle s
 
 // AddTestRule adds a test rule that routes to a specific provider
 func (ts *TestServer) AddTestRule(t *testing.T, requestModel, providerName, model string) {
-	// Create a simple rule
+	// Create a simple rule with proper LBTactic
 	rule := config.Rule{
 		UUID:          requestModel,
 		RequestModel:  requestModel,
 		ResponseModel: model,
 		Services: []config.Service{
 			{
-				Provider: providerName,
-				Model:    model,
-				Weight:   1,
-				Active:   true,
+				Provider:   providerName,
+				Model:      model,
+				Weight:     1,
+				Active:     true,
+				TimeWindow: 300,
 			},
 		},
-		CurrentServiceIndex: 0,
-		Tactic:              "round_robin",
-		Active:              true,
+		LBTactic: config.Tactic{
+			Type:   config.TacticRoundRobin,
+			Params: config.DefaultRoundRobinParams(),
+		},
+		Active: true,
 	}
 
 	if err := ts.appConfig.GetGlobalConfig().AddRequestConfig(rule); err != nil {

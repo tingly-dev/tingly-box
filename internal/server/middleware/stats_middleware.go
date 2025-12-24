@@ -234,6 +234,15 @@ func (sm *StatsMiddleware) RecordUsageOnRule(rule *config.Rule, provider, model 
 		if service.Active && service.Provider == provider && service.Model == model {
 			// Found the service, record usage in its embedded stats
 			service.RecordUsage(inputTokens, outputTokens)
+
+			// Find the rule in config and update it to persist the stats
+			rules := sm.config.GetRequestConfigs()
+			for ruleIdx, r := range rules {
+				if r.UUID == rule.UUID {
+					sm.config.UpdateRequestConfigAt(ruleIdx, *rule)
+					return
+				}
+			}
 			return
 		}
 	}
