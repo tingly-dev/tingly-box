@@ -188,7 +188,7 @@ func (c *Config) AddRule(rule Rule) error {
 	// Guard name unique
 	for _, rc := range c.Rules {
 		if rc.UUID != rule.UUID {
-			if rc.ResponseModel == rule.RequestModel {
+			if rc.RequestModel == rule.RequestModel {
 				return fmt.Errorf("rule with Name %s already exists", rule.RequestModel)
 			}
 		}
