@@ -196,11 +196,9 @@ func (c *Config) AddRule(rule Rule) error {
 		}
 	}
 
-	// Find existing config with same request model
-	for i, rc := range c.Rules {
+	for _, rc := range c.Rules {
 		if rc.UUID == rule.UUID {
-			c.Rules[i] = rule
-			return c.save()
+			return fmt.Errorf("rule with UUID %s already exists", rule.UUID)
 		}
 	}
 
@@ -208,6 +206,30 @@ func (c *Config) AddRule(rule Rule) error {
 	c.Rules = append(c.Rules, rule)
 	c.DefaultRequestID = len(c.Rules) - 1
 	return c.save()
+}
+
+func (c *Config) UpdateRule(uid string, rule Rule) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Guard name unique
+	for _, rc := range c.Rules {
+		if rc.RequestModel == rule.RequestModel {
+			if rc.UUID != rule.UUID {
+				return fmt.Errorf("rule with Name %s already exists", rule.RequestModel)
+			}
+		}
+	}
+
+	// Find existing config with same request model
+	for i, rc := range c.Rules {
+		if rc.UUID == uid {
+			c.Rules[i] = rule
+			return c.save()
+		}
+	}
+
+	return nil
 }
 
 // AddRequestConfig adds a new Rule
@@ -834,11 +856,11 @@ func (c *Config) migrateRules() {
 	for i := range c.Rules {
 		// Ensure UUID exists
 		if c.Rules[i].UUID == "" {
-			UUID, err := uuid.NewUUID()
+			uid, err := uuid.NewUUID()
 			if err != nil {
 				continue
 			}
-			c.Rules[i].UUID = UUID.String()
+			c.Rules[i].UUID = uid.String()
 			needsSave = true
 		}
 

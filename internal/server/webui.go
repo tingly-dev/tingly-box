@@ -450,6 +450,13 @@ func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
 		swagger.WithResponseModel(UpdateRuleResponse{}),
 	)
 
+	apiV1.POST("/rule", s.AddRule,
+		swagger.WithDescription("Create or update a rule configuration"),
+		swagger.WithTags("rules"),
+		swagger.WithRequestModel(AddRuleRequest{}),
+		swagger.WithResponseModel(UpdateRuleResponse{}),
+	)
+
 	apiV1.DELETE("/rule/:uuid", s.DeleteRule,
 		swagger.WithDescription("Delete a rule configuration"),
 		swagger.WithTags("rules"),

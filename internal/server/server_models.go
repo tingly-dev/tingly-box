@@ -229,6 +229,8 @@ type RulesResponse struct {
 	Data    interface{} `json:"data"`
 }
 
+type AddRuleRequest config.Rule
+
 // UpdateRuleRequest represents the request to set/update a rule
 type UpdateRuleRequest config.Rule
 
@@ -237,6 +239,7 @@ type UpdateRuleResponse struct {
 	Success bool   `json:"success" example:"true"`
 	Message string `json:"message" example:"Rule saved successfully"`
 	Data    struct {
+		UUID          string `json:"uuid"`
 		RequestModel  string `json:"request_model" example:"gpt-3.5-turbo"`
 		ResponseModel string `json:"response_model" example:"gpt-3.5-turbo"`
 		Provider      string `json:"provider" example:"openai"`
