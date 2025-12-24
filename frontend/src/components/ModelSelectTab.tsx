@@ -26,10 +26,10 @@ import { useGridLayout } from '../hooks/useGridLayout';
 import { usePagination } from '../hooks/usePagination';
 import type { Provider, ProviderModelsData } from '../types/provider';
 import { getModelTypeInfo, navigateToModelPage } from '../utils/modelUtils';
+import { ApiStyleBadge } from "./ApiStyleBadge";
 import CustomModelCard from './CustomModelCard';
 import ModelCard from './ModelCard';
-import {a11yProps, TabPanel} from './TabPanel';
-import {ApiStyleBadge} from "./ApiStyleBadge";
+import { a11yProps, TabPanel } from './TabPanel';
 
 export interface ProviderSelectTabOption {
     provider: Provider;
@@ -63,7 +63,7 @@ export default function ModelSelectTab({
 }: ProviderSelectTabProps) {
     const [internalCurrentTab, setInternalCurrentTab] = useState(0);
     const [isInitialized, setIsInitialized] = useState(false);
-    const {customModels, saveCustomModel, removeCustomModel} = useCustomModels();
+    const { customModels, saveCustomModel, removeCustomModel } = useCustomModels();
     const gridLayout = useGridLayout();
 
 
@@ -216,6 +216,10 @@ export default function ModelSelectTab({
     return (
         <Box sx={{ width: '100%' }}>
             <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+
+                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                    Providers
+                </Typography>
                 <Tabs
                     value={currentTab}
                     onChange={handleTabChange}
@@ -242,7 +246,7 @@ export default function ModelSelectTab({
                                             )}
                                         </Stack>
                                         <Stack direction="row" alignItems="center" spacing={1}>
-                                            {provider.api_style && <ApiStyleBadge apiStyle={provider.api_style}/>}
+                                            {provider.api_style && <ApiStyleBadge apiStyle={provider.api_style} />}
                                         </Stack>
                                     </Stack>
                                 }
@@ -274,89 +278,7 @@ export default function ModelSelectTab({
 
                 return (
                     <TabPanel key={provider.uuid} value={currentTab} index={index}> {/* Use UUID as key */}
-                        {/* Search and Pagination Controls */}
-                        <Box sx={{ mb: 3 }}>
-                            <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2}>
-                                <Stack direction="row" alignItems="center" spacing={1}>
-                                    <TextField
-                                        size="small"
-                                        placeholder="Search models..."
-                                        value={searchTerms[provider.name] || ''}
-                                        onChange={(e) => handleSearchChange(provider.name, e.target.value)}
-                                        slotProps={{
-                                            input: {
-                                                startAdornment: (
-                                                    <InputAdornment position="start">
-                                                        <SearchIcon />
-                                                    </InputAdornment>
-                                                ),
-                                            },
-                                        }}
-                                        sx={{ width: 300 }}
-                                    />
-                                    <Button
-                                        variant="outlined"
-                                        startIcon={<AddCircleOutlineIcon />}
-                                        onClick={() => handleCustomModelEdit(provider)}
-                                        sx={{
-                                            height: 40,
-                                            borderColor: 'primary.main',
-                                            color: 'primary.main',
-                                            '&:hover': {
-                                                backgroundColor: 'primary.50',
-                                                borderColor: 'primary.dark',
-                                            }
-                                        }}
-                                    >
-                                        Customize
-                                    </Button>
-                                    <Button
-                                        variant="outlined"
-                                        startIcon={isRefreshing ? <CircularProgress size={16} /> : <RefreshIcon />}
-                                        onClick={() => onRefresh && onRefresh(provider)}
-                                        disabled={!onRefresh || isRefreshing}
-                                        sx={{
-                                            height: 40,
-                                            borderColor: isRefreshing ? 'grey.300' : 'primary.main',
-                                            color: isRefreshing ? 'grey.500' : 'primary.main',
-                                            '&:hover': !isRefreshing ? {
-                                                backgroundColor: 'primary.50',
-                                                borderColor: 'primary.dark',
-                                            } : {},
-                                            '&:disabled': {
-                                                borderColor: 'grey.300',
-                                                color: 'grey.500',
-                                            }
-                                        }}
-                                    >
-                                        {isRefreshing ? 'Fetching...' : 'Refresh'}
-                                    </Button>
-                                </Stack>
 
-                                {/* Pagination Controls */}
-                                {pagination.totalPages > 1 && (
-                                    <Stack direction="row" alignItems="center" spacing={1}>
-                                        <IconButton
-                                            size="small"
-                                            disabled={pagination.currentPage === 1}
-                                            onClick={() => handlePageChange(provider.name, pagination.currentPage - 1)}
-                                        >
-                                            <NavigateBeforeIcon />
-                                        </IconButton>
-                                        <Typography variant="body2" sx={{ minWidth: 60, textAlign: 'center' }}>
-                                            {pagination.currentPage} / {pagination.totalPages}
-                                        </Typography>
-                                        <IconButton
-                                            size="small"
-                                            disabled={pagination.currentPage === pagination.totalPages}
-                                            onClick={() => handlePageChange(provider.name, pagination.currentPage + 1)}
-                                        >
-                                            <NavigateNextIcon />
-                                        </IconButton>
-                                    </Stack>
-                                )}
-                            </Stack>
-                        </Box>
 
                         {/* Models Display */}
                         <Stack spacing={2}>
@@ -388,9 +310,68 @@ export default function ModelSelectTab({
 
                             {/* All Models Section */}
                             <Box sx={{ minHeight: 200 }}>
-                                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-                                    All Models ({pagination.totalItems})
-                                </Typography>
+                                {/* Title and Controls in same row */}
+                                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+                                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                                        Models ({pagination.totalItems})
+                                    </Typography>
+                                    <Stack direction="row" alignItems="center" spacing={1}>
+                                        <TextField
+                                            size="small"
+                                            placeholder="Search models..."
+                                            value={searchTerms[provider.name] || ''}
+                                            onChange={(e) => handleSearchChange(provider.name, e.target.value)}
+                                            slotProps={{
+                                                input: {
+                                                    startAdornment: (
+                                                        <InputAdornment position="start">
+                                                            <SearchIcon />
+                                                        </InputAdornment>
+                                                    ),
+                                                },
+                                            }}
+                                            sx={{ width: 300 }}
+                                        />
+                                        <Button
+                                            variant="outlined"
+                                            startIcon={<AddCircleOutlineIcon />}
+                                            onClick={() => handleCustomModelEdit(provider)}
+                                            sx={{
+                                                height: 40,
+                                                borderColor: 'primary.main',
+                                                color: 'primary.main',
+                                                '&:hover': {
+                                                    backgroundColor: 'primary.50',
+                                                    borderColor: 'primary.dark',
+                                                }
+                                            }}
+                                        >
+                                            Customize
+                                        </Button>
+                                        <Button
+                                            variant="outlined"
+                                            startIcon={isRefreshing ? <CircularProgress size={16} /> : <RefreshIcon />}
+                                            onClick={() => onRefresh && onRefresh(provider)}
+                                            disabled={!onRefresh || isRefreshing}
+                                            sx={{
+                                                height: 40,
+                                                borderColor: isRefreshing ? 'grey.300' : 'primary.main',
+                                                color: isRefreshing ? 'grey.500' : 'primary.main',
+                                                '&:hover': !isRefreshing ? {
+                                                    backgroundColor: 'primary.50',
+                                                    borderColor: 'primary.dark',
+                                                } : {},
+                                                '&:disabled': {
+                                                    borderColor: 'grey.300',
+                                                    color: 'grey.500',
+                                                }
+                                            }}
+                                        >
+                                            {isRefreshing ? 'Fetching...' : 'Refresh'}
+                                        </Button>
+                                    </Stack>
+                                </Stack>
+
                                 <Box
                                     sx={{
                                         display: 'grid',
@@ -468,6 +449,31 @@ export default function ModelSelectTab({
                                         </Box>
                                     )}
                             </Box>
+
+                            {/* Pagination Controls - Bottom Center */}
+                            {pagination.totalPages > 1 && (
+                                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+                                    <Stack direction="row" alignItems="center" spacing={1}>
+                                        <IconButton
+                                            size="small"
+                                            disabled={pagination.currentPage === 1}
+                                            onClick={() => handlePageChange(provider.name, pagination.currentPage - 1)}
+                                        >
+                                            <NavigateBeforeIcon />
+                                        </IconButton>
+                                        <Typography variant="body2" sx={{ minWidth: 60, textAlign: 'center' }}>
+                                            {pagination.currentPage} / {pagination.totalPages}
+                                        </Typography>
+                                        <IconButton
+                                            size="small"
+                                            disabled={pagination.currentPage === pagination.totalPages}
+                                            onClick={() => handlePageChange(provider.name, pagination.currentPage + 1)}
+                                        >
+                                            <NavigateNextIcon />
+                                        </IconButton>
+                                    </Stack>
+                                </Box>
+                            )}
                         </Stack>
                     </TabPanel>
                 );

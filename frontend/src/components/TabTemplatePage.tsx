@@ -441,7 +441,7 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
                     sx: { height: '80vh' }
                 }}
             >
-                <DialogTitle>
+                <DialogTitle sx={{ textAlign: 'center' }}>
                     {modelSelectMode === 'add' ? 'Add Provider' : 'Edit Provider'}
                 </DialogTitle>
                 <DialogContent>
