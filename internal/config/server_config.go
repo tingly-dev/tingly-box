@@ -88,9 +88,11 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 			return nil, fmt.Errorf("failed to load global cfg: %w", err)
 		}
 	} else {
-		cfg.InsertDefaultRule()
 		cfg.save()
 	}
+
+	cfg.InsertDefaultRule()
+	cfg.save()
 
 	// Ensure tokens exist even for existing configs
 	updated := false
@@ -187,8 +189,8 @@ func (c *Config) AddRule(rule Rule) error {
 
 	// Guard name unique
 	for _, rc := range c.Rules {
-		if rc.UUID != rule.UUID {
-			if rc.RequestModel == rule.RequestModel {
+		if rc.RequestModel == rule.RequestModel {
+			if rc.UUID != rule.UUID {
 				return fmt.Errorf("rule with Name %s already exists", rule.RequestModel)
 			}
 		}
