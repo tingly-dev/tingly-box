@@ -49,7 +49,7 @@ tasks:
     env:
       PRODUCTION: '{{.PRODUCTION | default "false"}}'
     vars:
-      BUILD_COMMAND: '{{if eq .PRODUCTION "true"}}build:wails{{else}}build:dev:gui{{end}}'
+      BUILD_COMMAND: '{{if eq .PRODUCTION "true"}}build:wails{{else}}build:dev:wails{{end}}'
 
 
   generate:bindings:
