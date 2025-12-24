@@ -1033,7 +1033,7 @@ func init() {
 			Active: true,
 		},
 		{
-			UUID:          "tingly/anthropic",
+			UUID:          "built-in-anthropic",
 			RequestModel:  "tingly/anthropic",
 			ResponseModel: "",
 			Description:   "Default proxy rule in tingly-box for general use with Anthropic",
@@ -1045,7 +1045,7 @@ func init() {
 			Active: true,
 		},
 		{
-			UUID:          "tingly/openai",
+			UUID:          "built-in-openai",
 			RequestModel:  "tingly/openai",
 			ResponseModel: "",
 			Description:   "Default proxy rule in tingly-box for general use with OpenAI",
@@ -1057,10 +1057,10 @@ func init() {
 			Active: true,
 		},
 		{
-			UUID:          "tingly/ide",
-			RequestModel:  "tingly/ide",
+			UUID:          "built-in-cc",
+			RequestModel:  "tingly/cc",
 			ResponseModel: "",
-			Description:   "Default proxy rule for IDE, like Claude Code and so on",
+			Description:   "Default proxy rule for Claude Code",
 			Services:      []Service{}, // Empty services initially
 			LBTactic: Tactic{ // Initialize with default round-robin tactic
 				Type:   TacticRoundRobin,
@@ -1080,30 +1080,30 @@ func init() {
 			},
 			Active: true,
 		},
-		{
-			UUID:          "litellm/openai",
-			RequestModel:  "gpt-5",
-			ResponseModel: "",
-			Description:   "Default proxy rule for litellm openai compatible",
-			Services:      []Service{}, // Empty services initially
-			LBTactic: Tactic{ // Initialize with default round-robin tactic
-				Type:   TacticRoundRobin,
-				Params: DefaultRoundRobinParams(),
-			},
-			Active: true,
-		},
-		{
-			UUID:          "litellm/anthropic",
-			RequestModel:  "claude-sonnet-4-5",
-			ResponseModel: "",
-			Description:   "Default proxy rule for litellm anthropic compatible",
-			Services:      []Service{}, // Empty services initially
-			LBTactic: Tactic{ // Initialize with default round-robin tactic
-				Type:   TacticRoundRobin,
-				Params: DefaultRoundRobinParams(),
-			},
-			Active: true,
-		},
+		//{
+		//	UUID:          "built-in-litellm-openai",
+		//	RequestModel:  "gpt-5",
+		//	ResponseModel: "",
+		//	Description:   "Default proxy rule for litellm openai compatible",
+		//	Services:      []Service{}, // Empty services initially
+		//	LBTactic: Tactic{ // Initialize with default round-robin tactic
+		//		Type:   TacticRoundRobin,
+		//		Params: DefaultRoundRobinParams(),
+		//	},
+		//	Active: true,
+		//},
+		//{
+		//	UUID:          "built-in-litellm-anthropic",
+		//	RequestModel:  "claude-sonnet-4-5",
+		//	ResponseModel: "",
+		//	Description:   "Default proxy rule for litellm anthropic compatible",
+		//	Services:      []Service{}, // Empty services initially
+		//	LBTactic: Tactic{ // Initialize with default round-robin tactic
+		//		Type:   TacticRoundRobin,
+		//		Params: DefaultRoundRobinParams(),
+		//	},
+		//	Active: true,
+		//},
 	}
 }
 
