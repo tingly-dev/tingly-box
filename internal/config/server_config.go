@@ -80,44 +80,15 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 	if err := cfg.load(); err != nil {
 		// If file doesn't exist, create default cfg
 		if os.IsNotExist(err) {
-			// Create a default Rule
-			cfg.Rules = []Rule{
-				{
-					UUID:          "tingly",
-					RequestModel:  "tingly",
-					ResponseModel: "",
-					Services:      []Service{}, // Empty services initially
-					LBTactic: Tactic{ // Initialize with default round-robin tactic
-						Type:   TacticRoundRobin,
-						Params: DefaultRoundRobinParams(),
-					},
-					Active: true,
-				},
-			}
-			cfg.DefaultRequestID = 0
-			// Set default auth tokens if not already set
-			if cfg.UserToken == "" {
-				cfg.UserToken = "tingly-box-user-token"
-			}
-			if cfg.ModelToken == "" {
-				modelToken, err := auth.NewJWTManager(cfg.JWTSecret).GenerateToken("tingly-box")
-				if err != nil {
-					cfg.ModelToken = "tingly-box-model-token"
-				}
-				cfg.ModelToken = "tingly-box-" + modelToken
-			}
-			// Initialize merged fields with defaults
-			cfg.ProvidersV1 = make(map[string]*Provider)
-			cfg.Providers = make([]*Provider, 0)
-			cfg.ServerPort = 12580
-			cfg.JWTSecret = generateSecret()
-			if err := cfg.save(); err != nil {
-				return nil, fmt.Errorf("failed to create default global cfg: %w", err)
+			err = cfg.CreateDefaultConfig()
+			if err != nil {
+				return nil, err
 			}
 		} else {
 			return nil, fmt.Errorf("failed to load global cfg: %w", err)
 		}
 	} else {
+		cfg.InsertDefaultRule()
 		cfg.save()
 	}
 
@@ -209,21 +180,30 @@ func (c *Config) save() error {
 	return os.WriteFile(c.ConfigFile, data, 0644)
 }
 
-// SetDefaultRequestConfig updates the default Rule
-func (c *Config) SetDefaultRequestConfig(reqConfig Rule) error {
+// AddRule updates the default Rule
+func (c *Config) AddRule(rule Rule) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	// Guard name unique
+	for _, rc := range c.Rules {
+		if rc.UUID != rule.UUID {
+			if rc.ResponseModel == rule.RequestModel {
+				return fmt.Errorf("rule with Name %s already exists", rule.RequestModel)
+			}
+		}
+	}
+
 	// Find existing config with same request model
 	for i, rc := range c.Rules {
-		if rc.UUID == reqConfig.UUID {
-			c.Rules[i] = reqConfig
+		if rc.UUID == rule.UUID {
+			c.Rules[i] = rule
 			return c.save()
 		}
 	}
 
 	// If not found, append new config
-	c.Rules = append(c.Rules, reqConfig)
+	c.Rules = append(c.Rules, rule)
 	c.DefaultRequestID = len(c.Rules) - 1
 	return c.save()
 }
@@ -996,4 +976,89 @@ func (c *Config) migrateProviders() {
 			_ = os.WriteFile(c.ConfigFile, data, 0644)
 		}
 	}
+}
+
+func (c *Config) CreateDefaultConfig() error {
+	// Create a default Rule
+	c.Rules = []Rule{}
+	c.DefaultRequestID = 0
+	// Set default auth tokens if not already set
+	if c.UserToken == "" {
+		c.UserToken = "tingly-box-user-token"
+	}
+	if c.ModelToken == "" {
+		modelToken, err := auth.NewJWTManager(c.JWTSecret).GenerateToken("tingly-box")
+		if err != nil {
+			c.ModelToken = "tingly-box-model-token"
+		}
+		c.ModelToken = "tingly-box-" + modelToken
+	}
+	// Initialize merged fields with defaults
+	c.ProvidersV1 = make(map[string]*Provider)
+	c.Providers = make([]*Provider, 0)
+	c.ServerPort = 12580
+	c.JWTSecret = generateSecret()
+	if err := c.save(); err != nil {
+		return fmt.Errorf("failed to create default global cfg: %w", err)
+	}
+
+	return nil
+}
+
+var DefaultRules []Rule
+
+func init() {
+	DefaultRules = []Rule{
+		{
+			UUID:          "tingly",
+			RequestModel:  "tingly",
+			ResponseModel: "",
+			Services:      []Service{}, // Empty services initially
+			LBTactic: Tactic{ // Initialize with default round-robin tactic
+				Type:   TacticRoundRobin,
+				Params: DefaultRoundRobinParams(),
+			},
+			Active: true,
+		},
+		{
+			UUID:          "claude-code",
+			RequestModel:  "claude-code",
+			ResponseModel: "",
+			Services:      []Service{}, // Empty services initially
+			LBTactic: Tactic{ // Initialize with default round-robin tactic
+				Type:   TacticRoundRobin,
+				Params: DefaultRoundRobinParams(),
+			},
+			Active: true,
+		},
+		{
+			UUID:          "litellm/openai",
+			RequestModel:  "gpt-5",
+			ResponseModel: "",
+			Services:      []Service{}, // Empty services initially
+			LBTactic: Tactic{ // Initialize with default round-robin tactic
+				Type:   TacticRoundRobin,
+				Params: DefaultRoundRobinParams(),
+			},
+			Active: true,
+		},
+		{
+			UUID:          "litellm/anthropic",
+			RequestModel:  "claude-sonnet-4-5",
+			ResponseModel: "",
+			Services:      []Service{}, // Empty services initially
+			LBTactic: Tactic{ // Initialize with default round-robin tactic
+				Type:   TacticRoundRobin,
+				Params: DefaultRoundRobinParams(),
+			},
+			Active: true,
+		},
+	}
+}
+
+func (c *Config) InsertDefaultRule() error {
+	for _, r := range DefaultRules {
+		c.AddRule(r)
+	}
+	return nil
 }
