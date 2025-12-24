@@ -1013,6 +1013,7 @@ func init() {
 			UUID:          "tingly",
 			RequestModel:  "tingly",
 			ResponseModel: "",
+			Description:   "Default proxy rule in tingly-box for general use with OpenAI or Anthropic",
 			Services:      []Service{}, // Empty services initially
 			LBTactic: Tactic{ // Initialize with default round-robin tactic
 				Type:   TacticRoundRobin,
@@ -1024,6 +1025,7 @@ func init() {
 			UUID:          "claude-code",
 			RequestModel:  "claude-code",
 			ResponseModel: "",
+			Description:   "Default proxy rule for Claude Code",
 			Services:      []Service{}, // Empty services initially
 			LBTactic: Tactic{ // Initialize with default round-robin tactic
 				Type:   TacticRoundRobin,
@@ -1035,6 +1037,7 @@ func init() {
 			UUID:          "litellm/openai",
 			RequestModel:  "gpt-5",
 			ResponseModel: "",
+			Description:   "Default proxy rule for litellm openai compatible",
 			Services:      []Service{}, // Empty services initially
 			LBTactic: Tactic{ // Initialize with default round-robin tactic
 				Type:   TacticRoundRobin,
@@ -1046,6 +1049,7 @@ func init() {
 			UUID:          "litellm/anthropic",
 			RequestModel:  "claude-sonnet-4-5",
 			ResponseModel: "",
+			Description:   "Default proxy rule for litellm anthropic compatible",
 			Services:      []Service{}, // Empty services initially
 			LBTactic: Tactic{ // Initialize with default round-robin tactic
 				Type:   TacticRoundRobin,
