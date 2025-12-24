@@ -329,7 +329,7 @@ export default function ModelSelectTab({
                                             }
                                         }}
                                     >
-                                        {isRefreshing ? 'Fetching...' : 'Fetch Model List'}
+                                        {isRefreshing ? 'Fetching...' : 'Refresh'}
                                     </Button>
                                 </Stack>
 
