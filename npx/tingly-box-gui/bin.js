@@ -8,13 +8,14 @@ import { Readable } from "stream";
 
 // Configuration for binary downloads
 const BASE_URL = "https://github.com/tingly-dev/tingly-box/releases/download/";
+// const BASE_URL = "http://localhost:9090/";
 
 // GitHub API endpoint for getting latest release info
 const LATEST_RELEASE_API_URL = "https://github.com/tingly-dev/tingly-box/releases/download/";
 
 // Default branch to use when not specified via transport version
 // This will be replaced during the NPX build process
-const BINARY_RELEASE_BRANCH = "latest";
+const BINARY_RELEASE_BRANCH = "v0.25.12250000";
 
 // Parse transport version from command line arguments
 function parseTransportVersion() {
@@ -72,8 +73,8 @@ async function getPlatformArchAndBinary() {
 	let platformDir;
 	let archDir;
 	let binaryName;
-	binaryName = "tingly-box-gui";
-	let suffix = ""
+	let suffix = "";
+	let appName = "TinglyBox.app";  // macOS app bundle name
 
 	if (platform === "darwin") {
 		platformDir = "macos";
@@ -95,7 +96,7 @@ async function getPlatformArchAndBinary() {
 		process.exit(1);
 	}
 
-	return { platformDir, archDir, binaryName, suffix };
+	return { platformDir, archDir, binaryName: "tingly-box-gui", suffix, appName };
 }
 
 async function downloadBinary(url, dest) {
@@ -271,8 +272,25 @@ function formatBytes(bytes) {
 }
 
 (async () => {
+	const platform = process.platform;
+
+	// For Windows and Linux, show unsupported message
+	if (platform === "win32" || platform === "linux") {
+		const platformName = platform === "win32" ? "Windows" : "Linux";
+		console.error(`\n❌ ${platformName} is not currently supported for tingly-box-gui`);
+		console.error(`┌─ Status:`);
+		console.error(`│  GUI version is currently only available for macOS`);
+		console.error(`│  ${platformName} support is coming soon`);
+		console.error(`└─ Platform: ${platform} (${process.arch})`);
+		console.error(`\n💡 Alternatives:`);
+		console.error(`   • Use the CLI version: npx tingly-box`);
+		console.error(`   • Visit: https://github.com/tingly-dev/tingly-box for updates`);
+		process.exit(1);
+	}
+
+	// For macOS, continue with app download and launch
 	const platformInfo = await getPlatformArchAndBinary();
-	const { platformDir, archDir, binaryName, suffix } = platformInfo;
+	const { platformDir, archDir, binaryName, appName } = platformInfo;
 
 	const namedVersion = VERSION === "latest" ? BINARY_RELEASE_BRANCH : VERSION;
 
@@ -282,9 +300,6 @@ function formatBytes(bytes) {
 	// Build ZIP download URL
 	const zipFileName = `${binaryName}-${platformDir}-${archDir}.zip`;
 	const downloadUrl = `${BASE_URL}/${branchName}/${zipFileName}`;
-
-	let lastError = null;
-	let binaryWorking = false;
 
 	// Use branch name for caching
 	const tinglyBinDir = join(cacheDir(), "tingly-box-gui", branchName, "bin");
@@ -299,100 +314,66 @@ function formatBytes(bytes) {
 		process.exit(1);
 	}
 
-	// The extracted binary path
-	const binaryPath = join(tinglyBinDir, `${binaryName}-${platformDir}-${archDir}${suffix}`);
+	// The app bundle path
+	const appPath = join(tinglyBinDir, appName);
 
-	// If binary doesn't exist, download and extract ZIP
-	if (!existsSync(binaryPath)) {
+	// If app doesn't exist, download and extract ZIP
+	if (!existsSync(appPath)) {
 		await downloadAndExtractZip(downloadUrl, tinglyBinDir, binaryName);
-
-		// Make sure the binary is executable
-		if (process.platform !== "win32") {
-			chmodSync(binaryPath, 0o755);
-		}
-
-		console.log(`✅ Downloaded and extracted to ${binaryPath}`);
+		console.log(`✅ Downloaded and extracted to ${appPath}`);
 	}
 
-    // Test if the binary can execute
-    // Debug: Show binary location
-    console.log(`🔍 Executing binary: ${binaryPath}`);
+	console.log(`🔍 Launching app: ${appPath}`);
 
-    try {
-        execFileSync(binaryPath, remainingArgs, {
-            stdio: "inherit",
-            encoding: 'utf8'
-        });
+	// Sign the app (macOS requires ad-hoc signing for downloaded apps)
+	try {
+		console.log(`🔐 Signing app with ad-hoc signature...`);
+		execFileSync("codesign", ["--force", "--deep", "--sign", "-", appPath], {
+			stdio: "inherit"
+		});
+		console.log(`✅ App signed successfully`);
+	} catch (signError) {
+		console.error(`⚠️  Warning: Failed to sign app: ${signError.message}`);
+		console.error(`    Continuing anyway...`);
+	}
 
-        // If we reach here, the binary executed successfully
-        binaryWorking = true;
+	// Launch the app using `open` command
+	try {
+		console.log(`🚀 Launching ${appName}...`);
+		// Detach the app by using open command
+		execFileSync("open", ["-a", appPath], {
+			stdio: "inherit"
+		});
+		console.log(`✅ ${appName} launched successfully!`);
+	} catch (execError) {
+		console.error(`\n❌ Failed to launch ${appName}`);
+		console.error(`┌─ Error Details:`);
+		console.error(`│  Message: ${execError.message}`);
 
-        // If execFileSync completes without throwing, the binary exited with code 0
-        // No need to explicitly exit here, let the script continue
-    } catch (execError) {
-        lastError = execError;
-        binaryWorking = false;
+		const errorCode = execError.code;
+		if (errorCode) {
+			console.error(`│  Code: ${errorCode}`);
+		}
 
-        // Extract detailed error information
-        const errorCode = execError.code;
-        const errorSignal = execError.signal;
-        const errorMessage = execError.message;
-        const errorStatus = execError.status;
+		const errorStatus = execError.status;
+		if (errorStatus !== null && errorStatus !== undefined) {
+			console.error(`│  Exit Code: ${errorStatus}`);
+		}
 
-        // Create comprehensive error output
-        console.error(`\n❌ Tingly-Box execution failed`);
-        console.error(`┌─ Error Details:`);
-        console.error(`│  Message: ${errorMessage}`);
+		console.error(`└─ App Path: ${appPath}`);
+		console.error(`   Platform: ${process.platform} (${process.arch})`);
 
-        if (errorCode) {
-            console.error(`│  Code: ${errorCode}`);
-            // Provide specific guidance for common error codes
-            switch (errorCode) {
-                case 'ENOENT':
-                    console.error(`│  └─ Binary not found at: ${binaryPath}`);
-                    console.error(`│     Try removing the cached binary: rm -rf "${join(cacheDir(), 'tingly-box-gui')}"`);
-                    break;
-                case 'EACCES':
-                    console.error(`│  └─ Permission denied. Check binary permissions.`);
-                    break;
-                case 'ETXTBSY':
-                    console.error(`│  └─ Binary file is busy or being modified.`);
-                    break;
-                default:
-                    console.error(`│  └─ System error occurred.`);
-            }
-        }
+		// Provide help
+		console.error(`\n💡 Troubleshooting:`);
+		console.error(`   • Try opening manually: open "${appPath}"`);
+		console.error(`   • Check if the app is quarantined: xattr -l "${appPath}"`);
+		console.error(`   • Remove quarantine if needed: xattr -cr "${appPath}"`);
 
-        if (errorStatus !== null && errorStatus !== undefined) {
-            console.error(`│  Exit Code: ${errorStatus}`);
-            console.error(`│  └─ The binary exited with non-zero status code.`);
-        }
+		// Suggest retry
+		console.error(`\n🔄 To retry, run: npx tingly-box-gui ${remainingArgs.join(' ')}`);
+		console.error(`   Or clear cache first: rm -rf "${join(cacheDir(), 'tingly-box-gui')}"`);
 
-        if (errorSignal) {
-            console.error(`│  Signal: ${errorSignal}`);
-            console.error(`│  └─ The binary was terminated by a signal.`);
-        }
-
-        console.error(`└─ Binary Path: ${binaryPath}`);
-        console.error(`   Platform: ${process.platform} (${process.arch})`);
-
-        // Provide additional help for common scenarios
-        if (process.platform === "linux") {
-            console.error(`\n💡 Linux Troubleshooting:`);
-            console.error(`   • Check if required libraries are installed:`);
-            console.error(`     - For glibc issues: try on a different Linux distribution`);
-            console.error(`     - For missing dependencies: install required system packages`);
-            console.error(`   • Try running with strace: strace -o trace.log "${binaryPath}"`);
-        }
-
-        // Suggest retry
-        console.error(`\n🔄 To retry, run: npx tingly-box-gui ${remainingArgs.join(' ')}`);
-        console.error(`   Or clear cache first: rm -rf "${join(cacheDir(), 'tingly-box-gui')}"`);
-    }
-
-    if (!binaryWorking) {
-        // Exit with the binary's exit code if available, otherwise default to 1
-        const exitCode = lastError.status !== undefined ? lastError.status : 1;
-        process.exit(exitCode);
-    }
+		const exitCode = errorStatus !== undefined ? errorStatus : 1;
+		process.exit(exitCode);
+	}
 })();
