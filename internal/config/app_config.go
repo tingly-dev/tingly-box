@@ -166,11 +166,7 @@ func (ac *AppConfig) DeleteProvider(name string) error {
 
 // Save saves the configuration to file, with optional encryption based on global config
 func (ac *AppConfig) Save() error {
-	data, err := json.Marshal(ac.config)
-	if err != nil {
-		return fmt.Errorf("failed to marshal config: %w", err)
-	}
-
+	var err error
 	// Check if encryption is enabled
 	shouldEncrypt := false
 	if ac.config != nil {
@@ -180,8 +176,13 @@ func (ac *AppConfig) Save() error {
 	var fileData []byte
 	if shouldEncrypt {
 		// Encrypt the data
+		data, err := json.Marshal(ac.config)
+		if err != nil {
+			return fmt.Errorf("failed to marshal config: %w", err)
+		}
+
 		nonce := make([]byte, ac.gcm.NonceSize())
-		if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
 			return err
 		}
 
@@ -244,9 +245,34 @@ func (ac *AppConfig) Load() error {
 		return fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
+	statsStore, err := NewStatsStore(filepath.Join(ac.configDir, StateDirName))
+	if err != nil {
+		return fmt.Errorf("failed to initialize stats store: %w", err)
+	}
+
 	ac.mu.Lock()
+	var existingModelManager *ModelListManager
+	if ac.config != nil {
+		existingModelManager = ac.config.modelManager
+	}
 	ac.config = &config
+	ac.config.ConfigFile = ac.configFile
+	ac.config.ConfigDir = ac.configDir
+	ac.config.modelManager = existingModelManager
+	ac.config.statsStore = statsStore
+	if ac.config.modelManager == nil {
+		modelManager, err := NewProviderModelManager(filepath.Join(ac.configDir, ModelsDirName))
+		if err != nil {
+			ac.mu.Unlock()
+			return fmt.Errorf("failed to initialize model manager: %w", err)
+		}
+		ac.config.modelManager = modelManager
+	}
 	ac.mu.Unlock()
+
+	if err := ac.config.refreshStatsFromStore(); err != nil {
+		return err
+	}
 
 	return nil
 }

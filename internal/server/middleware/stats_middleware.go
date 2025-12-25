@@ -13,13 +13,15 @@ import (
 
 // StatsMiddleware tracks usage statistics by updating service-embedded stats
 type StatsMiddleware struct {
-	config *config.Config // Reference to config to access config and rules
+	config     *config.Config     // Reference to config to access config and rules
+	statsStore *config.StatsStore // Dedicated stats store for persistence
 }
 
 // NewStatsMiddleware creates a new statistics middleware
 func NewStatsMiddleware(cfg *config.Config) *StatsMiddleware {
 	return &StatsMiddleware{
-		config: cfg,
+		config:     cfg,
+		statsStore: cfg.GetStatsStore(),
 	}
 }
 
@@ -218,8 +220,8 @@ func (sm *StatsMiddleware) RecordUsage(serviceID string, inputTokens, outputToke
 				// Found the service, record usage in its embedded stats
 				service.RecordUsage(inputTokens, outputTokens)
 
-				// Save the updated config to persist changes
-				sm.config.UpdateRequestConfigAt(ruleIdx, *rule)
+				// Persist usage stats separately from config
+				sm.persistServiceStats(service)
 				return
 			}
 		}
@@ -235,15 +237,17 @@ func (sm *StatsMiddleware) RecordUsageOnRule(rule *config.Rule, provider, model 
 			// Found the service, record usage in its embedded stats
 			service.RecordUsage(inputTokens, outputTokens)
 
-			// Find the rule in config and update it to persist the stats
-			rules := sm.config.GetRequestConfigs()
-			for ruleIdx, r := range rules {
-				if r.UUID == rule.UUID {
-					sm.config.UpdateRequestConfigAt(ruleIdx, *rule)
-					return
-				}
-			}
+			// Persist usage stats separately from config
+			sm.persistServiceStats(service)
 			return
 		}
 	}
+}
+
+// persistServiceStats writes the updated stats into the dedicated stats store.
+func (sm *StatsMiddleware) persistServiceStats(service *config.Service) {
+	if sm.statsStore == nil {
+		return
+	}
+	_ = sm.statsStore.UpdateFromService(service)
 }

@@ -375,6 +375,7 @@ func NewMockProviderTestSuite(t *testing.T) *MockProviderTestSuite {
 		APIBase: suite.mockServer.GetURL(),
 		Token:   "mock-token",
 		Enabled: true,
+		Timeout: int64(config.DefaultRequestTimeout.Seconds()),
 	}
 	err := suite.testServer.appConfig.AddProvider(provider)
 	if err != nil {

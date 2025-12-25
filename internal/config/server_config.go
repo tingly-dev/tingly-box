@@ -34,13 +34,13 @@ type Config struct {
 	JWTSecret   string               `json:"jwt_secret"`
 
 	// Server settings
-	RequestTimeout   int `json:"request_timeout"`    // Request timeout in seconds
 	DefaultMaxTokens int `json:"default_max_tokens"` // Default max_tokens for anthropic API requests
 
 	ConfigFile string `yaml:"-" json:"-"` // Not serialized to YAML (exported to preserve field)
 	ConfigDir  string `yaml:"-" json:"-"`
 
 	modelManager *ModelListManager
+	statsStore   *StatsStore
 
 	mu sync.RWMutex
 }
@@ -76,6 +76,13 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 		ConfigDir:  configDir,
 	}
 
+	// Initialize stats store before loading config so load can hydrate runtime stats
+	statsStore, err := NewStatsStore(filepath.Join(configDir, StateDirName))
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize stats store: %w", err)
+	}
+	cfg.statsStore = statsStore
+
 	// Load existing cfg if exists
 	if err := cfg.load(); err != nil {
 		// If file doesn't exist, create default cfg
@@ -93,6 +100,11 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 
 	cfg.InsertDefaultRule()
 	cfg.save()
+
+	// Hydrate stats from the store
+	if err := cfg.refreshStatsFromStore(); err != nil {
+		return nil, fmt.Errorf("failed to refresh stats store: %w", err)
+	}
 
 	// Ensure tokens exist even for existing configs
 	updated := false
@@ -119,10 +131,6 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 	}
 	if cfg.ServerPort == 0 {
 		cfg.ServerPort = 12580
-		updated = true
-	}
-	if cfg.RequestTimeout == 0 {
-		cfg.RequestTimeout = int(RequestTimeout.Seconds())
 		updated = true
 	}
 	if cfg.DefaultMaxTokens == 0 {
@@ -166,7 +174,7 @@ func (c *Config) load() error {
 	c.migrateRules()
 	c.migrateProviders()
 
-	return nil
+	return c.refreshStatsFromStore()
 }
 
 // save saves the global configuration to file
@@ -178,8 +186,20 @@ func (c *Config) save() error {
 	if err != nil {
 		return err
 	}
+	err = os.WriteFile(c.ConfigFile, data, 0644)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
-	return os.WriteFile(c.ConfigFile, data, 0644)
+// refreshStatsFromStore hydrates service stats from the SQLite store.
+func (c *Config) refreshStatsFromStore() error {
+	if c.statsStore == nil {
+		return nil
+	}
+
+	return c.statsStore.HydrateRules(c.Rules)
 }
 
 // AddRule updates the default Rule
@@ -483,6 +503,14 @@ func (c *Config) GetModelToken() string {
 	return c.ModelToken
 }
 
+// GetStatsStore returns the dedicated stats store (may be nil in tests).
+func (c *Config) GetStatsStore() *StatsStore {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.statsStore
+}
+
 // HasModelToken checks if a model token is configured
 func (c *Config) HasModelToken() bool {
 	c.mu.RLock()
@@ -673,23 +701,6 @@ func (c *Config) SetServerPort(port int) error {
 	defer c.mu.Unlock()
 
 	c.ServerPort = port
-	return c.save()
-}
-
-// GetRequestTimeout returns the configured request timeout in seconds
-func (c *Config) GetRequestTimeout() int {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	return c.RequestTimeout
-}
-
-// SetRequestTimeout updates the request timeout in seconds
-func (c *Config) SetRequestTimeout(timeout int) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.RequestTimeout = timeout
 	return c.save()
 }
 
@@ -960,9 +971,9 @@ func (c *Config) migrateProviders() {
 			Token:       pv1.Token,
 			Enabled:     pv1.Enabled,
 			ProxyURL:    pv1.ProxyURL,
-			Timeout:     30 * time.Minute, // Default timeout: 30 minute
-			Tags:        []string{},       // Empty tags
-			Models:      []string{},       // Empty models initially
+			Timeout:     int64(DefaultRequestTimeout.Seconds()), // Default timeout from constants
+			Tags:        []string{},                             // Empty tags
+			Models:      []string{},                             // Empty models initially
 			LastUpdated: time.Now().Format(time.RFC3339),
 		}
 

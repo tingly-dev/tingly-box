@@ -13,13 +13,15 @@ const (
 	// ModelsDirName is the subdirectory for provider model configurations
 	ModelsDirName = "models"
 
-	LogDirName = "log"
+	LogDirName      = "log"
+	StateDirName    = "state"
+	StatsDBFileName = "stats.db" // SQLite database file
 
 	// DebugLogFileName is the name of the debug log file
 	DebugLogFileName = "bad_requests.log"
 
-	// RequestTimeout is the default timeout for HTTP requests in seconds
-	RequestTimeout = 600 * time.Second
+	// DefaultRequestTimeout is the default timeout for HTTP requests in seconds
+	DefaultRequestTimeout = 600 * time.Second
 
 	// DefaultMaxTokens is the default max_tokens value for API requests
 	DefaultMaxTokens = 8192
@@ -42,4 +44,9 @@ func GetTinglyConfDir() string {
 // GetModelsDir returns the models directory path
 func GetModelsDir() string {
 	return filepath.Join(GetTinglyConfDir(), ModelsDirName)
+}
+
+// GetStateDir returns the directory used for persisted runtime state
+func GetStateDir() string {
+	return filepath.Join(GetTinglyConfDir(), StateDirName)
 }

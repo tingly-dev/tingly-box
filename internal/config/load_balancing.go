@@ -14,7 +14,7 @@ type Service struct {
 	Weight     int          `yaml:"weight" json:"weight"`           // Weight for load balancing
 	Active     bool         `yaml:"active" json:"active"`           // Whether this service is active
 	TimeWindow int          `yaml:"time_window" json:"time_window"` // Statistics time window in seconds
-	Stats      ServiceStats `yaml:"stats" json:"stats"`             // Service usage statistics
+	Stats      ServiceStats `yaml:"-" json:"-"`                     // Service usage statistics (stored in SQLite, not in config)
 }
 
 // ServiceID returns a unique identifier for the service
