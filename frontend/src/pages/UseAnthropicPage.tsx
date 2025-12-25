@@ -97,11 +97,11 @@ const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
                 isClickable={true}
             >
                 <Box sx={{display: 'flex', gap: 0.5, ml: 'auto'}}>
-                    <Tooltip title="Edit Rule">
+                    {/* <Tooltip title="Edit Rule">
                         <IconButton onClick={() => navigate('/routing?expand=anthropic')} size="small">
                             <EditIcon fontSize="small"/>
                         </IconButton>
-                    </Tooltip>
+                    </Tooltip> */}
                     <Tooltip title="Copy Model">
                         <IconButton onClick={() => copyToClipboard(modelName || ruleId, 'Model Name')} size="small">
                             <CopyIcon fontSize="small"/>
