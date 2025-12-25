@@ -936,11 +936,7 @@ func (c *Config) migrateRules() {
 
 	// Save if any rules were updated
 	if needsSave {
-		// Call save without acquiring lock since this is called within load()
-		data, err := json.MarshalIndent(c, "", "  ")
-		if err == nil {
-			os.WriteFile(c.ConfigFile, data, 0644)
-		}
+		_ = c.save()
 	}
 }
 
@@ -948,8 +944,19 @@ func (c *Config) migrateRules() {
 func (c *Config) migrateProviders() {
 	needsSave := false
 
+	// Ensure all providers have a valid timeout (set to default if zero)
+	for _, p := range c.Providers {
+		if p.Timeout == 0 {
+			p.Timeout = int64(DefaultRequestTimeout.Seconds())
+			needsSave = true
+		}
+	}
+
 	// Skip migration if Providers is already populated
 	if len(c.Providers) > 0 {
+		if needsSave {
+			_ = c.save()
+		}
 		return
 	}
 
@@ -1003,11 +1010,7 @@ func (c *Config) migrateProviders() {
 
 	// Save if migration occurred
 	if needsSave {
-		// Call save without acquiring lock since this is called within load()
-		data, err := json.MarshalIndent(c, "", "  ")
-		if err == nil {
-			_ = os.WriteFile(c.ConfigFile, data, 0644)
-		}
+		_ = c.save()
 	}
 }
 
