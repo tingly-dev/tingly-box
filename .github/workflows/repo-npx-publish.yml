@@ -1,12 +1,7 @@
-name: NPX Package Publish
+name: Legacy NPX Package Publish
 
 # Triggers when main is pushed and package.json has changed
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'npx/package.json'
   workflow_dispatch:
     inputs:
       packages_branch:

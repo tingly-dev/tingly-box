@@ -1,11 +1,11 @@
-name: Build and Release
+name: Legacy Github repo Release
 
 on:
 #  push:
 #    tags:
 #      - 'v*'
-  # pull_request:
-  #   branches: [ main ]
+#   pull_request:
+#     branches: [ main ]
   workflow_dispatch:
     inputs:
       createRelease:
