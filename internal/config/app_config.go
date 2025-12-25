@@ -166,7 +166,6 @@ func (ac *AppConfig) DeleteProvider(name string) error {
 
 // Save saves the configuration to file, with optional encryption based on global config
 func (ac *AppConfig) Save() error {
-	persistable := ac.config.persistableCopy()
 	var err error
 	// Check if encryption is enabled
 	shouldEncrypt := false
@@ -177,7 +176,7 @@ func (ac *AppConfig) Save() error {
 	var fileData []byte
 	if shouldEncrypt {
 		// Encrypt the data
-		data, err := json.Marshal(persistable)
+		data, err := json.Marshal(ac.config)
 		if err != nil {
 			return fmt.Errorf("failed to marshal config: %w", err)
 		}
@@ -192,7 +191,7 @@ func (ac *AppConfig) Save() error {
 		fileData = []byte(base64.StdEncoding.EncodeToString(ciphertext))
 	} else {
 		// Save as plaintext JSON with pretty formatting
-		fileData, err = json.MarshalIndent(persistable, "", "  ")
+		fileData, err = json.MarshalIndent(ac.config, "", "  ")
 		if err != nil {
 			return fmt.Errorf("failed to marshal config with indentation: %w", err)
 		}

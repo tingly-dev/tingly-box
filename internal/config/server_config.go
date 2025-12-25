@@ -199,39 +199,10 @@ func (c *Config) save() error {
 }
 
 // marshalWithoutRuntime produces a config JSON payload without runtime-only fields like stats.
+// Unexported fields (modelManager, statsStore) and fields marked json:"-" (Stats) are
+// automatically excluded during JSON marshaling.
 func (c *Config) marshalWithoutRuntime() ([]byte, error) {
-	persistable := c.persistableCopy()
-	return json.MarshalIndent(persistable, "", "  ")
-}
-
-// persistableCopy clones the config while stripping runtime-only fields prior to persistence.
-// NOTE: Must be called while holding the config mutex (either RLock or Lock).
-// This method does NOT acquire a lock itself to avoid deadlock when called from save()
-// which is already called from methods holding a write lock.
-func (c *Config) persistableCopy() *Config {
-	// Don't acquire lock here - caller must already hold it to avoid deadlock
-	// This is called from save() which is always called from methods that already hold the lock
-	copyCfg := *c
-	// Remove runtime-only pointers from the copy
-	copyCfg.modelManager = nil
-	copyCfg.statsStore = nil
-
-	// Deep copy rules and strip stats
-	if len(c.Rules) > 0 {
-		copyCfg.Rules = make([]Rule, len(c.Rules))
-		for i, rule := range c.Rules {
-			copyCfg.Rules[i] = rule
-			if len(rule.Services) > 0 {
-				copyCfg.Rules[i].Services = make([]Service, len(rule.Services))
-				for j, service := range rule.Services {
-					service.Stats = ServiceStats{}
-					copyCfg.Rules[i].Services[j] = service
-				}
-			}
-		}
-	}
-
-	return &copyCfg
+	return json.MarshalIndent(c, "", "  ")
 }
 
 // refreshStatsFromStore migrates any embedded stats into the stats store and hydrates services.
