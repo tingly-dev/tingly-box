@@ -1,4 +1,4 @@
-name: NPX Package Publish from GitHub Release
+name: NPX Package (GUI) Publish from GitHub Release
 
 on:
   workflow_dispatch:

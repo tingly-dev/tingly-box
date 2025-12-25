@@ -1,4 +1,4 @@
-name: Github Tag Release
+name: Github Tag (GUI) Release
 
 on:
 #  push:
