@@ -29,11 +29,11 @@ jobs:
           - goos: darwin
             goarch: amd64
             suffix: macos-amd64
-            runs-on: macos-13
+            runs-on: macos-latest-large
           - goos: darwin
             goarch: arm64
             suffix: macos-arm64
-            runs-on: macos-14
+            runs-on: macos-latest
           - goos: windows
             goarch: amd64
             suffix: windows-amd64
