@@ -464,7 +464,7 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                 </Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Chip
-                        label={`use ${record.providers.length} keys`}
+                        label={`Use ${record.providers.length} ${record.providers.length === 1 ? 'Key' : 'Keys'}`}
                         size="small"
                         variant="outlined"
                         sx={{
@@ -621,7 +621,13 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                                                 />
                                             ))}
                                             {/* Add Provider Button */}
-                                            <Tooltip title="Add another provider">
+                                            <Tooltip title={
+                                                record.providers.length === 0
+                                                    ? "Add a provider to enable request forwarding"
+                                                    : record.providers.length === 1
+                                                        ? "Add another provider (with 2+ providers, load balancing will be enabled based on strategy)"
+                                                        : "Add another provider (requests will be load balanced across all providers)"
+                                            }>
                                                 <IconButton
                                                     onClick={(e) => {
                                                         e.stopPropagation();
