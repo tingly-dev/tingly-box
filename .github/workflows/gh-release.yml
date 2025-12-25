@@ -18,7 +18,27 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runs-on }}
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            suffix: linux-amd64
+            runs-on: ubuntu-latest
+          - goos: darwin
+            goarch: amd64
+            suffix: macos-amd64
+            runs-on: macos-13
+          - goos: darwin
+            goarch: arm64
+            suffix: macos-arm64
+            runs-on: macos-14
+          - goos: windows
+            goarch: amd64
+            suffix: windows-amd64
+            exe: .exe
+            runs-on: windows-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -26,6 +46,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up tag environment
+        shell: bash
         run: |
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "RELEASE_TAG=${{ github.event.inputs.release_tag }}" >> $GITHUB_ENV
@@ -51,8 +72,9 @@ jobs:
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          key: ${{ runner.os }}-go-${{ matrix.goarch }}-${{ hashFiles('**/go.sum') }}
           restore-keys: |
+            ${{ runner.os }}-go-${{ matrix.goarch }}-
             ${{ runner.os }}-go-
 
       - name: Install pnpm
@@ -66,49 +88,43 @@ jobs:
         run: npm install -g @openapitools/openapi-generator-cli
 
       - name: Run codegen Build frontend
+        shell: bash
         run: |
           openapi-generator-cli generate -g typescript-axios -i ../swagger.json -o ./src/client
           pnpm build && mkdir -p ../internal/web/dist && cp -R dist/* ../internal/web/dist/
         working-directory: ./frontend
 
-      - name: Build Go binaries
+      - name: Build Go binary (${{ matrix.suffix }})
+        shell: bash
         run: |
           # Create build directory
           mkdir -p dist
-          
+
           # Get build info
           VERSION="${{ env.RELEASE_TAG }}"
           GIT_COMMIT="$(git rev-parse HEAD 2>/dev/null || echo 'unknown')"
           BUILD_TIME="$(date -u '+%Y-%m-%d-%H-%M-%S' 2>/dev/null || echo 'unknown')"
           GO_VERSION="$(go version | awk '{print $3}' | sed 's/go//' 2>/dev/null || echo 'unknown')"
-  
+          PLATFORM="${{ matrix.goos }}/${{ matrix.goarch }}"
+
           # Build with ldflags
-          mkdir -p build
-          LDFLAGS="-X main.version=${VERSION} -X main.gitCommit=${GIT_COMMIT} -X main.buildTime=${BUILD_TIME} -X main.goVersion=${GO_VERSION}"
+          LDFLAGS="-X main.version=${VERSION} -X main.gitCommit=${GIT_COMMIT} -X main.buildTime=${BUILD_TIME} -X main.goVersion=${GO_VERSION} -X main.platform=${PLATFORM}"
 
-          # Build Linux binaries
-          CGO_ENABLED=1 PLATFORM=linux/amd64 GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS} -X main.platform=${PLATFORM}" -o ./dist/tingly-box-linux-amd64 ./cmd/tingly-box
-          CGO_ENABLED=1 PLATFORM=linux/arm64 GOOS=linux GOARCH=arm64 go build -ldflags="${LDFLAGS} -X main.platform=${PLATFORM}" -o ./dist/tingly-box-linux-arm64 ./cmd/tingly-box
+          CGO_ENABLED=1 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build \
+            -ldflags="${LDFLAGS}" \
+            -o ./dist/tingly-box-${{ matrix.suffix }}${{ matrix.exe }} \
+            ./cmd/tingly-box
 
-          # Build macOS binaries
-          CGO_ENABLED=1 PLATFORM=darwin/amd64 GOOS=darwin GOARCH=amd64 go build -ldflags="${LDFLAGS} -X main.platform=${PLATFORM}" -o ./dist/tingly-box-macos-amd64 ./cmd/tingly-box
-          CGO_ENABLED=1 PLATFORM=darwin/arm64 GOOS=darwin GOARCH=arm64 go build -ldflags="${LDFLAGS} -X main.platform=${PLATFORM}" -o ./dist/tingly-box-macos-arm64 ./cmd/tingly-box
+          # Make binary executable for non-Windows
+          [ "${{ matrix.goos }}" != "windows" ] && chmod +x ./dist/tingly-box-${{ matrix.suffix }}${{ matrix.exe }} || true
 
-          # Build Windows binaries
-          CGO_ENABLED=1 PLATFORM=windows/amd64 GOOS=windows GOARCH=amd64 go build -ldflags="${LDFLAGS} -X main.platform=${PLATFORM}" -o ./dist/tingly-box-windows-amd64.exe ./cmd/tingly-box
-          # PLATFORM=windows/arm64 GOOS=windows GOARCH=arm64 go build -ldflags="${LDFLAGS} -X main.platform=${PLATFORM}" -o ./dist/tingly-box-windows-arm64.exe ./cmd/tingly-box
-
-          # Make Linux binaries executable
-          chmod +x ./dist/tingly-box-linux-*
-          chmod +x ./dist/tingly-box-macos-*
-
-      - name: Upload build artifacts
+      - name: Upload build artifact (${{ matrix.suffix }})
         if: |
           startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
-          name: binaries
-          path: ./dist/
+          name: binary-${{ matrix.suffix }}
+          path: ./dist/tingly-box-${{ matrix.suffix }}${{ matrix.exe }}
           retention-days: 7
       
   github-release:
@@ -137,26 +153,20 @@ jobs:
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
-          name: binaries
+          pattern: binary-*
           path: ./dist
+          merge-multiple: true
 
       - name: Package binaries with proper extensions
         run: |
           cd dist
 
-          chmod +x tingly-box-linux-*
-          chmod +x tingly-box-macos-*
+          chmod +x tingly-box-* || true
 
-          # Package Linux binaries as zip
-          zip tingly-box-linux-amd64.zip tingly-box-linux-amd64
-          zip tingly-box-linux-arm64.zip tingly-box-linux-arm64
-
-          # Package macOS binaries as zip
-          zip tingly-box-macos-amd64.zip tingly-box-macos-amd64
-          zip tingly-box-macos-arm64.zip tingly-box-macos-arm64
-
-          # Package Windows binary as zip
-          zip tingly-box-windows-amd64.zip tingly-box-windows-amd64.exe
+          # Package all binaries as zip
+          for binary in tingly-box-*; do
+            zip "${binary%.exe}.zip" "$binary"
+          done
 
           # Move packages to dist root
           mv *.zip ../
