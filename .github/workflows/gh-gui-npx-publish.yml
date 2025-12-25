@@ -227,11 +227,11 @@ jobs:
           ### 🚀 Installation
 
           \`\`\`bash
-          # Install globally
-          npm install -g tingly-box@$VERSION
-
-          # Or use with npx (no installation needed)
-          npx tingly-box@$VERSION --help
+          # Use with npx (recommended)
+          npx tingly-box-gui@$VERSION start
+          
+          # Or install globally
+          npm install -g tingly-box-gui@$VERSION
           \`\`\`
 
           ### 🔗 Links
