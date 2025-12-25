@@ -95,7 +95,7 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
-                
+
       - name: Install go-task
         run: go install github.com/go-task/task/v3/cmd/task@latest
 
@@ -183,7 +183,7 @@ jobs:
           cd dist
 
           # Package binaries as zip
-          for binary in tingly-box-gui-*; do
+          for binary in Tingly*; do
             if [ -f "$binary" ]; then
               zip "${binary}.zip" "$binary"
             fi
