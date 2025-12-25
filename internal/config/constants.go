@@ -2,7 +2,6 @@ package config
 
 import (
 	"path/filepath"
-	"time"
 	"tingly-box/internal/util"
 )
 
@@ -21,7 +20,9 @@ const (
 	DebugLogFileName = "bad_requests.log"
 
 	// DefaultRequestTimeout is the default timeout for HTTP requests in seconds
-	DefaultRequestTimeout = 1800 * time.Second
+	DefaultRequestTimeout = 1800
+	// DefaultMaxTimeout in seconds
+	DefaultMaxTimeout = 30 * 60
 
 	// DefaultMaxTokens is the default max_tokens value for API requests
 	DefaultMaxTokens = 8192
