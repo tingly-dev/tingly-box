@@ -27,7 +27,7 @@ const (
 	DefaultMaxTokens = 8192
 
 	// Load balancing threshold defaults
-	DefaultRequestThreshold = int64(100)   // Default request threshold for round-robin and hybrid tactics
+	DefaultRequestThreshold = int64(10)    // Default request threshold for round-robin and hybrid tactics
 	DefaultTokenThreshold   = int64(10000) // Default token threshold for token-based and hybrid tactics
 )
 
