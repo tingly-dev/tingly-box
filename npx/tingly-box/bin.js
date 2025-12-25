@@ -5,6 +5,7 @@ import { chmodSync, createWriteStream, existsSync, fsyncSync, mkdirSync } from "
 import { tmpdir } from "os";
 import { join } from "path";
 import { Readable } from "stream";
+import { ProxyAgent } from "undici";
 
 // Configuration for binary downloads
 const BASE_URL = "https://github.com/tingly-dev/tingly-box/releases/download/";
@@ -15,6 +16,13 @@ const LATEST_RELEASE_API_URL = "https://github.com/tingly-dev/tingly-box/release
 // Default branch to use when not specified via transport version
 // This will be replaced during the NPX build process
 const BINARY_RELEASE_BRANCH = "latest";
+
+// Create proxy agent from environment variables (HTTP_PROXY, HTTPS_PROXY)
+// Only create ProxyAgent if proxy is configured, otherwise use undefined (direct connection)
+const httpProxy = process.env.HTTP_PROXY || process.env.http_proxy;
+const httpsProxy = process.env.HTTPS_PROXY || process.env.https_proxy;
+const proxyUri = httpsProxy || httpProxy;
+const dispatcher = proxyUri ? new ProxyAgent(proxyUri) : undefined;
 
 // Parse transport version from command line arguments
 function parseTransportVersion() {
@@ -101,13 +109,18 @@ async function getPlatformArchAndBinary() {
 async function downloadBinary(url, dest) {
 	// console.log(`🔄 Downloading binary from ${url}...`);
 
-	// Fetch with redirect following
-	const res = await fetch(url, {
+	// Fetch with redirect following and optional proxy support
+	const fetchOptions = {
 		redirect: 'follow', // Automatically follow redirects
 		headers: {
 			'User-Agent': 'tingly-box-npx'
 		}
-	});
+	};
+	if (dispatcher) {
+		fetchOptions.dispatcher = dispatcher;
+	}
+
+	const res = await fetch(url, fetchOptions);
 
 	if (!res.ok) {
 		console.error(`❌ Download failed: ${res.status} ${res.statusText}`);
@@ -161,13 +174,18 @@ async function downloadBinary(url, dest) {
 async function downloadAndExtractZip(url, extractDir, binaryName) {
 	console.log(`🔄 Downloading ZIP from ${url}...`);
 
-	// Fetch with redirect following
-	const res = await fetch(url, {
+	// Fetch with redirect following and optional proxy support
+	const fetchOptions = {
 		redirect: 'follow',
 		headers: {
 			'User-Agent': 'tingly-box-npx'
 		}
-	});
+	};
+	if (dispatcher) {
+		fetchOptions.dispatcher = dispatcher;
+	}
+
+	const res = await fetch(url, fetchOptions);
 
 	if (!res.ok) {
 		console.error(`❌ Download failed: ${res.status} ${res.statusText}`);
@@ -254,7 +272,11 @@ function cacheDir() {
 // gets the latest version number for transport
 async function getLatestVersion() {
     const releaseUrl = LATEST_RELEASE_API_URL;
-    const res = await fetch(releaseUrl);
+    const fetchOptions = {};
+    if (dispatcher) {
+        fetchOptions.dispatcher = dispatcher;
+    }
+    const res = await fetch(releaseUrl, fetchOptions);
     if (!res.ok) {
         return null;
     }

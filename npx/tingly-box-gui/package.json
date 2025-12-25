@@ -20,5 +20,7 @@
     "tingly-box": "bin.js"
   },
   "type": "module",
-  "dependencies": {}
+  "dependencies": {
+    "undici": "^7.0.0"
+  }
 }
