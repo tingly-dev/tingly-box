@@ -221,7 +221,7 @@ func (sm *StatsMiddleware) RecordUsage(serviceID string, inputTokens, outputToke
 				service.RecordUsage(inputTokens, outputTokens)
 
 				// Persist usage stats separately from config
-				sm.persistServiceStats(rule.UUID, service)
+				sm.persistServiceStats(service)
 				return
 			}
 		}
@@ -238,16 +238,16 @@ func (sm *StatsMiddleware) RecordUsageOnRule(rule *config.Rule, provider, model 
 			service.RecordUsage(inputTokens, outputTokens)
 
 			// Persist usage stats separately from config
-			sm.persistServiceStats(rule.UUID, service)
+			sm.persistServiceStats(service)
 			return
 		}
 	}
 }
 
 // persistServiceStats writes the updated stats into the dedicated stats store.
-func (sm *StatsMiddleware) persistServiceStats(ruleUUID string, service *config.Service) {
+func (sm *StatsMiddleware) persistServiceStats(service *config.Service) {
 	if sm.statsStore == nil {
 		return
 	}
-	_ = sm.statsStore.UpsertFromService(ruleUUID, service)
+	_ = sm.statsStore.UpdateFromService(service)
 }

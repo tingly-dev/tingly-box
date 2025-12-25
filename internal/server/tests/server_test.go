@@ -67,7 +67,8 @@ func runTokenGeneration(t *testing.T, ts *TestServer) {
 func runModelsEndpoint(t *testing.T, ts *TestServer, isRealConfig bool) {
 	globalConfig := ts.appConfig.GetGlobalConfig()
 	userToken := globalConfig.GetUserToken()
-	req, _ := http.NewRequest("GET", "/api/v1/provider-models", nil)
+	// Use "glm" provider UUID to test provider models endpoint
+	req, _ := http.NewRequest("GET", "/api/v1/provider-models/glm", nil)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+userToken)
 	w := httptest.NewRecorder()
@@ -75,7 +76,7 @@ func runModelsEndpoint(t *testing.T, ts *TestServer, isRealConfig bool) {
 
 	if isRealConfig {
 		assert.Equal(t, 200, w.Code)
-		assert.Contains(t, w.Body.String(), "glm-4.6")
+		assert.Contains(t, w.Body.String(), "success")
 	} else {
 		assert.True(t, containsStatus(w.Code, []int{200, 500}))
 	}
@@ -135,14 +136,14 @@ func runAnthropicMessagesWithAuth(t *testing.T, ts *TestServer, isRealConfig boo
 	globalConfig := ts.appConfig.GetGlobalConfig()
 	modelToken := globalConfig.GetModelToken()
 	reqBody := map[string]interface{}{
-		"model":      "tingly",
+		"model":      "tingly/openai",
 		"max_tokens": 1024,
 		"messages": []map[string]string{
 			{"role": "user", "content": "Hello from Anthropic!"},
 		},
 	}
 
-	req, _ := http.NewRequest("POST", "/anthropic/v1/messages", CreateJSONBody(reqBody))
+	req, _ := http.NewRequest("POST", "/openai/v1/chat/completions", CreateJSONBody(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+modelToken)
 
@@ -161,8 +162,8 @@ func runAnthropicMessagesWithAuth(t *testing.T, ts *TestServer, isRealConfig boo
 }
 
 func runAnthropicMessagesWithoutAuth(t *testing.T, ts *TestServer) {
-	req, _ := http.NewRequest("POST", "/anthropic/v1/messages", CreateJSONBody(map[string]interface{}{
-		"model": "tingly",
+	req, _ := http.NewRequest("POST", "/openai/v1/chat/completions", CreateJSONBody(map[string]interface{}{
+		"model": "tingly/openai",
 		"messages": []map[string]string{
 			{"role": "user", "content": "Hello from Anthropic!"},
 		},
@@ -225,7 +226,8 @@ func runProviderModelsEndpointWithAuth(t *testing.T, ts *TestServer, isRealConfi
 }
 
 func runProviderModelsEndpointWithoutAuth(t *testing.T, ts *TestServer) {
-	req, _ := http.NewRequest("GET", "/api/v1/provider-models", nil)
+	// Use "glm" provider UUID to test provider models endpoint
+	req, _ := http.NewRequest("GET", "/api/v1/provider-models/glm", nil)
 	w := httptest.NewRecorder()
 	ts.ginEngine.ServeHTTP(w, req)
 

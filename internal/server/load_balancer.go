@@ -146,7 +146,8 @@ func (lb *LoadBalancer) GetServiceStats(provider, model string) *config.ServiceS
 	return nil
 }
 
-// GetAllServiceStats returns all service statistics from all active rules
+// GetAllServiceStats returns all service statistics from all active rules.
+// Stats are keyed by provider:model since stats are global (shared across rules).
 func (lb *LoadBalancer) GetAllServiceStats() map[string]*config.ServiceStats {
 	result := make(map[string]*config.ServiceStats)
 
@@ -160,13 +161,14 @@ func (lb *LoadBalancer) GetAllServiceStats() map[string]*config.ServiceStats {
 			for i := range rule.Services {
 				service := &rule.Services[i]
 				if service.Active {
-					// Use a composite key with rule UUID to ensure uniqueness
-					// Format: ruleUUID:provider:model
-					uniqueServiceID := fmt.Sprintf("%s:%s:%s", rule.UUID, service.Provider, service.Model)
-					statsCopy := service.Stats.GetStats()
-					// Update the ServiceID in the returned stats to match our key
-					statsCopy.ServiceID = uniqueServiceID
-					result[uniqueServiceID] = &statsCopy
+					// Stats are global per provider:model, not per-rule
+					store := lb.config.GetStatsStore()
+					key := store.ServiceKey(service.Provider, service.Model)
+					// Only add if not already present (services across rules may share provider:model)
+					if _, exists := result[key]; !exists {
+						statsCopy := service.Stats.GetStats()
+						result[key] = &statsCopy
+					}
 				}
 			}
 		}

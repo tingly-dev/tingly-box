@@ -18,8 +18,7 @@ const defaultServiceTimeWindow = 300
 
 // ServiceStatsRecord is the GORM model for persisting service statistics
 type ServiceStatsRecord struct {
-	// Composite primary key: rule_uuid + provider + model
-	RuleUUID             string    `gorm:"primaryKey;column:rule_uuid"`
+	// Composite primary key: provider + model (stats are global, not per-rule)
 	Provider             string    `gorm:"primaryKey;column:provider"`
 	Model                string    `gorm:"primaryKey;column:model"`
 	ServiceID            string    `gorm:"column:service_id"`
@@ -70,52 +69,21 @@ func NewStatsStore(baseDir string) (*StatsStore, error) {
 		dbPath: dbPath,
 	}
 
-	// Auto-migrate schema
-	log.Printf("Running database migrations...")
+	// Auto-migrate schema, if we add column it would create or update the database table to match the struct definition
 	if err := db.AutoMigrate(&ServiceStatsRecord{}); err != nil {
 		return nil, fmt.Errorf("failed to migrate stats database: %w", err)
 	}
-	log.Printf("Database migrations completed")
-
 	log.Printf("Stats store initialization completed")
 
 	return store, nil
 }
 
-// parseKey parses a stats key into rule_uuid, provider, model.
-// Keys can be "rule_uuid:provider:model" or "provider:model"
-func parseKey(key string) (ruleUUID, provider, model string) {
-	parts := make([]string, 0, 3)
-	lastIdx := 0
-	for i, r := range key {
-		if r == ':' {
-			parts = append(parts, key[lastIdx:i])
-			lastIdx = i + 1
-		}
-	}
-	if lastIdx < len(key) {
-		parts = append(parts, key[lastIdx:])
-	}
-
-	switch len(parts) {
-	case 3:
-		return parts[0], parts[1], parts[2]
-	case 2:
-		return "", parts[0], parts[1]
-	default:
-		return "", "", ""
-	}
-}
-
-// key builds a unique key for a rule/provider/model combination.
-func (ss *StatsStore) key(ruleUUID, provider, model string) string {
-	if ruleUUID != "" {
-		return fmt.Sprintf("%s:%s:%s", ruleUUID, provider, model)
-	}
+// ServiceKey builds a unique key for a provider/model combination.
+func (ss *StatsStore) ServiceKey(provider, model string) string {
 	return fmt.Sprintf("%s:%s", provider, model)
 }
 
-// Snapshot returns a copy of all stats keyed by rule+provider+model.
+// Snapshot returns a copy of all stats keyed by provider:model.
 func (ss *StatsStore) Snapshot() map[string]ServiceStats {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
@@ -127,20 +95,20 @@ func (ss *StatsStore) Snapshot() map[string]ServiceStats {
 
 	snapshot := make(map[string]ServiceStats, len(records))
 	for _, record := range records {
-		key := ss.key(record.RuleUUID, record.Provider, record.Model)
+		key := ss.ServiceKey(record.Provider, record.Model)
 		snapshot[key] = record.toServiceStats()
 	}
 
 	return snapshot
 }
 
-// Get returns stats for a specific rule/provider/model combination.
-func (ss *StatsStore) Get(ruleUUID, provider, model string) (ServiceStats, bool) {
+// Get returns stats for a specific provider/model combination.
+func (ss *StatsStore) Get(provider, model string) (ServiceStats, bool) {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
 
 	var record ServiceStatsRecord
-	err := ss.db.Where("rule_uuid = ? AND provider = ? AND model = ?", ruleUUID, provider, model).
+	err := ss.db.Where("provider = ? AND model = ?", provider, model).
 		First(&record).Error
 
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -153,8 +121,8 @@ func (ss *StatsStore) Get(ruleUUID, provider, model string) (ServiceStats, bool)
 	return record.toServiceStats(), true
 }
 
-// UpsertFromService stores the current stats from a service into the store.
-func (ss *StatsStore) UpsertFromService(ruleUUID string, service *Service) error {
+// UpdateFromService stores the current stats from a service into the store.
+func (ss *StatsStore) UpdateFromService(service *Service) error {
 	if service == nil {
 		return nil
 	}
@@ -166,7 +134,6 @@ func (ss *StatsStore) UpsertFromService(ruleUUID string, service *Service) error
 	stat := service.Stats.GetStats()
 
 	record := ServiceStatsRecord{
-		RuleUUID:             ruleUUID,
 		Provider:             service.Provider,
 		Model:                service.Model,
 		ServiceID:            stat.ServiceID,
@@ -199,7 +166,7 @@ func (ss *StatsStore) UpsertFromService(ruleUUID string, service *Service) error
 }
 
 // RecordUsage records usage for a service and persists the updated stats.
-func (ss *StatsStore) RecordUsage(ruleUUID string, service *Service, inputTokens, outputTokens int) (ServiceStats, error) {
+func (ss *StatsStore) RecordUsage(service *Service, inputTokens, outputTokens int) (ServiceStats, error) {
 	if service == nil {
 		return ServiceStats{}, nil
 	}
@@ -209,13 +176,12 @@ func (ss *StatsStore) RecordUsage(ruleUUID string, service *Service, inputTokens
 
 	// Get or create record
 	var record ServiceStatsRecord
-	err := ss.db.Where("rule_uuid = ? AND provider = ? AND model = ?", ruleUUID, service.Provider, service.Model).
+	err := ss.db.Where("provider = ? AND model = ?", service.Provider, service.Model).
 		First(&record).Error
 
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		// Create new record
 		record = ServiceStatsRecord{
-			RuleUUID:  ruleUUID,
 			Provider:  service.Provider,
 			Model:     service.Model,
 			ServiceID: service.ServiceID(),
@@ -265,11 +231,11 @@ func (ss *StatsStore) HydrateRules(rules []Rule) error {
 		return err
 	}
 
-	// Build lookup map
+	// Build lookup map by provider:model
 	statsMap := make(map[string]*ServiceStatsRecord)
 	for i := range records {
 		record := &records[i]
-		key := ss.key(record.RuleUUID, record.Provider, record.Model)
+		key := ss.ServiceKey(record.Provider, record.Model)
 		statsMap[key] = record
 	}
 
@@ -277,7 +243,7 @@ func (ss *StatsStore) HydrateRules(rules []Rule) error {
 		rule := &rules[i]
 		for j := range rule.Services {
 			service := &rule.Services[j]
-			key := ss.key(rule.UUID, service.Provider, service.Model)
+			key := ss.ServiceKey(service.Provider, service.Model)
 
 			if record, ok := statsMap[key]; ok {
 				service.Stats = record.toServiceStats()
@@ -285,7 +251,6 @@ func (ss *StatsStore) HydrateRules(rules []Rule) error {
 				service.InitializeStats()
 				statCopy := service.Stats.GetStats()
 				record := &ServiceStatsRecord{
-					RuleUUID:             rule.UUID,
 					Provider:             service.Provider,
 					Model:                service.Model,
 					ServiceID:            statCopy.ServiceID,
@@ -314,6 +279,8 @@ func (ss *StatsStore) HydrateRules(rules []Rule) error {
 				if err := ss.db.Create(record).Error; err != nil {
 					return err
 				}
+				// Add to statsMap so other services with same provider:model find it
+				statsMap[key] = record
 			}
 		}
 	}
