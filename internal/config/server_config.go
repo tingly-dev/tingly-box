@@ -102,7 +102,7 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 	cfg.InsertDefaultRule()
 	cfg.save()
 
-	// Hydrate stats from the store and migrate any embedded stats
+	// Hydrate stats from the store
 	if err := cfg.refreshStatsFromStore(); err != nil {
 		return nil, fmt.Errorf("failed to refresh stats store: %w", err)
 	}
@@ -187,7 +187,7 @@ func (c *Config) save() error {
 	if c.ConfigFile == "" {
 		return fmt.Errorf("ConfigFile is empty")
 	}
-	data, err := c.marshalWithoutRuntime()
+	data, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -198,59 +198,13 @@ func (c *Config) save() error {
 	return nil
 }
 
-// marshalWithoutRuntime produces a config JSON payload without runtime-only fields like stats.
-// Unexported fields (modelManager, statsStore) and fields marked json:"-" (Stats) are
-// automatically excluded during JSON marshaling.
-func (c *Config) marshalWithoutRuntime() ([]byte, error) {
-	return json.MarshalIndent(c, "", "  ")
-}
-
-// refreshStatsFromStore migrates any embedded stats into the stats store and hydrates services.
+// refreshStatsFromStore hydrates service stats from the SQLite store.
 func (c *Config) refreshStatsFromStore() error {
 	if c.statsStore == nil {
 		return nil
 	}
 
-	if err := c.migrateEmbeddedStatsToStore(); err != nil {
-		return err
-	}
-
 	return c.statsStore.HydrateRules(c.Rules)
-}
-
-// migrateEmbeddedStatsToStore moves legacy embedded stats into the dedicated stats store.
-func (c *Config) migrateEmbeddedStatsToStore() error {
-	if c.statsStore == nil {
-		return nil
-	}
-
-	for i := range c.Rules {
-		rule := &c.Rules[i]
-		for j := range rule.Services {
-			service := &rule.Services[j]
-			if hasStatsData(&service.Stats) {
-				if err := c.statsStore.UpsertFromService(rule.UUID, service); err != nil {
-					return err
-				}
-			}
-		}
-	}
-
-	return nil
-}
-
-func hasStatsData(stat *ServiceStats) bool {
-	if stat == nil {
-		return false
-	}
-
-	return stat.RequestCount != 0 ||
-		stat.WindowRequestCount != 0 ||
-		stat.WindowTokensConsumed != 0 ||
-		stat.WindowInputTokens != 0 ||
-		stat.WindowOutputTokens != 0 ||
-		!stat.LastUsed.IsZero() ||
-		!stat.WindowStart.IsZero()
 }
 
 // AddRule updates the default Rule

@@ -251,11 +251,11 @@ func (ac *AppConfig) Load() error {
 	}
 
 	ac.mu.Lock()
-	if ac.config == nil {
-		ac.config = &Config{}
+	var existingModelManager *ModelListManager
+	if ac.config != nil {
+		existingModelManager = ac.config.modelManager
 	}
-	existingModelManager := ac.config.modelManager
-	*ac.config = config
+	ac.config = &config
 	ac.config.ConfigFile = ac.configFile
 	ac.config.ConfigDir = ac.configDir
 	ac.config.modelManager = existingModelManager
