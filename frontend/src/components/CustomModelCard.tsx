@@ -1,7 +1,7 @@
 import { CheckCircle } from '@mui/icons-material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
-import { Box, Card, IconButton, Typography } from '@mui/material';
+import { Box, Card, IconButton, Tooltip, Typography } from '@mui/material';
 import React from 'react';
 import type { Provider } from '../types/provider';
 
@@ -38,9 +38,6 @@ export default function CustomModelCard({
         onDelete();
     };
 
-    const showEditButton = variant !== 'backend';
-    const showLabel = variant === 'localStorage';
-
     return (
         <Card
             sx={{
@@ -55,98 +52,134 @@ export default function CustomModelCard({
                 position: 'relative',
                 boxShadow: isSelected ? 2 : 0,
                 display: 'flex',
-                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                overflow: 'hidden',
                 '&:hover': {
                     backgroundColor: 'grey.50',
                     boxShadow: 2,
+                    '& .control-bar': {
+                        opacity: 1,
+                    },
                 },
             }}
             onClick={handleCardClick}
         >
             {/* Main content area */}
-            <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', px: 1, py: 0.5 }}>
+            <Box sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                px: 2,
+                width: '100%',
+                height: '100%',
+                zIndex: 1,
+            }}>
                 <Typography
                     variant="body2"
                     sx={{
                         fontWeight: 500,
                         fontSize: '0.8rem',
-                        lineHeight: 1.3,
+                        lineHeight: 1.2,
                         wordBreak: 'break-word',
-                        textAlign: 'center'
+                        textAlign: 'center',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
                     }}
                 >
                     {model}
                 </Typography>
-                {isSelected && (
-                    <CheckCircle
-                        color="primary"
-                        sx={{
-                            position: 'absolute',
-                            top: 2,
-                            right: 2,
-                            fontSize: 14
-                        }}
-                    />
-                )}
             </Box>
-            {/* Control bar */}
+
+            {/* Selected indicator */}
+            {isSelected && (
+                <CheckCircle
+                    color="primary"
+                    sx={{
+                        position: 'absolute',
+                        top: 4,
+                        right: 4,
+                        fontSize: 16,
+                        zIndex: 2,
+                    }}
+                />
+            )}
+
+            {/* Triangle badge in bottom-left corner */}
+            <Tooltip title="Custom model" arrow>
+                <Box
+                    sx={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        width: 20,
+                        height: 20,
+                        backgroundColor: 'primary.main',
+                        clipPath: 'polygon(0 100%, 100% 100%, 0 0)',
+                        cursor: 'help',
+                    }}
+                />
+            </Tooltip>
+
+            {/* Control bar - visible on hover */}
             <Box
+                className="control-bar"
                 sx={{
+                    position: 'absolute',
+                    bottom: 0,
+                    right: 0,
                     height: 20,
-                    backgroundColor: 'primary.100',
+                    backgroundColor: 'grey.50',
                     borderTop: 1,
-                    borderColor: variant === 'selected' ? 'primary.main' : 'primary.main',
+                    borderTopLeftRadius: 4,
+                    borderColor: 'grey.200',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: showLabel ? 'space-between' : 'flex-end',
                     px: 0.5,
-                    borderRadius: '0 0 12px 12px',
+                    opacity: 0,
+                    transition: 'opacity 0.2s',
+                    zIndex: 10,
                 }}
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                }}
+                onMouseDown={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                }}
             >
-                {showLabel && (
-                    <Typography
-                        variant="caption"
-                        sx={{
-                            fontSize: '0.65rem',
-                            fontWeight: 600,
+                <IconButton
+                    size="small"
+                    onClick={handleEditClick}
+                    sx={{
+                        p: 0.3,
+                        color: 'text.secondary',
+                        '&:hover': {
+                            backgroundColor: 'rgba(0, 0, 0, 0.04)',
                             color: 'primary.main',
-                            textTransform: 'uppercase',
-                            letterSpacing: 0.5,
-                            pl: 0.5,
-                        }}
-                    >
-                        custom
-                    </Typography>
-                )}
-                <Box>
-                    <IconButton
-                        size="small"
-                        onClick={handleEditClick}
-                        sx={{
-                            p: 0.3,
-                            '&:hover': {
-                                backgroundColor: 'primary.100',
-                            }
-                        }}
-                        title="Edit custom model"
-                    >
-                        <EditIcon sx={{ fontSize: 14 }} />
-                    </IconButton>
-                    <IconButton
-                        size="small"
-                        onClick={handleDeleteClick}
-                        sx={{
-                            p: 0.3,
-                            '&:hover': {
-                                backgroundColor: 'rgba(211, 47, 47, 0.04)',
-                            }
-                        }}
-                        title="Delete custom model"
-                    >
-                        <DeleteIcon sx={{ fontSize: 14 }} />
-                    </IconButton>
-                </Box>
+                        }
+                    }}
+                    title="Edit custom model"
+                >
+                    <EditIcon sx={{ fontSize: 14 }} />
+                </IconButton>
+                <IconButton
+                    size="small"
+                    onClick={handleDeleteClick}
+                    sx={{
+                        p: 0.3,
+                        color: 'text.secondary',
+                        '&:hover': {
+                            backgroundColor: 'rgba(211, 47, 47, 0.08)',
+                            color: 'error.main',
+                        }
+                    }}
+                    title="Delete custom model"
+                >
+                    <DeleteIcon sx={{ fontSize: 14 }} />
+                </IconButton>
             </Box>
         </Card>
     );
