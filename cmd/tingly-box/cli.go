@@ -7,6 +7,7 @@ import (
 	"tingly-box/internal/config"
 	"tingly-box/internal/util"
 
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -16,6 +17,12 @@ var rootCmd = &cobra.Command{
 	Long: `Tingly Box is a CLI tool for managing AI service API keys and acting as a proxy.
 It provides a unified OpenAI-compatible endpoint that routes requests to configured
 AI providers with dynamic configuration management.`,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		verbose, _ := cmd.Flags().GetBool("verbose")
+		if verbose {
+			logrus.SetLevel(logrus.TraceLevel)
+		}
+	},
 }
 
 // Build information variables

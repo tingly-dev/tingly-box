@@ -130,7 +130,7 @@ func (ts *TestServer) AddTestProviders(t *testing.T) {
 			APIBase: p.apiBase,
 			Token:   p.token,
 			Enabled: true,
-			Timeout: int64(config.DefaultRequestTimeout.Seconds()),
+			Timeout: int64(config.DefaultRequestTimeout),
 		}
 		if err := ts.appConfig.AddProvider(provider); err != nil {
 			t.Fatalf("Failed to add provider %s: %v", p.name, err)
@@ -198,7 +198,7 @@ func CreateTestProvider(name, apiBase, token string) *config.Provider {
 		APIBase: apiBase,
 		Token:   token,
 		Enabled: true,
-		Timeout: int64(config.DefaultRequestTimeout.Seconds()),
+		Timeout: int64(config.DefaultRequestTimeout),
 	}
 }
 
@@ -234,7 +234,7 @@ func (ts *TestServer) AddTestProvider(t *testing.T, name, apiBase, apiStyle stri
 		APIStyle: config.APIStyle(apiStyle),
 		Token:    "test-token",
 		Enabled:  enabled,
-		Timeout:  int64(config.DefaultRequestTimeout.Seconds()),
+		Timeout:  int64(config.DefaultRequestTimeout),
 	}
 	if err := ts.appConfig.AddProvider(provider); err != nil {
 		t.Fatalf("Failed to add provider %s: %v", name, err)
@@ -250,7 +250,7 @@ func (ts *TestServer) AddTestProviderWithURL(t *testing.T, name, url, apiStyle s
 		APIStyle: config.APIStyle(apiStyle),
 		Token:    "test-token",
 		Enabled:  enabled,
-		Timeout:  int64(config.DefaultRequestTimeout.Seconds()),
+		Timeout:  int64(config.DefaultRequestTimeout),
 	}
 	if err := ts.appConfig.AddProvider(provider); err != nil {
 		t.Fatalf("Failed to add provider %s: %v", name, err)

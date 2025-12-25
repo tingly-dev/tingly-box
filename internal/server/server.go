@@ -17,6 +17,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/browser"
+	"github.com/sirupsen/logrus"
 )
 
 // Server represents the HTTP server
@@ -197,10 +198,10 @@ func (s *Server) setupConfigWatcher() {
 
 	// Add callback for configuration changes
 	watcher.AddCallback(func(newConfig *config.Config) {
-		log.Println("Configuration updated, reloading...")
+		logrus.Debugln("Configuration updated, reloading...")
 		// Update JWT manager with new secret if changed
 		s.jwtManager = auth.NewJWTManager(newConfig.JWTSecret)
-		log.Println("JWT manager reloaded with new secret")
+		logrus.Debugln("JWT manager reloaded with new secret")
 	})
 }
 
