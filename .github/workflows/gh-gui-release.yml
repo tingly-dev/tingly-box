@@ -1,24 +1,27 @@
 name: Github Tag (GUI) Release
 
 on:
-#  push:
-#    tags:
-#      - 'v*'
+  #  push:
+  #    tags:
+  #      - 'v*'
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Release tag (e.g., v1.0.0)'
+        description: "Release tag (e.g., v1.0.0)"
         required: true
         type: string
-        default: 'v1.0.0'
-      
+        default: "v1.0.0"
+
 env:
-  GO_VERSION: '1.25'
-  NODE_VERSION: '20'
+  GO_VERSION: "1.25"
+  NODE_VERSION: "20"
 
 jobs:
-  build:
+  # Setup job to determine tag
+  setup:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.release_tag }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -26,14 +29,52 @@ jobs:
           fetch-depth: 0
 
       - name: Set up tag environment
+        id: tag
         run: |
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "RELEASE_TAG=${{ github.event.inputs.release_tag }}" >> $GITHUB_ENV
-            echo "TAG_EXISTS=$(git tag -l "${{ github.event.inputs.release_tag }}" | wc -l)" >> $GITHUB_ENV
+            echo "release_tag=${{ github.event.inputs.release_tag }}" >> $GITHUB_OUTPUT
           else
-            echo "RELEASE_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
-            echo "TAG_EXISTS=1" >> $GITHUB_ENV
+            echo "release_tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
           fi
+
+  # Matrix build for all platforms
+  build:
+    needs: setup
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+        #   # Linux builds
+        #   - os: ubuntu-latest
+        #     platform: linux
+        #     arch: amd64
+        #     goos: linux
+        #     goarch: amd64
+        #   - os: ubuntu-latest
+        #     platform: linux
+        #     arch: arm64
+        #     goos: linux
+        #     goarch: arm64
+
+          # macOS builds (on real macOS runners)
+          - os: macos-latest
+            platform: macos
+            arch: arm64
+            goos: darwin
+            goarch: arm64
+
+        #     # Windows builds
+        #   - os: windows-latest
+        #     platform: windows
+        #     arch: amd64
+        #     goos: windows
+        #     goarch: amd64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -44,6 +85,9 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+
+      - name: Install go-task
+        run: go install github.com/go-task/task/v3/cmd/task@latest
 
       - name: Cache Go modules
         uses: actions/cache@v4
@@ -65,54 +109,39 @@ jobs:
       - name: Install openapi-generator-cli
         run: npm install -g @openapitools/openapi-generator-cli
 
-      - name: Run codegen Build frontend
+      - name: Run codegen
+        run: task codegen
+
+      - name: Build frontend
         run: |
-          openapi-generator-cli generate -g typescript-axios -i ../swagger.json -o ./src/client
+          cd frontend
           pnpm build && mkdir -p ../internal/web/dist && cp -R dist/* ../internal/web/dist/
-        working-directory: ./frontend
 
-      - name: Build Go binaries
+      - name: Build Go binary (Linux)
+        if: matrix.platform == 'linux'
+        run: task linux:package
+
+      - name: Build Go binary (macOS)
+        if: matrix.platform == 'macos'
         run: |
-          # Create build directory
-          mkdir -p dist
-          
-          # Get build info
-          VERSION="${{ env.RELEASE_TAG }}"
-          GIT_COMMIT="$(git rev-parse HEAD 2>/dev/null || echo 'unknown')"
-          BUILD_TIME="$(date -u '+%Y-%m-%d-%H-%M-%S' 2>/dev/null || echo 'unknown')"
-          GO_VERSION="$(go version | awk '{print $3}' | sed 's/go//' 2>/dev/null || echo 'unknown')"
-  
-          # Build with ldflags
-          mkdir -p build
-          LDFLAGS="-X main.version=${VERSION} -X main.gitCommit=${GIT_COMMIT} -X main.buildTime=${BUILD_TIME} -X main.goVersion=${GO_VERSION}"
+            task darwin:package
+            
+            mkdir -p dist
+            cp -R bin/TinglyBox.app dist/
 
-          # Build Linux binaries
-          PLATFORM=linux/amd64 GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS} -X main.platform=${PLATFORM}" -o ./dist/tingly-box-gui-linux-amd64 ./internal/wails3
-          PLATFORM=linux/arm64 GOOS=linux GOARCH=arm64 go build -ldflags="${LDFLAGS} -X main.platform=${PLATFORM}" -o ./dist/tingly-box-gui-linux-arm64 ./internal/wails3
+      - name: Build Go binary (Windows)
+        if: matrix.platform == 'windows'
+        run: task windows:package
 
-          # Build macOS binaries
-          PLATFORM=darwin/amd64 GOOS=darwin GOARCH=amd64 go build -ldflags="${LDFLAGS} -X main.platform=${PLATFORM}" -o ./dist/tingly-box-gui-macos-amd64 ./internal/wails3
-          PLATFORM=darwin/arm64 GOOS=darwin GOARCH=arm64 go build -ldflags="${LDFLAGS} -X main.platform=${PLATFORM}" -o ./dist/tingly-box-gui-macos-arm64 ./internal/wails3
-
-          # Build Windows binaries
-          PLATFORM=windows/amd64 GOOS=windows GOARCH=amd64 go build -ldflags="${LDFLAGS} -X main.platform=${PLATFORM}" -o ./dist/tingly-box-gui-windows-amd64.exe ./internal/wails3
-          # PLATFORM=windows/arm64 GOOS=windows GOARCH=arm64 go build -ldflags="${LDFLAGS} -X main.platform=${PLATFORM}" -o ./dist/tingly-box-gui-windows-arm64.exe ./internal/wails3
-
-          # Make Linux binaries executable
-          chmod +x ./dist/tingly-box-gui-linux-*
-          chmod +x ./dist/tingly-box-gui-macos-*
-
-      - name: Upload build artifacts
-        if: |
-          startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: binaries
+          name: binary-${{ matrix.platform }}-${{ matrix.arch }}
           path: ./dist/
           retention-days: 7
-      
+
   github-release:
-    needs: build
+    needs: [setup, build]
     runs-on: ubuntu-latest
     if: |
       startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
@@ -128,35 +157,34 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "RELEASE_TAG=${{ github.event.inputs.release_tag }}" >> $GITHUB_ENV
-            echo "TAG_EXISTS=$(git tag -l "${{ github.event.inputs.release_tag }}" | wc -l)" >> $GITHUB_ENV
           else
             echo "RELEASE_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
-            echo "TAG_EXISTS=1" >> $GITHUB_ENV
           fi
 
-      - name: Download build artifacts
+      - name: Download all build artifacts
         uses: actions/download-artifact@v4
         with:
-          name: binaries
-          path: ./dist
+          path: ./artifacts
 
-      - name: Package binaries with proper extensions
+      - name: Package binaries
         run: |
+          mkdir -p dist
+
+          # Process each platform's artifacts
+          for artifact_dir in artifacts/binary-*; do
+            if [ -d "$artifact_dir" ]; then
+              cp -r "$artifact_dir"/* dist/
+            fi
+          done
+
           cd dist
 
-          chmod +x tingly-box-gui-linux-*
-          chmod +x tingly-box-gui-macos-*
-
-          # Package Linux binaries as zip
-          zip tingly-box-gui-linux-amd64.zip tingly-box-gui-linux-amd64
-          zip tingly-box-gui-linux-arm64.zip tingly-box-gui-linux-arm64
-
-          # Package macOS binaries as zip
-          zip tingly-box-gui-macos-amd64.zip tingly-box-gui-macos-amd64
-          zip tingly-box-gui-macos-arm64.zip tingly-box-gui-macos-arm64
-
-          # Package Windows binary as zip
-          zip tingly-box-gui-windows-amd64.zip tingly-box-gui-windows-amd64.exe
+          # Package binaries as zip
+          for binary in tingly-box-gui-*; do
+            if [ -f "$binary" ]; then
+              zip "${binary}.zip" "$binary"
+            fi
+          done
 
           # Move packages to dist root
           mv *.zip ../
@@ -167,7 +195,6 @@ jobs:
 
       - name: Generate changelog
         run: |
-          # Use the release tag from environment
           echo "## Changes in version $RELEASE_TAG" > release-notes.md
 
       - name: Create GitHub Release
