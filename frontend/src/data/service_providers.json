@@ -67,7 +67,7 @@
     },
     "deepseek-speciale": {
         "id": "deepseek-speciale",
-        "name": "DeepSeek-V3.2-Speciale ",
+        "name": "DeepSeek (V3.2-Speciale)",
         "status": "active",
         "valid": true,
         "website": "https://deepseek.com",
