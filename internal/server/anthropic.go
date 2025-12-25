@@ -369,8 +369,9 @@ func (s *Server) AnthropicCountTokens(c *gin.Context) {
 		// Get or create Anthropic client from pool
 		client := s.clientPool.GetAnthropicClient(provider)
 
-		// Make the request using Anthropic SDK with timeout
-		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(s.config.GetRequestTimeout())*time.Second)
+		// Make the request using Anthropic SDK with timeout (provider.Timeout is in seconds)
+		timeout := time.Duration(provider.Timeout) * time.Second
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 		message, err := client.Messages.CountTokens(ctx, req)
 		if err != nil {
@@ -461,8 +462,9 @@ func (s *Server) forwardAnthropicRequestRaw(provider *config.Provider, rawReq ma
 		params.MaxTokens = int64(s.config.GetDefaultMaxTokens())
 	}
 
-	// Make the request using Anthropic SDK with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(s.config.GetRequestTimeout())*time.Second)
+	// Make the request using Anthropic SDK with timeout (provider.Timeout is in seconds)
+	timeout := time.Duration(provider.Timeout) * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	message, err := client.Messages.New(ctx, params)
 	if err != nil {
@@ -477,8 +479,9 @@ func (s *Server) forwardAnthropicRequest(provider *config.Provider, req anthropi
 	// Get or create Anthropic client from pool
 	client := s.clientPool.GetAnthropicClient(provider)
 
-	// Make the request using Anthropic SDK with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(s.config.GetRequestTimeout())*time.Second)
+	// Make the request using Anthropic SDK with timeout (provider.Timeout is in seconds)
+	timeout := time.Duration(provider.Timeout) * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	message, err := client.Messages.New(ctx, req)
 	if err != nil {
