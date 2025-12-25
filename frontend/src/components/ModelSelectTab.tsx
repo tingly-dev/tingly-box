@@ -119,10 +119,6 @@ export default function ModelSelectTab({
             if (onCustomModelSave) {
                 onCustomModelSave(customModelDialog.provider, customModel);
             }
-            // Select the custom model
-            if (onSelected) {
-                onSelected({ provider: customModelDialog.provider, model: customModel });
-            }
         }
         setCustomModelDialog({ open: false, provider: null, value: '' });
     };

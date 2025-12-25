@@ -56,22 +56,28 @@ export default function ModelCard({
     return (
         <Card sx={getCardStyles()} onClick={onClick}>
             <CardContent sx={{
-                textAlign: 'center',
-                py: 0.5,
-                px: 0.8,
+                py: 1,
+                px: 1,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                height: '100%'
+                height: '100%',
+                '&:last-child': {
+                    pb: 1,
+                }
             }}>
                 <Typography
                     variant="body2"
                     sx={{
                         fontWeight: 500,
                         fontSize: '0.8rem',
-                        lineHeight: 1.3,
+                        lineHeight: 1.2,
                         wordBreak: 'break-word',
-                        textAlign: 'center'
+                        textAlign: 'center',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '100%',
                     }}
                 >
                     {model}
@@ -81,9 +87,9 @@ export default function ModelCard({
                         color="primary"
                         sx={{
                             position: 'absolute',
-                            top: 2,
-                            right: 2,
-                            fontSize: 14
+                            top: 4,
+                            right: 4,
+                            fontSize: 16
                         }}
                     />
                 )}
