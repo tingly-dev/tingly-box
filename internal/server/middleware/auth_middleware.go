@@ -85,22 +85,14 @@ func (am *AuthMiddleware) UserAuthMiddleware() gin.HandlerFunc {
 			}
 		}
 
-		// If not matching global config user token, validate as JWT token
-		claims, err := am.jwtManager.ValidateAPIKey(token)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, ErrorResponse{
-				Error: ErrorDetail{
-					Message: "Invalid or expired token",
-					Type:    "invalid_request_error",
-				},
-			})
-			c.Abort()
-			return
-		}
-
-		// Store client ID in context
-		c.Set("client_id", claims.ClientID)
-		c.Next()
+		c.JSON(http.StatusUnauthorized, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Invalid authorization header format. Expected: 'Bearer <token>'",
+				Type:    "invalid_request_error",
+			},
+		})
+		c.Abort()
+		return
 	}
 }
 
@@ -129,34 +121,34 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 
 		// Check against global config model token first
 		cfg := am.config
-		if cfg != nil && cfg.HasModelToken() {
-			configToken := cfg.GetModelToken()
-
-			// Direct token comparison
-			if token == configToken || xApiKey == configToken {
-				// Token matches the one in global config, allow access
-				c.Set("client_id", "model_authenticated")
-				c.Next()
-				return
-			}
-		}
-
-		// If not matching global config model token, validate as JWT token
-		claims, err := am.jwtManager.ValidateAPIKey(token)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, ErrorResponse{
+		if cfg == nil || !cfg.HasModelToken() {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{
 				Error: ErrorDetail{
-					Message: "Invalid or expired token",
+					Message: "config or config model token missing",
 					Type:    "invalid_request_error",
 				},
 			})
-			c.Abort()
 			return
 		}
 
-		// Store client ID in context
-		c.Set("client_id", claims.ClientID)
-		c.Next()
+		configToken := cfg.GetModelToken()
+
+		// Direct token comparison
+		if token == configToken || xApiKey == configToken {
+			// Token matches the one in global config, allow access
+			c.Set("client_id", "model_authenticated")
+			c.Next()
+			return
+		}
+
+		c.JSON(http.StatusUnauthorized, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Invalid authorization header format. Expected: 'Bearer <token>'",
+				Type:    "invalid_request_error",
+			},
+		})
+		c.Abort()
+		return
 	}
 }
 
