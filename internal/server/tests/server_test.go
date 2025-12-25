@@ -133,6 +133,9 @@ func runInvalidChatRequest(t *testing.T, ts *TestServer) {
 }
 
 func runAnthropicMessagesWithAuth(t *testing.T, ts *TestServer, isRealConfig bool) {
+	if isRealConfig {
+		t.Skip("skipping real config test - provider configuration dependent")
+	}
 	globalConfig := ts.appConfig.GetGlobalConfig()
 	modelToken := globalConfig.GetModelToken()
 	reqBody := map[string]interface{}{
