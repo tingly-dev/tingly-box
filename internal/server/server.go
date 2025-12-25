@@ -146,7 +146,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	var errorMW *middleware.ErrorLogMiddleware
 	errorLogPath := filepath.Join(cfg.ConfigDir, config.LogDirName, config.DebugLogFileName)
 	errorMW = middleware.NewErrorLogMiddleware(errorLogPath, 10)
-	log.Printf("Error middleware initialized (debug=true in config), logging to: %s", errorLogPath)
+	log.Printf("ErrorLog middleware initialized (debug=true in config), logging to: %s", errorLogPath)
 
 	// Create server struct first with applied options
 	server.jwtManager = jwtManager

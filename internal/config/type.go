@@ -1,7 +1,5 @@
 package config
 
-import "time"
-
 // APIStyle represents the API style/version for a provider
 type APIStyle string
 
@@ -12,17 +10,17 @@ const (
 
 // Provider represents an AI model api key and provider configuration
 type Provider struct {
-	UUID        string        `json:"uuid"`
-	Name        string        `json:"name"`
-	APIBase     string        `json:"api_base"`
-	APIStyle    APIStyle      `json:"api_style"` // "openai" or "anthropic", defaults to "openai"
-	Token       string        `json:"token"`
-	Enabled     bool          `json:"enabled"`
-	ProxyURL    string        `json:"proxy_url"`              // HTTP or SOCKS proxy URL (e.g., "http://127.0.0.1:7890" or "socks5://127.0.0.1:1080")
-	Timeout     time.Duration `json:"timeout,omitempty"`      // Request timeout in seconds (default: 30,000)
-	Tags        []string      `json:"tags,omitempty"`         // Provider tags for categorization
-	Models      []string      `json:"models,omitempty"`       // Available models for this provider (cached)
-	LastUpdated string        `json:"last_updated,omitempty"` // Last update timestamp
+	UUID        string   `json:"uuid"`
+	Name        string   `json:"name"`
+	APIBase     string   `json:"api_base"`
+	APIStyle    APIStyle `json:"api_style"` // "openai" or "anthropic", defaults to "openai"
+	Token       string   `json:"token"`
+	Enabled     bool     `json:"enabled"`
+	ProxyURL    string   `json:"proxy_url"`              // HTTP or SOCKS proxy URL (e.g., "http://127.0.0.1:7890" or "socks5://127.0.0.1:1080")
+	Timeout     int64    `json:"timeout,omitempty"`      // Request timeout in seconds (default: 1800 = 30 minutes)
+	Tags        []string `json:"tags,omitempty"`         // Provider tags for categorization
+	Models      []string `json:"models,omitempty"`       // Available models for this provider (cached)
+	LastUpdated string   `json:"last_updated,omitempty"` // Last update timestamp
 }
 
 // Rule represents a request/response configuration with load balancing support

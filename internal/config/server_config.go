@@ -34,7 +34,6 @@ type Config struct {
 	JWTSecret   string               `json:"jwt_secret"`
 
 	// Server settings
-	RequestTimeout   int `json:"request_timeout"`    // Request timeout in seconds
 	DefaultMaxTokens int `json:"default_max_tokens"` // Default max_tokens for anthropic API requests
 
 	ConfigFile string `yaml:"-" json:"-"` // Not serialized to YAML (exported to preserve field)
@@ -132,10 +131,6 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 	}
 	if cfg.ServerPort == 0 {
 		cfg.ServerPort = 12580
-		updated = true
-	}
-	if cfg.RequestTimeout == 0 {
-		cfg.RequestTimeout = int(RequestTimeout.Seconds())
 		updated = true
 	}
 	if cfg.DefaultMaxTokens == 0 {
@@ -709,23 +704,6 @@ func (c *Config) SetServerPort(port int) error {
 	return c.save()
 }
 
-// GetRequestTimeout returns the configured request timeout in seconds
-func (c *Config) GetRequestTimeout() int {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	return c.RequestTimeout
-}
-
-// SetRequestTimeout updates the request timeout in seconds
-func (c *Config) SetRequestTimeout(timeout int) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.RequestTimeout = timeout
-	return c.save()
-}
-
 // GetDefaultMaxTokens returns the configured default max_tokens
 func (c *Config) GetDefaultMaxTokens() int {
 	c.mu.RLock()
@@ -993,9 +971,9 @@ func (c *Config) migrateProviders() {
 			Token:       pv1.Token,
 			Enabled:     pv1.Enabled,
 			ProxyURL:    pv1.ProxyURL,
-			Timeout:     30 * time.Minute, // Default timeout: 30 minute
-			Tags:        []string{},       // Empty tags
-			Models:      []string{},       // Empty models initially
+			Timeout:     int64(DefaultRequestTimeout.Seconds()), // Default timeout from constants
+			Tags:        []string{},                             // Empty tags
+			Models:      []string{},                             // Empty models initially
 			LastUpdated: time.Now().Format(time.RFC3339),
 		}
 
