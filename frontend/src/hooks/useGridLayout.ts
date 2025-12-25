@@ -34,7 +34,7 @@ export const useGridLayout = () => {
         return {
             columns,
             rows,
-            modelsPerPage: Math.max(8 * 4, Math.min(96, modelsPerPage)), // Increased range: 24-96 models per page
+            modelsPerPage: Math.max(8 * 5, Math.min(96, modelsPerPage)), // Increased range: 24-96 models per page
             cardWidth: `${100 / columns}%` // Responsive width
         };
     };
