@@ -67,7 +67,7 @@ func (j *JWTManager) ValidateToken(tokenString string) (*Claims, error) {
 	return claims, nil
 }
 
-// GenerateAPIKey generates a JWT token and encodes it with sk-tingly- prefix
+// GenerateAPIKey generates a JWT token and encodes it with tingly-box- prefix
 func (j *JWTManager) GenerateAPIKey(clientID string) (string, error) {
 	// Generate regular JWT token
 	jwtToken, err := j.GenerateToken(clientID)
@@ -81,26 +81,26 @@ func (j *JWTManager) GenerateAPIKey(clientID string) (string, error) {
 	// Remove padding for cleaner format
 	encodedToken = strings.TrimRight(encodedToken, "=")
 
-	// Add sk-tingly- prefix
-	apiKey := "sk-tingly-" + encodedToken
+	// Add tingly-box- prefix
+	apiKey := "tingly-box-" + encodedToken
 
 	return apiKey, nil
 }
 
-// ValidateAPIKey validates an API key with sk-tingly- prefix and returns JWT claims
+// ValidateAPIKey validates an API key with tingly-box- prefix and returns JWT claims
 func (j *JWTManager) ValidateAPIKey(tokenString string) (*Claims, error) {
 	// Remove "Bearer " prefix if present
 	if strings.HasPrefix(tokenString, "Bearer ") {
 		tokenString = tokenString[7:]
 	}
 
-	// Check if it starts with "sk-tingly-"
-	if !strings.HasPrefix(tokenString, "sk-tingly-") {
-		return nil, fmt.Errorf("invalid API key format: must start with 'sk-tingly-'")
+	// Check if it starts with "tingly-box-"
+	if !strings.HasPrefix(tokenString, "tingly-box-") {
+		return nil, fmt.Errorf("invalid API key format: must start with 'tingly-box-'")
 	}
 
 	// Remove the prefix
-	encodedToken := tokenString[10:] // len("sk-tingly-") = 10
+	encodedToken := tokenString[len("tingly-box-"):]
 
 	// Add padding back if needed (base64 decoding requires proper padding)
 	padding := len(encodedToken) % 4
@@ -141,10 +141,10 @@ func (j *JWTManager) validateJWT(tokenString string) (*Claims, error) {
 	return claims, nil
 }
 
-// IsAPIKeyFormat checks if the token follows API key format (sk-tingly-xxx)
+// IsAPIKeyFormat checks if the token follows API key format (tingly-box-xxx)
 func (j *JWTManager) IsAPIKeyFormat(tokenString string) bool {
 	if strings.HasPrefix(tokenString, "Bearer ") {
 		tokenString = tokenString[7:]
 	}
-	return strings.HasPrefix(tokenString, "sk-tingly-")
+	return strings.HasPrefix(tokenString, "tingly-box-")
 }

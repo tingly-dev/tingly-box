@@ -837,42 +837,6 @@ func (c *Config) GetModelManager() *ModelListManager {
 	return c.modelManager
 }
 
-// migrateRules ensures all rules have proper UUID and LBTactic set
-func (c *Config) migrateRules() {
-	needsSave := false
-	for i := range c.Rules {
-		// Ensure UUID exists
-		if c.Rules[i].UUID == "" {
-			uid, err := uuid.NewUUID()
-			if err != nil {
-				continue
-			}
-			c.Rules[i].UUID = uid.String()
-			needsSave = true
-		}
-
-		// Ensure LBTactic is properly initialized
-		// Check if params are nil or have invalid zero values
-		if !isTacticValid(&c.Rules[i].LBTactic) {
-			// Set default tactic if params are invalid
-			c.Rules[i].LBTactic = Tactic{
-				Type:   TacticRoundRobin,
-				Params: DefaultRoundRobinParams(),
-			}
-			needsSave = true
-		}
-	}
-
-	// Save if any rules were updated
-	if needsSave {
-		// Call save without acquiring lock since this is called within load()
-		data, err := json.MarshalIndent(c, "", "  ")
-		if err == nil {
-			os.WriteFile(c.ConfigFile, data, 0644)
-		}
-	}
-}
-
 // isTacticValid checks if the tactic params are valid (not zero values)
 func isTacticValid(tactic *Tactic) bool {
 	if tactic.Params == nil {
@@ -933,6 +897,42 @@ func generateUUID() string {
 	return id.String()
 }
 
+// migrateRules ensures all rules have proper UUID and LBTactic set
+func (c *Config) migrateRules() {
+	needsSave := false
+	for i := range c.Rules {
+		// Ensure UUID exists
+		if c.Rules[i].UUID == "" {
+			uid, err := uuid.NewUUID()
+			if err != nil {
+				continue
+			}
+			c.Rules[i].UUID = uid.String()
+			needsSave = true
+		}
+
+		// Ensure LBTactic is properly initialized
+		// Check if params are nil or have invalid zero values
+		if !isTacticValid(&c.Rules[i].LBTactic) {
+			// Set default tactic if params are invalid
+			c.Rules[i].LBTactic = Tactic{
+				Type:   TacticRoundRobin,
+				Params: DefaultRoundRobinParams(),
+			}
+			needsSave = true
+		}
+	}
+
+	// Save if any rules were updated
+	if needsSave {
+		// Call save without acquiring lock since this is called within load()
+		data, err := json.MarshalIndent(c, "", "  ")
+		if err == nil {
+			os.WriteFile(c.ConfigFile, data, 0644)
+		}
+	}
+}
+
 // migrateProviders migrates provider configurations from v1 to v2 format
 func (c *Config) migrateProviders() {
 	needsSave := false
@@ -977,6 +977,17 @@ func (c *Config) migrateProviders() {
 	// Only mark for save if migration actually occurred
 	if len(c.Providers) > 0 {
 		needsSave = true
+	}
+
+	for i, rule := range c.Rules {
+		for j := range rule.Services {
+			for _, p := range c.Providers {
+				if rule.Services[j].Provider == p.Name {
+					rule.Services[j].Provider = p.UUID
+				}
+			}
+		}
+		c.Rules[i] = rule
 	}
 
 	// Save if migration occurred

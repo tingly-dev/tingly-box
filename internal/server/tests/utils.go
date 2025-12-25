@@ -39,9 +39,11 @@ func NewTestServerWithConfigDir(t *testing.T, configDir string) *TestServer {
 	}
 
 	// use name to set provider uuid for testing
-	for _, p := range appConfig.GetGlobalConfig().ListProviders() {
-		p.UUID = p.Name
+	for idx, p := range appConfig.GetGlobalConfig().ListProviders() {
+		p.UUID = fmt.Sprintf("%d", idx)
 	}
+
+	appConfig.Save()
 
 	return createTestServer(t, appConfig)
 }
