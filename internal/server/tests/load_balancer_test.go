@@ -921,7 +921,7 @@ func TestLoadBalancer_WithMockProvider(t *testing.T) {
 		APIBase: mockServer.GetURL(),
 		Token:   "mock-token",
 		Enabled: true,
-		Timeout: int64(config.DefaultRequestTimeout.Seconds()),
+		Timeout: int64(config.DefaultRequestTimeout),
 	}
 	err := ts.appConfig.AddProvider(provider)
 	if err != nil {
