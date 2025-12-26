@@ -1,11 +1,9 @@
-import { Cancel, CheckCircle, ContentCopy, Delete, Edit, Visibility, VpnKey } from '@mui/icons-material';
+import { Cancel, CheckCircle, ContentCopy, Delete, Edit, Visibility } from '@mui/icons-material';
 import {
     Box,
     Button,
     FormControlLabel,
     IconButton,
-    Menu,
-    MenuItem,
     Modal,
     Paper,
     Stack,
@@ -17,27 +15,18 @@ import {
     TableHead,
     TableRow,
     Tooltip,
-    Typography
+    Typography,
 } from '@mui/material';
 import { useState } from 'react';
 import api from '../services/api';
-import type { Provider, ProviderModelsData } from '../types/provider';
-import {ApiStyleBadge} from "@/components/ApiStyleBadge.tsx";
+import type { Provider } from '../types/provider';
+import { ApiStyleBadge } from '@/components/ApiStyleBadge.tsx';
 
-
-interface ProviderTableProps {
+interface ApiKeyTableProps {
     providers: Provider[];
-    providerModels?: ProviderModelsData;
     onEdit?: (providerUuid: string) => void;
     onToggle?: (providerUuid: string) => void;
     onDelete?: (providerUuid: string) => void;
-    onSetDefault?: (providerUuid: string) => void;
-    onFetchModels?: (providerUuid: string) => void;
-}
-
-interface TokenMenuState {
-    anchor: HTMLElement | null;
-    showToken: boolean;
 }
 
 interface TokenModalState {
@@ -53,128 +42,77 @@ interface DeleteModalState {
     providerName: string;
 }
 
-const ProviderTable = ({
-    providers,
-    onEdit,
-    onToggle,
-    onDelete,
-}: ProviderTableProps) => {
-    const [tokenStates, setTokenStates] = useState<{ [key: string]: TokenMenuState }>({});
+const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete }: ApiKeyTableProps) => {
     const [tokenModal, setTokenModal] = useState<TokenModalState>({
         open: false,
         providerName: '',
         token: '',
-        loading: false
+        loading: false,
     });
     const [deleteModal, setDeleteModal] = useState<DeleteModalState>({
         open: false,
         providerUuid: '',
-        providerName: ''
+        providerName: '',
     });
 
-    // Function to fetch full token for a provider
     const fetchFullToken = async (providerUuid: string): Promise<string> => {
         try {
-            const response = await api.getProvider(providerUuid)
+            const response = await api.getProvider(providerUuid);
             if (!response.success) {
                 throw new Error(`Failed to fetch token for provider ${providerUuid}`);
             }
-            const data = response.data;
-            return data.token || '';
+            return response.data.token || '';
         } catch (error) {
             console.error('Error fetching full token:', error);
             throw error;
         }
     };
 
-    const handleTokenMenuClick = (event: React.MouseEvent<HTMLElement>, providerUuid: string) => {
-        setTokenStates(prev => ({
-            ...prev,
-            [providerUuid]: {
-                anchor: event.currentTarget,
-                showToken: prev[providerUuid]?.showToken || false
-            }
-        }));
-    };
-
-    const handleTokenMenuClose = (providerUuid: string) => {
-        setTokenStates(prev => ({
-            ...prev,
-            [providerUuid]: {
-                ...prev[providerUuid],
-                anchor: null
-            }
-        }));
-    };
-
     const handleViewToken = async (providerUuid: string) => {
-        // Open modal with loading state
         setTokenModal({
             open: true,
-            providerName: '', // Will be set later after we get provider data
+            providerName: '',
             token: '',
-            loading: true
+            loading: true,
         });
 
         try {
-            // Fetch the full token from API
             const fullToken = await fetchFullToken(providerUuid);
-
-            // Also fetch provider data to get the name for display
             const providerResponse = await api.getProvider(providerUuid);
             if (providerResponse.success) {
-                setTokenModal(prev => ({
-                    ...prev,
+                setTokenModal({
+                    open: true,
                     providerName: providerResponse.data.name,
                     token: fullToken,
-                    loading: false
-                }));
-            } else {
-                setTokenModal(prev => ({
-                    ...prev,
-                    token: fullToken,
-                    loading: false
-                }));
+                    loading: false,
+                });
             }
         } catch (error) {
             console.error('Failed to fetch token:', error);
-            // Update modal with error state
-            setTokenModal(prev => ({
-                ...prev,
+            setTokenModal({
+                open: true,
+                providerName: '',
                 token: '',
-                loading: false
-            }));
+                loading: false,
+            });
         }
-        handleTokenMenuClose(providerUuid);
     };
 
     const handleCloseTokenModal = () => {
-        setTokenModal({
-            open: false,
-            providerName: '',
-            token: '',
-            loading: false
-        });
+        setTokenModal({ open: false, providerName: '', token: '', loading: false });
     };
 
-    const handleDeleteClick = async (providerUuid: string) => {
-        // Get provider name for display in the delete modal
-        const provider = providers.find(p => p.uuid === providerUuid);
-        const providerName = provider?.name || 'Unknown Provider';
-
+    const handleDeleteClick = (providerUuid: string) => {
+        const provider = providers.find((p) => p.uuid === providerUuid);
         setDeleteModal({
             open: true,
             providerUuid,
-            providerName
+            providerName: provider?.name || 'Unknown Provider',
         });
     };
 
     const handleCloseDeleteModal = () => {
-        setDeleteModal({
-            open: false,
-            providerUuid: '',
-            providerName: ''
-        });
+        setDeleteModal({ open: false, providerUuid: '', providerName: '' });
     };
 
     const handleConfirmDelete = () => {
@@ -185,13 +123,8 @@ const ProviderTable = ({
     };
 
     const formatTokenDisplay = (provider: Provider) => {
-        const tokenState = tokenStates[provider.uuid];
-        const showToken = tokenState?.showToken || false;
-
         if (!provider.token) return 'Not set';
-        if (showToken) return provider.token;
-        if (provider.token.length <= 12) return provider.token; // If too short, show as is
-
+        if (provider.token.length <= 12) return provider.token;
         const prefix = provider.token.substring(0, 4);
         const suffix = provider.token.substring(provider.token.length - 4);
         return `${prefix}${'*'.repeat(4)}${suffix}`;
@@ -203,7 +136,6 @@ const ProviderTable = ({
                 <TableHead>
                     <TableRow>
                         <TableCell sx={{ fontWeight: 600, minWidth: 150 }}>Name</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 100 }}>Auth Type</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 150 }}>API Key</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 200 }}>API Base</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>API Style</TableCell>
@@ -228,104 +160,46 @@ const ProviderTable = ({
                             </TableCell>
                             <TableCell>
                                 <Stack direction="row" alignItems="center" spacing={1}>
-                                    {provider.auth_type === 'oauth' ? (
-                                        <>
-                                            <VpnKey fontSize="small" color="primary" />
-                                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                                OAuth
-                                            </Typography>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <VpnKey fontSize="small" color="action" />
-                                            <Typography variant="body2" color="text.secondary">
-                                                API Key
-                                            </Typography>
-                                        </>
-                                    )}
-                                </Stack>
-                            </TableCell>
-                            <TableCell>
-                                <Stack direction="row" alignItems="center" spacing={1}>
                                     <Typography
                                         variant="body2"
                                         sx={{
                                             fontFamily: 'monospace',
                                             wordBreak: 'break-all',
                                             flex: 1,
-                                            minWidth: 0
+                                            minWidth: 0,
                                         }}
                                     >
                                         {formatTokenDisplay(provider)}
                                     </Typography>
                                     {provider.token && (
-                                        <Stack direction="row" spacing={0.25}>
-                                            <Tooltip title="View Token">
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={() => handleViewToken(provider.uuid)}
-                                                    sx={{ p: 0.25 }}
-                                                >
-                                                    <Visibility fontSize="small" />
-                                                </IconButton>
-                                            </Tooltip>
-                                            {/* <IconButton
-                                                size="small"
-                                                onClick={(e) => handleTokenMenuClick(e, provider.uuid)}
-                                                sx={{ p: 0.25 }}
-                                            >
-                                                <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
-                                                    •••
-                                                </Typography>
-                                            </IconButton> */}
-                                        </Stack>
+                                        <Tooltip title="View Token">
+                                            <IconButton size="small" onClick={() => handleViewToken(provider.uuid)} sx={{ p: 0.25 }}>
+                                                <Visibility fontSize="small" />
+                                            </IconButton>
+                                        </Tooltip>
                                     )}
                                 </Stack>
                             </TableCell>
-
                             <TableCell>
-                                <Typography
-                                    variant="body2"
-                                    sx={{
-                                        fontFamily: 'monospace',
-                                        wordBreak: 'break-all',
-                                        maxWidth: 200
-                                    }}
-                                >
+                                <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all', maxWidth: 200 }}>
                                     {provider.api_base}
                                 </Typography>
                             </TableCell>
-
                             <TableCell>
-                                <ApiStyleBadge
-                                    sx={{
-                                        minWidth: "110px"
-                                    }}
-                                    apiStyle={provider.api_style}
-                                ></ApiStyleBadge>
+                                <ApiStyleBadge sx={{ minWidth: '110px' }} apiStyle={provider.api_style} />
                             </TableCell>
-
-
                             <TableCell>
                                 <Stack direction="row" spacing={0.5}>
                                     {onEdit && (
                                         <Tooltip title="Edit">
-                                            <IconButton
-                                                size="small"
-                                                color="primary"
-                                                onClick={() => onEdit(provider.uuid)}
-                                            >
+                                            <IconButton size="small" color="primary" onClick={() => onEdit(provider.uuid)}>
                                                 <Edit fontSize="small" />
                                             </IconButton>
                                         </Tooltip>
                                     )}
                                     {onDelete && (
                                         <Tooltip title="Delete">
-                                            <IconButton
-                                                size="small"
-                                                color="error"
-                                                onClick={() => handleDeleteClick(provider.uuid)}
-                                            >
+                                            <IconButton size="small" color="error" onClick={() => handleDeleteClick(provider.uuid)}>
                                                 <Delete fontSize="small" />
                                             </IconButton>
                                         </Tooltip>
@@ -345,8 +219,7 @@ const ProviderTable = ({
                                         }
                                         label=""
                                     />
-                                    <Typography variant="body2"
-                                        color={provider.enabled ? 'success.main' : 'error.main'}>
+                                    <Typography variant="body2" color={provider.enabled ? 'success.main' : 'error.main'}>
                                         {provider.enabled ? 'Enabled' : 'Disabled'}
                                     </Typography>
                                 </Stack>
@@ -356,36 +229,8 @@ const ProviderTable = ({
                 </TableBody>
             </Table>
 
-            {/* Token context menus for each provider */}
-            {Object.entries(tokenStates).map(([providerUuid, tokenState]) => (
-                <Menu
-                    key={providerUuid}
-                    anchorEl={tokenState.anchor}
-                    open={Boolean(tokenState.anchor)}
-                    onClose={() => handleTokenMenuClose(providerUuid)}
-                    anchorOrigin={{
-                        vertical: 'bottom',
-                        horizontal: 'right',
-                    }}
-                    transformOrigin={{
-                        vertical: 'top',
-                        horizontal: 'right',
-                    }}
-                >
-                    <MenuItem onClick={() => handleViewToken(providerUuid)}>
-                        <Visibility fontSize="small" sx={{ mr: 1 }} />
-                        View Token
-                    </MenuItem>
-                </Menu>
-            ))}
-
             {/* Token View Modal */}
-            <Modal
-                open={tokenModal.open}
-                onClose={handleCloseTokenModal}
-                aria-labelledby="token-modal-title"
-                aria-describedby="token-modal-description"
-            >
+            <Modal open={tokenModal.open} onClose={handleCloseTokenModal}>
                 <Box
                     sx={{
                         position: 'absolute',
@@ -400,28 +245,24 @@ const ProviderTable = ({
                         borderRadius: 2,
                     }}
                 >
-                    <Typography id="token-modal-title" variant="h6" component="h2" sx={{ mb: 2 }}>
-                        API Key - {tokenModal.providerName}
-                    </Typography>
+                    <Typography variant="h6" sx={{ mb: 2 }}>API Key - {tokenModal.providerName}</Typography>
 
                     {tokenModal.loading ? (
                         <Box sx={{ mb: 3, textAlign: 'center', py: 4 }}>
-                            <Typography variant="body2" color="text.secondary">
-                                Loading API key...
-                            </Typography>
+                            <Typography variant="body2" color="text.secondary">Loading API key...</Typography>
                         </Box>
                     ) : (
                         <Box sx={{ mb: 3 }}>
                             <Box
                                 sx={{
                                     p: 2,
-                                    bgcolor: 'grey.100',
+                                    bgcolor: 'action.hover',
                                     borderRadius: 1,
                                     fontFamily: 'monospace',
                                     fontSize: '0.875rem',
                                     wordBreak: 'break-all',
                                     border: '1px solid',
-                                    borderColor: 'divider'
+                                    borderColor: 'divider',
                                 }}
                             >
                                 {tokenModal.token || 'Failed to load token'}
@@ -442,11 +283,10 @@ const ProviderTable = ({
                                     }
                                 }
                             }}
-                            title={tokenModal.loading ? "Loading..." : "Copy Token"}
+                            title={tokenModal.loading ? 'Loading...' : 'Copy Token'}
                         >
                             <ContentCopy />
                         </IconButton>
-
                         <Tooltip title="Close">
                             <IconButton onClick={handleCloseTokenModal}>
                                 <Cancel />
@@ -457,12 +297,7 @@ const ProviderTable = ({
             </Modal>
 
             {/* Delete Confirmation Modal */}
-            <Modal
-                open={deleteModal.open}
-                onClose={handleCloseDeleteModal}
-                aria-labelledby="delete-modal-title"
-                aria-describedby="delete-modal-description"
-            >
+            <Modal open={deleteModal.open} onClose={handleCloseDeleteModal}>
                 <Box
                     sx={{
                         position: 'absolute',
@@ -477,15 +312,10 @@ const ProviderTable = ({
                         borderRadius: 2,
                     }}
                 >
-                    <Typography id="delete-modal-title" variant="h6" component="h2" sx={{ mb: 2 }}>
-                        Delete Provider
+                    <Typography variant="h6" sx={{ mb: 2 }}>Delete Provider</Typography>
+                    <Typography variant="body2" sx={{ mb: 3 }}>
+                        Are you sure you want to delete the provider "{deleteModal.providerName}"? This action cannot be undone.
                     </Typography>
-
-                    <Typography id="delete-modal-description" variant="body2" sx={{ mb: 3 }}>
-                        Are you sure you want to delete the provider "{deleteModal.providerName}"? This action cannot
-                        be undone.
-                    </Typography>
-
                     <Stack direction="row" spacing={2} justifyContent="flex-end">
                         <Button onClick={handleCloseDeleteModal} color="inherit">
                             Cancel
@@ -500,4 +330,4 @@ const ProviderTable = ({
     );
 };
 
-export default ProviderTable;
+export default ApiKeyTable;

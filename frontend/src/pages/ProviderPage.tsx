@@ -1,7 +1,6 @@
 import { Add, VpnKey } from '@mui/icons-material';
-import { Alert, Box, Button, Snackbar, Stack, Typography } from '@mui/material';
+import { Alert, Box, Button, Chip, Snackbar, Stack, Tab, Tabs, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
-import ProviderTable from '../components/ProviderTable.tsx';
 import { PageLayout } from '../components/PageLayout';
 import PresetProviderFormDialog from '../components/PresetProviderFormDialog.tsx';
 import OAuthDialog from '../components/OAuthDialog.tsx';
@@ -9,10 +8,13 @@ import OAuthDetailDialog from '../components/OAuthDetailDialog.tsx';
 import { type ProviderFormData } from '../components/ProviderFormDialog.tsx';
 import UnifiedCard from '../components/UnifiedCard';
 import { api } from '../services/api';
+import ApiKeyTable from '../components/ApiKeyTable.tsx';
+import OAuthTable from '../components/OAuthTable.tsx';
 
 const ProviderPage = () => {
     const [providers, setProviders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [tabValue, setTabValue] = useState(0);
     const [snackbar, setSnackbar] = useState<{
         open: boolean;
         message: string;
@@ -129,7 +131,7 @@ const ProviderPage = () => {
 
             // Route to appropriate dialog based on auth type
             if (provider.auth_type === 'oauth') {
-                // Open OAuth detail dialog (read-only)
+                // Open OAuth detail dialog (read-only credentials, editable settings)
                 setOAuthDetailProvider(provider);
                 setOAuthDetailDialogOpen(true);
             } else {
@@ -150,54 +152,99 @@ const ProviderPage = () => {
         }
     };
 
+    const handleReauthorizeOAuth = async (_uuid: string) => {
+        // TODO: Implement reauthorize flow
+        showNotification('Reauthorize functionality coming soon!', 'error');
+    };
+
+    // Separate providers by auth type
+    const apiKeyProviders = providers.filter(p => p.auth_type !== 'oauth');
+    const oauthProviders = providers.filter(p => p.auth_type === 'oauth');
+
     return (
         <PageLayout loading={loading}>
             {providers.length > 0 && (
                 <UnifiedCard
                     title="Providers"
-                    subtitle={providers.length > 0 ? `Managing ${providers.length} providers and api keys` : "No model API key configured yet"}
+                    subtitle={`Managing ${providers.length} providers`}
                     size="full"
                     rightAction={
                         <Stack direction="row" spacing={1} alignItems="center">
-                            <Button
-                                variant="outlined"
-                                startIcon={<VpnKey />}
-                                onClick={handleAddOAuthClick}
-                                size="small"
-                            >
-                                Add OAuth
-                            </Button>
-                            <Button
-                                variant="contained"
-                                startIcon={<Add />}
-                                onClick={handleAddApiKeyClick}
-                                size="small"
-                            >
-                                Add API Key
-                            </Button>
+                            {tabValue === 0 && (
+                                <Button
+                                    variant="contained"
+                                    startIcon={<Add />}
+                                    onClick={handleAddApiKeyClick}
+                                    size="small"
+                                >
+                                    Add API Key
+                                </Button>
+                            )}
+                            {tabValue === 1 && (
+                                <Button
+                                    variant="contained"
+                                    startIcon={<VpnKey />}
+                                    onClick={handleAddOAuthClick}
+                                    size="small"
+                                >
+                                    Add OAuth
+                                </Button>
+                            )}
                         </Stack>
                     }
                 >
                     <Box sx={{ flex: 1 }}>
-                        <ProviderTable
-                            providers={providers}
-                            onEdit={handleEditProvider}
-                            onToggle={handleToggleProvider}
-                            onDelete={handleDeleteProvider}
-                        />
+                        <Tabs value={tabValue} onChange={(_, newValue) => setTabValue(newValue)} sx={{ borderBottom: 1, borderColor: 'divider' }}>
+                            <Tab
+                                label={
+                                    <Stack direction="row" alignItems="center" spacing={1}>
+                                        <Typography variant="body2">API Keys</Typography>
+                                        <Chip label={apiKeyProviders.length} size="small" sx={{ height: 18, fontSize: '0.7rem' }} />
+                                    </Stack>
+                                }
+                            />
+                            <Tab
+                                label={
+                                    <Stack direction="row" alignItems="center" spacing={1}>
+                                        <Typography variant="body2">OAuth</Typography>
+                                        <Chip label={oauthProviders.length} size="small" sx={{ height: 18, fontSize: '0.7rem' }} />
+                                    </Stack>
+                                }
+                            />
+                        </Tabs>
+
+                        <Box sx={{ mt: 2 }}>
+                            {tabValue === 0 && (
+                                <ApiKeyTable
+                                    providers={apiKeyProviders}
+                                    onEdit={handleEditProvider}
+                                    onToggle={handleToggleProvider}
+                                    onDelete={handleDeleteProvider}
+                                />
+                            )}
+                            {tabValue === 1 && (
+                                <OAuthTable
+                                    providers={oauthProviders}
+                                    onEdit={handleEditProvider}
+                                    onToggle={handleToggleProvider}
+                                    onDelete={handleDeleteProvider}
+                                    onReauthorize={handleReauthorizeOAuth}
+                                />
+                            )}
+                        </Box>
                     </Box>
                 </UnifiedCard>
             )}
 
             {providers.length === 0 && (
                 <UnifiedCard
-                    title="No Model API Key Configured"
-                    subtitle="Get started by adding your first API token or key"
+                    title="No Providers Configured"
+                    subtitle="Get started by adding your first API key or OAuth provider"
                     size="large"
                 >
                     <Box textAlign="center" py={3}>
                         <Typography color="text.secondary" gutterBottom>
-                            Configure your API tokens and keys to access AI services
+                            Configure API keys or OAuth providers to access AI services
                         </Typography>
                         <Stack direction="row" spacing={2} justifyContent="center" sx={{ mt: 2 }}>
                             <Button
@@ -229,13 +276,13 @@ const ProviderPage = () => {
                 mode={dialogMode}
             />
 
-            {/* OAuth Dialog */}
+            {/* OAuth Add Dialog */}
             <OAuthDialog
                 open={oauthDialogOpen}
                 onClose={() => setOAuthDialogOpen(false)}
             />
 
-            {/* OAuth Detail Dialog */}
+            {/* OAuth Detail/Edit Dialog */}
             <OAuthDetailDialog
                 open={oauthDetailDialogOpen}
                 provider={oauthDetailProvider}
