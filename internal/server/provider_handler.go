@@ -10,6 +10,37 @@ import (
 	"github.com/google/uuid"
 )
 
+// maskProviderForResponse masks sensitive data and returns a safe ProviderResponse
+func maskProviderForResponse(provider *config.Provider) ProviderResponse {
+	resp := ProviderResponse{
+		UUID:     provider.UUID,
+		Name:     provider.Name,
+		APIBase:  provider.APIBase,
+		APIStyle: string(provider.APIStyle),
+		Enabled:  provider.Enabled,
+		AuthType: string(provider.AuthType),
+	}
+
+	switch provider.AuthType {
+	case config.AuthTypeOAuth:
+		// For OAuth, return masked OAuthDetail
+		if provider.OAuthDetail != nil {
+			resp.OAuthDetail = &config.OAuthDetail{
+				AccessToken:  maskToken(provider.OAuthDetail.AccessToken),
+				ProviderType: provider.OAuthDetail.ProviderType,
+				UserID:       provider.OAuthDetail.UserID,
+				ExpiresAt:    provider.OAuthDetail.ExpiresAt,
+				// Don't return refresh_token in responses
+			}
+		}
+	case config.AuthTypeAPIKey, "":
+		// For api_key (or empty for backward compatibility), return masked Token
+		resp.Token = maskToken(provider.Token)
+	}
+
+	return resp
+}
+
 func (s *Server) GetProviders(c *gin.Context) {
 	providers := s.config.ListProviders()
 
@@ -17,14 +48,7 @@ func (s *Server) GetProviders(c *gin.Context) {
 	maskedProviders := make([]ProviderResponse, len(providers))
 
 	for i, provider := range providers {
-		maskedProviders[i] = ProviderResponse{
-			UUID:     provider.UUID,
-			Name:     provider.Name,
-			APIBase:  provider.APIBase,
-			APIStyle: string(provider.APIStyle),
-			Token:    maskToken(provider.Token),
-			Enabled:  provider.Enabled,
-		}
+		maskedProviders[i] = maskProviderForResponse(provider)
 	}
 
 	response := ProvidersResponse{
@@ -244,14 +268,7 @@ func (s *Server) UpdateProvider(c *gin.Context) {
 	}
 
 	// Return masked provider data
-	responseProvider := ProviderResponse{
-		UUID:     provider.UUID,
-		Name:     provider.Name,
-		APIBase:  provider.APIBase,
-		APIStyle: string(provider.APIStyle),
-		Token:    maskToken(provider.Token),
-		Enabled:  provider.Enabled,
-	}
+	responseProvider := maskProviderForResponse(provider)
 
 	response := UpdateProviderResponse{
 		Success: true,
@@ -283,14 +300,7 @@ func (s *Server) GetProvider(c *gin.Context) {
 	}
 
 	// Mask the token for security
-	responseProvider := ProviderResponse{
-		UUID:     provider.UUID,
-		Name:     provider.Name,
-		APIBase:  provider.APIBase,
-		APIStyle: string(provider.APIStyle),
-		Token:    provider.Token, // Security: Token:    maskToken(provider.Token),
-		Enabled:  provider.Enabled,
-	}
+	responseProvider := maskProviderForResponse(provider)
 
 	response := struct {
 		Success bool             `json:"success"`
