@@ -3,7 +3,7 @@ name: Github Tag (GUI) Release
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*-gui'
     branches:
       - "ci/*"
   workflow_dispatch:
