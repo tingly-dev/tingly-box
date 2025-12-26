@@ -39,10 +39,14 @@ type RouteGroup struct {
 	name       string
 	version    string
 	prefix     string
+	tags       []string
 	Router     *gin.RouterGroup
 	routes     []RouteConfig
 	middleware []gin.HandlerFunc
 }
+
+// RouteGroupOption is a function that configures a RouteGroup
+type RouteGroupOption func(*RouteGroup)
 
 // RouteManager manages all route groups and swagger generation
 type RouteManager struct {
@@ -76,7 +80,7 @@ func (rm *RouteManager) AddGlobalMiddleware(middleware ...gin.HandlerFunc) {
 }
 
 // NewGroup creates a new route group
-func (rm *RouteManager) NewGroup(name, version, prefix string) *RouteGroup {
+func (rm *RouteManager) NewGroup(name, version, prefix string, opts ...RouteGroupOption) *RouteGroup {
 	fullPrefix := fmt.Sprintf("/%s/%s", name, version)
 	if prefix != "" {
 		fullPrefix += "/" + strings.TrimPrefix(prefix, "/")
@@ -93,9 +97,15 @@ func (rm *RouteManager) NewGroup(name, version, prefix string) *RouteGroup {
 		name:       name,
 		version:    version,
 		prefix:     fullPrefix,
+		tags:       []string{name}, // Default to group name as tag
 		Router:     ginGroup,
 		routes:     make([]RouteConfig, 0),
 		middleware: make([]gin.HandlerFunc, 0),
+	}
+
+	// Apply group options
+	for _, opt := range opts {
+		opt(group)
 	}
 
 	rm.groups[fullPrefix] = group
@@ -112,6 +122,12 @@ func (rg *RouteGroup) AddMiddleware(middleware ...gin.HandlerFunc) {
 
 // RegisterRoute registers a single route
 func (rg *RouteGroup) RegisterRoute(config RouteConfig) {
+	// If route doesn't have tags, inherit from group
+	if len(config.Tags) == 0 && len(rg.tags) > 0 {
+		config.Tags = make([]string, len(rg.tags))
+		copy(config.Tags, rg.tags)
+	}
+
 	// Build middleware chain
 	var middleware []gin.HandlerFunc
 
@@ -210,6 +226,13 @@ func (rg *RouteGroup) PATCH(path string, handler Handler, options ...func(*Route
 }
 
 // Route configuration options
+
+// GroupWithTags sets the tags for all routes in the group (unless overridden)
+func GroupWithTags(tags ...string) RouteGroupOption {
+	return func(rg *RouteGroup) {
+		rg.tags = tags
+	}
+}
 
 // WithDescription sets the route description
 func WithDescription(desc string) func(*RouteConfig) {
