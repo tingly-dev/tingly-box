@@ -48,10 +48,13 @@ func (s *Server) UseUIEndpoints() {
 	s.engine.GET("/system", s.UseIndexHTML)
 	s.engine.GET("/history", s.UseIndexHTML)
 
-	// API routes (for web UI functionality)
-	s.useWebAPIEndpoints(s.engine)
+	// Create route manager
+	manager := swagger.NewRouteManager(s.engine)
 
-	s.useOAuthEndpoints(s.engine)
+	// API routes (for web UI functionality)
+	s.useWebAPIEndpoints(manager)
+
+	s.useOAuthEndpoints(manager)
 
 	// Static files and templates - try embedded assets first, fallback to filesystem
 	s.useWebStaticEndpoints(s.engine)
@@ -311,10 +314,7 @@ func NewGinHandlerWrapper(h gin.HandlerFunc) swagger.Handler {
 }
 
 // useWebAPIEndpoints configures API routes for web UI using swagger manager
-func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
-	// Create route manager
-	manager := swagger.NewRouteManager(engine)
-
+func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 	// Set Swagger information
 	manager.SetSwaggerInfo(swagger.SwaggerInfo{
 		Title:       "Tingly Box API",

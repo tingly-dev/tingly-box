@@ -126,7 +126,7 @@ type OAuthCallbackDataResponse struct {
 	Provider     string `json:"provider,omitempty" example:"anthropic"`
 }
 
-func (s *Server) useOAuthEndpoints(r *gin.Engine) {
+func (s *Server) useOAuthEndpoints(manager *swagger.RouteManager) {
 	// Register simple HTML templates for OAuth callback
 	tmpl := template.Must(template.New("oauth").Parse(`
 {{ define "oauth_success.html" }}
@@ -181,10 +181,7 @@ func (s *Server) useOAuthEndpoints(r *gin.Engine) {
 </html>
 {{ end }}
 `))
-	r.SetHTMLTemplate(tmpl)
-
-	// Create route manager
-	manager := swagger.NewRouteManager(r)
+	manager.GetEngine().SetHTMLTemplate(tmpl)
 
 	// Create authenticated API group
 	apiV1 := manager.NewGroup("api", "v1", "")
@@ -244,7 +241,7 @@ func (s *Server) useOAuthEndpoints(r *gin.Engine) {
 	)
 
 	// OAuth Callback (no authentication required - called by OAuth provider)
-	r.GET("/oauth/callback", s.OAuthCallback)
+	manager.GetEngine().GET("/oauth/callback", s.OAuthCallback)
 }
 
 // =============================================
