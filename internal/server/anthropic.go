@@ -568,7 +568,13 @@ func (s *Server) handleAnthropicStreamResponse(c *gin.Context, stream *ssestream
 		// event: xxx
 		// data: xxx
 		// (extra \n here)
-		c.Writer.Write([]byte(fmt.Sprintf("event: %s\ndata: %s\n\n", event.Type, string(eventJSON))))
+		c.Writer.Write(
+			[]byte(
+				fmt.Sprintf(
+					"event: %s\ndata: %s\n\n",
+					event.Type, string(eventJSON)),
+			),
+		)
 		flusher.Flush()
 	}
 
