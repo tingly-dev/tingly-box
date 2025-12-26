@@ -58,13 +58,13 @@ func WithHost(host string) ServerManagerOption {
 	}
 }
 
-// NewServerManager creates a new server manager with default options (UI enabled, adaptor disabled)
+// NewServerManager creates a new server manager with default options (UI enabled, adapter enabled)
 func NewServerManager(appConfig *config.AppConfig, opts ...ServerManagerOption) *ServerManager {
 	// Default options
 	sm := &ServerManager{
 		appConfig:     appConfig,
-		enableUI:      true,  // Default: UI enabled
-		enableAdaptor: false, // Default: adaptor disabled
+		enableUI:      true, // Default: UI enabled
+		enableAdaptor: true, // Default: adapter enabled
 	}
 
 	// Apply provided options

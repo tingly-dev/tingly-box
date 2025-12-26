@@ -161,7 +161,7 @@ The server will handle request routing to configured AI providers.`,
 	cmd.Flags().StringVar(&host, "host", "localhost", "Server host")
 	cmd.Flags().BoolVarP(&enableUI, "ui", "u", true, "Enable web UI (default: true)")
 	cmd.Flags().BoolVar(&enableDebug, "debug", false, "Enable debug mode including gin, low level logging and so on (default: false)")
-	cmd.Flags().BoolVar(&enableStyleTransform, "adaptor", false, "Enable API style transformation (default: false)")
+	cmd.Flags().BoolVar(&enableStyleTransform, "adapter", true, "Enable API style transformation (default: true)")
 	return cmd
 }
 
