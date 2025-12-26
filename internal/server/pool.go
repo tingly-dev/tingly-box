@@ -104,7 +104,7 @@ func (p *ClientPool) GetOpenAIClient(provider *config.Provider) *openai.Client {
 	logrus.Infof("Creating new OpenAI client for provider: %s (API: %s)", provider.Name, provider.APIBase)
 
 	options := []openaiOption.RequestOption{
-		openaiOption.WithAPIKey(provider.Token),
+		openaiOption.WithAPIKey(provider.GetAccessToken()),
 		openaiOption.WithBaseURL(provider.APIBase),
 	}
 
@@ -156,7 +156,7 @@ func (p *ClientPool) GetAnthropicClient(provider *config.Provider) anthropic.Cli
 	logrus.Infof("Creating new Anthropic client for provider: %s (API: %s)", provider.Name, apiBase)
 
 	options := []anthropicOption.RequestOption{
-		anthropicOption.WithAPIKey(provider.Token),
+		anthropicOption.WithAPIKey(provider.GetAccessToken()),
 		anthropicOption.WithBaseURL(apiBase),
 	}
 
@@ -177,7 +177,7 @@ func (p *ClientPool) GetAnthropicClient(provider *config.Provider) anthropic.Cli
 // generateProviderKey creates a unique key for a provider
 // Uses combination of name, API base, hash of the token, and proxy URL for uniqueness
 func (p *ClientPool) generateProviderKey(provider *config.Provider) string {
-	return fmt.Sprintf("%s:%s:%s:%s", provider.Name, provider.APIBase, hashToken(provider.Token), hashToken(provider.ProxyURL))
+	return fmt.Sprintf("%s:%s:%s:%s", provider.Name, provider.APIBase, hashToken(provider.GetAccessToken()), hashToken(provider.ProxyURL))
 }
 
 // hashToken creates a secure hash of the token for key generation

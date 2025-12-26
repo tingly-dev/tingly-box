@@ -1,5 +1,7 @@
 package config
 
+import "time"
+
 // APIStyle represents the API style/version for a provider
 type APIStyle string
 
@@ -8,19 +10,75 @@ const (
 	APIStyleAnthropic APIStyle = "anthropic"
 )
 
+// AuthType represents the authentication type for a provider
+type AuthType string
+
+const (
+	AuthTypeAPIKey AuthType = "api_key"
+	AuthTypeOAuth  AuthType = "oauth"
+)
+
+// OAuthDetail contains OAuth-specific authentication information
+type OAuthDetail struct {
+	AccessToken  string `json:"access_token"`  // OAuth access token
+	ProviderType string `json:"provider_type"` // anthropic, google, etc. for token manager lookup
+	UserID       string `json:"user_id"`       // OAuth user identifier
+	RefreshToken string `json:"refresh_token"` // Token for refreshing access token
+	ExpiresAt    string `json:"expires_at"`    // Token expiration time (RFC3339)
+}
+
+// IsExpired checks if the OAuth token is expired
+func (o *OAuthDetail) IsExpired() bool {
+	if o == nil || o.ExpiresAt == "" {
+		return false
+	}
+	// Parse RFC3339 timestamp and check if expired
+	expiryTime, err := time.Parse(time.RFC3339, o.ExpiresAt)
+	if err != nil {
+		return false
+	}
+	return time.Now().Add(5 * time.Minute).After(expiryTime) // Consider expired if within 5 minutes
+}
+
 // Provider represents an AI model api key and provider configuration
 type Provider struct {
 	UUID        string   `json:"uuid"`
 	Name        string   `json:"name"`
 	APIBase     string   `json:"api_base"`
 	APIStyle    APIStyle `json:"api_style"` // "openai" or "anthropic", defaults to "openai"
-	Token       string   `json:"token"`
+	Token       string   `json:"token"`     // API key for api_key auth type
 	Enabled     bool     `json:"enabled"`
 	ProxyURL    string   `json:"proxy_url"`              // HTTP or SOCKS proxy URL (e.g., "http://127.0.0.1:7890" or "socks5://127.0.0.1:1080")
 	Timeout     int64    `json:"timeout,omitempty"`      // Request timeout in seconds (default: 1800 = 30 minutes)
 	Tags        []string `json:"tags,omitempty"`         // Provider tags for categorization
 	Models      []string `json:"models,omitempty"`       // Available models for this provider (cached)
 	LastUpdated string   `json:"last_updated,omitempty"` // Last update timestamp
+
+	// Auth configuration
+	AuthType    AuthType     `json:"auth_type"`              // api_key or oauth
+	OAuthDetail *OAuthDetail `json:"oauth_detail,omitempty"` // OAuth credentials (only for oauth auth type)
+}
+
+// GetAccessToken returns the access token based on auth type
+func (p *Provider) GetAccessToken() string {
+	switch p.AuthType {
+	case AuthTypeOAuth:
+		if p.OAuthDetail != nil {
+			return p.OAuthDetail.AccessToken
+		}
+	case AuthTypeAPIKey, "":
+		// Default to api_key for backward compatibility
+		return p.Token
+	}
+	return ""
+}
+
+// IsOAuthExpired checks if the OAuth token is expired (only valid for oauth auth type)
+func (p *Provider) IsOAuthExpired() bool {
+	if p.AuthType == AuthTypeOAuth && p.OAuthDetail != nil {
+		return p.OAuthDetail.IsExpired()
+	}
+	return false
 }
 
 // Rule represents a request/response configuration with load balancing support
