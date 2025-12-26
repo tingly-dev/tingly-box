@@ -136,7 +136,7 @@ func RunManualTest(config *ManualTestConfig) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/oauth/callback", func(w http.ResponseWriter, r *http.Request) {
 		// Handle the OAuth callback
-		token, redirectTo, err := manager.HandleCallback(context.Background(), r)
+		token, err := manager.HandleCallback(context.Background(), r)
 		if err != nil {
 			errorChan <- fmt.Errorf("callback failed: %w", err)
 			http.Error(w, fmt.Sprintf("OAuth callback failed: %v", err), http.StatusBadRequest)
@@ -146,7 +146,7 @@ func RunManualTest(config *ManualTestConfig) error {
 		// Send success response
 		resultChan <- &CallbackResult{
 			Token:      token,
-			RedirectTo: redirectTo,
+			RedirectTo: token.RedirectTo,
 		}
 
 		// Show success page
@@ -229,7 +229,7 @@ Provider: %s
 	}
 
 	// Generate authorization URL
-	authURL, state, err := manager.GetAuthURL(context.Background(), config.UserID, config.ProviderType, "")
+	authURL, state, err := manager.GetAuthURL(context.Background(), config.UserID, config.ProviderType, "", "")
 	if err != nil {
 		return fmt.Errorf("failed to generate auth URL: %w", err)
 	}
