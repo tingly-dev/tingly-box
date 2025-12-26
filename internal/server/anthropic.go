@@ -173,7 +173,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		if !s.enableAdaptor {
 			c.JSON(http.StatusUnprocessableEntity, ErrorResponse{
 				Error: ErrorDetail{
-					Message: fmt.Sprintf("Request format adaptation is disabled. Cannot send Anthropic request to OpenAI-style provider '%s'. Use --adaptor flag to enable format conversion.", provider.Name),
+					Message: fmt.Sprintf("Request format adaptation is disabled. Cannot send Anthropic request to OpenAI-style provider '%s'. Use --adapter flag to enable format conversion.", provider.Name),
 					Type:    "adapter_disabled",
 				},
 			})

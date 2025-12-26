@@ -72,7 +72,8 @@ func NewTestServer(t *testing.T) *TestServer {
 // createTestServer creates a test server with the given appConfig
 func createTestServer(t *testing.T, appConfig *config.AppConfig) *TestServer {
 	// Create server instance but don't start it
-	httpServer := server.NewServer(appConfig.GetGlobalConfig())
+	// Note: adapter is disabled by default in tests to test the fallback behavior
+	httpServer := server.NewServer(appConfig.GetGlobalConfig(), server.WithAdaptor(false))
 
 	return &TestServer{
 		appConfig: appConfig,

@@ -53,9 +53,9 @@ type ServerOption func(*Server)
 // WithDefault applies all default server options
 func WithDefault() ServerOption {
 	return func(s *Server) {
-		s.enableUI = true       // Default: UI enabled
-		s.enableAdaptor = false // Default: adaptor disabled
-		s.host = ""             // Default: empty host (resolves to localhost)
+		s.enableUI = true      // Default: UI enabled
+		s.enableAdaptor = true // Default: adapter enabled
+		s.host = ""            // Default: empty host (resolves to localhost)
 	}
 }
 
