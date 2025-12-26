@@ -1,12 +1,17 @@
 package server
 
 import (
+	"fmt"
 	"html/template"
 	"net/http"
+	"time"
 	oauth2 "tingly-box/pkg/oauth"
 	"tingly-box/pkg/swagger"
 
+	"tingly-box/internal/config"
+
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 // =============================================
@@ -141,6 +146,7 @@ func (s *Server) useOAuthEndpoints(manager *swagger.RouteManager) {
         h1 { color: #10b981; margin: 0 0 10px; }
         p { color: #666; margin: 8px 0; }
         .token { background: #f3f4f6; padding: 12px; border-radius: 6px; font-family: monospace; margin: 20px auto; max-width: 400px; }
+        .provider-name { background: #e0f2fe; color: #0369a1; padding: 8px 16px; border-radius: 6px; font-weight: 500; margin: 10px auto; max-width: 400px; }
     </style>
 </head>
 <body>
@@ -148,9 +154,10 @@ func (s *Server) useOAuthEndpoints(manager *swagger.RouteManager) {
         <div class="icon">✅</div>
         <h1>OAuth Authorization Successful</h1>
         <p><strong>Provider:</strong> {{ .provider }}</p>
+        <div class="provider-name">{{ .provider_name }}</div>
         <p><strong>Token Type:</strong> {{ .token_type }}</p>
         <div class="token">{{ .access_token }}</div>
-        <p style="font-size: 14px; color: #999;">You can close this window and return to the application.</p>
+        <p style="font-size: 14px; color: #999;">Provider has been created. You can close this window and return to the application.</p>
     </div>
 </body>
 </html>
@@ -663,10 +670,84 @@ func (s *Server) OAuthCallback(c *gin.Context) {
 		return
 	}
 
+	// Generate unique provider name
+	providerType := string(token.Provider)
+	timestamp := time.Now().Format("20060102-150405")
+	providerName := fmt.Sprintf("oauth-%s-%s", providerType, timestamp)
+
+	// Generate UUID for the provider
+	providerUUID, err := uuid.NewUUID()
+	if err != nil {
+		c.HTML(http.StatusInternalServerError, "oauth_error.html", gin.H{
+			"error": fmt.Sprintf("Failed to generate provider UUID: %v", err),
+		})
+		return
+	}
+
+	// Determine API base and style based on provider type
+	var apiBase string
+	var apiStyle config.APIStyle
+	switch token.Provider {
+	case oauth2.ProviderAnthropic:
+		apiBase = "https://api.anthropic.com"
+		apiStyle = config.APIStyleAnthropic
+	case oauth2.ProviderGoogle:
+		apiBase = "https://generativelanguage.googleapis.com"
+		apiStyle = config.APIStyleOpenAI
+	case oauth2.ProviderOpenAI:
+		apiBase = "https://api.openai.com/v1"
+		apiStyle = config.APIStyleOpenAI
+	default:
+		// For mock and unknown providers
+		apiBase = "mock"
+		apiStyle = config.APIStyleOpenAI
+	}
+
+	// Build expires_at string
+	var expiresAt string
+	if !token.Expiry.IsZero() {
+		expiresAt = token.Expiry.Format(time.RFC3339)
+	}
+
+	// Create Provider with OAuth credentials
+	provider := &config.Provider{
+		UUID:     providerUUID.String(),
+		Name:     providerName,
+		APIBase:  apiBase,
+		APIStyle: apiStyle,
+		Enabled:  true,
+		AuthType: config.AuthTypeOAuth,
+		OAuthDetail: &config.OAuthDetail{
+			AccessToken:  token.AccessToken,
+			ProviderType: string(token.Provider),
+			UserID:       oauth2.DefaultUserID,
+			RefreshToken: token.RefreshToken,
+			ExpiresAt:    expiresAt,
+		},
+	}
+
+	// Save provider to config
+	if err := s.config.AddProvider(provider); err != nil {
+		c.HTML(http.StatusInternalServerError, "oauth_error.html", gin.H{
+			"error": fmt.Sprintf("Failed to save provider: %v", err),
+		})
+		return
+	}
+
+	// Log the successful provider creation
+	if s.logger != nil {
+		s.logger.LogAction("oauth_provider_created", map[string]interface{}{
+			"provider_name": providerName,
+			"provider_type": string(token.Provider),
+			"uuid":          providerUUID.String(),
+		}, true, "OAuth provider created successfully")
+	}
+
 	// Return success HTML page to inform the user
 	c.HTML(http.StatusOK, "oauth_success.html", gin.H{
-		"provider":     string(token.Provider),
-		"access_token": token.AccessToken[:20] + "...", // Partially show token
-		"token_type":   token.TokenType,
+		"provider":      string(token.Provider),
+		"provider_name": providerName,
+		"access_token":  token.AccessToken[:20] + "...", // Partially show token
+		"token_type":    token.TokenType,
 	})
 }
