@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 	oauth2 "tingly-box/pkg/oauth"
 	"tingly-box/pkg/swagger"
@@ -43,6 +45,7 @@ type OAuthAuthorizeRequest struct {
 	UserID       string `json:"user_id" description:"User ID for the OAuth flow" example:"user123"`
 	Redirect     string `json:"redirect" description:"URL to redirect after OAuth completion" example:"http://localhost:3000/callback"`
 	ResponseType string `json:"response_type" description:"Response type: 'redirect' or 'json'" example:"json"`
+	Name         string `json:"name" description:"Custom name for the provider (optional, auto-generated if empty)" example:"my-claude-account"`
 }
 
 // OAuthAuthorizeResponse represents the response for OAuth authorization initiation
@@ -471,8 +474,19 @@ func (s *Server) AuthorizeOAuth(c *gin.Context) {
 		userID = oauth2.DefaultUserID
 	}
 
+	// Append provider name to redirect URL for callback to use
+	redirectURL := req.Redirect
+	if req.Name != "" {
+		// Add name as query parameter to redirect URL
+		if strings.Contains(redirectURL, "?") {
+			redirectURL += "&name=" + url.QueryEscape(req.Name)
+		} else {
+			redirectURL += "?name=" + url.QueryEscape(req.Name)
+		}
+	}
+
 	// Get auth URL
-	authURL, state, err := s.oauthManager.GetAuthURL(c.Request.Context(), userID, providerType, req.Redirect)
+	authURL, state, err := s.oauthManager.GetAuthURL(c.Request.Context(), userID, providerType, redirectURL)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, OAuthErrorResponse{
 			Success: false,
@@ -670,10 +684,20 @@ func (s *Server) OAuthCallback(c *gin.Context) {
 		return
 	}
 
+	// Get custom name from query parameter (if provided via redirect URL)
+	customName := c.Query("name")
+
 	// Generate unique provider name
 	providerType := string(token.Provider)
-	timestamp := time.Now().Format("20060102-150405")
-	providerName := fmt.Sprintf("oauth-%s-%s", providerType, timestamp)
+	var providerName string
+	if customName != "" {
+		// Use custom name provided by user
+		providerName = customName
+	} else {
+		// Auto-generate name with timestamp
+		timestamp := time.Now().Format("20060102-150405")
+		providerName = fmt.Sprintf("oauth-%s-%s", providerType, timestamp)
+	}
 
 	// Generate UUID for the provider
 	providerUUID, err := uuid.NewUUID()
