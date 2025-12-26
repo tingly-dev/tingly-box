@@ -51,7 +51,7 @@ type RouteGroupOption func(*RouteGroup)
 // RouteManager manages all route groups and swagger generation
 type RouteManager struct {
 	engine      *gin.Engine
-	groups      map[string]*RouteGroup
+	groups      []*RouteGroup
 	globalMW    []gin.HandlerFunc
 	swaggerInfo *SwaggerInfo
 }
@@ -60,7 +60,7 @@ type RouteManager struct {
 func NewRouteManager(engine *gin.Engine) *RouteManager {
 	return &RouteManager{
 		engine: engine,
-		groups: make(map[string]*RouteGroup),
+		groups: make([]*RouteGroup, 0),
 		swaggerInfo: &SwaggerInfo{
 			Title:       "API Documentation",
 			Description: "Generated API documentation",
@@ -108,7 +108,7 @@ func (rm *RouteManager) NewGroup(name, version, prefix string, opts ...RouteGrou
 		opt(group)
 	}
 
-	rm.groups[fullPrefix] = group
+	rm.groups = append(rm.groups, group)
 	return group
 }
 
@@ -309,7 +309,7 @@ func (rg *RouteGroup) authMiddleware() gin.HandlerFunc {
 }
 
 // GetRouteGroups returns all registered route groups
-func (rm *RouteManager) GetRouteGroups() map[string]*RouteGroup {
+func (rm *RouteManager) GetRouteGroups() []*RouteGroup {
 	return rm.groups
 }
 
