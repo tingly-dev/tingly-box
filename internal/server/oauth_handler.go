@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
-	"net/url"
-	"strings"
 	"time"
 	oauth2 "tingly-box/pkg/oauth"
 	"tingly-box/pkg/swagger"
@@ -474,19 +472,8 @@ func (s *Server) AuthorizeOAuth(c *gin.Context) {
 		userID = oauth2.DefaultUserID
 	}
 
-	// Append provider name to redirect URL for callback to use
-	redirectURL := req.Redirect
-	if req.Name != "" {
-		// Add name as query parameter to redirect URL
-		if strings.Contains(redirectURL, "?") {
-			redirectURL += "&name=" + url.QueryEscape(req.Name)
-		} else {
-			redirectURL += "?name=" + url.QueryEscape(req.Name)
-		}
-	}
-
-	// Get auth URL
-	authURL, state, err := s.oauthManager.GetAuthURL(c.Request.Context(), userID, providerType, redirectURL)
+	// Get auth URL with name parameter
+	authURL, state, err := s.oauthManager.GetAuthURL(c.Request.Context(), userID, providerType, req.Redirect, req.Name)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, OAuthErrorResponse{
 			Success: false,
@@ -675,8 +662,8 @@ func (s *Server) OAuthCallback(c *gin.Context) {
 		return
 	}
 
-	// Delegate to the oauth handler's callback
-	token, _, err := s.oauthManager.HandleCallback(c.Request.Context(), c.Request)
+	// Delegate to the oauth handler's callback, now returns name in token
+	token, err := s.oauthManager.HandleCallback(c.Request.Context(), c.Request)
 	if err != nil {
 		c.HTML(http.StatusBadRequest, "oauth_error.html", gin.H{
 			"error": err.Error(),
@@ -684,14 +671,14 @@ func (s *Server) OAuthCallback(c *gin.Context) {
 		return
 	}
 
-	// Get custom name from query parameter (if provided via redirect URL)
-	customName := c.Query("name")
+	// Get custom name from token (stored in state during authorize)
+	customName := token.Name
 
 	// Generate unique provider name
 	providerType := string(token.Provider)
 	var providerName string
 	if customName != "" {
-		// Use custom name provided by user
+		// Use custom name from state
 		providerName = customName
 	} else {
 		// Auto-generate name with timestamp
