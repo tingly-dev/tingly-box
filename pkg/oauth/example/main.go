@@ -31,21 +31,10 @@ func main() {
 	demo := flag.Bool("demo", false, "Demo mode: show auth URL without real credentials")
 	flag.Parse()
 
-	// Map provider string to ProviderType
-	var providerType oauth2.ProviderType
-	switch *provider {
-	case "anthropic":
-		providerType = oauth2.ProviderAnthropic
-	case "openai":
-		providerType = oauth2.ProviderOpenAI
-	case "google":
-		providerType = oauth2.ProviderGoogle
-	case "github":
-		providerType = oauth2.ProviderGitHub
-	case "mock":
-		providerType = oauth2.ProviderMock
-	default:
-		log.Fatalf("Unknown provider: %s. Use: mock, anthropic, openai, google, or github", *provider)
+	// Parse provider type from string
+	providerType, err := oauth2.ParseProviderType(*provider)
+	if err != nil {
+		log.Fatalf("Invalid provider: %v. Use: mock, anthropic, openai, google, or github", err)
 	}
 
 	// Get default provider config to check if it has built-in credentials
@@ -55,32 +44,6 @@ func main() {
 	// Check for environment variables
 	clientID := os.Getenv("OAUTH_CLIENT_ID")
 	clientSecret := os.Getenv("OAUTH_CLIENT_SECRET")
-
-	// Try provider-specific environment variables
-	if clientID == "" {
-		switch providerType {
-		case oauth2.ProviderAnthropic:
-			clientID = os.Getenv("ANTHROPIC_CLIENT_ID")
-		case oauth2.ProviderOpenAI:
-			clientID = os.Getenv("OPENAI_CLIENT_ID")
-		case oauth2.ProviderGoogle:
-			clientID = os.Getenv("GOOGLE_CLIENT_ID")
-		case oauth2.ProviderGitHub:
-			clientID = os.Getenv("GITHUB_CLIENT_ID")
-		}
-	}
-	if clientSecret == "" {
-		switch providerType {
-		case oauth2.ProviderAnthropic:
-			clientSecret = os.Getenv("ANTHROPIC_CLIENT_SECRET")
-		case oauth2.ProviderOpenAI:
-			clientSecret = os.Getenv("OPENAI_CLIENT_SECRET")
-		case oauth2.ProviderGoogle:
-			clientSecret = os.Getenv("GOOGLE_CLIENT_SECRET")
-		case oauth2.ProviderGitHub:
-			clientSecret = os.Getenv("GITHUB_CLIENT_SECRET")
-		}
-	}
 
 	// Use built-in client ID if no override provided
 	if clientID == "" && hasDefault && defaultConfig.ClientID != "" {
@@ -153,36 +116,18 @@ func printDemoInfo(providerType oauth2.ProviderType, port int) {
 	fmt.Println("TO PERFORM REAL OAUTH:")
 	fmt.Println(strings.Repeat("-", 80))
 
-	fmt.Println("\n1. Get OAuth credentials from your provider:")
-	switch providerType {
-	case oauth2.ProviderAnthropic:
-		fmt.Println("   https://console.anthropic.com/")
-		fmt.Println("   Create an OAuth app to get Client ID")
-	case oauth2.ProviderOpenAI:
-		fmt.Println("   https://platform.openai.com/")
-		fmt.Println("   Create an OAuth app to get Client ID and Secret")
-	case oauth2.ProviderGoogle:
-		fmt.Println("   https://console.cloud.google.com/")
-		fmt.Println("   Create OAuth 2.0 credentials")
-	case oauth2.ProviderGitHub:
-		fmt.Println("   https://github.com/settings/developers")
-		fmt.Println("   Create a new OAuth App")
-		fmt.Println("   Set Authorization callback URL to: http://localhost:54545/oauth/callback")
+	if providerConfig.ConsoleURL != "" {
+		fmt.Println("\n1. Get OAuth credentials from your provider:")
+		fmt.Printf("   %s\n", providerConfig.ConsoleURL)
+		fmt.Println("   Create an OAuth app to get credentials")
 	}
 
 	fmt.Println("\n2. Set environment variables:")
-	switch providerType {
-	case oauth2.ProviderAnthropic:
-		fmt.Println("   export ANTHROPIC_CLIENT_ID=\"your_client_id\"")
-	case oauth2.ProviderOpenAI:
-		fmt.Println("   export OPENAI_CLIENT_ID=\"your_client_id\"")
-		fmt.Println("   export OPENAI_CLIENT_SECRET=\"your_client_secret\"")
-	case oauth2.ProviderGoogle:
-		fmt.Println("   export GOOGLE_CLIENT_ID=\"your_client_id\"")
-		fmt.Println("   export GOOGLE_CLIENT_SECRET=\"your_client_secret\"")
-	case oauth2.ProviderGitHub:
-		fmt.Println("   export GITHUB_CLIENT_ID=\"your_client_id\"")
-		fmt.Println("   export GITHUB_CLIENT_SECRET=\"your_client_secret\"")
+	if providerConfig.ClientIDEnvVar != "" {
+		fmt.Printf("   export %s=\"your_client_id\"\n", providerConfig.ClientIDEnvVar)
+	}
+	if providerConfig.ClientSecretEnvVar != "" {
+		fmt.Printf("   export %s=\"your_client_secret\"\n", providerConfig.ClientSecretEnvVar)
 	}
 
 	fmt.Println("\n3. Run without -demo flag:")

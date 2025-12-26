@@ -54,65 +54,80 @@ func DefaultProviders() *Registry {
 
 	// Anthropic (Claude) OAuth
 	registry.Register(&ProviderConfig{
-		Type:         ProviderAnthropic,
-		DisplayName:  "Anthropic Claude",
-		ClientID:     "9d1c250a-e61b-44d9-88ed-5944d1962f5e", // Public client ID for Claude
-		ClientSecret: "",                                     // No secret required for public client
-		AuthURL:      "https://claude.ai/oauth/authorize",
-		TokenURL:     "https://console.anthropic.com/v1/oauth/token",
-		Scopes:       []string{"api"},
-		AuthStyle:    AuthStyleInHeader,
+		Type:               ProviderAnthropic,
+		DisplayName:        "Anthropic Claude",
+		ClientID:           "9d1c250a-e61b-44d9-88ed-5944d1962f5e", // Public client ID for Claude
+		ClientSecret:       "",                                     // No secret required for public client
+		AuthURL:            "https://claude.ai/oauth/authorize",
+		TokenURL:           "https://console.anthropic.com/v1/oauth/token",
+		Scopes:             []string{"api"},
+		AuthStyle:          AuthStyleInHeader,
+		ConsoleURL:         "https://console.anthropic.com/",
+		ClientIDEnvVar:     "ANTHROPIC_CLIENT_ID",
+		ClientSecretEnvVar: "ANTHROPIC_CLIENT_SECRET",
 	})
 
 	// OpenAI OAuth
 	registry.Register(&ProviderConfig{
-		Type:         ProviderOpenAI,
-		DisplayName:  "OpenAI",
-		ClientID:     "", // Must be configured
-		ClientSecret: "",
-		AuthURL:      "https://platform.openai.com/oauth/authorize",
-		TokenURL:     "https://api.openai.com/v1/oauth/token",
-		Scopes:       []string{"api", "offline_access"},
-		AuthStyle:    AuthStyleInHeader,
+		Type:               ProviderOpenAI,
+		DisplayName:        "OpenAI",
+		ClientID:           "", // Must be configured
+		ClientSecret:       "",
+		AuthURL:            "https://platform.openai.com/oauth/authorize",
+		TokenURL:           "https://api.openai.com/v1/oauth/token",
+		Scopes:             []string{"api", "offline_access"},
+		AuthStyle:          AuthStyleInHeader,
+		ConsoleURL:         "https://platform.openai.com/",
+		ClientIDEnvVar:     "OPENAI_CLIENT_ID",
+		ClientSecretEnvVar: "OPENAI_CLIENT_SECRET",
 	})
 
 	// Google OAuth (for Gemini/Vertex AI)
 	registry.Register(&ProviderConfig{
-		Type:         ProviderGoogle,
-		DisplayName:  "Google",
-		ClientID:     "", // Must be configured
-		ClientSecret: "",
-		AuthURL:      "https://accounts.google.com/o/oauth2/v2/auth",
-		TokenURL:     "https://oauth2.googleapis.com/token",
-		Scopes:       []string{"https://www.googleapis.com/auth/cloud-platform"},
-		AuthStyle:    AuthStyleInHeader,
+		Type:               ProviderGoogle,
+		DisplayName:        "Google",
+		ClientID:           "", // Must be configured
+		ClientSecret:       "",
+		AuthURL:            "https://accounts.google.com/o/oauth2/v2/auth",
+		TokenURL:           "https://oauth2.googleapis.com/token",
+		Scopes:             []string{"https://www.googleapis.com/auth/cloud-platform"},
+		AuthStyle:          AuthStyleInHeader,
+		ConsoleURL:         "https://console.cloud.google.com/",
+		ClientIDEnvVar:     "GOOGLE_CLIENT_ID",
+		ClientSecretEnvVar: "GOOGLE_CLIENT_SECRET",
 	})
 
 	// GitHub OAuth (for GitHub Copilot)
 	// Note: You need to create your own OAuth app at https://github.com/settings/developers
 	// This is a demo configuration for testing the authorize URL
 	registry.Register(&ProviderConfig{
-		Type:         ProviderGitHub,
-		DisplayName:  "GitHub",
-		ClientID:     "demo-github-client-id", // Replace with your own OAuth app's Client ID
-		ClientSecret: "",                      // No secret required for demo
-		AuthURL:      "https://github.com/login/oauth/authorize",
-		TokenURL:     "https://github.com/login/oauth/access_token",
-		Scopes:       []string{"read:user", "user:email"},
-		AuthStyle:    AuthStyleInParams, // GitHub uses params for auth
+		Type:               ProviderGitHub,
+		DisplayName:        "GitHub",
+		ClientID:           "demo-github-client-id", // Replace with your own OAuth app's Client ID
+		ClientSecret:       "",                      // No secret required for demo
+		AuthURL:            "https://github.com/login/oauth/authorize",
+		TokenURL:           "https://github.com/login/oauth/access_token",
+		Scopes:             []string{"read:user", "user:email"},
+		AuthStyle:          AuthStyleInParams, // GitHub uses params for auth
+		ConsoleURL:         "https://github.com/settings/developers",
+		ClientIDEnvVar:     "GITHUB_CLIENT_ID",
+		ClientSecretEnvVar: "GITHUB_CLIENT_SECRET",
 	})
 
 	// Mock OAuth provider for testing
 	// Uses https://oauth-mock.mock.beeceptor.com for testing OAuth flow
 	registry.Register(&ProviderConfig{
-		Type:         ProviderMock,
-		DisplayName:  "Mock OAuth (Testing)",
-		ClientID:     "mock-client-id",
-		ClientSecret: "mock-client-secret",
-		AuthURL:      "https://oauth-mock.mock.beeceptor.com/oauth/authorize",
-		TokenURL:     "https://oauth-mock.mock.beeceptor.com/oauth/token/google",
-		Scopes:       []string{"test", "read", "write"},
-		AuthStyle:    AuthStyleInParams,
+		Type:               ProviderMock,
+		DisplayName:        "Mock OAuth (Testing)",
+		ClientID:           "mock-client-id",
+		ClientSecret:       "mock-client-secret",
+		AuthURL:            "https://oauth-mock.mock.beeceptor.com/oauth/authorize",
+		TokenURL:           "https://oauth-mock.mock.beeceptor.com/oauth/token/google",
+		Scopes:             []string{"test", "read", "write"},
+		AuthStyle:          AuthStyleInParams,
+		ConsoleURL:         "",
+		ClientIDEnvVar:     "MOCK_CLIENT_ID",
+		ClientSecretEnvVar: "MOCK_CLIENT_SECRET",
 	})
 
 	return registry

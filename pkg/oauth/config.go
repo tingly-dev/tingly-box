@@ -1,6 +1,7 @@
 package oauth
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -14,6 +15,23 @@ const (
 	ProviderGitHub    ProviderType = "github"
 	ProviderMock      ProviderType = "mock"
 )
+
+// ParseProviderType parses a provider type from string, case-insensitive
+func ParseProviderType(s string) (ProviderType, error) {
+	p := ProviderType(s)
+	// Validate by checking against known providers
+	switch p {
+	case ProviderAnthropic, ProviderOpenAI, ProviderGoogle, ProviderGitHub, ProviderMock:
+		return p, nil
+	default:
+		return "", fmt.Errorf("unknown provider type: %s", s)
+	}
+}
+
+// String returns the string representation of ProviderType
+func (p ProviderType) String() string {
+	return string(p)
+}
 
 // Config holds the OAuth configuration
 type Config struct {
@@ -72,6 +90,15 @@ type ProviderConfig struct {
 
 	// RedirectURL is the OAuth redirect URI (optional, uses default if empty)
 	RedirectURL string
+
+	// ConsoleURL is the URL to the provider's console for creating OAuth apps
+	ConsoleURL string
+
+	// ClientIDEnvVar is the environment variable name for the client ID
+	ClientIDEnvVar string
+
+	// ClientSecretEnvVar is the environment variable name for the client secret
+	ClientSecretEnvVar string
 }
 
 // AuthStyle represents how client credentials are sent to the token endpoint
