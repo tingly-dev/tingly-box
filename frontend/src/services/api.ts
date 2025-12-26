@@ -13,7 +13,8 @@ import {
     RulesApi,
     ServerApi,
     TestingApi,
-    TokenApi
+    TokenApi,
+    OauthApi,
 } from '../client';
 
 
@@ -29,6 +30,7 @@ interface ApiInstances {
     testingApi: TestingApi;
     tokenApi: TokenApi;
     infoApi: InfoApi;
+    oauthApi: OauthApi;
 }
 
 
@@ -120,6 +122,7 @@ const createApiInstances = async () => {
         testingApi: new TestingApi(config),
         tokenApi: new TokenApi(config),
         infoApi: new InfoApi(config),
+        oauthApi: new OauthApi(config),
     };
 };
 
@@ -196,7 +199,7 @@ async function initializeApiInstances(): Promise<ApiInstances> {
 }
 
 // Get API instances (async)
-async function getApiInstances(): Promise<ApiInstances> {
+export async function getApiInstances(): Promise<ApiInstances> {
     if (!initializationPromise) {
         initializationPromise = initializeApiInstances();
     }
@@ -617,6 +620,10 @@ export const api = {
     removeModelToken: (): void => {
         localStorage.removeItem('model_token');
     },
+
+    // Direct access to raw API instances for advanced usage
+    // Usage: const { providersApi, modelsApi } = await api.instances();
+    instances: getApiInstances,
 };
 
 export default api;
