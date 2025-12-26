@@ -534,7 +534,7 @@ const ProviderNodeComponent: React.FC<{
                     <ListItemIcon>
                         <EditIcon />
                     </ListItemIcon>
-                    <ListItemText>Edit Provider</ListItemText>
+                    <ListItemText>Choose Model</ListItemText>
                 </MenuItem>
                 <MenuItem onClick={handleDelete} disabled={!active}>
                     <ListItemIcon>
