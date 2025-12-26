@@ -564,7 +564,17 @@ func (s *Server) handleAnthropicStreamResponse(c *gin.Context, stream *ssestream
 
 		// Send the event as SSE
 		// Anthropic streaming uses server-sent events format
-		c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", string(eventJSON))))
+		// MENTION: keep the format
+		// event: xxx
+		// data: xxx
+		// (extra \n here)
+		c.Writer.Write(
+			[]byte(
+				fmt.Sprintf(
+					"event: %s\ndata: %s\n\n",
+					event.Type, string(eventJSON)),
+			),
+		)
 		flusher.Flush()
 	}
 
