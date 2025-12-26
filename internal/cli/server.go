@@ -12,6 +12,7 @@ import (
 	"tingly-box/internal/server"
 	"tingly-box/internal/util"
 
+	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
 )
 
@@ -67,6 +68,8 @@ type startServerOptions struct {
 
 // startServer handles the server starting logic
 func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
+	gin.SetMode(gin.ReleaseMode)
+
 	var port int = opts.Port
 	if port == 0 {
 		port = appConfig.GetServerPort()
