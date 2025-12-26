@@ -1,9 +1,11 @@
-import { Add } from '@mui/icons-material';
+import { Add, VpnKey } from '@mui/icons-material';
 import { Alert, Box, Button, Snackbar, Stack, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import ProviderTable from '../components/ProviderTable.tsx';
 import { PageLayout } from '../components/PageLayout';
 import PresetProviderFormDialog from '../components/PresetProviderFormDialog.tsx';
+import OAuthDialog from '../components/OAuthDialog.tsx';
+import OAuthDetailDialog from '../components/OAuthDetailDialog.tsx';
 import { type ProviderFormData } from '../components/ProviderFormDialog.tsx';
 import UnifiedCard from '../components/UnifiedCard';
 import { api } from '../services/api';
@@ -17,8 +19,8 @@ const ProviderPage = () => {
         severity: 'success' | 'error';
     }>({ open: false, message: '', severity: 'success' });
 
-    // Dialog state
-    const [dialogOpen, setDialogOpen] = useState(false);
+    // API Key Dialog state
+    const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false);
     const [dialogMode, setDialogMode] = useState<'add' | 'edit'>('add');
     const [providerFormData, setProviderFormData] = useState<ProviderFormData>({
         uuid: undefined,
@@ -29,6 +31,11 @@ const ProviderPage = () => {
         enabled: true,
     });
 
+    // OAuth Dialog state
+    const [oauthDialogOpen, setOAuthDialogOpen] = useState(false);
+    const [oauthDetailProvider, setOAuthDetailProvider] = useState<any | null>(null);
+    const [oauthDetailDialogOpen, setOAuthDetailDialogOpen] = useState(false);
+
     useEffect(() => {
         loadProviders();
     }, []);
@@ -37,7 +44,7 @@ const ProviderPage = () => {
         setSnackbar({ open: true, message, severity });
     };
 
-    const handleAddProviderClick = () => {
+    const handleAddApiKeyClick = () => {
         setDialogMode('add');
         setProviderFormData({
             uuid: undefined,
@@ -47,7 +54,11 @@ const ProviderPage = () => {
             token: '',
             enabled: true,
         });
-        setDialogOpen(true);
+        setApiKeyDialogOpen(true);
+    };
+
+    const handleAddOAuthClick = () => {
+        setOAuthDialogOpen(true);
     };
 
     const loadProviders = async () => {
@@ -81,7 +92,7 @@ const ProviderPage = () => {
 
         if (result.success) {
             showNotification(`Provider ${dialogMode === 'add' ? 'added' : 'updated'} successfully!`, 'success');
-            setDialogOpen(false);
+            setApiKeyDialogOpen(false);
             loadProviders();
         } else {
             showNotification(`Failed to ${dialogMode === 'add' ? 'add' : 'update'} provider: ${result.error}`, 'error');
@@ -115,16 +126,25 @@ const ProviderPage = () => {
 
         if (result.success) {
             const provider = result.data;
-            setDialogMode('edit');
-            setProviderFormData({
-                uuid: provider.uuid,
-                name: provider.name,
-                apiBase: provider.api_base,
-                apiStyle: provider.api_style || 'openai',
-                token: provider.token || "",
-                enabled: provider.enabled,
-            });
-            setDialogOpen(true);
+
+            // Route to appropriate dialog based on auth type
+            if (provider.auth_type === 'oauth') {
+                // Open OAuth detail dialog (read-only)
+                setOAuthDetailProvider(provider);
+                setOAuthDetailDialogOpen(true);
+            } else {
+                // Open API Key edit dialog
+                setDialogMode('edit');
+                setProviderFormData({
+                    uuid: provider.uuid,
+                    name: provider.name,
+                    apiBase: provider.api_base,
+                    apiStyle: provider.api_style || 'openai',
+                    token: provider.token || "",
+                    enabled: provider.enabled,
+                });
+                setApiKeyDialogOpen(true);
+            }
         } else {
             showNotification(`Failed to load provider details: ${result.error}`, 'error');
         }
@@ -140,9 +160,17 @@ const ProviderPage = () => {
                     rightAction={
                         <Stack direction="row" spacing={1} alignItems="center">
                             <Button
+                                variant="outlined"
+                                startIcon={<VpnKey />}
+                                onClick={handleAddOAuthClick}
+                                size="small"
+                            >
+                                Add OAuth
+                            </Button>
+                            <Button
                                 variant="contained"
                                 startIcon={<Add />}
-                                onClick={handleAddProviderClick}
+                                onClick={handleAddApiKeyClick}
                                 size="small"
                             >
                                 Add API Key
@@ -171,35 +199,61 @@ const ProviderPage = () => {
                         <Typography color="text.secondary" gutterBottom>
                             Configure your API tokens and keys to access AI services
                         </Typography>
-                        <Button
-                            variant="contained"
-                            startIcon={<Add />}
-                            onClick={() => setDialogOpen(true)}
-                            sx={{ mt: 2 }}
-                        >
-                            Add Your First Provider
-                        </Button>
+                        <Stack direction="row" spacing={2} justifyContent="center" sx={{ mt: 2 }}>
+                            <Button
+                                variant="outlined"
+                                startIcon={<VpnKey />}
+                                onClick={handleAddOAuthClick}
+                            >
+                                Add OAuth
+                            </Button>
+                            <Button
+                                variant="contained"
+                                startIcon={<Add />}
+                                onClick={handleAddApiKeyClick}
+                            >
+                                Add API Key
+                            </Button>
+                        </Stack>
                     </Box>
                 </UnifiedCard>
             )}
 
-            {/* Provider Dialog */}
-            {/* <CredentialFormDialog
-                open={dialogOpen}
-                onClose={() => setDialogOpen(false)}
-                onSubmit={handleProviderSubmit}
-                data={providerFormData}
-                onChange={(field, value) => setProviderFormData(prev => ({ ...prev, [field]: value }))}
-                mode={dialogMode}
-            /> */}
-
+            {/* API Key Provider Dialog */}
             <PresetProviderFormDialog
-                open={dialogOpen}
-                onClose={() => setDialogOpen(false)}
+                open={apiKeyDialogOpen}
+                onClose={() => setApiKeyDialogOpen(false)}
                 onSubmit={handleProviderSubmit}
                 data={providerFormData}
                 onChange={(field, value) => setProviderFormData(prev => ({ ...prev, [field]: value }))}
                 mode={dialogMode}
+            />
+
+            {/* OAuth Dialog */}
+            <OAuthDialog
+                open={oauthDialogOpen}
+                onClose={() => setOAuthDialogOpen(false)}
+            />
+
+            {/* OAuth Detail Dialog */}
+            <OAuthDetailDialog
+                open={oauthDetailDialogOpen}
+                provider={oauthDetailProvider}
+                onClose={() => setOAuthDetailDialogOpen(false)}
+                onSubmit={async (data) => {
+                    if (!oauthDetailProvider?.uuid) return;
+                    const result = await api.updateProvider(oauthDetailProvider.uuid, {
+                        name: data.name,
+                        api_base: data.apiBase,
+                        api_style: data.apiStyle,
+                        enabled: data.enabled,
+                    });
+                    if (!result.success) {
+                        throw new Error(result.error || 'Failed to update provider');
+                    }
+                    showNotification('Provider updated successfully!', 'success');
+                    loadProviders();
+                }}
             />
 
             {/* Snackbar for notifications */}

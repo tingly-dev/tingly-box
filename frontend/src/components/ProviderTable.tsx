@@ -1,4 +1,4 @@
-import { Cancel, CheckCircle, ContentCopy, Delete, Edit, Visibility } from '@mui/icons-material';
+import { Cancel, CheckCircle, ContentCopy, Delete, Edit, Visibility, VpnKey } from '@mui/icons-material';
 import {
     Box,
     Button,
@@ -203,6 +203,7 @@ const ProviderTable = ({
                 <TableHead>
                     <TableRow>
                         <TableCell sx={{ fontWeight: 600, minWidth: 150 }}>Name</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 100 }}>Auth Type</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 150 }}>API Key</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 200 }}>API Base</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>API Style</TableCell>
@@ -223,6 +224,25 @@ const ProviderTable = ({
                                     <Typography variant="body2" sx={{ fontWeight: 500 }}>
                                         {provider.name}
                                     </Typography>
+                                </Stack>
+                            </TableCell>
+                            <TableCell>
+                                <Stack direction="row" alignItems="center" spacing={1}>
+                                    {provider.auth_type === 'oauth' ? (
+                                        <>
+                                            <VpnKey fontSize="small" color="primary" />
+                                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                                OAuth
+                                            </Typography>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <VpnKey fontSize="small" color="action" />
+                                            <Typography variant="body2" color="text.secondary">
+                                                API Key
+                                            </Typography>
+                                        </>
+                                    )}
                                 </Stack>
                             </TableCell>
                             <TableCell>
