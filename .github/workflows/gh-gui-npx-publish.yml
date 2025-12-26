@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       version_override:
-        description: 'NPX package version (leave empty to use tag version)'
+        description: 'NPX Package ersion (leave empty to use tag version)'
         required: false
         type: string
         default: ''
@@ -245,7 +245,7 @@ jobs:
           # Check if release already exists
           if gh release view "$FULL_TAG" >/dev/null 2>&1; then
             echo "Release $FULL_TAG already exists, updating..."
-            gh release edit "$FULL_TAG" --notes-file npx_release_notes.md --title "NPX Package v$VERSION"
+            gh release edit "$FULL_TAG" --notes-file npx_release_notes.md --title "NPX Package $VERSION"
           else
             # Create new release
             PRERELEASE_FLAG=""
@@ -253,7 +253,7 @@ jobs:
               PRERELEASE_FLAG="--prerelease"
             fi
             gh release create "$FULL_TAG" \
-              --title "NPX Package v$VERSION" \
+              --title "NPX Package $VERSION" \
               --notes-file npx_release_notes.md \
               ${PRERELEASE_FLAG}
           fi
@@ -307,7 +307,7 @@ jobs:
 
           # Add and commit the changes
           git add LATEST.json
-          git commit -m "Update LATEST.json with NPX package v$VERSION based on $RELEASE_TAG
+          git commit -m "Update LATEST.json with NPX Package $VERSION based on $RELEASE_TAG
 
           - Release tag: $RELEASE_TAG
           - NPX tag: npx-$VERSION
