@@ -12,16 +12,16 @@ import {
     Stack,
     Typography,
 } from '@mui/material';
+import { Anthropic, Google } from '@lobehub/icons';
 import { useState } from 'react';
-import api, {getApiInstances} from "@/services/api.ts";
-import type {OAuthAuthorizeRequest} from "@/client";
+import api from "@/services/api.ts";
 
 interface OAuthProvider {
     id: string;
     name: string;
     displayName: string;
     description: string;
-    icon: string;
+    icon: React.ReactNode;
     color: string;
 }
 
@@ -31,7 +31,7 @@ const OAUTH_PROVIDERS: OAuthProvider[] = [
         name: 'Mock',
         displayName: 'Mock OAuth Provider',
         description: 'Test OAuth flow with mock provider',
-        icon: '🧪',
+        icon: <Box sx={{ fontSize: 32 }}>🧪</Box>,
         color: '#9E9E9E',
     },
     {
@@ -39,7 +39,7 @@ const OAUTH_PROVIDERS: OAuthProvider[] = [
         name: 'Anthropic',
         displayName: 'Anthropic Claude',
         description: 'Access Claude models via OAuth',
-        icon: '🤖',
+        icon: <Anthropic size={32} />,
         color: '#D97757',
     },
     {
@@ -47,7 +47,7 @@ const OAUTH_PROVIDERS: OAuthProvider[] = [
         name: 'Google',
         displayName: 'Google AI Studio',
         description: 'Access Gemini models via OAuth',
-        icon: '🔵',
+        icon: <Google size={32} />,
         color: '#4285F4',
     },
     // Add more providers as needed
@@ -68,6 +68,7 @@ const OAuthDialog = ({ open, onClose }: OAuthDialogProps) => {
             const { oauthApi } = await api.instances()
             const response = await oauthApi.apiV1OauthAuthorizePost(
                 {
+                    name: "",
                     redirect: "",
                     user_id: "",
                     provider: provider.id,

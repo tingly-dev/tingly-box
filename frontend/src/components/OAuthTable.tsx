@@ -129,17 +129,17 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize }: OA
                                         ) : (
                                             <Cancel color="error" fontSize="small" />
                                         )}
-                                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                            {provider.name}
-                                        </Typography>
-                                        <Chip
-                                            icon={<VpnKey fontSize="small" sx={{ fontSize: 14 }} />}
+                                         <Chip
+                                            // icon={<VpnKey fontSize="small" sx={{ fontSize: 14 }} />}
                                             label="OAuth"
                                             size="small"
                                             color="primary"
                                             variant="outlined"
                                             sx={{ height: 20, fontSize: '0.7rem', '& .MuiChip-label': { px: 0.5 } }}
                                         />
+                                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                            {provider.name}
+                                        </Typography>
                                     </Stack>
                                 </TableCell>
                                 <TableCell>
