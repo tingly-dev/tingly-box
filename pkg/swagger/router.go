@@ -313,6 +313,10 @@ func (rm *RouteManager) GetRouteGroups() map[string]*RouteGroup {
 	return rm.groups
 }
 
+func (rm *RouteManager) GetEngine() *gin.Engine {
+	return rm.engine
+}
+
 // GenerateSwaggerAnnotations generates swagger annotations for all routes
 func (rm *RouteManager) GenerateSwaggerAnnotations() string {
 	var annotations strings.Builder
