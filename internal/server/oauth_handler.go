@@ -1,6 +1,8 @@
 package server
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -130,6 +132,13 @@ type OAuthCallbackDataResponse struct {
 	TokenType    string `json:"token_type,omitempty" example:"Bearer"`
 	ExpiresAt    string `json:"expires_at,omitempty" example:"2024-01-01T12:00:00Z"`
 	Provider     string `json:"provider,omitempty" example:"anthropic"`
+}
+
+// generateRandomSuffix generates a random alphanumeric suffix of specified length
+func generateRandomSuffix(length int) string {
+	bytes := make([]byte, length/2+1)
+	rand.Read(bytes)
+	return hex.EncodeToString(bytes)[:length]
 }
 
 func (s *Server) useOAuthEndpoints(manager *swagger.RouteManager) {
@@ -674,16 +683,16 @@ func (s *Server) OAuthCallback(c *gin.Context) {
 	// Get custom name from token (stored in state during authorize)
 	customName := token.Name
 
-	// Generate unique provider name
+	// Generate unique provider name with random suffix
 	providerType := string(token.Provider)
 	var providerName string
 	if customName != "" {
 		// Use custom name from state
 		providerName = customName
 	} else {
-		// Auto-generate name with timestamp
-		timestamp := time.Now().Format("20060102-150405")
-		providerName = fmt.Sprintf("oauth-%s-%s", providerType, timestamp)
+		// Auto-generate name with 6-char random suffix
+		randomSuffix := generateRandomSuffix(6)
+		providerName = fmt.Sprintf("%s-%s", providerType, randomSuffix)
 	}
 
 	// Generate UUID for the provider
