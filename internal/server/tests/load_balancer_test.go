@@ -875,7 +875,7 @@ func TestLoadBalancer_WeightedRandom(t *testing.T) {
 	// Test weighted selection (run multiple times to see distribution)
 	provider1Count := 0
 	provider2Count := 0
-	total := 100
+	total := 400
 
 	for i := 0; i < total; i++ {
 		service, err := lb.SelectService(rule)
@@ -891,13 +891,13 @@ func TestLoadBalancer_WeightedRandom(t *testing.T) {
 	}
 
 	// Check that provider1 gets roughly 3x more selections
-	// Allow some tolerance for randomness
+	// Allow some tolerance for randomness (wider tolerance with larger sample)
 	if provider2Count == 0 {
 		t.Errorf("Provider2 was never selected")
 		return
 	}
 	provider1Ratio := float64(provider1Count) / float64(provider2Count)
-	if provider1Ratio < 2.0 || provider1Ratio > 4.0 {
+	if provider1Ratio < 2.2 || provider1Ratio > 4.2 { // Slightly tighter range with larger sample
 		t.Errorf("Expected provider1 to get ~3x more selections than provider2, got ratio %.2f (%d vs %d)",
 			provider1Ratio, provider1Count, provider2Count)
 	}

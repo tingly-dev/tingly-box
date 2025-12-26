@@ -39,6 +39,9 @@ type Server struct {
 	// client pool for caching
 	clientPool *ClientPool
 
+	// template manager for provider templates
+	templateManager *config.TemplateManager
+
 	// options
 	enableUI      bool
 	enableAdaptor bool
@@ -173,6 +176,19 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.authMW = authMW
 	server.loadBalancer = loadBalancer
 	server.loadBalancerAPI = loadBalancerAPI
+
+	// Initialize template manager with GitHub URL for template sync
+	const templateGitHubURL = "https://raw.githubusercontent.com/tingly-dev/tingly-box/main/internal/config/provider_templates.json"
+	templateManager := config.NewTemplateManager(templateGitHubURL)
+	if err := templateManager.Initialize(); err != nil {
+		log.Printf("Failed to fetch from GitHub, using embedded provider templates: %v", err)
+	} else {
+		log.Printf("Provider templates initialized (version: %s)", templateManager.GetVersion())
+	}
+	server.templateManager = templateManager
+
+	// Set template manager in config for model fetching fallback
+	server.config.SetTemplateManager(templateManager)
 
 	// Setup middleware
 	server.setupMiddleware()

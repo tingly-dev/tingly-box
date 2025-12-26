@@ -39,8 +39,9 @@ type Config struct {
 	ConfigFile string `yaml:"-" json:"-"` // Not serialized to YAML (exported to preserve field)
 	ConfigDir  string `yaml:"-" json:"-"`
 
-	modelManager *ModelListManager
-	statsStore   *StatsStore
+	modelManager    *ModelListManager
+	statsStore      *StatsStore
+	templateManager *TemplateManager
 
 	mu sync.RWMutex
 }
@@ -720,7 +721,7 @@ func (c *Config) SetDefaultMaxTokens(maxTokens int) error {
 	return c.save()
 }
 
-// FetchAndSaveProviderModels fetches models from a provider and saves them
+// FetchAndSaveProviderModels fetches models from a provider with fallback hierarchy
 func (c *Config) FetchAndSaveProviderModels(uid string) error {
 	c.mu.RLock()
 	var provider *Provider
@@ -736,18 +737,28 @@ func (c *Config) FetchAndSaveProviderModels(uid string) error {
 		return fmt.Errorf("provider with UUID %s not found", uid)
 	}
 
-	// Fetch models from provider API
-	models, err := c.getProviderModelsFromAPI(provider)
-	if err != nil {
-		return fmt.Errorf("%w", err)
+	// Try provider API first
+	models, err := getProviderModelsFromAPI(provider)
+	if err == nil {
+		// Save models to local storage
+		return c.modelManager.SaveModels(provider, provider.APIBase, models)
 	}
 
-	// Save models to local storage
-	return c.modelManager.SaveModels(provider, provider.APIBase, models)
+	// API failed, try template fallback
+	if c.templateManager != nil {
+		tmplModels, _, tmplErr := c.templateManager.GetModelsForProvider(provider)
+		if tmplErr == nil && len(tmplModels) > 0 {
+			// Use the fallback models
+			return c.modelManager.SaveModels(provider, provider.APIBase, tmplModels)
+		}
+	}
+
+	// All fallbacks failed, return original API error
+	return fmt.Errorf("failed to fetch models (API: %v, template fallback: not available)", err)
 }
 
 // getProviderModelsFromAPI fetches models from provider API via real HTTP requests
-func (c *Config) getProviderModelsFromAPI(provider *Provider) ([]string, error) {
+func getProviderModelsFromAPI(provider *Provider) ([]string, error) {
 	// Construct the models endpoint URL
 	// For Anthropic-style providers, ensure they have a version suffix
 	apiBase := strings.TrimSuffix(provider.APIBase, "/")
@@ -845,6 +856,20 @@ func (c *Config) getProviderModelsFromAPI(provider *Provider) ([]string, error) 
 
 func (c *Config) GetModelManager() *ModelListManager {
 	return c.modelManager
+}
+
+// SetTemplateManager sets the template manager for provider templates
+func (c *Config) SetTemplateManager(tm *TemplateManager) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.templateManager = tm
+}
+
+// GetTemplateManager returns the template manager
+func (c *Config) GetTemplateManager() *TemplateManager {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.templateManager
 }
 
 // isTacticValid checks if the tactic params are valid (not zero values)
