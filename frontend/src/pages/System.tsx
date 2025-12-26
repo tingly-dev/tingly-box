@@ -213,7 +213,7 @@ const System = () => {
                                     <strong>Server:</strong> {baseUrl}
                                 </Typography>
                                 <Typography variant="body2" color="text.secondary">
-                                    <strong>Providers:</strong> {serverStatus.providers_enabled}/{serverStatus.providers_total}
+                                    <strong>Keys:</strong> {serverStatus.providers_enabled}/{serverStatus.providers_total}
                                 </Typography>
                                 {serverStatus.uptime && (
                                     <Typography variant="body2" color="text.secondary">

@@ -134,7 +134,7 @@ const ProviderPage = () => {
         <PageLayout loading={loading}>
             {providers.length > 0 && (
                 <UnifiedCard
-                    title="Providers"
+                    title="Credential"
                     subtitle={providers.length > 0 ? `Managing ${providers.length} providers and api keys` : "No model API key configured yet"}
                     size="full"
                     rightAction={
