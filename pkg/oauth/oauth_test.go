@@ -318,7 +318,7 @@ func TestManager(t *testing.T) {
 		config.BaseURL = "http://localhost:8080"
 		manager := NewManager(config, registry)
 
-		authURL, state, err := manager.GetAuthURL(context.Background(), "user123", ProviderAnthropic, "")
+		authURL, state, err := manager.GetAuthURL(context.Background(), "user123", ProviderAnthropic, "", "")
 		if err != nil {
 			t.Fatalf("GetAuthURL failed: %v", err)
 		}
@@ -360,7 +360,7 @@ func TestManager(t *testing.T) {
 		config := DefaultConfig()
 		manager := NewManager(config, registry)
 
-		_, _, err := manager.GetAuthURL(context.Background(), "user123", ProviderAnthropic, "")
+		_, _, err := manager.GetAuthURL(context.Background(), "user123", ProviderAnthropic, "", "")
 		if err == nil {
 			t.Error("Expected error for unconfigured provider")
 		}
@@ -375,7 +375,7 @@ func TestManager(t *testing.T) {
 		config := DefaultConfig()
 		manager := NewManager(config, registry)
 
-		_, _, err := manager.GetAuthURL(context.Background(), "user123", ProviderType("invalid"), "")
+		_, _, err := manager.GetAuthURL(context.Background(), "user123", ProviderType("invalid"), "", "")
 		if err == nil {
 			t.Error("Expected error for invalid provider")
 		}
@@ -397,7 +397,7 @@ func TestManager(t *testing.T) {
 		config.StateExpiry = 10 * time.Millisecond
 		manager := NewManager(config, registry)
 
-		authURL, state, err := manager.GetAuthURL(context.Background(), "user123", ProviderAnthropic, "")
+		authURL, state, err := manager.GetAuthURL(context.Background(), "user123", ProviderAnthropic, "", "")
 		if err != nil {
 			t.Fatalf("GetAuthURL failed: %v", err)
 		}
@@ -462,7 +462,7 @@ func TestHandleCallback(t *testing.T) {
 		manager := NewManager(config, registry)
 
 		// First, get auth URL to create a state
-		_, state, err := manager.GetAuthURL(context.Background(), "user123", ProviderAnthropic, "")
+		_, state, err := manager.GetAuthURL(context.Background(), "user123", ProviderAnthropic, "", "")
 		if err != nil {
 			t.Fatalf("GetAuthURL failed: %v", err)
 		}
@@ -478,7 +478,7 @@ func TestHandleCallback(t *testing.T) {
 			URL: reqURL,
 		}
 
-		token, _, err := manager.HandleCallback(context.Background(), req)
+		token, err := manager.HandleCallback(context.Background(), req)
 		if err != nil {
 			t.Fatalf("HandleCallback failed: %v", err)
 		}
@@ -520,7 +520,7 @@ func TestHandleCallback(t *testing.T) {
 			URL: reqURL,
 		}
 
-		_, _, err := manager.HandleCallback(context.Background(), req)
+		_, err := manager.HandleCallback(context.Background(), req)
 		if err == nil {
 			t.Error("Expected error for callback with error parameter")
 		}
@@ -541,7 +541,7 @@ func TestHandleCallback(t *testing.T) {
 			URL: reqURL,
 		}
 
-		_, _, err := manager.HandleCallback(context.Background(), req)
+		_, err := manager.HandleCallback(context.Background(), req)
 		if err != ErrInvalidState {
 			t.Errorf("Expected ErrInvalidState, got %v", err)
 		}

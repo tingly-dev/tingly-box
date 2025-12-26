@@ -134,6 +134,12 @@ type Token struct {
 
 	// Provider is the provider that issued this token
 	Provider ProviderType
+
+	// RedirectTo is the optional URL to redirect to after successful OAuth
+	RedirectTo string
+
+	// Name is the optional custom name for the provider
+	Name string
 }
 
 // Valid returns true if the token is valid and not expired

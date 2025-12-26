@@ -30,6 +30,7 @@ type StateData struct {
 	Provider   ProviderType
 	ExpiresAt  time.Time
 	RedirectTo string // Optional redirect URL after successful auth
+	Name       string // Optional custom provider name
 }
 
 // NewManager creates a new OAuth manager
@@ -115,7 +116,7 @@ func (m *Manager) cleanupExpiredStates() {
 }
 
 // GetAuthURL generates the OAuth authorization URL for a provider
-func (m *Manager) GetAuthURL(ctx context.Context, userID string, providerType ProviderType, redirectTo string) (string, string, error) {
+func (m *Manager) GetAuthURL(ctx context.Context, userID string, providerType ProviderType, redirectTo string, name string) (string, string, error) {
 	config, ok := m.registry.Get(providerType)
 	if !ok {
 		return "", "", fmt.Errorf("%w: %s", ErrInvalidProvider, providerType)
@@ -137,6 +138,7 @@ func (m *Manager) GetAuthURL(ctx context.Context, userID string, providerType Pr
 		UserID:     userID,
 		Provider:   providerType,
 		RedirectTo: redirectTo,
+		Name:       name,
 	}); err != nil {
 		return "", "", err
 	}
@@ -177,46 +179,48 @@ func (m *Manager) buildAuthURL(config *ProviderConfig, state string) (string, er
 }
 
 // HandleCallback handles the OAuth callback request
-func (m *Manager) HandleCallback(ctx context.Context, r *http.Request) (*Token, string, error) {
+func (m *Manager) HandleCallback(ctx context.Context, r *http.Request) (*Token, error) {
 	// Parse callback parameters
 	code := r.URL.Query().Get("code")
 	state := r.URL.Query().Get("state")
 	errorParam := r.URL.Query().Get("error")
 
 	if errorParam != "" {
-		return nil, "", fmt.Errorf("oauth error: %s", errorParam)
+		return nil, fmt.Errorf("oauth error: %s", errorParam)
 	}
 
 	if code == "" {
-		return nil, "", ErrInvalidCode
+		return nil, ErrInvalidCode
 	}
 
 	// Validate state
 	stateData, err := m.getState(state)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	defer m.deleteState(state)
 
 	// Get provider config
 	config, ok := m.registry.Get(stateData.Provider)
 	if !ok {
-		return nil, "", fmt.Errorf("%w: %s", ErrInvalidProvider, stateData.Provider)
+		return nil, fmt.Errorf("%w: %s", ErrInvalidProvider, stateData.Provider)
 	}
 
 	// Exchange code for token
 	token, err := m.exchangeCodeForToken(ctx, config, code)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	token.Provider = stateData.Provider
+	token.RedirectTo = stateData.RedirectTo
+	token.Name = stateData.Name
 
 	// Save token
 	if err := m.config.TokenStorage.SaveToken(stateData.UserID, stateData.Provider, token); err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
-	return token, stateData.RedirectTo, nil
+	return token, nil
 }
 
 // exchangeCodeForToken exchanges the authorization code for an access token

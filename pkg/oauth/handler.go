@@ -49,7 +49,7 @@ func (h *Handler) ListProviders(c *gin.Context) {
 }
 
 // Authorize initiates the OAuth flow by redirecting to the provider's auth URL
-// GET /oauth/authorize?provider=anthropic&user_id=xxx&redirect_to=xxx
+// GET /oauth/authorize?provider=anthropic&user_id=xxx&redirect_to=xxx&name=xxx
 func (h *Handler) Authorize(c *gin.Context) {
 	providerType := ProviderType(c.Query("provider"))
 	if providerType == "" {
@@ -65,9 +65,10 @@ func (h *Handler) Authorize(c *gin.Context) {
 	}
 
 	redirectTo := c.Query("redirect_to")
+	name := c.Query("name") // Optional custom provider name
 
 	// Get auth URL
-	authURL, state, err := h.manager.GetAuthURL(c.Request.Context(), userID, providerType, redirectTo)
+	authURL, state, err := h.manager.GetAuthURL(c.Request.Context(), userID, providerType, redirectTo, name)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
@@ -91,7 +92,7 @@ func (h *Handler) Authorize(c *gin.Context) {
 // Callback handles the OAuth callback from the provider
 // GET /oauth/callback?code=xxx&state=xxx
 func (h *Handler) Callback(c *gin.Context) {
-	token, redirectTo, err := h.manager.HandleCallback(c.Request.Context(), c.Request)
+	token, err := h.manager.HandleCallback(c.Request.Context(), c.Request)
 	if err != nil {
 		c.HTML(http.StatusBadRequest, "oauth_error.html", gin.H{
 			"error": err.Error(),
@@ -100,9 +101,9 @@ func (h *Handler) Callback(c *gin.Context) {
 	}
 
 	// If there's a redirect URL, redirect there with the token info
-	if redirectTo != "" {
+	if token.RedirectTo != "" {
 		// Parse redirect URL and add token info
-		redirectURL := redirectTo
+		redirectURL := token.RedirectTo
 		if strings.Contains(redirectURL, "?") {
 			redirectURL += "&token=" + token.AccessToken
 		} else {
