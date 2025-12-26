@@ -175,8 +175,8 @@ func TestTokenExpiredIn(t *testing.T) {
 
 // TestProviderRegistry tests the provider registry
 func TestProviderRegistry(t *testing.T) {
-	t.Run("DefaultProviders", func(t *testing.T) {
-		registry := DefaultProviders()
+	t.Run("DefaultRegistry", func(t *testing.T) {
+		registry := DefaultRegistry()
 
 		// Check that default providers are registered
 		providers := []ProviderType{

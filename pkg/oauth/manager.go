@@ -38,7 +38,7 @@ func NewManager(config *Config, registry *Registry) *Manager {
 		config = DefaultConfig()
 	}
 	if registry == nil {
-		registry = DefaultProviders()
+		registry = DefaultRegistry()
 	}
 
 	m := &Manager{

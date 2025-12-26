@@ -38,7 +38,7 @@ func main() {
 	}
 
 	// Get default provider config to check if it has built-in credentials
-	registry := oauth2.DefaultProviders()
+	registry := oauth2.DefaultRegistry()
 	defaultConfig, hasDefault := registry.Get(providerType)
 
 	// Check for environment variables
@@ -89,7 +89,7 @@ func main() {
 }
 
 func printDemoInfo(providerType oauth2.ProviderType, port int) {
-	registry := oauth2.DefaultProviders()
+	registry := oauth2.DefaultRegistry()
 	providerConfig, ok := registry.Get(providerType)
 	if !ok {
 		log.Fatalf("Provider %s not found", providerType)

@@ -47,9 +47,9 @@ func (r *Registry) IsRegistered(providerType ProviderType) bool {
 	return ok
 }
 
-// DefaultProviders returns a registry with default provider configurations
+// DefaultRegistry returns a registry with default provider configurations
 // Note: Client ID and Secret must be set from environment variables or config
-func DefaultProviders() *Registry {
+func DefaultRegistry() *Registry {
 	registry := NewRegistry()
 
 	// Anthropic (Claude) OAuth
@@ -140,7 +140,7 @@ func DefaultProviders() *Registry {
 // - OAUTH_GOOGLE_CLIENT_ID, OAUTH_GOOGLE_CLIENT_SECRET
 // - OAUTH_GITHUB_CLIENT_ID, OAUTH_GITHUB_CLIENT_SECRET
 func ProviderFromEnv(providerType ProviderType) (*ProviderConfig, error) {
-	registry := DefaultProviders()
+	registry := DefaultRegistry()
 	config, ok := registry.Get(providerType)
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrInvalidProvider, providerType)

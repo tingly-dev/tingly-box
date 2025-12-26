@@ -53,7 +53,7 @@ func RunManualTest(config *ManualTestConfig) error {
 	registry := oauth2.NewRegistry()
 
 	// Get default provider config
-	defaultConfig, ok := oauth2.DefaultProviders().Get(config.ProviderType)
+	defaultConfig, ok := oauth2.DefaultRegistry().Get(config.ProviderType)
 	if !ok {
 		return fmt.Errorf("provider %s not found in defaults", config.ProviderType)
 	}
