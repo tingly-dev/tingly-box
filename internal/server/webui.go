@@ -51,6 +51,8 @@ func (s *Server) UseUIEndpoints() {
 	// API routes (for web UI functionality)
 	s.useWebAPIEndpoints(s.engine)
 
+	s.useOAuthEndpoints(s.engine)
+
 	// Static files and templates - try embedded assets first, fallback to filesystem
 	s.useWebStaticEndpoints(s.engine)
 }

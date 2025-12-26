@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"time"
+	oauth2 "tingly-box/pkg/oauth"
 
 	"tingly-box/internal/auth"
 	"tingly-box/internal/config"
@@ -38,6 +39,10 @@ type Server struct {
 
 	// client pool for caching
 	clientPool *ClientPool
+
+	// OAuth manager
+	oauthManager *oauth2.Manager
+	oauthHandler *oauth2.Handler
 
 	// template manager for provider templates
 	templateManager *config.TemplateManager
@@ -180,11 +185,25 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize load balancer API
 	loadBalancerAPI := NewLoadBalancerAPI(loadBalancer, cfg)
 
+	// Initialize OAuth manager and handler
+	registry := oauth2.DefaultRegistry()
+	oauthConfig := &oauth2.Config{
+		BaseURL:           fmt.Sprintf("http://localhost:%d", cfg.GetServerPort()),
+		ProviderConfigs:   make(map[oauth2.ProviderType]*oauth2.ProviderConfig),
+		TokenStorage:      oauth2.NewMemoryTokenStorage(),
+		StateExpiry:       10 * time.Minute,
+		TokenExpiryBuffer: 5 * time.Minute,
+	}
+	oauthManager := oauth2.NewManager(oauthConfig, registry)
+	oauthHandler := oauth2.NewHandler(oauthManager)
+
 	// Update server with dependencies
 	server.statsMW = statsMW
 	server.authMW = authMW
 	server.loadBalancer = loadBalancer
 	server.loadBalancerAPI = loadBalancerAPI
+	server.oauthManager = oauthManager
+	server.oauthHandler = oauthHandler
 
 	// Initialize template manager with GitHub URL for template sync
 	const templateGitHubURL = "https://raw.githubusercontent.com/tingly-dev/tingly-box/main/internal/config/provider_templates.json"
@@ -323,6 +342,14 @@ func (s *Server) setupRoutes() {
 		s.loadBalancerAPI.RegisterRoutes(api.Group("/v1"))
 	}
 
+	// OAuth routes (public endpoints for OAuth flow)
+	//if s.oauthHandler != nil {
+	//	s.oauthHandler.RegisterRoutes(s.engine)
+	//
+	//	// OAuth configuration routes (protected)
+	//	oauthConfig := oauth2.NewConfigHandler(s.oauthManager, s.oauthManager.GetRegistry())
+	//	oauthConfig.RegisterConfigRoutes(s.engine)
+	//}
 }
 
 // Start starts the HTTP server
