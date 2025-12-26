@@ -19,6 +19,7 @@ export interface ServiceProviderOption {
     title: string;
     value: string;
     api_style: string;
+    baseUrl: string;
 }
 
 // Get dropdown options for service provider selection
@@ -34,14 +35,16 @@ export function getServiceProviderOptions(): ServiceProviderOption[] {
             options.push({
                 title: `${provider.name}`,
                 value: `${provider.id}:openai`,
-                api_style: 'openai'
+                api_style: 'openai',
+                baseUrl: (provider as ServiceProvider).base_url_openai!
             });
         }
         if (hasAnthropic) {
             options.push({
                 title: `${provider.name}`,
                 value: `${provider.id}:anthropic`,
-                api_style: 'anthropic'
+                api_style: 'anthropic',
+                baseUrl: (provider as ServiceProvider).base_url_anthropic!
             });
         }
     });

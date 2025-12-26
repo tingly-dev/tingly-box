@@ -18,8 +18,7 @@ import {
     Typography,
 } from '@mui/material';
 import React, { useState } from 'react';
-import { getProviderBaseUrl } from '../data/providerUtils';
-import { getProvidersByStyle, getServiceProvider } from '../data/serviceProviders';
+import { getServiceProvider, getProvidersByStyle } from '../data/serviceProviders';
 import api from '../services/api';
 import { OpenAI } from '@lobehub/icons';
 import { Anthropic } from '@lobehub/icons';
@@ -68,27 +67,39 @@ const PresetProviderFormDialog = ({
     const openaiProviders = getProvidersByStyle('openai');
     const anthropicProviders = getProvidersByStyle('anthropic');
 
-    // Handle provider selection
-    const handleProviderSelect = (providerValue: string, apiStyle: 'openai' | 'anthropic') => {
-        if (!providerValue) return;
+    // Get current provider options based on apiStyle
+    const getCurrentProviders = () => {
+        if (data.apiStyle === 'openai') return openaiProviders;
+        if (data.apiStyle === 'anthropic') return anthropicProviders;
+        return [];
+    };
 
-        const [providerId] = providerValue.split(':');
-        const provider = getServiceProvider(providerId);
-
-        if (provider) {
-            onChange('name', provider.name);
-            onChange('apiBase', getProviderBaseUrl(provider, apiStyle));
-        }
-        // Clear verification result when changing provider
+    // Handle provider/baseurl selection
+    const handleProviderOrBaseUrlSelect = (newValue: string | { title: string; value: string; baseUrl: string; api_style: string } | null) => {
         setVerificationResult(null);
+
+        if (typeof newValue === 'string') {
+            // Custom input - only update apiBase
+            onChange('apiBase', newValue);
+        } else if (newValue && newValue.baseUrl) {
+            // Preset selected - update apiBase
+            onChange('apiBase', newValue.baseUrl);
+            // If name is empty and token is empty, set default name
+            if (!data.name && !data.token) {
+                onChange('name', `Key For ${newValue.title}`);
+            }
+        } else if (newValue === null) {
+            // Clear selection - only clear apiBase, preserve name
+            onChange('apiBase', '');
+        }
     };
 
     // Handle verification
     const handleVerify = async () => {
-        if (!data.name || !data.apiBase || !data.token) {
+        if (!data.name || !data.apiBase || !data.token || !data.apiStyle) {
             setVerificationResult({
                 success: false,
-                message: 'Please fill in all required fields (Name, API Base URL, API Key)',
+                message: 'Please fill in all required fields (API Style, Name, API Base URL, API Key)',
             });
             return;
         }
@@ -184,142 +195,135 @@ const PresetProviderFormDialog = ({
                             </MenuItem>
                         </TextField>
 
-                        {/* Provider Selection based on API Style */}
-                        {data.apiStyle === 'openai' && (
-                            <Autocomplete
-                                size="small"
-                                options={openaiProviders}
-                                getOptionLabel={(option) => option.title}
-                                onChange={(_event, newValue) => {
-                                    if (newValue) {
-                                        handleProviderSelect(newValue.value, 'openai');
-                                    }
-                                }}
-                                renderInput={(params) => (
-                                    <TextField
-                                        {...params}
-                                        label="Choose a preset or config manually"
-                                        placeholder="Select to auto-fill..."
-                                    />
-                                )}
-                            />
-                        )}
-                        {data.apiStyle === 'anthropic' && (
-                            <Autocomplete
-                                size="small"
-                                options={anthropicProviders}
-                                getOptionLabel={(option) => option.title}
-                                onChange={(_event, newValue) => {
-                                    if (newValue) {
-                                        handleProviderSelect(newValue.value, 'anthropic');
-                                    }
-                                }}
-                                renderInput={(params) => (
-                                    <TextField
-                                        {...params}
-                                        label="Choose a preset or config manually"
-                                        placeholder="Select to auto-fill..."
-                                    />
-                                )}
-                            />
-                        )}
+                        {/* Show other fields only after API Style is selected */}
+                        {data.apiStyle && (
+                            <>
+                                {/* API Key Name */}
+                                <TextField
+                                    size="small"
+                                    fullWidth
+                                    label="API Key Name"
+                                    value={data.name}
+                                    onChange={(e) => {
+                                        onChange('name', e.target.value);
+                                        setVerificationResult(null);
+                                    }}
+                                    required
+                                    placeholder="e.g., OpenAI"
+                                />
 
-                        {/* Configuration Fields */}
-                        <Stack spacing={2}>
-                            <TextField
-                                size="small"
-                                fullWidth
-                                label="API Key Name"
-                                value={data.name}
-                                onChange={(e) => {
-                                    onChange('name', e.target.value);
-                                    setVerificationResult(null);
-                                }}
-                                required
-                                placeholder="e.g., OpenAI"
-                            />
-                            <TextField
-                                size="small"
-                                fullWidth
-                                label="API Base URL"
-                                value={data.apiBase}
-                                onChange={(e) => {
-                                    onChange('apiBase', e.target.value);
-                                    setVerificationResult(null);
-                                }}
-                                required
-                                placeholder={
-                                    data.apiStyle === 'openai'
-                                        ? "https://api.openai.com/v1"
-                                        : "https://api.anthropic.com"
-                                }
-                            />
-                        </Stack>
+                                {/* Merged Provider Preset and Base URL Input */}
+                                <Autocomplete
+                                    freeSolo
+                                    autoSelect
+                                    size="small"
+                                    options={getCurrentProviders()}
+                                    getOptionLabel={(option) => {
+                                        if (typeof option === 'string') return option;
+                                        return `${option.title} - ${option.baseUrl}`;
+                                    }}
+                                    value={data.apiBase}
+                                    onChange={(_event, newValue) => {
+                                        handleProviderOrBaseUrlSelect(newValue);
+                                    }}
+                                    onInputChange={(_event, newInputValue) => {
+                                        // Allow custom input
+                                        onChange('apiBase', newInputValue);
+                                        setVerificationResult(null);
+                                    }}
+                                    renderOption={(props, option) => (
+                                        <Box component="li" {...props} sx={{ fontSize: '0.875rem' }}>
+                                            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                                                <Typography variant="body2" fontWeight="medium">
+                                                    {option.title}
+                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary">
+                                                    {option.baseUrl}
+                                                </Typography>
+                                            </Box>
+                                        </Box>
+                                    )}
+                                    renderInput={(params) => (
+                                        <TextField
+                                            {...params}
+                                            label="Provider or Custom Base URL"
+                                            placeholder="Select a provider or enter custom URL"
+                                        />
+                                    )}
+                                    isOptionEqualToValue={(option, value) => {
+                                        if (typeof value === 'string') {
+                                            return option.baseUrl === value;
+                                        }
+                                        return option.value === value.value;
+                                    }}
+                                />
 
-                        {/* API Key Field */}
-                        <TextField
-                            size="small"
-                            fullWidth
-                            label="API Key"
-                            type="password"
-                            value={data.token}
-                            onChange={(e) => {
-                                onChange('token', e.target.value);
-                                // Clear verification result when token changes
-                                setVerificationResult(null);
-                            }}
-                            required={mode === 'add'}
-                            placeholder={mode === 'add' ? 'Your API token' : 'Leave empty to keep current token'}
-                            helperText={mode === 'edit' && 'Leave empty to keep current token'}
-                        />
+                                {/* API Key Field */}
+                                <TextField
+                                    size="small"
+                                    fullWidth
+                                    label="API Key"
+                                    type="password"
+                                    value={data.token}
+                                    onChange={(e) => {
+                                        onChange('token', e.target.value);
+                                        // Clear verification result when token changes
+                                        setVerificationResult(null);
+                                    }}
+                                    required={mode === 'add'}
+                                    placeholder={mode === 'add' ? 'Your API token' : 'Leave empty to keep current token'}
+                                    helperText={mode === 'edit' && 'Leave empty to keep current token'}
+                                />
 
-                        {/* Verification Result */}
-                        {verificationResult && (
-                            <Alert
-                                severity={verificationResult.success ? 'success' : 'error'}
-                                sx={{ mt: 1 }}
-                                action={
-                                    <IconButton
-                                        aria-label="close"
-                                        color="inherit"
-                                        size="small"
-                                        onClick={() => setVerificationResult(null)}
+                                {/* Verification Result */}
+                                {verificationResult && (
+                                    <Alert
+                                        severity={verificationResult.success ? 'success' : 'error'}
+                                        sx={{ mt: 1 }}
+                                        action={
+                                            <IconButton
+                                                aria-label="close"
+                                                color="inherit"
+                                                size="small"
+                                                onClick={() => setVerificationResult(null)}
+                                            >
+                                                ×
+                                            </IconButton>
+                                        }
                                     >
-                                        ×
-                                    </IconButton>
-                                }
-                            >
-                                <Box>
-                                    <Typography variant="body2" fontWeight="bold">
-                                        {verificationResult.message}
-                                    </Typography>
-                                    {verificationResult.details && (
-                                        <Typography variant="caption" display="block">
-                                            {verificationResult.details}
-                                        </Typography>
-                                    )}
-                                    {verificationResult.responseTime && (
-                                        <Typography variant="caption" display="block">
-                                            Response time: {verificationResult.responseTime}ms
-                                            {verificationResult.modelsCount && ` • ${verificationResult.modelsCount} models available`}
-                                        </Typography>
-                                    )}
-                                </Box>
-                            </Alert>
-                        )}
+                                        <Box>
+                                            <Typography variant="body2" fontWeight="bold">
+                                                {verificationResult.message}
+                                            </Typography>
+                                            {verificationResult.details && (
+                                                <Typography variant="caption" display="block">
+                                                    {verificationResult.details}
+                                                </Typography>
+                                            )}
+                                            {verificationResult.responseTime && (
+                                                <Typography variant="caption" display="block">
+                                                    Response time: {verificationResult.responseTime}ms
+                                                    {verificationResult.modelsCount && ` • ${verificationResult.modelsCount} models available`}
+                                                </Typography>
+                                            )}
+                                        </Box>
+                                    </Alert>
+                                )}
 
-                        {/* Enabled Toggle (Edit mode only) */}
-                        {mode === 'edit' && (
-                            <FormControlLabel
-                                control={
-                                    <Switch
-                                        size="small"
-                                        checked={data.enabled || false}
-                                        onChange={(e) => onChange('enabled', e.target.checked)}
+                                {/* Enabled Toggle (Edit mode only) */}
+                                {mode === 'edit' && (
+                                    <FormControlLabel
+                                        control={
+                                            <Switch
+                                                size="small"
+                                                checked={data.enabled || false}
+                                                onChange={(e) => onChange('enabled', e.target.checked)}
+                                            />
+                                        }
+                                        label="Enabled"
                                     />
-                                }
-                                label="Enabled"
-                            />
+                                )}
+                            </>
                         )}
                     </Stack>
                 </DialogContent>

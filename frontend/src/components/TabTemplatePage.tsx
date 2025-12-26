@@ -442,7 +442,7 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
                 }}
             >
                 <DialogTitle sx={{ textAlign: 'center' }}>
-                    {modelSelectMode === 'add' ? 'Add Provider' : 'Edit Provider'}
+                    {modelSelectMode === 'add' ? 'Add API Key' : 'Choose Model'}
                 </DialogTitle>
                 <DialogContent>
                     <ModelSelectTab

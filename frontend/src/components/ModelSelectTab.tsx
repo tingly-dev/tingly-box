@@ -214,7 +214,7 @@ export default function ModelSelectTab({
             <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
 
                 <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-                    Providers
+                    Credentials ({providers.length})
                 </Typography>
                 <Tabs
                     value={currentTab}
