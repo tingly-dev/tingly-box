@@ -1146,6 +1146,11 @@
     "OAuthAuthorizeRequest": {
       "type": "object",
       "properties": {
+        "name": {
+          "type": "string",
+          "description": "Custom name for the provider (optional, auto-generated if empty)",
+          "example": "my-claude-account"
+        },
         "provider": {
           "type": "string",
           "description": "OAuth provider type",
@@ -1171,7 +1176,8 @@
         "provider",
         "user_id",
         "redirect",
-        "response_type"
+        "response_type",
+        "name"
       ]
     },
     "OAuthAuthorizeResponse": {
@@ -2262,32 +2268,8 @@
   },
   "tags": [
     {
-      "name": "token",
-      "description": "Operations related to token"
-    },
-    {
-      "name": "providers",
-      "description": "Operations related to providers"
-    },
-    {
-      "name": "rules",
-      "description": "Operations related to rules"
-    },
-    {
-      "name": "oauth",
-      "description": "Operations related to oauth"
-    },
-    {
       "name": "info",
       "description": "Operations related to info"
-    },
-    {
-      "name": "server",
-      "description": "Operations related to server"
-    },
-    {
-      "name": "history",
-      "description": "Operations related to history"
     },
     {
       "name": "models",
@@ -2296,6 +2278,30 @@
     {
       "name": "testing",
       "description": "Operations related to testing"
+    },
+    {
+      "name": "token",
+      "description": "Operations related to token"
+    },
+    {
+      "name": "providers",
+      "description": "Operations related to providers"
+    },
+    {
+      "name": "server",
+      "description": "Operations related to server"
+    },
+    {
+      "name": "rules",
+      "description": "Operations related to rules"
+    },
+    {
+      "name": "history",
+      "description": "Operations related to history"
+    },
+    {
+      "name": "oauth",
+      "description": "Operations related to oauth"
     }
   ]
 }
