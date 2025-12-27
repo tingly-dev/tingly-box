@@ -377,7 +377,7 @@ func ConvertAnthropicToolChoiceToOpenAI(tc *anthropic.ToolChoiceUnionParam) open
 	}
 }
 
-// Helper functions to convert between formats
+// ConvertAnthropicToOpenAIRequest converts Anthropic request to OpenAI format
 func ConvertAnthropicToOpenAIRequest(anthropicReq *anthropic.MessageNewParams) *openai.ChatCompletionNewParams {
 	openaiReq := &openai.ChatCompletionNewParams{
 		Model: openai.ChatModel(anthropicReq.Model),
@@ -389,10 +389,9 @@ func ConvertAnthropicToOpenAIRequest(anthropicReq *anthropic.MessageNewParams) *
 	// Convert messages
 	for _, msg := range anthropicReq.Messages {
 		if string(msg.Role) == "user" {
-			// Convert content blocks to string for OpenAI
-			contentStr := ConvertContentBlocksToString(msg.Content)
-			openaiMsg := openai.UserMessage(contentStr)
-			openaiReq.Messages = append(openaiReq.Messages, openaiMsg)
+			// User messages may contain tool_result blocks - need special handling
+			messages := convertAnthropicUserMessageToOpenAI(msg)
+			openaiReq.Messages = append(openaiReq.Messages, messages...)
 		} else if string(msg.Role) == "assistant" {
 			// Convert assistant message with potential tool_use blocks
 			openaiMsg := convertAnthropicAssistantMessageToOpenAI(msg)
@@ -467,6 +466,70 @@ func convertAnthropicAssistantMessageToOpenAI(msg anthropic.MessageParam) openai
 
 	// Simple text-only assistant message
 	return openai.AssistantMessage(textContent)
+}
+
+// convertAnthropicUserMessageToOpenAI converts Anthropic user message to OpenAI format
+// This handles text content and tool_result blocks
+// tool_result blocks in Anthropic become separate role="tool" messages in OpenAI
+// Returns a slice of messages because tool results become separate messages
+func convertAnthropicUserMessageToOpenAI(msg anthropic.MessageParam) []openai.ChatCompletionMessageParamUnion {
+	var result []openai.ChatCompletionMessageParamUnion
+	var textContent string
+	var hasToolResult bool
+
+	// First, check if there are any tool_result blocks
+	for _, block := range msg.Content {
+		if block.OfToolResult != nil {
+			hasToolResult = true
+			break
+		}
+	}
+
+	// Process content blocks
+	if hasToolResult {
+		// When there are tool_result blocks, we need to create separate messages
+		for _, block := range msg.Content {
+			if block.OfText != nil {
+				textContent += block.OfText.Text
+			} else if block.OfToolResult != nil {
+				// Convert tool_result to OpenAI role="tool" message
+				toolMsg := map[string]interface{}{
+					"role":         "tool",
+					"tool_call_id": block.OfToolResult.ToolUseID,
+					"content":      convertToolResultContent(block.OfToolResult.Content),
+				}
+				msgBytes, _ := json.Marshal(toolMsg)
+				var toolResultMsg openai.ChatCompletionMessageParamUnion
+				_ = json.Unmarshal(msgBytes, &toolResultMsg)
+				result = append(result, toolResultMsg)
+			}
+		}
+		// If there was text content alongside tool results, add it as a user message
+		if textContent != "" {
+			result = append(result, openai.UserMessage(textContent))
+		}
+	} else {
+		// Simple text-only user message
+		contentStr := ConvertContentBlocksToString(msg.Content)
+		if contentStr != "" {
+			result = append(result, openai.UserMessage(contentStr))
+		}
+	}
+
+	return result
+}
+
+// convertToolResultContent extracts the content from a tool result block
+// The content is a list of content blocks (typically just one text block)
+func convertToolResultContent(content []anthropic.ToolResultBlockParamContentUnion) string {
+	var result strings.Builder
+	for _, c := range content {
+		// Handle text content
+		if c.OfText != nil {
+			result.WriteString(c.OfText.Text)
+		}
+	}
+	return result.String()
 }
 
 // ConvertContentBlocksToString converts Anthropic content blocks to string
