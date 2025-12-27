@@ -11,6 +11,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/gin-gonic/gin"
+	"github.com/openai/openai-go/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -42,8 +43,9 @@ func TestHandleAnthropicToOpenAIStreamResponse(t *testing.T) {
 		Model:     anthropic.Model(model),
 		MaxTokens: int64(100),
 		Messages: []anthropic.MessageParam{
-			anthropic.NewUserMessage(anthropic.NewTextBlock("Say 'Hello, World!' and nothing else.")),
+			anthropic.NewUserMessage(anthropic.NewTextBlock("What's the weather like in London?")),
 		},
+		Tools: ConvertOpenAIToolsToAnthropic([]openai.ChatCompletionToolUnionParam{newExampleTool()}),
 	})
 
 	// Create a gin context for the response
