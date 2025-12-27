@@ -8,6 +8,8 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/packages/param"
+	"github.com/openai/openai-go/v3/shared"
 )
 
 // ConvertAnthropicResponseToOpenAI converts an Anthropic response to OpenAI format
@@ -310,14 +312,79 @@ func ConvertOpenAIToolChoice(tc *openai.ChatCompletionToolChoiceOptionUnionParam
 	}
 }
 
+// ConvertAnthropicToolsToOpenAI converts Anthropic tools to OpenAI format
+func ConvertAnthropicToolsToOpenAI(tools []anthropic.ToolUnionParam) []openai.ChatCompletionToolUnionParam {
+	if len(tools) == 0 {
+		return nil
+	}
+
+	out := make([]openai.ChatCompletionToolUnionParam, 0, len(tools))
+
+	for _, t := range tools {
+		tool := t.OfTool
+		if tool == nil {
+			continue
+		}
+
+		// Convert Anthropic input schema to OpenAI function parameters (map[string]interface{})
+		var parameters map[string]interface{}
+		if tool.InputSchema.Properties != nil {
+			if schemaBytes, err := json.Marshal(tool.InputSchema); err == nil {
+				_ = json.Unmarshal(schemaBytes, &parameters)
+			}
+		}
+
+		// Create function with parameters
+		fn := shared.FunctionDefinitionParam{
+			Name:        tool.Name,
+			Description: param.Opt[string]{Value: tool.Description.Value},
+			Parameters:  parameters,
+		}
+
+		out = append(out, openai.ChatCompletionFunctionTool(fn))
+	}
+
+	return out
+}
+
+// ConvertAnthropicToolChoiceToOpenAI converts Anthropic tool_choice to OpenAI format
+func ConvertAnthropicToolChoiceToOpenAI(tc *anthropic.ToolChoiceUnionParam) openai.ChatCompletionToolChoiceOptionUnionParam {
+	if tc.OfAuto != nil {
+		return openai.ChatCompletionToolChoiceOptionUnionParam{
+			OfAuto: openai.Opt("auto"),
+		}
+	}
+
+	if tc.OfTool != nil {
+		return openai.ToolChoiceOptionFunctionToolChoice(
+			openai.ChatCompletionNamedToolChoiceFunctionParam{
+				Name: tc.OfTool.Name,
+			},
+		)
+	}
+
+	// OfAny (Anthropic's "required") - map to auto as OpenAI doesn't have direct equivalent
+	// In the future, we could use OfAllowedTools with all tools listed to achieve similar behavior
+	if tc.OfAny != nil {
+		return openai.ChatCompletionToolChoiceOptionUnionParam{
+			OfAuto: openai.Opt("auto"),
+		}
+	}
+
+	// Default to auto
+	return openai.ChatCompletionToolChoiceOptionUnionParam{
+		OfAuto: openai.Opt("auto"),
+	}
+}
+
 // Helper functions to convert between formats
-func ConvertAnthropicToOpenAI(anthropicReq *anthropic.MessageNewParams) *openai.ChatCompletionNewParams {
+func ConvertAnthropicToOpenAIRequest(anthropicReq *anthropic.MessageNewParams) *openai.ChatCompletionNewParams {
 	openaiReq := &openai.ChatCompletionNewParams{
 		Model: openai.ChatModel(anthropicReq.Model),
 	}
 
 	// Set MaxTokens
-	openaiReq.MaxTokens = openai.Opt(int64(anthropicReq.MaxTokens))
+	openaiReq.MaxTokens = openai.Opt(anthropicReq.MaxTokens)
 
 	// Convert messages
 	for _, msg := range anthropicReq.Messages {
@@ -340,6 +407,17 @@ func ConvertAnthropicToOpenAI(anthropicReq *anthropic.MessageNewParams) *openai.
 		systemMsg := openai.SystemMessage(systemStr)
 		// Add system message at the beginning
 		openaiReq.Messages = append([]openai.ChatCompletionMessageParamUnion{systemMsg}, openaiReq.Messages...)
+	}
+
+	// Convert tools from Anthropic format to OpenAI format
+	if len(anthropicReq.Tools) > 0 {
+		openaiReq.Tools = ConvertAnthropicToolsToOpenAI(anthropicReq.Tools)
+	}
+
+	// Convert tool choice
+	if anthropicReq.ToolChoice.OfAuto != nil || anthropicReq.ToolChoice.OfTool != nil ||
+		anthropicReq.ToolChoice.OfAny != nil {
+		openaiReq.ToolChoice = ConvertAnthropicToolChoiceToOpenAI(&anthropicReq.ToolChoice)
 	}
 
 	return openaiReq
