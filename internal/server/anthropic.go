@@ -404,7 +404,7 @@ func (s *Server) AnthropicCountTokens(c *gin.Context) {
 	} else {
 		c.JSON(http.StatusNotFound, ErrorResponse{
 			Error: ErrorDetail{
-				Message: "Do not support: " + err.Error(),
+				Message: "Do not support for OpenAI style provider",
 				Type:    "not_support",
 			},
 		})
