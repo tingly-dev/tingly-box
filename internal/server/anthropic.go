@@ -200,7 +200,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 				return
 			}
 			// Convert OpenAI response back to Anthropic format
-			anthropicResp := adaptor.ConvertOpenAIToAnthropic(response, proxyModel)
+			anthropicResp := adaptor.ConvertOpenAIToAnthropicReponse(response, proxyModel)
 			c.JSON(http.StatusOK, anthropicResp)
 		}
 	}

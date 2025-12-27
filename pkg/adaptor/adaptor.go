@@ -444,7 +444,7 @@ func ConvertTextBlocksToString(blocks []anthropic.TextBlockParam) string {
 	return result.String()
 }
 
-func ConvertOpenAIToAnthropic(openaiResp *openai.ChatCompletion, model string) anthropic.Message {
+func ConvertOpenAIToAnthropicReponse(openaiResp *openai.ChatCompletion, model string) anthropic.Message {
 	// Create the response as JSON first, then unmarshal into Message
 	// This is a workaround for the complex union types
 	responseJSON := map[string]interface{}{
