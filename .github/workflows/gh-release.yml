@@ -19,7 +19,6 @@ env:
 jobs:
   build:
     runs-on: ${{ matrix.runs-on }}
-    if: ${{ !endsWith(github.ref, '-gui') }}
     strategy:
       matrix:
         include:
@@ -132,8 +131,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: |
-      (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch') &&
-      !endsWith(github.ref, '-gui')
+      (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
     permissions:
       contents: write
     steps:
