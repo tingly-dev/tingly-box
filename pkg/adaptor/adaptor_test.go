@@ -532,7 +532,7 @@ func TestConvertOpenAIToAnthropic(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ConvertOpenAIToAnthropicReponse(tt.openaiResp, tt.model)
+			result := ConvertOpenAIToAnthropicResponse(tt.openaiResp, tt.model)
 
 			// Basic structure checks
 			assert.NotEmpty(t, result.ID)
