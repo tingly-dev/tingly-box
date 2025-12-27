@@ -212,7 +212,7 @@ jobs:
         if: github.event.inputs.dry_run != 'true'
         uses: softprops/action-gh-release@v2
         with:
-          name: GUI-${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_TAG }}
           tag_name: ${{ env.RELEASE_TAG }}
           files: |
             *.zip
