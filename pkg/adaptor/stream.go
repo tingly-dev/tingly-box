@@ -232,9 +232,9 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 
 	// Track streaming state
 	var (
-		sentContentBlockStart bool
-		contentIndex          = 0
-		outputTokens          int64
+		sentTextContent bool
+		contentIndex    = 0
+		outputTokens    int64
 		// Track tool call state
 		pendingToolCalls = make(map[int]*pendingToolCall)
 	)
@@ -274,25 +274,10 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 		choice := chunk.Choices[0]
 		delta := choice.Delta
 
-		// Handle role delta (first chunk)
-		if delta.Role != "" && !sentContentBlockStart {
-			// Send content_block_start for text content
-			contentBlockStartEvent := map[string]interface{}{
-				"type":  "content_block_start",
-				"index": contentIndex,
-				"content_block": map[string]interface{}{
-					"type": "text",
-					"text": "",
-				},
-			}
-			sendAnthropicStreamEvent(c, "content_block_start", contentBlockStartEvent, flusher)
-			sentContentBlockStart = true
-		}
-
 		// Handle content delta
 		if delta.Content != "" {
-			if !sentContentBlockStart {
-				// Send content_block_start first if not sent
+			// Send content_block_start for text content (only once, when first content arrives)
+			if !sentTextContent && len(pendingToolCalls) == 0 {
 				contentBlockStartEvent := map[string]interface{}{
 					"type":  "content_block_start",
 					"index": contentIndex,
@@ -302,7 +287,6 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 					},
 				}
 				sendAnthropicStreamEvent(c, "content_block_start", contentBlockStartEvent, flusher)
-				sentContentBlockStart = true
 			}
 
 			// Send content_block_delta
@@ -315,6 +299,7 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 				},
 			}
 			sendAnthropicStreamEvent(c, "content_block_delta", deltaEvent, flusher)
+			sentTextContent = true
 		}
 
 		// Handle tool_calls delta
@@ -371,8 +356,8 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 
 		// Handle finish_reason (last chunk for this choice)
 		if choice.FinishReason != "" {
-			// Send content_block_stop for text content if started
-			if sentContentBlockStart {
+			// Send content_block_stop for text content if sent
+			if sentTextContent {
 				contentBlockStopEvent := map[string]interface{}{
 					"type":  "content_block_stop",
 					"index": 0,
