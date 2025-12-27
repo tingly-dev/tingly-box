@@ -846,6 +846,8 @@ func (s *Server) handleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *o
 		sentContentBlockStart bool
 		contentIndex          = 0
 		outputTokens          int64
+		// Track tool call state
+		pendingToolCalls = make(map[int]*pendingToolCall)
 	)
 
 	// Send message_start event first
@@ -926,6 +928,53 @@ func (s *Server) handleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *o
 			s.sendAnthropicStreamEvent(c, "content_block_delta", deltaEvent, flusher)
 		}
 
+		// Handle tool_calls delta
+		if len(delta.ToolCalls) > 0 {
+			for _, toolCall := range delta.ToolCalls {
+				index := int(toolCall.Index)
+
+				// Initialize pending tool call if not exists
+				if pendingToolCalls[index] == nil {
+					pendingToolCalls[index] = &pendingToolCall{
+						id:   toolCall.ID,
+						name: toolCall.Function.Name,
+					}
+
+					// Send content_block_start for tool_use
+					// Note: input is omitted here, it will be sent via input_json_delta
+					contentBlockStartEvent := map[string]interface{}{
+						"type":  "content_block_start",
+						"index": index,
+						"content_block": map[string]interface{}{
+							"type": "tool_use",
+							"id":   toolCall.ID,
+							"name": toolCall.Function.Name,
+						},
+					}
+					s.sendAnthropicStreamEvent(c, "content_block_start", contentBlockStartEvent, flusher)
+					if index >= contentIndex {
+						contentIndex = index + 1
+					}
+				}
+
+				// Accumulate arguments and send delta
+				if toolCall.Function.Arguments != "" {
+					pendingToolCalls[index].input += toolCall.Function.Arguments
+
+					// Send content_block_delta with input_json_delta
+					deltaEvent := map[string]interface{}{
+						"type":  "content_block_delta",
+						"index": index,
+						"delta": map[string]interface{}{
+							"type":         "input_json_delta",
+							"partial_json": toolCall.Function.Arguments,
+						},
+					}
+					s.sendAnthropicStreamEvent(c, "content_block_delta", deltaEvent, flusher)
+				}
+			}
+		}
+
 		// Track usage from chunk
 		if chunk.Usage.CompletionTokens > 0 {
 			outputTokens = chunk.Usage.CompletionTokens
@@ -933,11 +982,20 @@ func (s *Server) handleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *o
 
 		// Handle finish_reason (last chunk for this choice)
 		if choice.FinishReason != "" {
-			// Send content_block_stop
+			// Send content_block_stop for text content if started
 			if sentContentBlockStart {
 				contentBlockStopEvent := map[string]interface{}{
 					"type":  "content_block_stop",
-					"index": contentIndex,
+					"index": 0,
+				}
+				s.sendAnthropicStreamEvent(c, "content_block_stop", contentBlockStopEvent, flusher)
+			}
+
+			// Send content_block_stop for each tool call
+			for i := range pendingToolCalls {
+				contentBlockStopEvent := map[string]interface{}{
+					"type":  "content_block_stop",
+					"index": i,
 				}
 				s.sendAnthropicStreamEvent(c, "content_block_stop", contentBlockStopEvent, flusher)
 			}
@@ -1004,4 +1062,11 @@ func (s *Server) sendAnthropicStreamEvent(c *gin.Context, eventType string, even
 	// Anthropic SSE format: event: <type>\ndata: <json>\n\n
 	c.Writer.Write([]byte(fmt.Sprintf("event: %s\ndata: %s\n\n", eventType, string(eventJSON))))
 	flusher.Flush()
+}
+
+// pendingToolCall tracks a tool call being assembled from stream chunks
+type pendingToolCall struct {
+	id    string
+	name  string
+	input string
 }
