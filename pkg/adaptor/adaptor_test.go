@@ -419,7 +419,7 @@ func TestConvertAnthropicToOpenAI(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ConvertAnthropicToOpenAI(tt.anthropicReq)
+			result := ConvertAnthropicToOpenAIRequest(tt.anthropicReq)
 
 			assert.Equal(t, openai.ChatModel(tt.expectedModel), result.Model)
 			assert.Equal(t, tt.expectedMaxTokens, result.MaxTokens.Value)
@@ -532,7 +532,7 @@ func TestConvertOpenAIToAnthropic(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ConvertOpenAIToAnthropic(tt.openaiResp, tt.model)
+			result := ConvertOpenAIToAnthropicResponse(tt.openaiResp, tt.model)
 
 			// Basic structure checks
 			assert.NotEmpty(t, result.ID)
