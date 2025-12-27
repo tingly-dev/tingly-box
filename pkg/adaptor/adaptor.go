@@ -394,9 +394,8 @@ func ConvertAnthropicToOpenAIRequest(anthropicReq *anthropic.MessageNewParams) *
 			openaiMsg := openai.UserMessage(contentStr)
 			openaiReq.Messages = append(openaiReq.Messages, openaiMsg)
 		} else if string(msg.Role) == "assistant" {
-			// Convert content blocks to string for OpenAI
-			contentStr := ConvertContentBlocksToString(msg.Content)
-			openaiMsg := openai.AssistantMessage(contentStr)
+			// Convert assistant message with potential tool_use blocks
+			openaiMsg := convertAnthropicAssistantMessageToOpenAI(msg)
 			openaiReq.Messages = append(openaiReq.Messages, openaiMsg)
 		}
 	}
@@ -421,6 +420,53 @@ func ConvertAnthropicToOpenAIRequest(anthropicReq *anthropic.MessageNewParams) *
 	}
 
 	return openaiReq
+}
+
+// convertAnthropicAssistantMessageToOpenAI converts Anthropic assistant message to OpenAI format
+// This handles both text content and tool_use blocks
+func convertAnthropicAssistantMessageToOpenAI(msg anthropic.MessageParam) openai.ChatCompletionMessageParamUnion {
+	var textContent string
+	var toolCalls []map[string]interface{}
+
+	// Process content blocks
+	for _, block := range msg.Content {
+		if block.OfText != nil {
+			textContent += block.OfText.Text
+		} else if block.OfToolUse != nil {
+			// Convert tool_use block to OpenAI tool_call format
+			toolCall := map[string]interface{}{
+				"id":   block.OfToolUse.ID,
+				"type": "function",
+				"function": map[string]interface{}{
+					"name": block.OfToolUse.Name,
+				},
+			}
+			// Marshal input to JSON string for OpenAI
+			if argsBytes, err := json.Marshal(block.OfToolUse.Input); err == nil {
+				toolCall["function"].(map[string]interface{})["arguments"] = string(argsBytes)
+			}
+			toolCalls = append(toolCalls, toolCall)
+		}
+	}
+
+	// Build the message based on what we have
+	if len(toolCalls) > 0 {
+		// Use JSON marshaling to create a message with tool_calls
+		msgMap := map[string]interface{}{
+			"role":    "assistant",
+			"content": textContent,
+		}
+		if len(toolCalls) > 0 {
+			msgMap["tool_calls"] = toolCalls
+		}
+		msgBytes, _ := json.Marshal(msgMap)
+		var result openai.ChatCompletionMessageParamUnion
+		_ = json.Unmarshal(msgBytes, &result)
+		return result
+	}
+
+	// Simple text-only assistant message
+	return openai.AssistantMessage(textContent)
 }
 
 // ConvertContentBlocksToString converts Anthropic content blocks to string
