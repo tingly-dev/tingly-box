@@ -188,7 +188,7 @@ func (s *Server) ChatCompletions(c *gin.Context) {
 
 		// 🔥 REQUIRED: forward tool_choice
 		if req.ToolChoice.OfAuto.Value != "" || req.ToolChoice.OfAllowedTools != nil || req.ToolChoice.OfFunctionToolChoice != nil || req.ToolChoice.OfCustomToolChoice != nil {
-			anthropicReq.ToolChoice = adaptor.ConvertOpenAIToolChoice(&req.ToolChoice)
+			anthropicReq.ToolChoice = adaptor.ConvertOpenAIToAnthropicToolChoice(&req.ToolChoice)
 		}
 
 		if isStreaming {
@@ -227,7 +227,7 @@ func (s *Server) ChatCompletions(c *gin.Context) {
 			return
 		}
 
-		openaiResp := adaptor.ConvertAnthropicResponseToOpenAI(anthropicResp, responseModel)
+		openaiResp := adaptor.ConvertAnthropicToOpenAIResponse(anthropicResp, responseModel)
 		c.JSON(http.StatusOK, openaiResp)
 		return
 	} else {

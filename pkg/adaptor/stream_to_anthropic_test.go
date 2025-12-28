@@ -45,7 +45,7 @@ func TestHandleAnthropicToOpenAIStreamResponse(t *testing.T) {
 		Messages: []anthropic.MessageParam{
 			anthropic.NewUserMessage(anthropic.NewTextBlock("What's the weather like in London?")),
 		},
-		Tools: ConvertOpenAIToolsToAnthropic([]openai.ChatCompletionToolUnionParam{newExampleTool()}),
+		Tools: ConvertOpenAIToAnthropicTools([]openai.ChatCompletionToolUnionParam{newExampleTool()}),
 	})
 
 	// Create a gin context for the response
