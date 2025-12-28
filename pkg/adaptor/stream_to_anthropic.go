@@ -53,11 +53,15 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 
 	// Track streaming state
 	var (
-		sentTextContent bool
-		contentIndex    = 0
-		outputTokens    int64
+		// Text block state
+		textBlockIndex = -1 // -1 means not assigned yet
+		outputTokens   int64
+		// Next available block index (auto-incremented as content blocks appear)
+		nextBlockIndex = 0
 		// Track tool call state
 		pendingToolCalls = make(map[int]*pendingToolCall)
+		// Map OpenAI tool index to Anthropic block index
+		toolIndexToBlockIndex = make(map[int]int)
 	)
 
 	// Send message_start event first
@@ -97,11 +101,15 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 
 		// Handle content delta
 		if delta.Content != "" {
-			// Send content_block_start for text content (only once, when first content arrives)
-			if !sentTextContent && len(pendingToolCalls) == 0 {
+			// Assign block index on first text content (lazy allocation)
+			if textBlockIndex == -1 {
+				textBlockIndex = nextBlockIndex
+				nextBlockIndex++
+
+				// Send content_block_start for text content
 				contentBlockStartEvent := map[string]interface{}{
 					"type":  "content_block_start",
-					"index": contentIndex,
+					"index": textBlockIndex,
 					"content_block": map[string]interface{}{
 						"type": "text",
 						"text": "",
@@ -113,33 +121,37 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 			// Send content_block_delta
 			deltaEvent := map[string]interface{}{
 				"type":  "content_block_delta",
-				"index": contentIndex,
+				"index": textBlockIndex,
 				"delta": map[string]interface{}{
 					"type": "text_delta",
 					"text": delta.Content,
 				},
 			}
 			sendAnthropicStreamEvent(c, "content_block_delta", deltaEvent, flusher)
-			sentTextContent = true
 		}
 
 		// Handle tool_calls delta
 		if len(delta.ToolCalls) > 0 {
 			for _, toolCall := range delta.ToolCalls {
-				index := int(toolCall.Index)
+				openaiIndex := int(toolCall.Index)
 
-				// Initialize pending tool call if not exists
-				if pendingToolCalls[index] == nil {
-					pendingToolCalls[index] = &pendingToolCall{
+				// Map OpenAI tool index to Anthropic block index
+				anthropicIndex, exists := toolIndexToBlockIndex[openaiIndex]
+				if !exists {
+					anthropicIndex = nextBlockIndex
+					toolIndexToBlockIndex[openaiIndex] = anthropicIndex
+					nextBlockIndex++
+
+					// Initialize pending tool call
+					pendingToolCalls[anthropicIndex] = &pendingToolCall{
 						id:   toolCall.ID,
 						name: toolCall.Function.Name,
 					}
 
 					// Send content_block_start for tool_use
-					// Note: input is omitted here, it will be sent via input_json_delta
 					contentBlockStartEvent := map[string]interface{}{
 						"type":  "content_block_start",
-						"index": index,
+						"index": anthropicIndex,
 						"content_block": map[string]interface{}{
 							"type": "tool_use",
 							"id":   toolCall.ID,
@@ -147,19 +159,16 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 						},
 					}
 					sendAnthropicStreamEvent(c, "content_block_start", contentBlockStartEvent, flusher)
-					if index >= contentIndex {
-						contentIndex = index + 1
-					}
 				}
 
 				// Accumulate arguments and send delta
 				if toolCall.Function.Arguments != "" {
-					pendingToolCalls[index].input += toolCall.Function.Arguments
+					pendingToolCalls[anthropicIndex].input += toolCall.Function.Arguments
 
 					// Send content_block_delta with input_json_delta
 					deltaEvent := map[string]interface{}{
 						"type":  "content_block_delta",
-						"index": index,
+						"index": anthropicIndex,
 						"delta": map[string]interface{}{
 							"type":         "input_json_delta",
 							"partial_json": toolCall.Function.Arguments,
@@ -177,11 +186,11 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 
 		// Handle finish_reason (last chunk for this choice)
 		if choice.FinishReason != "" {
-			// Send content_block_stop for text content if sent
-			if sentTextContent {
+			// Send content_block_stop for text content if assigned
+			if textBlockIndex != -1 {
 				contentBlockStopEvent := map[string]interface{}{
 					"type":  "content_block_stop",
-					"index": 0,
+					"index": textBlockIndex,
 				}
 				sendAnthropicStreamEvent(c, "content_block_stop", contentBlockStopEvent, flusher)
 			}
