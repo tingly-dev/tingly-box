@@ -259,6 +259,7 @@ func (s *Server) useOAuthEndpoints(manager *swagger.RouteManager) {
 
 	// OAuth Callback (no authentication required - called by OAuth provider)
 	manager.GetEngine().GET("/oauth/callback", s.OAuthCallback)
+	manager.GetEngine().GET("/callback", s.OAuthCallback)
 }
 
 // =============================================
