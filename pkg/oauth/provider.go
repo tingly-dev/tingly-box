@@ -2,6 +2,8 @@ package oauth
 
 import (
 	"fmt"
+
+	"github.com/google/uuid"
 )
 
 // Registry manages OAuth provider configurations
@@ -66,8 +68,7 @@ func DefaultRegistry() *Registry {
 		OAuthMethod:        OAuthMethodPKCE,        // Uses PKCE for security
 		TokenRequestFormat: TokenRequestFormatJSON, // Anthropic requires JSON format
 		ConsoleURL:         "https://console.anthropic.com/",
-		ClientIDEnvVar:     "ANTHROPIC_CLIENT_ID",
-		ClientSecretEnvVar: "ANTHROPIC_CLIENT_SECRET",
+
 		AuthExtraParams: map[string]string{
 			"code":          "true",
 			"response_type": "code",
@@ -84,32 +85,28 @@ func DefaultRegistry() *Registry {
 
 	// OpenAI OAuth
 	registry.Register(&ProviderConfig{
-		Type:               ProviderOpenAI,
-		DisplayName:        "OpenAI",
-		ClientID:           "", // Must be configured
-		ClientSecret:       "",
-		AuthURL:            "https://platform.openai.com/oauth/authorize",
-		TokenURL:           "https://api.openai.com/v1/oauth/token",
-		Scopes:             []string{"api", "offline_access"},
-		AuthStyle:          AuthStyleInHeader,
-		ConsoleURL:         "https://platform.openai.com/",
-		ClientIDEnvVar:     "OPENAI_CLIENT_ID",
-		ClientSecretEnvVar: "OPENAI_CLIENT_SECRET",
+		Type:         ProviderOpenAI,
+		DisplayName:  "OpenAI",
+		ClientID:     "", // Must be configured
+		ClientSecret: "",
+		AuthURL:      "https://platform.openai.com/oauth/authorize",
+		TokenURL:     "https://api.openai.com/v1/oauth/token",
+		Scopes:       []string{"api", "offline_access"},
+		AuthStyle:    AuthStyleInHeader,
+		ConsoleURL:   "https://platform.openai.com/",
 	})
 
 	// Google OAuth (for Gemini/Vertex AI)
 	registry.Register(&ProviderConfig{
-		Type:               ProviderGoogle,
-		DisplayName:        "Google",
-		ClientID:           "", // Must be configured
-		ClientSecret:       "",
-		AuthURL:            "https://accounts.google.com/o/oauth2/v2/auth",
-		TokenURL:           "https://oauth2.googleapis.com/token",
-		Scopes:             []string{"https://www.googleapis.com/auth/cloud-platform"},
-		AuthStyle:          AuthStyleInHeader,
-		ConsoleURL:         "https://console.cloud.google.com/",
-		ClientIDEnvVar:     "GOOGLE_CLIENT_ID",
-		ClientSecretEnvVar: "GOOGLE_CLIENT_SECRET",
+		Type:         ProviderGoogle,
+		DisplayName:  "Google",
+		ClientID:     "", // Must be configured
+		ClientSecret: "",
+		AuthURL:      "https://accounts.google.com/o/oauth2/v2/auth",
+		TokenURL:     "https://oauth2.googleapis.com/token",
+		Scopes:       []string{"https://www.googleapis.com/auth/cloud-platform"},
+		AuthStyle:    AuthStyleInHeader,
+		ConsoleURL:   "https://console.cloud.google.com/",
 	})
 
 	// Gemini CLI OAuth (Google OAuth with Gemini CLI's built-in credentials)
@@ -126,11 +123,10 @@ func DefaultRegistry() *Registry {
 			"https://www.googleapis.com/auth/userinfo.email",
 			"https://www.googleapis.com/auth/userinfo.profile",
 		},
-		AuthStyle:          AuthStyleInHeader,
-		OAuthMethod:        OAuthMethodPKCE, // Uses PKCE for security
-		ConsoleURL:         "https://console.cloud.google.com/",
-		ClientIDEnvVar:     "GEMINI_CLIENT_ID",
-		ClientSecretEnvVar: "GEMINI_CLIENT_SECRET",
+		AuthStyle:   AuthStyleInHeader,
+		OAuthMethod: OAuthMethodPKCE, // Uses PKCE for security
+		ConsoleURL:  "https://console.cloud.google.com/",
+
 		AuthExtraParams: map[string]string{
 			"access_type": "offline", // To get refresh token
 			"prompt":      "consent", // Force consent dialog to ensure refresh token is returned
@@ -141,33 +137,50 @@ func DefaultRegistry() *Registry {
 	// Note: You need to create your own OAuth app at https://github.com/settings/developers
 	// This is a demo configuration for testing the authorize URL
 	registry.Register(&ProviderConfig{
-		Type:               ProviderGitHub,
-		DisplayName:        "GitHub",
-		ClientID:           "demo-github-client-id", // Replace with your own OAuth app's Client ID
-		ClientSecret:       "",                      // No secret required for demo
-		AuthURL:            "https://github.com/login/oauth/authorize",
-		TokenURL:           "https://github.com/login/oauth/access_token",
-		Scopes:             []string{"read:user", "user:email"},
-		AuthStyle:          AuthStyleInParams, // GitHub uses params for auth
-		ConsoleURL:         "https://github.com/settings/developers",
-		ClientIDEnvVar:     "GITHUB_CLIENT_ID",
-		ClientSecretEnvVar: "GITHUB_CLIENT_SECRET",
+		Type:         ProviderGitHub,
+		DisplayName:  "GitHub",
+		ClientID:     "demo-github-client-id", // Replace with your own OAuth app's Client ID
+		ClientSecret: "",                      // No secret required for demo
+		AuthURL:      "https://github.com/login/oauth/authorize",
+		TokenURL:     "https://github.com/login/oauth/access_token",
+		Scopes:       []string{"read:user", "user:email"},
+		AuthStyle:    AuthStyleInParams, // GitHub uses params for auth
+		ConsoleURL:   "https://github.com/settings/developers",
 	})
 
 	// Mock OAuth provider for testing
 	// Uses https://oauth-mock.mock.beeceptor.com for testing OAuth flow
 	registry.Register(&ProviderConfig{
-		Type:               ProviderMock,
-		DisplayName:        "Mock OAuth (Testing)",
-		ClientID:           "mock-client-id",
-		ClientSecret:       "mock-client-secret",
-		AuthURL:            "https://oauth-mock.mock.beeceptor.com/oauth/authorize",
-		TokenURL:           "https://oauth-mock.mock.beeceptor.com/oauth/token/google",
-		Scopes:             []string{"test", "read", "write"},
-		AuthStyle:          AuthStyleInParams,
-		ConsoleURL:         "",
-		ClientIDEnvVar:     "MOCK_CLIENT_ID",
-		ClientSecretEnvVar: "MOCK_CLIENT_SECRET",
+		Type:         ProviderMock,
+		DisplayName:  "Mock OAuth (Testing)",
+		ClientID:     "mock-client-id",
+		ClientSecret: "mock-client-secret",
+		AuthURL:      "https://oauth-mock.mock.beeceptor.com/oauth/authorize",
+		TokenURL:     "https://oauth-mock.mock.beeceptor.com/oauth/token/google",
+		Scopes:       []string{"test", "read", "write"},
+		AuthStyle:    AuthStyleInParams,
+		ConsoleURL:   "",
+	})
+
+	// Qwen OAuth (Device Code Flow with PKCE)
+	// https://chat.qwen.ai/
+	// Uses device code flow with PKCE for authentication (RFC 8628 + RFC 7636)
+	registry.Register(&ProviderConfig{
+		Type:               ProviderQwen,
+		GrantType:          "urn:ietf:params:oauth:grant-type:device_code",
+		DisplayName:        "Qwen",
+		ClientID:           "f0304373b74a44d2b584a3fb70ca9e56",
+		ClientSecret:       "", // No secret required for device code flow
+		DeviceCodeURL:      "https://chat.qwen.ai/api/v1/oauth2/device/code",
+		TokenURL:           "https://chat.qwen.ai/api/v1/oauth2/token",
+		Scopes:             []string{"openid", "profile", "email", "model.completion"},
+		AuthStyle:          AuthStyleInNone,
+		OAuthMethod:        OAuthMethodDeviceCodePKCE,
+		TokenRequestFormat: TokenRequestFormatForm,
+		ConsoleURL:         "https://chat.qwen.ai/",
+		AuthExtraParams: map[string]string{
+			"x-request-id": uuid.New().String(),
+		},
 	})
 
 	return registry

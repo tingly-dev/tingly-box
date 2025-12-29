@@ -580,6 +580,306 @@ func (m *Manager) GetConfig() *Config {
 	return m.config
 }
 
+// InitiateDeviceCodeFlow initiates the Device Code flow and returns device code data
+// RFC 8628: OAuth 2.0 Device Authorization Grant
+func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, providerType ProviderType, redirectTo string, name string) (*DeviceCodeData, error) {
+	config, ok := m.registry.Get(providerType)
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", ErrInvalidProvider, providerType)
+	}
+
+	if config.ClientID == "" {
+		return nil, fmt.Errorf("%w: %s", ErrProviderNotConfigured, providerType)
+	}
+
+	if config.DeviceCodeURL == "" {
+		return nil, fmt.Errorf("provider %s does not support device code flow", providerType)
+	}
+
+	// Generate PKCE code verifier if provider uses Device Code PKCE
+	var codeVerifier string
+	var codeChallenge string
+	if config.OAuthMethod == OAuthMethodDeviceCodePKCE {
+		var err error
+		codeVerifier, err = m.generateCodeVerifier()
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate code verifier: %w", err)
+		}
+		codeChallenge = m.generateCodeChallenge(codeVerifier)
+	}
+
+	// Build device authorization request
+	useJSON := config.TokenRequestFormat == TokenRequestFormatJSON
+	var reqBody io.Reader
+	var contentType string
+
+	if useJSON {
+		jsonData := map[string]string{
+			"client_id": config.ClientID,
+			"scope":     strings.Join(config.Scopes, " "),
+		}
+		// Add PKCE parameters for Device Code PKCE flow
+		if config.OAuthMethod == OAuthMethodDeviceCodePKCE {
+			jsonData["code_challenge"] = codeChallenge
+			jsonData["code_challenge_method"] = "S256"
+		}
+		bodyBytes, err := json.Marshal(jsonData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal JSON request: %w", err)
+		}
+		reqBody = bytes.NewReader(bodyBytes)
+		contentType = "application/json"
+	} else {
+		data := url.Values{}
+		data.Set("client_id", config.ClientID)
+		data.Set("scope", strings.Join(config.Scopes, " "))
+		// Add PKCE parameters for Device Code PKCE flow
+		if config.OAuthMethod == OAuthMethodDeviceCodePKCE {
+			data.Set("code_challenge", codeChallenge)
+			data.Set("code_challenge_method", "S256")
+		}
+
+		reqBody = strings.NewReader(data.Encode())
+		contentType = "application/x-www-form-urlencoded"
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", config.DeviceCodeURL, reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("Accept", "application/json")
+
+	// Add provider-specific extra headers
+	for key, value := range config.AuthExtraParams {
+		req.Header.Set(key, value)
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("device code request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("device code request failed: status %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse device code response
+	var deviceResp DeviceCodeResponse
+	if err := json.NewDecoder(resp.Body).Decode(&deviceResp); err != nil {
+		return nil, fmt.Errorf("failed to decode device code response: %w", err)
+	}
+
+	// Create device code data
+	now := time.Now()
+	data := &DeviceCodeData{
+		DeviceCodeResponse: &deviceResp,
+		Provider:           providerType,
+		UserID:             userID,
+		RedirectTo:         redirectTo,
+		Name:               name,
+		InitiatedAt:        now,
+		ExpiresAt:          now.Add(time.Duration(deviceResp.ExpiresIn) * time.Second),
+		CodeVerifier:       codeVerifier, // Store PKCE verifier for token polling
+	}
+
+	return data, nil
+}
+
+// PollForToken polls the token endpoint until the user completes authentication
+// or the device code expires
+// Polling timeout is limited to 1 minute
+func (m *Manager) PollForToken(ctx context.Context, data *DeviceCodeData, callback func(*Token)) (*Token, error) {
+	config, ok := m.registry.Get(data.Provider)
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", ErrInvalidProvider, data.Provider)
+	}
+
+	// Default interval is 5 seconds if not specified
+	interval := time.Duration(data.Interval) * time.Second
+	if interval == 0 {
+		interval = 5 * time.Second
+	}
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	// Create a timeout context with 1 minute limit for polling
+	const pollTimeout = 1 * time.Minute
+	timeoutCtx, cancel := context.WithTimeout(ctx, pollTimeout)
+	defer cancel()
+
+	for {
+		select {
+		case <-timeoutCtx.Done():
+			return nil, fmt.Errorf("authentication timed out after %v", pollTimeout)
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-ticker.C:
+			token, err := m.pollTokenRequest(ctx, config, data.DeviceCode, data.CodeVerifier)
+			if err != nil {
+				// Check if error is a transient error that we should retry
+				if isTransientDeviceCodeError(err) {
+					time.Sleep(interval)
+					continue
+				}
+				return nil, err
+			}
+
+			// Successfully got token
+			token.Provider = data.Provider
+			token.RedirectTo = data.RedirectTo
+			token.Name = data.Name
+
+			// Save token
+			if err := m.config.TokenStorage.SaveToken(data.UserID, data.Provider, token); err != nil {
+				return nil, fmt.Errorf("failed to save token: %w", err)
+			}
+
+			// Call callback if provided
+			if callback != nil {
+				callback(token)
+			}
+
+			return token, nil
+		}
+	}
+}
+
+// pollTokenRequest makes a single token polling request
+func (m *Manager) pollTokenRequest(ctx context.Context, config *ProviderConfig, deviceCode string, codeVerifier string) (*Token, error) {
+	useJSON := config.TokenRequestFormat == TokenRequestFormatJSON
+
+	var reqBody io.Reader
+	var contentType string
+
+	if useJSON {
+		jsonData := map[string]string{
+			"grant_type":  config.GrantType,
+			"client_id":   config.ClientID,
+			"device_code": deviceCode,
+		}
+		if config.ClientSecret != "" {
+			jsonData["client_secret"] = config.ClientSecret
+		}
+		// Add PKCE code_verifier for Device Code PKCE flow
+		if config.OAuthMethod == OAuthMethodDeviceCodePKCE && codeVerifier != "" {
+			jsonData["code_verifier"] = codeVerifier
+		}
+
+		bodyBytes, err := json.Marshal(jsonData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal JSON request: %w", err)
+		}
+		reqBody = bytes.NewReader(bodyBytes)
+		contentType = "application/json"
+	} else {
+		data := url.Values{}
+		data.Set("grant_type", config.GrantType)
+		data.Set("device_code", deviceCode)
+		data.Set("client_id", config.ClientID)
+		if config.ClientSecret != "" {
+			data.Set("client_secret", config.ClientSecret)
+		}
+		// Add PKCE code_verifier for Device Code PKCE flow
+		if config.OAuthMethod == OAuthMethodDeviceCodePKCE && codeVerifier != "" {
+			data.Set("code_verifier", codeVerifier)
+		}
+
+		reqBody = strings.NewReader(data.Encode())
+		contentType = "application/x-www-form-urlencoded"
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", config.TokenURL, reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("Accept", "application/json")
+
+	// Add provider-specific extra headers
+	for key, value := range config.TokenExtraHeaders {
+		req.Header.Set(key, value)
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("token poll request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	// Check for authorization pending (should retry)
+	if resp.StatusCode == http.StatusBadRequest {
+		var errResp struct {
+			Error string `json:"error"`
+		}
+		if json.Unmarshal(body, &errResp) == nil {
+			switch errResp.Error {
+			case "authorization_pending", "slow_down":
+				return nil, &DeviceCodePendingError{Message: errResp.Error}
+			case "access_denied", "expired_token":
+				return nil, fmt.Errorf("device code error: %s", errResp.Error)
+			}
+		}
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("token poll failed: status %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse token response
+	var tokenResp struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+		TokenType    string `json:"token_type"`
+		ExpiresIn    int64  `json:"expires_in"`
+	}
+
+	if err := json.Unmarshal(body, &tokenResp); err != nil {
+		return nil, fmt.Errorf("failed to decode token response: %w", err)
+	}
+
+	token := &Token{
+		AccessToken:  tokenResp.AccessToken,
+		RefreshToken: tokenResp.RefreshToken,
+		TokenType:    tokenResp.TokenType,
+	}
+
+	if tokenResp.ExpiresIn > 0 {
+		token.Expiry = time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
+	}
+
+	return token, nil
+}
+
+// DeviceCodePendingError represents a pending device code authorization
+type DeviceCodePendingError struct {
+	Message string
+}
+
+func (e *DeviceCodePendingError) Error() string {
+	return e.Message
+}
+
+// isTransientDeviceCodeError checks if an error is a transient device code error
+func isTransientDeviceCodeError(err error) bool {
+	if _, ok := err.(*DeviceCodePendingError); ok {
+		return true
+	}
+	return false
+}
+
 // debugRequest prints HTTP request details for debugging
 func (m *Manager) debugRequest(req *http.Request, isJSON bool) {
 	fmt.Printf("\n=== OAuth Debug: HTTP Request ===\n")

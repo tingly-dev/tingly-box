@@ -14,6 +14,7 @@ const (
 	ProviderGoogle    ProviderType = "google"
 	ProviderGemini    ProviderType = "gemini" // Gemini CLI OAuth
 	ProviderGitHub    ProviderType = "github"
+	ProviderQwen      ProviderType = "qwen"
 	ProviderMock      ProviderType = "mock"
 )
 
@@ -22,7 +23,7 @@ func ParseProviderType(s string) (ProviderType, error) {
 	p := ProviderType(s)
 	// Validate by checking against known providers
 	switch p {
-	case ProviderAnthropic, ProviderOpenAI, ProviderGoogle, ProviderGemini, ProviderGitHub, ProviderMock:
+	case ProviderAnthropic, ProviderOpenAI, ProviderGoogle, ProviderGemini, ProviderGitHub, ProviderQwen, ProviderMock:
 		return p, nil
 	default:
 		return "", fmt.Errorf("unknown provider type: %s", s)
@@ -68,6 +69,8 @@ type ProviderConfig struct {
 	// Type is the provider type
 	Type ProviderType
 
+	GrantType string
+
 	// DisplayName is the human-readable name
 	DisplayName string
 
@@ -79,6 +82,9 @@ type ProviderConfig struct {
 
 	// AuthURL is the authorization endpoint URL
 	AuthURL string
+
+	// DeviceCodeURL is the device authorization endpoint URL (for Device Code flow)
+	DeviceCodeURL string
 
 	// TokenURL is the token endpoint URL
 	TokenURL string
@@ -97,12 +103,6 @@ type ProviderConfig struct {
 
 	// ConsoleURL is the URL to the provider's console for creating OAuth apps
 	ConsoleURL string
-
-	// ClientIDEnvVar is the environment variable name for the client ID
-	ClientIDEnvVar string
-
-	// ClientSecretEnvVar is the environment variable name for the client secret
-	ClientSecretEnvVar string
 
 	// TokenRequestFormat specifies the format of token request body
 	// Default is TokenRequestFormatForm (standard OAuth)
@@ -158,6 +158,12 @@ const (
 
 	// OAuthMethodPKCE uses Authorization Code flow with PKCE (RFC 7636)
 	OAuthMethodPKCE
+
+	// OAuthMethodDeviceCode uses Device Code flow (RFC 8628)
+	OAuthMethodDeviceCode
+
+	// OAuthMethodDeviceCodePKCE uses Device Code flow with PKCE (RFC 8628 + RFC 7636)
+	OAuthMethodDeviceCodePKCE
 )
 
 // Token represents an OAuth token
@@ -209,4 +215,54 @@ func (t *Token) ExpiredIn(within time.Duration) bool {
 		return false
 	}
 	return time.Now().Add(within).After(t.Expiry)
+}
+
+// DeviceCodeResponse represents the response from the device authorization endpoint
+// RFC 8628: OAuth 2.0 Device Authorization Grant
+type DeviceCodeResponse struct {
+	// DeviceCode is the device verification code
+	DeviceCode string `json:"device_code"`
+
+	// UserCode is the end-user verification code
+	UserCode string `json:"user_code"`
+
+	// VerificationURI is the end-user verification URI where user enters the user code
+	VerificationURI string `json:"verification_uri"`
+
+	// VerificationURIComplete is the end-user verification URI with user_code pre-filled
+	VerificationURIComplete string `json:"verification_uri_complete,omitempty"`
+
+	// ExpiresIn is the lifetime in seconds of the device_code and user_code
+	ExpiresIn int64 `json:"expires_in"`
+
+	// Interval is the minimum amount of time in seconds that the client SHOULD wait
+	// between polling requests to the token endpoint
+	Interval int64 `json:"interval,omitempty"`
+}
+
+// DeviceCodeData holds device code information with metadata
+type DeviceCodeData struct {
+	*DeviceCodeResponse
+	Provider     ProviderType
+	UserID       string
+	RedirectTo   string
+	Name         string
+	ExpiresAt    time.Time
+	InitiatedAt  time.Time
+	CodeVerifier string // PKCE code verifier (for Device Code PKCE flow)
+}
+
+// DeviceTokenRequest represents the request to poll for token with device code
+type DeviceTokenRequest struct {
+	// GrantType is the grant type, must be "urn:ietf:params:oauth:grant-type:device_code"
+	GrantType string `json:"grant_type"`
+
+	// DeviceCode is the device code from the device authorization response
+	DeviceCode string `json:"device_code"`
+
+	// ClientID is the OAuth client ID
+	ClientID string `json:"client_id"`
+
+	// ClientSecret is the OAuth client secret (optional for public clients)
+	ClientSecret string `json:"client_secret,omitempty"`
 }
