@@ -75,9 +75,9 @@ export default {
     }
   },
   "provider": {
-    "pageTitle": "Credential",
-    "subtitleWithCount": "Managing {{count}} providers and api keys",
-    "subtitleEmpty": "No model API key configured yet",
+    "pageTitle": "Credentials",
+    "subtitleWithCount": "Managing {{count}} providers and API keys",
+    "subtitleEmpty": "No API keys configured yet",
     "addButton": "Add API Key",
     "emptyCardTitle": "No Model API Key Configured",
     "emptyCardSubtitle": "Get started by adding your first API token or key",
@@ -168,15 +168,15 @@ export default {
     }
   },
   "rule": {
-    "pageTitle": "Advance Proxy Configuration",
-    "subtitle": "Config local model which forwarding to remote providers",
+    "pageTitle": "Advanced Proxy Configuration",
+    "subtitle": "Configure local models to forward requests to remote providers",
     "addButton": "Add Forwarding Rule",
     "emptyState": {
       "title": "No rules configured",
       "description": "Click \"Add Rule\" to create your first rule"
     },
     "card": {
-      "unspecifiedModel": "Specified model name",
+      "unspecifiedModel": "Please specify model name",
       "useKey": "Use {{count}} {{key}}",
       "key": "Key",
       "keys": "Keys",
