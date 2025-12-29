@@ -45,6 +45,7 @@ type Server struct {
 	// options
 	enableUI      bool
 	enableAdaptor bool
+	openBrowser   bool
 	host          string
 
 	version string
@@ -58,6 +59,7 @@ func WithDefault() ServerOption {
 	return func(s *Server) {
 		s.enableUI = true      // Default: UI enabled
 		s.enableAdaptor = true // Default: adapter enabled
+		s.openBrowser = true   // Default: open browser enabled
 		s.host = ""            // Default: empty host (resolves to localhost)
 	}
 }
@@ -85,6 +87,13 @@ func WithHost(host string) ServerOption {
 func WithAdaptor(enabled bool) ServerOption {
 	return func(s *Server) {
 		s.enableAdaptor = enabled
+	}
+}
+
+// WithOpenBrowser enables or disables automatic browser opening
+func WithOpenBrowser(enabled bool) ServerOption {
+	return func(s *Server) {
+		s.openBrowser = enabled
 	}
 }
 
@@ -349,7 +358,11 @@ func (s *Server) Start(port int) error {
 	}
 
 	fmt.Printf("Web UI: %s\n", webUIURL)
-	fmt.Printf("Starting server and opening browser...\n")
+	if s.openBrowser {
+		fmt.Printf("Starting server and opening browser...\n")
+	} else {
+		fmt.Printf("Starting server...\n")
+	}
 
 	// Use a channel to capture the immediate error if ListenAndServe fails
 	serverError := make(chan error, 1)
@@ -368,8 +381,10 @@ func (s *Server) Start(port int) error {
 		}
 	}
 
-	// Server is up, now open browser
-	browser.OpenURL(webUIURL)
+	// Server is up, now open browser if enabled
+	if s.openBrowser {
+		browser.OpenURL(webUIURL)
+	}
 
 	// Block until server shuts down or errors out
 	return <-serverError

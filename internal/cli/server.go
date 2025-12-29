@@ -12,7 +12,6 @@ import (
 	"tingly-box/internal/server"
 	"tingly-box/internal/util"
 
-	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
 )
 
@@ -59,17 +58,16 @@ func stopServerWithPIDManager(pidManager *config.PIDManager) error {
 
 // startServerOptions contains options for starting the server
 type startServerOptions struct {
-	Host          string
-	Port          int
-	EnableUI      bool
-	EnableDebug   bool
-	EnableAdaptor bool
+	Host              string
+	Port              int
+	EnableUI          bool
+	EnableDebug       bool
+	EnableAdaptor     bool
+	EnableOpenBrowser bool
 }
 
 // startServer handles the server starting logic
 func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
-	gin.SetMode(gin.ReleaseMode)
-
 	var port int = opts.Port
 	if port == 0 {
 		port = appConfig.GetServerPort()
@@ -96,6 +94,7 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 		manager.WithUI(opts.EnableUI),
 		manager.WithAdaptor(opts.EnableAdaptor),
 		manager.WithDebug(opts.EnableDebug),
+		manager.WithOpenBrowser(opts.EnableOpenBrowser),
 		manager.WithHost(opts.Host),
 	)
 
@@ -141,6 +140,7 @@ func StartCommand(appConfig *config.AppConfig) *cobra.Command {
 	var port int
 	var enableUI bool
 	var enableDebug bool
+	var enableOpenBrowser bool
 	var host string
 	var enableStyleTransform bool
 
@@ -150,20 +150,40 @@ func StartCommand(appConfig *config.AppConfig) *cobra.Command {
 		Long: `Start the Tingly Box HTTP server that provides the unified API endpoint.
 The server will handle request routing to configured AI providers.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// Apply priority: CLI flag > Config > Default
+			resolvedDebug := enableDebug
+			if !cmd.Flags().Changed("debug") {
+				resolvedDebug = appConfig.GetDebug()
+			}
+
+			resolvedOpenBrowser := enableOpenBrowser
+			if !cmd.Flags().Changed("browser") {
+				resolvedOpenBrowser = appConfig.GetOpenBrowser()
+			}
+
+			resolvedPort := port
+			if resolvedPort == 0 {
+				resolvedPort = appConfig.GetServerPort()
+			} else {
+				appConfig.SetServerPort(port)
+			}
+
 			return startServer(appConfig, startServerOptions{
-				Host:          host,
-				Port:          port,
-				EnableUI:      enableUI,
-				EnableDebug:   enableDebug,
-				EnableAdaptor: enableStyleTransform,
+				Host:              host,
+				Port:              resolvedPort,
+				EnableUI:          enableUI,
+				EnableDebug:       resolvedDebug,
+				EnableAdaptor:     enableStyleTransform,
+				EnableOpenBrowser: resolvedOpenBrowser,
 			})
 		},
 	}
 
-	cmd.Flags().IntVarP(&port, "port", "p", 12580, "Server port (default: 12580)")
+	cmd.Flags().IntVarP(&port, "port", "p", 0, "Server port (default: from config or 12580)")
 	cmd.Flags().StringVar(&host, "host", "localhost", "Server host")
 	cmd.Flags().BoolVarP(&enableUI, "ui", "u", true, "Enable web UI (default: true)")
 	cmd.Flags().BoolVar(&enableDebug, "debug", false, "Enable debug mode including gin, low level logging and so on (default: false)")
+	cmd.Flags().BoolVar(&enableOpenBrowser, "browser", true, "Auto-open browser when server starts (default: true)")
 	cmd.Flags().BoolVar(&enableStyleTransform, "adapter", true, "Enable API style transformation (default: true)")
 	return cmd
 }
@@ -271,6 +291,8 @@ show configuration information including number of providers and server port.`,
 func RestartCommand(appConfig *config.AppConfig) *cobra.Command {
 	var port int
 	var host string
+	var debug bool
+	var openBrowser bool
 
 	cmd := &cobra.Command{
 		Use:   "restart",
@@ -279,7 +301,25 @@ func RestartCommand(appConfig *config.AppConfig) *cobra.Command {
 This command will stop the current server (if running) and start a new instance.
 The restart is graceful - ongoing requests will be completed before shutdown.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := appConfig.SetServerPort(port); err != nil {
+			// Apply priority: CLI flag > Config > Default
+			resolvedDebug := debug
+			if !cmd.Flags().Changed("debug") {
+				resolvedDebug = appConfig.GetDebug()
+			}
+
+			resolvedOpenBrowser := openBrowser
+			if !cmd.Flags().Changed("browser") {
+				resolvedOpenBrowser = appConfig.GetOpenBrowser()
+			}
+
+			resolvedPort := port
+			if resolvedPort == 0 {
+				resolvedPort = appConfig.GetServerPort()
+			} else {
+				appConfig.SetServerPort(port)
+			}
+
+			if err := appConfig.SetServerPort(resolvedPort); err != nil {
 				return fmt.Errorf("failed to set server port: %w", err)
 			}
 
@@ -301,15 +341,18 @@ The restart is graceful - ongoing requests will be completed before shutdown.`,
 
 			// Start new server using non-blocking mode
 			return startServer(appConfig, startServerOptions{
-				Host:        host,
-				Port:        port,
-				EnableUI:    true,
-				EnableDebug: true,
+				Host:              host,
+				Port:              resolvedPort,
+				EnableUI:          true,
+				EnableDebug:       resolvedDebug,
+				EnableOpenBrowser: resolvedOpenBrowser,
 			})
 		},
 	}
 
 	cmd.Flags().StringVar(&host, "host", "localhost", "Server host")
-	cmd.Flags().IntVarP(&port, "port", "p", 12580, "Server port (default: 12580)")
+	cmd.Flags().IntVarP(&port, "port", "p", 0, "Server port (default: from config or 12580)")
+	cmd.Flags().BoolVar(&debug, "debug", false, "Enable debug mode (default: from config or false)")
+	cmd.Flags().BoolVar(&openBrowser, "browser", true, "Auto-open browser when server starts (default: true)")
 	return cmd
 }

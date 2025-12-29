@@ -39,6 +39,7 @@ func NewUIService(configDir string, port int) (*ProxyService, error) {
 		manager.WithUI(true),
 		manager.WithAdaptor(false),
 		manager.WithDebug(true),
+		manager.WithOpenBrowser(false), // GUI doesn't need browser auto-open
 	)
 
 	res := &ProxyService{
