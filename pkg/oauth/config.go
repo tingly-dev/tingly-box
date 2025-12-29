@@ -12,6 +12,7 @@ const (
 	ProviderAnthropic ProviderType = "anthropic"
 	ProviderOpenAI    ProviderType = "openai"
 	ProviderGoogle    ProviderType = "google"
+	ProviderGemini    ProviderType = "gemini" // Gemini CLI OAuth
 	ProviderGitHub    ProviderType = "github"
 	ProviderMock      ProviderType = "mock"
 )
@@ -21,7 +22,7 @@ func ParseProviderType(s string) (ProviderType, error) {
 	p := ProviderType(s)
 	// Validate by checking against known providers
 	switch p {
-	case ProviderAnthropic, ProviderOpenAI, ProviderGoogle, ProviderGitHub, ProviderMock:
+	case ProviderAnthropic, ProviderOpenAI, ProviderGoogle, ProviderGemini, ProviderGitHub, ProviderMock:
 		return p, nil
 	default:
 		return "", fmt.Errorf("unknown provider type: %s", s)

@@ -329,9 +329,8 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 			if codeVerifier != "" {
 				data.Set("code_verifier", codeVerifier)
 			}
-		} else {
-			data.Set("client_secret", config.ClientSecret)
 		}
+		data.Set("client_secret", config.ClientSecret)
 
 		// Add provider-specific extra parameters
 		for key, value := range config.TokenExtraParams {
@@ -358,8 +357,14 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 	// Debug: print request details
 	m.debugRequest(req, useJSON)
 
-	// Send request
-	client := &http.Client{Timeout: 60 * time.Second}
+	// Send request (with system proxy support from env vars HTTP_PROXY/HTTPS_PROXY)
+	// TODO: Temporary proxy support for debugging, remove later
+	client := &http.Client{
+		Timeout: 60 * time.Second,
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+		},
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("client error: %w: %v", ErrTokenExchangeFailed, err)
@@ -492,8 +497,14 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 	// Debug: print request details
 	m.debugRequest(req, useJSON)
 
-	// Send request
-	client := &http.Client{Timeout: 30 * time.Second}
+	// Send request (with system proxy support from env vars HTTP_PROXY/HTTPS_PROXY)
+	// TODO: Temporary proxy support for debugging, remove later
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+		},
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("refresh token: %w: %v", ErrTokenExchangeFailed, err)

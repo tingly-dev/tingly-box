@@ -76,6 +76,8 @@ func RunManualTest(config *ManualTestConfig) error {
 			clientID = os.Getenv("OPENAI_CLIENT_ID")
 		case oauth2.ProviderGoogle:
 			clientID = os.Getenv("GOOGLE_CLIENT_ID")
+		case oauth2.ProviderGemini:
+			clientID = os.Getenv("GEMINI_CLIENT_ID")
 		case oauth2.ProviderGitHub:
 			clientID = os.Getenv("GITHUB_CLIENT_ID")
 		}
@@ -88,6 +90,8 @@ func RunManualTest(config *ManualTestConfig) error {
 			clientSecret = os.Getenv("OPENAI_CLIENT_SECRET")
 		case oauth2.ProviderGoogle:
 			clientSecret = os.Getenv("GOOGLE_CLIENT_SECRET")
+		case oauth2.ProviderGemini:
+			clientSecret = os.Getenv("GEMINI_CLIENT_SECRET")
 		case oauth2.ProviderGitHub:
 			clientSecret = os.Getenv("GITHUB_CLIENT_SECRET")
 		}

@@ -9,7 +9,10 @@
 //	# Run with Anthropic (built-in credentials)
 //	go run main.go -provider=anthropic
 //
-// Available providers: mock, anthropic, openai, google, github
+//	# Run with Gemini CLI (built-in credentials)
+//	go run main.go -provider=gemini
+//
+// Available providers: mock, anthropic, openai, google, gemini, github
 package main
 
 import (
@@ -25,7 +28,7 @@ import (
 
 func main() {
 	// Parse command line flags
-	provider := flag.String("provider", "mock", "OAuth provider (mock, anthropic, openai, google, github)")
+	provider := flag.String("provider", "mock", "OAuth provider (mock, anthropic, openai, google, gemini, github)")
 	port := flag.Int("port", 54545, "Local server port for callback (default 54545)")
 	userID := flag.String("user", "example-user", "User ID for the OAuth flow")
 	demo := flag.Bool("demo", false, "Demo mode: show auth URL without real credentials")

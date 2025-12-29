@@ -68,7 +68,8 @@ func DefaultRegistry() *Registry {
 		ClientIDEnvVar:     "ANTHROPIC_CLIENT_ID",
 		ClientSecretEnvVar: "ANTHROPIC_CLIENT_SECRET",
 		AuthExtraParams: map[string]string{
-			"code": "true",
+			"code":          "true",
+			"response_type": "code",
 		},
 		TokenExtraHeaders: map[string]string{
 			"Content-Type":    "application/json",
@@ -108,6 +109,31 @@ func DefaultRegistry() *Registry {
 		ConsoleURL:         "https://console.cloud.google.com/",
 		ClientIDEnvVar:     "GOOGLE_CLIENT_ID",
 		ClientSecretEnvVar: "GOOGLE_CLIENT_SECRET",
+	})
+
+	// Gemini CLI OAuth (Google OAuth with Gemini CLI's built-in credentials)
+	// Based on: https://github.com/google-gemini/gemini-cli
+	registry.Register(&ProviderConfig{
+		Type:         ProviderGemini,
+		DisplayName:  "Gemini CLI",
+		ClientID:     "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com",
+		ClientSecret: "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",
+		AuthURL:      "https://accounts.google.com/o/oauth2/v2/auth",
+		TokenURL:     "https://oauth2.googleapis.com/token",
+		Scopes: []string{
+			"https://www.googleapis.com/auth/cloud-platform",
+			"https://www.googleapis.com/auth/userinfo.email",
+			"https://www.googleapis.com/auth/userinfo.profile",
+		},
+		AuthStyle:          AuthStyleInHeader,
+		OAuthMethod:        OAuthMethodPKCE, // Uses PKCE for security
+		ConsoleURL:         "https://console.cloud.google.com/",
+		ClientIDEnvVar:     "GEMINI_CLIENT_ID",
+		ClientSecretEnvVar: "GEMINI_CLIENT_SECRET",
+		AuthExtraParams: map[string]string{
+			"access_type": "offline", // To get refresh token
+			"prompt":      "consent", // Force consent dialog to ensure refresh token is returned
+		},
 	})
 
 	// GitHub OAuth (for GitHub Copilot)

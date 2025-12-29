@@ -322,16 +322,21 @@ func (h *ConfigHandler) UpdateProvider(c *gin.Context) {
 
 	// Update configuration (create a copy)
 	newConfig := &ProviderConfig{
-		Type:         config.Type,
-		DisplayName:  config.DisplayName,
-		ClientID:     req.ClientID,
-		ClientSecret: req.ClientSecret,
-		AuthURL:      config.AuthURL,
-		TokenURL:     config.TokenURL,
-		Scopes:       config.Scopes,
-		AuthStyle:    config.AuthStyle,
-		OAuthMethod:  config.OAuthMethod,
-		RedirectURL:  req.RedirectURL,
+		Type:               config.Type,
+		DisplayName:        config.DisplayName,
+		ClientID:           req.ClientID,
+		ClientSecret:       req.ClientSecret,
+		AuthURL:            config.AuthURL,
+		TokenURL:           config.TokenURL,
+		Scopes:             config.Scopes,
+		AuthStyle:          config.AuthStyle,
+		OAuthMethod:        config.OAuthMethod,
+		TokenRequestFormat: config.TokenRequestFormat,
+		RedirectURL:        req.RedirectURL,
+		ConsoleURL:         config.ConsoleURL,
+		AuthExtraParams:    config.AuthExtraParams,
+		TokenExtraParams:   config.TokenExtraParams,
+		TokenExtraHeaders:  config.TokenExtraHeaders,
 	}
 
 	h.registry.Register(newConfig)
@@ -357,15 +362,20 @@ func (h *ConfigHandler) DeleteProvider(c *gin.Context) {
 
 	// Clear credentials by registering with empty values
 	h.registry.Register(&ProviderConfig{
-		Type:         config.Type,
-		DisplayName:  config.DisplayName,
-		ClientID:     "",
-		ClientSecret: "",
-		AuthURL:      config.AuthURL,
-		TokenURL:     config.TokenURL,
-		Scopes:       config.Scopes,
-		AuthStyle:    config.AuthStyle,
-		OAuthMethod:  config.OAuthMethod,
+		Type:               config.Type,
+		DisplayName:        config.DisplayName,
+		ClientID:           "",
+		ClientSecret:       "",
+		AuthURL:            config.AuthURL,
+		TokenURL:           config.TokenURL,
+		Scopes:             config.Scopes,
+		AuthStyle:          config.AuthStyle,
+		OAuthMethod:        config.OAuthMethod,
+		TokenRequestFormat: config.TokenRequestFormat,
+		ConsoleURL:         config.ConsoleURL,
+		AuthExtraParams:    config.AuthExtraParams,
+		TokenExtraParams:   config.TokenExtraParams,
+		TokenExtraHeaders:  config.TokenExtraHeaders,
 	})
 
 	c.JSON(http.StatusOK, gin.H{
@@ -389,16 +399,21 @@ func LoadProviderConfigs(registry *Registry, configs []ProviderConfigInput) {
 		if ok {
 			// Update existing config
 			registry.Register(&ProviderConfig{
-				Type:         existing.Type,
-				DisplayName:  existing.DisplayName,
-				ClientID:     cfg.ClientID,
-				ClientSecret: cfg.ClientSecret,
-				AuthURL:      existing.AuthURL,
-				TokenURL:     existing.TokenURL,
-				Scopes:       existing.Scopes,
-				AuthStyle:    existing.AuthStyle,
-				OAuthMethod:  existing.OAuthMethod,
-				RedirectURL:  cfg.RedirectURL,
+				Type:               existing.Type,
+				DisplayName:        existing.DisplayName,
+				ClientID:           cfg.ClientID,
+				ClientSecret:       cfg.ClientSecret,
+				AuthURL:            existing.AuthURL,
+				TokenURL:           existing.TokenURL,
+				Scopes:             existing.Scopes,
+				AuthStyle:          existing.AuthStyle,
+				OAuthMethod:        existing.OAuthMethod,
+				TokenRequestFormat: existing.TokenRequestFormat,
+				RedirectURL:        cfg.RedirectURL,
+				ConsoleURL:         existing.ConsoleURL,
+				AuthExtraParams:    existing.AuthExtraParams,
+				TokenExtraParams:   existing.TokenExtraParams,
+				TokenExtraHeaders:  existing.TokenExtraHeaders,
 			})
 		}
 	}
