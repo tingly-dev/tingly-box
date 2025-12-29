@@ -124,7 +124,7 @@ tingly-box start
 
 ## 📚 Documentation
 
-**[User Manual](https://chatgpt.com/c/docs/user_manual.md)** – Installation, configuration, and operational guide
+**[User Manual](./docs/user-manual.md)** – Installation, configuration, and operational guide
 
 ------
 
