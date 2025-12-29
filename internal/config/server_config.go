@@ -34,7 +34,10 @@ type Config struct {
 	JWTSecret   string               `json:"jwt_secret"`
 
 	// Server settings
-	DefaultMaxTokens int `json:"default_max_tokens"` // Default max_tokens for anthropic API requests
+	DefaultMaxTokens int  `json:"default_max_tokens"` // Default max_tokens for anthropic API requests
+	Verbose          bool `json:"verbose"`            // Verbose mode for detailed logging
+	Debug            bool `json:"debug"`              // Debug mode for Gin debug level logging
+	OpenBrowser      bool `json:"open_browser"`       // Auto-open browser in web UI mode (default: true)
 
 	ConfigFile string `yaml:"-" json:"-"` // Not serialized to YAML (exported to preserve field)
 	ConfigDir  string `yaml:"-" json:"-"`
@@ -718,6 +721,51 @@ func (c *Config) SetDefaultMaxTokens(maxTokens int) error {
 	defer c.mu.Unlock()
 
 	c.DefaultMaxTokens = maxTokens
+	return c.save()
+}
+
+// GetVerbose returns the verbose setting
+func (c *Config) GetVerbose() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.Verbose
+}
+
+// SetVerbose updates the verbose setting
+func (c *Config) SetVerbose(verbose bool) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.Verbose = verbose
+	return c.save()
+}
+
+// GetDebug returns the debug setting
+func (c *Config) GetDebug() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.Debug
+}
+
+// SetDebug updates the debug setting
+func (c *Config) SetDebug(debug bool) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.Debug = debug
+	return c.save()
+}
+
+// GetOpenBrowser returns the open browser setting
+func (c *Config) GetOpenBrowser() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.OpenBrowser
+}
+
+// SetOpenBrowser updates the open browser setting
+func (c *Config) SetOpenBrowser(openBrowser bool) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.OpenBrowser = openBrowser
 	return c.save()
 }
 

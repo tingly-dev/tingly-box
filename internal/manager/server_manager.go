@@ -20,11 +20,12 @@ type ServerManager struct {
 	appConfig *config.AppConfig
 	server    *server.Server
 
-	host          string
-	enableUI      bool
-	enableAdaptor bool
-	enableDebug   bool
-	status        string
+	host              string
+	enableUI          bool
+	enableAdaptor     bool
+	enableDebug       bool
+	enableOpenBrowser bool
+	status            string
 	sync.Mutex
 }
 
@@ -45,10 +46,17 @@ func WithAdaptor(enabled bool) ServerManagerOption {
 	}
 }
 
-// WithAdaptor enables or disables the adaptor for the server manager
+// WithDebug enables or disables the debug mode for the server manager
 func WithDebug(enabled bool) ServerManagerOption {
 	return func(sm *ServerManager) {
 		sm.enableDebug = enabled
+	}
+}
+
+// WithOpenBrowser enables or disables automatic browser opening
+func WithOpenBrowser(enabled bool) ServerManagerOption {
+	return func(sm *ServerManager) {
+		sm.enableOpenBrowser = enabled
 	}
 }
 
@@ -62,9 +70,10 @@ func WithHost(host string) ServerManagerOption {
 func NewServerManager(appConfig *config.AppConfig, opts ...ServerManagerOption) *ServerManager {
 	// Default options
 	sm := &ServerManager{
-		appConfig:     appConfig,
-		enableUI:      true, // Default: UI enabled
-		enableAdaptor: true, // Default: adapter enabled
+		appConfig:         appConfig,
+		enableUI:          true, // Default: UI enabled
+		enableAdaptor:     true, // Default: adapter enabled
+		enableOpenBrowser: true, // Default: browser auto-open enabled
 	}
 
 	// Apply provided options
@@ -110,6 +119,7 @@ func (sm *ServerManager) Setup(port int) error {
 		sm.appConfig.GetGlobalConfig(),
 		server.WithUI(sm.enableUI),
 		server.WithAdaptor(sm.enableAdaptor),
+		server.WithOpenBrowser(sm.enableOpenBrowser),
 		server.WithHost(sm.host),
 		server.WithVersion(sm.appConfig.GetVersion()),
 	)

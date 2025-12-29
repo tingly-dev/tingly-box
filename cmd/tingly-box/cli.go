@@ -19,6 +19,10 @@ It provides a unified OpenAI-compatible endpoint that routes requests to configu
 AI providers with dynamic configuration management.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		verbose, _ := cmd.Flags().GetBool("verbose")
+		// Apply priority: CLI flag > Config > Default
+		if !cmd.Flags().Changed("verbose") && appConfig != nil {
+			verbose = appConfig.GetVerbose()
+		}
 		if verbose {
 			logrus.SetLevel(logrus.TraceLevel)
 		}
@@ -36,6 +40,9 @@ var (
 
 	// Global configuration directory flag
 	configDir string
+
+	// Global config instance
+	appConfig *config.AppConfig
 )
 
 func init() {
@@ -59,7 +66,6 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 
 	// Initialize app config with optional custom config directory
-	var appConfig *config.AppConfig
 	var err error
 
 	if configDir != "" {

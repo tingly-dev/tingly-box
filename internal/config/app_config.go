@@ -154,9 +154,9 @@ func (ac *AppConfig) AddProvider(provider *Provider) error {
 	return ac.config.AddProvider(provider)
 }
 
-// UpdateProvider updates an existing provider
-func (ac *AppConfig) UpdateProvider(originalName string, provider *Provider) error {
-	return ac.config.UpdateProvider(originalName, provider)
+// UpdateProvider updates an existing provider by UUID
+func (ac *AppConfig) UpdateProvider(uuid string, provider *Provider) error {
+	return ac.config.UpdateProvider(uuid, provider)
 }
 
 // DeleteProvider removes a provider by name
@@ -354,4 +354,46 @@ func (ac *AppConfig) SetVersion(version string) {
 
 func (ac *AppConfig) GetVersion() string {
 	return ac.version
+}
+
+// GetVerbose returns verbose setting
+func (ac *AppConfig) GetVerbose() bool {
+	ac.mu.RLock()
+	defer ac.mu.RUnlock()
+	return ac.config.GetVerbose()
+}
+
+// SetVerbose updates verbose setting
+func (ac *AppConfig) SetVerbose(verbose bool) error {
+	ac.mu.Lock()
+	defer ac.mu.Unlock()
+	return ac.config.SetVerbose(verbose)
+}
+
+// GetDebug returns debug setting
+func (ac *AppConfig) GetDebug() bool {
+	ac.mu.RLock()
+	defer ac.mu.RUnlock()
+	return ac.config.GetDebug()
+}
+
+// SetDebug updates debug setting
+func (ac *AppConfig) SetDebug(debug bool) error {
+	ac.mu.Lock()
+	defer ac.mu.Unlock()
+	return ac.config.SetDebug(debug)
+}
+
+// GetOpenBrowser returns the open browser setting
+func (ac *AppConfig) GetOpenBrowser() bool {
+	ac.mu.RLock()
+	defer ac.mu.RUnlock()
+	return ac.config.GetOpenBrowser()
+}
+
+// SetOpenBrowser updates the open browser setting
+func (ac *AppConfig) SetOpenBrowser(openBrowser bool) error {
+	ac.mu.Lock()
+	defer ac.mu.Unlock()
+	return ac.config.SetOpenBrowser(openBrowser)
 }
