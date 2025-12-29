@@ -38,9 +38,9 @@ npx tingly-box@latest start
 # Install dependencies
 # - Go: https://go.dev/doc/install
 # - Node.js: https://nodejs.org/
-# - pnpm: npm install -g pnpm
-# - task: https://taskfile.dev/installation/
-# - openapi-generator-cli: npm install @openapitools/openapi-generator-cli -g
+# - pnpm: `npm install -g pnpm`
+# - task: https://taskfile.dev/installation/, or `go install github.com/go-task/task/v3/cmd/task@latest`
+# - openapi-generator-cli: `npm install @openapitools/openapi-generator-cli -g`
 
 # Build CLI binary
 task go:build
@@ -48,8 +48,8 @@ task go:build
 # Build with frontend
 task cli:build
 
-# Run with gui
-task start
+# Build GUI binary via wails3
+task wails:build
 ```
 
 **From Docker**
