@@ -562,6 +562,27 @@ func useV2Provider(s *Server, api *swagger.RouteGroup) {
 		swagger.WithTags("providers"),
 		swagger.WithResponseModel(DeleteProviderResponse{}),
 	)
+
+	// Provider template endpoints
+	api.GET("/provider-templates", s.GetProviderTemplates,
+		swagger.WithDescription("Get all provider templates"),
+		swagger.WithTags("provider-templates"),
+	)
+
+	api.GET("/provider-templates/:id", s.GetProviderTemplate,
+		swagger.WithDescription("Get a specific provider template by ID"),
+		swagger.WithTags("provider-templates"),
+	)
+
+	api.POST("/provider-templates/refresh", s.RefreshProviderTemplates,
+		swagger.WithDescription("Refresh provider templates from GitHub"),
+		swagger.WithTags("provider-templates"),
+	)
+
+	api.GET("/provider-templates/version", s.GetProviderTemplateVersion,
+		swagger.WithDescription("Get current provider template registry version"),
+		swagger.WithTags("provider-templates"),
+	)
 }
 
 func (s *Server) useWebStaticEndpoints(engine *gin.Engine) {

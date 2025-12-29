@@ -2,6 +2,7 @@ package config
 
 import (
 	"path/filepath"
+	"time"
 	"tingly-box/internal/util"
 )
 
@@ -30,6 +31,8 @@ const (
 	// Load balancing threshold defaults
 	DefaultRequestThreshold = int64(10)    // Default request threshold for round-robin and hybrid tactics
 	DefaultTokenThreshold   = int64(10000) // Default token threshold for token-based and hybrid tactics
+
+	DefaultTemplateHTTPTimeout = 30 * time.Second // Default HTTP timeout for fetching templates
 )
 
 // GetTinglyConfDir returns the config directory path (default: ~/.tingly-box)
