@@ -188,7 +188,7 @@ func (s *Server) ChatCompletions(c *gin.Context) {
 
 		// 🔥 REQUIRED: forward tool_choice
 		if req.ToolChoice.OfAuto.Value != "" || req.ToolChoice.OfAllowedTools != nil || req.ToolChoice.OfFunctionToolChoice != nil || req.ToolChoice.OfCustomToolChoice != nil {
-			anthropicReq.ToolChoice = adaptor.ConvertOpenAIToolChoice(&req.ToolChoice)
+			anthropicReq.ToolChoice = adaptor.ConvertOpenAIToAnthropicToolChoice(&req.ToolChoice)
 		}
 
 		if isStreaming {
@@ -203,7 +203,16 @@ func (s *Server) ChatCompletions(c *gin.Context) {
 				return
 			}
 
-			s.handleAnthropicToOpenAIStreamResponse(c, stream, responseModel)
+			err = adaptor.HandleAnthropicToOpenAIStreamResponse(c, stream, responseModel)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, ErrorResponse{
+					Error: ErrorDetail{
+						Message: "Failed to create streaming request: " + err.Error(),
+						Type:    "api_error",
+					},
+				})
+				return
+			}
 			return
 		}
 
@@ -218,7 +227,7 @@ func (s *Server) ChatCompletions(c *gin.Context) {
 			return
 		}
 
-		openaiResp := adaptor.ConvertAnthropicResponseToOpenAI(anthropicResp, responseModel)
+		openaiResp := adaptor.ConvertAnthropicToOpenAIResponse(anthropicResp, responseModel)
 		c.JSON(http.StatusOK, openaiResp)
 		return
 	} else {
@@ -272,17 +281,6 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *config.Prov
 
 	// Return modified response
 	c.JSON(http.StatusOK, responseMap)
-}
-
-// sendOpenAIStreamChunk helper function to send a chunk in OpenAI format
-func (s *Server) sendOpenAIStreamChunk(c *gin.Context, chunk map[string]interface{}, flusher http.Flusher) {
-	chunkJSON, err := json.Marshal(chunk)
-	if err != nil {
-		logrus.Errorf("Failed to marshal OpenAI stream chunk: %v", err)
-		return
-	}
-	c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", string(chunkJSON))))
-	flusher.Flush()
 }
 
 // forwardOpenAIRequest forwards the request to the selected provider using OpenAI library
