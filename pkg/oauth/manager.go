@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -357,14 +358,19 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 	// Debug: print request details
 	m.debugRequest(req, useJSON)
 
-	// Send request (with system proxy support from env vars HTTP_PROXY/HTTPS_PROXY)
-	// TODO: Temporary proxy support for debugging, remove later
-	client := &http.Client{
-		Timeout: 60 * time.Second,
-		Transport: &http.Transport{
+	// Send request with optional proxy support
+	// Proxy is read from HTTP_PROXY/HTTPS_PROXY environment variables
+	client := &http.Client{Timeout: 60 * time.Second}
+
+	// Check if proxy is configured
+	if os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != "" {
+		// Use proxy from environment
+		client.Transport = &http.Transport{
 			Proxy: http.ProxyFromEnvironment,
-		},
+		}
+		fmt.Printf("[OAuth] Using proxy from environment\n")
 	}
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("client error: %w: %v", ErrTokenExchangeFailed, err)
@@ -497,14 +503,19 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 	// Debug: print request details
 	m.debugRequest(req, useJSON)
 
-	// Send request (with system proxy support from env vars HTTP_PROXY/HTTPS_PROXY)
-	// TODO: Temporary proxy support for debugging, remove later
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-		Transport: &http.Transport{
+	// Send request with optional proxy support
+	// Proxy is read from HTTP_PROXY/HTTPS_PROXY environment variables
+	client := &http.Client{Timeout: 30 * time.Second}
+
+	// Check if proxy is configured
+	if os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != "" {
+		// Use proxy from environment
+		client.Transport = &http.Transport{
 			Proxy: http.ProxyFromEnvironment,
-		},
+		}
+		fmt.Printf("[OAuth] Using proxy from environment\n")
 	}
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("refresh token: %w: %v", ErrTokenExchangeFailed, err)
