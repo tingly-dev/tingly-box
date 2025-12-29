@@ -68,6 +68,7 @@ require (
 	github.com/bytedance/sonic/loader v0.4.0 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.12 // indirect
 	github.com/gin-contrib/sse v1.1.0 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
@@ -93,6 +94,7 @@ require (
 	github.com/tidwall/match v1.2.0 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
+	github.com/tiktoken-go/tokenizer v0.7.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.1 // indirect
 	go.uber.org/mock v0.6.0 // indirect
