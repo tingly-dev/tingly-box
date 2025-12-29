@@ -10,6 +10,7 @@ import {
     Typography
 } from '@mui/material';
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface ApiKeyModalProps {
     open: boolean;
@@ -24,6 +25,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
     token,
     onCopy
 }) => {
+    const { t } = useTranslation();
     return (
         <Dialog
             open={open}
@@ -31,11 +33,11 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
             maxWidth="md"
             fullWidth
         >
-            <DialogTitle>API Key</DialogTitle>
+            <DialogTitle>{t('apiKeyModal.title')}</DialogTitle>
             <DialogContent>
                 <Box sx={{ mb: 2 }}>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                        Your authentication token:
+                        {t('apiKeyModal.description')}
                     </Typography>
                     <Box
                         onClick={() => onCopy(token, 'API Key')}
@@ -54,7 +56,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                                 borderColor: 'primary.main'
                             },
                             transition: 'all 0.2s ease-in-out',
-                            title: 'Click to copy token'
+                            title: t('apiKeyModal.clickToCopy')
                         }}
                     >
                         {token}
@@ -66,7 +68,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                         onClick={() => onCopy(token, 'API Key')}
                         startIcon={<CopyIcon fontSize="small" />}
                     >
-                        Copy Token
+                        {t('apiKeyModal.copyButton')}
                     </Button>
                 </Box>
             </DialogContent>

@@ -9,6 +9,7 @@ import {
     Typography,
 } from '@mui/material';
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api } from '../services/api';
 import UnifiedCard from './UnifiedCard';
 
@@ -17,6 +18,7 @@ interface ServerInfoCardProps {
 }
 
 const ServerInfoCard = ({ currentToken }: ServerInfoCardProps) => {
+    const { t } = useTranslation();
     const [snackbarOpen, setSnackbarOpen] = useState(false);
     const [snackbarMessage, setSnackbarMessage] = useState('');
     const [generatedToken, setGeneratedToken] = useState<string>('');
@@ -38,10 +40,10 @@ const ServerInfoCard = ({ currentToken }: ServerInfoCardProps) => {
     const copyToClipboard = async (text: string, label: string) => {
         try {
             await navigator.clipboard.writeText(text);
-            setSnackbarMessage(`${label} copied to clipboard!`);
+            setSnackbarMessage(t('serverInfo.notifications.copied', { label }));
             setSnackbarOpen(true);
         } catch (err) {
-            setSnackbarMessage('Failed to copy to clipboard');
+            setSnackbarMessage(t('serverInfo.notifications.copyFailed'));
             setSnackbarOpen(true);
         }
     };
@@ -54,7 +56,7 @@ const ServerInfoCard = ({ currentToken }: ServerInfoCardProps) => {
             setShowToken(true);
             copyToClipboard(result.data.token, 'Token');
         } else {
-            setSnackbarMessage(`Failed to generate token: ${result.error}`);
+            setSnackbarMessage(t('serverInfo.notifications.generateFailed', { error: result.error }));
             setSnackbarOpen(true);
         }
     };
@@ -76,13 +78,13 @@ const ServerInfoCard = ({ currentToken }: ServerInfoCardProps) => {
                         <Grid size={{ xs: 12, md: 7 }}>
                             <Stack spacing={2}>
                                 <Typography variant="h6" color="primary" fontWeight={600}>
-                                    API Endpoints
+                                    {t('serverInfo.title')}
                                 </Typography>
 
                                 <Grid container spacing={2}>
                                     <Grid size={{ xs: 12, sm: 6 }}>
                                         <TextField
-                                            label="OpenAI Base URL"
+                                            label={t('serverInfo.openAI.label')}
                                             value={openaiBaseUrl}
                                             fullWidth
                                             size="small"
@@ -92,9 +94,9 @@ const ServerInfoCard = ({ currentToken }: ServerInfoCardProps) => {
                                                     endAdornment: (
                                                         <Stack direction="row" spacing={0.5}>
                                                             <IconButton
-                                                                onClick={() => copyToClipboard(openaiBaseUrl, 'OpenAI Base URL')}
+                                                                onClick={() => copyToClipboard(openaiBaseUrl, t('serverInfo.openAI.label'))}
                                                                 size="small"
-                                                                title="Copy OpenAI Base URL"
+                                                                title={t('serverInfo.openAI.copyTooltip')}
                                                             >
                                                                 <CopyIcon fontSize="small" />
                                                             </IconButton>
@@ -108,7 +110,7 @@ const ServerInfoCard = ({ currentToken }: ServerInfoCardProps) => {
                                                                     copyToClipboard(openaiCurl, 'OpenAI cURL command');
                                                                 }}
                                                                 size="small"
-                                                                title="Copy OpenAI cURL Example"
+                                                                title={t('serverInfo.openAI.copyCurlTooltip')}
                                                             >
                                                                 <TerminalIcon fontSize="small" />
                                                             </IconButton>
@@ -121,7 +123,7 @@ const ServerInfoCard = ({ currentToken }: ServerInfoCardProps) => {
 
                                     <Grid size={{ xs: 12, sm: 6 }}>
                                         <TextField
-                                            label="Anthropic Base URL"
+                                            label={t('serverInfo.anthropic.label')}
                                             value={anthropicBaseUrl}
                                             fullWidth
                                             size="small"
@@ -131,9 +133,9 @@ const ServerInfoCard = ({ currentToken }: ServerInfoCardProps) => {
                                                     endAdornment: (
                                                         <Stack direction="row" spacing={0.5}>
                                                             <IconButton
-                                                                onClick={() => copyToClipboard(anthropicBaseUrl, 'Anthropic Base URL')}
+                                                                onClick={() => copyToClipboard(anthropicBaseUrl, t('serverInfo.anthropic.label'))}
                                                                 size="small"
-                                                                title="Copy Anthropic Base URL"
+                                                                title={t('serverInfo.anthropic.copyTooltip')}
                                                             >
                                                                 <CopyIcon fontSize="small" />
                                                             </IconButton>
@@ -147,7 +149,7 @@ const ServerInfoCard = ({ currentToken }: ServerInfoCardProps) => {
                                                                     copyToClipboard(anthropicCurl, 'Anthropic cURL command');
                                                                 }}
                                                                 size="small"
-                                                                title="Copy Anthropic cURL Example"
+                                                                title={t('serverInfo.anthropic.copyCurlTooltip')}
                                                             >
                                                                 <TerminalIcon fontSize="small" />
                                                             </IconButton>
@@ -164,11 +166,11 @@ const ServerInfoCard = ({ currentToken }: ServerInfoCardProps) => {
                         <Grid size={{ xs: 12, md: 5 }}>
                             <Stack spacing={2}>
                                 <Typography variant="h6" color="primary" fontWeight={600}>
-                                    Authentication
+                                    {t('serverInfo.authentication.title')}
                                 </Typography>
 
                                 <TextField
-                                    label="API Key"
+                                    label={t('serverInfo.authentication.apiKeyLabel')}
                                     value={showToken ? token : token.replace(/./g, '•')}
                                     fullWidth
                                     size="small"
@@ -181,23 +183,23 @@ const ServerInfoCard = ({ currentToken }: ServerInfoCardProps) => {
                                                     <IconButton
                                                         onClick={() => setShowToken(!showToken)}
                                                         size="small"
-                                                        title={showToken ? 'Hide token' : 'Show token'}
+                                                        title={showToken ? t('serverInfo.authentication.hideTokenTooltip') : t('serverInfo.authentication.showTokenTooltip')}
                                                     >
                                                         <Typography variant="caption">
                                                             {showToken ? '👁️' : '👁️‍🗨️'}
                                                         </Typography>
                                                     </IconButton>
                                                     <IconButton
-                                                        onClick={() => copyToClipboard(token, 'API Key')}
+                                                        onClick={() => copyToClipboard(token, t('serverInfo.authentication.apiKeyLabel'))}
                                                         size="small"
-                                                        title="Copy Token"
+                                                        title={t('serverInfo.authentication.copyTokenTooltip')}
                                                     >
                                                         <CopyIcon fontSize="small" />
                                                     </IconButton>
                                                     <IconButton
                                                         onClick={generateToken}
                                                         size="small"
-                                                        title="Generate New Token"
+                                                        title={t('serverInfo.authentication.generateTooltip')}
                                                     >
                                                         <RefreshIcon fontSize="small" />
                                                     </IconButton>

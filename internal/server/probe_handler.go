@@ -119,13 +119,13 @@ func (s *Server) testProviderConnectivity(req *ProbeProviderRequest) (bool, stri
 	// Tier 1: Try models list endpoint
 	models, err := s.getProviderModelsForProbe(provider)
 	if err == nil && len(models) > 0 {
-		return true, "API key is valid and models endpoint accessible", len(models), nil
+		return true, "API key is valid and model list endpoint is accessible", len(models), nil
 	}
 	lastErr = err
 
 	// Tier 2: Try chat completion with minimal message
 	if err = s.probeChatEndpoint(provider); err == nil {
-		return true, "API key is valid and chat endpoint accessible", 0, nil
+		return true, "API key is valid and message endpoint is accessible", 0, nil
 	}
 	lastErr = err
 

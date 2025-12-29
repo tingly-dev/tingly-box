@@ -26,6 +26,7 @@ import {
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Provider } from '../types/provider';
 import { ApiStyleBadge } from "./ApiStyleBadge.tsx";
 import type { ConfigProvider, ConfigRecord } from './RuleGraphTypes.ts';
@@ -131,6 +132,7 @@ const ModelNode: React.FC<{
     showStatusIcon?: boolean;
     compact?: boolean;
 }> = ({ active, label, value, editable = false, onUpdate, showStatusIcon = true, compact = false }) => {
+    const { t } = useTranslation();
     const [editMode, setEditMode] = useState(false);
     const [tempValue, setTempValue] = useState(value);
 
@@ -170,7 +172,7 @@ const ModelNode: React.FC<{
                         size="small"
                         fullWidth
                         autoFocus
-                        label="Model Name"
+                        label={t('rule.card.unspecifiedModel')}
                         sx={{
                             '& .MuiInputBase-input': {
                                 color: 'text.primary',
@@ -277,6 +279,7 @@ const ProviderNodeComponent: React.FC<{
     providerUuidToName,
     onNodeClick
 }) => {
+        const { t } = useTranslation();
         const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
         const menuOpen = Boolean(anchorEl);
 
@@ -343,7 +346,7 @@ const ProviderNodeComponent: React.FC<{
                             }}
                         >
                             <Typography variant="body2" color="text.primary">
-                                {providerUuidToName[provider.provider] || 'Select provider'}
+                                {providerUuidToName[provider.provider] || t('rule.graph.selectProvider')}
                             </Typography>
                         </Box>
                     </Box>
@@ -371,7 +374,7 @@ const ProviderNodeComponent: React.FC<{
                                     color="text.primary"
                                     sx={{ fontStyle: !provider.model ? 'italic' : 'normal' }}
                                 >
-                                    {provider.model || 'Select model'}
+                                    {provider.model || t('rule.graph.selectModel')}
                                 </Typography>
                             </Box>
                         </Box>
@@ -381,6 +384,7 @@ const ProviderNodeComponent: React.FC<{
                     <IconButton
                         size="small"
                         onClick={handleMenuClick}
+                        title={t('rule.menu.refreshModels')}
                         sx={{
                             position: 'absolute',
                             bottom: 4,
@@ -415,14 +419,14 @@ const ProviderNodeComponent: React.FC<{
                                 <ListItemIcon>
                                     <RefreshIcon />
                                 </ListItemIcon>
-                                <ListItemText>Refresh Models</ListItemText>
+                                <ListItemText>{t('rule.menu.refreshModels')}</ListItemText>
                             </MenuItem>
                         )}
                         <MenuItem onClick={handleDelete} disabled={!active}>
                             <ListItemIcon>
                                 <DeleteIcon color="error" />
                             </ListItemIcon>
-                            <ListItemText sx={{ color: 'error.main' }}>Delete Provider</ListItemText>
+                            <ListItemText sx={{ color: 'error.main' }}>{t('rule.menu.deleteProvider')}</ListItemText>
                         </MenuItem>
                     </Menu>
                 </ProviderNode>

@@ -3,6 +3,7 @@ import { Box, Drawer, IconButton, List, ListItem, ListItemButton, ListItemIcon, 
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
 
@@ -13,6 +14,7 @@ interface LayoutProps {
 const drawerWidth = 260;
 
 const Layout = ({ children }: LayoutProps) => {
+    const { t } = useTranslation();
     const location = useLocation();
     const navigate = useNavigate();
     const { logout } = useAuth();
@@ -52,8 +54,8 @@ const Layout = ({ children }: LayoutProps) => {
     };
 
     const menuItems = [
-        { path: '/', label: 'Home', icon: <DashboardIcon /> },
-        { path: '/provider', label: 'Credential', icon: <KeyIcon /> },
+        { path: '/', label: t('layout.nav.home'), icon: <DashboardIcon /> },
+        { path: '/provider', label: t('layout.nav.credential'), icon: <KeyIcon /> },
         // { path: '/routing', label: 'Advance', icon: <ForkRight sx={{ transform: 'rotate(45deg)' }} /> },
         // { path: '/system', label: 'System', icon: <SettingsIcon /> },
         // { path: '/history', label: 'History', icon: <HistoryIcon /> },
@@ -89,7 +91,7 @@ const Layout = ({ children }: LayoutProps) => {
                     T
                 </Box>
                 <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                    Tingly Box
+                    {t('layout.appTitle')}
                 </Typography>
 
             </Box>
@@ -144,7 +146,7 @@ const Layout = ({ children }: LayoutProps) => {
                     fontStyle: 'italic'
                 }}
             >
-                version {version}
+                {t('layout.version', { version })}
             </Typography>
 
             {/* Bottom Section - Slogan and User */}
@@ -167,7 +169,7 @@ const Layout = ({ children }: LayoutProps) => {
                         fontStyle: 'italic',
                     }}
                 >
-                    Ready for AI Agent Dev
+                    {t('layout.slogan')}
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <IconButton
