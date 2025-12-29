@@ -569,9 +569,6 @@ func (c *Config) AddProviderByName(name, apiBase, token string) error {
 	if apiBase == "" {
 		return errors.New("API base URL cannot be empty")
 	}
-	if token == "" {
-		return errors.New("API token cannot be empty")
-	}
 
 	provider := &Provider{
 		UUID:     generateUUID(), // Generate a new UUID for the provider
@@ -632,9 +629,6 @@ func (c *Config) AddProvider(provider *Provider) error {
 	}
 	if provider.APIBase == "" {
 		return errors.New("API base URL cannot be empty")
-	}
-	if provider.Token == "" {
-		return errors.New("API token cannot be empty")
 	}
 
 	c.Providers = append(c.Providers, provider)
