@@ -105,16 +105,21 @@ func RunManualTest(config *ManualTestConfig) error {
 
 	// Register provider with credentials
 	providerConfig := &oauth2.ProviderConfig{
-		Type:         defaultConfig.Type,
-		DisplayName:  defaultConfig.DisplayName,
-		ClientID:     clientID,
-		ClientSecret: clientSecret,
-		AuthURL:      defaultConfig.AuthURL,
-		TokenURL:     defaultConfig.TokenURL,
-		Scopes:       defaultConfig.Scopes,
-		AuthStyle:    defaultConfig.AuthStyle,
-		OAuthMethod:  defaultConfig.OAuthMethod,
-		RedirectURL:  fmt.Sprintf("%s/callback", config.BaseURL),
+		Type:               defaultConfig.Type,
+		DisplayName:        defaultConfig.DisplayName,
+		ClientID:           clientID,
+		ClientSecret:       clientSecret,
+		AuthURL:            defaultConfig.AuthURL,
+		TokenURL:           defaultConfig.TokenURL,
+		Scopes:             defaultConfig.Scopes,
+		AuthStyle:          defaultConfig.AuthStyle,
+		OAuthMethod:        defaultConfig.OAuthMethod,
+		TokenRequestFormat: defaultConfig.TokenRequestFormat,
+		RedirectURL:        fmt.Sprintf("%s/callback", config.BaseURL),
+		ConsoleURL:         defaultConfig.ConsoleURL,
+		AuthExtraParams:    defaultConfig.AuthExtraParams,
+		TokenExtraParams:   defaultConfig.TokenExtraParams,
+		TokenExtraHeaders:  defaultConfig.TokenExtraHeaders,
 	}
 	registry.Register(providerConfig)
 
