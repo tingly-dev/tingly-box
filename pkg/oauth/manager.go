@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -248,7 +249,13 @@ func (m *Manager) HandleCallback(ctx context.Context, r *http.Request) (*Token, 
 	}
 
 	// Exchange code for token
-	token, err := m.exchangeCodeForToken(ctx, config, code, stateData.CodeVerifier)
+	// For PKCE providers, include the code verifier; for standard OAuth, omit it
+	var codeVerifier string
+	if config.OAuthMethod == OAuthMethodPKCE {
+		codeVerifier = stateData.CodeVerifier
+	}
+
+	token, err := m.exchangeCodeForToken(ctx, config, code, codeVerifier)
 	if err != nil {
 		return nil, err
 	}
@@ -268,20 +275,23 @@ func (m *Manager) HandleCallback(ctx context.Context, r *http.Request) (*Token, 
 func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConfig, code string, codeVerifier string) (*Token, error) {
 	redirectURL := config.RedirectURL
 	if redirectURL == "" {
-		redirectURL = fmt.Sprintf("%s/oauth/callback", m.config.BaseURL)
+		redirectURL = fmt.Sprintf("%s/callback", m.config.BaseURL)
 	}
 
 	// Build token request
 	data := url.Values{}
-	data.Set("code", code)
 	data.Set("grant_type", "authorization_code")
-	data.Set("redirect_uri", redirectURL)
 	data.Set("client_id", config.ClientID)
 	data.Set("client_secret", config.ClientSecret)
+	data.Set("redirect_uri", redirectURL)
+	data.Set("code", code)
 
-	// Add code_verifier for PKCE flow
-	if config.OAuthMethod == OAuthMethodPKCE && codeVerifier != "" {
-		data.Set("code_verifier", codeVerifier)
+	// PKCE flow: use code_verifier instead of client_secret
+	// Standard OAuth: use client_secret for authentication
+	if config.OAuthMethod == OAuthMethodPKCE {
+		if codeVerifier != "" {
+			data.Set("code_verifier", codeVerifier)
+		}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", config.TokenURL, strings.NewReader(data.Encode()))
@@ -293,15 +303,16 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 	req.Header.Set("Accept", "application/json")
 
 	// Send request
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := &http.Client{Timeout: 60 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrTokenExchangeFailed, err)
+		return nil, fmt.Errorf("client error: %w: %v", ErrTokenExchangeFailed, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%w: status %d", ErrTokenExchangeFailed, resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("token exchange failed: status %d, body: %s", resp.StatusCode, string(body))
 	}
 
 	// Parse response
@@ -313,7 +324,7 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrTokenExchangeFailed, err)
+		return nil, fmt.Errorf("data decode: %w: %v", ErrTokenExchangeFailed, err)
 	}
 
 	token := &Token{
@@ -383,12 +394,13 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrTokenExchangeFailed, err)
+		return nil, fmt.Errorf("refresh token: %w: %v", ErrTokenExchangeFailed, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%w: status %d", ErrTokenExchangeFailed, resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("refresh token failed: status %d, body: %s", resp.StatusCode, string(body))
 	}
 
 	// Parse response
@@ -400,7 +412,7 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrTokenExchangeFailed, err)
+		return nil, fmt.Errorf("decode error: %w: %v", ErrTokenExchangeFailed, err)
 	}
 
 	token := &Token{
