@@ -1,12 +1,14 @@
 import { Cancel, CheckCircle, Key, PlayArrow, Refresh as RefreshIcon, RestartAlt, Stop } from '@mui/icons-material';
 import { Button, IconButton, Stack, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import CardGrid from '../components/CardGrid';
 import { PageLayout } from '../components/PageLayout';
 import UnifiedCard from '../components/UnifiedCard';
 import { api, getBaseUrl } from '../services/api';
 
 const System = () => {
+    const { t } = useTranslation();
     const [serverStatus, setServerStatus] = useState<any>(null);
     const [baseUrl, setBaseUrl] = useState<string>("");
     const [providersStatus, setProvidersStatus] = useState<any>(null);
@@ -83,7 +85,7 @@ const System = () => {
     };
 
     const handleStartServer = async () => {
-        const port = prompt('Enter port for server (8080):', '8080');
+        const port = prompt(t('system.prompts.enterPort'), '8080');
         if (port) {
             const result = await api.startServer(parseInt(port));
             if (result.success) {
@@ -98,7 +100,7 @@ const System = () => {
     };
 
     const handleStopServer = async () => {
-        if (confirm('Are you sure you want to stop the server?')) {
+        if (confirm(t('system.confirmations.stopServer'))) {
             const result = await api.stopServer();
             if (result.success) {
                 setMessage({ type: 'success', text: result.message });
@@ -112,7 +114,7 @@ const System = () => {
     };
 
     const handleRestartServer = async () => {
-        const port = prompt('Enter port for server (8080):', '8080');
+        const port = prompt(t('system.prompts.enterPort'), '8080');
         if (port) {
             const result = await api.restartServer(parseInt(port));
             if (result.success) {
@@ -127,7 +129,7 @@ const System = () => {
     };
 
     const handleGenerateToken = async () => {
-        const clientId = prompt('Enter client ID (web):', 'web');
+        const clientId = prompt(t('system.prompts.enterClientId'), 'web');
         if (clientId) {
             const result = await api.generateToken(clientId);
             if (result.success) {
@@ -145,7 +147,7 @@ const System = () => {
             <CardGrid>
                 {/* Server Status - Consolidated */}
                 <UnifiedCard
-                    title="Server Status & Control"
+                    title={t('system.pageTitle')}
                     size="full"
                     // rightAction={
                     //     <Stack direction="row" spacing={1}>
@@ -206,7 +208,7 @@ const System = () => {
                                         <Cancel color="error" />
                                     )}
                                     <Typography variant="h6">
-                                        Status: {serverStatus.server_running ? 'Running' : 'Stopped'}
+                                        Status: {serverStatus.server_running ? t('system.status.running') : t('system.status.stopped')}
                                     </Typography>
                                 </Stack>
                                 <Typography variant="body2" color="text.secondary">
@@ -233,7 +235,7 @@ const System = () => {
                             </Stack>
                         </Stack>
                     ) : (
-                        <div>Loading...</div>
+                        <div>{t('system.status.loading')}</div>
                     )}
                 </UnifiedCard>
             </CardGrid>

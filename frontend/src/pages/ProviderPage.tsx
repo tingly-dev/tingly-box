@@ -1,6 +1,7 @@
 import { Add } from '@mui/icons-material';
 import { Alert, Box, Button, Snackbar, Stack, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import ProviderTable from '../components/ProviderTable.tsx';
 import { PageLayout } from '../components/PageLayout';
 import PresetProviderFormDialog from '../components/PresetProviderFormDialog.tsx';
@@ -9,6 +10,7 @@ import UnifiedCard from '../components/UnifiedCard';
 import { api } from '../services/api';
 
 const ProviderPage = () => {
+    const { t } = useTranslation();
     const [providers, setProviders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [snackbar, setSnackbar] = useState<{
@@ -56,7 +58,7 @@ const ProviderPage = () => {
         if (result.success) {
             setProviders(result.data);
         } else {
-            showNotification(`Failed to load providers: ${result.error}`, 'error');
+            showNotification(t('provider.notifications.loadFailed', { error: result.error }), 'error');
         }
         setLoading(false);
     };
@@ -80,11 +82,11 @@ const ProviderPage = () => {
             });
 
         if (result.success) {
-            showNotification(`Provider ${dialogMode === 'add' ? 'added' : 'updated'} successfully!`, 'success');
+            showNotification(t(`provider.notifications.${dialogMode === 'add' ? 'added' : 'updated'}`), 'success');
             setDialogOpen(false);
             loadProviders();
         } else {
-            showNotification(`Failed to ${dialogMode === 'add' ? 'add' : 'update'} provider: ${result.error}`, 'error');
+            showNotification(t(`provider.notifications.${dialogMode === 'add' ? 'addFailed' : 'updateFailed'}`, { error: result.error }), 'error');
         }
     };
 
@@ -92,10 +94,10 @@ const ProviderPage = () => {
         const result = await api.deleteProvider(uuid);
 
         if (result.success) {
-            showNotification('Provider deleted successfully!', 'success');
+            showNotification(t('provider.notifications.deleted'), 'success');
             loadProviders();
         } else {
-            showNotification(`Failed to delete provider: ${result.error}`, 'error');
+            showNotification(t('provider.notifications.deleteFailed', { error: result.error }), 'error');
         }
     };
 
@@ -106,7 +108,7 @@ const ProviderPage = () => {
             showNotification(result.message, 'success');
             loadProviders();
         } else {
-            showNotification(`Failed to toggle provider: ${result.error}`, 'error');
+            showNotification(t('provider.notifications.toggleFailed', { error: result.error }), 'error');
         }
     };
 
@@ -126,7 +128,7 @@ const ProviderPage = () => {
             });
             setDialogOpen(true);
         } else {
-            showNotification(`Failed to load provider details: ${result.error}`, 'error');
+            showNotification(t('provider.notifications.loadDetailFailed', { error: result.error }), 'error');
         }
     };
 
@@ -134,8 +136,8 @@ const ProviderPage = () => {
         <PageLayout loading={loading}>
             {providers.length > 0 && (
                 <UnifiedCard
-                    title="Credential"
-                    subtitle={providers.length > 0 ? `Managing ${providers.length} providers and api keys` : "No model API key configured yet"}
+                    title={t('provider.pageTitle')}
+                    subtitle={providers.length > 0 ? t('provider.subtitleWithCount', { count: providers.length }) : t('provider.subtitleEmpty')}
                     size="full"
                     rightAction={
                         <Stack direction="row" spacing={1} alignItems="center">
@@ -145,7 +147,7 @@ const ProviderPage = () => {
                                 onClick={handleAddProviderClick}
                                 size="small"
                             >
-                                Add API Key
+                                {t('provider.addButton')}
                             </Button>
                         </Stack>
                     }
@@ -163,13 +165,13 @@ const ProviderPage = () => {
 
             {providers.length === 0 && (
                 <UnifiedCard
-                    title="No Model API Key Configured"
-                    subtitle="Get started by adding your first API token or key"
+                    title={t('provider.emptyCardTitle')}
+                    subtitle={t('provider.emptyCardSubtitle')}
                     size="large"
                 >
                     <Box textAlign="center" py={3}>
                         <Typography color="text.secondary" gutterBottom>
-                            Configure your API tokens and keys to access AI services
+                            {t('provider.emptyCardContent')}
                         </Typography>
                         <Button
                             variant="contained"
@@ -177,7 +179,7 @@ const ProviderPage = () => {
                             onClick={() => setDialogOpen(true)}
                             sx={{ mt: 2 }}
                         >
-                            Add Your First Provider
+                            {t('provider.emptyCardButton')}
                         </Button>
                     </Box>
                 </UnifiedCard>

@@ -12,6 +12,7 @@ import {
     Typography
 } from '@mui/material';
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { OpenAI, Anthropic } from '@lobehub/icons';
 import CodeIcon from '@mui/icons-material/Code';
 import { Add as AddIcon } from '@mui/icons-material';
@@ -25,6 +26,7 @@ import UseClaudeCodePage from './UseClaudeCodePage';
 import UseLiteLLMPage from './UseLiteLLMPage';
 
 const Home = () => {
+    const { t } = useTranslation();
     const [activeTab, setActiveTab] = useState(0);
     const [generatedToken, setGeneratedToken] = useState<string>('');
     const [apiKey, setApiKey] = useState<string>('');
@@ -65,9 +67,9 @@ const Home = () => {
     const copyToClipboard = async (text: string, label: string) => {
         try {
             await navigator.clipboard.writeText(text);
-            showNotification(`${label} copied to clipboard!`, 'success');
+            showNotification(t('home.token.generated', { label }), 'success');
         } catch (err) {
-            showNotification('Failed to copy to clipboard', 'error');
+            showNotification(t('home.token.copyFailed'), 'error');
         }
     };
 
@@ -97,7 +99,7 @@ const Home = () => {
             setGeneratedToken(result.data.token);
             copyToClipboard(result.data.token, 'Token');
         } else {
-            showNotification(`Failed to generate token: ${result.error}`, 'error');
+            showNotification(t('home.token.generationFailed', { error: result.error }), 'error');
         }
     };
 
@@ -141,7 +143,7 @@ const Home = () => {
         const result = await api.addProvider(providerData);
 
         if (result.success) {
-            showNotification('Provider added successfully!', 'success');
+            showNotification(t('home.notifications.providerAdded'), 'success');
             setProviderFormData({
                 name: '',
                 apiBase: '',
@@ -151,7 +153,7 @@ const Home = () => {
             setAddDialogOpen(false);
             await loadProviders();
         } else {
-            showNotification(`Failed to add provider: ${result.error}`, 'error');
+            showNotification(t('home.notifications.providerAddFailed', { error: result.error }), 'error');
         }
     };
 
@@ -192,10 +194,10 @@ const Home = () => {
                 <AddIcon sx={{ fontSize: 40 }} />
             </Button>
             <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>
-                No API Keys Available
+                {t('home.emptyState.title')}
             </Typography>
             <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
-                Get started by adding your first AI API Key to use the service.
+                {t('home.emptyState.description')}
             </Typography>
             <Button
                 variant="contained"
@@ -203,7 +205,7 @@ const Home = () => {
                 onClick={handleAddProviderClick}
                 size="large"
             >
-                Add Your First API Key
+                {t('home.emptyState.button')}
             </Button>
         </Box>
     );
@@ -215,17 +217,17 @@ const Home = () => {
                 <Tabs value={activeTab} onChange={handleTabChange} aria-label="Plugin tabs">
                     <Tab
                         icon={<OpenAI size={16} />}
-                        label="Use OpenAI"
+                        label={t('home.tabs.useOpenAI')}
                         iconPosition="start"
                     />
                     <Tab
                         icon={<Anthropic size={16} />}
-                        label="Use Anthropic"
+                        label={t('home.tabs.useAnthropic')}
                         iconPosition="start"
                     />
                     <Tab
                         icon={<CodeIcon fontSize="small" />}
-                        label="Use Claude Code"
+                        label={t('home.tabs.useClaudeCode')}
                         iconPosition="start"
                     />
                 </Tabs>
@@ -285,22 +287,22 @@ const Home = () => {
                 aria-describedby="refresh-token-dialog-description"
             >
                 <DialogTitle id="refresh-token-dialog-title">
-                    Confirm Token Refresh
+                    {t('home.token.refresh.title')}
                 </DialogTitle>
                 <DialogContent>
                     <Alert severity="warning" sx={{ mb: 2 }}>
-                        Important Reminder
+                        {t('home.token.refresh.alert')}
                     </Alert>
                     <DialogContentText id="refresh-token-dialog-description">
-                        Modifying the token will cause configured tools to become unavailable. Are you sure you want to continue generating a new token?
+                        {t('home.token.refresh.description')}
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={() => setShowRefreshConfirmation(false)} color="primary">
-                        Cancel
+                        {t('common.cancel')}
                     </Button>
                     <Button onClick={confirmRefreshToken} color="error" variant="contained">
-                        Confirm Refresh
+                        {t('home.token.refresh.button')}
                     </Button>
                 </DialogActions>
             </Dialog>

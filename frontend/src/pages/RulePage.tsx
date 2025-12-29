@@ -14,6 +14,7 @@ import {
 } from '@mui/material';
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { PageLayout } from '../components/PageLayout';
 import RuleGraph from '../components/RuleGraphV2'
 import UnifiedCard from '../components/UnifiedCard';
@@ -40,6 +41,7 @@ interface ConfigRecord {
 }
 
 const RulePage = () => {
+    const { t } = useTranslation();
     const [searchParams] = useSearchParams();
     const [rules, setRules] = useState<any>({});
     const [providers, setProviders] = useState<any[]>([]);
@@ -84,7 +86,7 @@ const RulePage = () => {
                 setRules(rulesResult.data);
             }
         } catch (error) {
-            setMessage({ type: 'error', text: 'Failed to load data' });
+            setMessage({ type: 'error', text: t('rule.notifications.loadFailed') });
         } finally {
             setLoading(false);
         }
@@ -135,14 +137,14 @@ const RulePage = () => {
     const handleSaveRule = async (record: ConfigRecord) => {
         console.log(record)
         if (!record.requestModel || !record.uuid) {
-            setMessage({ type: 'error', text: 'Request model name is required' });
+            setMessage({ type: 'error', text: t('rule.notifications.requestModelRequired') });
             return;
         }
 
         for (const provider of record.providers) {
             if (provider.provider && !provider.model) {
                 const providerName = providerUuidToName[provider.provider] || provider.provider;
-                setMessage({ type: 'error', text: `Please select a model for provider ${providerName}` });
+                setMessage({ type: 'error', text: t('rule.notifications.modelRequired', { name: providerName }) });
                 return;
             }
         }
@@ -167,14 +169,14 @@ const RulePage = () => {
             const result = await api.updateRule(record.uuid, ruleData);
 
             if (result.success) {
-                setMessage({ type: 'success', text: `Rule "${record.requestModel}" saved successfully` });
+                setMessage({ type: 'success', text: t('rule.notifications.saved', { model: record.requestModel }) });
                 await loadData();
             } else {
-                setMessage({ type: 'error', text: `Failed to save rule: ${result.error || 'Unknown error'}` });
+                setMessage({ type: 'error', text: t('rule.notifications.saveFailed', { error: result.error || t('common.error') }) });
                 setTimeout(() => loadData(), 3000);
             }
         } catch (error) {
-            setMessage({ type: 'error', text: `Error saving rule: ${error}` });
+            setMessage({ type: 'error', text: t('rule.notifications.saveError', { error }) });
             setTimeout(() => loadData(), 3000);
         } finally {
             setSavingRecords(prev => {
@@ -312,7 +314,7 @@ const RulePage = () => {
     const resetRule = async (recordId: string) => {
         // Reload data from server to reset changes
         await loadData();
-        setMessage({ type: 'success', text: 'Rule reset to latest saved state' });
+        setMessage({ type: 'success', text: t('rule.notifications.reset') });
     };
 
     const toggleCardExpanded = (recordId: string) => {
@@ -364,12 +366,12 @@ const RulePage = () => {
                         models: result.data.models || []
                     }
                 }));
-                setMessage({ type: 'success', text: `Successfully refreshed models for ${providerUuidToName[uid] || uid}` });
+                setMessage({ type: 'success', text: t('rule.notifications.modelsRefreshed', { name: providerUuidToName[uid] || uid }) });
             } else {
-                setMessage({ type: 'error', text: `Failed to refresh models: ${result.error || result.message}` });
+                setMessage({ type: 'error', text: t('rule.notifications.modelsRefreshFailed', { error: result.error || result.message }) });
             }
         } catch (error) {
-            setMessage({ type: 'error', text: `Failed to refresh models: ${error}` });
+            setMessage({ type: 'error', text: t('rule.notifications.modelsRefreshError', { error }) });
         }
     };
 
@@ -407,8 +409,8 @@ const RulePage = () => {
             }}
         >
             <UnifiedCard
-                title="Advance Proxy Configuration"
-                subtitle="Config local model which forwarding to remote providers"
+                title={t('rule.pageTitle')}
+                subtitle={t('rule.subtitle')}
                 size="full"
                 rightAction={
                     <Button
@@ -417,7 +419,7 @@ const RulePage = () => {
                         startIcon={<AddIcon />}
                         onClick={addConfigRecord}
                     >
-                        Add Forwarding Rule
+                        {t('rule.addButton')}
                     </Button>
                 }
             >
@@ -432,10 +434,10 @@ const RulePage = () => {
                             textAlign: 'center'
                         }}>
                             <Typography variant="h6" color="text.secondary" gutterBottom>
-                                No rules configured
+                                {t('rule.emptyState.title')}
                             </Typography>
                             <Typography variant="body2" color="text.secondary">
-                                Click "Add Rule" to create your first rule
+                                {t('rule.emptyState.description')}
                             </Typography>
                         </Box>
                     ) : (
@@ -476,19 +478,19 @@ const RulePage = () => {
                 aria-describedby="delete-dialog-description"
             >
                 <DialogTitle id="delete-dialog-title">
-                    Delete Rule
+                    {t('rule.deleteDialog.title')}
                 </DialogTitle>
                 <DialogContent>
                     <DialogContentText id="delete-dialog-description">
-                        Are you sure you want to delete this rule? This action cannot be undone.
+                        {t('rule.deleteDialog.description')}
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={cancelDelete} color="primary">
-                        Cancel
+                        {t('rule.deleteDialog.cancelButton')}
                     </Button>
                     <Button onClick={confirmDeleteRule} color="error" variant="contained" autoFocus>
-                        Delete
+                        {t('rule.deleteDialog.confirmButton')}
                     </Button>
                 </DialogActions>
             </Dialog>

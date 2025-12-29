@@ -1,5 +1,6 @@
 import { Stack } from '@mui/material';
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import CardGrid from '../components/CardGrid';
 import UnifiedCard from '../components/UnifiedCard';
 import HistoryStats from '../components/HistoryStats';
@@ -7,6 +8,7 @@ import ActivityLog from '../components/ActivityLog';
 import { PageLayout } from '../components/PageLayout';
 
 const History = () => {
+    const { t } = useTranslation();
     const [allHistory, setAllHistory] = useState<any[]>([]);
     const [filteredHistory, setFilteredHistory] = useState<any[]>([]);
     const [activityLog, setActivityLog] = useState<any[]>([]);
@@ -145,8 +147,8 @@ const History = () => {
 
                 {/* Activity Log - Enhanced */}
                 <UnifiedCard
-                    title="Activity Log & History"
-                    subtitle={`${activityLog.length} recent activity entries`}
+                    title={t('history.pageTitle')}
+                    subtitle={t('history.subtitle', { count: activityLog.length })}
                     size="full"
                 >
                     <Stack spacing={2}>
