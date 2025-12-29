@@ -14,6 +14,17 @@
       "base_url_openai": "https://api.openai.com/v1",
       "base_url_anthropic": null,
       "models": [],
+      "model_limits": {
+        "gpt-3.5-turbo": 4096,
+        "gpt-3.5-turbo-16k": 16384,
+        "gpt-4": 8192,
+        "gpt-4-turbo": 4096,
+        "gpt-4-turbo-preview": 4096,
+        "gpt-4o": 8192,
+        "gpt-4o-mini": 8192,
+        "o1": 8192,
+        "o1-mini": 8192
+      },
       "supports_models_endpoint": true
     },
     "anthropic": {
@@ -30,6 +41,16 @@
       "base_url_openai": null,
       "base_url_anthropic": "https://api.anthropic.com",
       "models": [],
+      "model_limits": {
+        "claude-3-haiku": 4096,
+        "claude-3.5-haiku": 8192,
+        "claude-3-haiku-20240307": 4096,
+        "claude-3-sonnet": 8192,
+        "claude-3.5-sonnet": 8192,
+        "claude-3-sonnet-20240229": 8192,
+        "claude-3-opus": 4096,
+        "claude-3-opus-20240229": 4096
+      },
       "supports_models_endpoint": true
     },
     "dashscope": {
@@ -46,6 +67,12 @@
       "base_url_openai": "https://dashscope.aliyuncs.com/compatible-mode/v1",
       "base_url_anthropic": null,
       "models": [],
+      "model_limits": {
+        "qwen-max": 8192,
+        "qwen-plus": 8192,
+        "qwen-turbo": 8192,
+        "qwen-long": 8192
+      },
       "supports_models_endpoint": true
     },
     "dashscope-intl": {
@@ -62,6 +89,12 @@
       "base_url_openai": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
       "base_url_anthropic": null,
       "models": [],
+      "model_limits": {
+        "qwen-max": 8192,
+        "qwen-plus": 8192,
+        "qwen-turbo": 8192,
+        "qwen-long": 8192
+      },
       "supports_models_endpoint": true
     },
     "deepseek": {
@@ -78,6 +111,10 @@
       "base_url_openai": "https://api.deepseek.com/v1",
       "base_url_anthropic": "https://api.deepseek.com/anthropic",
       "models": [],
+      "model_limits": {
+        "deepseek-chat": 8192,
+        "deepseek-coder": 8192
+      },
       "supports_models_endpoint": true
     },
     "minimax": {
@@ -99,6 +136,12 @@
         "glm-4.6",
         "glm-4.7"
       ],
+      "model_limits": {
+        "glm-4.5": 128000,
+        "glm-4.5-air": 128000,
+        "glm-4.6": 128000,
+        "glm-4.7": 128000
+      },
       "supports_models_endpoint": false
     },
     "minimax-intl": {
@@ -120,6 +163,12 @@
         "glm-4.6",
         "glm-4.7"
       ],
+      "model_limits": {
+        "glm-4.5": 128000,
+        "glm-4.5-air": 128000,
+        "glm-4.6": 128000,
+        "glm-4.7": 128000
+      },
       "supports_models_endpoint": false
     },
     "zai-intl": {
@@ -136,6 +185,13 @@
       "base_url_openai": "https://api.z.ai/api/paas/v4",
       "base_url_anthropic": "https://api.z.ai/api/anthropic",
       "models": [],
+      "model_limits": {
+        "glm-4": 128000,
+        "glm-4.5": 128000,
+        "glm-4.5-air": 128000,
+        "glm-4.6": 128000,
+        "glm-4.7": 128000
+      },
       "supports_models_endpoint": true
     },
     "zai": {
@@ -152,6 +208,13 @@
       "base_url_openai": "https://open.bigmodel.cn/api/paas/v4",
       "base_url_anthropic": "https://open.bigmodel.cn/api/anthropic",
       "models": [],
+      "model_limits": {
+        "glm-4": 128000,
+        "glm-4.5": 128000,
+        "glm-4.5-air": 128000,
+        "glm-4.6": 128000,
+        "glm-4.7": 128000
+      },
       "supports_models_endpoint": true
     },
     "xai": {
@@ -168,6 +231,9 @@
       "base_url_openai": "https://xai.com/api/v1",
       "base_url_anthropic": null,
       "models": [],
+      "model_limits": {
+        "grok-beta": 8192
+      },
       "supports_models_endpoint": true
     },
     "gemini": {
@@ -184,6 +250,11 @@
       "base_url_openai": "https://generativelanguage.googleapis.com/v1beta/openai",
       "base_url_anthropic": null,
       "models": [],
+      "model_limits": {
+        "gemini-2.0-flash": 8192,
+        "gemini-1.5-pro": 8192,
+        "gemini-1.5-flash": 8192
+      },
       "supports_models_endpoint": true
     },
     "mistral": {
@@ -200,6 +271,12 @@
       "base_url_openai": "https://api.mistral.ai/v1",
       "base_url_anthropic": null,
       "models": [],
+      "model_limits": {
+        "mistral-large": 8192,
+        "mistral-small": 8192,
+        "mistral-medium": 8192,
+        "codestral": 8192
+      },
       "supports_models_endpoint": true
     },
     "moonshot-intl": {
@@ -215,6 +292,11 @@
       "base_url_openai": "https://api.moonshot.ai/v1",
       "base_url_anthropic": null,
       "models": [],
+      "model_limits": {
+        "moonshot-v1-8k": 8192,
+        "moonshot-v1-32k": 8192,
+        "moonshot-v1-128k": 8192
+      },
       "supports_models_endpoint": true
     },
     "moonshot": {
@@ -230,6 +312,11 @@
       "base_url_openai": "https://api.moonshot.cn/v1",
       "base_url_anthropic": null,
       "models": [],
+      "model_limits": {
+        "moonshot-v1-8k": 8192,
+        "moonshot-v1-32k": 8192,
+        "moonshot-v1-128k": 8192
+      },
       "supports_models_endpoint": true
     },
     "openrouter": {
@@ -245,9 +332,10 @@
       "base_url_openai": "https://openrouter.ai/api/v1",
       "base_url_anthropic": null,
       "models": [],
+      "model_limits": {},
       "supports_models_endpoint": true
     }
   },
-  "version": "1.0.0",
-  "last_updated": "2025-01-15T00:00:00Z"
+  "version": "1.0.1",
+  "last_updated": "2025-12-29T00:00:00Z"
 }
