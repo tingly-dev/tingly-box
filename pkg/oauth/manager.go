@@ -208,10 +208,10 @@ func (m *Manager) buildAuthURL(config *ProviderConfig, state string, codeVerifie
 		return "", "", err
 	}
 
-	redirectURL := config.RedirectURL
-	if redirectURL == "" {
-		redirectURL = fmt.Sprintf("%s/callback", m.config.BaseURL)
-	}
+	//redirectURL := config.RedirectURL
+	//if redirectURL == "" {
+	redirectURL := fmt.Sprintf("%s/callback", m.config.BaseURL)
+	//}
 
 	query := u.Query()
 	query.Set("client_id", config.ClientID)

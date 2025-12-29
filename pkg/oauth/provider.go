@@ -56,7 +56,7 @@ func DefaultRegistry() *Registry {
 	registry.Register(&ProviderConfig{
 		Type:               ProviderAnthropic,
 		DisplayName:        "Anthropic Claude Code",
-		ClientID:           "9d1c250a-e61b-44d9-88ed-5944d1962f5e", // Public client ID for Claude
+		ClientID:           "9d1c250a-e61b-44d9-88ed-5944d1962f5e", // Public client ID for Claude Code
 		ClientSecret:       "",                                     // No secret required for public client
 		AuthURL:            "https://claude.ai/oauth/authorize",
 		TokenURL:           "https://console.anthropic.com/v1/oauth/token",
