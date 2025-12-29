@@ -20,6 +20,7 @@ import {
     Typography
 } from '@mui/material';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import type { Provider, ProviderModelsData } from '../types/provider';
 import {ApiStyleBadge} from "@/components/ApiStyleBadge.tsx";
@@ -59,6 +60,7 @@ const ProviderTable = ({
     onToggle,
     onDelete,
 }: ProviderTableProps) => {
+    const { t } = useTranslation();
     const [tokenStates, setTokenStates] = useState<{ [key: string]: TokenMenuState }>({});
     const [tokenModal, setTokenModal] = useState<TokenModalState>({
         open: false,
@@ -188,7 +190,7 @@ const ProviderTable = ({
         const tokenState = tokenStates[provider.uuid];
         const showToken = tokenState?.showToken || false;
 
-        if (!provider.token) return 'Not set';
+        if (!provider.token) return t('providerTable.token.notSet');
         if (showToken) return provider.token;
         if (provider.token.length <= 12) return provider.token; // If too short, show as is
 
@@ -202,12 +204,12 @@ const ProviderTable = ({
             <Table>
                 <TableHead>
                     <TableRow>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 150 }}>Name</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 150 }}>API Key</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 200 }}>API Base</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>API Style</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Actions</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Status</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 150 }}>{t('providerTable.columns.name')}</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 150 }}>{t('providerTable.columns.apiKey')}</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 200 }}>{t('providerTable.columns.apiBase')}</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>{t('providerTable.columns.apiStyle')}</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>{t('providerTable.columns.actions')}</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>{t('providerTable.columns.status')}</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -240,7 +242,7 @@ const ProviderTable = ({
                                     </Typography>
                                     {provider.token && (
                                         <Stack direction="row" spacing={0.25}>
-                                            <Tooltip title="View Token">
+                                            <Tooltip title={t('providerTable.token.viewTooltip')}>
                                                 <IconButton
                                                     size="small"
                                                     onClick={() => handleViewToken(provider.uuid)}
@@ -289,7 +291,7 @@ const ProviderTable = ({
                             <TableCell>
                                 <Stack direction="row" spacing={0.5}>
                                     {onEdit && (
-                                        <Tooltip title="Edit">
+                                        <Tooltip title={t('common.edit')}>
                                             <IconButton
                                                 size="small"
                                                 color="primary"
@@ -300,7 +302,7 @@ const ProviderTable = ({
                                         </Tooltip>
                                     )}
                                     {onDelete && (
-                                        <Tooltip title="Delete">
+                                        <Tooltip title={t('common.delete')}>
                                             <IconButton
                                                 size="small"
                                                 color="error"
@@ -327,7 +329,7 @@ const ProviderTable = ({
                                     />
                                     <Typography variant="body2"
                                         color={provider.enabled ? 'success.main' : 'error.main'}>
-                                        {provider.enabled ? 'Enabled' : 'Disabled'}
+                                        {provider.enabled ? t('providerTable.status.enabled') : t('providerTable.status.disabled')}
                                     </Typography>
                                 </Stack>
                             </TableCell>
@@ -354,7 +356,7 @@ const ProviderTable = ({
                 >
                     <MenuItem onClick={() => handleViewToken(providerUuid)}>
                         <Visibility fontSize="small" sx={{ mr: 1 }} />
-                        View Token
+                        {t('providerTable.token.view')}
                     </MenuItem>
                 </Menu>
             ))}
@@ -381,13 +383,13 @@ const ProviderTable = ({
                     }}
                 >
                     <Typography id="token-modal-title" variant="h6" component="h2" sx={{ mb: 2 }}>
-                        API Key - {tokenModal.providerName}
+                        {t('providerTable.tokenModal.title', { providerName: tokenModal.providerName })}
                     </Typography>
 
                     {tokenModal.loading ? (
                         <Box sx={{ mb: 3, textAlign: 'center', py: 4 }}>
                             <Typography variant="body2" color="text.secondary">
-                                Loading API key...
+                                {t('providerTable.tokenModal.loading')}
                             </Typography>
                         </Box>
                     ) : (
@@ -404,7 +406,7 @@ const ProviderTable = ({
                                     borderColor: 'divider'
                                 }}
                             >
-                                {tokenModal.token || 'Failed to load token'}
+                                {tokenModal.token || t('providerTable.tokenModal.failedToLoad')}
                             </Box>
                         </Box>
                     )}
@@ -422,12 +424,12 @@ const ProviderTable = ({
                                     }
                                 }
                             }}
-                            title={tokenModal.loading ? "Loading..." : "Copy Token"}
+                            title={tokenModal.loading ? t('providerTable.tokenModal.loadingTooltip') : t('serverInfo.authentication.copyTokenTooltip')}
                         >
                             <ContentCopy />
                         </IconButton>
 
-                        <Tooltip title="Close">
+                        <Tooltip title={t('providerTable.tokenModal.closeTooltip')}>
                             <IconButton onClick={handleCloseTokenModal}>
                                 <Cancel />
                             </IconButton>
@@ -458,20 +460,19 @@ const ProviderTable = ({
                     }}
                 >
                     <Typography id="delete-modal-title" variant="h6" component="h2" sx={{ mb: 2 }}>
-                        Delete Provider
+                        {t('providerTable.deleteModal.title')}
                     </Typography>
 
                     <Typography id="delete-modal-description" variant="body2" sx={{ mb: 3 }}>
-                        Are you sure you want to delete the provider "{deleteModal.providerName}"? This action cannot
-                        be undone.
+                        {t('providerTable.deleteModal.description', { name: deleteModal.providerName })}
                     </Typography>
 
                     <Stack direction="row" spacing={2} justifyContent="flex-end">
                         <Button onClick={handleCloseDeleteModal} color="inherit">
-                            Cancel
+                            {t('providerTable.deleteModal.cancelButton')}
                         </Button>
                         <Button onClick={handleConfirmDelete} color="error" variant="contained">
-                            Delete
+                            {t('providerTable.deleteModal.confirmButton')}
                         </Button>
                     </Stack>
                 </Box>

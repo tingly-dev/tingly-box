@@ -18,6 +18,7 @@ import {
     Typography,
 } from '@mui/material';
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { getServiceProvider, getProvidersByStyle } from '../data/serviceProviders';
 import api from '../services/api';
 import { OpenAI } from '@lobehub/icons';
@@ -52,8 +53,9 @@ const PresetProviderFormDialog = ({
     title,
     submitText,
 }: PresetProviderFormDialogProps) => {
-    const defaultTitle = mode === 'add' ? 'Add New API Key' : 'Edit API Key';
-    const defaultSubmitText = mode === 'add' ? 'Add API Key' : 'Save Changes';
+    const { t } = useTranslation();
+    const defaultTitle = mode === 'add' ? t('providerDialog.addTitle') : t('providerDialog.editTitle');
+    const defaultSubmitText = mode === 'add' ? t('providerDialog.addButton') : t('common.saveChanges');
 
     const [verifying, setVerifying] = useState(false);
     const [verificationResult, setVerificationResult] = useState<{
@@ -86,7 +88,7 @@ const PresetProviderFormDialog = ({
             onChange('apiBase', newValue.baseUrl);
             // If name is empty and token is empty, set default name
             if (!data.name && !data.token) {
-                onChange('name', `Key For ${newValue.title}`);
+                onChange('name', t('providerDialog.keyName.autoFill', { title: newValue.title }));
             }
         } else if (newValue === null) {
             // Clear selection - only clear apiBase, preserve name
@@ -99,7 +101,7 @@ const PresetProviderFormDialog = ({
         if (!data.name || !data.apiBase || !data.token || !data.apiStyle) {
             setVerificationResult({
                 success: false,
-                message: 'Please fill in all required fields (API Style, Name, API Base URL, API Key)',
+                message: t('providerDialog.verification.missingFields'),
             });
             return;
         }
@@ -118,21 +120,21 @@ const PresetProviderFormDialog = ({
                 setVerificationResult({
                     success: true,
                     message: result.data.message,
-                    details: `Test result: ${result.data.test_result}`,
+                    details: t('providerDialog.verification.testResult', { result: result.data.test_result }),
                     responseTime: result.data.response_time_ms,
                     modelsCount: result.data.models_count,
                 });
             } else {
                 setVerificationResult({
                     success: false,
-                    message: result.error?.message || 'Verification failed',
+                    message: result.error?.message || t('providerDialog.verification.failed'),
                     details: result.error?.type,
                 });
             }
         } catch (error) {
             setVerificationResult({
                 success: false,
-                message: 'Network error or unable to connect to verification service',
+                message: t('providerDialog.verification.networkError'),
                 details: error instanceof Error ? error.message : 'Unknown error',
             });
         } finally {
@@ -151,7 +153,7 @@ const PresetProviderFormDialog = ({
                             select
                             fullWidth
                             size="small"
-                            label="API Style"
+                            label={t('providerDialog.apiStyle.label')}
                             value={data.apiStyle || ''}
                             onChange={(e) => {
                                 onChange('apiStyle', e.target.value as 'openai' | 'anthropic' | '');
@@ -171,26 +173,26 @@ const PresetProviderFormDialog = ({
                             }}
                             helperText={
                                 data.apiStyle === 'openai'
-                                    ? "Supports models from OpenAI, Azure OpenAI, and many other providers"
+                                    ? t('providerDialog.apiStyle.helperOpenAI')
                                     : data.apiStyle === 'anthropic'
-                                        ? "For Claude API and Claude-compatible AI providers"
-                                        : "Please select an API style to continue"
+                                        ? t('providerDialog.apiStyle.helperAnthropic')
+                                        : t('providerDialog.apiStyle.placeholder')
                             }
                             required={mode === 'add'}
                         >
                             <MenuItem value="">
-                                <em>Select API style...</em>
+                                <em>{t('providerDialog.apiStyle.placeholder')}</em>
                             </MenuItem>
                             <MenuItem value="openai">
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                     <OpenAI size={16} />
-                                    OpenAI Compatible
+                                    {t('providerDialog.apiStyle.openAI')}
                                 </Box>
                             </MenuItem>
                             <MenuItem value="anthropic">
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                     <Anthropic size={16} />
-                                    Anthropic Compatible
+                                    {t('providerDialog.apiStyle.anthropic')}
                                 </Box>
                             </MenuItem>
                         </TextField>
@@ -202,14 +204,14 @@ const PresetProviderFormDialog = ({
                                 <TextField
                                     size="small"
                                     fullWidth
-                                    label="API Key Name"
+                                    label={t('providerDialog.keyName.label')}
                                     value={data.name}
                                     onChange={(e) => {
                                         onChange('name', e.target.value);
                                         setVerificationResult(null);
                                     }}
                                     required
-                                    placeholder="e.g., OpenAI"
+                                    placeholder={t('providerDialog.keyName.placeholder')}
                                 />
 
                                 {/* Merged Provider Preset and Base URL Input */}
@@ -246,8 +248,8 @@ const PresetProviderFormDialog = ({
                                     renderInput={(params) => (
                                         <TextField
                                             {...params}
-                                            label="Provider or Custom Base URL"
-                                            placeholder="Select a provider or enter custom URL"
+                                            label={t('providerDialog.providerOrUrl.label')}
+                                            placeholder={t('providerDialog.providerOrUrl.placeholder')}
                                         />
                                     )}
                                     isOptionEqualToValue={(option, value) => {
@@ -262,7 +264,7 @@ const PresetProviderFormDialog = ({
                                 <TextField
                                     size="small"
                                     fullWidth
-                                    label="API Key"
+                                    label={t('providerDialog.apiKey.label')}
                                     type="password"
                                     value={data.token}
                                     onChange={(e) => {
@@ -271,8 +273,8 @@ const PresetProviderFormDialog = ({
                                         setVerificationResult(null);
                                     }}
                                     required={mode === 'add'}
-                                    placeholder={mode === 'add' ? 'Your API token' : 'Leave empty to keep current token'}
-                                    helperText={mode === 'edit' && 'Leave empty to keep current token'}
+                                    placeholder={mode === 'add' ? t('providerDialog.apiKey.placeholderAdd') : t('providerDialog.apiKey.placeholderEdit')}
+                                    helperText={mode === 'edit' && t('providerDialog.apiKey.helperEdit')}
                                 />
 
                                 {/* Verification Result */}
@@ -302,8 +304,8 @@ const PresetProviderFormDialog = ({
                                             )}
                                             {verificationResult.responseTime && (
                                                 <Typography variant="caption" display="block">
-                                                    Response time: {verificationResult.responseTime}ms
-                                                    {verificationResult.modelsCount && ` • ${verificationResult.modelsCount} models available`}
+                                                    {t('providerDialog.verification.responseTime', { time: verificationResult.responseTime })}
+                                                    {verificationResult.modelsCount && ` • ${t('providerDialog.verification.modelsAvailable', { count: verificationResult.modelsCount })}`}
                                                 </Typography>
                                             )}
                                         </Box>
@@ -320,7 +322,7 @@ const PresetProviderFormDialog = ({
                                                 onChange={(e) => onChange('enabled', e.target.checked)}
                                             />
                                         }
-                                        label="Enabled"
+                                        label={t('providerDialog.enabled')}
                                     />
                                 )}
                             </>
@@ -328,7 +330,7 @@ const PresetProviderFormDialog = ({
                     </Stack>
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Button onClick={onClose}>Cancel</Button>
+                    <Button onClick={onClose}>{t('common.cancel')}</Button>
                     <Button
                         variant="outlined"
                         onClick={handleVerify}
@@ -336,7 +338,7 @@ const PresetProviderFormDialog = ({
                         size="small"
                         startIcon={verifying ? <CircularProgress size={16} /> : <Refresh />}
                     >
-                        {verifying ? 'Verifying...' : 'Verify'}
+                        {verifying ? t('providerDialog.verification.verifying') : t('common.verify')}
                     </Button>
                     <Button type="submit" variant="contained" size="small">
                         {submitText || defaultSubmitText}

@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { Alert, Box, Button, Container, Paper, Snackbar, TextField, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 
 const Login: React.FC = () => {
+    const { t } = useTranslation();
     const [token, setToken] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
@@ -14,7 +16,7 @@ const Login: React.FC = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!token.trim()) {
-            setError('Please enter a valid token');
+            setError(t('login.errors.enterValidToken'));
             return;
         }
 
@@ -37,10 +39,10 @@ const Login: React.FC = () => {
                     navigate('/dashboard');
                 }, 1000);
             } else {
-                setError('Invalid token. Please check your token and try again.');
+                setError(t('login.errors.invalidToken'));
             }
         } catch (err) {
-            setError('Failed to validate token. Please check your connection and try again.');
+            setError(t('login.errors.validationFailed'));
         } finally {
             setLoading(false);
         }
@@ -65,10 +67,10 @@ const Login: React.FC = () => {
             >
                 <Paper elevation={3} sx={{ padding: 4, width: '100%' }}>
                     <Typography component="h1" variant="h4" align="center" gutterBottom>
-                        Tingly Box
+                        {t('login.title')}
                     </Typography>
                     <Typography component="h2" variant="h6" align="center" color="text.secondary" gutterBottom>
-                        Authentication Required
+                        {t('login.subtitle')}
                     </Typography>
 
                     <Box component="form" onSubmit={handleSubmit} sx={{ mt: 3 }}>
@@ -77,14 +79,14 @@ const Login: React.FC = () => {
                             required
                             fullWidth
                             name="token"
-                            label="Authentication Token"
+                            label={t('login.tokenLabel')}
                             type="password"
                             id="token"
                             autoComplete="current-token"
                             value={token}
                             onChange={(e) => setToken(e.target.value)}
                             disabled={loading}
-                            helperText="Enter your user authentication token for UI and management access"
+                            helperText={t('login.tokenHelper')}
                         />
 
                         {error && (
@@ -100,7 +102,7 @@ const Login: React.FC = () => {
                             sx={{ mt: 3, mb: 2 }}
                             disabled={loading}
                         >
-                            {loading ? 'Validating...' : 'Login'}
+                            {loading ? t('login.validating') : t('login.loginButton')}
                         </Button>
 
                         <Button
@@ -109,7 +111,7 @@ const Login: React.FC = () => {
                             onClick={handleGenerateToken}
                             sx={{ mb: 2 }}
                         >
-                            Generate New Token
+                            {t('login.generateTokenButton')}
                         </Button>
                     </Box>
                 </Paper>
@@ -121,7 +123,7 @@ const Login: React.FC = () => {
                 onClose={() => setShowSuccess(false)}
             >
                 <Alert onClose={() => setShowSuccess(false)} severity="success">
-                    Login successful! Redirecting...
+                    {t('login.success.loginSuccess')}
                 </Alert>
             </Snackbar>
         </Container>
