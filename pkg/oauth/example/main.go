@@ -103,6 +103,13 @@ func printDemoInfo(providerType oauth2.ProviderType, port int) {
 	fmt.Printf("Token Endpoint: %s\n", providerConfig.TokenURL)
 	fmt.Printf("Scopes: %v\n", providerConfig.Scopes)
 
+	// Show OAuth method
+	oauthMethod := "Standard Authorization Code"
+	if providerConfig.OAuthMethod == oauth2.OAuthMethodPKCE {
+		oauthMethod = "PKCE (RFC 7636) - Proof Key for Code Exchange"
+	}
+	fmt.Printf("OAuth Method: %s\n", oauthMethod)
+
 	// Show if provider has built-in client ID
 	if providerConfig.ClientID != "" {
 		fmt.Printf("\nBuilt-in Client ID: %s\n", providerConfig.ClientID)
@@ -126,7 +133,7 @@ func printDemoInfo(providerType oauth2.ProviderType, port int) {
 	if providerConfig.ClientIDEnvVar != "" {
 		fmt.Printf("   export %s=\"your_client_id\"\n", providerConfig.ClientIDEnvVar)
 	}
-	if providerConfig.ClientSecretEnvVar != "" {
+	if providerConfig.ClientSecretEnvVar != "" && providerConfig.AuthStyle != oauth2.AuthStyleInNone {
 		fmt.Printf("   export %s=\"your_client_secret\"\n", providerConfig.ClientSecretEnvVar)
 	}
 

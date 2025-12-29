@@ -2,6 +2,9 @@ package oauth
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -25,12 +28,13 @@ type Manager struct {
 
 // StateData holds information about an OAuth state
 type StateData struct {
-	State      string
-	UserID     string
-	Provider   ProviderType
-	ExpiresAt  time.Time
-	RedirectTo string // Optional redirect URL after successful auth
-	Name       string // Optional custom provider name
+	State        string
+	UserID       string
+	Provider     ProviderType
+	ExpiresAt    time.Time
+	RedirectTo   string // Optional redirect URL after successful auth
+	Name         string // Optional custom provider name
+	CodeVerifier string // PKCE code verifier (for PKCE flow)
 }
 
 // NewManager creates a new OAuth manager
@@ -57,6 +61,26 @@ func NewManager(config *Config, registry *Registry) *Manager {
 // generateState generates a secure random state parameter using UUID
 func (m *Manager) generateState() (string, error) {
 	return uuid.New().String(), nil
+}
+
+// generateCodeVerifier generates a PKCE code verifier (43-128 characters)
+// Uses cryptographically secure random bytes encoded as base64url
+func (m *Manager) generateCodeVerifier() (string, error) {
+	// Generate 32 random bytes (256 bits), which when base64url-encoded
+	// gives us 43 characters (minimum required by PKCE spec)
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("failed to generate code verifier: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+// generateCodeChallenge creates a PKCE code challenge from the verifier
+// Uses SHA256 and base64url encoding (S256 method)
+func (m *Manager) generateCodeChallenge(verifier string) string {
+	h := sha256.New()
+	h.Write([]byte(verifier))
+	return base64.RawURLEncoding.EncodeToString(h.Sum(nil))
 }
 
 // generateStateKey generates a key for storing state data
@@ -132,19 +156,29 @@ func (m *Manager) GetAuthURL(ctx context.Context, userID string, providerType Pr
 		return "", "", err
 	}
 
+	// Generate PKCE code verifier if provider uses PKCE
+	var codeVerifier string
+	if config.OAuthMethod == OAuthMethodPKCE {
+		codeVerifier, err = m.generateCodeVerifier()
+		if err != nil {
+			return "", "", fmt.Errorf("failed to generate code verifier: %w", err)
+		}
+	}
+
 	// Save state data
 	if err := m.saveState(&StateData{
-		State:      state,
-		UserID:     userID,
-		Provider:   providerType,
-		RedirectTo: redirectTo,
-		Name:       name,
+		State:        state,
+		UserID:       userID,
+		Provider:     providerType,
+		RedirectTo:   redirectTo,
+		Name:         name,
+		CodeVerifier: codeVerifier,
 	}); err != nil {
 		return "", "", err
 	}
 
 	// Build authorization URL
-	authURL, err := m.buildAuthURL(config, state)
+	authURL, err := m.buildAuthURL(config, state, codeVerifier)
 	if err != nil {
 		m.deleteState(state)
 		return "", "", err
@@ -154,7 +188,7 @@ func (m *Manager) GetAuthURL(ctx context.Context, userID string, providerType Pr
 }
 
 // buildAuthURL builds the authorization URL with all required parameters
-func (m *Manager) buildAuthURL(config *ProviderConfig, state string) (string, error) {
+func (m *Manager) buildAuthURL(config *ProviderConfig, state string, codeVerifier string) (string, error) {
 	u, err := url.Parse(config.AuthURL)
 	if err != nil {
 		return "", err
@@ -173,6 +207,13 @@ func (m *Manager) buildAuthURL(config *ProviderConfig, state string) (string, er
 	if len(config.Scopes) > 0 {
 		query.Set("scope", strings.Join(config.Scopes, " "))
 	}
+
+	// Add PKCE parameters if provider uses PKCE
+	if config.OAuthMethod == OAuthMethodPKCE && codeVerifier != "" {
+		query.Set("code_challenge", m.generateCodeChallenge(codeVerifier))
+		query.Set("code_challenge_method", "S256")
+	}
+
 	u.RawQuery = query.Encode()
 
 	return u.String(), nil
@@ -207,7 +248,7 @@ func (m *Manager) HandleCallback(ctx context.Context, r *http.Request) (*Token, 
 	}
 
 	// Exchange code for token
-	token, err := m.exchangeCodeForToken(ctx, config, code)
+	token, err := m.exchangeCodeForToken(ctx, config, code, stateData.CodeVerifier)
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +265,7 @@ func (m *Manager) HandleCallback(ctx context.Context, r *http.Request) (*Token, 
 }
 
 // exchangeCodeForToken exchanges the authorization code for an access token
-func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConfig, code string) (*Token, error) {
+func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConfig, code string, codeVerifier string) (*Token, error) {
 	redirectURL := config.RedirectURL
 	if redirectURL == "" {
 		redirectURL = fmt.Sprintf("%s/oauth/callback", m.config.BaseURL)
@@ -237,6 +278,11 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 	data.Set("redirect_uri", redirectURL)
 	data.Set("client_id", config.ClientID)
 	data.Set("client_secret", config.ClientSecret)
+
+	// Add code_verifier for PKCE flow
+	if config.OAuthMethod == OAuthMethodPKCE && codeVerifier != "" {
+		data.Set("code_verifier", codeVerifier)
+	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", config.TokenURL, strings.NewReader(data.Encode()))
 	if err != nil {

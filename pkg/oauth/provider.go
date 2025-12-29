@@ -52,7 +52,7 @@ func (r *Registry) IsRegistered(providerType ProviderType) bool {
 func DefaultRegistry() *Registry {
 	registry := NewRegistry()
 
-	// Anthropic (Claude) OAuth
+	// Anthropic (Claude) OAuth - uses PKCE
 	registry.Register(&ProviderConfig{
 		Type:               ProviderAnthropic,
 		DisplayName:        "Anthropic Claude",
@@ -60,8 +60,9 @@ func DefaultRegistry() *Registry {
 		ClientSecret:       "",                                     // No secret required for public client
 		AuthURL:            "https://claude.ai/oauth/authorize",
 		TokenURL:           "https://console.anthropic.com/v1/oauth/token",
-		Scopes:             []string{"api"},
-		AuthStyle:          AuthStyleInHeader,
+		Scopes:             []string{"org:create_api_key", "user:profile", "user:inference", "user:sessions:claude_code"},
+		AuthStyle:          AuthStyleInNone, // Public client, no auth in token request
+		OAuthMethod:        OAuthMethodPKCE, // Uses PKCE for security
 		ConsoleURL:         "https://console.anthropic.com/",
 		ClientIDEnvVar:     "ANTHROPIC_CLIENT_ID",
 		ClientSecretEnvVar: "ANTHROPIC_CLIENT_SECRET",

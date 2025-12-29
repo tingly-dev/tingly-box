@@ -14,7 +14,6 @@ import (
 	oauth2 "tingly-box/pkg/oauth"
 
 	"github.com/google/uuid"
-	"github.com/pkg/browser"
 )
 
 // ManualTestConfig holds configuration for manual OAuth testing
@@ -114,6 +113,7 @@ func RunManualTest(config *ManualTestConfig) error {
 		TokenURL:     defaultConfig.TokenURL,
 		Scopes:       defaultConfig.Scopes,
 		AuthStyle:    defaultConfig.AuthStyle,
+		OAuthMethod:  defaultConfig.OAuthMethod,
 		RedirectURL:  fmt.Sprintf("%s/oauth/callback", config.BaseURL),
 	}
 	registry.Register(providerConfig)
@@ -250,10 +250,10 @@ Provider: %s
 	fmt.Println("\nAttempting to open browser automatically...")
 
 	// Try to open browser
-	if err := browser.OpenURL(authURL); err != nil {
-		log.Printf("Could not open browser automatically: %v", err)
-		log.Println("Please open the URL above manually in your browser.")
-	}
+	//if err := browser.OpenURL(authURL); err != nil {
+	//	log.Printf("Could not open browser automatically: %v", err)
+	//	log.Println("Please open the URL above manually in your browser.")
+	//}
 
 	// Wait for callback or interrupt
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)

@@ -330,6 +330,7 @@ func (h *ConfigHandler) UpdateProvider(c *gin.Context) {
 		TokenURL:     config.TokenURL,
 		Scopes:       config.Scopes,
 		AuthStyle:    config.AuthStyle,
+		OAuthMethod:  config.OAuthMethod,
 		RedirectURL:  req.RedirectURL,
 	}
 
@@ -364,6 +365,7 @@ func (h *ConfigHandler) DeleteProvider(c *gin.Context) {
 		TokenURL:     config.TokenURL,
 		Scopes:       config.Scopes,
 		AuthStyle:    config.AuthStyle,
+		OAuthMethod:  config.OAuthMethod,
 	})
 
 	c.JSON(http.StatusOK, gin.H{
@@ -395,6 +397,7 @@ func LoadProviderConfigs(registry *Registry, configs []ProviderConfigInput) {
 				TokenURL:     existing.TokenURL,
 				Scopes:       existing.Scopes,
 				AuthStyle:    existing.AuthStyle,
+				OAuthMethod:  existing.OAuthMethod,
 				RedirectURL:  cfg.RedirectURL,
 			})
 		}

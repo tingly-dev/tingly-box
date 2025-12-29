@@ -88,6 +88,9 @@ type ProviderConfig struct {
 	// AuthStyle is the authentication style (in header, body, etc.)
 	AuthStyle AuthStyle
 
+	// OAuthMethod is the OAuth flow method (authorization code or PKCE)
+	OAuthMethod OAuthMethod
+
 	// RedirectURL is the OAuth redirect URI (optional, uses default if empty)
 	RedirectURL string
 
@@ -116,6 +119,17 @@ const (
 
 	// AuthStyleInNone uses no client authentication (public client)
 	AuthStyleInNone
+)
+
+// OAuthMethod represents the OAuth flow method
+type OAuthMethod int
+
+const (
+	// OAuthMethodAuthorizationCode uses standard Authorization Code flow
+	OAuthMethodAuthorizationCode OAuthMethod = iota
+
+	// OAuthMethodPKCE uses Authorization Code flow with PKCE (RFC 7636)
+	OAuthMethodPKCE
 )
 
 // Token represents an OAuth token
