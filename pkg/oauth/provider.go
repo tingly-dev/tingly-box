@@ -60,6 +60,7 @@ func DefaultRegistry() *Registry {
 		ClientSecret:       "",                                     // No secret required for public client
 		AuthURL:            "https://claude.ai/oauth/authorize",
 		TokenURL:           "https://console.anthropic.com/v1/oauth/token",
+		RedirectURL:        "https://console.anthropic.com/oauth/code/callback",
 		Scopes:             []string{"org:create_api_key", "user:profile", "user:inference", "user:sessions:claude_code"},
 		AuthStyle:          AuthStyleInNone,        // Public client, no auth in token request
 		OAuthMethod:        OAuthMethodPKCE,        // Uses PKCE for security

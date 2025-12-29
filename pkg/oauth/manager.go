@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,8 +16,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 // Manager handles OAuth flows
@@ -31,14 +30,16 @@ type Manager struct {
 
 // StateData holds information about an OAuth state
 type StateData struct {
-	State        string
-	UserID       string
-	Provider     ProviderType
-	ExpiresAt    time.Time
-	RedirectTo   string // Optional redirect URL after successful auth
-	Name         string // Optional custom provider name
-	CodeVerifier string // PKCE code verifier (for PKCE flow)
-	RedirectURI  string // Actual redirect_uri used in auth request (must match in token request)
+	State         string
+	UserID        string
+	Provider      ProviderType
+	ExpiresAt     time.Time
+	Timestamp     int64  // Unix timestamp when state was created
+	ExpiresAtUnix int64  // Unix timestamp when state expires
+	RedirectTo    string // Optional redirect URL after successful auth
+	Name          string // Optional custom provider name
+	CodeVerifier  string // PKCE code verifier (for PKCE flow)
+	RedirectURI   string // Actual redirect_uri used in auth request (must match in token request)
 }
 
 // NewManager creates a new OAuth manager
@@ -101,7 +102,10 @@ func (m *Manager) saveState(data *StateData) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	data.ExpiresAt = time.Now().Add(m.config.StateExpiry)
+	now := time.Now()
+	data.Timestamp = now.Unix()
+	data.ExpiresAt = now.Add(m.config.StateExpiry)
+	data.ExpiresAtUnix = data.ExpiresAt.Unix()
 	m.states[m.stateKey(data.State)] = data
 	return nil
 }
@@ -269,7 +273,7 @@ func (m *Manager) HandleCallback(ctx context.Context, r *http.Request) (*Token, 
 		codeVerifier = stateData.CodeVerifier
 	}
 
-	token, err := m.exchangeCodeForToken(ctx, config, code, codeVerifier, stateData.RedirectURI)
+	token, err := m.exchangeCodeForToken(ctx, config, state, code, codeVerifier, stateData.RedirectURI)
 	if err != nil {
 		return nil, err
 	}
@@ -286,7 +290,7 @@ func (m *Manager) HandleCallback(ctx context.Context, r *http.Request) (*Token, 
 }
 
 // exchangeCodeForToken exchanges the authorization code for an access token
-func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConfig, code string, codeVerifier string, redirectURI string) (*Token, error) {
+func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConfig, state string, code string, codeVerifier string, redirectURI string) (*Token, error) {
 	useJSON := config.TokenRequestFormat == TokenRequestFormatJSON
 
 	var reqBody io.Reader
@@ -299,6 +303,7 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 			"client_id":    config.ClientID,
 			"redirect_uri": redirectURI,
 			"code":         code,
+			"state":        state,
 		}
 
 		// Add client_secret
@@ -457,10 +462,9 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 			"grant_type":    "refresh_token",
 			"refresh_token": refreshToken,
 			"client_id":     config.ClientID,
-		}
-
-		if config.ClientSecret != "" {
-			jsonData["client_secret"] = config.ClientSecret
+			"scopes":        config.Scopes,
+			"client_secret": config.ClientSecret,
+			// TODO: expire
 		}
 
 		// Add provider-specific extra parameters
