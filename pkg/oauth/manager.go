@@ -1,6 +1,7 @@
 package oauth
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -36,6 +37,7 @@ type StateData struct {
 	RedirectTo   string // Optional redirect URL after successful auth
 	Name         string // Optional custom provider name
 	CodeVerifier string // PKCE code verifier (for PKCE flow)
+	RedirectURI  string // Actual redirect_uri used in auth request (must match in token request)
 }
 
 // NewManager creates a new OAuth manager
@@ -166,7 +168,14 @@ func (m *Manager) GetAuthURL(ctx context.Context, userID string, providerType Pr
 		}
 	}
 
-	// Save state data
+	// Build authorization URL
+	authURL, redirectURI, err := m.buildAuthURL(config, state, codeVerifier)
+	if err != nil {
+		m.deleteState(state)
+		return "", "", err
+	}
+
+	// Update state with actual redirect_uri used
 	if err := m.saveState(&StateData{
 		State:        state,
 		UserID:       userID,
@@ -174,14 +183,8 @@ func (m *Manager) GetAuthURL(ctx context.Context, userID string, providerType Pr
 		RedirectTo:   redirectTo,
 		Name:         name,
 		CodeVerifier: codeVerifier,
+		RedirectURI:  redirectURI,
 	}); err != nil {
-		return "", "", err
-	}
-
-	// Build authorization URL
-	authURL, err := m.buildAuthURL(config, state, codeVerifier)
-	if err != nil {
-		m.deleteState(state)
 		return "", "", err
 	}
 
@@ -189,15 +192,16 @@ func (m *Manager) GetAuthURL(ctx context.Context, userID string, providerType Pr
 }
 
 // buildAuthURL builds the authorization URL with all required parameters
-func (m *Manager) buildAuthURL(config *ProviderConfig, state string, codeVerifier string) (string, error) {
+// Returns the auth URL and the actual redirect_uri used
+func (m *Manager) buildAuthURL(config *ProviderConfig, state string, codeVerifier string) (string, string, error) {
 	u, err := url.Parse(config.AuthURL)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	redirectURL := config.RedirectURL
 	if redirectURL == "" {
-		redirectURL = fmt.Sprintf("%s/oauth/callback", m.config.BaseURL)
+		redirectURL = fmt.Sprintf("%s/callback", m.config.BaseURL)
 	}
 
 	query := u.Query()
@@ -215,9 +219,14 @@ func (m *Manager) buildAuthURL(config *ProviderConfig, state string, codeVerifie
 		query.Set("code_challenge_method", "S256")
 	}
 
+	// Add provider-specific extra parameters
+	for key, value := range config.AuthExtraParams {
+		query.Set(key, value)
+	}
+
 	u.RawQuery = query.Encode()
 
-	return u.String(), nil
+	return u.String(), redirectURL, nil
 }
 
 // HandleCallback handles the OAuth callback request
@@ -255,7 +264,7 @@ func (m *Manager) HandleCallback(ctx context.Context, r *http.Request) (*Token, 
 		codeVerifier = stateData.CodeVerifier
 	}
 
-	token, err := m.exchangeCodeForToken(ctx, config, code, codeVerifier)
+	token, err := m.exchangeCodeForToken(ctx, config, code, codeVerifier, stateData.RedirectURI)
 	if err != nil {
 		return nil, err
 	}
@@ -272,35 +281,85 @@ func (m *Manager) HandleCallback(ctx context.Context, r *http.Request) (*Token, 
 }
 
 // exchangeCodeForToken exchanges the authorization code for an access token
-func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConfig, code string, codeVerifier string) (*Token, error) {
-	redirectURL := config.RedirectURL
-	if redirectURL == "" {
-		redirectURL = fmt.Sprintf("%s/callback", m.config.BaseURL)
+func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConfig, code string, codeVerifier string, redirectURI string) (*Token, error) {
+	// Check if provider requires JSON format
+	useJSON := false
+	if ct, ok := config.TokenExtraHeaders["Content-Type"]; ok {
+		useJSON = strings.Contains(ct, "application/json")
 	}
 
-	// Build token request
-	data := url.Values{}
-	data.Set("grant_type", "authorization_code")
-	data.Set("client_id", config.ClientID)
-	data.Set("client_secret", config.ClientSecret)
-	data.Set("redirect_uri", redirectURL)
-	data.Set("code", code)
+	var reqBody io.Reader
+	var contentType string
 
-	// PKCE flow: use code_verifier instead of client_secret
-	// Standard OAuth: use client_secret for authentication
-	if config.OAuthMethod == OAuthMethodPKCE {
-		if codeVerifier != "" {
-			data.Set("code_verifier", codeVerifier)
+	if useJSON {
+		// Build JSON request body
+		jsonData := map[string]any{
+			"grant_type":   "authorization_code",
+			"client_id":    config.ClientID,
+			"redirect_uri": redirectURI,
+			"code":         code,
 		}
+
+		// Add client_secret for non-PKCE flows
+		if config.OAuthMethod != OAuthMethodPKCE && config.ClientSecret != "" {
+			jsonData["client_secret"] = config.ClientSecret
+		}
+
+		// Add code_verifier for PKCE flow
+		if config.OAuthMethod == OAuthMethodPKCE && codeVerifier != "" {
+			jsonData["code_verifier"] = codeVerifier
+		}
+
+		// Add provider-specific extra parameters
+		for key, value := range config.TokenExtraParams {
+			jsonData[key] = value
+		}
+
+		bodyBytes, err := json.Marshal(jsonData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal JSON request: %w", err)
+		}
+		reqBody = bytes.NewReader(bodyBytes)
+		contentType = "application/json"
+	} else {
+		// Build form-encoded request body
+		data := url.Values{}
+		data.Set("grant_type", "authorization_code")
+		data.Set("client_id", config.ClientID)
+		data.Set("redirect_uri", redirectURI)
+		data.Set("code", code)
+
+		// PKCE flow: use code_verifier instead of client_secret
+		// Standard OAuth: use client_secret for authentication
+		if config.OAuthMethod == OAuthMethodPKCE {
+			if codeVerifier != "" {
+				data.Set("code_verifier", codeVerifier)
+			}
+		} else {
+			data.Set("client_secret", config.ClientSecret)
+		}
+
+		// Add provider-specific extra parameters
+		for key, value := range config.TokenExtraParams {
+			data.Set(key, value)
+		}
+
+		reqBody = strings.NewReader(data.Encode())
+		contentType = "application/x-www-form-urlencoded"
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", config.TokenURL, strings.NewReader(data.Encode()))
+	req, err := http.NewRequestWithContext(ctx, "POST", config.TokenURL, reqBody)
 	if err != nil {
 		return nil, err
 	}
 
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("Accept", "application/json")
+
+	// Add provider-specific extra headers (may override Content-Type above)
+	for key, value := range config.TokenExtraHeaders {
+		req.Header.Set(key, value)
+	}
 
 	// Send request
 	client := &http.Client{Timeout: 60 * time.Second}
@@ -375,20 +434,67 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 		return nil, fmt.Errorf("%w: %s", ErrInvalidProvider, providerType)
 	}
 
-	// Build refresh request
-	data := url.Values{}
-	data.Set("grant_type", "refresh_token")
-	data.Set("refresh_token", refreshToken)
-	data.Set("client_id", config.ClientID)
-	data.Set("client_secret", config.ClientSecret)
+	// Check if provider requires JSON format
+	useJSON := false
+	if ct, ok := config.TokenExtraHeaders["Content-Type"]; ok {
+		useJSON = strings.Contains(ct, "application/json")
+	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", config.TokenURL, strings.NewReader(data.Encode()))
+	var reqBody io.Reader
+	var contentType string
+
+	if useJSON {
+		// Build JSON request body
+		jsonData := map[string]any{
+			"grant_type":    "refresh_token",
+			"refresh_token": refreshToken,
+			"client_id":     config.ClientID,
+		}
+
+		if config.ClientSecret != "" {
+			jsonData["client_secret"] = config.ClientSecret
+		}
+
+		// Add provider-specific extra parameters
+		for key, value := range config.TokenExtraParams {
+			jsonData[key] = value
+		}
+
+		bodyBytes, err := json.Marshal(jsonData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal JSON request: %w", err)
+		}
+		reqBody = bytes.NewReader(bodyBytes)
+		contentType = "application/json"
+	} else {
+		// Build form-encoded request body
+		data := url.Values{}
+		data.Set("grant_type", "refresh_token")
+		data.Set("refresh_token", refreshToken)
+		data.Set("client_id", config.ClientID)
+		data.Set("client_secret", config.ClientSecret)
+
+		// Add provider-specific extra parameters
+		for key, value := range config.TokenExtraParams {
+			data.Set(key, value)
+		}
+
+		reqBody = strings.NewReader(data.Encode())
+		contentType = "application/x-www-form-urlencoded"
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", config.TokenURL, reqBody)
 	if err != nil {
 		return nil, err
 	}
 
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("Accept", "application/json")
+
+	// Add provider-specific extra headers (may override Content-Type above)
+	for key, value := range config.TokenExtraHeaders {
+		req.Header.Set(key, value)
+	}
 
 	// Send request
 	client := &http.Client{Timeout: 30 * time.Second}
