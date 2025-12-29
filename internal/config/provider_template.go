@@ -27,7 +27,8 @@ type ProviderTemplate struct {
 	PricingDoc             string            `json:"pricing_doc"`
 	BaseURLOpenAI          string            `json:"base_url_openai,omitempty"`
 	BaseURLAnthropic       string            `json:"base_url_anthropic,omitempty"`
-	Models                 []string          `json:"models"` // List of model IDs
+	Models                 []string          `json:"models"`                 // List of model IDs
+	ModelLimits            map[string]int    `json:"model_limits,omitempty"` // Model name -> max_tokens mapping
 	SupportsModelsEndpoint bool              `json:"supports_models_endpoint"`
 	Tags                   []string          `json:"tags,omitempty"`
 	Metadata               map[string]string `json:"metadata,omitempty"`
@@ -224,6 +225,13 @@ func (tm *TemplateManager) loadEmbeddedTemplates() error {
 			tmplCopy.Models = make([]string, len(v.Models))
 			copy(tmplCopy.Models, v.Models)
 		}
+		// Copy model limits map
+		if v.ModelLimits != nil {
+			tmplCopy.ModelLimits = make(map[string]int, len(v.ModelLimits))
+			for mk, mv := range v.ModelLimits {
+				tmplCopy.ModelLimits[mk] = mv
+			}
+		}
 		// Copy metadata
 		if v.Metadata != nil {
 			tmplCopy.Metadata = make(map[string]string, len(v.Metadata))
@@ -299,4 +307,31 @@ func (tm *TemplateManager) GetModelsForProvider(provider *Provider) ([]string, T
 	}
 
 	return nil, TemplateSourceLocal, fmt.Errorf("no models found for provider '%s'", provider.Name)
+}
+
+// GetMaxTokensForModel returns the maximum allowed tokens for a specific model
+// using the provider templates. If templates are not available, falls back to
+// the global default.
+// It checks in order:
+// 1. Exact match of provider:model in templates
+// 2. Model wildcard match (provider:*) in templates
+// 3. Global default
+func (tm *TemplateManager) GetMaxTokensForModel(provider, model string) int {
+	// Try templates first if available
+	if tm != nil {
+		tmpl, _ := tm.GetTemplate(provider)
+		if tmpl != nil && tmpl.ModelLimits != nil {
+			// Check exact model match
+			if maxTokens, ok := tmpl.ModelLimits[model]; ok {
+				return maxTokens
+			}
+			// Check provider wildcard (provider:*)
+			if maxTokens, ok := tmpl.ModelLimits[provider+":*"]; ok {
+				return maxTokens
+			}
+		}
+	}
+
+	// Fallback to global default
+	return DefaultMaxTokens
 }
