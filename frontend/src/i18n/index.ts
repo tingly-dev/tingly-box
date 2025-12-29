@@ -4,7 +4,9 @@ import LanguageDetector from 'i18next-browser-languagedetector';
 import en from './locales/en';
 
 const resources = {
-    en,
+    en: {
+        translation: en,
+    },
 };
 
 i18n
@@ -13,6 +15,7 @@ i18n
     .init({
         resources,
         fallbackLng: 'en', // Use English by default
+        defaultNS: 'translation',
         debug: false,
 
         interpolation: {
