@@ -64,7 +64,11 @@ func NewManager(config *Config, registry *Registry) *Manager {
 
 // generateState generates a secure random state parameter using UUID
 func (m *Manager) generateState() (string, error) {
-	return uuid.New().String(), nil
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("failed to generate state: %w", err)
+	}
+	return hex.EncodeToString(b), nil
 }
 
 // generateCodeVerifier generates a PKCE code verifier (43-128 characters)
