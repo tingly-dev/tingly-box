@@ -361,6 +361,9 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 		req.Header.Set(key, value)
 	}
 
+	// Debug: print request details
+	m.debugRequest(req, useJSON)
+
 	// Send request
 	client := &http.Client{Timeout: 60 * time.Second}
 	resp, err := client.Do(req)
@@ -496,6 +499,9 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 		req.Header.Set(key, value)
 	}
 
+	// Debug: print request details
+	m.debugRequest(req, useJSON)
+
 	// Send request
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
@@ -552,4 +558,47 @@ func (m *Manager) GetRegistry() *Registry {
 // GetConfig returns the OAuth configuration
 func (m *Manager) GetConfig() *Config {
 	return m.config
+}
+
+// debugRequest prints HTTP request details for debugging
+func (m *Manager) debugRequest(req *http.Request, isJSON bool) {
+	fmt.Printf("\n=== OAuth Debug: HTTP Request ===\n")
+	fmt.Printf("Method: %s\n", req.Method)
+	fmt.Printf("URL: %s\n", req.URL.String())
+	fmt.Printf("\nHeaders:\n")
+	for key, values := range req.Header {
+		for _, value := range values {
+			// Mask sensitive headers
+			if strings.EqualFold(key, "Authorization") {
+				value = "***REDACTED***"
+			}
+			fmt.Printf("  %s: %s\n", key, value)
+		}
+	}
+
+	if req.Body != nil && req.Body != http.NoBody {
+		fmt.Printf("\nBody:\n")
+		// Read body to print it (but we need to restore it for the actual request)
+		bodyBytes, err := io.ReadAll(req.Body)
+		if err == nil {
+			// Try to format JSON for readability
+			if isJSON {
+				var formatted any
+				if json.Unmarshal(bodyBytes, &formatted) == nil {
+					if pretty, err := json.MarshalIndent(formatted, "", "  "); err == nil {
+						fmt.Printf("%s\n", string(pretty))
+					} else {
+						fmt.Printf("%s\n", string(bodyBytes))
+					}
+				} else {
+					fmt.Printf("%s\n", string(bodyBytes))
+				}
+			} else {
+				fmt.Printf("%s\n", string(bodyBytes))
+			}
+			// Restore body for actual request
+			req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+		}
+	}
+	fmt.Printf("================================\n\n")
 }
