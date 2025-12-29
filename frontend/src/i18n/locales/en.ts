@@ -236,7 +236,7 @@ export default {
       "loading": "Loading..."
     },
     "prompts": {
-      "enterPort": "Enter port for server (8080):",
+      "enterPort": "Enter port for server:",
       "enterClientId": "Enter client ID (web):"
     },
     "confirmations": {
