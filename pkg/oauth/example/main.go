@@ -133,12 +133,6 @@ func printDemoInfo(providerType oauth2.ProviderType, port int) {
 	}
 
 	fmt.Println("\n2. Set environment variables:")
-	if providerConfig.ClientIDEnvVar != "" {
-		fmt.Printf("   export %s=\"your_client_id\"\n", providerConfig.ClientIDEnvVar)
-	}
-	if providerConfig.ClientSecretEnvVar != "" && providerConfig.AuthStyle != oauth2.AuthStyleInNone {
-		fmt.Printf("   export %s=\"your_client_secret\"\n", providerConfig.ClientSecretEnvVar)
-	}
 
 	fmt.Println("\n3. Run without -demo flag:")
 	fmt.Printf("   go run . -provider=%s -port=%d\n", providerType, port)
