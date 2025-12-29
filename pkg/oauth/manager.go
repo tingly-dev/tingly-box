@@ -296,10 +296,8 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 			"code":         code,
 		}
 
-		// Add client_secret for non-PKCE flows
-		if config.OAuthMethod != OAuthMethodPKCE && config.ClientSecret != "" {
-			jsonData["client_secret"] = config.ClientSecret
-		}
+		// Add client_secret
+		jsonData["client_secret"] = config.ClientSecret
 
 		// Add code_verifier for PKCE flow
 		if config.OAuthMethod == OAuthMethodPKCE && codeVerifier != "" {
