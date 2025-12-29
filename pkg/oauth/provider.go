@@ -55,7 +55,7 @@ func DefaultRegistry() *Registry {
 	// Anthropic (Claude) OAuth - uses PKCE
 	registry.Register(&ProviderConfig{
 		Type:               ProviderAnthropic,
-		DisplayName:        "Anthropic Claude",
+		DisplayName:        "Anthropic Claude Code",
 		ClientID:           "9d1c250a-e61b-44d9-88ed-5944d1962f5e", // Public client ID for Claude
 		ClientSecret:       "",                                     // No secret required for public client
 		AuthURL:            "https://claude.ai/oauth/authorize",
@@ -66,6 +66,17 @@ func DefaultRegistry() *Registry {
 		ConsoleURL:         "https://console.anthropic.com/",
 		ClientIDEnvVar:     "ANTHROPIC_CLIENT_ID",
 		ClientSecretEnvVar: "ANTHROPIC_CLIENT_SECRET",
+		AuthExtraParams: map[string]string{
+			"code": "true",
+		},
+		TokenExtraHeaders: map[string]string{
+			"Content-Type":    "application/json",
+			"User-Agent":      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+			"Accept":          "application/json, text/plain, */*",
+			"Accept-Language": "en-US,en;q=0.9",
+			"Referer":         "https://claude.ai/",
+			"Origin":          "https://claude.ai",
+		},
 	})
 
 	// OpenAI OAuth
