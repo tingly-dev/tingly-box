@@ -282,11 +282,7 @@ func (m *Manager) HandleCallback(ctx context.Context, r *http.Request) (*Token, 
 
 // exchangeCodeForToken exchanges the authorization code for an access token
 func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConfig, code string, codeVerifier string, redirectURI string) (*Token, error) {
-	// Check if provider requires JSON format
-	useJSON := false
-	if ct, ok := config.TokenExtraHeaders["Content-Type"]; ok {
-		useJSON = strings.Contains(ct, "application/json")
-	}
+	useJSON := config.TokenRequestFormat == TokenRequestFormatJSON
 
 	var reqBody io.Reader
 	var contentType string
@@ -437,11 +433,7 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 		return nil, fmt.Errorf("%w: %s", ErrInvalidProvider, providerType)
 	}
 
-	// Check if provider requires JSON format
-	useJSON := false
-	if ct, ok := config.TokenExtraHeaders["Content-Type"]; ok {
-		useJSON = strings.Contains(ct, "application/json")
-	}
+	useJSON := config.TokenRequestFormat == TokenRequestFormatJSON
 
 	var reqBody io.Reader
 	var contentType string

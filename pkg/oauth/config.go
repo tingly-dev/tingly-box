@@ -103,6 +103,10 @@ type ProviderConfig struct {
 	// ClientSecretEnvVar is the environment variable name for the client secret
 	ClientSecretEnvVar string
 
+	// TokenRequestFormat specifies the format of token request body
+	// Default is TokenRequestFormatForm (standard OAuth)
+	TokenRequestFormat TokenRequestFormat
+
 	// AuthExtraParams are additional parameters to send in auth requests
 	// Some providers require extra fields in the authorization URL
 	AuthExtraParams map[string]string
@@ -115,6 +119,17 @@ type ProviderConfig struct {
 	// Useful for client impersonation with custom User-Agent, etc.
 	TokenExtraHeaders map[string]string
 }
+
+// TokenRequestFormat represents the format of token request body
+type TokenRequestFormat int
+
+const (
+	// TokenRequestFormatForm uses application/x-www-form-urlencoded (default OAuth standard)
+	TokenRequestFormatForm TokenRequestFormat = iota
+
+	// TokenRequestFormatJSON uses application/json format
+	TokenRequestFormatJSON
+)
 
 // AuthStyle represents how client credentials are sent to the token endpoint
 type AuthStyle int
