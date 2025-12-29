@@ -114,7 +114,7 @@ func RunManualTest(config *ManualTestConfig) error {
 		Scopes:       defaultConfig.Scopes,
 		AuthStyle:    defaultConfig.AuthStyle,
 		OAuthMethod:  defaultConfig.OAuthMethod,
-		RedirectURL:  fmt.Sprintf("%s/oauth/callback", config.BaseURL),
+		RedirectURL:  fmt.Sprintf("%s/callback", config.BaseURL),
 	}
 	registry.Register(providerConfig)
 
@@ -134,7 +134,7 @@ func RunManualTest(config *ManualTestConfig) error {
 
 	// Create HTTP server for callback
 	mux := http.NewServeMux()
-	mux.HandleFunc("/oauth/callback", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
 		// Handle the OAuth callback
 		token, err := manager.HandleCallback(context.Background(), r)
 		if err != nil {
@@ -239,11 +239,11 @@ Provider: %s
 	fmt.Println("MANUAL OAUTH TEST")
 	fmt.Println(strings.Repeat("=", 80))
 	fmt.Printf("\nProvider: %s\n", providerConfig.DisplayName)
-	fmt.Printf("Callback URL: %s/oauth/callback\n", config.BaseURL)
+	fmt.Printf("Callback URL: %s/callback\n", config.BaseURL)
 	fmt.Printf("\n1. Open the following URL in your browser:\n")
 	fmt.Printf("\n   %s\n\n", authURL)
 	fmt.Printf("2. Authorize the application\n")
-	fmt.Printf("3. The callback will be received at %s/oauth/callback\n", config.BaseURL)
+	fmt.Printf("3. The callback will be received at %s/callback\n", config.BaseURL)
 	fmt.Printf("4. Check the terminal for results\n")
 	fmt.Printf("\nState: %s\n", state)
 	fmt.Println("\n" + strings.Repeat("-", 80))
