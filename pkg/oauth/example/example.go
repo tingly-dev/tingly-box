@@ -397,20 +397,14 @@ func printTokenResult(token *oauth2.Token, userID string, oauthConfig *oauth2.Co
 	fmt.Println("OAUTH SUCCESSFUL")
 	fmt.Println(strings.Repeat("=", 80))
 
-	tokenJSON, _ := json.MarshalIndent(struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token,omitempty"`
-		TokenType    string `json:"token_type"`
-		ExpiresAt    string `json:"expires_at"`
-		Provider     string `json:"provider"`
-		UserID       string `json:"user_id"`
-	}{
+	tokenJSON, _ := json.MarshalIndent(oauth2.Token{
 		AccessToken:  safeTruncate(token.AccessToken, 20) + "...",
 		RefreshToken: safeTruncate(token.RefreshToken, 20) + "...",
+		IDToken:      safeTruncate(token.IDToken, 20) + "...",
 		TokenType:    token.TokenType,
-		ExpiresAt:    token.Expiry.Format(time.RFC3339),
-		Provider:     string(token.Provider),
-		UserID:       userID,
+		ExpiresIn:    token.Expiry.UTC().Unix(),
+		ResourceURL:  token.ResourceURL,
+		Provider:     token.Provider,
 	}, "", "  ")
 
 	fmt.Println("\nToken Info:")
@@ -423,6 +417,12 @@ func printTokenResult(token *oauth2.Token, userID string, oauthConfig *oauth2.Co
 		fmt.Println("\nToken successfully saved to storage!")
 		fmt.Printf("  - Access Token (first 20 chars): %s...\n", safeTruncate(savedToken.AccessToken, 20))
 		fmt.Printf("  - Token Type: %s\n", savedToken.TokenType)
+		if savedToken.IDToken != "" {
+			fmt.Printf("  - ID Token (first 20 chars): %s...\n", safeTruncate(savedToken.IDToken, 20))
+		}
+		if savedToken.ResourceURL != "" {
+			fmt.Printf("  - Resource URL: %s\n", savedToken.ResourceURL)
+		}
 		fmt.Printf("  - Valid: %t\n", savedToken.Valid())
 		if !savedToken.Expiry.IsZero() {
 			fmt.Printf("  - Expires At: %s\n", savedToken.Expiry.Format(time.RFC3339))
@@ -443,8 +443,9 @@ type CallbackResult struct {
 
 // safeTruncate safely truncates a string to max length
 func safeTruncate(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen]
+	//if len(s) <= maxLen {
+	//	return s
+	//}
+	//return s[:maxLen]
+	return s
 }
