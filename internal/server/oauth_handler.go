@@ -269,13 +269,6 @@ func (s *Server) useOAuthEndpoints(manager *swagger.RouteManager) {
 // ListOAuthProviders returns all available OAuth providers
 // GET /api/v1/oauth/providers
 func (s *Server) ListOAuthProviders(c *gin.Context) {
-	if s.oauthHandler == nil {
-		c.JSON(http.StatusServiceUnavailable, OAuthErrorResponse{
-			Success: false,
-			Error:   "OAuth service not available",
-		})
-		return
-	}
 
 	providers := s.oauthManager.GetRegistry().GetProviderInfo()
 	data := make([]OAuthProviderInfo, len(providers))
@@ -298,13 +291,6 @@ func (s *Server) ListOAuthProviders(c *gin.Context) {
 // GetOAuthProvider returns a specific OAuth provider configuration
 // GET /api/v1/oauth/providers/:type
 func (s *Server) GetOAuthProvider(c *gin.Context) {
-	if s.oauthHandler == nil {
-		c.JSON(http.StatusServiceUnavailable, OAuthErrorResponse{
-			Success: false,
-			Error:   "OAuth service not available",
-		})
-		return
-	}
 
 	providerType := oauth2.ProviderType(c.Param("type"))
 	config, ok := s.oauthManager.GetRegistry().Get(providerType)
@@ -331,14 +317,6 @@ func (s *Server) GetOAuthProvider(c *gin.Context) {
 // UpdateOAuthProvider updates an OAuth provider configuration
 // PUT /api/v1/oauth/providers/:type
 func (s *Server) UpdateOAuthProvider(c *gin.Context) {
-	if s.oauthHandler == nil {
-		c.JSON(http.StatusServiceUnavailable, OAuthErrorResponse{
-			Success: false,
-			Error:   "OAuth service not available",
-		})
-		return
-	}
-
 	providerType := oauth2.ProviderType(c.Param("type"))
 
 	var req OAuthUpdateProviderRequest
@@ -361,19 +339,17 @@ func (s *Server) UpdateOAuthProvider(c *gin.Context) {
 
 	// Update configuration
 	newConfig := &oauth2.ProviderConfig{
-		Type:               config.Type,
-		DisplayName:        config.DisplayName,
-		ClientID:           req.ClientID,
-		ClientSecret:       req.ClientSecret,
-		AuthURL:            config.AuthURL,
-		TokenURL:           config.TokenURL,
-		Scopes:             config.Scopes,
-		AuthStyle:          config.AuthStyle,
-		OAuthMethod:        config.OAuthMethod,
-		RedirectURL:        req.RedirectURL,
-		ConsoleURL:         config.ConsoleURL,
-		ClientIDEnvVar:     config.ClientIDEnvVar,
-		ClientSecretEnvVar: config.ClientSecretEnvVar,
+		Type:         config.Type,
+		DisplayName:  config.DisplayName,
+		ClientID:     req.ClientID,
+		ClientSecret: req.ClientSecret,
+		AuthURL:      config.AuthURL,
+		TokenURL:     config.TokenURL,
+		Scopes:       config.Scopes,
+		AuthStyle:    config.AuthStyle,
+		OAuthMethod:  config.OAuthMethod,
+		RedirectURL:  req.RedirectURL,
+		ConsoleURL:   config.ConsoleURL,
 	}
 
 	s.oauthManager.GetRegistry().Register(newConfig)
@@ -394,13 +370,6 @@ func (s *Server) UpdateOAuthProvider(c *gin.Context) {
 // DeleteOAuthProvider removes an OAuth provider configuration (clears credentials)
 // DELETE /api/v1/oauth/providers/:type
 func (s *Server) DeleteOAuthProvider(c *gin.Context) {
-	if s.oauthHandler == nil {
-		c.JSON(http.StatusServiceUnavailable, OAuthErrorResponse{
-			Success: false,
-			Error:   "OAuth service not available",
-		})
-		return
-	}
 
 	providerType := oauth2.ProviderType(c.Param("type"))
 
@@ -415,18 +384,16 @@ func (s *Server) DeleteOAuthProvider(c *gin.Context) {
 
 	// Clear credentials
 	s.oauthManager.GetRegistry().Register(&oauth2.ProviderConfig{
-		Type:               config.Type,
-		DisplayName:        config.DisplayName,
-		ClientID:           "",
-		ClientSecret:       "",
-		AuthURL:            config.AuthURL,
-		TokenURL:           config.TokenURL,
-		Scopes:             config.Scopes,
-		AuthStyle:          config.AuthStyle,
-		OAuthMethod:        config.OAuthMethod,
-		ConsoleURL:         config.ConsoleURL,
-		ClientIDEnvVar:     config.ClientIDEnvVar,
-		ClientSecretEnvVar: config.ClientSecretEnvVar,
+		Type:         config.Type,
+		DisplayName:  config.DisplayName,
+		ClientID:     "",
+		ClientSecret: "",
+		AuthURL:      config.AuthURL,
+		TokenURL:     config.TokenURL,
+		Scopes:       config.Scopes,
+		AuthStyle:    config.AuthStyle,
+		OAuthMethod:  config.OAuthMethod,
+		ConsoleURL:   config.ConsoleURL,
 	})
 
 	if s.logger != nil {
@@ -445,13 +412,6 @@ func (s *Server) DeleteOAuthProvider(c *gin.Context) {
 // AuthorizeOAuth initiates the OAuth flow
 // POST /api/v1/oauth/authorize
 func (s *Server) AuthorizeOAuth(c *gin.Context) {
-	if s.oauthHandler == nil {
-		c.JSON(http.StatusServiceUnavailable, OAuthErrorResponse{
-			Success: false,
-			Error:   "OAuth service not available",
-		})
-		return
-	}
 
 	var req OAuthAuthorizeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -480,9 +440,6 @@ func (s *Server) AuthorizeOAuth(c *gin.Context) {
 	}
 
 	userID := req.UserID
-	if userID == "" {
-		userID = oauth2.DefaultUserID
-	}
 
 	// Get auth URL with name parameter
 	authURL, state, err := s.oauthManager.GetAuthURL(c.Request.Context(), userID, providerType, req.Redirect, req.Name)
@@ -508,13 +465,6 @@ func (s *Server) AuthorizeOAuth(c *gin.Context) {
 // GetOAuthToken returns the OAuth token for a user and provider
 // GET /api/v1/oauth/token?provider=anthropic&user_id=xxx
 func (s *Server) GetOAuthToken(c *gin.Context) {
-	if s.oauthHandler == nil {
-		c.JSON(http.StatusServiceUnavailable, OAuthErrorResponse{
-			Success: false,
-			Error:   "OAuth service not available",
-		})
-		return
-	}
 
 	providerType := oauth2.ProviderType(c.Query("provider"))
 	if providerType == "" {
@@ -526,9 +476,6 @@ func (s *Server) GetOAuthToken(c *gin.Context) {
 	}
 
 	userID := c.Query("user_id")
-	if userID == "" {
-		userID = oauth2.DefaultUserID
-	}
 
 	token, err := s.oauthManager.GetToken(c.Request.Context(), userID, providerType)
 	if err != nil {
@@ -563,13 +510,6 @@ func (s *Server) GetOAuthToken(c *gin.Context) {
 // RevokeOAuthToken removes the OAuth token for a user and provider
 // DELETE /api/v1/oauth/token?provider=anthropic&user_id=xxx
 func (s *Server) RevokeOAuthToken(c *gin.Context) {
-	if s.oauthHandler == nil {
-		c.JSON(http.StatusServiceUnavailable, OAuthErrorResponse{
-			Success: false,
-			Error:   "OAuth service not available",
-		})
-		return
-	}
 
 	providerType := oauth2.ProviderType(c.Query("provider"))
 	if providerType == "" {
@@ -581,9 +521,6 @@ func (s *Server) RevokeOAuthToken(c *gin.Context) {
 	}
 
 	userID := c.Query("user_id")
-	if userID == "" {
-		userID = oauth2.DefaultUserID
-	}
 
 	err := s.oauthManager.RevokeToken(userID, providerType)
 	if err != nil {
@@ -617,18 +554,8 @@ func (s *Server) RevokeOAuthToken(c *gin.Context) {
 // ListOAuthTokens returns all tokens for a user
 // GET /api/v1/oauth/tokens?user_id=xxx
 func (s *Server) ListOAuthTokens(c *gin.Context) {
-	if s.oauthHandler == nil {
-		c.JSON(http.StatusServiceUnavailable, OAuthErrorResponse{
-			Success: false,
-			Error:   "OAuth service not available",
-		})
-		return
-	}
 
 	userID := c.Query("user_id")
-	if userID == "" {
-		userID = oauth2.DefaultUserID
-	}
 
 	providers, err := s.oauthManager.ListProviders(userID)
 	if err != nil {
@@ -666,14 +593,6 @@ func (s *Server) ListOAuthTokens(c *gin.Context) {
 // This is typically called by the OAuth provider redirect
 // GET /oauth/callback?code=xxx&state=xxx
 func (s *Server) OAuthCallback(c *gin.Context) {
-	if s.oauthHandler == nil {
-		c.JSON(http.StatusServiceUnavailable, OAuthErrorResponse{
-			Success: false,
-			Error:   "OAuth service not available",
-		})
-		return
-	}
-
 	// Delegate to the oauth handler's callback, now returns name in token
 	token, err := s.oauthManager.HandleCallback(c.Request.Context(), c.Request)
 	if err != nil {
@@ -743,7 +662,7 @@ func (s *Server) OAuthCallback(c *gin.Context) {
 		OAuthDetail: &config.OAuthDetail{
 			AccessToken:  token.AccessToken,
 			ProviderType: string(token.Provider),
-			UserID:       oauth2.DefaultUserID,
+			UserID:       uuid.New().String(),
 			RefreshToken: token.RefreshToken,
 			ExpiresAt:    expiresAt,
 		},
