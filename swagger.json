@@ -110,6 +110,73 @@
         }
       }
     },
+    "/api/v1/log": {
+      "get": {
+        "tags": [
+          "logs"
+        ],
+        "summary": "Get logs with optional filtering",
+        "description": "Get logs with optional filtering",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/LogsResponse"
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "logs"
+        ],
+        "summary": "Clear all logs",
+        "description": "Clear all logs",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/log/stats": {
+      "get": {
+        "tags": [
+          "logs"
+        ],
+        "summary": "Get log statistics",
+        "description": "Get log statistics",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
     "/api/v1/oauth/authorize": {
       "post": {
         "tags": [
@@ -1276,6 +1343,64 @@
       "required": [
         "success",
         "data"
+      ]
+    },
+    "LogEntry": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "description": "Field data",
+          "additionalProperties": {
+            "type": "object"
+          }
+        },
+        "fields": {
+          "type": "object",
+          "description": "Field fields",
+          "additionalProperties": {
+            "type": "object"
+          }
+        },
+        "level": {
+          "type": "string",
+          "description": "Field level"
+        },
+        "message": {
+          "type": "string",
+          "description": "Field message"
+        },
+        "time": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Field time"
+        }
+      },
+      "required": [
+        "time",
+        "level",
+        "message"
+      ]
+    },
+    "LogsResponse": {
+      "type": "object",
+      "properties": {
+        "logs": {
+          "type": "array",
+          "description": "Field logs",
+          "items": {
+            "$ref": "#/definitions/LogEntry"
+          }
+        },
+        "total": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field total"
+        }
+      },
+      "required": [
+        "total",
+        "logs"
       ]
     },
     "OAuthAuthorizeRequest": {
@@ -2471,8 +2596,8 @@
   },
   "tags": [
     {
-      "name": "oauth",
-      "description": "Operations related to oauth"
+      "name": "info",
+      "description": "Operations related to info"
     },
     {
       "name": "server",
@@ -2487,20 +2612,24 @@
       "description": "Operations related to history"
     },
     {
+      "name": "token",
+      "description": "Operations related to token"
+    },
+    {
+      "name": "oauth",
+      "description": "Operations related to oauth"
+    },
+    {
+      "name": "logs",
+      "description": "Operations related to logs"
+    },
+    {
       "name": "models",
       "description": "Operations related to models"
     },
     {
-      "name": "info",
-      "description": "Operations related to info"
-    },
-    {
       "name": "testing",
       "description": "Operations related to testing"
-    },
-    {
-      "name": "token",
-      "description": "Operations related to token"
     },
     {
       "name": "providers",
