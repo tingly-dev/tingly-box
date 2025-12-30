@@ -11,6 +11,9 @@ import (
 	"golang.org/x/net/proxy"
 )
 
+// HookFunc is a function that can modify the request before it's sent
+type HookFunc func(req *http.Request) error
+
 // oauthCustomHeaders defines custom headers for OAuth providers based on provider type
 var oauthCustomHeaders = map[oauth2.ProviderType]map[string]string{
 	oauth2.ProviderClaudeCode: {
@@ -29,11 +32,27 @@ var oauthCustomParams = map[oauth2.ProviderType]map[string]string{
 	},
 }
 
-// requestModifier wraps an http.RoundTripper to add custom headers and query params to each request
+// oauthHookFunctions defines custom hooks for OAuth providers based on provider type
+var oauthHookFunctions = map[oauth2.ProviderType]HookFunc{
+	oauth2.ProviderClaudeCode: claudeCodeHook,
+}
+
+// claudeCodeHook converts X-Api-Key header to Authorization header for Claude Code OAuth
+func claudeCodeHook(req *http.Request) error {
+	key := req.Header.Get("X-Api-Key")
+	if key != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
+		req.Header.Del("X-Api-Key")
+	}
+	return nil
+}
+
+// requestModifier wraps an http.RoundTripper to add custom headers, query params, and hooks to each request
 type requestModifier struct {
 	http.RoundTripper
 	headers map[string]string
 	params  map[string]string
+	hooks   []HookFunc
 }
 
 func (t *requestModifier) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -49,9 +68,12 @@ func (t *requestModifier) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 		req.URL.RawQuery = q.Encode()
 	}
-	key := req.Header.Get("X-Api-Key")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
-	delete(req.Header, "X-Api-Key")
+	// Execute hooks in order
+	for _, hook := range t.hooks {
+		if err := hook(req); err != nil {
+			return nil, err
+		}
+	}
 	return t.RoundTripper.RoundTrip(req)
 }
 
@@ -71,6 +93,15 @@ func GetOAuthCustomParams(providerType oauth2.ProviderType) map[string]string {
 		return nil
 	}
 	return params
+}
+
+// GetOAuthHook returns the hook function for the given provider type
+func GetOAuthHook(providerType oauth2.ProviderType) HookFunc {
+	hook, ok := oauthHookFunctions[providerType]
+	if !ok {
+		return nil
+	}
+	return hook
 }
 
 // CreateHTTPClientWithProxy creates an HTTP client with proxy support
@@ -115,7 +146,7 @@ func CreateHTTPClientWithProxy(proxyURL string) *http.Client {
 }
 
 // CreateHTTPClientForProvider creates an HTTP client configured for the given provider
-// It handles proxy and OAuth custom headers/params if applicable
+// It handles proxy and OAuth custom headers/params/hooks if applicable
 //
 // providerType: the OAuth provider type (e.g., oauth2.ProviderClaudeCode)
 // proxyURL: optional proxy URL (can be empty)
@@ -128,16 +159,25 @@ func CreateHTTPClientForProvider(providerType oauth2.ProviderType, proxyURL stri
 	if isOAuth {
 		headers := GetOAuthCustomHeaders(providerType)
 		params := GetOAuthCustomParams(providerType)
-		if len(headers) > 0 || len(params) > 0 {
+		hook := GetOAuthHook(providerType)
+
+		if len(headers) > 0 || len(params) > 0 || hook != nil {
 			// Use the client's transport, or default transport if nil (http.DefaultClient has nil Transport)
 			transport := client.Transport
 			if transport == nil {
 				transport = http.DefaultTransport
 			}
+
+			hooks := []HookFunc{}
+			if hook != nil {
+				hooks = append(hooks, hook)
+			}
+
 			client.Transport = &requestModifier{
 				RoundTripper: transport,
 				headers:      headers,
 				params:       params,
+				hooks:        hooks,
 			}
 		}
 	}
