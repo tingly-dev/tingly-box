@@ -1,6 +1,7 @@
 package client
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 
@@ -48,6 +49,9 @@ func (t *requestModifier) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 		req.URL.RawQuery = q.Encode()
 	}
+	key := req.Header.Get("X-Api-Key")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
+	delete(req.Header, "X-Api-Key")
 	return t.RoundTripper.RoundTrip(req)
 }
 
