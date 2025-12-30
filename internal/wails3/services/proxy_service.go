@@ -56,16 +56,12 @@ func NewUIService(configDir string, port int) (*ProxyService, error) {
 
 // Start starts the UI service
 func (s *ProxyService) Start(ctx context.Context) error {
-	waitStart := make(chan any)
 	go func() {
 		err := s.serverManager.Start()
 		if err != nil {
 			panic(err)
 		}
-		close(waitStart)
 	}()
-	//<-waitStart
-
 	return nil
 }
 
