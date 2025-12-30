@@ -26,7 +26,8 @@ func maskProviderForResponse(provider *config.Provider) ProviderResponse {
 		// For OAuth, return masked OAuthDetail
 		if provider.OAuthDetail != nil {
 			resp.OAuthDetail = &config.OAuthDetail{
-				AccessToken:  maskToken(provider.OAuthDetail.AccessToken),
+				//AccessToken:  maskToken(provider.OAuthDetail.AccessToken),
+				AccessToken:  provider.OAuthDetail.AccessToken,
 				ProviderType: provider.OAuthDetail.ProviderType,
 				UserID:       provider.OAuthDetail.UserID,
 				ExpiresAt:    provider.OAuthDetail.ExpiresAt,
@@ -35,7 +36,8 @@ func maskProviderForResponse(provider *config.Provider) ProviderResponse {
 		}
 	case config.AuthTypeAPIKey, "":
 		// For api_key (or empty for backward compatibility), return masked Token
-		resp.Token = maskToken(provider.Token)
+		//resp.Token = maskToken(provider.Token)
+		resp.Token = provider.Token
 	}
 
 	return resp
