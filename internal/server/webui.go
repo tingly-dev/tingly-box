@@ -374,6 +374,21 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithResponseModel(VersionInfoResponse{}),
 	)
 
+	// Log API routes
+	apiV1.GET("/log", s.GetLogs,
+		swagger.WithDescription("Get logs with optional filtering"),
+		swagger.WithTags("logs"),
+		swagger.WithResponseModel(LogsResponse{}),
+	)
+	apiV1.GET("/log/stats", s.GetLogStats,
+		swagger.WithDescription("Get log statistics"),
+		swagger.WithTags("logs"),
+	)
+	apiV1.DELETE("/log", s.ClearLogs,
+		swagger.WithDescription("Clear all logs"),
+		swagger.WithTags("logs"),
+	)
+
 	// Provider Management
 	//apiV1.GET("/providers", (s.GetProviders),
 	//	swagger.WithDescription("Get all configured providers with masked tokens"),

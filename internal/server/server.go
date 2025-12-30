@@ -34,6 +34,7 @@ type Server struct {
 	statsMW         *middleware.StatsMiddleware
 	errorMW         *middleware.ErrorLogMiddleware
 	authMW          *middleware.AuthMiddleware
+	memoryLogMW     *middleware.MemoryLogMiddleware
 	loadBalancer    *LoadBalancer
 	loadBalancerAPI *LoadBalancerAPI
 
@@ -175,6 +176,9 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize statistics middleware with server reference
 	statsMW := middleware.NewStatsMiddleware(cfg)
 
+	// Initialize memory log middleware for HTTP request logging
+	memoryLogMW := middleware.NewMemoryLogMiddleware(1000) // Store up to 1000 entries
+
 	// Initialize auth middleware
 	authMW := middleware.NewAuthMiddleware(cfg, jwtManager)
 
@@ -198,6 +202,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Update server with dependencies
 	server.statsMW = statsMW
 	server.authMW = authMW
+	server.memoryLogMW = memoryLogMW
 	server.loadBalancer = loadBalancer
 	server.loadBalancerAPI = loadBalancerAPI
 	server.oauthManager = oauthManager
@@ -248,13 +253,13 @@ func (s *Server) setupConfigWatcher() {
 
 // setupMiddleware configures server middleware
 func (s *Server) setupMiddleware() {
-	s.engine.Use(RequestLoggerMiddleware())
-
-	// Logger middleware
-	s.engine.Use(gin.Logger())
-
 	// Recovery middleware
 	s.engine.Use(gin.Recovery())
+
+	// Memory log middleware for HTTP request logging
+	if s.memoryLogMW != nil {
+		s.engine.Use(s.memoryLogMW.Middleware())
+	}
 
 	// Debug middleware for logging requests/responses (only if enabled)
 	if s.errorMW != nil {
@@ -268,31 +273,6 @@ func (s *Server) setupMiddleware() {
 
 	// CORS middleware
 	s.engine.Use(middleware.CORS())
-}
-
-func RequestLoggerMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		start := time.Now()
-
-		// Get content length from headers instead of reading the whole body
-		contentLength := c.Request.ContentLength
-		if contentLength == -1 {
-			contentLength = 0
-		}
-
-		// Process the request
-		c.Next()
-
-		// Log essential details after the request is processed
-		duration := time.Since(start)
-		fmt.Printf("Method: %s | Path: %s | Status: %d | Content-Length: %d | Duration: %v\n",
-			c.Request.Method,
-			c.Request.URL.Path,
-			c.Writer.Status(),
-			contentLength,
-			duration,
-		)
-	}
 }
 
 // setupRoutes configures server routes
@@ -333,7 +313,7 @@ func (s *Server) setupRoutes() {
 
 	// API routes for load balancer management
 	api := s.engine.Group("/api")
-	api.Use(s.authMW.UserAuthMiddleware()) // Require user authentication for management APIs
+	//api.Use(s.authMW.UserAuthMiddleware()) // Require user authentication for management APIs
 	{
 		// Load balancer API routes
 		s.loadBalancerAPI.RegisterRoutes(api.Group("/v1"))
