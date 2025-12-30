@@ -7,7 +7,8 @@ import Layout from './layout/Layout';
 import Home from './pages/Home.tsx';
 import History from "./pages/History";
 import Login from './pages/Login';
-import ProviderPage from './pages/ProviderPage.tsx';
+import ApiKeyPage from './pages/ApiKeyPage.tsx';
+import OAuthPage from './pages/OAuthPage.tsx';
 import RulePage from './pages/RulePage.tsx';
 import System from './pages/System';
 import theme from './theme';
@@ -27,7 +28,8 @@ function App() {
                                         <Routes>
                                             <Route path="/" element={<Home />} />
                                             <Route path="/home" element={<Home />} />
-                                            <Route path="/provider" element={<ProviderPage />} />
+                                            <Route path="/api-keys" element={<ApiKeyPage />} />
+                                            <Route path="/oauth" element={<OAuthPage />} />
                                             <Route path="/routing" element={<RulePage />} />
                                             <Route path="/system" element={<System />} />
                                             <Route path="/history" element={<History />} />
