@@ -1,8 +1,9 @@
-import { Cancel, CheckCircle, Delete, Edit, VpnKey as RefreshToken, Schedule, VpnKey } from '@mui/icons-material';
+import { Cancel, CheckCircle, Delete, Edit, Refresh as RefreshIcon, Schedule, VpnKey } from '@mui/icons-material';
 import {
     Box,
     Button,
     Chip,
+    CircularProgress,
     FormControlLabel,
     IconButton,
     Modal,
@@ -28,6 +29,7 @@ interface OAuthTableProps {
     onToggle?: (providerUuid: string) => void;
     onDelete?: (providerUuid: string) => void;
     onReauthorize?: (providerUuid: string) => void;
+    onRefreshToken?: (providerUuid: string) => Promise<void>;
 }
 
 interface DeleteModalState {
@@ -36,12 +38,26 @@ interface DeleteModalState {
     providerName: string;
 }
 
-const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize }: OAuthTableProps) => {
+interface RefreshModalState {
+    open: boolean;
+    providerUuid: string;
+    providerName: string;
+}
+
+const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRefreshToken }: OAuthTableProps) => {
     const [deleteModal, setDeleteModal] = useState<DeleteModalState>({
         open: false,
         providerUuid: '',
         providerName: '',
     });
+
+    const [refreshModal, setRefreshModal] = useState<RefreshModalState>({
+        open: false,
+        providerUuid: '',
+        providerName: '',
+    });
+
+    const [refreshing, setRefreshing] = useState<string | null>(null);
 
     const handleDeleteClick = (providerUuid: string) => {
         const provider = providers.find((p) => p.uuid === providerUuid);
@@ -61,6 +77,31 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize }: OA
             onDelete(deleteModal.providerUuid);
         }
         handleCloseDeleteModal();
+    };
+
+    const handleRefreshClick = (providerUuid: string) => {
+        const provider = providers.find((p) => p.uuid === providerUuid);
+        setRefreshModal({
+            open: true,
+            providerUuid,
+            providerName: provider?.name || 'Unknown Provider',
+        });
+    };
+
+    const handleCloseRefreshModal = () => {
+        setRefreshModal({ open: false, providerUuid: '', providerName: '' });
+    };
+
+    const handleConfirmRefresh = async () => {
+        if (!onRefreshToken || !refreshModal.providerUuid) return;
+
+        setRefreshing(refreshModal.providerUuid);
+        try {
+            await onRefreshToken(refreshModal.providerUuid);
+        } finally {
+            setRefreshing(null);
+        }
+        handleCloseRefreshModal();
     };
 
     const formatExpiresAt = (expiresAt?: string) => {
@@ -170,6 +211,22 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize }: OA
                                                 </IconButton>
                                             </Tooltip>
                                         )}
+                                        {onRefreshToken && provider.oauth_detail?.refresh_token && (
+                                            <Tooltip title="Refresh Token">
+                                                <IconButton
+                                                    size="small"
+                                                    color="info"
+                                                    onClick={() => handleRefreshClick(provider.uuid)}
+                                                    disabled={refreshing === provider.uuid}
+                                                >
+                                                    {refreshing === provider.uuid ? (
+                                                        <CircularProgress size={16} />
+                                                    ) : (
+                                                        <RefreshIcon fontSize="small" />
+                                                    )}
+                                                </IconButton>
+                                            </Tooltip>
+                                        )}
                                         {onReauthorize && (
                                             <Tooltip title="Reauthorize">
                                                 <IconButton
@@ -177,7 +234,7 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize }: OA
                                                     color={isExpired ? 'warning' : 'default'}
                                                     onClick={() => onReauthorize(provider.uuid)}
                                                 >
-                                                    <RefreshToken fontSize="small" />
+                                                    <VpnKey fontSize="small" />
                                                 </IconButton>
                                             </Tooltip>
                                         )}
@@ -240,6 +297,43 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize }: OA
                         </Button>
                         <Button onClick={handleConfirmDelete} color="error" variant="contained">
                             Delete
+                        </Button>
+                    </Stack>
+                </Box>
+            </Modal>
+
+            {/* Refresh Token Confirmation Modal */}
+            <Modal open={refreshModal.open} onClose={handleCloseRefreshModal}>
+                <Box
+                    sx={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        width: 400,
+                        maxWidth: '80vw',
+                        bgcolor: 'background.paper',
+                        boxShadow: 24,
+                        p: 4,
+                        borderRadius: 2,
+                    }}
+                >
+                    <Typography variant="h6" sx={{ mb: 2 }}>Refresh OAuth Token</Typography>
+                    <Typography variant="body2" sx={{ mb: 3 }}>
+                        Are you sure you want to refresh the OAuth token for "{refreshModal.providerName}"? This will update the access token using the refresh token.
+                    </Typography>
+                    <Stack direction="row" spacing={2} justifyContent="flex-end">
+                        <Button onClick={handleCloseRefreshModal} color="inherit" disabled={refreshing !== null}>
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleConfirmRefresh}
+                            color="info"
+                            variant="contained"
+                            disabled={refreshing !== null}
+                            startIcon={refreshing !== null ? <CircularProgress size={16} /> : <RefreshIcon fontSize="small" />}
+                        >
+                            {refreshing !== null ? 'Refreshing...' : 'Refresh'}
                         </Button>
                     </Stack>
                 </Box>

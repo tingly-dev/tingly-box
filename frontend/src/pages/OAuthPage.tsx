@@ -86,9 +86,29 @@ const OAuthPage = () => {
         }
     };
 
+    // Reauthorize - start new OAuth flow (not implemented in backend, placeholder for now)
     const handleReauthorizeOAuth = async (_uuid: string) => {
-        // TODO: Implement reauthorize flow
-        showNotification('Reauthorize functionality coming soon!', 'error');
+        // For now, this could open the OAuth dialog with pre-filled provider info
+        // or could be removed if reauthorization is done through "Add OAuth" flow
+        showNotification('Reauthorization flow - use "Add OAuth" to reauthorize', 'success');
+    };
+
+    // Refresh token - use refresh_token to get new access token
+    const handleRefreshToken = async (providerUuid: string) => {
+        try {
+            const { oauthApi } = await api.instances();
+            const response = await oauthApi.apiV1OauthRefreshPost({ provider_uuid: providerUuid });
+
+            if (response.data.success) {
+                showNotification('Token refreshed successfully!', 'success');
+                await loadProviders();
+            } else {
+                showNotification(`Failed to refresh token: ${response.data.message || 'Unknown error'}`, 'error');
+            }
+        } catch (error: any) {
+            const errorMessage = error?.response?.data?.error || error?.message || 'Unknown error';
+            showNotification(`Failed to refresh token: ${errorMessage}`, 'error');
+        }
     };
 
     return (
@@ -114,7 +134,8 @@ const OAuthPage = () => {
                         onEdit={handleEditProvider}
                         onToggle={handleToggleProvider}
                         onDelete={handleDeleteProvider}
-                        onReauthorize={handleReauthorizeOAuth}
+                        // onReauthorize={handleReauthorizeOAuth}
+                        onRefreshToken={handleRefreshToken}
                     />
                 </UnifiedCard>
             )}
