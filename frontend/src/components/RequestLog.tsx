@@ -45,6 +45,7 @@ interface RequestLogProps {
 const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
     const { t } = useTranslation();
     const [logs, setLogs] = useState<LogEntry[]>([]);
+    const [allLogs, setAllLogs] = useState<LogEntry[]>([]); // Store all logs
     const [loading, setLoading] = useState(false);
     const [filterLevel, setFilterLevel] = useState<string>('all');
     const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
@@ -53,13 +54,15 @@ const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
     const loadLogs = async () => {
         setLoading(true);
         try {
-            const params: any = { limit: 100 };
-            if (filterLevel !== 'all') {
-                params.level = filterLevel;
-            }
-            const response = await getLogs(params);
+            const response = await getLogs({ limit: 100 });
             if (response && response.logs) {
-                setLogs(response.logs);
+                setAllLogs(response.logs);
+                // Apply current filter to newly loaded logs
+                if (filterLevel === 'all') {
+                    setLogs(response.logs);
+                } else {
+                    setLogs(response.logs.filter(log => log.level.toLowerCase() === filterLevel.toLowerCase()));
+                }
             }
         } catch (error) {
             console.error('Failed to load logs:', error);
@@ -72,6 +75,7 @@ const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
         if (confirm('Are you sure you want to clear all logs?')) {
             try {
                 await clearLogs();
+                setAllLogs([]);
                 setLogs([]);
             } catch (error) {
                 console.error('Failed to clear logs:', error);
@@ -114,16 +118,25 @@ const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
         }
     };
 
+    // Client-side filter when filterLevel changes
+    useEffect(() => {
+        if (filterLevel === 'all') {
+            setLogs(allLogs);
+        } else {
+            setLogs(allLogs.filter(log => log.level.toLowerCase() === filterLevel.toLowerCase()));
+        }
+    }, [filterLevel, allLogs]);
+
     useEffect(() => {
         loadLogs();
-    }, [filterLevel]);
+    }, []); // Only load on mount
 
     useEffect(() => {
         if (autoRefresh) {
             const interval = setInterval(loadLogs, 5000);
             return () => clearInterval(interval);
         }
-    }, [autoRefresh, filterLevel]);
+    }, [autoRefresh]);
 
     return (
         <Stack spacing={2}>
