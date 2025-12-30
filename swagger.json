@@ -110,6 +110,107 @@
         }
       }
     },
+    "/api/v1/oauth/authorize": {
+      "post": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Initiate OAuth authorization flow",
+        "description": "Initiate OAuth authorization flow",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "request",
+            "in": "body",
+            "description": "Request body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/OAuthAuthorizeRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/OAuthAuthorizeResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/oauth/token": {
+      "get": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Get OAuth token for a user and provider",
+        "description": "Get OAuth token for a user and provider",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/OAuthTokenResponse"
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Revoke OAuth token for a user and provider",
+        "description": "Revoke OAuth token for a user and provider",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/OAuthMessageResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/oauth/tokens": {
+      "get": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "List all OAuth tokens for a user",
+        "description": "List all OAuth tokens for a user",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/OAuthTokensResponse"
+            }
+          }
+        }
+      }
+    },
     "/api/v1/probe": {
       "post": {
         "tags": [
@@ -584,6 +685,107 @@
         }
       }
     },
+    "/api/v2/provider-templates": {
+      "get": {
+        "tags": [
+          "provider-templates"
+        ],
+        "summary": "Get all provider templates",
+        "description": "Get all provider templates",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/provider-templates/refresh": {
+      "post": {
+        "tags": [
+          "provider-templates"
+        ],
+        "summary": "Refresh provider templates from GitHub",
+        "description": "Refresh provider templates from GitHub",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/provider-templates/version": {
+      "get": {
+        "tags": [
+          "provider-templates"
+        ],
+        "summary": "Get current provider template registry version",
+        "description": "Get current provider template registry version",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/provider-templates/{id}": {
+      "get": {
+        "tags": [
+          "provider-templates"
+        ],
+        "summary": "Get a specific provider template by ID",
+        "description": "Get a specific provider template by ID",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
     "/api/v2/providers": {
       "get": {
         "tags": [
@@ -911,17 +1113,6 @@
             "$ref": "#/definitions/Service"
           }
         },
-        "tactic": {
-          "type": "string",
-          "description": "Field tactic"
-        },
-        "tactic_params": {
-          "type": "object",
-          "description": "Field tactic_params",
-          "additionalProperties": {
-            "type": "object"
-          }
-        },
         "uuid": {
           "type": "string",
           "description": "Field uuid"
@@ -935,8 +1126,7 @@
         "services",
         "current_service_index",
         "lb_tactic",
-        "active",
-        "tactic"
+        "active"
       ]
     },
     "DeleteProviderResponse": {
@@ -1042,6 +1232,202 @@
         "data": {
           "type": "object",
           "description": "Field data"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    },
+    "OAuthAuthorizeRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Custom name for the provider (optional, auto-generated if empty)",
+          "example": "my-claude-account"
+        },
+        "provider": {
+          "type": "string",
+          "description": "OAuth provider type",
+          "example": "anthropic"
+        },
+        "redirect": {
+          "type": "string",
+          "description": "URL to redirect after OAuth completion",
+          "example": "http://localhost:3000/callback"
+        },
+        "response_type": {
+          "type": "string",
+          "description": "Response type: 'redirect' or 'json'",
+          "example": "json"
+        },
+        "user_id": {
+          "type": "string",
+          "description": "User ID for the OAuth flow",
+          "example": "user123"
+        }
+      },
+      "required": [
+        "provider",
+        "user_id",
+        "redirect",
+        "response_type",
+        "name"
+      ]
+    },
+    "OAuthAuthorizeResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "description": "Field data",
+          "properties": {
+            "auth_url": {
+              "type": "string",
+              "description": "Field auth_url"
+            },
+            "state": {
+              "type": "string",
+              "description": "Field state"
+            }
+          },
+          "required": [
+            "auth_url",
+            "state"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "description": "Field message",
+          "example": "Authorization initiated"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    },
+    "OAuthDetail": {
+      "type": "object",
+      "properties": {
+        "access_token": {
+          "type": "string",
+          "description": "Field access_token"
+        },
+        "expires_at": {
+          "type": "string",
+          "description": "Field expires_at"
+        },
+        "provider_type": {
+          "type": "string",
+          "description": "Field provider_type"
+        },
+        "refresh_token": {
+          "type": "string",
+          "description": "Field refresh_token"
+        },
+        "user_id": {
+          "type": "string",
+          "description": "Field user_id"
+        }
+      },
+      "required": [
+        "access_token",
+        "provider_type",
+        "user_id",
+        "refresh_token",
+        "expires_at"
+      ]
+    },
+    "OAuthMessageResponse": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string",
+          "description": "Field message",
+          "example": "Operation successful"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "message"
+      ]
+    },
+    "OAuthTokenResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "description": "Field data",
+          "properties": {
+            "access_token": {
+              "type": "string",
+              "description": "Field access_token"
+            },
+            "expires_at": {
+              "type": "string",
+              "description": "Field expires_at"
+            },
+            "provider": {
+              "type": "string",
+              "description": "Field provider"
+            },
+            "refresh_token": {
+              "type": "string",
+              "description": "Field refresh_token"
+            },
+            "token_type": {
+              "type": "string",
+              "description": "Field token_type"
+            },
+            "valid": {
+              "type": "boolean",
+              "description": "Field valid"
+            }
+          },
+          "required": [
+            "access_token",
+            "token_type",
+            "provider",
+            "valid"
+          ]
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    },
+    "OAuthTokensResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "array",
+          "description": "Field data",
+          "items": {
+            "$ref": "#/definitions/TokenInfo"
+          }
         },
         "success": {
           "type": "boolean",
@@ -1418,6 +1804,11 @@
           "description": "Field api_style",
           "example": "openai"
         },
+        "auth_type": {
+          "type": "string",
+          "description": "Field auth_type",
+          "example": "api_key"
+        },
         "enabled": {
           "type": "boolean",
           "description": "Field enabled",
@@ -1427,6 +1818,10 @@
           "type": "string",
           "description": "Field name",
           "example": "openai"
+        },
+        "oauth_detail": {
+          "description": "Field oauth_detail",
+          "$ref": "#/definitions/OAuthDetail"
         },
         "token": {
           "type": "string",
@@ -1527,6 +1922,10 @@
     "Service": {
       "type": "object",
       "properties": {
+        "Stats": {
+          "description": "Field Stats",
+          "$ref": "#/definitions/ServiceStats"
+        },
         "active": {
           "type": "boolean",
           "description": "Field active"
@@ -1538,10 +1937,6 @@
         "provider": {
           "type": "string",
           "description": "Field provider"
-        },
-        "stats": {
-          "description": "Field stats",
-          "$ref": "#/definitions/ServiceStats"
         },
         "time_window": {
           "type": "integer",
@@ -1560,7 +1955,7 @@
         "weight",
         "active",
         "time_window",
-        "stats"
+        "Stats"
       ]
     },
     "ServiceStats": {
@@ -1725,6 +2120,30 @@
         "data"
       ]
     },
+    "TokenInfo": {
+      "type": "object",
+      "properties": {
+        "expires_at": {
+          "type": "string",
+          "description": "Field expires_at",
+          "example": "2024-01-01T12:00:00Z"
+        },
+        "provider": {
+          "type": "string",
+          "description": "Field provider",
+          "example": "anthropic"
+        },
+        "valid": {
+          "type": "boolean",
+          "description": "Field valid",
+          "example": true
+        }
+      },
+      "required": [
+        "provider",
+        "valid"
+      ]
+    },
     "TokenResponse": {
       "type": "object",
       "properties": {
@@ -1828,17 +2247,6 @@
             "$ref": "#/definitions/Service"
           }
         },
-        "tactic": {
-          "type": "string",
-          "description": "Field tactic"
-        },
-        "tactic_params": {
-          "type": "object",
-          "description": "Field tactic_params",
-          "additionalProperties": {
-            "type": "object"
-          }
-        },
         "uuid": {
           "type": "string",
           "description": "Field uuid"
@@ -1852,8 +2260,7 @@
         "services",
         "current_service_index",
         "lb_tactic",
-        "active",
-        "tactic"
+        "active"
       ]
     },
     "UpdateRuleResponse": {
@@ -1962,36 +2369,44 @@
   },
   "tags": [
     {
-      "name": "providers",
-      "description": "Operations related to providers"
-    },
-    {
-      "name": "history",
-      "description": "Operations related to history"
-    },
-    {
-      "name": "testing",
-      "description": "Operations related to testing"
-    },
-    {
       "name": "info",
       "description": "Operations related to info"
-    },
-    {
-      "name": "server",
-      "description": "Operations related to server"
     },
     {
       "name": "rules",
       "description": "Operations related to rules"
     },
     {
-      "name": "models",
-      "description": "Operations related to models"
+      "name": "history",
+      "description": "Operations related to history"
     },
     {
       "name": "token",
       "description": "Operations related to token"
+    },
+    {
+      "name": "providers",
+      "description": "Operations related to providers"
+    },
+    {
+      "name": "provider-templates",
+      "description": "Operations related to provider-templates"
+    },
+    {
+      "name": "oauth",
+      "description": "Operations related to oauth"
+    },
+    {
+      "name": "server",
+      "description": "Operations related to server"
+    },
+    {
+      "name": "models",
+      "description": "Operations related to models"
+    },
+    {
+      "name": "testing",
+      "description": "Operations related to testing"
     }
   ]
 }
