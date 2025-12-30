@@ -7,12 +7,23 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/expr-lang/expr"
+	"github.com/expr-lang/expr/vm"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 )
+
+// FilterContext provides the context for filter expression evaluation
+type FilterContext struct {
+	StatusCode int    `expr:"StatusCode"`
+	Method     string `expr:"Method"`
+	Path       string `expr:"Path"`
+	Query      string `expr:"Query"`
+}
 
 // ErrorLogMiddleware logs requests and responses to a file when debug mode is enabled
 type ErrorLogMiddleware struct {
@@ -22,6 +33,10 @@ type ErrorLogMiddleware struct {
 	enabled   bool
 	maxSize   int64 // Maximum log file size in bytes
 	rotateLog bool
+
+	// Compiled expression program for filtering
+	filterProgram  *vm.Program
+	filterCompiled bool
 }
 
 // NewErrorLogMiddleware creates a new debug middleware
@@ -31,6 +46,15 @@ func NewErrorLogMiddleware(logPath string, maxSizeMB int) *ErrorLogMiddleware {
 		maxSize:   int64(maxSizeMB) * 1024 * 1024, // Convert MB to bytes
 		rotateLog: true,
 		enabled:   true, // Debug middleware is enabled when created
+	}
+
+	// Compile default filter expression
+	program, err := expr.Compile("StatusCode >= 400 && Path matches '^/api/'", expr.Env(FilterContext{}))
+	if err != nil {
+		logrus.Errorf("Failed to compile default filter expression: %v", err)
+	} else {
+		dm.filterProgram = program
+		dm.filterCompiled = true
 	}
 
 	// Create log directory if it doesn't exist
@@ -81,6 +105,25 @@ func (dm *ErrorLogMiddleware) IsEnabled() bool {
 	dm.mu.RLock()
 	defer dm.mu.RUnlock()
 	return dm.enabled
+}
+
+// SetFilterExpression recompiles and sets a new filter expression
+func (dm *ErrorLogMiddleware) SetFilterExpression(expression string) error {
+	dm.mu.Lock()
+	defer dm.mu.Unlock()
+
+	if expression == "" {
+		expression = "StatusCode >= 400 && Path matches '^/api/'"
+	}
+
+	program, err := expr.Compile(expression, expr.Env(FilterContext{}))
+	if err != nil {
+		return fmt.Errorf("failed to compile filter expression: %w", err)
+	}
+
+	dm.filterProgram = program
+	dm.filterCompiled = true
+	return nil
 }
 
 // openLogFile opens or creates the log file
@@ -214,13 +257,41 @@ func (dm *ErrorLogMiddleware) logEntry(entry *logEntry) {
 	dm.mu.RLock()
 	defer dm.mu.RUnlock()
 
-	if !dm.enabled || dm.logFile == nil {
+	if !dm.enabled {
 		return
 	}
 
-	// Only log error responses (4xx, 5xx)
-	if entry.StatusCode < 400 {
+	if dm.logFile == nil {
+		logrus.Errorf("Failed to write log entry: log file is not initialized (path: %s)", dm.logPath)
 		return
+	}
+
+	// Evaluate filter expression if compiled
+	if dm.filterCompiled && dm.filterProgram != nil {
+		context := FilterContext{
+			StatusCode: entry.StatusCode,
+			Method:     entry.Method,
+			Path:       entry.Path,
+			Query:      entry.Query,
+		}
+
+		shouldLog, err := expr.Run(dm.filterProgram, context)
+		if err != nil {
+			logrus.Errorf("Failed to evaluate filter expression: %v", err)
+			// Fallback to default behavior: log API errors only
+			if entry.StatusCode < 400 || !strings.HasPrefix(entry.Path, "/api/") {
+				return
+			}
+		} else if result, ok := shouldLog.(bool); ok && !result {
+			// Expression returned false, don't log
+			return
+		}
+		// If expression returns true or is not a bool, log the entry
+	} else {
+		// Fallback to default behavior if expression not compiled
+		if entry.StatusCode < 400 || !strings.HasPrefix(entry.Path, "/api/") {
+			return
+		}
 	}
 
 	// Format for JSON output
@@ -268,15 +339,21 @@ func (dm *ErrorLogMiddleware) logEntry(entry *logEntry) {
 				if err := dm.rotateLogFile(); err != nil {
 					logrus.Errorf("Failed to rotate log file: %v", err)
 				}
-				dm.openLogFile()
+				if err := dm.openLogFile(); err != nil {
+					logrus.Errorf("Failed to open log file after rotation: %v", err)
+					return
+				}
 			}
 		}
 	}
 
 	// Write the log entry
-	if dm.logFile != nil {
-		dm.logFile.WriteString(string(jsonData) + "\n")
-		dm.logFile.Sync() // Ensure immediate write to disk
+	if _, err := dm.logFile.WriteString(string(jsonData) + "\n"); err != nil {
+		logrus.Errorf("Failed to write log entry to file: %v", err)
+		return
+	}
+	if err := dm.logFile.Sync(); err != nil {
+		logrus.Errorf("Failed to sync log file to disk: %v", err)
 	}
 }
 
@@ -315,7 +392,9 @@ func (dm *ErrorLogMiddleware) Stop() {
 	defer dm.mu.Unlock()
 
 	if dm.logFile != nil {
-		dm.logFile.Close()
+		if err := dm.logFile.Close(); err != nil {
+			logrus.Errorf("Failed to close log file: %v", err)
+		}
 		dm.logFile = nil
 	}
 	dm.enabled = false
