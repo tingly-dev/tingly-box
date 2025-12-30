@@ -4,19 +4,18 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 
 	"tingly-box/internal/config"
+	"tingly-box/pkg/client"
+	"tingly-box/pkg/oauth"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/openai/openai-go/v3"
 	openaiOption "github.com/openai/openai-go/v3/option"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/net/proxy"
 )
 
 // ClientPool manages OpenAI and Anthropic client instances for different providers
@@ -31,47 +30,6 @@ func NewClientPool() *ClientPool {
 	return &ClientPool{
 		openaiClients:    make(map[string]*openai.Client),
 		anthropicClients: make(map[string]anthropic.Client),
-	}
-}
-
-// createHTTPClientWithProxy creates an HTTP client with proxy support
-func createHTTPClientWithProxy(proxyURL string) *http.Client {
-	if proxyURL == "" {
-		return http.DefaultClient
-	}
-
-	// Parse the proxy URL
-	parsedURL, err := url.Parse(proxyURL)
-	if err != nil {
-		logrus.Errorf("Failed to parse proxy URL %s: %v, using default client", proxyURL, err)
-		return http.DefaultClient
-	}
-
-	// Create transport with proxy
-	transport := &http.Transport{}
-
-	switch parsedURL.Scheme {
-	case "http", "https":
-		transport.Proxy = http.ProxyURL(parsedURL)
-	case "socks5":
-		dialer, err := proxy.SOCKS5("tcp", parsedURL.Host, nil, proxy.Direct)
-		if err != nil {
-			logrus.Errorf("Failed to create SOCKS5 proxy dialer: %v, using default client", err)
-			return http.DefaultClient
-		}
-		dialContext, ok := dialer.(proxy.ContextDialer)
-		if ok {
-			transport.DialContext = dialContext.DialContext
-		} else {
-			return http.DefaultClient
-		}
-	default:
-		logrus.Errorf("Unsupported proxy scheme %s, supported schemes are http, https, socks5", parsedURL.Scheme)
-		return http.DefaultClient
-	}
-
-	return &http.Client{
-		Transport: transport,
 	}
 }
 
@@ -104,22 +62,22 @@ func (p *ClientPool) GetOpenAIClient(provider *config.Provider) *openai.Client {
 	logrus.Infof("Creating new OpenAI client for provider: %s (API: %s)", provider.Name, provider.APIBase)
 
 	options := []openaiOption.RequestOption{
-		openaiOption.WithAPIKey(provider.Token),
+		openaiOption.WithAPIKey(provider.GetAccessToken()),
 		openaiOption.WithBaseURL(provider.APIBase),
 	}
 
 	// Add proxy if configured
 	if provider.ProxyURL != "" {
-		httpClient := createHTTPClientWithProxy(provider.ProxyURL)
+		httpClient := client.CreateHTTPClientWithProxy(provider.ProxyURL)
 		options = append(options, openaiOption.WithHTTPClient(httpClient))
 		logrus.Infof("Using proxy for OpenAI client: %s", provider.ProxyURL)
 	}
 
-	client := openai.NewClient(options...)
+	openaiClient := openai.NewClient(options...)
 
 	// Store in pool
-	p.openaiClients[key] = &client
-	return &client
+	p.openaiClients[key] = &openaiClient
+	return &openaiClient
 }
 
 // GetAnthropicClient returns an Anthropic client for the specified provider
@@ -156,28 +114,39 @@ func (p *ClientPool) GetAnthropicClient(provider *config.Provider) anthropic.Cli
 	logrus.Infof("Creating new Anthropic client for provider: %s (API: %s)", provider.Name, apiBase)
 
 	options := []anthropicOption.RequestOption{
-		anthropicOption.WithAPIKey(provider.Token),
+		anthropicOption.WithAPIKey(provider.GetAccessToken()),
 		anthropicOption.WithBaseURL(apiBase),
 	}
 
-	// Add proxy if configured
-	if provider.ProxyURL != "" {
-		httpClient := createHTTPClientWithProxy(provider.ProxyURL)
+	// Add proxy and/or custom headers if configured
+	if provider.ProxyURL != "" || provider.AuthType == config.AuthTypeOAuth {
+		var providerType oauth.ProviderType
+		if provider.OAuthDetail != nil {
+			providerType = oauth.ProviderType(provider.OAuthDetail.ProviderType)
+		}
+		httpClient := client.CreateHTTPClientForProvider(providerType, provider.ProxyURL, provider.AuthType == config.AuthTypeOAuth)
+
+		if provider.AuthType == config.AuthTypeOAuth && provider.OAuthDetail != nil {
+			logrus.Infof("Using custom headers/params for OAuth provider type: %s", provider.OAuthDetail.ProviderType)
+		}
+		if provider.ProxyURL != "" {
+			logrus.Infof("Using proxy for Anthropic client: %s", provider.ProxyURL)
+		}
+
 		options = append(options, anthropicOption.WithHTTPClient(httpClient))
-		logrus.Infof("Using proxy for Anthropic client: %s", provider.ProxyURL)
 	}
 
-	client := anthropic.NewClient(options...)
+	anthropicClient := anthropic.NewClient(options...)
 
 	// Store in pool
-	p.anthropicClients[key] = client
-	return client
+	p.anthropicClients[key] = anthropicClient
+	return anthropicClient
 }
 
 // generateProviderKey creates a unique key for a provider
 // Uses combination of name, API base, hash of the token, and proxy URL for uniqueness
 func (p *ClientPool) generateProviderKey(provider *config.Provider) string {
-	return fmt.Sprintf("%s:%s:%s:%s", provider.Name, provider.APIBase, hashToken(provider.Token), hashToken(provider.ProxyURL))
+	return fmt.Sprintf("%s:%s:%s:%s", provider.Name, provider.APIBase, hashToken(provider.GetAccessToken()), hashToken(provider.ProxyURL))
 }
 
 // hashToken creates a secure hash of the token for key generation

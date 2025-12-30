@@ -1,11 +1,27 @@
-import { AccountCircle as AccountIcon, Dashboard as DashboardIcon, Key as KeyIcon, Menu as MenuIcon } from '@mui/icons-material';
-import { Box, Drawer, IconButton, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Typography } from '@mui/material';
-import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
-import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
-import { useAuth } from '../contexts/AuthContext';
+import {
+    AccountCircle as AccountIcon,
+    Dashboard as DashboardIcon,
+    Key as KeyIcon,
+    Menu as MenuIcon
+} from '@mui/icons-material';
+import {
+    Box,
+    Drawer,
+    IconButton,
+    List,
+    ListItem,
+    ListItemButton,
+    ListItemIcon,
+    ListItemText,
+    Typography
+} from '@mui/material';
+import type {ReactNode} from 'react';
+import {useEffect, useState} from 'react';
+import {Link as RouterLink, useLocation, useNavigate} from 'react-router-dom';
+import {useTranslation} from 'react-i18next';
+import {useAuth} from '../contexts/AuthContext';
 import api from '../services/api';
+import VerifiedIcon from '@mui/icons-material/Verified';
 
 interface LayoutProps {
     children: ReactNode;
@@ -55,7 +71,8 @@ const Layout = ({ children }: LayoutProps) => {
 
     const menuItems = [
         { path: '/', label: t('layout.nav.home'), icon: <DashboardIcon /> },
-        { path: '/provider', label: t('layout.nav.credential'), icon: <KeyIcon /> },
+        { path: '/api-keys', label: t('layout.nav.apiKeys', { defaultValue: 'API Keys' }), icon: <KeyIcon /> },
+        { path: '/oauth', label: t('layout.nav.oauth', { defaultValue: 'OAuth' }), icon: <VerifiedIcon /> },
         // { path: '/routing', label: 'Advance', icon: <ForkRight sx={{ transform: 'rotate(45deg)' }} /> },
         // { path: '/system', label: 'System', icon: <SettingsIcon /> },
         // { path: '/history', label: 'History', icon: <HistoryIcon /> },

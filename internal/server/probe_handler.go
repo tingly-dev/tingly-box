@@ -14,10 +14,8 @@ import (
 	"tingly-box/internal/obs"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
-	openaiOption "github.com/openai/openai-go/v3/option"
 )
 
 // HandleProbeProvider tests a provider's API key and connectivity
@@ -247,17 +245,11 @@ func (s *Server) getProviderModelsForProbe(provider *config.Provider) ([]string,
 }
 
 // probeWithOpenAI handles probe requests for OpenAI-style APIs
-func probeWithOpenAI(c *gin.Context, provider *config.Provider, model string) (string, ProbeUsage, error) {
+func (s *Server) probeWithOpenAI(c *gin.Context, provider *config.Provider, model string) (string, ProbeUsage, error) {
 	startTime := time.Now()
 
-	// Configure OpenAI client
-	opts := []openaiOption.RequestOption{
-		openaiOption.WithAPIKey(provider.Token),
-	}
-	if provider.APIBase != "" {
-		opts = append(opts, openaiOption.WithBaseURL(provider.APIBase))
-	}
-	openaiClient := openai.NewClient(opts...)
+	// Get OpenAI client from pool (supports proxy and caching)
+	openaiClient := s.clientPool.GetOpenAIClient(provider)
 
 	// Create chat completion request using OpenAI SDK
 	chatRequest := &openai.ChatCompletionNewParams{
@@ -316,17 +308,11 @@ func probeWithOpenAI(c *gin.Context, provider *config.Provider, model string) (s
 }
 
 // probeWithAnthropic handles probe requests for Anthropic-style APIs
-func probeWithAnthropic(c *gin.Context, provider *config.Provider, model string) (string, ProbeUsage, error) {
+func (s *Server) probeWithAnthropic(c *gin.Context, provider *config.Provider, model string) (string, ProbeUsage, error) {
 	startTime := time.Now()
 
-	// Configure Anthropic client
-	opts := []anthropicOption.RequestOption{
-		anthropicOption.WithAPIKey(provider.Token),
-	}
-	if provider.APIBase != "" {
-		opts = append(opts, anthropicOption.WithBaseURL(provider.APIBase))
-	}
-	anthropicClient := anthropic.NewClient(opts...)
+	// Get Anthropic client from pool (supports proxy, OAuth headers, and caching)
+	anthropicClient := s.clientPool.GetAnthropicClient(provider)
 
 	// Create message request using Anthropic SDK
 	messageRequest := anthropic.MessageNewParams{

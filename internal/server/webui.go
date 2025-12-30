@@ -44,12 +44,19 @@ func (s *Server) UseUIEndpoints() {
 	// UI page routes
 	s.engine.GET("/home", s.UseIndexHTML)
 	s.engine.GET("/provider", s.UseIndexHTML)
+	s.engine.GET("/api-keys", s.UseIndexHTML)
+	s.engine.GET("/oauth", s.UseIndexHTML)
 	s.engine.GET("/routing", s.UseIndexHTML)
 	s.engine.GET("/system", s.UseIndexHTML)
 	s.engine.GET("/history", s.UseIndexHTML)
 
+	// Create route manager
+	manager := swagger.NewRouteManager(s.engine)
+
 	// API routes (for web UI functionality)
-	s.useWebAPIEndpoints(s.engine)
+	s.useWebAPIEndpoints(manager)
+
+	s.useOAuthEndpoints(manager)
 
 	// Static files and templates - try embedded assets first, fallback to filesystem
 	s.useWebStaticEndpoints(s.engine)
@@ -125,11 +132,11 @@ func (s *Server) HandleProbeModel(c *gin.Context) {
 
 	switch provider.APIStyle {
 	case config.APIStyleAnthropic:
-		responseContent, usage, err = probeWithAnthropic(c, provider, model)
+		responseContent, usage, err = s.probeWithAnthropic(c, provider, model)
 	case config.APIStyleOpenAI:
 		fallthrough
 	default:
-		responseContent, usage, err = probeWithOpenAI(c, provider, model)
+		responseContent, usage, err = s.probeWithOpenAI(c, provider, model)
 	}
 
 	endTime := time.Now()
@@ -309,10 +316,7 @@ func NewGinHandlerWrapper(h gin.HandlerFunc) swagger.Handler {
 }
 
 // useWebAPIEndpoints configures API routes for web UI using swagger manager
-func (s *Server) useWebAPIEndpoints(engine *gin.Engine) {
-	// Create route manager
-	manager := swagger.NewRouteManager(engine)
-
+func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 	// Set Swagger information
 	manager.SetSwaggerInfo(swagger.SwaggerInfo{
 		Title:       "Tingly Box API",
