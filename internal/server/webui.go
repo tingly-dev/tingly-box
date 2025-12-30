@@ -132,11 +132,11 @@ func (s *Server) HandleProbeModel(c *gin.Context) {
 
 	switch provider.APIStyle {
 	case config.APIStyleAnthropic:
-		responseContent, usage, err = probeWithAnthropic(c, provider, model)
+		responseContent, usage, err = s.probeWithAnthropic(c, provider, model)
 	case config.APIStyleOpenAI:
 		fallthrough
 	default:
-		responseContent, usage, err = probeWithOpenAI(c, provider, model)
+		responseContent, usage, err = s.probeWithOpenAI(c, provider, model)
 	}
 
 	endTime := time.Now()
