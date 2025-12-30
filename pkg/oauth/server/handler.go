@@ -1,10 +1,12 @@
-package oauth
+package server
 
 import (
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
+
+	"tingly-box/pkg/oauth"
 
 	"github.com/gin-gonic/gin"
 )
@@ -16,11 +18,11 @@ const (
 
 // Handler provides HTTP handlers for OAuth endpoints
 type Handler struct {
-	manager *Manager
+	manager *oauth.Manager
 }
 
 // NewHandler creates a new OAuth HTTP handler
-func NewHandler(manager *Manager) *Handler {
+func NewHandler(manager *oauth.Manager) *Handler {
 	return &Handler{
 		manager: manager,
 	}
@@ -51,7 +53,7 @@ func (h *Handler) ListProviders(c *gin.Context) {
 // Authorize initiates the OAuth flow by redirecting to the provider's auth URL
 // GET /oauth/authorize?provider=anthropic&user_id=xxx&redirect_to=xxx&name=xxx
 func (h *Handler) Authorize(c *gin.Context) {
-	providerType := ProviderType(c.Query("provider"))
+	providerType := oauth.ProviderType(c.Query("provider"))
 	if providerType == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "provider parameter is required",
@@ -126,7 +128,7 @@ func (h *Handler) Callback(c *gin.Context) {
 // GetToken returns the OAuth token for a user and provider
 // GET /oauth/token?provider=anthropic&user_id=xxx
 func (h *Handler) GetToken(c *gin.Context) {
-	providerType := ProviderType(c.Query("provider"))
+	providerType := oauth.ProviderType(c.Query("provider"))
 	if providerType == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "provider parameter is required",
@@ -141,7 +143,7 @@ func (h *Handler) GetToken(c *gin.Context) {
 
 	token, err := h.manager.GetToken(c.Request.Context(), userID, providerType)
 	if err != nil {
-		if err == ErrTokenNotFound {
+		if err == oauth.ErrTokenNotFound {
 			c.JSON(http.StatusNotFound, gin.H{
 				"error": "no token found for this provider",
 			})
@@ -165,7 +167,7 @@ func (h *Handler) GetToken(c *gin.Context) {
 // RevokeToken removes the OAuth token for a user and provider
 // DELETE /oauth/token?provider=anthropic&user_id=xxx
 func (h *Handler) RevokeToken(c *gin.Context) {
-	providerType := ProviderType(c.Query("provider"))
+	providerType := oauth.ProviderType(c.Query("provider"))
 	if providerType == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "provider parameter is required",
@@ -180,7 +182,7 @@ func (h *Handler) RevokeToken(c *gin.Context) {
 
 	err := h.manager.RevokeToken(userID, providerType)
 	if err != nil {
-		if err == ErrTokenNotFound {
+		if err == oauth.ErrTokenNotFound {
 			c.JSON(http.StatusNotFound, gin.H{
 				"error": "no token found for this provider",
 			})
@@ -214,9 +216,9 @@ func (h *Handler) ListTokens(c *gin.Context) {
 	}
 
 	type TokenInfo struct {
-		Provider  ProviderType `json:"provider"`
-		Valid     bool         `json:"valid"`
-		ExpiresAt string       `json:"expires_at,omitempty"`
+		Provider  oauth.ProviderType `json:"provider"`
+		Valid     bool               `json:"valid"`
+		ExpiresAt string             `json:"expires_at,omitempty"`
 	}
 
 	tokens := make([]TokenInfo, 0, len(providers))
@@ -242,12 +244,12 @@ func (h *Handler) ListTokens(c *gin.Context) {
 
 // ConfigHandler handles OAuth configuration updates
 type ConfigHandler struct {
-	manager  *Manager
-	registry *Registry
+	manager  *oauth.Manager
+	registry *oauth.Registry
 }
 
 // NewConfigHandler creates a new OAuth configuration handler
-func NewConfigHandler(manager *Manager, registry *Registry) *ConfigHandler {
+func NewConfigHandler(manager *oauth.Manager, registry *oauth.Registry) *ConfigHandler {
 	return &ConfigHandler{
 		manager:  manager,
 		registry: registry,
@@ -275,7 +277,7 @@ func (h *ConfigHandler) ListProviders(c *gin.Context) {
 // GetProvider returns a specific OAuth provider configuration
 // GET /api/v1/oauth/providers/:type
 func (h *ConfigHandler) GetProvider(c *gin.Context) {
-	providerType := ProviderType(c.Param("type"))
+	providerType := oauth.ProviderType(c.Param("type"))
 	config, ok := h.registry.Get(providerType)
 	if !ok {
 		c.JSON(http.StatusNotFound, gin.H{
@@ -297,7 +299,7 @@ func (h *ConfigHandler) GetProvider(c *gin.Context) {
 // UpdateProvider updates an OAuth provider configuration
 // PUT /api/v1/oauth/providers/:type
 func (h *ConfigHandler) UpdateProvider(c *gin.Context) {
-	providerType := ProviderType(c.Param("type"))
+	providerType := oauth.ProviderType(c.Param("type"))
 
 	var req struct {
 		ClientID     string `json:"client_id"`
@@ -321,7 +323,7 @@ func (h *ConfigHandler) UpdateProvider(c *gin.Context) {
 	}
 
 	// Update configuration (create a copy)
-	newConfig := &ProviderConfig{
+	newConfig := &oauth.ProviderConfig{
 		Type:               config.Type,
 		DisplayName:        config.DisplayName,
 		ClientID:           req.ClientID,
@@ -350,7 +352,7 @@ func (h *ConfigHandler) UpdateProvider(c *gin.Context) {
 // DeleteProvider removes an OAuth provider configuration
 // DELETE /api/v1/oauth/providers/:type
 func (h *ConfigHandler) DeleteProvider(c *gin.Context) {
-	providerType := ProviderType(c.Param("type"))
+	providerType := oauth.ProviderType(c.Param("type"))
 
 	config, ok := h.registry.Get(providerType)
 	if !ok {
@@ -361,7 +363,7 @@ func (h *ConfigHandler) DeleteProvider(c *gin.Context) {
 	}
 
 	// Clear credentials by registering with empty values
-	h.registry.Register(&ProviderConfig{
+	h.registry.Register(&oauth.ProviderConfig{
 		Type:               config.Type,
 		DisplayName:        config.DisplayName,
 		ClientID:           "",
@@ -386,19 +388,19 @@ func (h *ConfigHandler) DeleteProvider(c *gin.Context) {
 
 // ProviderConfigInput represents provider configuration from environment or file
 type ProviderConfigInput struct {
-	ProviderType ProviderType `json:"provider_type" yaml:"provider_type"`
-	ClientID     string       `json:"client_id" yaml:"client_id"`
-	ClientSecret string       `json:"client_secret" yaml:"client_secret"`
-	RedirectURL  string       `json:"redirect_url,omitempty" yaml:"redirect_url,omitempty"`
+	ProviderType oauth.ProviderType `json:"provider_type" yaml:"provider_type"`
+	ClientID     string             `json:"client_id" yaml:"client_id"`
+	ClientSecret string             `json:"client_secret" yaml:"client_secret"`
+	RedirectURL  string             `json:"redirect_url,omitempty" yaml:"redirect_url,omitempty"`
 }
 
 // LoadProviderConfigs loads provider configurations from a list
-func LoadProviderConfigs(registry *Registry, configs []ProviderConfigInput) {
+func LoadProviderConfigs(registry *oauth.Registry, configs []ProviderConfigInput) {
 	for _, cfg := range configs {
 		existing, ok := registry.Get(cfg.ProviderType)
 		if ok {
 			// Update existing config
-			registry.Register(&ProviderConfig{
+			registry.Register(&oauth.ProviderConfig{
 				Type:               existing.Type,
 				DisplayName:        existing.DisplayName,
 				ClientID:           cfg.ClientID,
@@ -420,7 +422,7 @@ func LoadProviderConfigs(registry *Registry, configs []ProviderConfigInput) {
 }
 
 // MarshalProviderConfigs marshals provider configs for storage (without secrets)
-func MarshalProviderConfigs(registry *Registry) ([]byte, error) {
+func MarshalProviderConfigs(registry *oauth.Registry) ([]byte, error) {
 	providers := registry.GetProviderInfo()
 	return json.Marshal(providers)
 }
