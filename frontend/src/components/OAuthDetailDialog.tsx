@@ -1,4 +1,4 @@
-import { Info, VpnKey } from '@mui/icons-material';
+import { ContentCopy, Info, Visibility, VisibilityOff, VpnKey } from '@mui/icons-material';
 import {
     Alert,
     Box,
@@ -8,14 +8,14 @@ import {
     DialogActions,
     DialogContent,
     DialogTitle,
+    IconButton,
+    InputAdornment,
     Stack,
     TextField,
     Typography,
 } from '@mui/material';
 import { useState } from 'react';
-import { OpenAI } from '@lobehub/icons';
-import { Anthropic } from '@lobehub/icons';
-import { Provider } from '../types/provider';
+import {type Provider } from '../types/provider';
 
 interface OAuthEditFormData {
     name: string;
@@ -40,6 +40,8 @@ const OAuthDetailDialog = ({ open, provider, onClose, onSubmit }: OAuthDetailDia
     });
     const [submitting, setSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
+    const [visibleTokens, setVisibleTokens] = useState<Record<string, boolean>>({});
+    const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
     // Update form data when provider changes
     if (provider && (formData.name !== provider.name || formData.apiBase !== provider.api_base)) {
@@ -64,6 +66,27 @@ const OAuthDetailDialog = ({ open, provider, onClose, onSubmit }: OAuthDetailDia
     const isExpired = provider?.oauth_detail?.expires_at
         ? new Date(provider.oauth_detail.expires_at) < new Date()
         : false;
+
+    const toggleTokenVisibility = (tokenKey: string) => {
+        setVisibleTokens(prev => ({ ...prev, [tokenKey]: !prev[tokenKey] }));
+    };
+
+    const copyToken = async (token: string, tokenKey: string) => {
+        try {
+            await navigator.clipboard.writeText(token);
+            setCopiedToken(tokenKey);
+            setTimeout(() => setCopiedToken(null), 2000);
+        } catch (err) {
+            console.error('Failed to copy:', err);
+        }
+    };
+
+    const maskToken = (token: string) => {
+        if (token.length <= 12) return token;
+        return `${token.substring(0, 12)}...`;
+    };
+
+    const isTokenVisible = (tokenKey: string) => visibleTokens[tokenKey] || false;
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -173,11 +196,75 @@ const OAuthDetailDialog = ({ open, provider, onClose, onSubmit }: OAuthDetailDia
                                 label="Access Token"
                                 value={
                                     provider.oauth_detail?.access_token
-                                        ? `${provider.oauth_detail.access_token.substring(0, 12)}...`
+                                        ? (isTokenVisible('access_token')
+                                            ? provider.oauth_detail.access_token
+                                            : maskToken(provider.oauth_detail.access_token))
                                         : 'N/A'
                                 }
                                 disabled
+                                slotProps={{
+                                    input: {
+                                        endAdornment: provider.oauth_detail?.access_token && (
+                                            <InputAdornment position="end">
+                                                <IconButton
+                                                    edge="end"
+                                                    size="small"
+                                                    onClick={() => toggleTokenVisibility('access_token')}
+                                                    title={isTokenVisible('access_token') ? 'Hide' : 'Show'}
+                                                >
+                                                    {isTokenVisible('access_token') ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                                                </IconButton>
+                                                <IconButton
+                                                    edge="end"
+                                                    size="small"
+                                                    onClick={() => copyToken(provider.oauth_detail!.access_token, 'access_token')}
+                                                    title={copiedToken === 'access_token' ? 'Copied!' : 'Copy'}
+                                                >
+                                                    <ContentCopy fontSize="small" />
+                                                </IconButton>
+                                            </InputAdornment>
+                                        ),
+                                    },
+                                }}
                             />
+
+                            {provider.oauth_detail?.refresh_token && (
+                                <TextField
+                                    size="small"
+                                    fullWidth
+                                    label="Refresh Token"
+                                    value={
+                                        isTokenVisible('refresh_token')
+                                            ? provider.oauth_detail.refresh_token
+                                            : maskToken(provider.oauth_detail.refresh_token)
+                                    }
+                                    disabled
+                                    slotProps={{
+                                        input: {
+                                            endAdornment: (
+                                                <InputAdornment position="end">
+                                                    <IconButton
+                                                        edge="end"
+                                                        size="small"
+                                                        onClick={() => toggleTokenVisibility('refresh_token')}
+                                                        title={isTokenVisible('refresh_token') ? 'Hide' : 'Show'}
+                                                    >
+                                                        {isTokenVisible('refresh_token') ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                                                    </IconButton>
+                                                    <IconButton
+                                                        edge="end"
+                                                        size="small"
+                                                        onClick={() => copyToken(provider.oauth_detail.refresh_token, 'refresh_token')}
+                                                        title={copiedToken === 'refresh_token' ? 'Copied!' : 'Copy'}
+                                                    >
+                                                        <ContentCopy fontSize="small" />
+                                                    </IconButton>
+                                                </InputAdornment>
+                                            ),
+                                        },
+                                    }}
+                                />
+                            )}
 
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <TextField
