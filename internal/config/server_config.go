@@ -15,8 +15,11 @@ import (
 	"time"
 
 	"tingly-box/internal/auth"
+	"tingly-box/pkg/client"
+	"tingly-box/pkg/oauth"
 
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 )
 
 // Config represents the global configuration
@@ -185,7 +188,7 @@ func (c *Config) save() error {
 	if c.ConfigFile == "" {
 		return fmt.Errorf("ConfigFile is empty")
 	}
-	data, err := json.MarshalIndent(c, "", "  ")
+	data, err := json.MarshalIndent(c, "", "    ")
 	if err != nil {
 		return err
 	}
@@ -781,7 +784,9 @@ func (c *Config) FetchAndSaveProviderModels(uid string) error {
 
 	// Try provider API first
 	models, err := getProviderModelsFromAPI(provider)
-	if err == nil {
+	if err != nil {
+		logrus.Errorf("Failed to fetch models from API: %v", err)
+	} else {
 		// Save models to local storage
 		return c.modelManager.SaveModels(provider, provider.APIBase, models)
 	}
@@ -829,21 +834,41 @@ func getProviderModelsFromAPI(provider *Provider) ([]string, error) {
 		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
 	}
 
-	// Set headers based on provider style
+	// Set headers based on provider style and auth type
+	accessToken := provider.GetAccessToken()
 	if provider.APIStyle == APIStyleAnthropic {
-		req.Header.Set("x-api-key", provider.Token)
-		req.Header.Set("anthropic-version", "2023-06-01")
+		// Add OAuth custom headers if applicable
+		if provider.AuthType == AuthTypeOAuth && provider.OAuthDetail != nil {
+			req.Header.Set("Authorization", "Bearer "+accessToken)
+			req.Header.Set("anthropic-version", "2023-06-01")
+			providerType := oauth.ProviderType(provider.OAuthDetail.ProviderType)
+			if headers := client.GetOAuthCustomHeaders(providerType); len(headers) > 0 {
+				for k, v := range headers {
+					req.Header.Set(k, v)
+				}
+			}
+			// Add custom query params
+			if params := client.GetOAuthCustomParams(providerType); len(params) > 0 {
+				q := req.URL.Query()
+				for k, v := range params {
+					q.Add(k, v)
+				}
+				req.URL.RawQuery = q.Encode()
+			}
+		} else {
+			req.Header.Set("x-api-key", accessToken)
+			req.Header.Set("anthropic-version", "2023-06-01")
+		}
 	} else {
-		req.Header.Set("Authorization", "Bearer "+provider.Token)
+		req.Header.Set("Authorization", "Bearer "+accessToken)
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	// Make the request with timeout
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-	}
+	// Create HTTP client with proxy support
+	httpClient := client.CreateHTTPClientWithProxy(provider.ProxyURL)
+	httpClient.Timeout = 30 * time.Second
 
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
