@@ -9,13 +9,14 @@ import (
 type ProviderType string
 
 const (
-	ProviderAnthropic ProviderType = "anthropic"
-	ProviderOpenAI    ProviderType = "openai"
-	ProviderGoogle    ProviderType = "google"
-	ProviderGemini    ProviderType = "gemini" // Gemini CLI OAuth
-	ProviderGitHub    ProviderType = "github"
-	ProviderQwen      ProviderType = "qwen"
-	ProviderMock      ProviderType = "mock"
+	ProviderClaudeCode  ProviderType = "claude_code"
+	ProviderOpenAI      ProviderType = "openai"
+	ProviderGoogle      ProviderType = "google"
+	ProviderGemini      ProviderType = "gemini" // Gemini CLI OAuth
+	ProviderGitHub      ProviderType = "github"
+	ProviderQwenCode    ProviderType = "qwen_code"
+	ProviderAntigravity ProviderType = "antigravity"
+	ProviderMock        ProviderType = "mock"
 )
 
 // ParseProviderType parses a provider type from string, case-insensitive
@@ -23,7 +24,7 @@ func ParseProviderType(s string) (ProviderType, error) {
 	p := ProviderType(s)
 	// Validate by checking against known providers
 	switch p {
-	case ProviderAnthropic, ProviderOpenAI, ProviderGoogle, ProviderGemini, ProviderGitHub, ProviderQwen, ProviderMock:
+	case ProviderClaudeCode, ProviderOpenAI, ProviderGoogle, ProviderGemini, ProviderGitHub, ProviderQwenCode, ProviderAntigravity, ProviderMock:
 		return p, nil
 	default:
 		return "", fmt.Errorf("unknown provider type: %s", s)

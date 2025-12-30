@@ -40,7 +40,7 @@ func RunManualTest(config *ManualTestConfig) error {
 		config.ServerPort = 14890
 	}
 	if config.ProviderType == "" {
-		config.ProviderType = oauth2.ProviderAnthropic
+		config.ProviderType = oauth2.ProviderClaudeCode
 	}
 	if config.UserID == "" {
 		config.UserID = "test-user-manual"
@@ -87,7 +87,7 @@ func setupProvider(config *ManualTestConfig) (*oauth2.Registry, *oauth2.Provider
 	// Use provider-specific env vars if generic ones aren't set
 	if clientID == "" {
 		switch config.ProviderType {
-		case oauth2.ProviderAnthropic:
+		case oauth2.ProviderClaudeCode:
 			clientID = os.Getenv("ANTHROPIC_CLIENT_ID")
 		case oauth2.ProviderOpenAI:
 			clientID = os.Getenv("OPENAI_CLIENT_ID")
@@ -97,13 +97,13 @@ func setupProvider(config *ManualTestConfig) (*oauth2.Registry, *oauth2.Provider
 			clientID = os.Getenv("GEMINI_CLIENT_ID")
 		case oauth2.ProviderGitHub:
 			clientID = os.Getenv("GITHUB_CLIENT_ID")
-		case oauth2.ProviderQwen:
+		case oauth2.ProviderQwenCode:
 			clientID = os.Getenv("QWEN_CLIENT_ID")
 		}
 	}
 	if clientSecret == "" {
 		switch config.ProviderType {
-		case oauth2.ProviderAnthropic:
+		case oauth2.ProviderClaudeCode:
 			clientSecret = os.Getenv("ANTHROPIC_CLIENT_SECRET")
 		case oauth2.ProviderOpenAI:
 			clientSecret = os.Getenv("OPENAI_CLIENT_SECRET")
@@ -113,7 +113,7 @@ func setupProvider(config *ManualTestConfig) (*oauth2.Registry, *oauth2.Provider
 			clientSecret = os.Getenv("GEMINI_CLIENT_SECRET")
 		case oauth2.ProviderGitHub:
 			clientSecret = os.Getenv("GITHUB_CLIENT_SECRET")
-		case oauth2.ProviderQwen:
+		case oauth2.ProviderQwenCode:
 			clientSecret = os.Getenv("QWEN_CLIENT_SECRET")
 		}
 	}

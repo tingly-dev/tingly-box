@@ -28,7 +28,7 @@ import (
 
 func main() {
 	// Parse command line flags
-	provider := flag.String("provider", "mock", "OAuth provider (mock, anthropic, openai, google, gemini, github)")
+	provider := flag.String("provider", "mock", "OAuth provider (mock, claude_code, openai, gemini, github)")
 	port := flag.Int("port", 54545, "Local server port for callback (default 54545)")
 	userID := flag.String("user", "example-user", "User ID for the OAuth flow")
 	demo := flag.Bool("demo", false, "Demo mode: show auth URL without real credentials")

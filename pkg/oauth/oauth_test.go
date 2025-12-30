@@ -14,7 +14,7 @@ func TestMemoryTokenStorage(t *testing.T) {
 	storage := NewMemoryTokenStorage()
 
 	userID := "test-user"
-	provider := ProviderAnthropic
+	provider := ProviderClaudeCode
 
 	token := &Token{
 		AccessToken:  "test-access-token",
@@ -180,7 +180,7 @@ func TestProviderRegistry(t *testing.T) {
 
 		// Check that default providers are registered
 		providers := []ProviderType{
-			ProviderAnthropic,
+			ProviderClaudeCode,
 			ProviderOpenAI,
 			ProviderGoogle,
 			ProviderGitHub,
@@ -239,7 +239,7 @@ func TestProviderRegistry(t *testing.T) {
 		registry := NewRegistry()
 
 		registry.Register(&ProviderConfig{
-			Type:         ProviderAnthropic,
+			Type:         ProviderClaudeCode,
 			DisplayName:  "Anthropic",
 			ClientID:     "test-id",
 			ClientSecret: "test-secret",
@@ -264,7 +264,7 @@ func TestProviderRegistry(t *testing.T) {
 		anthropicConfigured := false
 		openaiConfigured := false
 		for _, p := range info {
-			if p.Type == ProviderAnthropic && p.Configured {
+			if p.Type == ProviderClaudeCode && p.Configured {
 				anthropicConfigured = true
 			}
 			if p.Type == ProviderOpenAI && !p.Configured {
@@ -305,7 +305,7 @@ func TestManager(t *testing.T) {
 	t.Run("GetAuthURL", func(t *testing.T) {
 		registry := NewRegistry()
 		registry.Register(&ProviderConfig{
-			Type:         ProviderAnthropic,
+			Type:         ProviderClaudeCode,
 			DisplayName:  "Anthropic",
 			ClientID:     "test-client-id",
 			ClientSecret: "test-secret",
@@ -318,7 +318,7 @@ func TestManager(t *testing.T) {
 		config.BaseURL = "http://localhost:8080"
 		manager := NewManager(config, registry)
 
-		authURL, state, err := manager.GetAuthURL(context.Background(), "user123", ProviderAnthropic, "", "")
+		authURL, state, err := manager.GetAuthURL(context.Background(), "user123", ProviderClaudeCode, "", "")
 		if err != nil {
 			t.Fatalf("GetAuthURL failed: %v", err)
 		}
@@ -341,15 +341,15 @@ func TestManager(t *testing.T) {
 			t.Errorf("Expected userID 'user123', got '%s'", stateData.UserID)
 		}
 
-		if stateData.Provider != ProviderAnthropic {
-			t.Errorf("Expected provider %s, got %s", ProviderAnthropic, stateData.Provider)
+		if stateData.Provider != ProviderClaudeCode {
+			t.Errorf("Expected provider %s, got %s", ProviderClaudeCode, stateData.Provider)
 		}
 	})
 
 	t.Run("GetAuthURLProviderNotConfigured", func(t *testing.T) {
 		registry := NewRegistry()
 		registry.Register(&ProviderConfig{
-			Type:        ProviderAnthropic,
+			Type:        ProviderClaudeCode,
 			DisplayName: "Anthropic",
 			// No client credentials
 			AuthURL:  "https://anthropic.com/auth",
@@ -360,7 +360,7 @@ func TestManager(t *testing.T) {
 		config := DefaultConfig()
 		manager := NewManager(config, registry)
 
-		_, _, err := manager.GetAuthURL(context.Background(), "user123", ProviderAnthropic, "", "")
+		_, _, err := manager.GetAuthURL(context.Background(), "user123", ProviderClaudeCode, "", "")
 		if err == nil {
 			t.Error("Expected error for unconfigured provider")
 		}
@@ -384,7 +384,7 @@ func TestManager(t *testing.T) {
 	t.Run("StateExpiry", func(t *testing.T) {
 		registry := NewRegistry()
 		registry.Register(&ProviderConfig{
-			Type:         ProviderAnthropic,
+			Type:         ProviderClaudeCode,
 			DisplayName:  "Anthropic",
 			ClientID:     "test-client-id",
 			ClientSecret: "test-secret",
@@ -397,7 +397,7 @@ func TestManager(t *testing.T) {
 		config.StateExpiry = 10 * time.Millisecond
 		manager := NewManager(config, registry)
 
-		authURL, state, err := manager.GetAuthURL(context.Background(), "user123", ProviderAnthropic, "", "")
+		authURL, state, err := manager.GetAuthURL(context.Background(), "user123", ProviderClaudeCode, "", "")
 		if err != nil {
 			t.Fatalf("GetAuthURL failed: %v", err)
 		}
@@ -448,7 +448,7 @@ func TestHandleCallback(t *testing.T) {
 	t.Run("SuccessfulCallback", func(t *testing.T) {
 		registry := NewRegistry()
 		registry.Register(&ProviderConfig{
-			Type:         ProviderAnthropic,
+			Type:         ProviderClaudeCode,
 			DisplayName:  "Anthropic",
 			ClientID:     "test-client-id",
 			ClientSecret: "test-client-secret",
@@ -462,7 +462,7 @@ func TestHandleCallback(t *testing.T) {
 		manager := NewManager(config, registry)
 
 		// First, get auth URL to create a state
-		_, state, err := manager.GetAuthURL(context.Background(), "user123", ProviderAnthropic, "", "")
+		_, state, err := manager.GetAuthURL(context.Background(), "user123", ProviderClaudeCode, "", "")
 		if err != nil {
 			t.Fatalf("GetAuthURL failed: %v", err)
 		}
@@ -491,12 +491,12 @@ func TestHandleCallback(t *testing.T) {
 			t.Errorf("Expected refresh token 'test-refresh-token', got '%s'", token.RefreshToken)
 		}
 
-		if token.Provider != ProviderAnthropic {
-			t.Errorf("Expected provider %s, got %s", ProviderAnthropic, token.Provider)
+		if token.Provider != ProviderClaudeCode {
+			t.Errorf("Expected provider %s, got %s", ProviderClaudeCode, token.Provider)
 		}
 
 		// Verify token was saved
-		savedToken, err := config.TokenStorage.GetToken("user123", ProviderAnthropic)
+		savedToken, err := config.TokenStorage.GetToken("user123", ProviderClaudeCode)
 		if err != nil {
 			t.Fatalf("Failed to get saved token: %v", err)
 		}
@@ -555,15 +555,15 @@ func TestGetToken(t *testing.T) {
 		token := &Token{
 			AccessToken: "test-token",
 			Expiry:      time.Now().Add(1 * time.Hour),
-			Provider:    ProviderAnthropic,
+			Provider:    ProviderClaudeCode,
 		}
-		storage.SaveToken("user123", ProviderAnthropic, token)
+		storage.SaveToken("user123", ProviderClaudeCode, token)
 
 		config := DefaultConfig()
 		config.TokenStorage = storage
 		manager := NewManager(config, nil)
 
-		retrieved, err := manager.GetToken(context.Background(), "user123", ProviderAnthropic)
+		retrieved, err := manager.GetToken(context.Background(), "user123", ProviderClaudeCode)
 		if err != nil {
 			t.Fatalf("GetToken failed: %v", err)
 		}
@@ -579,7 +579,7 @@ func TestGetToken(t *testing.T) {
 		config.TokenStorage = storage
 		manager := NewManager(config, nil)
 
-		_, err := manager.GetToken(context.Background(), "user123", ProviderAnthropic)
+		_, err := manager.GetToken(context.Background(), "user123", ProviderClaudeCode)
 		if err != ErrTokenNotFound {
 			t.Errorf("Expected ErrTokenNotFound, got %v", err)
 		}
@@ -591,21 +591,21 @@ func TestRevokeToken(t *testing.T) {
 	storage := NewMemoryTokenStorage()
 	token := &Token{
 		AccessToken: "test-token",
-		Provider:    ProviderAnthropic,
+		Provider:    ProviderClaudeCode,
 	}
-	storage.SaveToken("user123", ProviderAnthropic, token)
+	storage.SaveToken("user123", ProviderClaudeCode, token)
 
 	config := DefaultConfig()
 	config.TokenStorage = storage
 	manager := NewManager(config, nil)
 
-	err := manager.RevokeToken("user123", ProviderAnthropic)
+	err := manager.RevokeToken("user123", ProviderClaudeCode)
 	if err != nil {
 		t.Fatalf("RevokeToken failed: %v", err)
 	}
 
 	// Verify token is deleted
-	_, err = storage.GetToken("user123", ProviderAnthropic)
+	_, err = storage.GetToken("user123", ProviderClaudeCode)
 	if err != ErrTokenNotFound {
 		t.Errorf("Expected ErrTokenNotFound after revoke, got %v", err)
 	}
@@ -616,9 +616,9 @@ func TestListProviders(t *testing.T) {
 	storage := NewMemoryTokenStorage()
 
 	// Add tokens for multiple providers
-	storage.SaveToken("user123", ProviderAnthropic, &Token{
+	storage.SaveToken("user123", ProviderClaudeCode, &Token{
 		AccessToken: "anthropic-token",
-		Provider:    ProviderAnthropic,
+		Provider:    ProviderClaudeCode,
 	})
 	storage.SaveToken("user123", ProviderOpenAI, &Token{
 		AccessToken: "openai-token",

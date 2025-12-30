@@ -56,7 +56,7 @@ func DefaultRegistry() *Registry {
 
 	// Anthropic (Claude) OAuth - uses PKCE
 	registry.Register(&ProviderConfig{
-		Type:               ProviderAnthropic,
+		Type:               ProviderClaudeCode,
 		DisplayName:        "Anthropic Claude Code",
 		ClientID:           "9d1c250a-e61b-44d9-88ed-5944d1962f5e", // Public client ID for Claude Code
 		ClientSecret:       "",                                     // No secret required for public client
@@ -148,6 +148,33 @@ func DefaultRegistry() *Registry {
 		ConsoleURL:   "https://github.com/settings/developers",
 	})
 
+	// Antigravity OAuth (Google OAuth with Antigravity credentials)
+	// Scopes include cloud-platform, userinfo, and additional Google services
+	registry.Register(&ProviderConfig{
+		Type:         ProviderAntigravity,
+		DisplayName:  "Antigravity",
+		ClientID:     "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com",
+		ClientSecret: "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",
+		AuthURL:      "https://accounts.google.com/o/oauth2/v2/auth",
+		TokenURL:     "https://oauth2.googleapis.com/token",
+		Scopes: []string{
+			"https://www.googleapis.com/auth/cloud-platform",
+			"https://www.googleapis.com/auth/userinfo.email",
+			"https://www.googleapis.com/auth/userinfo.profile",
+			"https://www.googleapis.com/auth/cclog",
+			"https://www.googleapis.com/auth/experimentsandconfigs",
+		},
+		AuthStyle:   AuthStyleInHeader,
+		OAuthMethod: OAuthMethodPKCE,
+		ConsoleURL:  "https://console.cloud.google.com/",
+
+		AuthExtraParams: map[string]string{
+			"access_type":            "offline", // To get refresh token
+			"prompt":                 "consent", // Force consent dialog
+			"include_granted_scopes": "true",    // Include granted scopes
+		},
+	})
+
 	// Mock OAuth provider for testing
 	// Uses https://oauth-mock.mock.beeceptor.com for testing OAuth flow
 	registry.Register(&ProviderConfig{
@@ -166,7 +193,7 @@ func DefaultRegistry() *Registry {
 	// https://chat.qwen.ai/
 	// Uses device code flow with PKCE for authentication (RFC 8628 + RFC 7636)
 	registry.Register(&ProviderConfig{
-		Type:               ProviderQwen,
+		Type:               ProviderQwenCode,
 		GrantType:          "urn:ietf:params:oauth:grant-type:device_code",
 		DisplayName:        "Qwen",
 		ClientID:           "f0304373b74a44d2b584a3fb70ca9e56",
