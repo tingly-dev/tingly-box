@@ -224,7 +224,17 @@ type ProviderInfo struct {
 func (r *Registry) GetProviderInfo() []ProviderInfo {
 	info := make([]ProviderInfo, 0, len(r.providers))
 	for _, config := range r.providers {
-		configured := config.ClientID != "" && config.ClientSecret != ""
+		// A provider is considered configured if:
+		// - Public client (AuthStyleInNone): only needs ClientID
+		// - PKCE/DeviceCode flows: only need ClientID
+		// - Standard flows: need both ClientID and ClientSecret
+		configured := config.ClientID != ""
+		if config.AuthStyle != AuthStyleInNone &&
+			config.OAuthMethod != OAuthMethodPKCE &&
+			config.OAuthMethod != OAuthMethodDeviceCode &&
+			config.OAuthMethod != OAuthMethodDeviceCodePKCE {
+			configured = configured && config.ClientSecret != ""
+		}
 		info = append(info, ProviderInfo{
 			Type:        config.Type,
 			DisplayName: config.DisplayName,
