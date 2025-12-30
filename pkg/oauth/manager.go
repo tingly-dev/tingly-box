@@ -391,26 +391,15 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 		return nil, fmt.Errorf("token exchange failed: status %d, body: %s", resp.StatusCode, string(body))
 	}
 
-	// Parse response
-	var tokenResp struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
-		TokenType    string `json:"token_type"`
-		ExpiresIn    int64  `json:"expires_in"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+	// Parse response directly into Token
+	token := &Token{}
+	if err := json.NewDecoder(resp.Body).Decode(token); err != nil {
 		return nil, fmt.Errorf("data decode: %w: %v", ErrTokenExchangeFailed, err)
 	}
 
-	token := &Token{
-		AccessToken:  tokenResp.AccessToken,
-		RefreshToken: tokenResp.RefreshToken,
-		TokenType:    tokenResp.TokenType,
-	}
-
-	if tokenResp.ExpiresIn > 0 {
-		token.Expiry = time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
+	// Convert ExpiresIn to Expiry
+	if token.ExpiresIn > 0 {
+		token.Expiry = time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)
 	}
 
 	return token, nil
@@ -535,26 +524,15 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 		return nil, fmt.Errorf("refresh token failed: status %d, body: %s", resp.StatusCode, string(body))
 	}
 
-	// Parse response
-	var tokenResp struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
-		TokenType    string `json:"token_type"`
-		ExpiresIn    int64  `json:"expires_in"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+	// Parse response directly into Token
+	token := &Token{}
+	if err := json.NewDecoder(resp.Body).Decode(token); err != nil {
 		return nil, fmt.Errorf("decode error: %w: %v", ErrTokenExchangeFailed, err)
 	}
 
-	token := &Token{
-		AccessToken:  tokenResp.AccessToken,
-		RefreshToken: tokenResp.RefreshToken,
-		TokenType:    tokenResp.TokenType,
-	}
-
-	if tokenResp.ExpiresIn > 0 {
-		token.Expiry = time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
+	// Convert ExpiresIn to Expiry
+	if token.ExpiresIn > 0 {
+		token.Expiry = time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)
 	}
 
 	return token, nil
@@ -838,26 +816,15 @@ func (m *Manager) pollTokenRequest(ctx context.Context, config *ProviderConfig, 
 		return nil, fmt.Errorf("token poll failed: status %d, body: %s", resp.StatusCode, string(body))
 	}
 
-	// Parse token response
-	var tokenResp struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
-		TokenType    string `json:"token_type"`
-		ExpiresIn    int64  `json:"expires_in"`
-	}
-
-	if err := json.Unmarshal(body, &tokenResp); err != nil {
+	// Parse token response directly into Token
+	token := &Token{}
+	if err := json.Unmarshal(body, token); err != nil {
 		return nil, fmt.Errorf("failed to decode token response: %w", err)
 	}
 
-	token := &Token{
-		AccessToken:  tokenResp.AccessToken,
-		RefreshToken: tokenResp.RefreshToken,
-		TokenType:    tokenResp.TokenType,
-	}
-
-	if tokenResp.ExpiresIn > 0 {
-		token.Expiry = time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
+	// Convert ExpiresIn to Expiry
+	if token.ExpiresIn > 0 {
+		token.Expiry = time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)
 	}
 
 	return token, nil

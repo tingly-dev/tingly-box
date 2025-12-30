@@ -169,25 +169,34 @@ const (
 // Token represents an OAuth token
 type Token struct {
 	// AccessToken is the access token
-	AccessToken string
+	AccessToken string `json:"access_token"`
 
 	// RefreshToken is the refresh token (may be empty)
-	RefreshToken string
+	RefreshToken string `json:"refresh_token"`
+
+	// IDToken is the OpenID Connect ID token (may be empty)
+	IDToken string `json:"id_token,omitempty"`
 
 	// TokenType is the type of token (usually "Bearer")
-	TokenType string
+	TokenType string `json:"token_type"`
+
+	// ExpiresIn is the token expiration duration in seconds (from API response)
+	ExpiresIn int64 `json:"expires_in"`
 
 	// Expiry is the token expiration time (zero if no expiry)
-	Expiry time.Time
+	Expiry time.Time `json:"-"`
 
 	// Provider is the provider that issued this token
-	Provider ProviderType
+	Provider ProviderType `json:"-"`
 
 	// RedirectTo is the optional URL to redirect to after successful OAuth
-	RedirectTo string
+	RedirectTo string `json:"-"`
 
 	// Name is the optional custom name for the provider
-	Name string
+	Name string `json:"-"`
+
+	// ResourceURL is the optional resource URL endpoint (for some providers like Qwen)
+	ResourceURL string `json:"resource_url,omitempty"`
 }
 
 // Valid returns true if the token is valid and not expired
