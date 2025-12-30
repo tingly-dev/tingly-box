@@ -2,7 +2,8 @@ import {
     AccountCircle as AccountIcon,
     Dashboard as DashboardIcon,
     Key as KeyIcon,
-    Menu as MenuIcon
+    Menu as MenuIcon,
+    Menu as SystemIcon
 } from '@mui/icons-material';
 import {
     Box,
@@ -74,7 +75,7 @@ const Layout = ({ children }: LayoutProps) => {
         { path: '/api-keys', label: t('layout.nav.apiKeys', { defaultValue: 'API Keys' }), icon: <KeyIcon /> },
         { path: '/oauth', label: t('layout.nav.oauth', { defaultValue: 'OAuth' }), icon: <VerifiedIcon /> },
         // { path: '/routing', label: 'Advance', icon: <ForkRight sx={{ transform: 'rotate(45deg)' }} /> },
-        // { path: '/system', label: 'System', icon: <SettingsIcon /> },
+        { path: '/system', label: 'System', icon: <SystemIcon /> },
         // { path: '/history', label: 'History', icon: <HistoryIcon /> },
     ];
 

@@ -14,7 +14,7 @@ import {
     ServerApi,
     TestingApi,
     TokenApi,
-    OauthApi,
+    OauthApi, LogsApi,
 } from '../client';
 
 
@@ -31,6 +31,7 @@ interface ApiInstances {
     tokenApi: TokenApi;
     infoApi: InfoApi;
     oauthApi: OauthApi;
+    logsApi: LogsApi;
 }
 
 
@@ -123,6 +124,7 @@ const createApiInstances = async () => {
         tokenApi: new TokenApi(config),
         infoApi: new InfoApi(config),
         oauthApi: new OauthApi(config),
+        logsApi: new LogsApi(config)
     };
 };
 
