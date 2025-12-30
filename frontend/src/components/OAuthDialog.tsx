@@ -22,6 +22,7 @@ interface OAuthProvider {
     description: string;
     icon: React.ReactNode;
     color: string;
+    enabled?: boolean;
 }
 
 const OAUTH_PROVIDERS: OAuthProvider[] = [
@@ -32,6 +33,7 @@ const OAUTH_PROVIDERS: OAuthProvider[] = [
         description: 'Access Claude Code models via OAuth',
         icon: <Claude size={32}/>,
         color: '#D97757',
+        enabled: true,
     },
     {
         id: 'gemini',
@@ -40,6 +42,7 @@ const OAUTH_PROVIDERS: OAuthProvider[] = [
         description: 'Access Gemini CLI models via OAuth',
         icon: <Gemini size={32}/>,
         color: '#4285F4',
+        enabled: false,
     },
     {
         id: 'antigravity',
@@ -48,6 +51,7 @@ const OAUTH_PROVIDERS: OAuthProvider[] = [
         description: 'Access Antigravity services via Google OAuth',
         icon: <Google size={32}/>,
         color: '#7B1FA2',
+        enabled: false,
     },
     {
         id: 'qwen_code',
@@ -56,14 +60,16 @@ const OAUTH_PROVIDERS: OAuthProvider[] = [
         description: 'Access Qwen Code models via OAuth',
         icon: <Qwen size={32}/>,
         color: '#00A8E1',
+        enabled: false,
     },
     {
         id: 'mock',
         name: 'Mock',
-        displayName: 'Mock OAuth Provider',
+        displayName: 'Mock OAuth',
         description: 'Test OAuth flow with mock provider',
         icon: <Box sx={{fontSize: 32}}>🧪</Box>,
         color: '#9E9E9E',
+        enabled: true,
     },
     // Add more providers as needed
 ];
@@ -77,6 +83,8 @@ const OAuthDialog = ({open, onClose}: OAuthDialogProps) => {
     const [authorizing, setAuthorizing] = useState<string | null>(null);
 
     const handleProviderClick = async (provider: OAuthProvider) => {
+        if (provider.enabled === false) return;
+
         setAuthorizing(provider.id);
 
         try {
@@ -139,69 +147,78 @@ const OAuthDialog = ({open, onClose}: OAuthDialogProps) => {
                         gap: 2,
                     }}
                 >
-                    {OAUTH_PROVIDERS.map((provider) => (
-                        <Box key={provider.id}>
-                            <Card
-                                sx={{
-                                    height: '100%',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s',
-                                    border: '1px solid',
-                                    borderColor: 'divider',
-                                    '&:hover': {
-                                        borderColor: provider.color,
-                                        boxShadow: 2,
-                                    },
-                                }}
-                                onClick={() => handleProviderClick(provider)}
-                            >
-                                <CardContent sx={{flex: 1, display: 'flex', flexDirection: 'column'}}>
-                                    <Stack direction="row" alignItems="center" spacing={2} sx={{mb: 2}}>
-                                        <Box
-                                            sx={{
-                                                fontSize: 32,
-                                                width: 48,
-                                                height: 48,
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                bgcolor: `${provider.color}15`,
-                                                borderRadius: 2,
-                                            }}
-                                        >
-                                            {provider.icon}
-                                        </Box>
-                                        <Box sx={{flex: 1}}>
-                                            <Typography variant="subtitle1" sx={{fontWeight: 600}}>
-                                                {provider.displayName}
-                                            </Typography>
-                                            <Typography variant="caption" color="text.secondary">
-                                                {provider.name}
-                                            </Typography>
-                                        </Box>
-                                    </Stack>
+                    {OAUTH_PROVIDERS.map((provider) => {
+                        const isDisabled = provider.enabled === false;
 
-                                    <Typography variant="body2" color="text.secondary" sx={{mb: 2}}>
-                                        {provider.description}
-                                    </Typography>
+                        return (
+                            <Box key={provider.id}>
+                                <Card
+                                    sx={{
+                                        height: '100%',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        cursor: isDisabled ? 'not-allowed' : 'pointer',
+                                        transition: 'all 0.2s',
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                        opacity: isDisabled ? 0.5 : 1,
+                                        filter: isDisabled ? 'grayscale(100%)' : 'none',
+                                        ...(isDisabled ? {} : {
+                                            '&:hover': {
+                                                borderColor: provider.color,
+                                                boxShadow: 2,
+                                            },
+                                        }),
+                                    }}
+                                    onClick={() => handleProviderClick(provider)}
+                                >
+                                    <CardContent sx={{flex: 1, display: 'flex', flexDirection: 'column'}}>
+                                        <Stack direction="row" alignItems="center" spacing={2} sx={{mb: 2}}>
+                                            <Box
+                                                sx={{
+                                                    fontSize: 32,
+                                                    width: 48,
+                                                    height: 48,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    bgcolor: `${provider.color}15`,
+                                                    borderRadius: 2,
+                                                    opacity: isDisabled ? 0.5 : 1,
+                                                }}
+                                            >
+                                                {provider.icon}
+                                            </Box>
+                                            <Box sx={{flex: 1}}>
+                                                <Typography variant="subtitle1" sx={{fontWeight: 600}}>
+                                                    {provider.displayName}
+                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary">
+                                                    {provider.name}
+                                                </Typography>
+                                            </Box>
+                                        </Stack>
 
-                                    <Box sx={{mt: 'auto'}}>
-                                        <Button
-                                            variant="outlined"
-                                            size="small"
-                                            startIcon={<Launch/>}
-                                            disabled={authorizing === provider.id}
-                                            fullWidth
-                                        >
-                                            {authorizing === provider.id ? 'Authorizing...' : 'Authorize'}
-                                        </Button>
-                                    </Box>
-                                </CardContent>
-                            </Card>
-                        </Box>
-                    ))}
+                                        <Typography variant="body2" color="text.secondary" sx={{mb: 2}}>
+                                            {provider.description}
+                                        </Typography>
+
+                                        <Box sx={{mt: 'auto'}}>
+                                            <Button
+                                                variant="outlined"
+                                                size="small"
+                                                startIcon={<Launch/>}
+                                                disabled={isDisabled || authorizing === provider.id}
+                                                fullWidth
+                                            >
+                                                {authorizing === provider.id ? 'Authorizing...' : 'Authorize'}
+                                            </Button>
+                                        </Box>
+                                    </CardContent>
+                                </Card>
+                            </Box>
+                        );
+                    })}
                 </Box>
 
                 {/* Empty state for future providers */}
