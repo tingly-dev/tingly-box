@@ -159,6 +159,8 @@ func (s *Server) ChatCompletions(c *gin.Context) {
 	}
 
 	actualModel := selectedService.Model
+	maxAllowed := s.templateManager.GetMaxTokensForModel(provider.Name, actualModel)
+
 	// FIXME: response as proxy / request
 	responseModel := proxyModel
 	req.Model = actualModel
@@ -184,7 +186,7 @@ func (s *Server) ChatCompletions(c *gin.Context) {
 			return
 		}
 
-		anthropicReq := adaptor.ConvertOpenAIToAnthropicRequest(&req, int64(s.config.GetDefaultMaxTokens()))
+		anthropicReq := adaptor.ConvertOpenAIToAnthropicRequest(&req, int64(maxAllowed))
 
 		// 🔥 REQUIRED: forward tool_choice
 		if req.ToolChoice.OfAuto.Value != "" || req.ToolChoice.OfAllowedTools != nil || req.ToolChoice.OfFunctionToolChoice != nil || req.ToolChoice.OfCustomToolChoice != nil {

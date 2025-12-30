@@ -119,9 +119,16 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 	// Use the selected service's model
 	actualModel := selectedService.Model
 	req.Model = anthropic.Model(actualModel)
+
 	// Ensure max_tokens is set (Anthropic API requires this)
+	// and cap it at the model's maximum allowed value
 	if req.MaxTokens == 0 {
 		req.MaxTokens = int64(s.config.GetDefaultMaxTokens())
+	}
+	// Cap max_tokens at the model's maximum to prevent API errors
+	maxAllowed := s.templateManager.GetMaxTokensForModel(provider.Name, actualModel)
+	if req.MaxTokens > int64(maxAllowed) {
+		req.MaxTokens = int64(maxAllowed)
 	}
 
 	// Set provider UUID in context (Service.Provider uses UUID, not name)
@@ -475,6 +482,7 @@ func (s *Server) forwardAnthropicRequestRaw(provider *config.Provider, rawReq ma
 	}
 
 	// Set max_tokens if provided, otherwise use default
+	// and cap it at the model's maximum allowed value
 	if maxTokens, ok := rawReq["max_tokens"]; ok {
 		if maxTokensFloat, ok := maxTokens.(float64); ok {
 			params.MaxTokens = int64(maxTokensFloat)
@@ -482,6 +490,11 @@ func (s *Server) forwardAnthropicRequestRaw(provider *config.Provider, rawReq ma
 	} else {
 		// Set default max_tokens if not provided (Anthropic API requires this)
 		params.MaxTokens = int64(s.config.GetDefaultMaxTokens())
+	}
+	// Cap max_tokens at the model's maximum to prevent API errors
+	maxAllowed := s.templateManager.GetMaxTokensForModel(provider.Name, model)
+	if params.MaxTokens > int64(maxAllowed) {
+		params.MaxTokens = int64(maxAllowed)
 	}
 
 	// Make the request using Anthropic SDK with timeout (provider.Timeout is in seconds)
