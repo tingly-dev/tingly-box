@@ -125,8 +125,13 @@ func CreateHTTPClientForProvider(providerType oauth2.ProviderType, proxyURL stri
 		headers := GetOAuthCustomHeaders(providerType)
 		params := GetOAuthCustomParams(providerType)
 		if len(headers) > 0 || len(params) > 0 {
+			// Use the client's transport, or default transport if nil (http.DefaultClient has nil Transport)
+			transport := client.Transport
+			if transport == nil {
+				transport = http.DefaultTransport
+			}
 			client.Transport = &requestModifier{
-				RoundTripper: client.Transport,
+				RoundTripper: transport,
 				headers:      headers,
 				params:       params,
 			}
