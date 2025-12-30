@@ -1,8 +1,6 @@
 package oauth
 
 import (
-	"fmt"
-
 	"github.com/google/uuid"
 )
 
@@ -96,7 +94,7 @@ func DefaultRegistry() *Registry {
 		ConsoleURL:   "https://platform.openai.com/",
 	})
 
-	// Google OAuth (for Gemini/Vertex AI)
+	// TODO: Google OAuth (for Gemini/Vertex AI)
 	registry.Register(&ProviderConfig{
 		Type:         ProviderGoogle,
 		DisplayName:  "Google",
@@ -211,24 +209,6 @@ func DefaultRegistry() *Registry {
 	})
 
 	return registry
-}
-
-// ProviderFromEnv returns provider configurations loaded from environment variables
-// Expected environment variables:
-// - OAUTH_ANTHROPIC_CLIENT_ID, OAUTH_ANTHROPIC_CLIENT_SECRET
-// - OAUTH_OPENAI_CLIENT_ID, OAUTH_OPENAI_CLIENT_SECRET
-// - OAUTH_GOOGLE_CLIENT_ID, OAUTH_GOOGLE_CLIENT_SECRET
-// - OAUTH_GITHUB_CLIENT_ID, OAUTH_GITHUB_CLIENT_SECRET
-func ProviderFromEnv(providerType ProviderType) (*ProviderConfig, error) {
-	registry := DefaultRegistry()
-	config, ok := registry.Get(providerType)
-	if !ok {
-		return nil, fmt.Errorf("%w: %s", ErrInvalidProvider, providerType)
-	}
-
-	// Return a copy with credentials loaded from env
-	// The actual env loading would be done in the config setup
-	return config, nil
 }
 
 // ProviderInfo returns information about a provider

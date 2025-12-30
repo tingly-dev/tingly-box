@@ -296,59 +296,33 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 	var reqBody io.Reader
 	var contentType string
 
-	if useJSON {
-		// Build JSON request body
-		jsonData := map[string]any{
-			"grant_type":   "authorization_code",
-			"client_id":    config.ClientID,
-			"redirect_uri": redirectURI,
-			"code":         code,
-			"state":        state,
-		}
+	// Build common parameters
+	params := map[string]string{
+		"grant_type":   "authorization_code",
+		"client_id":    config.ClientID,
+		"redirect_uri": redirectURI,
+		"code":         code,
+		"state":        state,
+	}
 
-		// Add client_secret
-		jsonData["client_secret"] = config.ClientSecret
+	// Add client_secret if possible
+	if config.ClientSecret != "" {
+		params["client_secret"] = config.ClientSecret
+	}
 
-		// Add code_verifier for PKCE flow
-		if config.OAuthMethod == OAuthMethodPKCE && codeVerifier != "" {
-			jsonData["code_verifier"] = codeVerifier
-		}
+	// Add code_verifier for PKCE
+	if config.OAuthMethod == OAuthMethodPKCE && codeVerifier != "" {
+		params["code_verifier"] = codeVerifier
+	}
 
-		// Add provider-specific extra parameters
-		for key, value := range config.TokenExtraParams {
-			jsonData[key] = value
-		}
+	// Add provider-specific extra parameters
+	for key, value := range config.TokenExtraParams {
+		params[key] = value
+	}
 
-		bodyBytes, err := json.Marshal(jsonData)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal JSON request: %w", err)
-		}
-		reqBody = bytes.NewReader(bodyBytes)
-		contentType = "application/json"
-	} else {
-		// Build form-encoded request body
-		data := url.Values{}
-		data.Set("grant_type", "authorization_code")
-		data.Set("client_id", config.ClientID)
-		data.Set("redirect_uri", redirectURI)
-		data.Set("code", code)
-
-		// PKCE flow: use code_verifier instead of client_secret
-		// Standard OAuth: use client_secret for authentication
-		if config.OAuthMethod == OAuthMethodPKCE {
-			if codeVerifier != "" {
-				data.Set("code_verifier", codeVerifier)
-			}
-		}
-		data.Set("client_secret", config.ClientSecret)
-
-		// Add provider-specific extra parameters
-		for key, value := range config.TokenExtraParams {
-			data.Set(key, value)
-		}
-
-		reqBody = strings.NewReader(data.Encode())
-		contentType = "application/x-www-form-urlencoded"
+	reqBody, contentType, err := buildRequestBody(params, useJSON)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build request body: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", config.TokenURL, reqBody)
@@ -442,46 +416,22 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 
 	useJSON := config.TokenRequestFormat == TokenRequestFormatJSON
 
-	var reqBody io.Reader
-	var contentType string
+	// Build common parameters
+	params := map[string]string{
+		"grant_type":    "refresh_token",
+		"refresh_token": refreshToken,
+		"client_id":     config.ClientID,
+		"client_secret": config.ClientSecret,
+	}
 
-	if useJSON {
-		// Build JSON request body
-		jsonData := map[string]any{
-			"grant_type":    "refresh_token",
-			"refresh_token": refreshToken,
-			"client_id":     config.ClientID,
-			"scopes":        config.Scopes,
-			"client_secret": config.ClientSecret,
-			// TODO: expire
-		}
+	// Add provider-specific extra parameters
+	for key, value := range config.TokenExtraParams {
+		params[key] = value
+	}
 
-		// Add provider-specific extra parameters
-		for key, value := range config.TokenExtraParams {
-			jsonData[key] = value
-		}
-
-		bodyBytes, err := json.Marshal(jsonData)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal JSON request: %w", err)
-		}
-		reqBody = bytes.NewReader(bodyBytes)
-		contentType = "application/json"
-	} else {
-		// Build form-encoded request body
-		data := url.Values{}
-		data.Set("grant_type", "refresh_token")
-		data.Set("refresh_token", refreshToken)
-		data.Set("client_id", config.ClientID)
-		data.Set("client_secret", config.ClientSecret)
-
-		// Add provider-specific extra parameters
-		for key, value := range config.TokenExtraParams {
-			data.Set(key, value)
-		}
-
-		reqBody = strings.NewReader(data.Encode())
-		contentType = "application/x-www-form-urlencoded"
+	reqBody, contentType, err := buildRequestBody(params, useJSON)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build request body: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", config.TokenURL, reqBody)
@@ -588,37 +538,21 @@ func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, pro
 
 	// Build device authorization request
 	useJSON := config.TokenRequestFormat == TokenRequestFormatJSON
-	var reqBody io.Reader
-	var contentType string
 
-	if useJSON {
-		jsonData := map[string]string{
-			"client_id": config.ClientID,
-			"scope":     strings.Join(config.Scopes, " "),
-		}
-		// Add PKCE parameters for Device Code PKCE flow
-		if config.OAuthMethod == OAuthMethodDeviceCodePKCE {
-			jsonData["code_challenge"] = codeChallenge
-			jsonData["code_challenge_method"] = "S256"
-		}
-		bodyBytes, err := json.Marshal(jsonData)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal JSON request: %w", err)
-		}
-		reqBody = bytes.NewReader(bodyBytes)
-		contentType = "application/json"
-	} else {
-		data := url.Values{}
-		data.Set("client_id", config.ClientID)
-		data.Set("scope", strings.Join(config.Scopes, " "))
-		// Add PKCE parameters for Device Code PKCE flow
-		if config.OAuthMethod == OAuthMethodDeviceCodePKCE {
-			data.Set("code_challenge", codeChallenge)
-			data.Set("code_challenge_method", "S256")
-		}
+	// Build common parameters
+	params := map[string]string{
+		"client_id": config.ClientID,
+		"scope":     strings.Join(config.Scopes, " "),
+	}
+	// Add PKCE parameters for Device Code PKCE flow
+	if config.OAuthMethod == OAuthMethodDeviceCodePKCE {
+		params["code_challenge"] = codeChallenge
+		params["code_challenge_method"] = "S256"
+	}
 
-		reqBody = strings.NewReader(data.Encode())
-		contentType = "application/x-www-form-urlencoded"
+	reqBody, contentType, err := buildRequestBody(params, useJSON)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build request body: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", config.DeviceCodeURL, reqBody)
@@ -732,44 +666,23 @@ func (m *Manager) PollForToken(ctx context.Context, data *DeviceCodeData, callba
 func (m *Manager) pollTokenRequest(ctx context.Context, config *ProviderConfig, deviceCode string, codeVerifier string) (*Token, error) {
 	useJSON := config.TokenRequestFormat == TokenRequestFormatJSON
 
-	var reqBody io.Reader
-	var contentType string
+	// Build common parameters
+	params := map[string]string{
+		"grant_type":  config.GrantType,
+		"client_id":   config.ClientID,
+		"device_code": deviceCode,
+	}
+	if config.ClientSecret != "" {
+		params["client_secret"] = config.ClientSecret
+	}
+	// Add PKCE code_verifier for Device Code PKCE flow
+	if config.OAuthMethod == OAuthMethodDeviceCodePKCE && codeVerifier != "" {
+		params["code_verifier"] = codeVerifier
+	}
 
-	if useJSON {
-		jsonData := map[string]string{
-			"grant_type":  config.GrantType,
-			"client_id":   config.ClientID,
-			"device_code": deviceCode,
-		}
-		if config.ClientSecret != "" {
-			jsonData["client_secret"] = config.ClientSecret
-		}
-		// Add PKCE code_verifier for Device Code PKCE flow
-		if config.OAuthMethod == OAuthMethodDeviceCodePKCE && codeVerifier != "" {
-			jsonData["code_verifier"] = codeVerifier
-		}
-
-		bodyBytes, err := json.Marshal(jsonData)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal JSON request: %w", err)
-		}
-		reqBody = bytes.NewReader(bodyBytes)
-		contentType = "application/json"
-	} else {
-		data := url.Values{}
-		data.Set("grant_type", config.GrantType)
-		data.Set("device_code", deviceCode)
-		data.Set("client_id", config.ClientID)
-		if config.ClientSecret != "" {
-			data.Set("client_secret", config.ClientSecret)
-		}
-		// Add PKCE code_verifier for Device Code PKCE flow
-		if config.OAuthMethod == OAuthMethodDeviceCodePKCE && codeVerifier != "" {
-			data.Set("code_verifier", codeVerifier)
-		}
-
-		reqBody = strings.NewReader(data.Encode())
-		contentType = "application/x-www-form-urlencoded"
+	reqBody, contentType, err := buildRequestBody(params, useJSON)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build request body: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", config.TokenURL, reqBody)
