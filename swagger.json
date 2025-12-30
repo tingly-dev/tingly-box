@@ -144,6 +144,40 @@
         }
       }
     },
+    "/api/v1/oauth/refresh": {
+      "post": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Refresh OAuth token using refresh token",
+        "description": "Refresh OAuth token using refresh token",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "request",
+            "in": "body",
+            "description": "Request body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/OAuthRefreshTokenRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/OAuthRefreshTokenResponse"
+            }
+          }
+        }
+      }
+    },
     "/api/v1/oauth/token": {
       "get": {
         "tags": [
@@ -1369,6 +1403,74 @@
         "message"
       ]
     },
+    "OAuthRefreshTokenRequest": {
+      "type": "object",
+      "properties": {
+        "provider_uuid": {
+          "type": "string",
+          "description": "Provider UUID to refresh token for",
+          "example": "550e8400-e29b-41d4-a716-446655440000"
+        }
+      },
+      "required": [
+        "provider_uuid"
+      ]
+    },
+    "OAuthRefreshTokenResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "description": "Field data",
+          "properties": {
+            "access_token": {
+              "type": "string",
+              "description": "Field access_token"
+            },
+            "expires_at": {
+              "type": "string",
+              "description": "Field expires_at"
+            },
+            "provider_type": {
+              "type": "string",
+              "description": "Field provider_type"
+            },
+            "provider_uuid": {
+              "type": "string",
+              "description": "Field provider_uuid"
+            },
+            "refresh_token": {
+              "type": "string",
+              "description": "Field refresh_token"
+            },
+            "token_type": {
+              "type": "string",
+              "description": "Field token_type"
+            }
+          },
+          "required": [
+            "provider_uuid",
+            "access_token",
+            "token_type",
+            "provider_type"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "description": "Field message",
+          "example": "Token refreshed successfully"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    },
     "OAuthTokenResponse": {
       "type": "object",
       "properties": {
@@ -2369,8 +2471,12 @@
   },
   "tags": [
     {
-      "name": "info",
-      "description": "Operations related to info"
+      "name": "oauth",
+      "description": "Operations related to oauth"
+    },
+    {
+      "name": "server",
+      "description": "Operations related to server"
     },
     {
       "name": "rules",
@@ -2379,6 +2485,18 @@
     {
       "name": "history",
       "description": "Operations related to history"
+    },
+    {
+      "name": "models",
+      "description": "Operations related to models"
+    },
+    {
+      "name": "info",
+      "description": "Operations related to info"
+    },
+    {
+      "name": "testing",
+      "description": "Operations related to testing"
     },
     {
       "name": "token",
@@ -2391,22 +2509,6 @@
     {
       "name": "provider-templates",
       "description": "Operations related to provider-templates"
-    },
-    {
-      "name": "oauth",
-      "description": "Operations related to oauth"
-    },
-    {
-      "name": "server",
-      "description": "Operations related to server"
-    },
-    {
-      "name": "models",
-      "description": "Operations related to models"
-    },
-    {
-      "name": "testing",
-      "description": "Operations related to testing"
     }
   ]
 }
