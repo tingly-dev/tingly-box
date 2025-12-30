@@ -630,7 +630,7 @@ func (s *Server) OAuthCallback(c *gin.Context) {
 	var apiBase string
 	var apiStyle config.APIStyle
 	switch token.Provider {
-	case oauth2.ProviderAnthropic:
+	case oauth2.ProviderClaudeCode:
 		apiBase = "https://api.anthropic.com"
 		apiStyle = config.APIStyleAnthropic
 	case oauth2.ProviderGoogle:
