@@ -28,6 +28,7 @@ func maskProviderForResponse(provider *config.Provider) ProviderResponse {
 			resp.OAuthDetail = &config.OAuthDetail{
 				//AccessToken:  maskToken(provider.OAuthDetail.AccessToken),
 				AccessToken:  provider.OAuthDetail.AccessToken,
+				RefreshToken: provider.OAuthDetail.RefreshToken,
 				ProviderType: provider.OAuthDetail.ProviderType,
 				UserID:       provider.OAuthDetail.UserID,
 				ExpiresAt:    provider.OAuthDetail.ExpiresAt,

@@ -488,6 +488,25 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 	return token, nil
 }
 
+// RefreshToken refreshes an access token using a refresh token
+// This is a public method that can be called from HTTP handlers
+func (m *Manager) RefreshToken(ctx context.Context, userID string, providerType ProviderType, refreshToken string) (*Token, error) {
+	// Refresh the token
+	token, err := m.refreshToken(ctx, providerType, refreshToken)
+	if err != nil {
+		return nil, err
+	}
+
+	token.Provider = providerType
+
+	// Save the refreshed token
+	if err := m.config.TokenStorage.SaveToken(userID, providerType, token); err != nil {
+		return nil, fmt.Errorf("failed to save refreshed token: %w", err)
+	}
+
+	return token, nil
+}
+
 // RevokeToken removes a token for a user and provider
 func (m *Manager) RevokeToken(userID string, providerType ProviderType) error {
 	return m.config.TokenStorage.DeleteToken(userID, providerType)

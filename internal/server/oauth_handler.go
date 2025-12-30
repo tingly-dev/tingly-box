@@ -89,6 +89,29 @@ type OAuthTokensResponse struct {
 }
 
 // =============================================
+// OAuth Refresh Token Models
+// =============================================
+
+// OAuthRefreshTokenRequest represents the request to refresh an OAuth token
+type OAuthRefreshTokenRequest struct {
+	ProviderUUID string `json:"provider_uuid" binding:"required" description:"Provider UUID to refresh token for" example:"550e8400-e29b-41d4-a716-446655440000"`
+}
+
+// OAuthRefreshTokenResponse represents the response for refreshing an OAuth token
+type OAuthRefreshTokenResponse struct {
+	Success bool   `json:"success" example:"true"`
+	Message string `json:"message,omitempty" example:"Token refreshed successfully"`
+	Data    struct {
+		ProviderUUID string `json:"provider_uuid" example:"550e8400-e29b-41d4-a716-446655440000"`
+		AccessToken  string `json:"access_token" example:"sk-ant-..."`
+		RefreshToken string `json:"refresh_token,omitempty" example:"refresh_..."`
+		TokenType    string `json:"token_type" example:"Bearer"`
+		ExpiresAt    string `json:"expires_at,omitempty" example:"2024-01-01T12:00:00Z"`
+		ProviderType string `json:"provider_type" example:"claude_code"`
+	} `json:"data"`
+}
+
+// =============================================
 // OAuth Config Models
 // =============================================
 
@@ -243,6 +266,13 @@ func (s *Server) useOAuthEndpoints(manager *swagger.RouteManager) {
 		swagger.WithTags("oauth"),
 		swagger.WithDescription("Get OAuth token for a user and provider"),
 		swagger.WithResponseModel(OAuthTokenResponse{}),
+	)
+
+	apiV1.POST("/oauth/refresh", s.RefreshOAuthToken,
+		swagger.WithTags("oauth"),
+		swagger.WithDescription("Refresh OAuth token using refresh token"),
+		swagger.WithRequestModel(OAuthRefreshTokenRequest{}),
+		swagger.WithResponseModel(OAuthRefreshTokenResponse{}),
 	)
 
 	apiV1.DELETE("/oauth/token", s.RevokeOAuthToken,
@@ -692,4 +722,109 @@ func (s *Server) OAuthCallback(c *gin.Context) {
 		"access_token":  token.AccessToken[:20] + "...", // Partially show token
 		"token_type":    token.TokenType,
 	})
+}
+
+// RefreshOAuthToken refreshes an OAuth token using a refresh token
+// POST /api/v1/oauth/refresh
+func (s *Server) RefreshOAuthToken(c *gin.Context) {
+	var req OAuthRefreshTokenRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, OAuthErrorResponse{
+			Success: false,
+			Error:   "Invalid request: " + err.Error(),
+		})
+		return
+	}
+
+	// Get provider by UUID
+	provider, err := s.config.GetProviderByUUID(req.ProviderUUID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, OAuthErrorResponse{
+			Success: false,
+			Error:   "Provider not found: " + err.Error(),
+		})
+		return
+	}
+
+	// Check if provider uses OAuth
+	if provider.AuthType != config.AuthTypeOAuth || provider.OAuthDetail == nil {
+		c.JSON(http.StatusBadRequest, OAuthErrorResponse{
+			Success: false,
+			Error:   "Provider does not use OAuth authentication",
+		})
+		return
+	}
+
+	// Check if provider has refresh token
+	if provider.OAuthDetail.RefreshToken == "" {
+		c.JSON(http.StatusBadRequest, OAuthErrorResponse{
+			Success: false,
+			Error:   "Provider does not have a refresh token",
+		})
+		return
+	}
+
+	// Parse provider type
+	providerType, err := oauth2.ParseProviderType(provider.OAuthDetail.ProviderType)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, OAuthErrorResponse{
+			Success: false,
+			Error:   "Invalid provider type: " + err.Error(),
+		})
+		return
+	}
+
+	// Refresh the token
+	token, err := s.oauthManager.RefreshToken(c.Request.Context(), provider.OAuthDetail.UserID, providerType, provider.OAuthDetail.RefreshToken)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, OAuthErrorResponse{
+			Success: false,
+			Error:   "Failed to refresh token: " + err.Error(),
+		})
+		return
+	}
+
+	// Update provider with new token
+	var expiresAt string
+	if !token.Expiry.IsZero() {
+		expiresAt = token.Expiry.Format(time.RFC3339)
+	}
+
+	provider.OAuthDetail.AccessToken = token.AccessToken
+	provider.OAuthDetail.RefreshToken = token.RefreshToken
+	provider.OAuthDetail.ExpiresAt = expiresAt
+
+	if err := s.config.UpdateProvider(provider.UUID, provider); err != nil {
+		c.JSON(http.StatusInternalServerError, OAuthErrorResponse{
+			Success: false,
+			Error:   "Failed to update provider: " + err.Error(),
+		})
+		return
+	}
+
+	// Log the successful token refresh
+	if s.logger != nil {
+		s.logger.LogAction("refresh_oauth_token", map[string]interface{}{
+			"provider_uuid": provider.UUID,
+			"provider_name": provider.Name,
+			"provider_type": providerType,
+		}, true, "OAuth token refreshed successfully")
+	}
+
+	// Build response
+	resp := OAuthRefreshTokenResponse{
+		Success: true,
+		Message: "Token refreshed successfully",
+	}
+	resp.Data.ProviderUUID = provider.UUID
+	resp.Data.AccessToken = token.AccessToken
+	resp.Data.RefreshToken = token.RefreshToken
+	resp.Data.TokenType = token.TokenType
+	resp.Data.ProviderType = string(token.Provider)
+
+	if !token.Expiry.IsZero() {
+		resp.Data.ExpiresAt = token.Expiry.Format("2006-01-02T15:04:05Z07:00")
+	}
+
+	c.JSON(http.StatusOK, resp)
 }
