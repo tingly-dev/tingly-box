@@ -39,15 +39,19 @@ type RouteGroup struct {
 	name       string
 	version    string
 	prefix     string
+	tags       []string
 	Router     *gin.RouterGroup
 	routes     []RouteConfig
 	middleware []gin.HandlerFunc
 }
 
+// RouteGroupOption is a function that configures a RouteGroup
+type RouteGroupOption func(*RouteGroup)
+
 // RouteManager manages all route groups and swagger generation
 type RouteManager struct {
 	engine      *gin.Engine
-	groups      map[string]*RouteGroup
+	groups      []*RouteGroup
 	globalMW    []gin.HandlerFunc
 	swaggerInfo *SwaggerInfo
 }
@@ -56,7 +60,7 @@ type RouteManager struct {
 func NewRouteManager(engine *gin.Engine) *RouteManager {
 	return &RouteManager{
 		engine: engine,
-		groups: make(map[string]*RouteGroup),
+		groups: make([]*RouteGroup, 0),
 		swaggerInfo: &SwaggerInfo{
 			Title:       "API Documentation",
 			Description: "Generated API documentation",
@@ -76,7 +80,7 @@ func (rm *RouteManager) AddGlobalMiddleware(middleware ...gin.HandlerFunc) {
 }
 
 // NewGroup creates a new route group
-func (rm *RouteManager) NewGroup(name, version, prefix string) *RouteGroup {
+func (rm *RouteManager) NewGroup(name, version, prefix string, opts ...RouteGroupOption) *RouteGroup {
 	fullPrefix := fmt.Sprintf("/%s/%s", name, version)
 	if prefix != "" {
 		fullPrefix += "/" + strings.TrimPrefix(prefix, "/")
@@ -93,12 +97,18 @@ func (rm *RouteManager) NewGroup(name, version, prefix string) *RouteGroup {
 		name:       name,
 		version:    version,
 		prefix:     fullPrefix,
+		tags:       []string{name}, // Default to group name as tag
 		Router:     ginGroup,
 		routes:     make([]RouteConfig, 0),
 		middleware: make([]gin.HandlerFunc, 0),
 	}
 
-	rm.groups[fullPrefix] = group
+	// Apply group options
+	for _, opt := range opts {
+		opt(group)
+	}
+
+	rm.groups = append(rm.groups, group)
 	return group
 }
 
@@ -112,6 +122,12 @@ func (rg *RouteGroup) AddMiddleware(middleware ...gin.HandlerFunc) {
 
 // RegisterRoute registers a single route
 func (rg *RouteGroup) RegisterRoute(config RouteConfig) {
+	// If route doesn't have tags, inherit from group
+	if len(config.Tags) == 0 && len(rg.tags) > 0 {
+		config.Tags = make([]string, len(rg.tags))
+		copy(config.Tags, rg.tags)
+	}
+
 	// Build middleware chain
 	var middleware []gin.HandlerFunc
 
@@ -211,6 +227,13 @@ func (rg *RouteGroup) PATCH(path string, handler Handler, options ...func(*Route
 
 // Route configuration options
 
+// GroupWithTags sets the tags for all routes in the group (unless overridden)
+func GroupWithTags(tags ...string) RouteGroupOption {
+	return func(rg *RouteGroup) {
+		rg.tags = tags
+	}
+}
+
 // WithDescription sets the route description
 func WithDescription(desc string) func(*RouteConfig) {
 	return func(rc *RouteConfig) {
@@ -286,8 +309,12 @@ func (rg *RouteGroup) authMiddleware() gin.HandlerFunc {
 }
 
 // GetRouteGroups returns all registered route groups
-func (rm *RouteManager) GetRouteGroups() map[string]*RouteGroup {
+func (rm *RouteManager) GetRouteGroups() []*RouteGroup {
 	return rm.groups
+}
+
+func (rm *RouteManager) GetEngine() *gin.Engine {
+	return rm.engine
 }
 
 // GenerateSwaggerAnnotations generates swagger annotations for all routes
