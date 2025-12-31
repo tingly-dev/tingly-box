@@ -98,16 +98,11 @@ func (s *Server) HandleProbeModel(c *gin.Context) {
 	var model = req.Model
 
 	for _, p := range providers {
-		if p.Enabled && p.Name == req.Provider {
+		if p.Enabled && p.UUID == req.Provider {
 			provider = p
 			break
 		}
 	}
-
-	startTime := time.Now()
-
-	// Create the mock request data that would be sent to the API
-	mockRequest := NewMockRequest(req.Provider, req.Model)
 
 	if provider == nil {
 		errorResp := ErrorDetail{
@@ -118,12 +113,15 @@ func (s *Server) HandleProbeModel(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ProbeResponse{
 			Success: false,
 			Error:   &errorResp,
-			Data: &ProbeResponseData{
-				Request: mockRequest,
-			},
+			Data:    &ProbeResponseData{},
 		})
 		return
 	}
+
+	startTime := time.Now()
+
+	// Create the mock request data that would be sent to the API
+	mockRequest := NewMockRequest(provider.Name, req.Model)
 
 	// Call the appropriate probe function based on provider API style
 	var responseContent string
