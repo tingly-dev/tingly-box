@@ -19,7 +19,7 @@ import {
 } from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getServiceProvider, getProvidersByStyle } from '../data/serviceProviders';
+import { getProvidersByStyle } from '../services/serviceProviders';
 import api from '../services/api';
 import { OpenAI } from '@lobehub/icons';
 import { Anthropic } from '@lobehub/icons';

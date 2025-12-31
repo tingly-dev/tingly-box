@@ -1,4 +1,4 @@
-import serviceProviders from './service_providers.json';
+import api from "@/services/api.ts";
 
 export interface ServiceProvider {
     id: string;
@@ -21,6 +21,12 @@ export interface ServiceProviderOption {
     api_style: string;
     baseUrl: string;
 }
+
+const serviceProviders = await async function () {
+    const {providersApi} = await api.instances()
+    let res = await providersApi.apiV2ProviderTemplatesGet()
+    return res.data.data
+}()
 
 // Get dropdown options for service provider selection
 export function getServiceProviderOptions(): ServiceProviderOption[] {
@@ -67,4 +73,4 @@ export function getProvidersByStyle(style: 'openai' | 'anthropic'): ServiceProvi
 }
 
 // Export the raw data for direct access
-export { serviceProviders };
+export {serviceProviders};
