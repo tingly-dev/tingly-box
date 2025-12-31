@@ -187,9 +187,10 @@ export default function ModelSelectTab({
 
                 // Check if probe was successful
                 if (result?.success === false || result?.error) {
+                    console.log(result.error)
                     setSnackbar({
                         open: true,
-                        message: `Model "${model}" is not available: ${result.error || 'Unknown error'}`,
+                        message: `Model "${model}" is not available: ${result.error?.message || 'Unknown error'}`,
                         severity: 'error'
                     });
                     return; // Don't proceed with selection
@@ -207,9 +208,10 @@ export default function ModelSelectTab({
                     return next;
                 });
 
+                console.log(error)
                 setSnackbar({
                     open: true,
-                    message: `Model "${model}" is not available: ${error.message || 'Network error'}`,
+                    message: `Model "${model}" is not available: ${error || 'Network error'}`,
                     severity: 'error'
                 });
             }
