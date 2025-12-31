@@ -16,7 +16,7 @@
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
-    "@lobehub/icons": "^3.0.0",
+    "@lobehub/icons": "^3.0.2",
     "@mui/icons-material": "^7.3.6",
     "@mui/material": "^7.3.6",
     "@types/react": "^19.2.7",
@@ -27,17 +27,18 @@
     "i18next": "^25.7.3",
     "i18next-browser-languagedetector": "^8.2.0",
     "prism-react-renderer": "^2.4.1",
-    "react": "^19.2.1",
-    "react-dom": "^19.2.1",
+    "react": "^19.2.3",
+    "react-devicons": "^2.16.2",
+    "react-dom": "^19.2.3",
     "react-i18next": "^16.5.0",
-    "react-router-dom": "^7.10.1",
+    "react-router-dom": "^7.11.0",
     "react-virtualized-auto-sizer": "^1.0.26",
     "react-window": "^2.2.3"
   },
   "devDependencies": {
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react-swc": "^4.2.2",
-    "vite": "^7.2.7",
+    "vite": "^7.3.0",
     "vite-plugin-mock": "^3.0.2"
   }
 }
