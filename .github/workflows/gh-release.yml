@@ -77,6 +77,17 @@ jobs:
             ${{ runner.os }}-go-${{ matrix.goarch }}-
             ${{ runner.os }}-go-
 
+      - name: Cache pnpm modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pnpm-store
+            frontend/node_modules
+          key: ${{ runner.os }}-pnpm-${{ matrix.goarch }}-${{ hashFiles('frontend/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-${{ matrix.goarch }}-
+            ${{ runner.os }}-pnpm-
+
       - name: Install pnpm
         run: npm install -g pnpm
 

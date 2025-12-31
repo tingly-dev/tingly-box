@@ -70,12 +70,12 @@ jobs:
             goos: darwin
             goarch: arm64
 
-        #     # Windows builds
-        #   - os: windows-latest
-        #     platform: windows
-        #     arch: amd64
-        #     goos: windows
-        #     goarch: amd64
+            # Windows builds
+          - os: windows-latest
+            platform: windows
+            arch: amd64
+            goos: windows
+            goarch: amd64
 
     steps:
       - name: Checkout code
@@ -92,25 +92,27 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-
+      
       - name: Cache Go modules
         uses: actions/cache@v4
         with:
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          key: ${{ runner.os }}-go-${{ matrix.goarch }}-${{ hashFiles('**/go.sum') }}
           restore-keys: |
+            ${{ runner.os }}-go-${{ matrix.goarch }}-
             ${{ runner.os }}-go-
-
+      
       - name: Cache pnpm modules
         uses: actions/cache@v4
         with:
           path: |
             ~/.pnpm-store
             frontend/node_modules
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('frontend/pnpm-lock.yaml') }}
+          key: ${{ runner.os }}-pnpm-${{ matrix.goarch }}-${{ hashFiles('frontend/pnpm-lock.yaml') }}
           restore-keys: |
+            ${{ runner.os }}-pnpm-${{ matrix.goarch }}-
             ${{ runner.os }}-pnpm-
 
       - name: Install go-task
@@ -135,6 +137,10 @@ jobs:
       - name: Run codegen
         run: task codegen
 
+      - name: Install NSIS (Windows only)
+        if: matrix.platform == 'windows'
+        run: choco install nsis -y
+
       - name: Build Go binary (Linux)
         if: matrix.platform == 'linux'
         run: task linux:package
@@ -156,7 +162,19 @@ jobs:
 
       - name: Build Go binary (Windows)
         if: matrix.platform == 'windows'
-        run: task windows:package
+        shell: pwsh
+        run: |
+          task windows:build PRODUCTION=true
+
+          New-Item -ItemType Directory -Force -Path dist
+
+          cd bin
+          Get-ChildItem
+          Compress-Archive -Path TinglyBox.exe -DestinationPath ../dist/tingly-box-gui-windows-amd64.zip
+          cd ..
+
+          cd dist
+          Get-ChildItem
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -200,6 +218,7 @@ jobs:
           ls -la dist/*
 
           cp dist/macos-arm64/*.zip ./
+          cp dist/windows-amd64/*.zip ./
 
           # Create checksums for all files
           sha256sum *.zip > checksums.txt
