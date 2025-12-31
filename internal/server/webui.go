@@ -150,7 +150,7 @@ func (s *Server) HandleProbeModel(c *gin.Context) {
 			Code:    errorCode,
 		}
 
-		c.JSON(http.StatusOK, ProbeResponse{
+		c.JSON(http.StatusNotFound, ProbeResponse{
 			Success: false,
 			Error:   &errorResp,
 			Data: &ProbeResponseData{
