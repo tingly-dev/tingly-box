@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -16,6 +15,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 )
 
 // Use official Anthropic SDK types directly
@@ -48,7 +48,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 	// Read the raw request body first for debugging purposes
 	bodyBytes, err := c.GetRawData()
 	if err != nil {
-		log.Printf("Failed to read request body: %v", err)
+		logrus.Debugf("Failed to read request body: %v", err)
 	} else {
 		// Store the body back for parsing
 		c.Request.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
@@ -57,7 +57,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 	// Parse the request to check if streaming is requested
 	var rawReq map[string]interface{}
 	if err := json.Unmarshal(bodyBytes, &rawReq); err != nil {
-		log.Printf("Invalid JSON in request body: %v", err)
+		logrus.Debugf("Invalid JSON in request body: %v", err)
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Invalid JSON: " + err.Error(),
@@ -72,13 +72,13 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 	if stream, ok := rawReq["stream"].(bool); ok {
 		isStreaming = stream
 	}
-	log.Printf("Stream requested for AnthropicMessages: %v", isStreaming)
+	logrus.Debugf("Stream requested for AnthropicMessages: %v", isStreaming)
 
 	// Parse into MessageNewParams using SDK's JSON unmarshaling
 	var req anthropic.MessageNewParams
 	if err := c.ShouldBindJSON(&req); err != nil {
 		// Log the invalid request for debugging
-		log.Printf("Invalid JSON request received: %v\nBody: %s", err, string(bodyBytes))
+		logrus.Debugf("Invalid JSON request received: %v\nBody: %s", err, string(bodyBytes))
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Invalid request body: " + err.Error(),
@@ -315,7 +315,7 @@ func (s *Server) AnthropicCountTokens(c *gin.Context) {
 	// Read the raw request body first for debugging purposes
 	bodyBytes, err := c.GetRawData()
 	if err != nil {
-		log.Printf("Failed to read request body: %v", err)
+		logrus.Debugf("Failed to read request body: %v", err)
 	} else {
 		// Store the body back for parsing
 		c.Request.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
@@ -324,7 +324,7 @@ func (s *Server) AnthropicCountTokens(c *gin.Context) {
 	// Parse the request to check if streaming is requested
 	var rawReq map[string]interface{}
 	if err := json.Unmarshal(bodyBytes, &rawReq); err != nil {
-		log.Printf("Invalid JSON in request body: %v", err)
+		logrus.Debugf("Invalid JSON in request body: %v", err)
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Invalid JSON: " + err.Error(),
@@ -339,13 +339,13 @@ func (s *Server) AnthropicCountTokens(c *gin.Context) {
 	if stream, ok := rawReq["stream"].(bool); ok {
 		isStreaming = stream
 	}
-	log.Printf("Stream requested for AnthropicMessages: %v", isStreaming)
+	logrus.Debugf("Stream requested for AnthropicMessages: %v", isStreaming)
 
 	// Parse into MessageNewParams using SDK's JSON unmarshaling
 	var req anthropic.MessageCountTokensParams
 	if err := c.ShouldBindJSON(&req); err != nil {
 		// Log the invalid request for debugging
-		log.Printf("Invalid JSON request received: %v\nBody: %s", err, string(bodyBytes))
+		logrus.Debugf("Invalid JSON request received: %v\nBody: %s", err, string(bodyBytes))
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Invalid request body: " + err.Error(),
@@ -428,7 +428,7 @@ func (s *Server) AnthropicCountTokens(c *gin.Context) {
 func (s *Server) forwardAnthropicRequestRaw(provider *config.Provider, rawReq map[string]interface{}, model string) (*anthropic.Message, error) {
 	// Get or create Anthropic client from pool
 	client := s.clientPool.GetAnthropicClient(provider)
-	log.Printf("Anthropic API Token Length: %d", len(provider.Token))
+	logrus.Debugf("Anthropic API Token Length: %d", len(provider.Token))
 
 	// Extract and convert messages from raw request
 	messagesData, ok := rawReq["messages"].([]interface{})
@@ -531,7 +531,7 @@ func (s *Server) forwardAnthropicStreamRequest(provider *config.Provider, req an
 	// Get or create Anthropic client from pool
 	client := s.clientPool.GetAnthropicClient(provider)
 
-	log.Printf("Creating Anthropic streaming request")
+	logrus.Debugln("Creating Anthropic streaming request")
 
 	// Use background context for streaming
 	// The stream will manage its own lifecycle and timeout
@@ -546,7 +546,7 @@ func (s *Server) forwardAnthropicStreamRequest(provider *config.Provider, req an
 func (s *Server) handleAnthropicStreamResponse(c *gin.Context, stream *anthropicstream.Stream[anthropic.MessageStreamEventUnion], model string) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("Panic in Anthropic streaming handler: %v", r)
+			logrus.Debugf("Panic in Anthropic streaming handler: %v", r)
 			// Try to send an error event if possible
 			if c.Writer != nil {
 				c.Writer.WriteHeader(http.StatusInternalServerError)
@@ -559,7 +559,7 @@ func (s *Server) handleAnthropicStreamResponse(c *gin.Context, stream *anthropic
 		// Ensure stream is always closed
 		if stream != nil {
 			if err := stream.Close(); err != nil {
-				log.Printf("Error closing Anthropic stream: %v", err)
+				logrus.Debugf("Error closing Anthropic stream: %v", err)
 			}
 		}
 	}()
@@ -593,7 +593,7 @@ func (s *Server) handleAnthropicStreamResponse(c *gin.Context, stream *anthropic
 		// Convert the event to JSON
 		eventJSON, err := json.Marshal(event)
 		if err != nil {
-			log.Printf("Failed to marshal Anthropic stream event: %v", err)
+			logrus.Debugf("Failed to marshal Anthropic stream event: %v", err)
 			continue
 		}
 
@@ -615,7 +615,7 @@ func (s *Server) handleAnthropicStreamResponse(c *gin.Context, stream *anthropic
 
 	// Check for stream errors
 	if err := stream.Err(); err != nil {
-		log.Printf("Anthropic stream error: %v", err)
+		logrus.Debugf("Anthropic stream error: %v", err)
 
 		// Send error event
 		errorEvent := map[string]interface{}{
@@ -629,7 +629,7 @@ func (s *Server) handleAnthropicStreamResponse(c *gin.Context, stream *anthropic
 
 		errorJSON, marshalErr := json.Marshal(errorEvent)
 		if marshalErr != nil {
-			log.Printf("Failed to marshal Anthropic error event: %v", marshalErr)
+			logrus.Debugf("Failed to marshal Anthropic error event: %v", marshalErr)
 			c.Writer.Write([]byte("event: error\ndata: {\"error\":{\"message\":\"Failed to marshal error\",\"type\":\"internal_error\"}}\n\n"))
 		} else {
 			c.Writer.Write([]byte(fmt.Sprintf("event: error\ndata: %s\n\n", string(errorJSON))))
