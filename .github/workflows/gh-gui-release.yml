@@ -92,25 +92,27 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-
+      
       - name: Cache Go modules
         uses: actions/cache@v4
         with:
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          key: ${{ runner.os }}-go-${{ matrix.goarch }}-${{ hashFiles('**/go.sum') }}
           restore-keys: |
+            ${{ runner.os }}-go-${{ matrix.goarch }}-
             ${{ runner.os }}-go-
-
+      
       - name: Cache pnpm modules
         uses: actions/cache@v4
         with:
           path: |
             ~/.pnpm-store
             frontend/node_modules
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('frontend/pnpm-lock.yaml') }}
+          key: ${{ runner.os }}-pnpm-${{ matrix.goarch }}-${{ hashFiles('frontend/pnpm-lock.yaml') }}
           restore-keys: |
+            ${{ runner.os }}-pnpm-${{ matrix.goarch }}-
             ${{ runner.os }}-pnpm-
 
       - name: Install go-task
