@@ -39,7 +39,7 @@ export const BaseUrlRow: React.FC<BaseUrlRowProps> = ({
     const displayUrl = urlLabel || label;
 
     return (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, maxWidth: 500 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, maxWidth: 700 }}>
             <Typography
                 variant="body2"
                 color="text.secondary"
@@ -58,8 +58,8 @@ export const BaseUrlRow: React.FC<BaseUrlRowProps> = ({
                     fontFamily: 'monospace',
                     fontSize: '0.75rem',
                     color: 'primary.main',
-                    flex: 'none',
-                    maxWidth: '300px',
+                    flex: 1,
+                    minWidth: 0,
                     cursor: 'pointer',
                     '&:hover': {
                         textDecoration: 'underline',
