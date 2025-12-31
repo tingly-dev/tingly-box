@@ -6,6 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	"tingly-box/internal/lock"
 
 	"tingly-box/internal/config"
 	"tingly-box/internal/manager"
@@ -15,17 +16,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// stopServer stops the running server using the PID manager
-func stopServer(pidManager *config.PIDManager) error {
-	return stopServerWithPIDManager(pidManager)
+// stopServer stops the running server using the file lock
+func stopServer(fileLock *lock.FileLock) error {
+	return stopServerWithFileLock(fileLock)
 }
 
-// stopServerWithPIDManager handles the server stopping logic
-func stopServerWithPIDManager(pidManager *config.PIDManager) error {
-	// Get PID from manager
-	pid, err := pidManager.GetPID()
+// stopServerWithFileLock handles the server stopping logic
+func stopServerWithFileLock(fileLock *lock.FileLock) error {
+	// Get PID from lock file
+	pid, err := fileLock.GetPID()
 	if err != nil {
-		return fmt.Errorf("PID file does not exist or is invalid: %w", err)
+		return fmt.Errorf("lock file does not exist or is invalid: %w", err)
 	}
 
 	// Find and signal the process
@@ -41,7 +42,7 @@ func stopServerWithPIDManager(pidManager *config.PIDManager) error {
 
 	// Wait for process to exit
 	for i := 0; i < 30; i++ { // Wait up to 30 seconds
-		if !pidManager.IsRunning() {
+		if !fileLock.IsLocked() {
 			return nil
 		}
 		time.Sleep(1 * time.Second)
@@ -75,19 +76,20 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 		appConfig.SetServerPort(port)
 	}
 
-	// Create PID manager
-	pidManager := config.NewPIDManager(appConfig.ConfigDir())
+	// Create file lock
+	fileLock := lock.NewFileLock(appConfig.ConfigDir())
 
-	// Check if server is already running using PID manager
-	if pidManager.IsRunning() {
+	// Check if server is already running using file lock
+	if fileLock.IsLocked() {
 		fmt.Printf("Server is already running on port %d\n", port)
 		return nil
 	}
 
-	// Create PID file before starting server
-	if err := pidManager.CreatePIDFile(); err != nil {
-		return fmt.Errorf("failed to create PID file: %w", err)
+	// Acquire lock before starting server
+	if err := fileLock.TryLock(); err != nil {
+		return fmt.Errorf("failed to acquire lock: %w", err)
 	}
+	fmt.Printf("Lock acquired: %s\n", fileLock.GetLockFilePath())
 
 	serverManager := manager.NewServerManager(
 		appConfig,
@@ -119,18 +121,18 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 	// Wait for either server error, shutdown signal, or web UI stop request
 	select {
 	case err := <-serverErr:
-		// Clean up PID file on error
-		pidManager.RemovePIDFile()
+		// Release lock on error
+		fileLock.Unlock()
 		return fmt.Errorf("server stopped unexpectedly: %w", err)
 	case <-sigChan:
 		fmt.Println("\nReceived shutdown signal, stopping server...")
-		// Clean up PID file on shutdown
-		pidManager.RemovePIDFile()
+		// Release lock on shutdown
+		fileLock.Unlock()
 		return serverManager.Stop()
 	case <-server.GetShutdownChannel():
 		fmt.Println("\nReceived stop request from web UI, stopping server...")
-		// Clean up PID file on shutdown
-		pidManager.RemovePIDFile()
+		// Release lock on shutdown
+		fileLock.Unlock()
 		return serverManager.Stop()
 	}
 }
@@ -196,15 +198,15 @@ func StopCommand(appConfig *config.AppConfig) *cobra.Command {
 		Long: `Stop the running Tingly Box HTTP server gracefully.
 All ongoing requests will be completed before shutdown.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			pidManager := config.NewPIDManager(appConfig.ConfigDir())
+			fileLock := lock.NewFileLock(appConfig.ConfigDir())
 
-			if !pidManager.IsRunning() {
+			if !fileLock.IsLocked() {
 				fmt.Println("Server is not running")
 				return nil
 			}
 
 			fmt.Println("Stopping server...")
-			if err := stopServerWithPIDManager(pidManager); err != nil {
+			if err := stopServerWithFileLock(fileLock); err != nil {
 				return fmt.Errorf("failed to stop server: %w", err)
 			}
 
@@ -225,8 +227,8 @@ func StatusCommand(appConfig *config.AppConfig) *cobra.Command {
 show configuration information including number of providers and server port.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			providers := appConfig.ListProviders()
-			pidManager := config.NewPIDManager(appConfig.ConfigDir())
-			serverRunning := pidManager.IsRunning()
+			fileLock := lock.NewFileLock(appConfig.ConfigDir())
+			serverRunning := fileLock.IsLocked()
 			globalConfig := appConfig.GetGlobalConfig()
 
 			fmt.Println("=== Tingly Box Status ===")
@@ -323,12 +325,12 @@ The restart is graceful - ongoing requests will be completed before shutdown.`,
 				return fmt.Errorf("failed to set server port: %w", err)
 			}
 
-			pidManager := config.NewPIDManager(appConfig.ConfigDir())
-			wasRunning := pidManager.IsRunning()
+			fileLock := lock.NewFileLock(appConfig.ConfigDir())
+			wasRunning := fileLock.IsLocked()
 
 			if wasRunning {
 				fmt.Println("Stopping current server...")
-				if err := stopServerWithPIDManager(pidManager); err != nil {
+				if err := stopServerWithFileLock(fileLock); err != nil {
 					return fmt.Errorf("failed to stop server: %w", err)
 				}
 				fmt.Println("Server stopped successfully")

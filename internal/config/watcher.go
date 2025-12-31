@@ -2,13 +2,13 @@ package config
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/sirupsen/logrus"
 )
 
 // ConfigWatcher monitors configuration changes and triggers reloads
@@ -118,7 +118,7 @@ func (cw *ConfigWatcher) watchLoop() {
 			if !ok {
 				return
 			}
-			log.Printf("Config watcher error: %v", err)
+			logrus.Debugf("Config watcher error: %v", err)
 
 		case <-cw.stopCh:
 			return
@@ -177,7 +177,7 @@ func (cw *ConfigWatcher) handleConfigChange(event fsnotify.Event) {
 
 	// Reload configuration (reload Config)
 	if err := cw.config.load(); err != nil {
-		log.Printf("Failed to reload configuration: %v", err)
+		logrus.Debugf("Failed to reload configuration: %v", err)
 		return
 	}
 
@@ -198,7 +198,7 @@ func (cw *ConfigWatcher) handleConfigChange(event fsnotify.Event) {
 		callback(config)
 	}
 
-	log.Println("Configuration reloaded successfully")
+	logrus.Debugln("Configuration reloaded successfully")
 }
 
 // TriggerReload manually triggers a configuration reload
