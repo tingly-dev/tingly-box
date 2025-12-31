@@ -5,6 +5,7 @@ import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
 import {
+    Alert,
     Box,
     Button,
     CircularProgress,
@@ -14,17 +15,19 @@ import {
     DialogTitle,
     IconButton,
     InputAdornment,
+    Snackbar,
     Stack,
     Tab,
     Tabs,
     TextField,
     Typography,
 } from '@mui/material';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { dispatchCustomModelUpdate, listenForCustomModelUpdates, useCustomModels } from '../hooks/useCustomModels';
 import { useGridLayout } from '../hooks/useGridLayout';
 import { usePagination } from '../hooks/usePagination';
 import type { Provider, ProviderModelsData } from '../types/provider';
+import { api } from '../services/api';
 import { getModelTypeInfo, navigateToModelPage } from '../utils/modelUtils';
 import { ApiStyleBadge } from "./ApiStyleBadge";
 import CustomModelCard from './CustomModelCard';
@@ -65,6 +68,14 @@ export default function ModelSelectTab({
     const [isInitialized, setIsInitialized] = useState(false);
     const { customModels, saveCustomModel, removeCustomModel } = useCustomModels();
     const gridLayout = useGridLayout();
+
+    // State for model probing
+    const [probingModels, setProbingModels] = useState<Set<string>>(new Set());
+    const [snackbar, setSnackbar] = useState<{
+        open: boolean;
+        message: string;
+        severity: 'success' | 'error';
+    }>({ open: false, message: '', severity: 'error' });
 
 
     // Create provider name to UUID mapping for search functionality
@@ -151,11 +162,66 @@ export default function ModelSelectTab({
         }
     };
 
-    const handleModelSelect = (provider: Provider, model: string) => {
-        if (onSelected) {
-            onSelected({ provider, model });
+    const handleModelSelect = useCallback(async (provider: Provider, model: string) => {
+        // Check if provider is oauth type
+        if (provider.auth_type === 'oauth') {
+            const modelKey = `${provider.uuid}-${model}`;
+            // Check if already probing
+            if (probingModels.has(modelKey)) {
+                return;
+            }
+
+            // Add to probing set
+            setProbingModels(prev => new Set(prev).add(modelKey));
+
+            try {
+                // Probe model availability
+                const result = await api.probeModel(provider.uuid, model);
+
+                // Remove from probing set
+                setProbingModels(prev => {
+                    const next = new Set(prev);
+                    next.delete(modelKey);
+                    return next;
+                });
+
+                // Check if probe was successful
+                if (result?.success === false || result?.error) {
+                    console.log(result.error)
+                    setSnackbar({
+                        open: true,
+                        message: `Model "${model}" is not available: ${result.error?.message || 'Unknown error'}`,
+                        severity: 'error'
+                    });
+                    return; // Don't proceed with selection
+                }
+
+                // Success - proceed with selection
+                if (onSelected) {
+                    onSelected({ provider, model });
+                }
+            } catch (error: any) {
+                // Remove from probing set
+                setProbingModels(prev => {
+                    const next = new Set(prev);
+                    next.delete(modelKey);
+                    return next;
+                });
+
+                console.log(error)
+                setSnackbar({
+                    open: true,
+                    message: `Model "${model}" is not available: ${error || 'Network error'}`,
+                    severity: 'error'
+                });
+            }
+        } else {
+            // Non-oauth provider - proceed directly
+            if (onSelected) {
+                onSelected({ provider, model });
+            }
         }
-    };
+    }, [probingModels, onSelected]);
 
     const handleDeleteCustomModel = (provider: Provider, customModel: string) => {
         removeCustomModel(provider.name, customModel);
@@ -298,6 +364,7 @@ export default function ModelSelectTab({
                                                 isSelected={isProviderSelected && selectedModel === starModel}
                                                 onClick={() => handleModelSelect(provider, starModel)}
                                                 variant="starred"
+                                                loading={provider.auth_type === 'oauth' && probingModels.has(`${provider.uuid}-${starModel}`)}
                                             />
                                         ))}
                                     </Box>
@@ -386,6 +453,7 @@ export default function ModelSelectTab({
                                             onDelete={() => handleDeleteCustomModel(provider, customModel)}
                                             onSelect={() => handleModelSelect(provider, customModel)}
                                             variant="localStorage"
+                                            loading={provider.auth_type === 'oauth' && probingModels.has(`${provider.uuid}-${customModel}`)}
                                         />
                                     ))}
 
@@ -401,6 +469,7 @@ export default function ModelSelectTab({
                                                 onDelete={() => handleDeleteCustomModel(provider, backendCustomModel)}
                                                 onSelect={() => handleModelSelect(provider, backendCustomModel)}
                                                 variant="backend"
+                                                loading={provider.auth_type === 'oauth' && probingModels.has(`${provider.uuid}-${backendCustomModel}`)}
                                             />
                                         )}
 
@@ -417,6 +486,7 @@ export default function ModelSelectTab({
                                                 onDelete={() => handleDeleteCustomModel(provider, selectedModel)}
                                                 onSelect={() => handleModelSelect(provider, selectedModel)}
                                                 variant="selected"
+                                                loading={provider.auth_type === 'oauth' && probingModels.has(`${provider.uuid}-${selectedModel}`)}
                                             />
                                         )}
 
@@ -430,6 +500,7 @@ export default function ModelSelectTab({
                                                 isSelected={isModelSelected}
                                                 onClick={() => handleModelSelect(provider, model)}
                                                 variant="standard"
+                                                loading={provider.auth_type === 'oauth' && probingModels.has(`${provider.uuid}-${model}`)}
                                             />
                                         );
                                     })}
@@ -516,6 +587,22 @@ export default function ModelSelectTab({
                     </Button>
                 </DialogActions>
             </Dialog>
+
+            {/* Snackbar for notifications */}
+            <Snackbar
+                open={snackbar.open}
+                autoHideDuration={6000}
+                onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+            >
+                <Alert
+                    onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+                    severity={snackbar.severity}
+                    sx={{ width: '100%' }}
+                >
+                    {snackbar.message}
+                </Alert>
+            </Snackbar>
         </Box>
     );
 }

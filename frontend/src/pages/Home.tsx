@@ -13,8 +13,9 @@ import {
 } from '@mui/material';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { OpenAI, Anthropic } from '@lobehub/icons';
-import CodeIcon from '@mui/icons-material/Code';
+import OpenAI from "@lobehub/icons/es/OpenAI"
+import Anthropic from "@lobehub/icons/es/Anthropic"
+import Claude from "@lobehub/icons/es/Claude"
 import { Add as AddIcon } from '@mui/icons-material';
 import { PageLayout } from '../components/PageLayout';
 import PresetProviderFormDialog, { type EnhancedProviderFormData } from '../components/PresetProviderFormDialog';
@@ -226,7 +227,7 @@ const Home = () => {
                         iconPosition="start"
                     />
                     <Tab
-                        icon={<CodeIcon fontSize="small" />}
+                        icon={<Claude fontSize="small" />}
                         label={t('home.tabs.useClaudeCode')}
                         iconPosition="start"
                     />

@@ -98,16 +98,11 @@ func (s *Server) HandleProbeModel(c *gin.Context) {
 	var model = req.Model
 
 	for _, p := range providers {
-		if p.Enabled && p.Name == req.Provider {
+		if p.Enabled && p.UUID == req.Provider {
 			provider = p
 			break
 		}
 	}
-
-	startTime := time.Now()
-
-	// Create the mock request data that would be sent to the API
-	mockRequest := NewMockRequest(req.Provider, req.Model)
 
 	if provider == nil {
 		errorResp := ErrorDetail{
@@ -118,12 +113,15 @@ func (s *Server) HandleProbeModel(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ProbeResponse{
 			Success: false,
 			Error:   &errorResp,
-			Data: &ProbeResponseData{
-				Request: mockRequest,
-			},
+			Data:    &ProbeResponseData{},
 		})
 		return
 	}
+
+	startTime := time.Now()
+
+	// Create the mock request data that would be sent to the API
+	mockRequest := NewMockRequest(provider.Name, req.Model)
 
 	// Call the appropriate probe function based on provider API style
 	var responseContent string
@@ -152,7 +150,7 @@ func (s *Server) HandleProbeModel(c *gin.Context) {
 			Code:    errorCode,
 		}
 
-		c.JSON(http.StatusOK, ProbeResponse{
+		c.JSON(http.StatusNotFound, ProbeResponse{
 			Success: false,
 			Error:   &errorResp,
 			Data: &ProbeResponseData{
@@ -585,22 +583,23 @@ func useV2Provider(s *Server, api *swagger.RouteGroup) {
 	// Provider template endpoints
 	api.GET("/provider-templates", s.GetProviderTemplates,
 		swagger.WithDescription("Get all provider templates"),
-		swagger.WithTags("provider-templates"),
+		swagger.WithTags("providers"),
+		swagger.WithResponseModel(TemplateResponse{}),
 	)
 
 	api.GET("/provider-templates/:id", s.GetProviderTemplate,
 		swagger.WithDescription("Get a specific provider template by ID"),
-		swagger.WithTags("provider-templates"),
+		swagger.WithTags("providers"),
 	)
 
 	api.POST("/provider-templates/refresh", s.RefreshProviderTemplates,
 		swagger.WithDescription("Refresh provider templates from GitHub"),
-		swagger.WithTags("provider-templates"),
+		swagger.WithTags("providers"),
 	)
 
 	api.GET("/provider-templates/version", s.GetProviderTemplateVersion,
 		swagger.WithDescription("Get current provider template registry version"),
-		swagger.WithTags("provider-templates"),
+		swagger.WithTags("providers"),
 	)
 }
 

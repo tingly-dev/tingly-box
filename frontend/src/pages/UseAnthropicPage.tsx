@@ -4,6 +4,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import {Box, IconButton, Tooltip, Typography} from '@mui/material';
 import {useNavigate} from 'react-router-dom';
 import {ApiConfigRow} from '../components/ApiConfigRow';
+import {BaseUrlRow} from '../components/BaseUrlRow';
 import TabTemplatePage from '../components/TabTemplatePage';
 import {api, getBaseUrl} from '../services/api';
 import type { Provider } from '../types/provider';
@@ -56,26 +57,17 @@ const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
         loadData();
     }, []);
 
-    const anthropicBaseUrl = `${baseUrl}/anthropic`;
     const modelName = rule?.request_model;
 
     const header = (
         <Box sx={{p: 2}}>
-            <ApiConfigRow
+            <BaseUrlRow
                 label="Base URL"
-                value={anthropicBaseUrl}
-                onCopy={() => copyToClipboard(anthropicBaseUrl, 'Anthropic Base URL')}
-                isClickable={true}
-            >
-                <Box sx={{display: 'flex', gap: 0.5, ml: 'auto'}}>
-                    <Tooltip title="Copy Base URL">
-                        <IconButton onClick={() => copyToClipboard(anthropicBaseUrl, 'Anthropic Base URL')}
-                                    size="small">
-                            <CopyIcon fontSize="small"/>
-                        </IconButton>
-                    </Tooltip>
-                </Box>
-            </ApiConfigRow>
+                path="/anthropic"
+                baseUrl={baseUrl}
+                onCopy={(url) => copyToClipboard(url, 'Anthropic Base URL')}
+                urlLabel="Anthropic Base URL"
+            />
             <ApiConfigRow label="API Key" showEllipsis={true}>
                 <Box sx={{display: 'flex', gap: 0.5, ml: 'auto'}}>
                     <Tooltip title="View Token">
@@ -114,7 +106,7 @@ const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
 
     return (
         <TabTemplatePage
-            title="Anthropic Configuration"
+            title="Use Anthropic SDK"
             rule={rule}
             header={header}
             showTokenModal={showTokenModal}

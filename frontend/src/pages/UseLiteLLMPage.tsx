@@ -4,6 +4,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import {Box, IconButton, Tooltip, Typography} from '@mui/material';
 import {useNavigate} from 'react-router-dom';
 import {ApiConfigRow} from '../components/ApiConfigRow';
+import {BaseUrlRow} from '../components/BaseUrlRow';
 import TabTemplatePage from '../components/TabTemplatePage';
 import {api, getBaseUrl} from '../services/api';
 
@@ -52,7 +53,6 @@ const UseLiteLLMPage: React.FC<UseLiteLLMPageProps> = ({
         loadData();
     }, []);
 
-    const litellmBaseUrl = `${baseUrl}/litellm`;
     const modelName = rule?.request_model;
 
     const header = (
@@ -60,20 +60,13 @@ const UseLiteLLMPage: React.FC<UseLiteLLMPageProps> = ({
             <Typography variant="h6" sx={{fontWeight: 600, mb: 2}}>
                 Use LiteLLM
             </Typography>
-            <ApiConfigRow
+            <BaseUrlRow
                 label="Base URL"
-                value={litellmBaseUrl}
-                onCopy={() => copyToClipboard(litellmBaseUrl, 'LiteLLM Base URL')}
-                isClickable={true}
-            >
-                <Box sx={{display: 'flex', gap: 0.5, ml: 'auto'}}>
-                    <Tooltip title="Copy Base URL">
-                        <IconButton onClick={() => copyToClipboard(litellmBaseUrl, 'LiteLLM Base URL')} size="small">
-                            <CopyIcon fontSize="small"/>
-                        </IconButton>
-                    </Tooltip>
-                </Box>
-            </ApiConfigRow>
+                path="/litellm"
+                baseUrl={baseUrl}
+                onCopy={(url) => copyToClipboard(url, 'LiteLLM Base URL')}
+                urlLabel="LiteLLM Base URL"
+            />
             <ApiConfigRow label="API Key" showEllipsis={true}>
                 <Box sx={{display: 'flex', gap: 0.5, ml: 'auto'}}>
                     <Tooltip title="View Token">

@@ -27,6 +27,12 @@ export default {
     "version": "version {{version}}",
     "nav": {
       "home": "Home",
+      "settings": "Settings",
+      "useOpenAI": "OpenAI SDK",
+      "useAnthropic": "Anthropic SDK",
+      "useClaudeCode": "Claude Code",
+      "apiKeys": "API Keys",
+      "oauth": "OAuth",
       "credential": "Credential"
     }
   },
@@ -264,6 +270,9 @@ export default {
       "label": "Anthropic Base URL",
       "copyTooltip": "Copy Anthropic Base URL",
       "copyCurlTooltip": "Copy Anthropic cURL Example"
+    },
+    "docker": {
+      "tooltip": "Docker mode. To access from container, configure network: --network=host on Linux, or use host.docker.internal on Docker Desktop (Mac/Windows)"
     },
     "authentication": {
       "title": "Authentication",

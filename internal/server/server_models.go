@@ -388,16 +388,19 @@ type ProbeRequestDetail struct {
 func NewMockRequest(provider, model string) ProbeRequestDetail {
 	return ProbeRequestDetail{
 		Messages: []map[string]interface{}{
+			//{
+			//	"role":    "system",
+			//	"content": "work as `echo`",
+			//},
 			{
 				"role":    "user",
 				"content": "hi",
 			},
 		},
-		Model:       model,
-		MaxTokens:   100,
-		Temperature: 0.7,
-		Provider:    provider,
-		Timestamp:   time.Now().Format(time.RFC3339),
+		Model:     model,
+		MaxTokens: 100,
+		Provider:  provider,
+		Timestamp: time.Now().Format(time.RFC3339),
 	}
 }
 

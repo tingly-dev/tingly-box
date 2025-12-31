@@ -789,7 +789,7 @@
     "/api/v2/provider-templates": {
       "get": {
         "tags": [
-          "provider-templates"
+          "providers"
         ],
         "summary": "Get all provider templates",
         "description": "Get all provider templates",
@@ -803,7 +803,7 @@
           "200": {
             "description": "Successful response",
             "schema": {
-              "type": "object"
+              "$ref": "#/definitions/TemplateResponse"
             }
           }
         }
@@ -812,7 +812,7 @@
     "/api/v2/provider-templates/refresh": {
       "post": {
         "tags": [
-          "provider-templates"
+          "providers"
         ],
         "summary": "Refresh provider templates from GitHub",
         "description": "Refresh provider templates from GitHub",
@@ -835,7 +835,7 @@
     "/api/v2/provider-templates/version": {
       "get": {
         "tags": [
-          "provider-templates"
+          "providers"
         ],
         "summary": "Get current provider template registry version",
         "description": "Get current provider template registry version",
@@ -858,7 +858,7 @@
     "/api/v2/provider-templates/{id}": {
       "get": {
         "tags": [
-          "provider-templates"
+          "providers"
         ],
         "summary": "Get a specific provider template by ID",
         "description": "Get a specific provider template by ID",
@@ -2070,6 +2070,106 @@
         "enabled"
       ]
     },
+    "ProviderTemplate": {
+      "type": "object",
+      "properties": {
+        "api_doc": {
+          "type": "string",
+          "description": "Field api_doc"
+        },
+        "base_url_anthropic": {
+          "type": "string",
+          "description": "Field base_url_anthropic"
+        },
+        "base_url_openai": {
+          "type": "string",
+          "description": "Field base_url_openai"
+        },
+        "description": {
+          "type": "string",
+          "description": "Field description"
+        },
+        "id": {
+          "type": "string",
+          "description": "Field id"
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Field metadata",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "model_doc": {
+          "type": "string",
+          "description": "Field model_doc"
+        },
+        "model_limits": {
+          "type": "object",
+          "description": "Field model_limits",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "models": {
+          "type": "array",
+          "description": "Field models",
+          "items": {
+            "type": "string"
+          }
+        },
+        "name": {
+          "type": "string",
+          "description": "Field name"
+        },
+        "pricing_doc": {
+          "type": "string",
+          "description": "Field pricing_doc"
+        },
+        "status": {
+          "type": "string",
+          "description": "Field status"
+        },
+        "supports_models_endpoint": {
+          "type": "boolean",
+          "description": "Field supports_models_endpoint"
+        },
+        "tags": {
+          "type": "array",
+          "description": "Field tags",
+          "items": {
+            "type": "string"
+          }
+        },
+        "type": {
+          "type": "string",
+          "description": "Field type"
+        },
+        "valid": {
+          "type": "boolean",
+          "description": "Field valid"
+        },
+        "website": {
+          "type": "string",
+          "description": "Field website"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "status",
+        "valid",
+        "website",
+        "description",
+        "type",
+        "api_doc",
+        "model_doc",
+        "pricing_doc",
+        "models",
+        "supports_models_endpoint"
+      ]
+    },
     "ProvidersResponse": {
       "type": "object",
       "properties": {
@@ -2312,6 +2412,33 @@
       "required": [
         "type",
         "params"
+      ]
+    },
+    "TemplateResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "description": "Field data",
+          "additionalProperties": {
+            "$ref": "#/definitions/ProviderTemplate"
+          }
+        },
+        "message": {
+          "type": "string",
+          "description": "Field message"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success"
+        },
+        "version": {
+          "type": "string",
+          "description": "Field version"
+        }
+      },
+      "required": [
+        "success"
       ]
     },
     "ToggleProviderResponse": {
@@ -2596,48 +2723,44 @@
   },
   "tags": [
     {
-      "name": "info",
-      "description": "Operations related to info"
-    },
-    {
       "name": "server",
       "description": "Operations related to server"
-    },
-    {
-      "name": "rules",
-      "description": "Operations related to rules"
     },
     {
       "name": "history",
       "description": "Operations related to history"
     },
     {
-      "name": "token",
-      "description": "Operations related to token"
-    },
-    {
-      "name": "oauth",
-      "description": "Operations related to oauth"
-    },
-    {
-      "name": "logs",
-      "description": "Operations related to logs"
-    },
-    {
-      "name": "models",
-      "description": "Operations related to models"
-    },
-    {
       "name": "testing",
       "description": "Operations related to testing"
+    },
+    {
+      "name": "token",
+      "description": "Operations related to token"
     },
     {
       "name": "providers",
       "description": "Operations related to providers"
     },
     {
-      "name": "provider-templates",
-      "description": "Operations related to provider-templates"
+      "name": "logs",
+      "description": "Operations related to logs"
+    },
+    {
+      "name": "rules",
+      "description": "Operations related to rules"
+    },
+    {
+      "name": "models",
+      "description": "Operations related to models"
+    },
+    {
+      "name": "oauth",
+      "description": "Operations related to oauth"
+    },
+    {
+      "name": "info",
+      "description": "Operations related to info"
     }
   ]
 }

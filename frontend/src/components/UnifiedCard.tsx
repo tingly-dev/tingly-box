@@ -3,7 +3,7 @@ import type { SxProps, Theme } from '@mui/material/styles';
 import type { ReactNode } from 'react';
 
 interface UnifiedCardProps {
-  title?: string;
+  title?: string | ReactNode;
   subtitle?: string;
   children: ReactNode;
   size?: 'small' | 'medium' | 'large' | 'full' | 'header';

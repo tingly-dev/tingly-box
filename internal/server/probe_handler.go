@@ -255,6 +255,7 @@ func (s *Server) probeWithOpenAI(c *gin.Context, provider *config.Provider, mode
 	chatRequest := &openai.ChatCompletionNewParams{
 		Model: model, // Use empty stats for probe testing
 		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.SystemMessage("work as `echo`"),
 			openai.UserMessage("hi"),
 		},
 	}
@@ -317,6 +318,11 @@ func (s *Server) probeWithAnthropic(c *gin.Context, provider *config.Provider, m
 	// Create message request using Anthropic SDK
 	messageRequest := anthropic.MessageNewParams{
 		Model: anthropic.Model(model), // Use empty stats for probe testing
+		System: []anthropic.TextBlockParam{
+			{
+				Text: "work as `echo`",
+			},
+		},
 		Messages: []anthropic.MessageParam{
 			anthropic.NewUserMessage(anthropic.NewTextBlock("hi")),
 		},

@@ -1,7 +1,7 @@
 import { PlayArrow as ProbeIcon } from '@mui/icons-material';
 import { Box, Button, Dialog, DialogContent, DialogTitle, Typography } from '@mui/material';
 import React, { useCallback, useEffect, useState } from 'react';
-import type { ProbeResponse } from '../client';
+import type {ProbeResponse, ProbeResponseData} from '../client';
 import ApiKeyModal from '../components/ApiKeyModal';
 import CardGrid from '../components/CardGrid.tsx';
 import Probe from '../components/Probe';
@@ -41,6 +41,7 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
     const [configRecord, setConfigRecord] = useState<ConfigRecord | null>(null);
     const [saving, setSaving] = useState(false);
     const [refreshingProviders, setRefreshingProviders] = useState<string[]>([]);
+    const [isInitialized, setIsInitialized] = useState(false);
 
     // Probe state
     const [isProbing, setIsProbing] = useState(false);
@@ -62,7 +63,7 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
 
     // Convert rule to ConfigRecord format when rule or providers change
     useEffect(() => {
-        if (rule && providers.length > 0 && !configRecord) {
+        if (rule && providers.length > 0) {
             const services = rule.services || [];
             const providersList: ConfigProvider[] = services.map((service: any) => ({
                 uuid: service.id || service.uuid || crypto.randomUUID(),
@@ -83,15 +84,18 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
                 });
             }
 
-            setConfigRecord({
+            const newConfigRecord: ConfigRecord = {
                 uuid: rule.uuid || crypto.randomUUID(),
                 requestModel: rule.request_model || '',
                 responseModel: rule.response_model || '',
                 active: rule.active !== undefined ? rule.active : true,
                 providers: providersList,
-            });
+            };
+
+            setConfigRecord(newConfigRecord);
+            setIsInitialized(true);
         }
-    }, [rule, providers, configRecord]);
+    }, [rule, providers]);
 
     // Fetch models for providers when configRecord changes
     useEffect(() => {
@@ -123,12 +127,7 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
         setProbeResult(null);
 
         try {
-            const providerName = providerUuidToName[providerUuid];
-            if (!providerName) {
-                throw new Error('Provider not found');
-            }
-
-            const result = await api.probeModel(providerName, model);
+            const result = await api.probeModel(providerUuid, model);
             setProbeResult(result);
         } catch (error) {
             console.error('Probe error:', error);
@@ -360,9 +359,31 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
         handleFetchModels(provider.uuid);
     };
 
-    // If no providers or no configRecord, don't render anything (Home.tsx will show empty state)
-    if (!providers.length || !configRecord) {
+    // If no providers, don't render anything (Home.tsx will show empty state)
+    if (!providers.length) {
         return null;
+    }
+
+    // Show skeleton while initializing
+    if (!isInitialized || !configRecord) {
+        return (
+            <CardGrid>
+                <UnifiedCard size="header">
+                    <Box sx={{ p: 3 }}>
+                        {/* Simple skeleton loader */}
+                        <Box sx={{ height: 60, animation: 'pulse 1.5s ease-in-out infinite' }}>
+                            <Box sx={{ height: '100%', display: 'flex', alignItems: 'center', gap: 2 }}>
+                                <Box sx={{ width: 40, height: 40, borderRadius: 1, bgcolor: 'grey.200' }} />
+                                <Box sx={{ flex: 1 }}>
+                                    <Box sx={{ height: 24, width: '60%', bgcolor: 'grey.200', borderRadius: 1, mb: 1 }} />
+                                    <Box sx={{ height: 16, width: '40%', bgcolor: 'grey.200', borderRadius: 1 }} />
+                                </Box>
+                            </Box>
+                        </Box>
+                    </Box>
+                </UnifiedCard>
+            </CardGrid>
+        );
     }
 
     return (
@@ -370,8 +391,7 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
             {/* Header Card */}
             <UnifiedCard
                 title={title}
-                size="header"
-            >
+                size="header">
                 {header || (
                     <Box sx={{ p: 2 }}>
                         <Typography variant="h6" sx={{ fontWeight: 600 }}>

@@ -1,4 +1,4 @@
-import { type ServiceProvider } from './serviceProviders';
+import { type ServiceProvider } from './serviceProviders.ts';
 
 export interface ParsedProviderValue {
   providerId: string;

@@ -11,17 +11,17 @@ import {
     TableHead,
     TableRow,
     Typography,
-    Select,
-    MenuItem,
-    FormControl,
-    InputLabel,
     IconButton,
     Collapse,
+    Menu,
+    MenuItem,
 } from '@mui/material';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import FilterListIcon from '@mui/icons-material/FilterList';
+import ClearIcon from '@mui/icons-material/Clear';
 
 interface LogEntry {
     time: string;
@@ -47,9 +47,15 @@ const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const [allLogs, setAllLogs] = useState<LogEntry[]>([]); // Store all logs
     const [loading, setLoading] = useState(false);
-    const [filterLevel, setFilterLevel] = useState<string>('all');
+    const [filterLevel, setFilterLevel] = useState<string | null>(null);
+    const [filterStatus, setFilterStatus] = useState<number | null>(null);
     const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
     const [autoRefresh, setAutoRefresh] = useState(false);
+    const tableContainerRef = useRef<HTMLDivElement>(null);
+
+    // Menu anchor elements
+    const [levelMenuAnchor, setLevelMenuAnchor] = useState<null | HTMLElement>(null);
+    const [statusMenuAnchor, setStatusMenuAnchor] = useState<null | HTMLElement>(null);
 
     const loadLogs = async () => {
         setLoading(true);
@@ -109,6 +115,15 @@ const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
         }
     };
 
+    const getStatusCodeColor = (statusCode?: number): string => {
+        if (!statusCode) return '#6b7280'; // gray for missing
+        if (statusCode >= 200 && statusCode < 300) return '#10b981'; // green for 2xx
+        if (statusCode >= 300 && statusCode < 400) return '#3b82f6'; // blue for 3xx
+        if (statusCode >= 400 && statusCode < 500) return '#f59e0b'; // orange for 4xx
+        if (statusCode >= 500) return '#ef4444'; // red for 5xx
+        return '#6b7280';
+    };
+
     const formatTimestamp = (timestamp: string): string => {
         try {
             const date = new Date(timestamp);
@@ -118,14 +133,22 @@ const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
         }
     };
 
-    // Client-side filter when filterLevel changes
+    // Client-side filter when filterLevel or filterStatus changes
     useEffect(() => {
-        if (filterLevel === 'all') {
-            setLogs(allLogs);
-        } else {
-            setLogs(allLogs.filter(log => log.level.toLowerCase() === filterLevel.toLowerCase()));
+        let filtered = allLogs;
+        if (filterLevel) {
+            filtered = filtered.filter(log => log.level.toLowerCase() === filterLevel.toLowerCase());
         }
-    }, [filterLevel, allLogs]);
+        if (filterStatus !== null) {
+            filtered = filtered.filter(log => log.fields?.status === filterStatus);
+        }
+        setLogs(filtered);
+    }, [filterLevel, filterStatus, allLogs]);
+
+    // Get unique status codes from all logs
+    const uniqueStatusCodes = Array.from(
+        new Set(allLogs.map(log => log.fields?.status).filter(Boolean))
+    ).sort((a, b) => (a as number) - (b as number)) as number[];
 
     useEffect(() => {
         loadLogs();
@@ -138,25 +161,18 @@ const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
         }
     }, [autoRefresh]);
 
+    // Scroll to bottom when logs change
+    useEffect(() => {
+        if (tableContainerRef.current && logs.length > 0) {
+            tableContainerRef.current.scrollTop = tableContainerRef.current.scrollHeight;
+        }
+    }, [logs]);
+
     return (
         <Stack spacing={2}>
             {/* Header */}
             <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
                 <Stack direction="row" spacing={2} alignItems="center">
-                    <FormControl size="small" sx={{ minWidth: 120 }}>
-                        <InputLabel>Level</InputLabel>
-                        <Select
-                            value={filterLevel}
-                            label="Level"
-                            onChange={(e) => setFilterLevel(e.target.value)}
-                        >
-                            <MenuItem value="all">All</MenuItem>
-                            <MenuItem value="error">Error</MenuItem>
-                            <MenuItem value="warning">Warning</MenuItem>
-                            <MenuItem value="info">Info</MenuItem>
-                            <MenuItem value="debug">Debug</MenuItem>
-                        </Select>
-                    </FormControl>
                     <Button
                         variant={autoRefresh ? 'contained' : 'outlined'}
                         size="small"
@@ -172,6 +188,19 @@ const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
                     >
                         Refresh
                     </Button>
+                    {(filterLevel || filterStatus !== null) && (
+                        <Button
+                            variant="outlined"
+                            size="small"
+                            startIcon={<ClearIcon />}
+                            onClick={() => {
+                                setFilterLevel(null);
+                                setFilterStatus(null);
+                            }}
+                        >
+                            Clear Filter
+                        </Button>
+                    )}
                     <Button
                         variant="outlined"
                         size="small"
@@ -182,25 +211,50 @@ const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
                     </Button>
                 </Stack>
                 <Typography variant="body2" color="text.secondary">
-                    Total: {logs.length}
+                    Total: {logs.length}{allLogs.length !== logs.length && ` / ${allLogs.length}`}
                 </Typography>
             </Stack>
 
             {/* Logs Table */}
-            <TableContainer component={Paper} sx={{ maxHeight: 600 }}>
+            <TableContainer component={Paper} sx={{ maxHeight: 600 }} ref={tableContainerRef}>
                 <Table stickyHeader size="small">
                     <TableHead>
                         <TableRow>
                             <TableCell padding="checkbox" />
                             <TableCell sx={{ width: 180 }}>Time</TableCell>
-                            <TableCell sx={{ width: 100 }}>Level</TableCell>
+                            <TableCell sx={{ width: 100 }}>
+                                <Stack direction="row" alignItems="center" spacing={0.5}>
+                                    <span>Level</span>
+                                    <IconButton
+                                        size="small"
+                                        onClick={(e) => setLevelMenuAnchor(e.currentTarget)}
+                                        sx={{ padding: 0.5 }}
+                                        color={filterLevel ? 'primary' : 'default'}
+                                    >
+                                        <FilterListIcon fontSize="small" />
+                                    </IconButton>
+                                </Stack>
+                            </TableCell>
+                            <TableCell sx={{ width: 80 }}>
+                                <Stack direction="row" alignItems="center" spacing={0.5}>
+                                    <span>Status</span>
+                                    <IconButton
+                                        size="small"
+                                        onClick={(e) => setStatusMenuAnchor(e.currentTarget)}
+                                        sx={{ padding: 0.5 }}
+                                        color={filterStatus !== null ? 'primary' : 'default'}
+                                    >
+                                        <FilterListIcon fontSize="small" />
+                                    </IconButton>
+                                </Stack>
+                            </TableCell>
                             <TableCell>Message</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
                         {logs.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={4} align="center" sx={{ py: 4 }}>
+                                <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
                                     <Typography color="text.secondary">
                                         {loading ? 'Loading...' : 'No logs available'}
                                     </Typography>
@@ -239,13 +293,30 @@ const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
                                                 }}
                                             />
                                         </TableCell>
+                                        <TableCell>
+                                            {log.fields?.status !== undefined ? (
+                                                <Chip
+                                                    label={log.fields.status as number}
+                                                    size="small"
+                                                    sx={{
+                                                        backgroundColor: getStatusCodeColor(log.fields.status as number),
+                                                        color: 'white',
+                                                        fontSize: '0.7rem',
+                                                        height: 20,
+                                                        fontWeight: 'bold',
+                                                    }}
+                                                />
+                                            ) : (
+                                                <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>-</Typography>
+                                            )}
+                                        </TableCell>
                                         <TableCell sx={{ fontSize: '0.8rem' }}>
                                             {log.message}
                                         </TableCell>
                                     </TableRow>
                                     <TableRow>
                                         <TableCell
-                                            colSpan={4}
+                                            colSpan={5}
                                             sx={{ pb: 0, pt: 0, border: 'none' }}
                                         >
                                             <Collapse
@@ -296,6 +367,101 @@ const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
                     </TableBody>
                 </Table>
             </TableContainer>
+
+            {/* Level Filter Menu */}
+            <Menu
+                anchorEl={levelMenuAnchor}
+                open={Boolean(levelMenuAnchor)}
+                onClose={() => setLevelMenuAnchor(null)}
+            >
+                <MenuItem
+                    selected={filterLevel === null}
+                    onClick={() => {
+                        setFilterLevel(null);
+                        setLevelMenuAnchor(null);
+                    }}
+                >
+                    All Levels
+                </MenuItem>
+                <MenuItem
+                    selected={filterLevel === 'error'}
+                    onClick={() => {
+                        setFilterLevel('error');
+                        setLevelMenuAnchor(null);
+                    }}
+                >
+                    <Box sx={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: '#ef4444', mr: 1 }} />
+                    Error
+                </MenuItem>
+                <MenuItem
+                    selected={filterLevel === 'warning'}
+                    onClick={() => {
+                        setFilterLevel('warning');
+                        setLevelMenuAnchor(null);
+                    }}
+                >
+                    <Box sx={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: '#f59e0b', mr: 1 }} />
+                    Warning
+                </MenuItem>
+                <MenuItem
+                    selected={filterLevel === 'info'}
+                    onClick={() => {
+                        setFilterLevel('info');
+                        setLevelMenuAnchor(null);
+                    }}
+                >
+                    <Box sx={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: '#3b82f6', mr: 1 }} />
+                    Info
+                </MenuItem>
+                <MenuItem
+                    selected={filterLevel === 'debug'}
+                    onClick={() => {
+                        setFilterLevel('debug');
+                        setLevelMenuAnchor(null);
+                    }}
+                >
+                    <Box sx={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: '#6b7280', mr: 1 }} />
+                    Debug
+                </MenuItem>
+            </Menu>
+
+            {/* Status Filter Menu */}
+            <Menu
+                anchorEl={statusMenuAnchor}
+                open={Boolean(statusMenuAnchor)}
+                onClose={() => setStatusMenuAnchor(null)}
+            >
+                <MenuItem
+                    selected={filterStatus === null}
+                    onClick={() => {
+                        setFilterStatus(null);
+                        setStatusMenuAnchor(null);
+                    }}
+                >
+                    All Status
+                </MenuItem>
+                {uniqueStatusCodes.map((code) => (
+                    <MenuItem
+                        key={code}
+                        selected={filterStatus === code}
+                        onClick={() => {
+                            setFilterStatus(code);
+                            setStatusMenuAnchor(null);
+                        }}
+                    >
+                        <Box
+                            sx={{
+                                width: 12,
+                                height: 12,
+                                borderRadius: '50%',
+                                backgroundColor: getStatusCodeColor(code),
+                                mr: 1,
+                            }}
+                        />
+                        {code}
+                    </MenuItem>
+                ))}
+            </Menu>
         </Stack>
     );
 };

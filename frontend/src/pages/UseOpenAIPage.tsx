@@ -3,10 +3,11 @@ import {ContentCopy as CopyIcon, Edit as EditIcon} from '@mui/icons-material';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import {Box, IconButton, Tooltip, Typography} from '@mui/material';
 import {useNavigate} from 'react-router-dom';
-import {ApiConfigRow} from '../components/ApiConfigRow';
+import {BaseUrlRow} from '../components/BaseUrlRow';
 import TabTemplatePage from '../components/TabTemplatePage';
 import {api, getBaseUrl} from '../services/api';
 import type { Provider } from '../types/provider';
+import { ApiConfigRow } from "@/components/ApiConfigRow";
 
 interface UseOpenAIPageProps {
     showTokenModal: boolean;
@@ -61,20 +62,13 @@ const UseOpenAIPage: React.FC<UseOpenAIPageProps> = ({
 
     const header = (
         <Box sx={{p: 2}}>
-            <ApiConfigRow
+            <BaseUrlRow
                 label="Base URL"
-                value={openaiBaseUrl}
-                onCopy={() => copyToClipboard(openaiBaseUrl, 'OpenAI Base URL')}
-                isClickable={true}
-            >
-                <Box sx={{display: 'flex', gap: 0.5, ml: 'auto'}}>
-                    <Tooltip title="Copy Base URL">
-                        <IconButton onClick={() => copyToClipboard(openaiBaseUrl, 'OpenAI Base URL')} size="small">
-                            <CopyIcon fontSize="small"/>
-                        </IconButton>
-                    </Tooltip>
-                </Box>
-            </ApiConfigRow>
+                path="/openai"
+                baseUrl={baseUrl}
+                onCopy={(url) => copyToClipboard(url, 'OpenAI Base URL')}
+                urlLabel="OpenAI Base URL"
+            />
             <ApiConfigRow label="API Key" showEllipsis={true}>
                 <Box sx={{display: 'flex', gap: 0.5, ml: 'auto'}}>
                     <Tooltip title="View Token">
@@ -113,7 +107,7 @@ const UseOpenAIPage: React.FC<UseOpenAIPageProps> = ({
 
     return (
         <TabTemplatePage
-            title="OpenAI Configuration"
+            title="Use OpenAI SDK"
             rule={rule}
             header={header}
             showTokenModal={showTokenModal}

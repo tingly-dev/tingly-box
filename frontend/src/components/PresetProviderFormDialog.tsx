@@ -1,4 +1,4 @@
-import { Refresh } from '@mui/icons-material';
+import { Refresh, WarningAmber } from '@mui/icons-material';
 import {
     Alert,
     Autocomplete,
@@ -19,7 +19,7 @@ import {
 } from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getServiceProvider, getProvidersByStyle } from '../data/serviceProviders';
+import { getProvidersByStyle } from '../services/serviceProviders';
 import api from '../services/api';
 import { OpenAI } from '@lobehub/icons';
 import { Anthropic } from '@lobehub/icons';
@@ -65,6 +65,7 @@ const PresetProviderFormDialog = ({
         responseTime?: number;
         modelsCount?: number;
     } | null>(null);
+    const [styleChangedWarning, setStyleChangedWarning] = useState(false);
 
     const openaiProviders = getProvidersByStyle('openai');
     const anthropicProviders = getProvidersByStyle('anthropic');
@@ -156,8 +157,22 @@ const PresetProviderFormDialog = ({
                             label={t('providerDialog.apiStyle.label')}
                             value={data.apiStyle || ''}
                             onChange={(e) => {
-                                onChange('apiStyle', e.target.value as 'openai' | 'anthropic' | '');
+                                const newStyle = e.target.value as 'openai' | 'anthropic' | '';
+                                const oldStyle = data.apiStyle;
+
+                                onChange('apiStyle', newStyle);
                                 setVerificationResult(null);
+
+                                // Reset apiBase and name when switching styles
+                                if (oldStyle && newStyle && oldStyle !== newStyle) {
+                                    onChange('apiBase', '');
+                                    onChange('name', '');
+                                    // Show warning only in edit mode
+                                    if (mode === 'edit') {
+                                        setStyleChangedWarning(true);
+                                        setTimeout(() => setStyleChangedWarning(false), 4000);
+                                    }
+                                }
                             }}
                             sx={{
                                 '& .MuiOutlinedInput-notchedOutline': {
@@ -196,6 +211,29 @@ const PresetProviderFormDialog = ({
                                 </Box>
                             </MenuItem>
                         </TextField>
+
+                        {/* Style change warning alert */}
+                        {styleChangedWarning && (
+                            <Alert
+                                severity="warning"
+                                icon={<WarningAmber fontSize="inherit" />}
+                                sx={{ mt: 1 }}
+                                action={
+                                    <IconButton
+                                        aria-label="close"
+                                        color="inherit"
+                                        size="small"
+                                        onClick={() => setStyleChangedWarning(false)}
+                                    >
+                                        ×
+                                    </IconButton>
+                                }
+                            >
+                                <Typography variant="body2">
+                                    {t('providerDialog.apiStyle.switchWarning', { defaultValue: 'API style changed. Base URL has been reset. Please select a compatible provider.' })}
+                                </Typography>
+                            </Alert>
+                        )}
 
                         {/* Show other fields only after API Style is selected */}
                         {data.apiStyle && (

@@ -1,5 +1,5 @@
 import { CheckCircle } from '@mui/icons-material';
-import { Box, Card, CardContent, IconButton, Typography } from '@mui/material';
+import { Box, Card, CardContent, CircularProgress, IconButton, Typography } from '@mui/material';
 import React from 'react';
 
 interface ModelCardProps {
@@ -8,6 +8,7 @@ interface ModelCardProps {
     onClick: () => void;
     variant?: 'standard' | 'starred';
     gridColumns?: number;
+    loading?: boolean;
 }
 
 export default function ModelCard({
@@ -15,7 +16,8 @@ export default function ModelCard({
     isSelected,
     onClick,
     variant = 'standard',
-    gridColumns
+    gridColumns,
+    loading = false,
 }: ModelCardProps) {
     const getCardStyles = () => {
         const baseStyles = {
@@ -23,11 +25,11 @@ export default function ModelCard({
             height: 60,
             border: 1,
             borderRadius: 1.5,
-            cursor: 'pointer',
+            cursor: loading ? 'wait' : 'pointer',
             transition: 'all 0.2s ease-in-out',
             position: 'relative' as const,
             boxShadow: isSelected ? 2 : 0,
-            '&:hover': {
+            '&:hover': loading ? {} : {
                 boxShadow: 2,
             },
         };
@@ -54,7 +56,7 @@ export default function ModelCard({
     };
 
     return (
-        <Card sx={getCardStyles()} onClick={onClick}>
+        <Card sx={getCardStyles()} onClick={loading ? undefined : onClick}>
             <CardContent sx={{
                 py: 1,
                 px: 1,
@@ -66,23 +68,27 @@ export default function ModelCard({
                     pb: 1,
                 }
             }}>
-                <Typography
-                    variant="body2"
-                    sx={{
-                        fontWeight: 500,
-                        fontSize: '0.8rem',
-                        lineHeight: 1.2,
-                        wordBreak: 'break-word',
-                        textAlign: 'center',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        width: '100%',
-                    }}
-                >
-                    {model}
-                </Typography>
-                {isSelected && (
+                {loading ? (
+                    <CircularProgress size={20} />
+                ) : (
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            fontWeight: 500,
+                            fontSize: '0.8rem',
+                            lineHeight: 1.2,
+                            wordBreak: 'break-word',
+                            textAlign: 'center',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: '100%',
+                        }}
+                    >
+                        {model}
+                    </Typography>
+                )}
+                {isSelected && !loading && (
                     <CheckCircle
                         color="primary"
                         sx={{

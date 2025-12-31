@@ -1,10 +1,14 @@
-import { Box, Typography } from '@mui/material';
+import { Box, Button, ButtonGroup, Typography } from '@mui/material';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import CodeBlock from '../components/CodeBlock';
 import TabTemplatePage from '../components/TabTemplatePage';
 import { api, getBaseUrl } from '../services/api';
 import type { Provider } from '../types/provider';
+import DockerOriginal from "devicons-react/icons/DockerOriginal";
+import { useTranslation } from 'react-i18next';
+
+const DockerIcon = DockerOriginal
 
 interface UseClaudeCodePageProps {
     showTokenModal: boolean;
@@ -28,6 +32,7 @@ const UseClaudeCodePage: React.FC<UseClaudeCodePageProps> = ({
     const [rule, setRule] = React.useState<any>(null);
     const [defaultModel, setDefaultModel] = React.useState("");
     const [loadingRule, setLoadingRule] = React.useState(true);
+    const [isDockerMode, setIsDockerMode] = React.useState(false);
     const navigate = useNavigate();
 
     const copyToClipboard = async (text: string, label: string) => {
@@ -62,9 +67,17 @@ const UseClaudeCodePage: React.FC<UseClaudeCodePageProps> = ({
         }
     }, [rule]);
 
-    const claudeCodeBaseUrl = `${baseUrl}/anthropic`;
+    const toDockerUrl = (url: string): string => {
+        return url.replace(/\/\/([^/:]+)(?::(\d+))?/, '//host.docker.internal:$2');
+    };
+
+    const getClaudeCodeBaseUrl = () => {
+        const url = `${baseUrl}/anthropic`;
+        return isDockerMode ? toDockerUrl(url) : url;
+    };
 
     const generateConfig = () => {
+        const claudeCodeBaseUrl = getClaudeCodeBaseUrl();
         let res = JSON.stringify({
             env: {
                 DISABLE_TELEMETRY: "1",
@@ -84,11 +97,25 @@ const UseClaudeCodePage: React.FC<UseClaudeCodePageProps> = ({
 
     const header = (
         <Box sx={{ p: 2 }}>
-            <Box sx={{ mb: 2 }}>
+            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Typography>
                     Add env config into claude code config file <code
                         style={{ fontSize: '0.85rem' }}>{configPath}</code>
                 </Typography>
+                {/*<ButtonGroup size="small" variant="outlined">*/}
+                {/*    <Button*/}
+                {/*        onClick={() => setIsDockerMode(false)}*/}
+                {/*        variant={!isDockerMode ? "contained" : "outlined"}*/}
+                {/*    >*/}
+                {/*        Normal*/}
+                {/*    </Button>*/}
+                {/*    <Button*/}
+                {/*        onClick={() => setIsDockerMode(true)}*/}
+                {/*        variant={isDockerMode ? "contained" : "outlined"}*/}
+                {/*    >*/}
+                {/*        <DockerIcon size='25' color="blue" />*/}
+                {/*    </Button>*/}
+                {/*</ButtonGroup>*/}
             </Box>
             <CodeBlock
                 code={generateConfig()}
@@ -102,7 +129,7 @@ const UseClaudeCodePage: React.FC<UseClaudeCodePageProps> = ({
 
     return (
         <TabTemplatePage
-            title="Claude Code Config"
+            title="Use Claude Code"
             rule={rule}
             header={header}
             showTokenModal={showTokenModal}
