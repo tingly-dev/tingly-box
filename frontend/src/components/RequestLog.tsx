@@ -109,6 +109,15 @@ const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
         }
     };
 
+    const getStatusCodeColor = (statusCode?: number): string => {
+        if (!statusCode) return '#6b7280'; // gray for missing
+        if (statusCode >= 200 && statusCode < 300) return '#10b981'; // green for 2xx
+        if (statusCode >= 300 && statusCode < 400) return '#3b82f6'; // blue for 3xx
+        if (statusCode >= 400 && statusCode < 500) return '#f59e0b'; // orange for 4xx
+        if (statusCode >= 500) return '#ef4444'; // red for 5xx
+        return '#6b7280';
+    };
+
     const formatTimestamp = (timestamp: string): string => {
         try {
             const date = new Date(timestamp);
@@ -194,13 +203,14 @@ const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
                             <TableCell padding="checkbox" />
                             <TableCell sx={{ width: 180 }}>Time</TableCell>
                             <TableCell sx={{ width: 100 }}>Level</TableCell>
+                            <TableCell sx={{ width: 80 }}>Status</TableCell>
                             <TableCell>Message</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
                         {logs.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={4} align="center" sx={{ py: 4 }}>
+                                <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
                                     <Typography color="text.secondary">
                                         {loading ? 'Loading...' : 'No logs available'}
                                     </Typography>
@@ -239,13 +249,30 @@ const RequestLog = ({ getLogs, clearLogs }: RequestLogProps) => {
                                                 }}
                                             />
                                         </TableCell>
+                                        <TableCell>
+                                            {log.fields?.status !== undefined ? (
+                                                <Chip
+                                                    label={log.fields.status as number}
+                                                    size="small"
+                                                    sx={{
+                                                        backgroundColor: getStatusCodeColor(log.fields.status as number),
+                                                        color: 'white',
+                                                        fontSize: '0.7rem',
+                                                        height: 20,
+                                                        fontWeight: 'bold',
+                                                    }}
+                                                />
+                                            ) : (
+                                                <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>-</Typography>
+                                            )}
+                                        </TableCell>
                                         <TableCell sx={{ fontSize: '0.8rem' }}>
                                             {log.message}
                                         </TableCell>
                                     </TableRow>
                                     <TableRow>
                                         <TableCell
-                                            colSpan={4}
+                                            colSpan={5}
                                             sx={{ pb: 0, pt: 0, border: 'none' }}
                                         >
                                             <Collapse
