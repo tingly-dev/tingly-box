@@ -33,6 +33,10 @@ const (
 	DefaultTokenThreshold   = int64(10000) // Default token threshold for token-based and hybrid tactics
 
 	DefaultTemplateHTTPTimeout = 30 * time.Second // Default HTTP timeout for fetching templates
+
+	// Template cache constants
+	DefaultTemplateCacheTTL = 12 * time.Hour // Default TTL for template cache
+	TemplateCacheFileName   = "provider_template.json"
 )
 
 // GetTinglyConfDir returns the config directory path (default: ~/.tingly-box)

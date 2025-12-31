@@ -42,6 +42,9 @@ type Config struct {
 	Debug            bool `json:"debug"`              // Debug mode for Gin debug level logging
 	OpenBrowser      bool `json:"open_browser"`       // Auto-open browser in web UI mode (default: true)
 
+	// Error log settings
+	ErrorLogFilterExpression string `json:"error_log_filter_expression"` // Expression for filtering error log entries (default: "StatusCode >= 400 && Path matches '^/api/'")
+
 	ConfigFile string `yaml:"-" json:"-"` // Not serialized to YAML (exported to preserve field)
 	ConfigDir  string `yaml:"-" json:"-"`
 
@@ -142,6 +145,10 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 	}
 	if cfg.DefaultMaxTokens == 0 {
 		cfg.DefaultMaxTokens = DefaultMaxTokens
+		updated = true
+	}
+	if cfg.ErrorLogFilterExpression == "" {
+		cfg.ErrorLogFilterExpression = "StatusCode >= 400 && Path matches '^/api/'"
 		updated = true
 	}
 	if updated {
@@ -766,6 +773,21 @@ func (c *Config) SetOpenBrowser(openBrowser bool) error {
 	return c.save()
 }
 
+// GetErrorLogFilterExpression returns the error log filter expression
+func (c *Config) GetErrorLogFilterExpression() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.ErrorLogFilterExpression
+}
+
+// SetErrorLogFilterExpression updates the error log filter expression
+func (c *Config) SetErrorLogFilterExpression(expr string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.ErrorLogFilterExpression = expr
+	return c.save()
+}
+
 // FetchAndSaveProviderModels fetches models from a provider with fallback hierarchy
 func (c *Config) FetchAndSaveProviderModels(uid string) error {
 	c.mu.RLock()
@@ -1019,6 +1041,10 @@ func (c *Config) CreateDefaultConfig() error {
 	c.Providers = make([]*Provider, 0)
 	c.ServerPort = 12580
 	c.JWTSecret = generateSecret()
+	// Set default error log filter expression
+	if c.ErrorLogFilterExpression == "" {
+		c.ErrorLogFilterExpression = "StatusCode >= 400 && Path matches '^/api/'"
+	}
 	if err := c.save(); err != nil {
 		return fmt.Errorf("failed to create default global cfg: %w", err)
 	}

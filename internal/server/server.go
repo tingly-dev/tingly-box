@@ -164,7 +164,18 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	var errorMW *middleware.ErrorLogMiddleware
 	errorLogPath := filepath.Join(cfg.ConfigDir, config.LogDirName, config.DebugLogFileName)
 	errorMW = middleware.NewErrorLogMiddleware(errorLogPath, 10)
-	log.Printf("ErrorLog middleware initialized (debug=true in config), logging to: %s", errorLogPath)
+
+	// Set filter expression from config
+	filterExpr := cfg.GetErrorLogFilterExpression()
+	if filterExpr != "" {
+		if err := errorMW.SetFilterExpression(filterExpr); err != nil {
+			log.Printf("Warning: Failed to set error log filter expression '%s': %v, using default", filterExpr, err)
+		} else {
+			log.Printf("ErrorLog middleware initialized with filter: %s, logging to: %s", filterExpr, errorLogPath)
+		}
+	} else {
+		log.Printf("ErrorLog middleware initialized with default filter, logging to: %s", errorLogPath)
+	}
 
 	// Create server struct first with applied options
 	server.jwtManager = jwtManager
@@ -248,6 +259,18 @@ func (s *Server) setupConfigWatcher() {
 		// Update JWT manager with new secret if changed
 		s.jwtManager = auth.NewJWTManager(newConfig.JWTSecret)
 		logrus.Debugln("JWT manager reloaded with new secret")
+
+		// Update error log filter expression if changed
+		if s.errorMW != nil {
+			newFilterExpr := newConfig.GetErrorLogFilterExpression()
+			if newFilterExpr != "" {
+				if err := s.errorMW.SetFilterExpression(newFilterExpr); err != nil {
+					logrus.Errorf("Failed to update error log filter expression: %v", err)
+				} else {
+					logrus.Debugf("Error log filter expression updated: %s", newFilterExpr)
+				}
+			}
+		}
 	})
 }
 

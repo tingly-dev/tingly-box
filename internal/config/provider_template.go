@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -63,17 +66,22 @@ type TemplateManager struct {
 	etagMu      sync.RWMutex
 	githubURL   string // Empty means no GitHub sync, only embedded templates
 	httpClient  *http.Client
+	cachePath   string        // Path to cache file
+	cacheTTL    time.Duration // Cache TTL (default 24h)
 }
 
 // NewTemplateManager creates a new template manager.
 // If githubURL is empty, only embedded templates will be used (no GitHub sync).
 func NewTemplateManager(githubURL string) *TemplateManager {
+	configDir := GetTinglyConfDir()
 	return &TemplateManager{
 		githubURL: githubURL,
 		templates: make(map[string]*ProviderTemplate),
 		httpClient: &http.Client{
 			Timeout: DefaultTemplateHTTPTimeout,
 		},
+		cachePath: configDir, // Will store in .tingly-box directory
+		cacheTTL:  DefaultTemplateCacheTTL,
 	}
 }
 
@@ -181,18 +189,109 @@ func (tm *TemplateManager) FetchFromGitHub() (*ProviderTemplateRegistry, error) 
 	return &registry, nil
 }
 
-// Initialize loads templates (first from GitHub, falling back to embedded)
+// TemplateCacheData represents the cache file structure
+type TemplateCacheData struct {
+	Registry ProviderTemplateRegistry `json:"registry"`
+	CachedAt time.Time                `json:"cached_at"`
+	Version  string                   `json:"version"`
+	ETag     string                   `json:"etag,omitempty"`
+}
+
+// loadCache loads templates from cache file if valid
+func (tm *TemplateManager) loadCache() (*ProviderTemplateRegistry, error) {
+	cacheFile := filepath.Join(tm.cachePath, TemplateCacheFileName)
+
+	data, err := ioutil.ReadFile(cacheFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil // Cache doesn't exist, not an error
+		}
+		return nil, fmt.Errorf("failed to read cache file: %w", err)
+	}
+
+	var cacheData TemplateCacheData
+	if err := json.Unmarshal(data, &cacheData); err != nil {
+		return nil, fmt.Errorf("failed to parse cache file: %w", err)
+	}
+
+	// Check if cache is still valid
+	if time.Since(cacheData.CachedAt) > tm.cacheTTL {
+		return nil, nil // Cache expired
+	}
+
+	// Restore ETag
+	if cacheData.ETag != "" {
+		tm.etagMu.Lock()
+		tm.etag = cacheData.ETag
+		tm.etagMu.Unlock()
+	}
+
+	return &cacheData.Registry, nil
+}
+
+// saveCache saves the current templates to cache file
+func (tm *TemplateManager) saveCache(registry *ProviderTemplateRegistry) error {
+	cacheFile := filepath.Join(tm.cachePath, TemplateCacheFileName)
+
+	tm.mu.RLock()
+	etag := tm.etag
+	tm.mu.RUnlock()
+
+	cacheData := TemplateCacheData{
+		Registry: *registry,
+		CachedAt: time.Now(),
+		Version:  registry.Version,
+		ETag:     etag,
+	}
+
+	data, err := json.MarshalIndent(cacheData, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal cache data: %w", err)
+	}
+
+	// Write to temp file first, then rename for atomicity
+	tmpFile := cacheFile + ".tmp"
+	if err := ioutil.WriteFile(tmpFile, data, 0644); err != nil {
+		return fmt.Errorf("failed to write cache file: %w", err)
+	}
+
+	if err := os.Rename(tmpFile, cacheFile); err != nil {
+		os.Remove(tmpFile) // Clean up temp file
+		return fmt.Errorf("failed to rename cache file: %w", err)
+	}
+
+	return nil
+}
+
+// Initialize loads templates (first from cache, then GitHub, falling back to embedded)
 func (tm *TemplateManager) Initialize() error {
 	// First, always load embedded templates as immutable fallback
 	if err := tm.loadEmbeddedTemplates(); err != nil {
 		return err
 	}
 
-	// Try GitHub if URL is configured (will update templates map)
+	// Try cache first (fastest, avoids network I/O)
 	if tm.githubURL != "" {
-		_, err := tm.FetchFromGitHub()
+		cachedRegistry, err := tm.loadCache()
+		if err == nil && cachedRegistry != nil {
+			// Cache hit - use cached templates
+			tm.mu.Lock()
+			tm.templates = cachedRegistry.Providers
+			tm.lastUpdated = time.Now()
+			tm.version = cachedRegistry.Version
+			tm.mu.Unlock()
+
+			tm.sourceMu.Lock()
+			tm.source = TemplateSourceGitHub // Loaded from cache, but originally from GitHub
+			tm.sourceMu.Unlock()
+			return nil
+		}
+		// Cache miss or expired - try GitHub
+		registry, err := tm.FetchFromGitHub()
 		if err == nil {
-			// GitHub fetch successful, update source tracking
+			// GitHub fetch successful - save to cache
+			_ = tm.saveCache(registry) // Ignore save errors, we have the data
+
 			tm.sourceMu.Lock()
 			tm.source = TemplateSourceGitHub
 			tm.sourceMu.Unlock()
