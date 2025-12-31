@@ -4,13 +4,18 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider } from './contexts/AuthContext';
 import Layout from './layout/Layout';
-import Home from './pages/Home.tsx';
+import Dashboard from './pages/Dashboard';
+import Home from './pages/Home';
 import Login from './pages/Login';
-import ApiKeyPage from './pages/ApiKeyPage.tsx';
-import OAuthPage from './pages/OAuthPage.tsx';
-import RulePage from './pages/RulePage.tsx';
+import ApiKeyPage from './pages/ApiKeyPage';
+import OAuthPage from './pages/OAuthPage';
+import RulePage from './pages/RulePage';
 import System from './pages/System';
+import UseOpenAIPageWrapper from './pages/wrappers/UseOpenAIPageWrapper';
+import UseAnthropicPageWrapper from './pages/wrappers/UseAnthropicPageWrapper';
+import UseClaudeCodePageWrapper from './pages/wrappers/UseClaudeCodePageWrapper';
 import theme from './theme';
+
 function App() {
     return (
         <ThemeProvider theme={theme}>
@@ -25,8 +30,13 @@ function App() {
                                 <ProtectedRoute>
                                     <Layout>
                                         <Routes>
-                                            <Route path="/" element={<Home />} />
+                                            <Route path="/" element={<Dashboard />} />
                                             <Route path="/home" element={<Home />} />
+                                            {/* Function panel routes */}
+                                            <Route path="/use-openai" element={<UseOpenAIPageWrapper />} />
+                                            <Route path="/use-anthropic" element={<UseAnthropicPageWrapper />} />
+                                            <Route path="/use-claude-code" element={<UseClaudeCodePageWrapper />} />
+                                            {/* Other routes */}
                                             <Route path="/api-keys" element={<ApiKeyPage />} />
                                             <Route path="/oauth" element={<OAuthPage />} />
                                             <Route path="/routing" element={<RulePage />} />

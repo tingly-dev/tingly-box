@@ -107,7 +107,7 @@ const UseOpenAIPage: React.FC<UseOpenAIPageProps> = ({
 
     return (
         <TabTemplatePage
-            title="OpenAI Configuration"
+            title="Use OpenAI SDK"
             rule={rule}
             header={header}
             showTokenModal={showTokenModal}

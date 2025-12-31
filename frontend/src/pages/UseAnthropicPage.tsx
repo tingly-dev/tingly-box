@@ -106,7 +106,7 @@ const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
 
     return (
         <TabTemplatePage
-            title="Anthropic Configuration"
+            title="Use Anthropic SDK"
             rule={rule}
             header={header}
             showTokenModal={showTokenModal}

@@ -27,6 +27,12 @@ export default {
     "version": "version {{version}}",
     "nav": {
       "home": "Home",
+      "settings": "Settings",
+      "useOpenAI": "OpenAI SDK",
+      "useAnthropic": "Anthropic SDK",
+      "useClaudeCode": "Claude Code",
+      "apiKeys": "API Keys",
+      "oauth": "OAuth",
       "credential": "Credential"
     }
   },
