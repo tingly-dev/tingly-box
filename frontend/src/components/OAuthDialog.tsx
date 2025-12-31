@@ -147,9 +147,7 @@ const OAuthDialog = ({open, onClose}: OAuthDialogProps) => {
                         gap: 2,
                     }}
                 >
-                    {OAUTH_PROVIDERS.map((provider) => {
-                        const isDisabled = provider.enabled === false;
-
+                    {OAUTH_PROVIDERS.filter((provider) => provider.enabled !== false).map((provider) => {
                         return (
                             <Box key={provider.id}>
                                 <Card
@@ -157,18 +155,14 @@ const OAuthDialog = ({open, onClose}: OAuthDialogProps) => {
                                         height: '100%',
                                         display: 'flex',
                                         flexDirection: 'column',
-                                        cursor: isDisabled ? 'not-allowed' : 'pointer',
+                                        cursor: 'pointer',
                                         transition: 'all 0.2s',
                                         border: '1px solid',
                                         borderColor: 'divider',
-                                        opacity: isDisabled ? 0.5 : 1,
-                                        filter: isDisabled ? 'grayscale(100%)' : 'none',
-                                        ...(isDisabled ? {} : {
-                                            '&:hover': {
-                                                borderColor: provider.color,
-                                                boxShadow: 2,
-                                            },
-                                        }),
+                                        '&:hover': {
+                                            borderColor: provider.color,
+                                            boxShadow: 2,
+                                        },
                                     }}
                                     onClick={() => handleProviderClick(provider)}
                                 >
@@ -184,7 +178,6 @@ const OAuthDialog = ({open, onClose}: OAuthDialogProps) => {
                                                     justifyContent: 'center',
                                                     bgcolor: `${provider.color}15`,
                                                     borderRadius: 2,
-                                                    opacity: isDisabled ? 0.5 : 1,
                                                 }}
                                             >
                                                 {provider.icon}
@@ -208,7 +201,7 @@ const OAuthDialog = ({open, onClose}: OAuthDialogProps) => {
                                                 variant="outlined"
                                                 size="small"
                                                 startIcon={<Launch/>}
-                                                disabled={isDisabled || authorizing === provider.id}
+                                                disabled={authorizing === provider.id}
                                                 fullWidth
                                             >
                                                 {authorizing === provider.id ? 'Authorizing...' : 'Authorize'}
