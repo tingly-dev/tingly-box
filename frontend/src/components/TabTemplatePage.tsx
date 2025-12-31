@@ -1,7 +1,7 @@
 import { PlayArrow as ProbeIcon } from '@mui/icons-material';
 import { Box, Button, Dialog, DialogContent, DialogTitle, Typography } from '@mui/material';
 import React, { useCallback, useEffect, useState } from 'react';
-import type { ProbeResponse } from '../client';
+import type {ProbeResponse, ProbeResponseData} from '../client';
 import ApiKeyModal from '../components/ApiKeyModal';
 import CardGrid from '../components/CardGrid.tsx';
 import Probe from '../components/Probe';
@@ -123,12 +123,7 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
         setProbeResult(null);
 
         try {
-            const providerName = providerUuidToName[providerUuid];
-            if (!providerName) {
-                throw new Error('Provider not found');
-            }
-
-            const result = await api.probeModel(providerName, model);
+            const result = await api.probeModel(providerUuid, model);
             setProbeResult(result);
         } catch (error) {
             console.error('Probe error:', error);

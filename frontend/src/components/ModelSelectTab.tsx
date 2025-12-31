@@ -176,7 +176,7 @@ export default function ModelSelectTab({
 
             try {
                 // Probe model availability
-                const result = await api.probeModel(provider.name, model);
+                const result = await api.probeModel(provider.uuid, model);
 
                 // Remove from probing set
                 setProbingModels(prev => {

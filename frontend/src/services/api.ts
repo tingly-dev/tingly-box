@@ -14,7 +14,7 @@ import {
     ServerApi,
     TestingApi,
     TokenApi,
-    OauthApi, LogsApi,
+    OauthApi, LogsApi, type ProbeResponse,
 } from '../client';
 
 
@@ -528,7 +528,7 @@ export const api = {
         }
     },
 
-    probeModel: async (provider: string, model: string): Promise<any> => {
+    probeModel: async (provider: string, model: string): Promise<ProbeResponse> => {
         try {
             const apiInstances = await getApiInstances();
             const response = await apiInstances.testingApi.apiV1ProbePost({
