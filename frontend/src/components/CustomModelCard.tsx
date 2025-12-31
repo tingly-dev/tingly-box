@@ -1,7 +1,7 @@
 import { CheckCircle } from '@mui/icons-material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
-import { Box, Card, IconButton, Tooltip, Typography } from '@mui/material';
+import { Box, Card, CircularProgress, IconButton, Tooltip, Typography } from '@mui/material';
 import React from 'react';
 import type { Provider } from '../types/provider';
 
@@ -13,6 +13,7 @@ interface CustomModelCardProps {
     onDelete: () => void;
     onSelect: () => void;
     variant: 'localStorage' | 'backend' | 'selected';
+    loading?: boolean;
 }
 
 export default function CustomModelCard({
@@ -22,10 +23,13 @@ export default function CustomModelCard({
     onEdit,
     onDelete,
     onSelect,
-    variant
+    variant,
+    loading = false,
 }: CustomModelCardProps) {
     const handleCardClick = () => {
-        onSelect();
+        if (!loading) {
+            onSelect();
+        }
     };
 
     const handleEditClick = (e: React.MouseEvent) => {
@@ -47,7 +51,7 @@ export default function CustomModelCard({
                 borderColor: variant === 'selected' ? 'primary.main' : 'grey.300',
                 borderRadius: 1.5,
                 backgroundColor: 'background.paper',
-                cursor: 'pointer',
+                cursor: loading ? 'wait' : 'pointer',
                 transition: 'all 0.2s ease-in-out',
                 position: 'relative',
                 boxShadow: isSelected ? 2 : 0,
@@ -55,7 +59,7 @@ export default function CustomModelCard({
                 alignItems: 'center',
                 justifyContent: 'center',
                 overflow: 'hidden',
-                '&:hover': {
+                '&:hover': loading ? {} : {
                     backgroundColor: 'grey.50',
                     boxShadow: 2,
                     '& .control-bar': {
@@ -75,25 +79,29 @@ export default function CustomModelCard({
                 height: '100%',
                 zIndex: 1,
             }}>
-                <Typography
-                    variant="body2"
-                    sx={{
-                        fontWeight: 500,
-                        fontSize: '0.8rem',
-                        lineHeight: 1.2,
-                        wordBreak: 'break-word',
-                        textAlign: 'center',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                    }}
-                >
-                    {model}
-                </Typography>
+                {loading ? (
+                    <CircularProgress size={20} />
+                ) : (
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            fontWeight: 500,
+                            fontSize: '0.8rem',
+                            lineHeight: 1.2,
+                            wordBreak: 'break-word',
+                            textAlign: 'center',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                        }}
+                    >
+                        {model}
+                    </Typography>
+                )}
             </Box>
 
             {/* Selected indicator */}
-            {isSelected && (
+            {isSelected && !loading && (
                 <CheckCircle
                     color="primary"
                     sx={{
@@ -107,20 +115,22 @@ export default function CustomModelCard({
             )}
 
             {/* Triangle badge in bottom-left corner */}
-            <Tooltip title="Custom model" arrow>
-                <Box
-                    sx={{
-                        position: 'absolute',
-                        bottom: 0,
-                        left: 0,
-                        width: 20,
-                        height: 20,
-                        backgroundColor: 'primary.main',
-                        clipPath: 'polygon(0 100%, 100% 100%, 0 0)',
-                        cursor: 'help',
-                    }}
-                />
-            </Tooltip>
+            {!loading && (
+                <Tooltip title="Custom model" arrow>
+                    <Box
+                        sx={{
+                            position: 'absolute',
+                            bottom: 0,
+                            left: 0,
+                            width: 20,
+                            height: 20,
+                            backgroundColor: 'primary.main',
+                            clipPath: 'polygon(0 100%, 100% 100%, 0 0)',
+                            cursor: 'help',
+                        }}
+                    />
+                </Tooltip>
+            )}
 
             {/* Control bar - visible on hover */}
             <Box
@@ -137,7 +147,7 @@ export default function CustomModelCard({
                     display: 'flex',
                     alignItems: 'center',
                     px: 0.5,
-                    opacity: 0,
+                    opacity: loading ? 0 : 0,
                     transition: 'opacity 0.2s',
                     zIndex: 10,
                 }}
