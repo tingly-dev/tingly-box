@@ -164,7 +164,7 @@ jobs:
         if: matrix.platform == 'windows'
         shell: pwsh
         run: |
-          task windows:package
+          task windows:build PRODUCTION=true
 
           New-Item -ItemType Directory -Force -Path dist
 
