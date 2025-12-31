@@ -137,6 +137,10 @@ jobs:
       - name: Run codegen
         run: task codegen
 
+      - name: Install NSIS (Windows only)
+        if: matrix.platform == 'windows'
+        run: choco install nsis -y
+
       - name: Build Go binary (Linux)
         if: matrix.platform == 'linux'
         run: task linux:package
@@ -158,18 +162,19 @@ jobs:
 
       - name: Build Go binary (Windows)
         if: matrix.platform == 'windows'
+        shell: pwsh
         run: |
           task windows:package
-          
-          mkdir -p dist
+
+          New-Item -ItemType Directory -Force -Path dist
 
           cd bin
-          ls -la .
-          zip -r ../dist/tingly-box-gui-windows-amd64.zip TinglyBox.exe
+          Get-ChildItem
+          Compress-Archive -Path TinglyBox.exe -DestinationPath ../dist/tingly-box-gui-windows-amd64.zip
           cd ..
 
           cd dist
-          ls -la .
+          Get-ChildItem
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
