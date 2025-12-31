@@ -265,6 +265,9 @@ export default {
       "copyTooltip": "Copy Anthropic Base URL",
       "copyCurlTooltip": "Copy Anthropic cURL Example"
     },
+    "docker": {
+      "tooltip": "Docker mode. To access from container, configure network: --network=host on Linux, or use host.docker.internal on Docker Desktop (Mac/Windows)"
+    },
     "authentication": {
       "title": "Authentication",
       "apiKeyLabel": "API Key",
