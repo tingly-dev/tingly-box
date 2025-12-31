@@ -225,7 +225,7 @@ export default {
     }
   },
   "system": {
-    "pageTitle": "Server Status & Control",
+    "pageTitle": "Server Status",
     "status": {
       "running": "Running",
       "stopped": "Stopped",
