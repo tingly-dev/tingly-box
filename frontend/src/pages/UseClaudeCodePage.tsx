@@ -1,14 +1,10 @@
-import { Box, Button, ButtonGroup, Typography } from '@mui/material';
+import { Box, Typography, ToggleButton, ToggleButtonGroup } from '@mui/material';
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 import CodeBlock from '../components/CodeBlock';
 import TabTemplatePage from '../components/TabTemplatePage';
 import { api, getBaseUrl } from '../services/api';
 import type { Provider } from '../types/provider';
-import DockerOriginal from "devicons-react/icons/DockerOriginal";
 import { useTranslation } from 'react-i18next';
-
-const DockerIcon = DockerOriginal
 
 interface UseClaudeCodePageProps {
     showTokenModal: boolean;
@@ -20,6 +16,8 @@ interface UseClaudeCodePageProps {
 
 const ruleId = "built-in-cc";
 
+type ClaudeJsonMode = 'json' | 'script';
+
 const UseClaudeCodePage: React.FC<UseClaudeCodePageProps> = ({
     showTokenModal,
     setShowTokenModal,
@@ -27,13 +25,13 @@ const UseClaudeCodePage: React.FC<UseClaudeCodePageProps> = ({
     showNotification,
     providers
 }) => {
+    const { t } = useTranslation();
     const [baseUrl, setBaseUrl] = React.useState<string>('');
-    const [configPath] = React.useState('~/.claude/settings.json');
     const [rule, setRule] = React.useState<any>(null);
     const [defaultModel, setDefaultModel] = React.useState("");
     const [loadingRule, setLoadingRule] = React.useState(true);
     const [isDockerMode, setIsDockerMode] = React.useState(false);
-    const navigate = useNavigate();
+    const [claudeJsonMode, setClaudeJsonMode] = React.useState<ClaudeJsonMode>('json');
 
     const copyToClipboard = async (text: string, label: string) => {
         try {
@@ -76,9 +74,9 @@ const UseClaudeCodePage: React.FC<UseClaudeCodePageProps> = ({
         return isDockerMode ? toDockerUrl(url) : url;
     };
 
-    const generateConfig = () => {
+    const generateSettingsConfig = () => {
         const claudeCodeBaseUrl = getClaudeCodeBaseUrl();
-        let res = JSON.stringify({
+        return JSON.stringify({
             env: {
                 DISABLE_TELEMETRY: "1",
                 DISABLE_ERROR_REPORTING: "1",
@@ -92,38 +90,85 @@ const UseClaudeCodePage: React.FC<UseClaudeCodePageProps> = ({
                 ANTHROPIC_MODEL: defaultModel
             },
         }, null, 2);
-        return res.trim().substring(1, res.length - 1).trim();
+    };
+
+    const generateClaudeJsonConfig = () => {
+        return JSON.stringify({
+            hasCompletedOnboarding: true
+        }, null, 2);
+    };
+
+    const generateScript = () => {
+        return `# Configure Claude Code to skip onboarding
+echo "Configuring Claude Code to skip onboarding..."
+node --eval '
+    const homeDir = os.homedir();
+    const filePath = path.join(homeDir, ".claude.json");
+    if (fs.existsSync(filePath)) {
+        const content = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+        fs.writeFileSync(filePath,JSON.stringify({ ...content, hasCompletedOnboarding: true }, 2), "utf-8");
+    } else {
+        fs.writeFileSync(filePath,JSON.stringify({ hasCompletedOnboarding: true }), "utf-8");
+    }'`;
     };
 
     const header = (
-        <Box sx={{ p: 2 }}>
-            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography>
-                    Add env config into claude code config file <code
-                        style={{ fontSize: '0.85rem' }}>{configPath}</code>
-                </Typography>
-                {/*<ButtonGroup size="small" variant="outlined">*/}
-                {/*    <Button*/}
-                {/*        onClick={() => setIsDockerMode(false)}*/}
-                {/*        variant={!isDockerMode ? "contained" : "outlined"}*/}
-                {/*    >*/}
-                {/*        Normal*/}
-                {/*    </Button>*/}
-                {/*    <Button*/}
-                {/*        onClick={() => setIsDockerMode(true)}*/}
-                {/*        variant={isDockerMode ? "contained" : "outlined"}*/}
-                {/*    >*/}
-                {/*        <DockerIcon size='25' color="blue" />*/}
-                {/*    </Button>*/}
-                {/*</ButtonGroup>*/}
+        <Box sx={{ p: 2, display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, alignItems: 'stretch' }}>
+            {/* Settings.json section */}
+            <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                <Box sx={{ mb: 1 }}>
+                    <Typography variant="subtitle2" color="text.secondary">
+                        {t('claudeCode.step1')}
+                    </Typography>
+                </Box>
+                <Box sx={{ flex: 1, height: 400 }}>
+                    <CodeBlock
+                        code={generateSettingsConfig()}
+                        language="json"
+                        filename="Add the env section into ~/.claude/setting.json"
+                        wrap={true}
+                        onCopy={(code) => copyToClipboard(code, 'settings.json')}
+                        maxHeight={220}
+                        minHeight={220}
+                    />
+                </Box>
             </Box>
-            <CodeBlock
-                code={generateConfig()}
-                language="json"
-                filename="settings.json"
-                onCopy={(code) => copyToClipboard(code, 'Configuration')}
-                maxHeight={280}
-            />
+
+            {/* .claude.json section */}
+            <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                <Box sx={{ mb: 1 }}>
+                    <Typography variant="subtitle2" color="text.secondary">
+                        {t('claudeCode.step2')}
+                    </Typography>
+                </Box>
+                <Box sx={{ flex: 1, height: 400 }}>
+                    <CodeBlock
+                        code={claudeJsonMode === 'json' ? generateClaudeJsonConfig() : generateScript()}
+                        language={claudeJsonMode === 'json' ? 'json' : 'js'}
+                        filename={claudeJsonMode === 'json' ? 'Set hasCompletedOnboarding into ~/.claude.json' : 'Script to init ~/.claude.json'}
+                        wrap={true}
+                        onCopy={(code) => copyToClipboard(code, claudeJsonMode === 'json' ? '.claude.json' : 'script')}
+                        maxHeight={220}
+                        minHeight={220}
+                        headerActions={
+                            <ToggleButtonGroup
+                                value={claudeJsonMode}
+                                exclusive
+                                size="small"
+                                onChange={(_, value) => value && setClaudeJsonMode(value)}
+                                sx={{ bgcolor: 'grey.700', '& .MuiToggleButton-root': { color: 'grey.300', padding: '2px 8px', fontSize: '0.75rem' } }}
+                            >
+                                <ToggleButton value="json" sx={{ '&.Mui-selected': { bgcolor: 'primary.main', color: 'white' } }}>
+                                    JSON
+                                </ToggleButton>
+                                <ToggleButton value="script" sx={{ '&.Mui-selected': { bgcolor: 'primary.main', color: 'white' } }}>
+                                    Script
+                                </ToggleButton>
+                            </ToggleButtonGroup>
+                        }
+                    />
+                </Box>
+            </Box>
         </Box>
     );
 
