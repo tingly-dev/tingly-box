@@ -297,5 +297,13 @@ export default {
   "history": {
     "pageTitle": "Activity Log & History",
     "subtitle": "{{count}} recent activity entries"
+  },
+  "claudeCode": {
+    "configPath": "Add env config to Claude Code config file",
+    "copyConfig": "Config",
+    "oneClickScript": "One-Click Script",
+    "jsonConfig": "JSON Config",
+    "step1": "1. Configure Model",
+    "step2": "2. Skip Onboarding - Make Claude Code directly usable"
   }
 };
