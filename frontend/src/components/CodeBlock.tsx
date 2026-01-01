@@ -12,6 +12,9 @@ export interface CodeBlockProps {
     onCopy?: (code: string) => void;
     sx?: React.CSSProperties;
     maxHeight?: number | string;
+    minHeight?: number | string;
+    headerActions?: React.ReactNode;
+    wrap?: boolean;
 }
 
 // Language mapping for Prism
@@ -48,6 +51,9 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
     onCopy,
     sx = {},
     maxHeight = 400,
+    minHeight,
+    headerActions,
+    wrap = false,
 }) => {
     const [copied, setCopied] = useState(false);
 
@@ -78,8 +84,8 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
                 ...sx,
             }}
         >
-            {/* Header bar with filename/language and copy button */}
-            {(filename || language || showCopy) && (
+            {/* Header bar with filename/language and action buttons */}
+            {(filename || language || showCopy || headerActions) && (
                 <Box
                     sx={{
                         display: 'flex',
@@ -110,24 +116,29 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
                             </Typography>
                         )}
                     </Box>
-                    {showCopy && (
-                        <IconButton
-                            size="small"
-                            onClick={handleCopy}
-                            sx={{ color: copied ? 'success.main' : 'grey.300', '&:hover': { bgcolor: 'grey.700' } }}
-                            title={copied ? 'Copied!' : 'Copy code'}
-                        >
-                            {copied ? <CheckIcon fontSize="small" /> : <CopyIcon fontSize="small" />}
-                        </IconButton>
-                    )}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        {showCopy && (
+                            <IconButton
+                                size="small"
+                                onClick={handleCopy}
+                                sx={{ color: copied ? 'success.main' : 'grey.300', '&:hover': { bgcolor: 'grey.700' } }}
+                                title={copied ? 'Copied!' : 'Copy code'}
+                            >
+                                {copied ? <CheckIcon fontSize="small" /> : <CopyIcon fontSize="small" />}
+                            </IconButton>
+                        )}
+                        {headerActions}
+                    </Box>
                 </Box>
             )}
             {/* Code content with syntax highlighting */}
             <Box
                 sx={{
-                    overflowX: 'auto',
+                    overflowX: wrap ? 'hidden' : 'auto',
                     overflowY: 'auto',
                     maxHeight,
+                    minHeight,
+                    bgcolor: '#282c34', // Match oneDark theme background
                 }}
             >
                 <Highlight
@@ -146,6 +157,10 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
                                 fontSize: '0.75rem',
                                 lineHeight: 1.5,
                                 minWidth: '100%',
+                                minHeight: '100%',
+                                backgroundColor: 'transparent', // Let parent Box handle background
+                                whiteSpace: wrap ? 'pre-wrap' : 'pre',
+                                wordBreak: wrap ? 'break-word' : 'normal',
                             }}
                         >
                             {tokens.map((line, lineIndex) => (
