@@ -102,16 +102,7 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 		chunkCount++
 		chunk := stream.Current()
 
-		logrus.Debugf("Processing chunk #%d: len(choices)=%d, content=%q, finish_reason=%q",
-			chunkCount, len(chunk.Choices),
-			getDeltaContent(&chunk), getFinishReason(&chunk))
-
-		// Log first few chunks in detail for debugging
-		if chunkCount <= 5 || chunk.Choices[0].FinishReason != "" {
-			logrus.Debugf("Full chunk #%d: %+v", chunkCount, chunk)
-		}
-
-		// Check if we have choices
+		// Skip empty chunks (no choices)
 		if len(chunk.Choices) == 0 {
 			// Check for usage info in the last chunk
 			if chunk.Usage.PromptTokens > 0 || chunk.Usage.CompletionTokens > 0 {
@@ -122,7 +113,53 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 		}
 
 		choice := chunk.Choices[0]
+
+		logrus.Debugf("Processing chunk #%d: len(choices)=%d, content=%q, finish_reason=%q",
+			chunkCount, len(chunk.Choices),
+			choice.Delta.Content, choice.FinishReason)
+
+		// Log first few chunks in detail for debugging
+		if chunkCount <= 5 || choice.FinishReason != "" {
+			logrus.Debugf("Full chunk #%d: %+v", chunkCount, chunk)
+		}
+
 		delta := choice.Delta
+
+		// Handle refusal (when model refuses to respond due to safety policies)
+		if delta.Refusal != "" {
+			// Parse delta raw JSON to get extra fields
+			deltaExtras := parseRawJSON(delta.RawJSON())
+
+			// Refusal should be sent as content
+			if textBlockIndex == -1 {
+				textBlockIndex = nextBlockIndex
+				nextBlockIndex++
+
+				contentBlockStartEvent := map[string]interface{}{
+					"type":  "content_block_start",
+					"index": textBlockIndex,
+					"content_block": map[string]interface{}{
+						"type": "text",
+						"text": "",
+					},
+				}
+				sendAnthropicStreamEvent(c, "content_block_start", contentBlockStartEvent, flusher)
+			}
+			hasTextContent = true
+
+			deltaMap := map[string]interface{}{
+				"type": "text_delta",
+				"text": delta.Refusal,
+			}
+			deltaMap = mergeMaps(deltaMap, deltaExtras)
+
+			deltaEvent := map[string]interface{}{
+				"type":  "content_block_delta",
+				"index": textBlockIndex,
+				"delta": deltaMap,
+			}
+			sendAnthropicStreamEvent(c, "content_block_delta", deltaEvent, flusher)
+		}
 
 		// Initialize text block on first chunk with choices (even if content is empty)
 		// This ensures client knows the stream is active
@@ -146,26 +183,37 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 		if delta.Content != "" {
 			hasTextContent = true
 
+			// Parse delta raw JSON to get extra fields
+			deltaExtras := parseRawJSON(delta.RawJSON())
+
 			// Send content_block_delta with actual content
+			deltaMap := map[string]interface{}{
+				"type": "text_delta",
+				"text": delta.Content,
+			}
+			deltaMap = mergeMaps(deltaMap, deltaExtras)
+
 			deltaEvent := map[string]interface{}{
 				"type":  "content_block_delta",
 				"index": textBlockIndex,
-				"delta": map[string]interface{}{
-					"type": "text_delta",
-					"text": delta.Content,
-				},
+				"delta": deltaMap,
 			}
 			sendAnthropicStreamEvent(c, "content_block_delta", deltaEvent, flusher)
 		} else if choice.FinishReason == "" {
+			// Parse delta raw JSON to get extra fields
+			deltaExtras := parseRawJSON(delta.RawJSON())
+
 			// Send empty delta for empty chunks to keep client informed
-			// Only do this if we haven't finished yet
+			deltaMap := map[string]interface{}{
+				"type": "text_delta",
+				"text": "",
+			}
+			deltaMap = mergeMaps(deltaMap, deltaExtras)
+
 			deltaEvent := map[string]interface{}{
 				"type":  "content_block_delta",
 				"index": textBlockIndex,
-				"delta": map[string]interface{}{
-					"type": "text_delta",
-					"text": "",
-				},
+				"delta": deltaMap,
 			}
 			sendAnthropicStreamEvent(c, "content_block_delta", deltaEvent, flusher)
 		}
@@ -262,11 +310,38 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 			}
 			sendAnthropicStreamEvent(c, "message_delta", messageDeltaEvent, flusher)
 
-			// Send message_stop
+			// Send message_stop with detailed data
 			messageStopEvent := map[string]interface{}{
 				"type": "message_stop",
+				"message": map[string]interface{}{
+					"id":            messageID,
+					"type":          "message",
+					"role":          "assistant",
+					"content":       []interface{}{},
+					"model":         responseModel,
+					"stop_reason":   stopReason,
+					"stop_sequence": nil,
+					"usage": map[string]interface{}{
+						"input_tokens":  inputTokens,
+						"output_tokens": outputTokens,
+					},
+				},
+				"delta": map[string]interface{}{
+					"stop_reason":   stopReason,
+					"stop_sequence": nil,
+					"text":          "",
+				},
+				"usage": map[string]interface{}{
+					"input_tokens":  inputTokens,
+					"output_tokens": outputTokens,
+				},
 			}
 			sendAnthropicStreamEvent(c, "message_stop", messageStopEvent, flusher)
+
+			// Send final simple data line (without event prefix)
+			c.Writer.Write([]byte("data: {\"type\":\"message_stop\"}\n\n"))
+			flusher.Flush()
+
 			return nil
 		}
 	}
@@ -301,26 +376,37 @@ func sendAnthropicStreamEvent(c *gin.Context, eventType string, eventData map[st
 	flusher.Flush()
 }
 
+// parseRawJSON parses raw JSON string into map[string]interface{}
+func parseRawJSON(rawJSON string) map[string]interface{} {
+	if rawJSON == "" {
+		return nil
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(rawJSON), &result); err != nil {
+		return nil
+	}
+	return result
+}
+
+// mergeMaps merges extra fields into the base map
+func mergeMaps(base map[string]interface{}, extra map[string]interface{}) map[string]interface{} {
+	if extra == nil || len(extra) == 0 {
+		return base
+	}
+	if base == nil {
+		base = make(map[string]interface{})
+	}
+	for k, v := range extra {
+		base[k] = v
+	}
+	return base
+}
+
 // pendingToolCall tracks a tool call being assembled from stream chunks
 type pendingToolCall struct {
 	id    string
 	name  string
 	input string
-}
-
-// Debug helper functions
-func getDeltaContent(chunk *openai.ChatCompletionChunk) string {
-	if len(chunk.Choices) > 0 {
-		return chunk.Choices[0].Delta.Content
-	}
-	return "<no choices>"
-}
-
-func getFinishReason(chunk *openai.ChatCompletionChunk) string {
-	if len(chunk.Choices) > 0 {
-		return string(chunk.Choices[0].FinishReason)
-	}
-	return "<no choices>"
 }
 
 // mapOpenAIFinishReasonToAnthropic converts OpenAI finish_reason to Anthropic stop_reason
