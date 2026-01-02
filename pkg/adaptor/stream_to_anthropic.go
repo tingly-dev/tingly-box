@@ -54,8 +54,10 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 	// Track streaming state
 	var (
 		// Text block state
-		textBlockIndex = -1 // -1 means not assigned yet
+		textBlockIndex = -1 // -1 means not initialized yet
+		hasTextContent = false
 		outputTokens   int64
+		inputTokens    int64
 		// Next available block index (auto-incremented as content blocks appear)
 		nextBlockIndex = 0
 		// Track tool call state
@@ -84,13 +86,25 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 	sendAnthropicStreamEvent(c, "message_start", messageStartEvent, flusher)
 
 	// Process the stream
+	chunkCount := 0
 	for stream.Next() {
+		chunkCount++
 		chunk := stream.Current()
+
+		logrus.Debugf("Processing chunk #%d: len(choices)=%d, content=%q, finish_reason=%q",
+			chunkCount, len(chunk.Choices),
+			getDeltaContent(&chunk), getFinishReason(&chunk))
+
+		// Log first few chunks in detail for debugging
+		if chunkCount <= 5 || chunk.Choices[0].FinishReason != "" {
+			logrus.Debugf("Full chunk #%d: %+v", chunkCount, chunk)
+		}
 
 		// Check if we have choices
 		if len(chunk.Choices) == 0 {
 			// Check for usage info in the last chunk
 			if chunk.Usage.PromptTokens > 0 || chunk.Usage.CompletionTokens > 0 {
+				inputTokens = chunk.Usage.PromptTokens
 				outputTokens = chunk.Usage.CompletionTokens
 			}
 			continue
@@ -101,7 +115,7 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 
 		// Handle content delta
 		if delta.Content != "" {
-			// Assign block index on first text content (lazy allocation)
+			// Initialize text block on first content (lazy allocation)
 			if textBlockIndex == -1 {
 				textBlockIndex = nextBlockIndex
 				nextBlockIndex++
@@ -117,6 +131,7 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 				}
 				sendAnthropicStreamEvent(c, "content_block_start", contentBlockStartEvent, flusher)
 			}
+			hasTextContent = true
 
 			// Send content_block_delta
 			deltaEvent := map[string]interface{}{
@@ -181,13 +196,14 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 
 		// Track usage from chunk
 		if chunk.Usage.CompletionTokens > 0 {
+			inputTokens = chunk.Usage.PromptTokens
 			outputTokens = chunk.Usage.CompletionTokens
 		}
 
 		// Handle finish_reason (last chunk for this choice)
 		if choice.FinishReason != "" {
-			// Send content_block_stop for text content if assigned
-			if textBlockIndex != -1 {
+			// Send content_block_stop for text content only if we had text content
+			if hasTextContent {
 				contentBlockStopEvent := map[string]interface{}{
 					"type":  "content_block_stop",
 					"index": textBlockIndex,
@@ -226,6 +242,7 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 				},
 				"usage": map[string]interface{}{
 					"output_tokens": outputTokens,
+					"input_tokens":  inputTokens,
 				},
 			}
 			sendAnthropicStreamEvent(c, "message_delta", messageDeltaEvent, flusher)
@@ -274,4 +291,19 @@ type pendingToolCall struct {
 	id    string
 	name  string
 	input string
+}
+
+// Debug helper functions
+func getDeltaContent(chunk *openai.ChatCompletionChunk) string {
+	if len(chunk.Choices) > 0 {
+		return chunk.Choices[0].Delta.Content
+	}
+	return "<no choices>"
+}
+
+func getFinishReason(chunk *openai.ChatCompletionChunk) string {
+	if len(chunk.Choices) > 0 {
+		return string(chunk.Choices[0].FinishReason)
+	}
+	return "<no choices>"
 }
