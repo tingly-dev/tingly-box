@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"testing"
+	client2 "tingly-box/pkg/client"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
@@ -25,7 +26,17 @@ func TestGoogleGenerateContent(t *testing.T) {
 
 	// Create Google client
 	ctx := context.Background()
-	_, err := genai.NewClient(ctx, &genai.ClientConfig{APIKey: apiKey})
+	client, err := genai.NewClient(
+		ctx,
+		&genai.ClientConfig{
+			APIKey:     apiKey,
+			HTTPClient: client2.CreateHTTPClientWithProxy(os.Getenv("HTTPS_PROXY")),
+			HTTPOptions: genai.HTTPOptions{
+				BaseURL:    os.Getenv("GOOGLE_API_URL"),
+				APIVersion: os.Getenv("GOOGLE_API_VERSION"),
+			},
+		},
+	)
 	if err != nil {
 		t.Fatalf("Failed to create Google client: %v", err)
 	}
@@ -62,42 +73,40 @@ func TestGoogleGenerateContent(t *testing.T) {
 	// Note: The actual API call method signature depends on SDK version
 	// This test focuses on request preparation
 	// To make actual API call, uncomment and adjust based on SDK:
-	/*
-		resp, err := client.Models.GenerateContent(ctx, model, config, contents)
-		if err != nil {
-			t.Fatalf("Failed to generate content: %v", err)
-		}
+	resp, err := client.Models.GenerateContent(ctx, model, contents, config)
+	if err != nil {
+		t.Fatalf("Failed to generate content: %v", err)
+	}
 
-		// Verify response
-		if resp == nil {
-			t.Fatal("Response should not be nil")
-		}
+	// Verify response
+	if resp == nil {
+		t.Fatal("Response should not be nil")
+	}
 
-		t.Logf("Response received - Candidates: %d", len(resp.Candidates))
+	t.Logf("Response received - Candidates: %d", len(resp.Candidates))
 
-		if len(resp.Candidates) == 0 {
-			t.Error("Expected at least one candidate")
-			return
-		}
+	if len(resp.Candidates) == 0 {
+		t.Error("Expected at least one candidate")
+		return
+	}
 
-		// Check content
-		candidate := resp.Candidates[0]
-		if candidate.Content != nil {
-			for _, part := range candidate.Content.Parts {
-				if part.Text != "" {
-					t.Logf("Generated text: %s", part.Text)
-				}
+	// Check content
+	candidate := resp.Candidates[0]
+	if candidate.Content != nil {
+		for _, part := range candidate.Content.Parts {
+			if part.Text != "" {
+				t.Logf("Generated text: %s", part.Text)
 			}
 		}
+	}
 
-		// Check usage
-		if resp.UsageMetadata != nil {
-			t.Logf("Usage - Prompt: %d, Candidates: %d, Total: %d",
-				resp.UsageMetadata.PromptTokenCount,
-				resp.UsageMetadata.CandidatesTokenCount,
-				resp.UsageMetadata.TotalTokenCount)
-		}
-	*/
+	// Check usage
+	if resp.UsageMetadata != nil {
+		t.Logf("Usage - Prompt: %d, Candidates: %d, Total: %d",
+			resp.UsageMetadata.PromptTokenCount,
+			resp.UsageMetadata.CandidatesTokenCount,
+			resp.UsageMetadata.TotalTokenCount)
+	}
 
 	// Verify request preparation was successful
 	if len(contents) == 0 {
