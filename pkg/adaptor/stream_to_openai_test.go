@@ -8,45 +8,44 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/anthropics/anthropic-sdk-go"
+	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
-	openaiOption "github.com/openai/openai-go/v3/option"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// TestHandleOpenAIToAnthropicStreamResponse tests the OpenAI to Anthropic stream conversion
-func TestHandleOpenAIToAnthropicStreamResponse(t *testing.T) {
+// TestHandleAnthropicToOpenAIStreamResponse tests the Anthropic to OpenAI stream conversion
+func TestHandleAnthropicToOpenAIStreamResponse(t *testing.T) {
 	// Set your API key and base URL before running the test
-	apiKey := os.Getenv("OPENAI_API_KEY")
+	apiKey := os.Getenv("ANTHROPIC_API_KEY")
 	baseURL := "" // Optional: custom base URL
-	model := ""
+	model := ""   // e.g., "claude-3-5-haiku-20241022"
 
 	if apiKey == "" || model == "" {
 		t.Skip("Skipping test: apiKey and model must be set")
 	}
 
 	// Create client
-	var client openai.Client
+	var client anthropic.Client
 	if baseURL != "" {
-		client = openai.NewClient(
-			openaiOption.WithAPIKey(apiKey),
-			openaiOption.WithBaseURL(baseURL),
+		client = anthropic.NewClient(
+			anthropicOption.WithAPIKey(apiKey),
+			anthropicOption.WithBaseURL(baseURL),
 		)
 	} else {
-		client = openai.NewClient(openaiOption.WithAPIKey(apiKey))
+		client = anthropic.NewClient(anthropicOption.WithAPIKey(apiKey))
 	}
 
 	// Create a streaming request
-	stream := client.Chat.Completions.NewStreaming(context.Background(), openai.ChatCompletionNewParams{
-		Model:     openai.ChatModel(model),
-		MaxTokens: openai.Opt[int64](100),
-		Messages: []openai.ChatCompletionMessageParamUnion{
-			openai.UserMessage("What's the weather like in London?"),
+	stream := client.Messages.NewStreaming(context.Background(), anthropic.MessageNewParams{
+		Model:     anthropic.Model(model),
+		MaxTokens: int64(100),
+		Messages: []anthropic.MessageParam{
+			anthropic.NewUserMessage(anthropic.NewTextBlock("What's the weather like in London?")),
 		},
-		Tools: []openai.ChatCompletionToolUnionParam{
-			newExampleTool(),
-		},
+		Tools: ConvertOpenAIToAnthropicTools([]openai.ChatCompletionToolUnionParam{newExampleTool()}),
 	})
 
 	// Create a gin context for the response
@@ -54,8 +53,8 @@ func TestHandleOpenAIToAnthropicStreamResponse(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 
-	// the handler
-	err := HandleOpenAIToAnthropicStreamResponse(c, stream, model)
+	// Run the handler
+	err := HandleAnthropicToOpenAIStreamResponse(c, stream, model)
 	require.NoError(t, err)
 
 	// Verify the response
@@ -65,68 +64,60 @@ func TestHandleOpenAIToAnthropicStreamResponse(t *testing.T) {
 	t.Logf("Response body:\n%s", body)
 
 	// Check for proper SSE format
-	foundMessageStart := false
-	foundContentBlockDelta := false
-	foundMessageStop := false
-
-	currentEvent := ""
+	foundDataChunk := false
+	foundDone := false
 	for _, line := range lines {
-		if strings.HasPrefix(line, "event: ") {
-			currentEvent = strings.TrimPrefix(line, "event: ")
-		} else if strings.HasPrefix(line, "data: ") {
+		if strings.HasPrefix(line, "data: ") {
+			foundDataChunk = true
 			dataContent := strings.TrimPrefix(line, "data: ")
-
-			switch currentEvent {
-			case "message_start":
-				foundMessageStart = true
-				var eventData map[string]interface{}
-				err := json.Unmarshal([]byte(dataContent), &eventData)
-				assert.NoError(t, err, "message_start data should be valid JSON")
-				assert.Equal(t, "message_start", eventData["type"])
-
-			case "content_block_delta":
-				foundContentBlockDelta = true
-				var eventData map[string]interface{}
-				err := json.Unmarshal([]byte(dataContent), &eventData)
-				assert.NoError(t, err, "content_block_delta data should be valid JSON")
-				assert.Equal(t, "content_block_delta", eventData["type"])
-
-			case "message_stop":
-				foundMessageStop = true
-				var eventData map[string]interface{}
-				err := json.Unmarshal([]byte(dataContent), &eventData)
-				assert.NoError(t, err, "message_stop data should be valid JSON")
-				assert.Equal(t, "message_stop", eventData["type"])
+			if dataContent == "[DONE]" {
+				foundDone = true
+				continue
 			}
+			// Verify it's valid JSON
+			var chunk map[string]interface{}
+			err := json.Unmarshal([]byte(dataContent), &chunk)
+			assert.NoError(t, err, "Chunk should be valid JSON")
+
+			// Verify OpenAI format structure
+			assert.Contains(t, chunk, "id")
+			assert.Contains(t, chunk, "object")
+			assert.Equal(t, "chat.completion.chunk", chunk["object"])
+			assert.Contains(t, chunk, "created")
+			assert.Contains(t, chunk, "model")
+			assert.Contains(t, chunk, "choices")
 		}
 	}
 
-	assert.True(t, foundMessageStart, "Should have message_start event")
-	assert.True(t, foundContentBlockDelta, "Should have content_block_delta event")
-	assert.True(t, foundMessageStop, "Should have message_stop event")
+	assert.True(t, foundDataChunk, "Should have at least one data chunk")
+	assert.True(t, foundDone, "Should have [DONE] marker")
 	assert.Equal(t, "text/event-stream", w.Header().Get("Content-Type"))
 }
 
-// TestSendAnthropicStreamEvent tests the helper function
-func TestSendAnthropicStreamEvent(t *testing.T) {
+// TestSendOpenAIStreamChunk tests the helper function
+func TestSendOpenAIStreamChunk(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 
-	eventData := map[string]interface{}{
-		"type": "message_start",
-		"message": map[string]interface{}{
-			"id":      "msg_123",
-			"type":    "message",
-			"role":    "assistant",
-			"content": []interface{}{},
+	chunk := map[string]interface{}{
+		"id":      "test-id",
+		"object":  "chat.completion.chunk",
+		"created": int64(1234567890),
+		"model":   "test-model",
+		"choices": []map[string]interface{}{
+			{
+				"index":         0,
+				"delta":         map[string]interface{}{"content": "Hello"},
+				"finish_reason": nil,
+			},
 		},
 	}
 
-	sendAnthropicStreamEvent(c, "message_start", eventData, w)
+	sendOpenAIStreamChunk(c, chunk, w)
 
 	body := w.Body.String()
-	assert.Contains(t, body, "event: message_start")
 	assert.Contains(t, body, "data: ")
-	assert.Contains(t, body, `"type":"message_start"`)
+	assert.Contains(t, body, `"id":"test-id"`)
+	assert.Contains(t, body, `"object":"chat.completion.chunk"`)
 }
