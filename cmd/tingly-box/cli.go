@@ -13,10 +13,10 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:   "tingly-box",
-	Short: "Tingly Box - AI Service API Key Management and Proxy CLI",
-	Long: `Tingly Box is a CLI tool for managing AI service API keys and acting as a proxy.
-It provides a unified OpenAI-compatible endpoint that routes requests to configured
-AI providers with dynamic configuration management.`,
+	Short: "Tingly Box - Provider-agnostic Desktop AI Model Proxy and Key Manager",
+	Long: `Tingly Box is a provider-agnostic desktop AI model proxy and key manager.
+It provides a unified OpenAI-compatible endpoint that routes requests to multiple
+AI providers, with flexible configuration and secure credential management.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		verbose, _ := cmd.Flags().GetBool("verbose")
 		// Apply priority: CLI flag > Config > Default
