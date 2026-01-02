@@ -22,6 +22,9 @@ const (
 	anthropicStopReasonMaxTokens     = "max_tokens"
 	anthropicStopReasonToolUse       = "tool_use"
 	anthropicStopReasonContentFilter = "content_filter"
+
+	// OpenAI extra field names that map to Anthropic content blocks
+	openaiFieldReasoningContent = "reasoning_content"
 )
 
 // HandleOpenAIToAnthropicStreamResponse processes OpenAI streaming events and converts them to Anthropic format
@@ -75,6 +78,10 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 		pendingToolCalls = make(map[int]*pendingToolCall)
 		// Map OpenAI tool index to Anthropic block index
 		toolIndexToBlockIndex = make(map[int]int)
+		// Thinking block state (for reasoning_content)
+		thinkingBlockIndex = -1
+		// Collect extra fields from delta across the stream (for final message_delta)
+		deltaExtras = make(map[string]interface{})
 	)
 
 	// Send message_start event first
@@ -125,11 +132,63 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 
 		delta := choice.Delta
 
+		// Collect extra fields from this delta (for final message_delta)
+		// Handle special fields that need dedicated content blocks
+		if extras := parseRawJSON(delta.RawJSON()); extras != nil {
+			for k, v := range extras {
+				// Handle reasoning_content -> thinking block
+				if k == openaiFieldReasoningContent {
+					// Initialize thinking block on first occurrence
+					if thinkingBlockIndex == -1 {
+						thinkingBlockIndex = nextBlockIndex
+						nextBlockIndex++
+
+						contentBlockStartEvent := map[string]interface{}{
+							"type":  "content_block_start",
+							"index": thinkingBlockIndex,
+							"content_block": map[string]interface{}{
+								"type":     "thinking",
+								"thinking": "",
+							},
+						}
+						sendAnthropicStreamEvent(c, "content_block_start", contentBlockStartEvent, flusher)
+					}
+
+					// Extract thinking content (handle different types)
+					var thinkingText string
+					switch tv := v.(type) {
+					case string:
+						thinkingText = tv
+					case []byte:
+						thinkingText = string(tv)
+					default:
+						thinkingText = fmt.Sprintf("%v", tv)
+					}
+
+					if thinkingText != "" {
+						// Send content_block_delta with thinking_delta
+						deltaEvent := map[string]interface{}{
+							"type":  "content_block_delta",
+							"index": thinkingBlockIndex,
+							"delta": map[string]interface{}{
+								"type":     "thinking_delta",
+								"thinking": thinkingText,
+							},
+						}
+						sendAnthropicStreamEvent(c, "content_block_delta", deltaEvent, flusher)
+					}
+
+					// Don't add to deltaExtras (already handled as thinking block)
+					continue
+				}
+
+				// Other extra fields: collect for final message_delta
+				deltaExtras[k] = v
+			}
+		}
+
 		// Handle refusal (when model refuses to respond due to safety policies)
 		if delta.Refusal != "" {
-			// Parse delta raw JSON to get extra fields
-			deltaExtras := parseRawJSON(delta.RawJSON())
-
 			// Refusal should be sent as content
 			if textBlockIndex == -1 {
 				textBlockIndex = nextBlockIndex
@@ -147,16 +206,13 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 			}
 			hasTextContent = true
 
-			deltaMap := map[string]interface{}{
-				"type": "text_delta",
-				"text": delta.Refusal,
-			}
-			deltaMap = mergeMaps(deltaMap, deltaExtras)
-
 			deltaEvent := map[string]interface{}{
 				"type":  "content_block_delta",
 				"index": textBlockIndex,
-				"delta": deltaMap,
+				"delta": map[string]interface{}{
+					"type": "text_delta",
+					"text": delta.Refusal,
+				},
 			}
 			sendAnthropicStreamEvent(c, "content_block_delta", deltaEvent, flusher)
 		}
@@ -184,14 +240,17 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 			hasTextContent = true
 
 			// Parse delta raw JSON to get extra fields
-			deltaExtras := parseRawJSON(delta.RawJSON())
+			currentExtras := parseRawJSON(delta.RawJSON())
+
+			// Filter out special fields that have dedicated blocks
+			currentExtras = filterSpecialFields(currentExtras)
 
 			// Send content_block_delta with actual content
 			deltaMap := map[string]interface{}{
 				"type": "text_delta",
 				"text": delta.Content,
 			}
-			deltaMap = mergeMaps(deltaMap, deltaExtras)
+			deltaMap = mergeMaps(deltaMap, currentExtras)
 
 			deltaEvent := map[string]interface{}{
 				"type":  "content_block_delta",
@@ -201,14 +260,17 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 			sendAnthropicStreamEvent(c, "content_block_delta", deltaEvent, flusher)
 		} else if choice.FinishReason == "" {
 			// Parse delta raw JSON to get extra fields
-			deltaExtras := parseRawJSON(delta.RawJSON())
+			currentExtras := parseRawJSON(delta.RawJSON())
+
+			// Filter out special fields that have dedicated blocks
+			currentExtras = filterSpecialFields(currentExtras)
 
 			// Send empty delta for empty chunks to keep client informed
 			deltaMap := map[string]interface{}{
 				"type": "text_delta",
 				"text": "",
 			}
-			deltaMap = mergeMaps(deltaMap, deltaExtras)
+			deltaMap = mergeMaps(deltaMap, currentExtras)
 
 			deltaEvent := map[string]interface{}{
 				"type":  "content_block_delta",
@@ -284,6 +346,15 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 				sendAnthropicStreamEvent(c, "content_block_stop", contentBlockStopEvent, flusher)
 			}
 
+			// Send content_block_stop for thinking block if we had reasoning content
+			if thinkingBlockIndex != -1 {
+				contentBlockStopEvent := map[string]interface{}{
+					"type":  "content_block_stop",
+					"index": thinkingBlockIndex,
+				}
+				sendAnthropicStreamEvent(c, "content_block_stop", contentBlockStopEvent, flusher)
+			}
+
 			// Send content_block_stop for each tool call
 			for i := range pendingToolCalls {
 				contentBlockStopEvent := map[string]interface{}{
@@ -296,13 +367,19 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 			// Map OpenAI finish_reason to Anthropic stop_reason
 			stopReason := mapOpenAIFinishReasonToAnthropic(choice.FinishReason)
 
-			// Send message_delta with stop_reason and usage
+			// Build delta with accumulated extras
+			deltaMap := map[string]interface{}{
+				"stop_reason":   stopReason,
+				"stop_sequence": nil,
+			}
+			// Merge all collected extra fields
+			for k, v := range deltaExtras {
+				deltaMap[k] = v
+			}
+
 			messageDeltaEvent := map[string]interface{}{
-				"type": "message_delta",
-				"delta": map[string]interface{}{
-					"stop_reason":   stopReason,
-					"stop_sequence": nil,
-				},
+				"type":  "message_delta",
+				"delta": deltaMap,
 				"usage": map[string]interface{}{
 					"output_tokens": outputTokens,
 					"input_tokens":  inputTokens,
@@ -311,30 +388,23 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 			sendAnthropicStreamEvent(c, "message_delta", messageDeltaEvent, flusher)
 
 			// Send message_stop with detailed data
-			messageStopEvent := map[string]interface{}{
-				"type": "message_stop",
-				"message": map[string]interface{}{
-					"id":            messageID,
-					"type":          "message",
-					"role":          "assistant",
-					"content":       []interface{}{},
-					"model":         responseModel,
-					"stop_reason":   stopReason,
-					"stop_sequence": nil,
-					"usage": map[string]interface{}{
-						"input_tokens":  inputTokens,
-						"output_tokens": outputTokens,
-					},
-				},
-				"delta": map[string]interface{}{
-					"stop_reason":   stopReason,
-					"stop_sequence": nil,
-					"text":          "",
-				},
+			// Build message object with all fields including extras
+			messageData := map[string]interface{}{
+				"id":            messageID,
+				"type":          "message",
+				"role":          "assistant",
+				"content":       []interface{}{},
+				"model":         responseModel,
+				"stop_reason":   stopReason,
+				"stop_sequence": nil,
 				"usage": map[string]interface{}{
 					"input_tokens":  inputTokens,
 					"output_tokens": outputTokens,
 				},
+			}
+			messageStopEvent := map[string]interface{}{
+				"type":    "message_stop",
+				"message": messageData,
 			}
 			sendAnthropicStreamEvent(c, "message_stop", messageStopEvent, flusher)
 
@@ -423,4 +493,19 @@ func mapOpenAIFinishReasonToAnthropic(finishReason string) string {
 	default:
 		return anthropicStopReasonEndTurn
 	}
+}
+
+// filterSpecialFields removes special fields that have dedicated content blocks
+// e.g., reasoning_content is handled as thinking block, not merged into text_delta
+func filterSpecialFields(extras map[string]interface{}) map[string]interface{} {
+	if extras == nil || len(extras) == 0 {
+		return extras
+	}
+	result := make(map[string]interface{})
+	for k, v := range extras {
+		if k != openaiFieldReasoningContent {
+			result[k] = v
+		}
+	}
+	return result
 }
