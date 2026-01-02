@@ -92,6 +92,37 @@ const UseClaudeCodePage: React.FC<UseClaudeCodePageProps> = ({
         }, null, 2);
     };
 
+    const generateSettingsScript = () => {
+        const claudeCodeBaseUrl = getClaudeCodeBaseUrl();
+        return `# Configure Claude Code settings
+echo "Configuring Claude Code settings..."
+mkdir -p ~/.claude
+node --eval '
+    const fs = require("fs");
+    const path = require("path");
+    const homeDir = os.homedir();
+    const settingsPath = path.join(homeDir, ".claude", "settings.json");
+    const env = {
+        DISABLE_TELEMETRY: "1",
+        DISABLE_ERROR_REPORTING: "1",
+        CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
+        API_TIMEOUT_MS: "3000000",
+        ANTHROPIC_AUTH_TOKEN: "${token}",
+        ANTHROPIC_BASE_URL: "${claudeCodeBaseUrl}",
+        ANTHROPIC_DEFAULT_HAIKU_MODEL: "${defaultModel}",
+        ANTHROPIC_DEFAULT_OPUS_MODEL: "${defaultModel}",
+        ANTHROPIC_DEFAULT_SONNET_MODEL: "${defaultModel}",
+        ANTHROPIC_MODEL: "${defaultModel}"
+    };
+    if (fs.existsSync(settingsPath)) {
+        const content = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
+        fs.writeFileSync(settingsPath, JSON.stringify({ ...content, env }, 2), "utf-8");
+    } else {
+        fs.writeFileSync(settingsPath, JSON.stringify({ env }, 2), "utf-8");
+    }
+'`;
+    };
+
     const generateClaudeJsonConfig = () => {
         return JSON.stringify({
             hasCompletedOnboarding: true
@@ -123,13 +154,29 @@ node --eval '
                 </Box>
                 <Box sx={{ flex: 1, height: 400 }}>
                     <CodeBlock
-                        code={generateSettingsConfig()}
-                        language="json"
-                        filename="Add the env section into ~/.claude/setting.json"
+                        code={claudeJsonMode === 'json' ? generateSettingsConfig() : generateSettingsScript()}
+                        language={claudeJsonMode === 'json' ? 'json' : 'js'}
+                        filename={claudeJsonMode === 'json' ? 'Add the env section into ~/.claude/setting.json' : 'Script to setup ~/.claude/settings.json'}
                         wrap={true}
-                        onCopy={(code) => copyToClipboard(code, 'settings.json')}
+                        onCopy={(code) => copyToClipboard(code, claudeJsonMode === 'json' ? 'settings.json' : 'script')}
                         maxHeight={220}
                         minHeight={220}
+                        headerActions={
+                            <ToggleButtonGroup
+                                value={claudeJsonMode}
+                                exclusive
+                                size="small"
+                                onChange={(_, value) => value && setClaudeJsonMode(value)}
+                                sx={{ bgcolor: 'grey.700', '& .MuiToggleButton-root': { color: 'grey.300', padding: '2px 8px', fontSize: '0.75rem' } }}
+                            >
+                                <ToggleButton value="json" sx={{ '&.Mui-selected': { bgcolor: 'primary.main', color: 'white' } }}>
+                                    JSON
+                                </ToggleButton>
+                                <ToggleButton value="script" sx={{ '&.Mui-selected': { bgcolor: 'primary.main', color: 'white' } }}>
+                                    Script
+                                </ToggleButton>
+                            </ToggleButtonGroup>
+                        }
                     />
                 </Box>
             </Box>
@@ -145,7 +192,7 @@ node --eval '
                     <CodeBlock
                         code={claudeJsonMode === 'json' ? generateClaudeJsonConfig() : generateScript()}
                         language={claudeJsonMode === 'json' ? 'json' : 'js'}
-                        filename={claudeJsonMode === 'json' ? 'Set hasCompletedOnboarding into ~/.claude.json' : 'Script to init ~/.claude.json'}
+                        filename={claudeJsonMode === 'json' ? 'Set hasCompletedOnboarding into ~/.claude.json' : 'Script to setup ~/.claude.json'}
                         wrap={true}
                         onCopy={(code) => copyToClipboard(code, claudeJsonMode === 'json' ? '.claude.json' : 'script')}
                         maxHeight={220}
