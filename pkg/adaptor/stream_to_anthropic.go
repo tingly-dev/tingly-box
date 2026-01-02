@@ -217,27 +217,26 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 			sendAnthropicStreamEvent(c, "content_block_delta", deltaEvent, flusher)
 		}
 
-		// Initialize text block on first chunk with choices (even if content is empty)
-		// This ensures client knows the stream is active
-		if textBlockIndex == -1 {
-			textBlockIndex = nextBlockIndex
-			nextBlockIndex++
-
-			// Send content_block_start for text content
-			contentBlockStartEvent := map[string]interface{}{
-				"type":  "content_block_start",
-				"index": textBlockIndex,
-				"content_block": map[string]interface{}{
-					"type": "text",
-					"text": "",
-				},
-			}
-			sendAnthropicStreamEvent(c, "content_block_start", contentBlockStartEvent, flusher)
-		}
-
 		// Handle content delta
 		if delta.Content != "" {
 			hasTextContent = true
+
+			// Initialize text block on first content
+			if textBlockIndex == -1 {
+				textBlockIndex = nextBlockIndex
+				nextBlockIndex++
+
+				// Send content_block_start for text content
+				contentBlockStartEvent := map[string]interface{}{
+					"type":  "content_block_start",
+					"index": textBlockIndex,
+					"content_block": map[string]interface{}{
+						"type": "text",
+						"text": "",
+					},
+				}
+				sendAnthropicStreamEvent(c, "content_block_start", contentBlockStartEvent, flusher)
+			}
 
 			// Parse delta raw JSON to get extra fields
 			currentExtras := parseRawJSON(delta.RawJSON())
@@ -258,14 +257,12 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 				"delta": deltaMap,
 			}
 			sendAnthropicStreamEvent(c, "content_block_delta", deltaEvent, flusher)
-		} else if choice.FinishReason == "" {
-			// Parse delta raw JSON to get extra fields
+		} else if choice.FinishReason == "" && textBlockIndex != -1 {
+			// Send empty delta for empty chunks to keep client informed
+			// Only if text block has been initialized
 			currentExtras := parseRawJSON(delta.RawJSON())
-
-			// Filter out special fields that have dedicated blocks
 			currentExtras = filterSpecialFields(currentExtras)
 
-			// Send empty delta for empty chunks to keep client informed
 			deltaMap := map[string]interface{}{
 				"type": "text_delta",
 				"text": "",
@@ -337,29 +334,34 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 
 		// Handle finish_reason (last chunk for this choice)
 		if choice.FinishReason != "" {
-			// Send content_block_stop for text content only if we had text content
-			if hasTextContent {
-				contentBlockStopEvent := map[string]interface{}{
-					"type":  "content_block_stop",
-					"index": textBlockIndex,
-				}
-				sendAnthropicStreamEvent(c, "content_block_stop", contentBlockStopEvent, flusher)
-			}
-
-			// Send content_block_stop for thinking block if we had reasoning content
+			// Send content_block_stop for all active blocks in order of index
+			// Create a list of block indices to stop
+			var blockIndices []int
 			if thinkingBlockIndex != -1 {
-				contentBlockStopEvent := map[string]interface{}{
-					"type":  "content_block_stop",
-					"index": thinkingBlockIndex,
-				}
-				sendAnthropicStreamEvent(c, "content_block_stop", contentBlockStopEvent, flusher)
+				blockIndices = append(blockIndices, thinkingBlockIndex)
+			}
+			if hasTextContent {
+				blockIndices = append(blockIndices, textBlockIndex)
+			}
+			for i := range pendingToolCalls {
+				blockIndices = append(blockIndices, i)
 			}
 
-			// Send content_block_stop for each tool call
-			for i := range pendingToolCalls {
+			// Sort by index to stop in order
+			// Use simple insertion sort since slice is small
+			for i := 0; i < len(blockIndices); i++ {
+				for j := i + 1; j < len(blockIndices); j++ {
+					if blockIndices[i] > blockIndices[j] {
+						blockIndices[i], blockIndices[j] = blockIndices[j], blockIndices[i]
+					}
+				}
+			}
+
+			// Send stop events in sorted order
+			for _, idx := range blockIndices {
 				contentBlockStopEvent := map[string]interface{}{
 					"type":  "content_block_stop",
-					"index": i,
+					"index": idx,
 				}
 				sendAnthropicStreamEvent(c, "content_block_stop", contentBlockStopEvent, flusher)
 			}
