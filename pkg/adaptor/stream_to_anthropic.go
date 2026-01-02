@@ -13,6 +13,17 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const (
+	// OpenAI finish reasons not defined in openai package
+	openaiFinishReasonToolCalls = "tool_calls"
+
+	// Anthropic stop reasons
+	anthropicStopReasonEndTurn       = "end_turn"
+	anthropicStopReasonMaxTokens     = "max_tokens"
+	anthropicStopReasonToolUse       = "tool_use"
+	anthropicStopReasonContentFilter = "content_filter"
+)
+
 // HandleOpenAIToAnthropicStreamResponse processes OpenAI streaming events and converts them to Anthropic format
 func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) error {
 	logrus.Info("Starting OpenAI to Anthropic streaming response handler")
@@ -235,17 +246,7 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 			}
 
 			// Map OpenAI finish_reason to Anthropic stop_reason
-			stopReason := "end_turn"
-			switch choice.FinishReason {
-			case "stop":
-				stopReason = "end_turn"
-			case "length":
-				stopReason = "max_tokens"
-			case "tool_calls":
-				stopReason = "tool_use"
-			case "content_filter":
-				stopReason = "content_filter"
-			}
+			stopReason := mapOpenAIFinishReasonToAnthropic(choice.FinishReason)
 
 			// Send message_delta with stop_reason and usage
 			messageDeltaEvent := map[string]interface{}{
@@ -320,4 +321,20 @@ func getFinishReason(chunk *openai.ChatCompletionChunk) string {
 		return string(chunk.Choices[0].FinishReason)
 	}
 	return "<no choices>"
+}
+
+// mapOpenAIFinishReasonToAnthropic converts OpenAI finish_reason to Anthropic stop_reason
+func mapOpenAIFinishReasonToAnthropic(finishReason string) string {
+	switch finishReason {
+	case string(openai.CompletionChoiceFinishReasonStop):
+		return anthropicStopReasonEndTurn
+	case string(openai.CompletionChoiceFinishReasonLength):
+		return anthropicStopReasonMaxTokens
+	case openaiFinishReasonToolCalls:
+		return anthropicStopReasonToolUse
+	case string(openai.CompletionChoiceFinishReasonContentFilter):
+		return anthropicStopReasonContentFilter
+	default:
+		return anthropicStopReasonEndTurn
+	}
 }
