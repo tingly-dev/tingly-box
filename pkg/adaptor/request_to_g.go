@@ -1,0 +1,434 @@
+package adaptor
+
+import (
+	"encoding/json"
+
+	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/openai/openai-go/v3"
+	"google.golang.org/genai"
+)
+
+// ConvertOpenAIToGoogleRequest converts OpenAI ChatCompletionNewParams to Google SDK format
+func ConvertOpenAIToGoogleRequest(req *openai.ChatCompletionNewParams, defaultMaxTokens int64) (string, []*genai.Content, *genai.GenerateContentConfig) {
+	model := string(req.Model)
+	contents := make([]*genai.Content, 0, len(req.Messages))
+	config := &genai.GenerateContentConfig{}
+
+	// Set max_tokens - Google uses int32 directly
+	if req.MaxTokens.Value > 0 {
+		config.MaxOutputTokens = int32(req.MaxTokens.Value)
+	} else {
+		config.MaxOutputTokens = int32(defaultMaxTokens)
+	}
+
+	// Set temperature if provided - Google uses *float32
+	if req.Temperature.Value > 0 {
+		temp := float32(req.Temperature.Value)
+		config.Temperature = &temp
+	}
+
+	// Set top_p if provided - Google uses *float32
+	if req.TopP.Value > 0 {
+		topP := float32(req.TopP.Value)
+		config.TopP = &topP
+	}
+
+	// Convert messages
+	var systemInstructions string
+	for _, msg := range req.Messages {
+		// Use JSON serialization to extract message content
+		raw, _ := json.Marshal(msg)
+		var m map[string]interface{}
+		if err := json.Unmarshal(raw, &m); err != nil {
+			continue
+		}
+
+		role, _ := m["role"].(string)
+
+		switch role {
+		case "system":
+			// System message → system_instruction
+			if content, ok := m["content"].(string); ok && content != "" {
+				systemInstructions += content + "\n"
+			}
+
+		case "user":
+			// User message
+			content := &genai.Content{
+				Role:  "user",
+				Parts: []*genai.Part{},
+			}
+
+			// Handle text content
+			if textContent, ok := m["content"].(string); ok && textContent != "" {
+				// Simple text content
+				content.Parts = append(content.Parts, genai.NewPartFromText(textContent))
+			} else if contentParts, ok := m["content"].([]interface{}); ok {
+				// Array of content parts (multimodal)
+				for _, part := range contentParts {
+					if partMap, ok := part.(map[string]interface{}); ok {
+						if text, ok := partMap["text"].(string); ok {
+							content.Parts = append(content.Parts, genai.NewPartFromText(text))
+						}
+						// Handle images or other content types if needed
+					}
+				}
+			}
+
+			// Handle tool result messages (from tool role in OpenAI, converted to user content in Google)
+			if toolCallID, ok := m["tool_call_id"].(string); ok {
+				if toolContent, ok := m["content"].(string); ok {
+					// Convert to function_response
+					content.Parts = append(content.Parts, &genai.Part{
+						FunctionResponse: &genai.FunctionResponse{
+							Name: toolCallID, // Use tool_call_id as reference name
+							Parts: []*genai.FunctionResponsePart{
+								{
+									InlineData: &genai.FunctionResponseBlob{
+										Data: []byte(toolContent),
+									},
+								},
+							},
+						},
+					})
+				}
+			}
+
+			if len(content.Parts) > 0 {
+				contents = append(contents, content)
+			}
+
+		case "assistant":
+			// Assistant message
+			content := &genai.Content{
+				Role:  "model",
+				Parts: []*genai.Part{},
+			}
+
+			// Add text content if present
+			if textContent, ok := m["content"].(string); ok && textContent != "" {
+				content.Parts = append(content.Parts, genai.NewPartFromText(textContent))
+			}
+
+			// Convert tool_calls to function_call parts
+			if toolCalls, ok := m["tool_calls"].([]interface{}); ok {
+				for _, tc := range toolCalls {
+					if call, ok := tc.(map[string]interface{}); ok {
+						if fn, ok := call["function"].(map[string]interface{}); ok {
+							id, _ := call["id"].(string)
+							name, _ := fn["name"].(string)
+
+							var argsInput map[string]interface{}
+							if argsStr, ok := fn["arguments"].(string); ok {
+								_ = json.Unmarshal([]byte(argsStr), &argsInput)
+							}
+
+							content.Parts = append(content.Parts, &genai.Part{
+								FunctionCall: &genai.FunctionCall{
+									ID:   id,
+									Name: name,
+									Args: argsInput,
+								},
+							})
+						}
+					}
+				}
+			}
+
+			if len(content.Parts) > 0 {
+				contents = append(contents, content)
+			}
+
+		case "tool":
+			// Tool result message → function_response in user content
+			toolCallID, _ := m["tool_call_id"].(string)
+			content, _ := m["content"].(string)
+
+			toolContent := &genai.Content{
+				Role: "user",
+				Parts: []*genai.Part{
+					{
+						FunctionResponse: &genai.FunctionResponse{
+							Name: toolCallID,
+							Parts: []*genai.FunctionResponsePart{
+								{
+									InlineData: &genai.FunctionResponseBlob{
+										Data: []byte(content),
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			contents = append(contents, toolContent)
+		}
+	}
+
+	// Set system instruction if we have one
+	if systemInstructions != "" {
+		config.SystemInstruction = &genai.Content{
+			Role:  "system",
+			Parts: []*genai.Part{genai.NewPartFromText(systemInstructions)},
+		}
+	}
+
+	// Convert tools from OpenAI format to Google format
+	if len(req.Tools) > 0 {
+		config.Tools = []*genai.Tool{
+			{
+				FunctionDeclarations: ConvertOpenAIToGoogleTools(req.Tools),
+			},
+		}
+	}
+
+	// Convert tool choice
+	if req.ToolChoice.OfAuto.Value != "" || req.ToolChoice.OfAllowedTools != nil ||
+		req.ToolChoice.OfFunctionToolChoice != nil || req.ToolChoice.OfCustomToolChoice != nil {
+		config.ToolConfig = ConvertOpenAIToGoogleToolChoice(&req.ToolChoice)
+	}
+
+	return model, contents, config
+}
+
+func ConvertOpenAIToGoogleTools(tools []openai.ChatCompletionToolUnionParam) []*genai.FunctionDeclaration {
+	if len(tools) == 0 {
+		return nil
+	}
+
+	out := make([]*genai.FunctionDeclaration, 0, len(tools))
+
+	for _, t := range tools {
+		fn := t.GetFunction()
+		if fn == nil {
+			continue
+		}
+
+		// Convert OpenAI function parameters to Google format
+		var parameters *genai.Schema
+		if fn.Parameters != nil {
+			// Convert map[string]interface{} to Google Schema
+			if schemaBytes, err := json.Marshal(fn.Parameters); err == nil {
+				_ = json.Unmarshal(schemaBytes, &parameters)
+			}
+		}
+
+		// Create function declaration
+		funcDecl := &genai.FunctionDeclaration{
+			Name:        fn.Name,
+			Description: fn.Description.Value,
+			Parameters:  parameters,
+		}
+		out = append(out, funcDecl)
+	}
+
+	return out
+}
+
+func ConvertOpenAIToGoogleToolChoice(tc *openai.ChatCompletionToolChoiceOptionUnionParam) *genai.ToolConfig {
+	config := &genai.ToolConfig{
+		FunctionCallingConfig: &genai.FunctionCallingConfig{},
+	}
+
+	// Check the different variants
+	if auto := tc.OfAuto.Value; auto != "" {
+		if auto == "auto" {
+			config.FunctionCallingConfig.Mode = genai.FunctionCallingConfigModeAuto
+		}
+	}
+
+	if tc.OfAllowedTools != nil {
+		// Default to auto for allowed tools
+		config.FunctionCallingConfig.Mode = genai.FunctionCallingConfigModeAuto
+	}
+
+	if funcChoice := tc.OfFunctionToolChoice; funcChoice != nil {
+		if name := funcChoice.Function.Name; name != "" {
+			config.FunctionCallingConfig.Mode = genai.FunctionCallingConfigModeAny
+			config.FunctionCallingConfig.AllowedFunctionNames = []string{name}
+		}
+	}
+
+	if tc.OfCustomToolChoice != nil {
+		// Default to auto for custom tool choice
+		config.FunctionCallingConfig.Mode = genai.FunctionCallingConfigModeAuto
+	}
+
+	// Default to auto
+	if config.FunctionCallingConfig.Mode == "" {
+		config.FunctionCallingConfig.Mode = genai.FunctionCallingConfigModeAuto
+	}
+
+	return config
+}
+
+// ConvertAnthropicToGoogleRequest converts Anthropic request to Google format
+func ConvertAnthropicToGoogleRequest(anthropicReq *anthropic.MessageNewParams, defaultMaxTokens int64) (string, []*genai.Content, *genai.GenerateContentConfig) {
+	model := string(anthropicReq.Model)
+	contents := make([]*genai.Content, 0, len(anthropicReq.Messages))
+	config := &genai.GenerateContentConfig{}
+
+	// Set max_tokens
+	config.MaxOutputTokens = int32(anthropicReq.MaxTokens)
+
+	// Convert system message
+	if len(anthropicReq.System) > 0 {
+		var systemText string
+		for _, sysBlock := range anthropicReq.System {
+			systemText += sysBlock.Text + "\n"
+		}
+		config.SystemInstruction = &genai.Content{
+			Role:  "system",
+			Parts: []*genai.Part{genai.NewPartFromText(systemText)},
+		}
+	}
+
+	// Convert messages
+	for _, msg := range anthropicReq.Messages {
+		switch string(msg.Role) {
+		case "user":
+			content := &genai.Content{
+				Role:  "user",
+				Parts: []*genai.Part{},
+			}
+
+			// Handle different content types
+			for _, block := range msg.Content {
+				if block.OfText != nil {
+					content.Parts = append(content.Parts, genai.NewPartFromText(block.OfText.Text))
+				} else if block.OfToolResult != nil {
+					// Convert tool_result to function_response
+					resultText := ""
+					for _, c := range block.OfToolResult.Content {
+						if c.OfText != nil {
+							resultText += c.OfText.Text
+						}
+					}
+
+					content.Parts = append(content.Parts, &genai.Part{
+						FunctionResponse: &genai.FunctionResponse{
+							Name: block.OfToolResult.ToolUseID,
+							Parts: []*genai.FunctionResponsePart{
+								{
+									InlineData: &genai.FunctionResponseBlob{
+										Data: []byte(resultText),
+									},
+								},
+							},
+						},
+					})
+				}
+			}
+
+			if len(content.Parts) > 0 {
+				contents = append(contents, content)
+			}
+
+		case "assistant":
+			content := &genai.Content{
+				Role:  "model",
+				Parts: []*genai.Part{},
+			}
+
+			// Handle different content types
+			for _, block := range msg.Content {
+				if block.OfText != nil {
+					content.Parts = append(content.Parts, genai.NewPartFromText(block.OfText.Text))
+				} else if block.OfToolUse != nil {
+					// Convert tool_use to function_call
+					var argsInput map[string]interface{}
+					if inputBytes, ok := block.OfToolUse.Input.([]byte); ok {
+						_ = json.Unmarshal(inputBytes, &argsInput)
+					}
+
+					content.Parts = append(content.Parts, &genai.Part{
+						FunctionCall: &genai.FunctionCall{
+							ID:   block.OfToolUse.ID,
+							Name: block.OfToolUse.Name,
+							Args: argsInput,
+						},
+					})
+				}
+			}
+
+			if len(content.Parts) > 0 {
+				contents = append(contents, content)
+			}
+		}
+	}
+
+	// Convert tools from Anthropic format to Google format
+	if len(anthropicReq.Tools) > 0 {
+		config.Tools = []*genai.Tool{
+			{
+				FunctionDeclarations: ConvertAnthropicToGoogleTools(anthropicReq.Tools),
+			},
+		}
+	}
+
+	// Convert tool choice
+	if anthropicReq.ToolChoice.OfAuto != nil || anthropicReq.ToolChoice.OfTool != nil ||
+		anthropicReq.ToolChoice.OfAny != nil {
+		config.ToolConfig = ConvertAnthropicToGoogleToolChoice(&anthropicReq.ToolChoice)
+	}
+
+	return model, contents, config
+}
+
+func ConvertAnthropicToGoogleTools(tools []anthropic.ToolUnionParam) []*genai.FunctionDeclaration {
+	if len(tools) == 0 {
+		return nil
+	}
+
+	out := make([]*genai.FunctionDeclaration, 0, len(tools))
+
+	for _, t := range tools {
+		tool := t.OfTool
+		if tool == nil {
+			continue
+		}
+
+		// Convert Anthropic input schema to Google parameters
+		var parameters *genai.Schema
+		if tool.InputSchema.Properties != nil {
+			if schemaBytes, err := json.Marshal(tool.InputSchema); err == nil {
+				_ = json.Unmarshal(schemaBytes, &parameters)
+			}
+		}
+
+		funcDecl := &genai.FunctionDeclaration{
+			Name:        tool.Name,
+			Description: tool.Description.Value,
+			Parameters:  parameters,
+		}
+		out = append(out, funcDecl)
+	}
+
+	return out
+}
+
+func ConvertAnthropicToGoogleToolChoice(tc *anthropic.ToolChoiceUnionParam) *genai.ToolConfig {
+	config := &genai.ToolConfig{
+		FunctionCallingConfig: &genai.FunctionCallingConfig{},
+	}
+
+	if tc.OfAuto != nil {
+		config.FunctionCallingConfig.Mode = genai.FunctionCallingConfigModeAuto
+	}
+
+	if tc.OfTool != nil {
+		config.FunctionCallingConfig.Mode = genai.FunctionCallingConfigModeAny
+		config.FunctionCallingConfig.AllowedFunctionNames = []string{tc.OfTool.Name}
+	}
+
+	if tc.OfAny != nil {
+		config.FunctionCallingConfig.Mode = genai.FunctionCallingConfigModeAny
+	}
+
+	// Default to auto
+	if config.FunctionCallingConfig.Mode == "" {
+		config.FunctionCallingConfig.Mode = genai.FunctionCallingConfigModeAuto
+	}
+
+	return config
+}
