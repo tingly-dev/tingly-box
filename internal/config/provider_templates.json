@@ -119,11 +119,11 @@
     },
     "minimax": {
       "id": "minimax",
-      "name": "Minimax (CN)",
+      "name": "Minimax (CN) | Minimax（中国）",
       "status": "active",
       "valid": true,
       "website": "https://www.minimaxi.com/",
-      "description": "Official Mimimax API service",
+      "description": "Official Minimax API service",
       "type": "official",
       "api_doc": "https://platform.minimaxi.com/docs/api-reference/text-intro",
       "model_doc": "https://platform.minimaxi.com/docs/guides/models-intro",
@@ -131,16 +131,14 @@
       "base_url_openai": "https://api.minimaxi.com/v1",
       "base_url_anthropic": "https://api.minimaxi.com/anthropic",
       "models": [
-        "glm-4.5",
-        "glm-4.5-air",
-        "glm-4.6",
-        "glm-4.7"
+        "MiniMax-M2.1",
+        "MiniMax-M2.1-lightning",
+        "MiniMax-M2"
       ],
       "model_limits": {
-        "glm-4.5": 128000,
-        "glm-4.5-air": 128000,
-        "glm-4.6": 128000,
-        "glm-4.7": 128000
+        "MiniMax-M2.1": 8192,
+        "MiniMax-M2.1-lightning": 8192,
+        "MiniMax-M2": 8192
       },
       "supports_models_endpoint": false
     },
@@ -150,7 +148,7 @@
       "status": "active",
       "valid": true,
       "website": "https://www.minimax.io/",
-      "description": "Official Mimimax API service (International)",
+      "description": "Official Minimax API service (International)",
       "type": "official",
       "api_doc": "https://platform.minimax.io/docs/api-reference/text-intro",
       "model_doc": "https://platform.minimax.io/docs/guides/models-intro",
@@ -158,16 +156,14 @@
       "base_url_openai": "https://api.minimax.io/v1",
       "base_url_anthropic": "https://api.minimax.io/anthropic",
       "models": [
-        "glm-4.5",
-        "glm-4.5-air",
-        "glm-4.6",
-        "glm-4.7"
+        "MiniMax-M2.1",
+        "MiniMax-M2.1-lightning",
+        "MiniMax-M2"
       ],
       "model_limits": {
-        "glm-4.5": 128000,
-        "glm-4.5-air": 128000,
-        "glm-4.6": 128000,
-        "glm-4.7": 128000
+        "MiniMax-M2.1": 8192,
+        "MiniMax-M2.1-lightning": 8192,
+        "MiniMax-M2": 8192
       },
       "supports_models_endpoint": false
     },
