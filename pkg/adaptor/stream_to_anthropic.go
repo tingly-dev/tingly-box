@@ -113,33 +113,47 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 		choice := chunk.Choices[0]
 		delta := choice.Delta
 
+		// Initialize text block on first chunk with choices (even if content is empty)
+		// This ensures client knows the stream is active
+		if textBlockIndex == -1 {
+			textBlockIndex = nextBlockIndex
+			nextBlockIndex++
+
+			// Send content_block_start for text content
+			contentBlockStartEvent := map[string]interface{}{
+				"type":  "content_block_start",
+				"index": textBlockIndex,
+				"content_block": map[string]interface{}{
+					"type": "text",
+					"text": "",
+				},
+			}
+			sendAnthropicStreamEvent(c, "content_block_start", contentBlockStartEvent, flusher)
+		}
+
 		// Handle content delta
 		if delta.Content != "" {
-			// Initialize text block on first content (lazy allocation)
-			if textBlockIndex == -1 {
-				textBlockIndex = nextBlockIndex
-				nextBlockIndex++
-
-				// Send content_block_start for text content
-				contentBlockStartEvent := map[string]interface{}{
-					"type":  "content_block_start",
-					"index": textBlockIndex,
-					"content_block": map[string]interface{}{
-						"type": "text",
-						"text": "",
-					},
-				}
-				sendAnthropicStreamEvent(c, "content_block_start", contentBlockStartEvent, flusher)
-			}
 			hasTextContent = true
 
-			// Send content_block_delta
+			// Send content_block_delta with actual content
 			deltaEvent := map[string]interface{}{
 				"type":  "content_block_delta",
 				"index": textBlockIndex,
 				"delta": map[string]interface{}{
 					"type": "text_delta",
 					"text": delta.Content,
+				},
+			}
+			sendAnthropicStreamEvent(c, "content_block_delta", deltaEvent, flusher)
+		} else if choice.FinishReason == "" {
+			// Send empty delta for empty chunks to keep client informed
+			// Only do this if we haven't finished yet
+			deltaEvent := map[string]interface{}{
+				"type":  "content_block_delta",
+				"index": textBlockIndex,
+				"delta": map[string]interface{}{
+					"type": "text_delta",
+					"text": "",
 				},
 			}
 			sendAnthropicStreamEvent(c, "content_block_delta", deltaEvent, flusher)
