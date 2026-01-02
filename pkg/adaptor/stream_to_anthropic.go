@@ -306,7 +306,7 @@ func sendAnthropicStreamEvent(c *gin.Context, eventType string, eventData map[st
 	}
 
 	// Anthropic SSE format: event: <type>\ndata: <json>\n\n
-	c.Writer.Write([]byte(fmt.Sprintf("event: %s\ndata: %s\n\n", eventType, string(eventJSON))))
+	c.SSEvent(eventType, string(eventJSON))
 	flusher.Flush()
 }
 
@@ -500,8 +500,8 @@ func sendMessageStop(c *gin.Context, messageID, model string, state *streamState
 	}
 	sendAnthropicStreamEvent(c, eventTypeMessageStop, event, flusher)
 
-	// Send final simple data line (without event prefix)
-	c.Writer.Write([]byte("data: {\"type\":\"message_stop\"}\n\n"))
+	// Send final simple data with type (without event, aka empty)
+	c.SSEvent("", map[string]interface{}{"type": eventTypeMessageStop})
 	flusher.Flush()
 }
 
