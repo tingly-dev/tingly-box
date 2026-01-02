@@ -294,9 +294,25 @@ func ConvertAnthropicToGoogleRequest(anthropicReq *anthropic.MessageNewParams, d
 
 			// Handle different content types
 			for _, block := range msg.Content {
-				if block.OfText != nil {
+				switch {
+				case block.OfText != nil:
 					content.Parts = append(content.Parts, genai.NewPartFromText(block.OfText.Text))
-				} else if block.OfToolResult != nil {
+				case block.OfImage != nil:
+					// Convert image to inline data
+					// For Google API, images need to be passed as inline data with MIME type
+					if block.OfImage.Source.OfBase64 != nil {
+						content.Parts = append(content.Parts, &genai.Part{
+							InlineData: &genai.Blob{
+								MIMEType: string(block.OfImage.Source.OfBase64.MediaType),
+								Data:     []byte(block.OfImage.Source.OfBase64.Data),
+							},
+						})
+					} else if block.OfImage.Source.OfURL != nil {
+						// For URL images, we'd need to fetch them first
+						// For now, skip or handle as text reference
+						content.Parts = append(content.Parts, genai.NewPartFromText("[Image: "+block.OfImage.Source.OfURL.URL+"]"))
+					}
+				case block.OfToolResult != nil:
 					// Convert tool_result to function_response
 					resultText := ""
 					for _, c := range block.OfToolResult.Content {
@@ -317,6 +333,8 @@ func ConvertAnthropicToGoogleRequest(anthropicReq *anthropic.MessageNewParams, d
 							},
 						},
 					})
+				case block.OfThinking != nil, block.OfRedactedThinking != nil:
+					// Skip thinking blocks - Google API doesn't support them
 				}
 			}
 
@@ -332,9 +350,10 @@ func ConvertAnthropicToGoogleRequest(anthropicReq *anthropic.MessageNewParams, d
 
 			// Handle different content types
 			for _, block := range msg.Content {
-				if block.OfText != nil {
+				switch {
+				case block.OfText != nil:
 					content.Parts = append(content.Parts, genai.NewPartFromText(block.OfText.Text))
-				} else if block.OfToolUse != nil {
+				case block.OfToolUse != nil:
 					// Convert tool_use to function_call
 					var argsInput map[string]interface{}
 					if inputBytes, ok := block.OfToolUse.Input.([]byte); ok {
@@ -348,6 +367,8 @@ func ConvertAnthropicToGoogleRequest(anthropicReq *anthropic.MessageNewParams, d
 							Args: argsInput,
 						},
 					})
+				case block.OfThinking != nil, block.OfRedactedThinking != nil:
+					// Skip thinking blocks - Google API doesn't support them
 				}
 			}
 
