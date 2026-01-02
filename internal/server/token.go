@@ -46,6 +46,15 @@ func countTokensWithTiktoken(model string, messages []anthropic.MessageParam, sy
 				}
 				totalTokens += count
 			}
+
+			if block.OfThinking != nil {
+				count, err := enc.Count(block.OfThinking.Thinking)
+				if err != nil {
+					// If counting fails, estimate with character count / 4
+					count = len(block.OfThinking.Thinking) / 4
+				}
+				totalTokens += count
+			}
 			// Note: We're not counting image tokens here as they require special handling
 			// This is an approximation for text-only requests
 		}

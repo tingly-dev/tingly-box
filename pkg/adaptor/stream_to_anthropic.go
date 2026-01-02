@@ -5,12 +5,47 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"time"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/sirupsen/logrus"
+)
+
+const (
+	// OpenAI finish reasons not defined in openai package
+	openaiFinishReasonToolCalls = "tool_calls"
+
+	// Anthropic stop reasons
+	anthropicStopReasonEndTurn       = string(anthropic.BetaStopReasonEndTurn)
+	anthropicStopReasonMaxTokens     = string(anthropic.BetaStopReasonMaxTokens)
+	anthropicStopReasonToolUse       = string(anthropic.BetaStopReasonToolUse)
+	anthropicStopReasonContentFilter = string(anthropic.BetaStopReasonRefusal) // "content_filter"
+
+	// OpenAI extra field names that map to Anthropic content blocks
+	openaiFieldReasoningContent = "reasoning_content"
+
+	// Anthropic event types
+	eventTypeMessageStart      = "message_start"
+	eventTypeContentBlockStart = "content_block_start"
+	eventTypeContentBlockDelta = "content_block_delta"
+	eventTypeContentBlockStop  = "content_block_stop"
+	eventTypeMessageDelta      = "message_delta"
+	eventTypeMessageStop       = "message_stop"
+	eventTypeError             = "error"
+
+	// Anthropic block types
+	blockTypeText     = "text"
+	blockTypeThinking = "thinking"
+	blockTypeToolUse  = "tool_use"
+
+	// Anthropic delta types
+	deltaTypeTextDelta      = "text_delta"
+	deltaTypeThinkingDelta  = "thinking_delta"
+	deltaTypeInputJSONDelta = "input_json_delta"
 )
 
 // HandleOpenAIToAnthropicStreamResponse processes OpenAI streaming events and converts them to Anthropic format
@@ -51,22 +86,12 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 	// Generate message ID for Anthropic format
 	messageID := fmt.Sprintf("msg_%d", time.Now().Unix())
 
-	// Track streaming state
-	var (
-		// Text block state
-		textBlockIndex = -1 // -1 means not assigned yet
-		outputTokens   int64
-		// Next available block index (auto-incremented as content blocks appear)
-		nextBlockIndex = 0
-		// Track tool call state
-		pendingToolCalls = make(map[int]*pendingToolCall)
-		// Map OpenAI tool index to Anthropic block index
-		toolIndexToBlockIndex = make(map[int]int)
-	)
+	// Initialize streaming state
+	state := newStreamState()
 
 	// Send message_start event first
 	messageStartEvent := map[string]interface{}{
-		"type": "message_start",
+		"type": eventTypeMessageStart,
 		"message": map[string]interface{}{
 			"id":            messageID,
 			"type":          "message",
@@ -81,53 +106,125 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 			},
 		},
 	}
-	sendAnthropicStreamEvent(c, "message_start", messageStartEvent, flusher)
+	sendAnthropicStreamEvent(c, eventTypeMessageStart, messageStartEvent, flusher)
 
 	// Process the stream
+	chunkCount := 0
 	for stream.Next() {
+		chunkCount++
 		chunk := stream.Current()
 
-		// Check if we have choices
+		// Skip empty chunks (no choices)
 		if len(chunk.Choices) == 0 {
 			// Check for usage info in the last chunk
 			if chunk.Usage.PromptTokens > 0 || chunk.Usage.CompletionTokens > 0 {
-				outputTokens = chunk.Usage.CompletionTokens
+				state.inputTokens = chunk.Usage.PromptTokens
+				state.outputTokens = chunk.Usage.CompletionTokens
 			}
 			continue
 		}
 
 		choice := chunk.Choices[0]
+
+		logrus.Debugf("Processing chunk #%d: len(choices)=%d, content=%q, finish_reason=%q",
+			chunkCount, len(chunk.Choices),
+			choice.Delta.Content, choice.FinishReason)
+
+		// Log first few chunks in detail for debugging
+		if chunkCount <= 5 || choice.FinishReason != "" {
+			logrus.Debugf("Full chunk #%d: %+v", chunkCount, chunk)
+		}
+
 		delta := choice.Delta
+
+		// Collect extra fields from this delta (for final message_delta)
+		// Handle special fields that need dedicated content blocks
+		if extras := parseRawJSON(delta.RawJSON()); extras != nil {
+			for k, v := range extras {
+				// Handle reasoning_content -> thinking block
+				if k == openaiFieldReasoningContent {
+					// Initialize thinking block on first occurrence
+					if state.thinkingBlockIndex == -1 {
+						state.thinkingBlockIndex = state.nextBlockIndex
+						state.nextBlockIndex++
+						sendContentBlockStart(c, state.thinkingBlockIndex, blockTypeThinking, map[string]interface{}{
+							"thinking": "",
+						}, flusher)
+					}
+
+					// Extract thinking content (handle different types)
+					thinkingText := extractString(v)
+					if thinkingText != "" {
+						// Send content_block_delta with thinking_delta
+						sendContentBlockDelta(c, state.thinkingBlockIndex, map[string]interface{}{
+							"type":     deltaTypeThinkingDelta,
+							"thinking": thinkingText,
+						}, flusher)
+					}
+
+					// Don't add to deltaExtras (already handled as thinking block)
+					continue
+				}
+
+				// Other extra fields: collect for final message_delta
+				state.deltaExtras[k] = v
+			}
+		}
+
+		// Handle refusal (when model refuses to respond due to safety policies)
+		if delta.Refusal != "" {
+			// Refusal should be sent as content
+			if state.textBlockIndex == -1 {
+				state.textBlockIndex = state.nextBlockIndex
+				state.nextBlockIndex++
+				sendContentBlockStart(c, state.textBlockIndex, blockTypeText, map[string]interface{}{
+					"text": "",
+				}, flusher)
+			}
+			state.hasTextContent = true
+
+			sendContentBlockDelta(c, state.textBlockIndex, map[string]interface{}{
+				"type": deltaTypeTextDelta,
+				"text": delta.Refusal,
+			}, flusher)
+		}
 
 		// Handle content delta
 		if delta.Content != "" {
-			// Assign block index on first text content (lazy allocation)
-			if textBlockIndex == -1 {
-				textBlockIndex = nextBlockIndex
-				nextBlockIndex++
+			state.hasTextContent = true
 
-				// Send content_block_start for text content
-				contentBlockStartEvent := map[string]interface{}{
-					"type":  "content_block_start",
-					"index": textBlockIndex,
-					"content_block": map[string]interface{}{
-						"type": "text",
-						"text": "",
-					},
-				}
-				sendAnthropicStreamEvent(c, "content_block_start", contentBlockStartEvent, flusher)
+			// Initialize text block on first content
+			if state.textBlockIndex == -1 {
+				state.textBlockIndex = state.nextBlockIndex
+				state.nextBlockIndex++
+				sendContentBlockStart(c, state.textBlockIndex, blockTypeText, map[string]interface{}{
+					"text": "",
+				}, flusher)
 			}
 
-			// Send content_block_delta
-			deltaEvent := map[string]interface{}{
-				"type":  "content_block_delta",
-				"index": textBlockIndex,
-				"delta": map[string]interface{}{
-					"type": "text_delta",
-					"text": delta.Content,
-				},
+			// Parse delta raw JSON to get extra fields
+			currentExtras := parseRawJSON(delta.RawJSON())
+			currentExtras = filterSpecialFields(currentExtras)
+
+			// Send content_block_delta with actual content
+			deltaMap := map[string]interface{}{
+				"type": deltaTypeTextDelta,
+				"text": delta.Content,
 			}
-			sendAnthropicStreamEvent(c, "content_block_delta", deltaEvent, flusher)
+			deltaMap = mergeMaps(deltaMap, currentExtras)
+			sendContentBlockDelta(c, state.textBlockIndex, deltaMap, flusher)
+		} else if choice.FinishReason == "" && state.textBlockIndex != -1 {
+			// Send empty delta for empty chunks to keep client informed
+			// Only if text block has been initialized
+			currentExtras := parseRawJSON(delta.RawJSON())
+			currentExtras = filterSpecialFields(currentExtras)
+
+			deltaMap := map[string]interface{}{
+				"type": deltaTypeTextDelta,
+				"text": "",
+			}
+			deltaMap = mergeMaps(deltaMap, currentExtras)
+			sendContentBlockDelta(c, state.textBlockIndex, deltaMap, flusher)
 		}
 
 		// Handle tool_calls delta
@@ -136,105 +233,49 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 				openaiIndex := int(toolCall.Index)
 
 				// Map OpenAI tool index to Anthropic block index
-				anthropicIndex, exists := toolIndexToBlockIndex[openaiIndex]
+				anthropicIndex, exists := state.toolIndexToBlockIndex[openaiIndex]
 				if !exists {
-					anthropicIndex = nextBlockIndex
-					toolIndexToBlockIndex[openaiIndex] = anthropicIndex
-					nextBlockIndex++
+					anthropicIndex = state.nextBlockIndex
+					state.toolIndexToBlockIndex[openaiIndex] = anthropicIndex
+					state.nextBlockIndex++
 
 					// Initialize pending tool call
-					pendingToolCalls[anthropicIndex] = &pendingToolCall{
+					state.pendingToolCalls[anthropicIndex] = &pendingToolCall{
 						id:   toolCall.ID,
 						name: toolCall.Function.Name,
 					}
 
 					// Send content_block_start for tool_use
-					contentBlockStartEvent := map[string]interface{}{
-						"type":  "content_block_start",
-						"index": anthropicIndex,
-						"content_block": map[string]interface{}{
-							"type": "tool_use",
-							"id":   toolCall.ID,
-							"name": toolCall.Function.Name,
-						},
-					}
-					sendAnthropicStreamEvent(c, "content_block_start", contentBlockStartEvent, flusher)
+					sendContentBlockStart(c, anthropicIndex, blockTypeToolUse, map[string]interface{}{
+						"id":   toolCall.ID,
+						"name": toolCall.Function.Name,
+					}, flusher)
 				}
 
 				// Accumulate arguments and send delta
 				if toolCall.Function.Arguments != "" {
-					pendingToolCalls[anthropicIndex].input += toolCall.Function.Arguments
+					state.pendingToolCalls[anthropicIndex].input += toolCall.Function.Arguments
 
 					// Send content_block_delta with input_json_delta
-					deltaEvent := map[string]interface{}{
-						"type":  "content_block_delta",
-						"index": anthropicIndex,
-						"delta": map[string]interface{}{
-							"type":         "input_json_delta",
-							"partial_json": toolCall.Function.Arguments,
-						},
-					}
-					sendAnthropicStreamEvent(c, "content_block_delta", deltaEvent, flusher)
+					sendContentBlockDelta(c, anthropicIndex, map[string]interface{}{
+						"type":         deltaTypeInputJSONDelta,
+						"partial_json": toolCall.Function.Arguments,
+					}, flusher)
 				}
 			}
 		}
 
 		// Track usage from chunk
 		if chunk.Usage.CompletionTokens > 0 {
-			outputTokens = chunk.Usage.CompletionTokens
+			state.inputTokens = chunk.Usage.PromptTokens
+			state.outputTokens = chunk.Usage.CompletionTokens
 		}
 
 		// Handle finish_reason (last chunk for this choice)
 		if choice.FinishReason != "" {
-			// Send content_block_stop for text content if assigned
-			if textBlockIndex != -1 {
-				contentBlockStopEvent := map[string]interface{}{
-					"type":  "content_block_stop",
-					"index": textBlockIndex,
-				}
-				sendAnthropicStreamEvent(c, "content_block_stop", contentBlockStopEvent, flusher)
-			}
-
-			// Send content_block_stop for each tool call
-			for i := range pendingToolCalls {
-				contentBlockStopEvent := map[string]interface{}{
-					"type":  "content_block_stop",
-					"index": i,
-				}
-				sendAnthropicStreamEvent(c, "content_block_stop", contentBlockStopEvent, flusher)
-			}
-
-			// Map OpenAI finish_reason to Anthropic stop_reason
-			stopReason := "end_turn"
-			switch choice.FinishReason {
-			case "stop":
-				stopReason = "end_turn"
-			case "length":
-				stopReason = "max_tokens"
-			case "tool_calls":
-				stopReason = "tool_use"
-			case "content_filter":
-				stopReason = "content_filter"
-			}
-
-			// Send message_delta with stop_reason and usage
-			messageDeltaEvent := map[string]interface{}{
-				"type": "message_delta",
-				"delta": map[string]interface{}{
-					"stop_reason":   stopReason,
-					"stop_sequence": nil,
-				},
-				"usage": map[string]interface{}{
-					"output_tokens": outputTokens,
-				},
-			}
-			sendAnthropicStreamEvent(c, "message_delta", messageDeltaEvent, flusher)
-
-			// Send message_stop
-			messageStopEvent := map[string]interface{}{
-				"type": "message_stop",
-			}
-			sendAnthropicStreamEvent(c, "message_stop", messageStopEvent, flusher)
+			sendStopEvents(c, state, flusher)
+			sendMessageDelta(c, state, mapOpenAIFinishReasonToAnthropic(choice.FinishReason), flusher)
+			sendMessageStop(c, messageID, responseModel, state, mapOpenAIFinishReasonToAnthropic(choice.FinishReason), flusher)
 			return nil
 		}
 	}
@@ -265,8 +306,34 @@ func sendAnthropicStreamEvent(c *gin.Context, eventType string, eventData map[st
 	}
 
 	// Anthropic SSE format: event: <type>\ndata: <json>\n\n
-	c.Writer.Write([]byte(fmt.Sprintf("event: %s\ndata: %s\n\n", eventType, string(eventJSON))))
+	c.SSEvent(eventType, string(eventJSON))
 	flusher.Flush()
+}
+
+// parseRawJSON parses raw JSON string into map[string]interface{}
+func parseRawJSON(rawJSON string) map[string]interface{} {
+	if rawJSON == "" {
+		return nil
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(rawJSON), &result); err != nil {
+		return nil
+	}
+	return result
+}
+
+// mergeMaps merges extra fields into the base map
+func mergeMaps(base map[string]interface{}, extra map[string]interface{}) map[string]interface{} {
+	if extra == nil || len(extra) == 0 {
+		return base
+	}
+	if base == nil {
+		base = make(map[string]interface{})
+	}
+	for k, v := range extra {
+		base[k] = v
+	}
+	return base
 }
 
 // pendingToolCall tracks a tool call being assembled from stream chunks
@@ -274,4 +341,181 @@ type pendingToolCall struct {
 	id    string
 	name  string
 	input string
+}
+
+// streamState tracks the streaming conversion state
+type streamState struct {
+	textBlockIndex        int
+	thinkingBlockIndex    int
+	hasTextContent        bool
+	nextBlockIndex        int
+	pendingToolCalls      map[int]*pendingToolCall
+	toolIndexToBlockIndex map[int]int
+	deltaExtras           map[string]interface{}
+	outputTokens          int64
+	inputTokens           int64
+}
+
+// newStreamState creates a new streamState
+func newStreamState() *streamState {
+	return &streamState{
+		textBlockIndex:        -1,
+		thinkingBlockIndex:    -1,
+		nextBlockIndex:        0,
+		pendingToolCalls:      make(map[int]*pendingToolCall),
+		toolIndexToBlockIndex: make(map[int]int),
+		deltaExtras:           make(map[string]interface{}),
+	}
+}
+
+// sendContentBlockStart sends a content_block_start event
+func sendContentBlockStart(c *gin.Context, index int, blockType string, initialContent map[string]interface{}, flusher http.Flusher) {
+	contentBlock := map[string]interface{}{
+		"type": blockType,
+	}
+	for k, v := range initialContent {
+		contentBlock[k] = v
+	}
+
+	event := map[string]interface{}{
+		"type":          eventTypeContentBlockStart,
+		"index":         index,
+		"content_block": contentBlock,
+	}
+	sendAnthropicStreamEvent(c, eventTypeContentBlockStart, event, flusher)
+}
+
+// sendContentBlockDelta sends a content_block_delta event
+func sendContentBlockDelta(c *gin.Context, index int, content map[string]interface{}, flusher http.Flusher) {
+	event := map[string]interface{}{
+		"type":  eventTypeContentBlockDelta,
+		"index": index,
+		"delta": content,
+	}
+	sendAnthropicStreamEvent(c, eventTypeContentBlockDelta, event, flusher)
+}
+
+// sendContentBlockStop sends a content_block_stop event
+func sendContentBlockStop(c *gin.Context, index int, flusher http.Flusher) {
+	event := map[string]interface{}{
+		"type":  eventTypeContentBlockStop,
+		"index": index,
+	}
+	sendAnthropicStreamEvent(c, eventTypeContentBlockStop, event, flusher)
+}
+
+// mapOpenAIFinishReasonToAnthropic converts OpenAI finish_reason to Anthropic stop_reason
+func mapOpenAIFinishReasonToAnthropic(finishReason string) string {
+	switch finishReason {
+	case string(openai.CompletionChoiceFinishReasonStop):
+		return anthropicStopReasonEndTurn
+	case string(openai.CompletionChoiceFinishReasonLength):
+		return anthropicStopReasonMaxTokens
+	case openaiFinishReasonToolCalls:
+		return anthropicStopReasonToolUse
+	case string(openai.CompletionChoiceFinishReasonContentFilter):
+		return anthropicStopReasonContentFilter
+	default:
+		return anthropicStopReasonEndTurn
+	}
+}
+
+// extractString extracts string value from interface{}, handling different types
+func extractString(v interface{}) string {
+	switch tv := v.(type) {
+	case string:
+		return tv
+	case []byte:
+		return string(tv)
+	default:
+		return fmt.Sprintf("%v", tv)
+	}
+}
+
+// sendStopEvents sends content_block_stop events for all active blocks in index order
+func sendStopEvents(c *gin.Context, state *streamState, flusher http.Flusher) {
+	// Collect block indices to stop
+	var blockIndices []int
+	if state.thinkingBlockIndex != -1 {
+		blockIndices = append(blockIndices, state.thinkingBlockIndex)
+	}
+	if state.hasTextContent {
+		blockIndices = append(blockIndices, state.textBlockIndex)
+	}
+	for i := range state.pendingToolCalls {
+		blockIndices = append(blockIndices, i)
+	}
+
+	// Sort by index to stop in order
+	sort.Ints(blockIndices)
+
+	// Send stop events in sorted order
+	for _, idx := range blockIndices {
+		sendContentBlockStop(c, idx, flusher)
+	}
+}
+
+// sendMessageDelta sends message_delta event
+func sendMessageDelta(c *gin.Context, state *streamState, stopReason string, flusher http.Flusher) {
+	// Build delta with accumulated extras
+	deltaMap := map[string]interface{}{
+		"stop_reason":   stopReason,
+		"stop_sequence": nil,
+	}
+	// Merge all collected extra fields
+	for k, v := range state.deltaExtras {
+		deltaMap[k] = v
+	}
+
+	event := map[string]interface{}{
+		"type":  eventTypeMessageDelta,
+		"delta": deltaMap,
+		"usage": map[string]interface{}{
+			"output_tokens": state.outputTokens,
+			"input_tokens":  state.inputTokens,
+		},
+	}
+	sendAnthropicStreamEvent(c, eventTypeMessageDelta, event, flusher)
+}
+
+// sendMessageStop sends message_stop event
+func sendMessageStop(c *gin.Context, messageID, model string, state *streamState, stopReason string, flusher http.Flusher) {
+	// Send message_stop with detailed data
+	messageData := map[string]interface{}{
+		"id":            messageID,
+		"type":          "message",
+		"role":          "assistant",
+		"content":       []interface{}{},
+		"model":         model,
+		"stop_reason":   stopReason,
+		"stop_sequence": nil,
+		"usage": map[string]interface{}{
+			"input_tokens":  state.inputTokens,
+			"output_tokens": state.outputTokens,
+		},
+	}
+	event := map[string]interface{}{
+		"type":    eventTypeMessageStop,
+		"message": messageData,
+	}
+	sendAnthropicStreamEvent(c, eventTypeMessageStop, event, flusher)
+
+	// Send final simple data with type (without event, aka empty)
+	c.SSEvent("", map[string]interface{}{"type": eventTypeMessageStop})
+	flusher.Flush()
+}
+
+// filterSpecialFields removes special fields that have dedicated content blocks
+// e.g., reasoning_content is handled as thinking block, not merged into text_delta
+func filterSpecialFields(extras map[string]interface{}) map[string]interface{} {
+	if extras == nil || len(extras) == 0 {
+		return extras
+	}
+	result := make(map[string]interface{})
+	for k, v := range extras {
+		if k != openaiFieldReasoningContent {
+			result[k] = v
+		}
+	}
+	return result
 }
