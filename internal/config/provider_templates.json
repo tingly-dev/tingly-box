@@ -55,7 +55,7 @@
     },
     "dashscope": {
       "id": "dashscope",
-      "name": "Dashscope (CN)",
+      "name": "Aliyun Dashscope (CN) | 阿里云百炼（中国）",
       "status": "active",
       "valid": true,
       "website": "https://bailian.console.aliyun.com/",
