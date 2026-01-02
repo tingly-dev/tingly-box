@@ -8,6 +8,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
@@ -19,10 +20,10 @@ const (
 	openaiFinishReasonToolCalls = "tool_calls"
 
 	// Anthropic stop reasons
-	anthropicStopReasonEndTurn       = "end_turn"
-	anthropicStopReasonMaxTokens     = "max_tokens"
-	anthropicStopReasonToolUse       = "tool_use"
-	anthropicStopReasonContentFilter = "content_filter"
+	anthropicStopReasonEndTurn       = string(anthropic.BetaStopReasonEndTurn)
+	anthropicStopReasonMaxTokens     = string(anthropic.BetaStopReasonMaxTokens)
+	anthropicStopReasonToolUse       = string(anthropic.BetaStopReasonToolUse)
+	anthropicStopReasonContentFilter = string(anthropic.BetaStopReasonRefusal) // "content_filter"
 
 	// OpenAI extra field names that map to Anthropic content blocks
 	openaiFieldReasoningContent = "reasoning_content"
