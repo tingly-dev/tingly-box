@@ -415,11 +415,18 @@ func (s *Server) AnthropicCountTokens(c *gin.Context) {
 
 		c.JSON(http.StatusOK, message)
 	} else {
-		c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Do not support: " + err.Error(),
-				Type:    "not_support",
-			},
+		count, err := countTokensWithTiktoken(string(req.Model), req.Messages, req.System.OfTextBlockArray)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error: ErrorDetail{
+					Message: "Invalid request body: " + err.Error(),
+					Type:    "invalid_request_error",
+				},
+			})
+			return
+		}
+		c.JSON(http.StatusOK, anthropic.MessageTokensCount{
+			InputTokens: int64(count),
 		})
 	}
 }
