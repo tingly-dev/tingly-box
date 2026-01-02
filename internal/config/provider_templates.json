@@ -190,7 +190,7 @@
       },
       "supports_models_endpoint": true
     },
-    "zai-intl-coding": {
+    "zai-intl-coding-plan": {
       "id": "zai-intl-coding",
       "name": "Z.ai Coding Plan",
       "status": "active",
@@ -202,7 +202,7 @@
       "model_doc": "https://docs.z.ai/guides/overview/pricing",
       "pricing_doc": "https://docs.z.ai/guides/overview/pricing",
       "base_url_openai": "https://api.z.ai/api/coding/paas/v4",
-      "base_url_anthropic": null,
+      "base_url_anthropic": "https://api.z.ai/api/anthropic",
       "models": [],
       "model_limits": {
         "glm-4": 128000,
@@ -213,9 +213,9 @@
       },
       "supports_models_endpoint": true
     },
-    "zai": {
+    "zai-cn": {
       "id": "zai",
-      "name": "Bigmodel (CN)",
+      "name": "Bigmodel (CN) | 智谱（中国）",
       "status": "active",
       "valid": true,
       "website": "https://bigmodel.cn/",
@@ -236,9 +236,9 @@
       },
       "supports_models_endpoint": true
     },
-    "zai-coding": {
+    "zai-cn-coding-plan": {
       "id": "zai-coding",
-      "name": "Bigmodel GLM Coding Plan (CN) | 智谱 Coding Plan（中国）",
+      "name": "Bigmodel GLM Coding Plan (CN) | 智谱 GLM Coding Plan（中国）",
       "status": "active",
       "valid": true,
       "website": "https://bigmodel.cn/",
@@ -248,7 +248,7 @@
       "model_doc": "https://docs.bigmodel.cn/cn/guide/start/model-overview",
       "pricing_doc": "https://open.bigmodel.cn/pricing",
       "base_url_openai": "https://open.bigmodel.cn/api/coding/paas/v4",
-      "base_url_anthropic": null,
+      "base_url_anthropic": "https://open.bigmodel.cn/api/anthropic",
       "models": [],
       "model_limits": {
         "glm-4": 128000,
