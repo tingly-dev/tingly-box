@@ -324,7 +324,16 @@ func (s *Server) UseAIEndpoints() {
 	s.SetupAnthropicEndpoints(anthropicV1)
 
 	// scenario
-	ccV1 := s.engine.Group("/claude-code/v1")
+	openaiFutureV1 := s.engine.Group("/tingly/openai/v1")
+	s.SetupOpenAIEndpoints(openaiFutureV1)
+
+	openaiFuture := s.engine.Group("/tingly/openai")
+	s.SetupOpenAIEndpoints(openaiFuture)
+
+	anthropicFutureV1 := s.engine.Group("/tingly/anthropic/v1")
+	s.SetupAnthropicEndpoints(anthropicFutureV1)
+
+	ccV1 := s.engine.Group("/tingly/claude-code/v1")
 	s.SetupAnthropicEndpoints(ccV1)
 }
 
