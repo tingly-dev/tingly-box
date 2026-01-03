@@ -44,6 +44,7 @@ interface RuleGraphProps {
     onToggleExpanded: () => void;
     onProviderNodeClick: (providerUuid: string) => void;
     onAddProviderButtonClick: () => void;
+    extraActions?: React.ReactNode;
 }
 
 const StyledCard = styled(Card, {
@@ -447,7 +448,8 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
     onRefreshModels,
     onToggleExpanded,
     onProviderNodeClick,
-    onAddProviderButtonClick
+    onAddProviderButtonClick,
+    extraActions
 }) => {
     const getApiStyle = (providerUuid: string) => {
         const provider = providers.find(p => p.uuid === providerUuid);
@@ -459,14 +461,6 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
             {/* Header Section - RuleCard Style */}
             <SummarySection onClick={onToggleExpanded}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1 }}>
-                    <Typography variant="h6" sx={{
-                        fontWeight: 600,
-                        color: record.active ? 'text.primary' : 'text.disabled'
-                    }}>
-                        {record.requestModel || 'Specified model name'}
-                    </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Chip
                         label={`Use ${record.providers.length} ${record.providers.length === 1 ? 'Key' : 'Keys'}`}
                         size="small"
@@ -494,6 +488,9 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                         color="success"
                         onClick={(e) => e.stopPropagation()}
                     />
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    {extraActions}
                     {record.responseModel && <Chip
                         label={`Response as ${record.responseModel}`}
                         size="small"
