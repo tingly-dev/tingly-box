@@ -2191,12 +2191,63 @@
         "data"
       ]
     },
+    "Rule": {
+      "type": "object",
+      "properties": {
+        "active": {
+          "type": "boolean",
+          "description": "Field active"
+        },
+        "current_service_index": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field current_service_index"
+        },
+        "description": {
+          "type": "string",
+          "description": "Field description"
+        },
+        "lb_tactic": {
+          "description": "Field lb_tactic",
+          "$ref": "#/definitions/Tactic"
+        },
+        "request_model": {
+          "type": "string",
+          "description": "Field request_model"
+        },
+        "response_model": {
+          "type": "string",
+          "description": "Field response_model"
+        },
+        "services": {
+          "type": "array",
+          "description": "Field services",
+          "items": {
+            "$ref": "#/definitions/Service"
+          }
+        },
+        "uuid": {
+          "type": "string",
+          "description": "Field uuid"
+        }
+      },
+      "required": [
+        "uuid",
+        "request_model",
+        "response_model",
+        "description",
+        "services",
+        "current_service_index",
+        "lb_tactic",
+        "active"
+      ]
+    },
     "RuleResponse": {
       "type": "object",
       "properties": {
         "data": {
-          "type": "object",
-          "description": "Field data"
+          "description": "Field data",
+          "$ref": "#/definitions/Rule"
         },
         "success": {
           "type": "boolean",
@@ -2727,8 +2778,16 @@
       "description": "Operations related to server"
     },
     {
+      "name": "rules",
+      "description": "Operations related to rules"
+    },
+    {
       "name": "history",
       "description": "Operations related to history"
+    },
+    {
+      "name": "models",
+      "description": "Operations related to models"
     },
     {
       "name": "testing",
@@ -2739,28 +2798,20 @@
       "description": "Operations related to token"
     },
     {
-      "name": "providers",
-      "description": "Operations related to providers"
-    },
-    {
-      "name": "logs",
-      "description": "Operations related to logs"
-    },
-    {
-      "name": "rules",
-      "description": "Operations related to rules"
-    },
-    {
-      "name": "models",
-      "description": "Operations related to models"
-    },
-    {
       "name": "oauth",
       "description": "Operations related to oauth"
     },
     {
       "name": "info",
       "description": "Operations related to info"
+    },
+    {
+      "name": "logs",
+      "description": "Operations related to logs"
+    },
+    {
+      "name": "providers",
+      "description": "Operations related to providers"
     }
   ]
 }
