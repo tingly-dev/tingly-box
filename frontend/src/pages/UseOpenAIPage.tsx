@@ -129,7 +129,7 @@ const UseOpenAIPage: React.FC<UseOpenAIPageProps> = ({
                 token={token}
                 showNotification={showNotification}
                 providers={providers}
-                onRulesChange={(rules) => loadData()}
+                onRulesChange={(rules) => setRules(rules)}
             />
         </CardGrid>
     );
