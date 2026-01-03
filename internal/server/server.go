@@ -322,6 +322,10 @@ func (s *Server) UseAIEndpoints() {
 	// Anthropic v1 API group
 	anthropicV1 := s.engine.Group("/anthropic/v1")
 	s.SetupAnthropicEndpoints(anthropicV1)
+
+	// scenario
+	ccV1 := s.engine.Group("/claude-code/v1")
+	s.SetupAnthropicEndpoints(ccV1)
 }
 
 func (s *Server) SetupOpenAIEndpoints(group *gin.RouterGroup) {
