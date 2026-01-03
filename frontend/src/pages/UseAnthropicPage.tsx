@@ -8,6 +8,8 @@ import {BaseUrlRow} from '../components/BaseUrlRow';
 import TabTemplatePage from '../components/TabTemplatePage';
 import {api, getBaseUrl} from '../services/api';
 import type { Provider } from '../types/provider';
+import CardGrid from "@/components/CardGrid.tsx";
+import UnifiedCard from "@/components/UnifiedCard.tsx";
 
 interface UseAnthropicPageProps {
     showTokenModal: boolean;
@@ -18,7 +20,6 @@ interface UseAnthropicPageProps {
 }
 
 const ruleId = "built-in-anthropic";
-const ruleName = "tingly/anthropic"
 
 const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
     showTokenModal,
@@ -47,6 +48,7 @@ const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
 
         // Fetch rule information
         const result = await api.getRule(ruleId);
+            console.log(result)
         if (result.success) {
             setRule(result.data);
         }
@@ -107,17 +109,28 @@ const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
     );
 
     return (
-        <TabTemplatePage
-            title="Use Anthropic SDK"
-            rule={rule}
-            header={header}
-            showTokenModal={showTokenModal}
-            setShowTokenModal={setShowTokenModal}
-            token={token}
-            showNotification={showNotification}
-            providers={providers}
-            onRuleChange={setRule}
-        />
+        <>
+            <TabTemplatePage
+                rules={[rule]}
+                collapsible={true}
+                renderHeader={() => (
+                    <CardGrid>
+                        <UnifiedCard
+                            title="Use Anthropic SDK"
+                            size="full"
+                        >
+                            {header}
+                        </UnifiedCard>
+                    </CardGrid>
+                )}
+                showTokenModal={showTokenModal}
+                setShowTokenModal={setShowTokenModal}
+                token={token}
+                showNotification={showNotification}
+                providers={providers}
+                onRulesChange={(rules) => setRule(rules[0])}
+            />
+        </>
     );
 };
 

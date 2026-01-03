@@ -8,6 +8,8 @@ import TabTemplatePage from '../components/TabTemplatePage';
 import {api, getBaseUrl} from '../services/api';
 import type { Provider } from '../types/provider';
 import { ApiConfigRow } from "@/components/ApiConfigRow";
+import CardGrid from "@/components/CardGrid.tsx";
+import UnifiedCard from "@/components/UnifiedCard.tsx";
 
 interface UseOpenAIPageProps {
     showTokenModal: boolean;
@@ -108,17 +110,28 @@ const UseOpenAIPage: React.FC<UseOpenAIPageProps> = ({
     );
 
     return (
-        <TabTemplatePage
-            title="Use OpenAI SDK"
-            rule={rule}
-            header={header}
-            showTokenModal={showTokenModal}
-            setShowTokenModal={setShowTokenModal}
-            token={token}
-            showNotification={showNotification}
-            providers={providers}
-            onRuleChange={setRule}
-        />
+        <>
+            <TabTemplatePage
+                rules={[rule]}
+                collapsible={true}
+                renderHeader={() => (
+                    <CardGrid>
+                        <UnifiedCard
+                            title="Use OpenAI SDK"
+                            size="full"
+                        >
+                            {header}
+                        </UnifiedCard>
+                    </CardGrid>
+                )}
+                showTokenModal={showTokenModal}
+                setShowTokenModal={setShowTokenModal}
+                token={token}
+                showNotification={showNotification}
+                providers={providers}
+                onRulesChange={(rules) => setRule(rules[0])}
+            />
+        </>
     );
 };
 

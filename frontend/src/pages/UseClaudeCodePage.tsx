@@ -5,6 +5,8 @@ import TabTemplatePage from '../components/TabTemplatePage';
 import { api, getBaseUrl } from '../services/api';
 import type { Provider } from '../types/provider';
 import { useTranslation } from 'react-i18next';
+import CardGrid from "@/components/CardGrid.tsx";
+import UnifiedCard from "@/components/UnifiedCard.tsx";
 
 interface UseClaudeCodePageProps {
     showTokenModal: boolean;
@@ -70,7 +72,7 @@ const UseClaudeCodePage: React.FC<UseClaudeCodePageProps> = ({
     };
 
     const getClaudeCodeBaseUrl = () => {
-        const url = `${baseUrl}/anthropic`;
+        const url = `${baseUrl}/tingly/claude-code`;
         return isDockerMode ? toDockerUrl(url) : url;
     };
 
@@ -220,17 +222,27 @@ node --eval '
     );
 
     return (
-        <TabTemplatePage
-            title="Use Claude Code"
-            rule={rule}
-            header={header}
-            showTokenModal={showTokenModal}
-            setShowTokenModal={setShowTokenModal}
-            token={token}
-            showNotification={showNotification}
-            providers={providers}
-            onRuleChange={setRule}
-        />
+        <>
+            <TabTemplatePage
+                rules={[rule]}
+                renderHeader={() => (
+                    <CardGrid>
+                        <UnifiedCard
+                            title="Use Claude Code"
+                            size="full"
+                        >
+                            {header}
+                        </UnifiedCard>
+                    </CardGrid>
+                )}
+                showTokenModal={showTokenModal}
+                setShowTokenModal={setShowTokenModal}
+                token={token}
+                showNotification={showNotification}
+                providers={providers}
+                onRulesChange={(rules) => setRule(rules[0])}
+            />
+        </>
     );
 };
 
