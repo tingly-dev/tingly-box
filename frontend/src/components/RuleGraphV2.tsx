@@ -471,63 +471,57 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                 onClick={collapsible ? onToggleExpanded : undefined}
             >
                 {/* Left side */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1 }}>
-                    {collapsible && !expanded ? (
-                        // Collapsed mode: show model name
-                        <Typography variant="h6" sx={{
-                            fontWeight: 600,
-                            color: record.active ? 'text.primary' : 'text.disabled'
-                        }}>
-                            {record.requestModel || 'Specified model name'}
-                        </Typography>
-                    ) : (
-                        // Expanded mode or non-collapsible: show chips and switch
-                        <>
-                            <Chip
-                                label={`Use ${record.providers.length} ${record.providers.length === 1 ? 'Key' : 'Keys'}`}
-                                size="small"
-                                variant="outlined"
-                                sx={{
-                                    opacity: record.active ? 1 : 0.5,
-                                    borderColor: record.active ? 'inherit' : 'text.disabled',
-                                    color: record.active ? 'inherit' : 'text.disabled'
-                                }}
-                            />
-                            <Chip
-                                label={record.active ? "Active" : "Inactive"}
-                                size="small"
-                                color={record.active ? "success" : "default"}
-                                variant={record.active ? "filled" : "outlined"}
-                                sx={{
-                                    opacity: record.active ? 1 : 0.7,
-                                }}
-                            />
-                            <Switch
-                                checked={record.active}
-                                onChange={(e) => onUpdateRecord('active', e.target.checked)}
-                                disabled={saving}
-                                size="small"
-                                color="success"
-                                onClick={(e) => e.stopPropagation()}
-                            />
-                        </>
-                    )}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1 }} onClick={(e) => e.stopPropagation()}>
+                    <Typography variant="h6" sx={{
+                        fontWeight: 600,
+                        color: record.active ? 'text.primary' : 'text.disabled'
+                    }}>
+                        {record.requestModel || 'Specified model name'}
+                    </Typography>
+                    <Chip
+                        label={`Use ${record.providers.length} ${record.providers.length === 1 ? 'Key' : 'Keys'}`}
+                        size="small"
+                        variant="outlined"
+                        onClick={(e) => e.stopPropagation()}
+                        sx={{
+                            opacity: record.active ? 1 : 0.5,
+                            borderColor: record.active ? 'inherit' : 'text.disabled',
+                            color: record.active ? 'inherit' : 'text.disabled'
+                        }}
+                    />
+                    <Chip
+                        label={record.active ? "Active" : "Inactive"}
+                        size="small"
+                        color={record.active ? "success" : "default"}
+                        variant={record.active ? "filled" : "outlined"}
+                        onClick={(e) => e.stopPropagation()}
+                        sx={{
+                            opacity: record.active ? 1 : 0.7,
+                        }}
+                    />
+                    <Switch
+                        checked={record.active}
+                        onChange={(e) => onUpdateRecord('active', e.target.checked)}
+                        disabled={saving}
+                        size="small"
+                        color="success"
+                        onClick={(e) => e.stopPropagation()}
+                    />
                 </Box>
                 {/* Right side */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    {collapsible && !expanded ? null : extraActions}
-                    {collapsible && !expanded ? null : (
-                        record.responseModel && <Chip
-                            label={`Response as ${record.responseModel}`}
-                            size="small"
-                            color="info"
-                            sx={{
-                                opacity: record.active ? 1 : 0.5,
-                                backgroundColor: record.active ? 'info.main' : 'action.disabled',
-                                color: record.active ? 'info.contrastText' : 'text.disabled'
-                            }}
-                        />
-                    )}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }} onClick={(e) => e.stopPropagation()}>
+                    {extraActions}
+                    {record.responseModel && <Chip
+                        label={`Response as ${record.responseModel}`}
+                        size="small"
+                        color="info"
+                        onClick={(e) => e.stopPropagation()}
+                        sx={{
+                            opacity: record.active ? 1 : 0.5,
+                            backgroundColor: record.active ? 'info.main' : 'action.disabled',
+                            color: record.active ? 'info.contrastText' : 'text.disabled'
+                        }}
+                    />}
                     {collapsible && (
                         <IconButton
                             size="small"
