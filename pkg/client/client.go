@@ -34,7 +34,20 @@ var oauthCustomParams = map[oauth2.ProviderType]map[string]string{
 
 // oauthHookFunctions defines custom hooks for OAuth providers based on provider type
 var oauthHookFunctions = map[oauth2.ProviderType]HookFunc{
-	oauth2.ProviderClaudeCode: claudeCodeHook,
+	oauth2.ProviderClaudeCode:  claudeCodeHook,
+	oauth2.ProviderAntigravity: antigravityHook,
+}
+
+func antigravityHook(req *http.Request) error {
+	key := req.Header.Get("X-Goog-Api-Key")
+
+	req.Header = http.Header{}
+	req.Header.Set("User-Agent", "antigravity/1.11.3 Darwin/arm64")
+	req.Header.Set("Content-Type", "application/json")
+	if key != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
+	}
+	return nil
 }
 
 // claudeCodeHook converts X-Api-Key header to Authorization header for Claude Code OAuth
