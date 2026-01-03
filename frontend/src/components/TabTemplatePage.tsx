@@ -16,8 +16,6 @@ export interface TabTemplatePageProps {
     showNotification: (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
     providers: Provider[];
     onRulesChange?: (updatedRules: Rule[]) => void;
-    renderHeader?: () => React.ReactNode;
-    renderEmpty?: () => React.ReactNode;
     collapsible?: boolean;
 }
 
@@ -29,8 +27,6 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
     showNotification,
     providers,
     onRulesChange,
-    renderHeader,
-    renderEmpty,
     collapsible = false,
 }) => {
     const [providerModelsByUuid, setProviderModelsByUuid] = useState<ProviderModelsDataByUuid>({});
@@ -202,20 +198,14 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
         return converted;
     }, [providerModelsByUuid, providerUuidToName]);
 
-    if (!providers.length) {
-        return renderEmpty?.() || null;
-    }
-
-    if (!rules || !rules.length) {
-        return renderEmpty?.() || null;
+    if (!providers.length || !rules?.length) {
+        return null;
     }
 
     console.log("rules", rules)
 
     return (
         <>
-            {renderHeader?.()}
-
             {rules.map((rule) => (
                 rule && rule.uuid && <UnifiedCard key={rule.uuid} size="full">
                     <RuleCard

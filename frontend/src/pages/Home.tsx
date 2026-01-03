@@ -24,7 +24,6 @@ import type { Provider } from '../types/provider';
 import UseOpenAIPage from './UseOpenAIPage';
 import UseAnthropicPage from './UseAnthropicPage';
 import UseClaudeCodePage from './UseClaudeCodePage';
-import UseLiteLLMPage from './UseLiteLLMPage';
 
 const Home = () => {
     const { t } = useTranslation();

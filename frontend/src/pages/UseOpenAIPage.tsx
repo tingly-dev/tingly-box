@@ -110,20 +110,16 @@ const UseOpenAIPage: React.FC<UseOpenAIPageProps> = ({
     );
 
     return (
-        <>
+        <CardGrid>
+            <UnifiedCard
+                title="Use OpenAI SDK"
+                size="full"
+            >
+                {header}
+            </UnifiedCard>
             <TabTemplatePage
                 rules={[rule]}
                 collapsible={true}
-                renderHeader={() => (
-                    <CardGrid>
-                        <UnifiedCard
-                            title="Use OpenAI SDK"
-                            size="full"
-                        >
-                            {header}
-                        </UnifiedCard>
-                    </CardGrid>
-                )}
                 showTokenModal={showTokenModal}
                 setShowTokenModal={setShowTokenModal}
                 token={token}
@@ -131,7 +127,7 @@ const UseOpenAIPage: React.FC<UseOpenAIPageProps> = ({
                 providers={providers}
                 onRulesChange={(rules) => setRule(rules[0])}
             />
-        </>
+        </CardGrid>
     );
 };
 
