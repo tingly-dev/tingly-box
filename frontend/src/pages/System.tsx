@@ -37,7 +37,6 @@ const System = () => {
             loadBaseUrl(),
             loadServerStatus(),
             loadProvidersStatus(),
-            loadDefaults(),
             loadProviderSelectionPanel(),
         ]);
         setLoading(false);
@@ -64,24 +63,14 @@ const System = () => {
     };
 
 
-    const loadDefaults = async () => {
-        const result = await api.getRules();
-        if (result.success) {
-            setRules(result.data);
-        }
-    };
 
     const loadProviderSelectionPanel = async () => {
-        const [providersResult, defaultsResult] = await Promise.all([
+        const [providersResult] = await Promise.all([
             api.getProviders(),
-            api.getRules(),
         ]);
 
         if (providersResult.success) {
             setProviders(providersResult.data);
-            if (defaultsResult.success) {
-                setRules(defaultsResult.data);
-            }
         }
     };
 
