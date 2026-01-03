@@ -305,35 +305,42 @@ func (s *Server) setupRoutes() {
 		s.UseUIEndpoints()
 	}
 
+	s.UseAIEndpoints()
+
+	s.UseLoadBalanceEndpoints()
+}
+
+func (s *Server) UseAIEndpoints() {
 	// OpenAI v1 API group
 	openaiV1 := s.engine.Group("/openai/v1")
-	{
-		// Chat completions endpoint (OpenAI compatible)
-		openaiV1.POST("/chat/completions", s.authMW.ModelAuthMiddleware(), s.OpenAIChatCompletions)
-		// Models endpoint (OpenAI compatible)
-		openaiV1.GET("/models", s.authMW.ModelAuthMiddleware(), s.OpenAIListModels)
-	}
+	s.SetupOpenAIEndpoints(openaiV1)
 
 	// OpenAI API alias (without version)
 	openai := s.engine.Group("/openai")
-	{
-		// Chat completions endpoint (OpenAI compatible)
-		openai.POST("/chat/completions", s.authMW.ModelAuthMiddleware(), s.OpenAIChatCompletions)
-		// Models endpoint (OpenAI compatible)
-		openai.GET("/models", s.authMW.ModelAuthMiddleware(), s.OpenAIListModels)
-	}
+	s.SetupOpenAIEndpoints(openai)
 
 	// Anthropic v1 API group
 	anthropicV1 := s.engine.Group("/anthropic/v1")
-	{
-		// Chat completions endpoint (Anthropic compatible)
-		anthropicV1.POST("/messages", s.authMW.ModelAuthMiddleware(), s.AnthropicMessages)
-		// Count tokens endpoint (Anthropic compatible)
-		anthropicV1.POST("/messages/count_tokens", s.authMW.ModelAuthMiddleware(), s.AnthropicCountTokens)
-		// Models endpoint (Anthropic compatible)
-		anthropicV1.GET("/models", s.authMW.ModelAuthMiddleware(), s.AnthropicListModels)
-	}
+	s.SetupAnthropicEndpoints(anthropicV1)
+}
 
+func (s *Server) SetupOpenAIEndpoints(group *gin.RouterGroup) {
+	// Chat completions endpoint (OpenAI compatible)
+	group.POST("/chat/completions", s.authMW.ModelAuthMiddleware(), s.OpenAIChatCompletions)
+	// Models endpoint (OpenAI compatible)
+	group.GET("/models", s.authMW.ModelAuthMiddleware(), s.OpenAIListModels)
+}
+
+func (s *Server) SetupAnthropicEndpoints(group *gin.RouterGroup) {
+	// Chat completions endpoint (Anthropic compatible)
+	group.POST("/messages", s.authMW.ModelAuthMiddleware(), s.AnthropicMessages)
+	// Count tokens endpoint (Anthropic compatible)
+	group.POST("/messages/count_tokens", s.authMW.ModelAuthMiddleware(), s.AnthropicCountTokens)
+	// Models endpoint (Anthropic compatible)
+	group.GET("/models", s.authMW.ModelAuthMiddleware(), s.AnthropicListModels)
+}
+
+func (s *Server) UseLoadBalanceEndpoints() {
 	// API routes for load balancer management
 	api := s.engine.Group("/api")
 	//api.Use(s.authMW.UserAuthMiddleware()) // Require user authentication for management APIs
