@@ -159,8 +159,8 @@ node --eval '
                         filename={claudeJsonMode === 'json' ? 'Add the env section into ~/.claude/setting.json' : 'Script to setup ~/.claude/settings.json'}
                         wrap={true}
                         onCopy={(code) => copyToClipboard(code, claudeJsonMode === 'json' ? 'settings.json' : 'script')}
-                        maxHeight={220}
-                        minHeight={220}
+                        maxHeight={180}
+                        minHeight={180}
                         headerActions={
                             <ToggleButtonGroup
                                 value={claudeJsonMode}
@@ -195,8 +195,8 @@ node --eval '
                         filename={claudeJsonMode === 'json' ? 'Set hasCompletedOnboarding into ~/.claude.json' : 'Script to setup ~/.claude.json'}
                         wrap={true}
                         onCopy={(code) => copyToClipboard(code, claudeJsonMode === 'json' ? '.claude.json' : 'script')}
-                        maxHeight={220}
-                        minHeight={220}
+                        maxHeight={180}
+                        minHeight={180}
                         headerActions={
                             <ToggleButtonGroup
                                 value={claudeJsonMode}
