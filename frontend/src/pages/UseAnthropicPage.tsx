@@ -129,7 +129,7 @@ const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
                 token={token}
                 showNotification={showNotification}
                 providers={providers}
-                onRulesChange={async () => await loadData()}
+                onRulesChange={(rules) => setRules(rules)}
             />
         </CardGrid>
     );
