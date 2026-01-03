@@ -455,10 +455,10 @@ export const api = {
 
 
     // Rules API - Updated for new rule structure with services
-    getRules: async (): Promise<any> => {
+    getRules: async (scenario: string): Promise<any> => {
         try {
             const apiInstances = await getApiInstances();
-            const response = await apiInstances.rulesApi.apiV1RulesGet();
+            const response = await apiInstances.rulesApi.apiV1RulesGet(scenario);
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
