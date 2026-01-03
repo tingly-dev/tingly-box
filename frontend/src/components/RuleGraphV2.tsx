@@ -502,6 +502,7 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                         onClick={(e) => e.stopPropagation()}
                         sx={{
                             opacity: record.active ? 1 : 0.7,
+                            minWidth: 75,
                         }}
                     />
                     <Switch
