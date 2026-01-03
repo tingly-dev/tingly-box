@@ -72,7 +72,7 @@ const UseClaudeCodePage: React.FC<UseClaudeCodePageProps> = ({
     };
 
     const getClaudeCodeBaseUrl = () => {
-        const url = `${baseUrl}/tingly/claude-code`;
+        const url = `${baseUrl}/tingly/claude_code`;
         return isDockerMode ? toDockerUrl(url) : url;
     };
 
