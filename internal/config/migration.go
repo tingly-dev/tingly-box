@@ -10,6 +10,7 @@ func migrate(c *Config) error {
 	migrate20251220(c)
 	migrate20251221(c)
 	migrate20251225(c)
+	migrate20260103(c)
 	return nil
 }
 
@@ -125,5 +126,41 @@ func migrate20251225(c *Config) {
 		if p.Timeout >= 30*60 {
 			p.Timeout = int64(DefaultMaxTimeout)
 		}
+	}
+}
+
+func migrate20260103(c *Config) {
+	needsSave := false
+
+	// Map of default rule UUIDs to their scenarios
+	scenarioMap := map[string]RuleScenario{
+		"tingly":             ScenarioOpenAI,
+		"built-in-openai":    ScenarioOpenAI,
+		"built-in-anthropic": ScenarioAnthropic,
+		"built-in-cc":        ScenarioClaudeCode,
+		"claude-code":        ScenarioClaudeCode,
+	}
+
+	for i := range c.Rules {
+		rule := &c.Rules[i]
+
+		// If scenario is already set, skip
+		if rule.Scenario != "" {
+			continue
+		}
+
+		// Check if this is a default rule and set its scenario
+		if scenario, ok := scenarioMap[rule.UUID]; ok {
+			rule.Scenario = scenario
+			needsSave = true
+		} else {
+			// For non-default rules, set to openai as default
+			rule.Scenario = ScenarioOpenAI
+			needsSave = true
+		}
+	}
+
+	if needsSave {
+		_ = c.save()
 	}
 }
