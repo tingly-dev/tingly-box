@@ -35,7 +35,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     onRefreshProvider,
     onModelSelectOpen,
     collapsible = false,
-    initiallyExpanded = true,
+    initiallyExpanded = !collapsible,
 }) => {
     const [configRecord, setConfigRecord] = useState<ConfigRecord | null>(null);
     const [expanded, setExpanded] = useState(initiallyExpanded);
