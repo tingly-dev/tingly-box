@@ -458,6 +458,9 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
     onAddProviderButtonClick,
     extraActions
 }) => {
+    // When collapsible, parent controls expanded state (defaults to false when collapsible=true)
+    // When not collapsible, always show expanded
+    const isExpanded = !collapsible || expanded;
     const getApiStyle = (providerUuid: string) => {
         const provider = providers.find(p => p.uuid === providerUuid);
         return provider?.api_style || 'openai';
@@ -474,7 +477,8 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1 }}>
                     <Typography variant="h6" sx={{
                         fontWeight: 600,
-                        color: record.active ? 'text.primary' : 'text.disabled'
+                        color: record.active ? 'text.primary' : 'text.disabled',
+                        minWidth: 150,
                     }}>
                         {record.requestModel || 'Specified model name'}
                     </Typography>
@@ -486,7 +490,8 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                         sx={{
                             opacity: record.active ? 1 : 0.5,
                             borderColor: record.active ? 'inherit' : 'text.disabled',
-                            color: record.active ? 'inherit' : 'text.disabled'
+                            color: record.active ? 'inherit' : 'text.disabled',
+                            minWidth: 90,
                         }}
                     />
                     <Chip
@@ -531,7 +536,7 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                             }}
                             sx={{
                                 transition: 'transform 0.2s',
-                                transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                                transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
                             }}
                         >
                             <ExpandMoreIcon />
@@ -541,7 +546,7 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
             </SummarySection>
 
             {/* Expanded Content - Graph View */}
-            <Collapse in={expanded} timeout="auto" unmountOnExit>
+            <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                 <CardContent sx={{ pt: 0 }}>
                     <Stack spacing={3}>
                         {/* Graph Visualization */}

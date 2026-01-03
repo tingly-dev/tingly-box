@@ -206,9 +206,11 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
 
     return (
         <>
+            <UnifiedCard size="full">
             {rules.map((rule) => (
-                rule && rule.uuid && <UnifiedCard key={rule.uuid} size="full">
+                rule && rule.uuid &&
                     <RuleCard
+                        key={rule.uuid}
                         rule={rule}
                         providers={providers}
                         providerModelsByUuid={providerModelsByUuid}
@@ -221,8 +223,8 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
                         collapsible={collapsible}
                         onModelSelectOpen={openModelSelectDialog}
                     />
-                </UnifiedCard>
             ))}
+            </UnifiedCard>
 
             <Dialog
                 open={modelSelectDialogOpen}
