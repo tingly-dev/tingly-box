@@ -145,11 +145,11 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     }, [providerModelsByUuid, onProviderModelsChange]);
 
     const autoSave = useCallback(async (newConfigRecord: ConfigRecord) => {
-        if (!newConfigRecord.requestModel) return;
+        if (!newConfigRecord.requestModel) return false;
 
         for (const provider of newConfigRecord.providers) {
             if (provider.provider && !provider.model) {
-                return;
+                return false;
             }
         }
 
@@ -171,7 +171,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
             };
 
             const result = await api.updateRule(rule.uuid, ruleData);
-
+            console.log("update rule: ", result)
             if (result.success) {
                 onRuleChange?.({
                     ...rule,
@@ -180,31 +180,46 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                     active: ruleData.active,
                     services: ruleData.services,
                 });
+                return true;
             } else {
                 showNotification(`Failed to save: ${result.error || 'Unknown error'}`, 'error');
+                return false;
             }
         } catch (error) {
             console.error('Error saving rule:', error);
             showNotification(`Error saving configuration`, 'error');
+            return false;
         }
     }, [rule, onRuleChange, showNotification]);
 
-    const handleUpdateRecord = useCallback((field: keyof ConfigRecord, value: any) => {
+    const handleUpdateRecord = useCallback(async (field: keyof ConfigRecord, value: any) => {
         if (configRecord) {
+            const previousRecord = { ...configRecord };
             const updated = { ...configRecord, [field]: value };
             setConfigRecord(updated);
-            autoSave(updated);
+
+            const success = await autoSave(updated);
+            if (!success) {
+                // Rollback on error
+                setConfigRecord(previousRecord);
+            }
         }
     }, [configRecord, autoSave]);
 
-    const handleDeleteProvider = useCallback((_recordId: string, providerId: string) => {
+    const handleDeleteProvider = useCallback(async (_recordId: string, providerId: string) => {
         if (configRecord) {
+            const previousRecord = { ...configRecord };
             const updated = {
                 ...configRecord,
                 providers: configRecord.providers.filter(p => p.uuid !== providerId),
             };
             setConfigRecord(updated);
-            autoSave(updated);
+
+            const success = await autoSave(updated);
+            if (!success) {
+                // Rollback on error
+                setConfigRecord(previousRecord);
+            }
         }
     }, [configRecord, autoSave]);
 
