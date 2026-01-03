@@ -116,9 +116,9 @@ node --eval '
     };
     if (fs.existsSync(settingsPath)) {
         const content = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
-        fs.writeFileSync(settingsPath, JSON.stringify({ ...content, env }, 2), "utf-8");
+        fs.writeFileSync(settingsPath, JSON.stringify({ ...content, env }, null, 2), "utf-8");
     } else {
-        fs.writeFileSync(settingsPath, JSON.stringify({ env }, 2), "utf-8");
+        fs.writeFileSync(settingsPath, JSON.stringify({ env }, null, 2), "utf-8");
     }
 '`;
     };
@@ -137,9 +137,9 @@ node --eval '
     const filePath = path.join(homeDir, ".claude.json");
     if (fs.existsSync(filePath)) {
         const content = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-        fs.writeFileSync(filePath,JSON.stringify({ ...content, hasCompletedOnboarding: true }, 2), "utf-8");
+        fs.writeFileSync(filePath, JSON.stringify({ ...content, hasCompletedOnboarding: true }, null, 2), "utf-8");
     } else {
-        fs.writeFileSync(filePath,JSON.stringify({ hasCompletedOnboarding: true }), "utf-8");
+        fs.writeFileSync(filePath, JSON.stringify({ hasCompletedOnboarding: true }, null, 2), "utf-8");
     }'`;
     };
 
