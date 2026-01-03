@@ -3,6 +3,7 @@ import {
     ArrowBack as ArrowBackIcon,
     ArrowForward as ArrowForwardIcon,
     Delete as DeleteIcon,
+    ExpandMore as ExpandMoreIcon,
     Info as InfoIcon,
     MoreVert as MoreVertIcon,
     Refresh as RefreshIcon
@@ -37,6 +38,7 @@ interface RuleGraphProps {
     providerUuidToName: { [uuid: string]: string };
     saving: boolean;
     expanded: boolean;
+    collapsible?: boolean;
     recordUuid: string;
     onUpdateRecord: (field: keyof ConfigRecord, value: any) => void;
     onDeleteProvider: (recordId: string, providerId: string) => void;
@@ -58,15 +60,19 @@ const StyledCard = styled(Card, {
     },
 }));
 
-const SummarySection = styled(Box)(({ theme }) => ({
+const SummarySection = styled(Box, {
+    shouldForwardProp: (prop) => prop !== 'collapsible',
+})<{ collapsible?: boolean }>(({ theme, collapsible }) => ({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: theme.spacing(2),
-    cursor: 'pointer',
-    '&:hover': {
-        backgroundColor: 'action.hover',
-    },
+    cursor: collapsible ? 'pointer' : 'default',
+    ...(collapsible && {
+        '&:hover': {
+            backgroundColor: 'action.hover',
+        },
+    }),
 }));
 
 // Graph Container for expanded view
@@ -442,6 +448,7 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
     providerUuidToName,
     saving,
     expanded,
+    collapsible = false,
     recordUuid,
     onUpdateRecord,
     onDeleteProvider,
@@ -459,48 +466,83 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
     return (
         <StyledCard active={record.active}>
             {/* Header Section - RuleCard Style */}
-            <SummarySection onClick={onToggleExpanded}>
+            <SummarySection
+                collapsible={collapsible}
+                onClick={collapsible ? onToggleExpanded : undefined}
+            >
+                {/* Left side */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1 }}>
-                    <Chip
-                        label={`Use ${record.providers.length} ${record.providers.length === 1 ? 'Key' : 'Keys'}`}
-                        size="small"
-                        variant="outlined"
-                        sx={{
-                            opacity: record.active ? 1 : 0.5,
-                            borderColor: record.active ? 'inherit' : 'text.disabled',
-                            color: record.active ? 'inherit' : 'text.disabled'
-                        }}
-                    />
-                    <Chip
-                        label={record.active ? "Active" : "Inactive"}
-                        size="small"
-                        color={record.active ? "success" : "default"}
-                        variant={record.active ? "filled" : "outlined"}
-                        sx={{
-                            opacity: record.active ? 1 : 0.7,
-                        }}
-                    />
-                    <Switch
-                        checked={record.active}
-                        onChange={(e) => onUpdateRecord('active', e.target.checked)}
-                        disabled={saving}
-                        size="small"
-                        color="success"
-                        onClick={(e) => e.stopPropagation()}
-                    />
+                    {collapsible && !expanded ? (
+                        // Collapsed mode: show model name
+                        <Typography variant="h6" sx={{
+                            fontWeight: 600,
+                            color: record.active ? 'text.primary' : 'text.disabled'
+                        }}>
+                            {record.requestModel || 'Specified model name'}
+                        </Typography>
+                    ) : (
+                        // Expanded mode or non-collapsible: show chips and switch
+                        <>
+                            <Chip
+                                label={`Use ${record.providers.length} ${record.providers.length === 1 ? 'Key' : 'Keys'}`}
+                                size="small"
+                                variant="outlined"
+                                sx={{
+                                    opacity: record.active ? 1 : 0.5,
+                                    borderColor: record.active ? 'inherit' : 'text.disabled',
+                                    color: record.active ? 'inherit' : 'text.disabled'
+                                }}
+                            />
+                            <Chip
+                                label={record.active ? "Active" : "Inactive"}
+                                size="small"
+                                color={record.active ? "success" : "default"}
+                                variant={record.active ? "filled" : "outlined"}
+                                sx={{
+                                    opacity: record.active ? 1 : 0.7,
+                                }}
+                            />
+                            <Switch
+                                checked={record.active}
+                                onChange={(e) => onUpdateRecord('active', e.target.checked)}
+                                disabled={saving}
+                                size="small"
+                                color="success"
+                                onClick={(e) => e.stopPropagation()}
+                            />
+                        </>
+                    )}
                 </Box>
+                {/* Right side */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    {extraActions}
-                    {record.responseModel && <Chip
-                        label={`Response as ${record.responseModel}`}
-                        size="small"
-                        color="info"
-                        sx={{
-                            opacity: record.active ? 1 : 0.5,
-                            backgroundColor: record.active ? 'info.main' : 'action.disabled',
-                            color: record.active ? 'info.contrastText' : 'text.disabled'
-                        }}
-                    />}
+                    {collapsible && !expanded ? null : extraActions}
+                    {collapsible && !expanded ? null : (
+                        record.responseModel && <Chip
+                            label={`Response as ${record.responseModel}`}
+                            size="small"
+                            color="info"
+                            sx={{
+                                opacity: record.active ? 1 : 0.5,
+                                backgroundColor: record.active ? 'info.main' : 'action.disabled',
+                                color: record.active ? 'info.contrastText' : 'text.disabled'
+                            }}
+                        />
+                    )}
+                    {collapsible && (
+                        <IconButton
+                            size="small"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onToggleExpanded();
+                            }}
+                            sx={{
+                                transition: 'transform 0.2s',
+                                transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                            }}
+                        >
+                            <ExpandMoreIcon />
+                        </IconButton>
+                    )}
                 </Box>
             </SummarySection>
 
