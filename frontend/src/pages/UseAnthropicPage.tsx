@@ -63,10 +63,12 @@ const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
         <Box sx={{p: 2}}>
             <BaseUrlRow
                 label="Base URL"
-                path="/anthropic"
+                path="/tingly/anthropic"
+                legacyPath ="/anthropic"
+                legacyLabel="(Legacy) Base URL "
                 baseUrl={baseUrl}
-                onCopy={(url) => copyToClipboard(url, 'Anthropic Base URL')}
                 urlLabel="Anthropic Base URL"
+                onCopy={(url) => copyToClipboard(url, 'Anthropic Base URL')}
             />
             <ApiConfigRow label="API Key" showEllipsis={true}>
                 <Box sx={{display: 'flex', gap: 0.5, ml: 'auto'}}>
