@@ -10,6 +10,15 @@ const (
 	APIStyleAnthropic APIStyle = "anthropic"
 )
 
+// RuleScenario represents the scenario for a routing rule
+type RuleScenario string
+
+const (
+	ScenarioOpenAI     RuleScenario = "openai"
+	ScenarioAnthropic  RuleScenario = "anthropic"
+	ScenarioClaudeCode RuleScenario = "claude_code"
+)
+
 // AuthType represents the authentication type for a provider
 type AuthType string
 
@@ -83,12 +92,13 @@ func (p *Provider) IsOAuthExpired() bool {
 
 // Rule represents a request/response configuration with load balancing support
 type Rule struct {
-	UUID                string    `json:"uuid"`
-	RequestModel        string    `json:"request_model" yaml:"request_model"`
-	ResponseModel       string    `json:"response_model" yaml:"response_model"`
-	Description         string    `json:"description"`
-	Services            []Service `json:"services" yaml:"services"`
-	CurrentServiceIndex int       `json:"current_service_index" yaml:"current_service_index"`
+	UUID                string       `json:"uuid"`
+	Scenario            RuleScenario `json:"scenario" yaml:"scenario"` // openai, anthropic, claude_code; defaults to openai
+	RequestModel        string       `json:"request_model" yaml:"request_model"`
+	ResponseModel       string       `json:"response_model" yaml:"response_model"`
+	Description         string       `json:"description"`
+	Services            []Service    `json:"services" yaml:"services"`
+	CurrentServiceIndex int          `json:"current_service_index" yaml:"current_service_index"`
 	// Unified Tactic Configuration
 	LBTactic Tactic `json:"lb_tactic" yaml:"lb_tactic"`
 	Active   bool   `json:"active" yaml:"active"`
@@ -102,6 +112,7 @@ func (r *Rule) ToJSON() interface{} {
 	// Create the JSON representation
 	jsonRule := map[string]interface{}{
 		"uuid":                  r.UUID,
+		"scenario":              r.GetScenario(),
 		"request_model":         r.RequestModel,
 		"response_model":        r.ResponseModel,
 		"services":              services,
@@ -119,6 +130,14 @@ func (r *Rule) GetServices() []Service {
 		r.Services = []Service{}
 	}
 	return r.Services
+}
+
+// GetScenario returns the scenario, defaulting to openai if empty
+func (r *Rule) GetScenario() RuleScenario {
+	if r.Scenario == "" {
+		return ScenarioOpenAI
+	}
+	return r.Scenario
 }
 
 // GetDefaultProvider returns the provider from the currently selected service using load balancing tactic

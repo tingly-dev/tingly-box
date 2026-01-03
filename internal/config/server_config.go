@@ -1058,6 +1058,7 @@ func init() {
 	DefaultRules = []Rule{
 		{
 			UUID:          "tingly",
+			Scenario:      ScenarioOpenAI,
 			RequestModel:  "tingly",
 			ResponseModel: "",
 			Description:   "Default proxy rule in tingly-box for general use with OpenAI or Anthropic",
@@ -1070,6 +1071,7 @@ func init() {
 		},
 		{
 			UUID:          "built-in-anthropic",
+			Scenario:      ScenarioAnthropic,
 			RequestModel:  "tingly/anthropic",
 			ResponseModel: "",
 			Description:   "Default proxy rule in tingly-box for general use with Anthropic",
@@ -1082,6 +1084,7 @@ func init() {
 		},
 		{
 			UUID:          "built-in-openai",
+			Scenario:      ScenarioOpenAI,
 			RequestModel:  "tingly/openai",
 			ResponseModel: "",
 			Description:   "Default proxy rule in tingly-box for general use with OpenAI",
@@ -1094,6 +1097,7 @@ func init() {
 		},
 		{
 			UUID:          "built-in-cc",
+			Scenario:      ScenarioClaudeCode,
 			RequestModel:  "tingly/cc",
 			ResponseModel: "",
 			Description:   "Default proxy rule for Claude Code",
@@ -1106,6 +1110,7 @@ func init() {
 		},
 		{
 			UUID:          "claude-code",
+			Scenario:      ScenarioClaudeCode,
 			RequestModel:  "claude-code",
 			ResponseModel: "",
 			Description:   "Default proxy rule for Claude Code",
