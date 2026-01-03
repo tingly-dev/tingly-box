@@ -471,7 +471,7 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                 onClick={collapsible ? onToggleExpanded : undefined}
             >
                 {/* Left side */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1 }} onClick={(e) => e.stopPropagation()}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1 }}>
                     <Typography variant="h6" sx={{
                         fontWeight: 600,
                         color: record.active ? 'text.primary' : 'text.disabled'
@@ -509,8 +509,8 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                     />
                 </Box>
                 {/* Right side */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }} onClick={(e) => e.stopPropagation()}>
-                    {extraActions}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Box onClick={(e) => e.stopPropagation()}>{extraActions}</Box>
                     {record.responseModel && <Chip
                         label={`Response as ${record.responseModel}`}
                         size="small"
