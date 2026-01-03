@@ -20,6 +20,7 @@ interface UseAnthropicPageProps {
 }
 
 const ruleId = "built-in-anthropic";
+const scenario = "anthropic";
 
 const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
     showTokenModal,
@@ -29,7 +30,7 @@ const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
     providers
 }) => {
     const [baseUrl, setBaseUrl] = React.useState<string>('');
-    const [rule, setRule] = React.useState<any>(null);
+    const [rules, setRules] = React.useState<any>(null);
     const [loadingRule, setLoadingRule] = React.useState(true);
     const navigate = useNavigate();
 
@@ -47,10 +48,14 @@ const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
         setBaseUrl(url);
 
         // Fetch rule information
-        const result = await api.getRule(ruleId);
-            console.log(result)
+        const result = await api.getRules(scenario);
+        console.log('getRules result:', result);
         if (result.success) {
-            setRule(result.data);
+            console.log('result.data:', result.data);
+            // getRules returns an array, we need the first item or filter by ruleId
+            const ruleData = result.data;
+            console.log('ruleData:', ruleData);
+            setRules(ruleData);
         }
         setLoadingRule(false);
     };
@@ -59,7 +64,7 @@ const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
         loadData();
     }, []);
 
-    const modelName = rule?.request_model;
+    // const modelName = rules?.request_model;
 
     const header = (
         <Box sx={{p: 2}}>
@@ -86,25 +91,25 @@ const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
                     </Tooltip>
                 </Box>
             </ApiConfigRow>
-            <ApiConfigRow
-                label="Model Name"
-                value={modelName}
-                onCopy={() => copyToClipboard(modelName, 'Model Name')}
-                isClickable={true}
-            >
-                <Box sx={{display: 'flex', gap: 0.5, ml: 'auto'}}>
-                    {/* <Tooltip title="Edit Rule">
-                        <IconButton onClick={() => navigate('/routing?expand=anthropic')} size="small">
-                            <EditIcon fontSize="small"/>
-                        </IconButton>
-                    </Tooltip> */}
-                    <Tooltip title="Copy Model">
-                        <IconButton onClick={() => copyToClipboard(modelName || ruleId, 'Model Name')} size="small">
-                            <CopyIcon fontSize="small"/>
-                        </IconButton>
-                    </Tooltip>
-                </Box>
-            </ApiConfigRow>
+            {/*<ApiConfigRow*/}
+            {/*    label="Model Name"*/}
+            {/*    value={modelName}*/}
+            {/*    onCopy={() => copyToClipboard(modelName, 'Model Name')}*/}
+            {/*    isClickable={true}*/}
+            {/*>*/}
+            {/*    <Box sx={{display: 'flex', gap: 0.5, ml: 'auto'}}>*/}
+            {/*        /!* <Tooltip title="Edit Rule">*/}
+            {/*            <IconButton onClick={() => navigate('/routing?expand=anthropic')} size="small">*/}
+            {/*                <EditIcon fontSize="small"/>*/}
+            {/*            </IconButton>*/}
+            {/*        </Tooltip> *!/*/}
+            {/*        <Tooltip title="Copy Model">*/}
+            {/*            <IconButton onClick={() => copyToClipboard(modelName || ruleId, 'Model Name')} size="small">*/}
+            {/*                <CopyIcon fontSize="small"/>*/}
+            {/*            </IconButton>*/}
+            {/*        </Tooltip>*/}
+            {/*    </Box>*/}
+            {/*</ApiConfigRow>*/}
         </Box>
     );
 
@@ -117,14 +122,14 @@ const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
                 {header}
             </UnifiedCard>
             <TabTemplatePage
-                rules={[rule]}
+                rules={rules}
                 collapsible={true}
                 showTokenModal={showTokenModal}
                 setShowTokenModal={setShowTokenModal}
                 token={token}
                 showNotification={showNotification}
                 providers={providers}
-                onRulesChange={(rules) => setRule(rules[0])}
+                onRulesChange={async () => await loadData()}
             />
         </CardGrid>
     );
