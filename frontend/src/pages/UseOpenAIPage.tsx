@@ -122,6 +122,11 @@ const UseOpenAIPage: React.FC<UseOpenAIPageProps> = ({
                 {header}
             </UnifiedCard>
             <TabTemplatePage
+                title={
+                    <Tooltip title="Use as model name in your API requests to forward">
+                        Use Model
+                    </Tooltip>
+                }
                 rules={rules}
                 collapsible={true}
                 showTokenModal={showTokenModal}

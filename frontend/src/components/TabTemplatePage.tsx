@@ -9,6 +9,7 @@ import ModelSelectTab, { type ProviderSelectTabOption } from './ModelSelectTab';
 import type { ConfigRecord, Rule } from './RuleGraphTypes';
 
 export interface TabTemplatePageProps {
+    title?: string | React.ReactNode;
     rules: Rule[];
     showTokenModal: boolean;
     setShowTokenModal: (show: boolean) => void;
@@ -27,6 +28,7 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
     showNotification,
     providers,
     onRulesChange,
+    title="",
     collapsible = false,
 }) => {
     const [providerModelsByUuid, setProviderModelsByUuid] = useState<ProviderModelsDataByUuid>({});
@@ -206,7 +208,7 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
 
     return (
         <>
-            <UnifiedCard size="full">
+            <UnifiedCard size="full" title={title}>
             {rules.map((rule) => (
                 rule && rule.uuid &&
                     <RuleCard
