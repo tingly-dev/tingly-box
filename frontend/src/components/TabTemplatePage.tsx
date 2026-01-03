@@ -408,7 +408,13 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
                     </Box>
                 )}
 
-                {/* Rule Configuration using RuleGraphV2 */}
+
+            </UnifiedCard>
+
+            {/* Rule Configuration using RuleGraphV2 */}
+            <UnifiedCard
+                size={"full"}
+            >
                 <RuleGraphV2
                     record={configRecord}
                     recordUuid={configRecord.uuid}
