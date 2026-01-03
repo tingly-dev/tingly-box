@@ -333,7 +333,7 @@ func (s *Server) UseAIEndpoints() {
 	anthropicFutureV1 := s.engine.Group("/tingly/anthropic/v1")
 	s.SetupAnthropicEndpoints(anthropicFutureV1)
 
-	ccV1 := s.engine.Group("/tingly/claude-code/v1")
+	ccV1 := s.engine.Group("/tingly/claude_code/v1")
 	s.SetupAnthropicEndpoints(ccV1)
 }
 
