@@ -64,7 +64,9 @@ const UseOpenAIPage: React.FC<UseOpenAIPageProps> = ({
         <Box sx={{p: 2}}>
             <BaseUrlRow
                 label="Base URL"
-                path="/openai"
+                path="/tingly/openai"
+                legacyLabel="(Legacy) Base URL"
+                legacyPath="/openai"
                 baseUrl={baseUrl}
                 onCopy={(url) => copyToClipboard(url, 'OpenAI Base URL')}
                 urlLabel="OpenAI Base URL"
