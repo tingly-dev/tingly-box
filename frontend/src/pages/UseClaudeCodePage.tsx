@@ -222,19 +222,15 @@ node --eval '
     );
 
     return (
-        <>
+        <CardGrid>
+            <UnifiedCard
+                title="Use Claude Code"
+                size="full"
+            >
+                {header}
+            </UnifiedCard>
             <TabTemplatePage
                 rules={[rule]}
-                renderHeader={() => (
-                    <CardGrid>
-                        <UnifiedCard
-                            title="Use Claude Code"
-                            size="full"
-                        >
-                            {header}
-                        </UnifiedCard>
-                    </CardGrid>
-                )}
                 showTokenModal={showTokenModal}
                 setShowTokenModal={setShowTokenModal}
                 token={token}
@@ -242,7 +238,7 @@ node --eval '
                 providers={providers}
                 onRulesChange={(rules) => setRule(rules[0])}
             />
-        </>
+        </CardGrid>
     );
 };
 

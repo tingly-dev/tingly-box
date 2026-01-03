@@ -109,20 +109,16 @@ const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
     );
 
     return (
-        <>
+        <CardGrid>
+            <UnifiedCard
+                title="Use Anthropic SDK"
+                size="full"
+            >
+                {header}
+            </UnifiedCard>
             <TabTemplatePage
                 rules={[rule]}
                 collapsible={true}
-                renderHeader={() => (
-                    <CardGrid>
-                        <UnifiedCard
-                            title="Use Anthropic SDK"
-                            size="full"
-                        >
-                            {header}
-                        </UnifiedCard>
-                    </CardGrid>
-                )}
                 showTokenModal={showTokenModal}
                 setShowTokenModal={setShowTokenModal}
                 token={token}
@@ -130,7 +126,7 @@ const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
                 providers={providers}
                 onRulesChange={(rules) => setRule(rules[0])}
             />
-        </>
+        </CardGrid>
     );
 };
 
