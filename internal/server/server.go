@@ -325,7 +325,21 @@ func (s *Server) UseAIEndpoints() {
 
 	// scenario
 	scenarioV1 := s.engine.Group("/tingly/:scenario/v1")
-	s.SetupOpenAIEndpoints(scenarioV1)
+	s.SetupMixinEndpoints(scenarioV1)
+}
+
+func (s *Server) SetupMixinEndpoints(group *gin.RouterGroup) {
+	// Chat completions endpoint (OpenAI compatible)
+	group.POST("/chat/completions", s.authMW.ModelAuthMiddleware(), s.OpenAIChatCompletions)
+	// Models endpoint (OpenAI compatible)
+	group.GET("/models", s.authMW.ModelAuthMiddleware(), s.OpenAIListModels)
+
+	// Chat completions endpoint (Anthropic compatible)
+	group.POST("/messages", s.authMW.ModelAuthMiddleware(), s.AnthropicMessages)
+	// Count tokens endpoint (Anthropic compatible)
+	group.POST("/messages/count_tokens", s.authMW.ModelAuthMiddleware(), s.AnthropicCountTokens)
+	// Models endpoint (Anthropic compatible)
+	//group.GET("/models", s.authMW.ModelAuthMiddleware(), s.AnthropicListModels)
 }
 
 func (s *Server) SetupOpenAIEndpoints(group *gin.RouterGroup) {

@@ -45,6 +45,8 @@ type (
 
 // AnthropicMessages handles Anthropic v1 messages API requests
 func (s *Server) AnthropicMessages(c *gin.Context) {
+	scenario := c.Param("scenario")
+
 	// Read the raw request body first for debugging purposes
 	bodyBytes, err := c.GetRawData()
 	if err != nil {
@@ -100,16 +102,45 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		return
 	}
 
-	// Determine provider and model based on request
-	provider, selectedService, rule, err := s.DetermineProviderAndModel(proxyModel)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
-		return
+	// Determine provider & model
+	var (
+		provider        *config.Provider
+		selectedService *config.Service
+		rule            *config.Rule
+	)
+	if scenario == "" {
+		provider, selectedService, rule, err = s.DetermineProviderAndModel(proxyModel)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error: ErrorDetail{
+					Message: err.Error(),
+					Type:    "invalid_request_error",
+				},
+			})
+			return
+		}
+	} else {
+		// Convert string to RuleScenario and validate
+		scenarioType := config.RuleScenario(scenario)
+		if !isValidRuleScenario(scenarioType) {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error: ErrorDetail{
+					Message: fmt.Sprintf("invalid scenario: %s", scenario),
+					Type:    "invalid_request_error",
+				},
+			})
+			return
+		}
+		provider, selectedService, rule, err = s.DetermineProviderAndModelWithScenario(scenarioType, proxyModel)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error: ErrorDetail{
+					Message: err.Error(),
+					Type:    "invalid_request_error",
+				},
+			})
+			return
+		}
 	}
 
 	// Set the rule and provider in context so middleware can use the same rule
