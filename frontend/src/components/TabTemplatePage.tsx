@@ -1,5 +1,5 @@
 import { PlayArrow as ProbeIcon } from '@mui/icons-material';
-import { Box, Button, Dialog, DialogContent, DialogTitle, Typography } from '@mui/material';
+import { Box, Button, Dialog, DialogContent, DialogTitle, Tooltip, Typography } from '@mui/material';
 import React, { useCallback, useEffect, useState } from 'react';
 import type {ProbeResponse, ProbeResponseData} from '../client';
 import ApiKeyModal from '../components/ApiKeyModal';
@@ -47,6 +47,7 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
     const [isProbing, setIsProbing] = useState(false);
     const [probeResult, setProbeResult] = useState<ProbeResponse | null>(null);
     const [detailsExpanded, setDetailsExpanded] = useState(false);
+    const [probeDialogOpen, setProbeDialogOpen] = useState(false);
 
     // ModelSelectTab dialog state for provider selection
     const [modelSelectDialogOpen, setModelSelectDialogOpen] = useState(false);
@@ -125,6 +126,7 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
 
         setIsProbing(true);
         setProbeResult(null);
+        setProbeDialogOpen(true);
 
         try {
             const result = await api.probeModel(providerUuid, model);
@@ -391,7 +393,8 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
             {/* Header Card */}
             <UnifiedCard
                 title={title}
-                size="header">
+                size="full"
+            >
                 {header || (
                     <Box sx={{ p: 2 }}>
                         <Typography variant="h6" sx={{ fontWeight: 600 }}>
@@ -419,37 +422,59 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
                     onToggleExpanded={() => { }}
                     onProviderNodeClick={handleProviderNodeClick}
                     onAddProviderButtonClick={handleAddProviderButtonClick}
+                    extraActions={
+                        <Tooltip title="Test connection to provider">
+                            <Button
+                                size="small"
+                                onClick={handleProbe}
+                                disabled={!configRecord.providers[0]?.provider || !configRecord.providers[0]?.model || isProbing}
+                                startIcon={<ProbeIcon fontSize="small" />}
+                                sx={{
+                                    minWidth: 'auto',
+                                    color: isProbing ? 'primary.main' : 'text.secondary',
+                                    '&:hover': {
+                                        backgroundColor: 'primary.main',
+                                        color: 'primary.contrastText',
+                                    },
+                                    '&:disabled': {
+                                        color: 'text.disabled',
+                                    }
+                                }}
+                            >
+                                Test
+                            </Button>
+                        </Tooltip>
+                    }
                 />
             </UnifiedCard>
 
-            {/* Probe Result Section */}
-            {configRecord.providers[0]?.provider && configRecord.providers[0]?.model && (
-                <UnifiedCard
-                    title="Connection Test"
-                    size="full"
-                    rightAction={
-                        <Button
-                            variant="outlined"
-                            onClick={handleProbe}
-                            disabled={!configRecord.providers[0]?.provider || !configRecord.providers[0]?.model || isProbing}
-                            startIcon={<ProbeIcon />}
-                        >
-                            Test Connection
-                        </Button>
-                    }
-                >
-                    <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                        <Probe
-                            provider={configRecord.providers[0].provider}
-                            model={configRecord.providers[0].model}
-                            isProbing={isProbing}
-                            probeResult={probeResult}
-                            onToggleDetails={() => setDetailsExpanded(!detailsExpanded)}
-                            detailsExpanded={detailsExpanded}
-                        />
-                    </Box>
-                </UnifiedCard>
-            )}
+            {/* Probe Result Dialog */}
+            <Dialog
+                open={probeDialogOpen}
+                onClose={() => setProbeDialogOpen(false)}
+                maxWidth="md"
+                fullWidth
+                PaperProps={{
+                    sx: { height: 'auto', maxHeight: '80vh' }
+                }}
+            >
+                <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Typography variant="h6">Connection Test Result</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                        {providerUuidToName[configRecord?.providers[0]?.provider || '']} / {configRecord?.providers[0]?.model}
+                    </Typography>
+                </DialogTitle>
+                <DialogContent>
+                    <Probe
+                        provider={configRecord?.providers[0]?.provider}
+                        model={configRecord?.providers[0]?.model}
+                        isProbing={isProbing}
+                        probeResult={probeResult}
+                        onToggleDetails={() => setDetailsExpanded(!detailsExpanded)}
+                        detailsExpanded={detailsExpanded}
+                    />
+                </DialogContent>
+            </Dialog>
 
             {/* ModelSelectTab Dialog for provider selection */}
             <Dialog
