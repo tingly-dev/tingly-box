@@ -72,12 +72,7 @@ func (s *Server) OpenAIListModels(c *gin.Context) {
 
 // OpenAIChatCompletions handles OpenAI v1 chat completion requests
 func (s *Server) OpenAIChatCompletions(c *gin.Context) {
-	// Use the existing ChatCompletions logic for OpenAI compatibility
-	s.ChatCompletions(c)
-}
 
-// ChatCompletions handles OpenAI-compatible chat completion requests
-func (s *Server) ChatCompletions(c *gin.Context) {
 	// Read raw body
 	bodyBytes, err := c.GetRawData()
 	if err != nil {
