@@ -3,6 +3,7 @@ import {
     ArrowBack as ArrowBackIcon,
     ArrowForward as ArrowForwardIcon,
     Delete as DeleteIcon,
+    ExpandMore as ExpandMoreIcon,
     Info as InfoIcon,
     MoreVert as MoreVertIcon,
     Refresh as RefreshIcon
@@ -37,6 +38,7 @@ interface RuleGraphProps {
     providerUuidToName: { [uuid: string]: string };
     saving: boolean;
     expanded: boolean;
+    collapsible?: boolean;
     recordUuid: string;
     onUpdateRecord: (field: keyof ConfigRecord, value: any) => void;
     onDeleteProvider: (recordId: string, providerId: string) => void;
@@ -44,6 +46,7 @@ interface RuleGraphProps {
     onToggleExpanded: () => void;
     onProviderNodeClick: (providerUuid: string) => void;
     onAddProviderButtonClick: () => void;
+    extraActions?: React.ReactNode;
 }
 
 const StyledCard = styled(Card, {
@@ -57,15 +60,19 @@ const StyledCard = styled(Card, {
     },
 }));
 
-const SummarySection = styled(Box)(({ theme }) => ({
+const SummarySection = styled(Box, {
+    shouldForwardProp: (prop) => prop !== 'collapsible',
+})<{ collapsible?: boolean }>(({ theme, collapsible }) => ({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: theme.spacing(2),
-    cursor: 'pointer',
-    '&:hover': {
-        backgroundColor: 'action.hover',
-    },
+    cursor: collapsible ? 'pointer' : 'default',
+    ...(collapsible && {
+        '&:hover': {
+            backgroundColor: 'action.hover',
+        },
+    }),
 }));
 
 // Graph Container for expanded view
@@ -441,14 +448,19 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
     providerUuidToName,
     saving,
     expanded,
+    collapsible = false,
     recordUuid,
     onUpdateRecord,
     onDeleteProvider,
     onRefreshModels,
     onToggleExpanded,
     onProviderNodeClick,
-    onAddProviderButtonClick
+    onAddProviderButtonClick,
+    extraActions
 }) => {
+    // When collapsible, parent controls expanded state (defaults to false when collapsible=true)
+    // When not collapsible, always show expanded
+    const isExpanded = !collapsible || expanded;
     const getApiStyle = (providerUuid: string) => {
         const provider = providers.find(p => p.uuid === providerUuid);
         return provider?.api_style || 'openai';
@@ -457,24 +469,29 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
     return (
         <StyledCard active={record.active}>
             {/* Header Section - RuleCard Style */}
-            <SummarySection onClick={onToggleExpanded}>
+            <SummarySection
+                collapsible={collapsible}
+                onClick={collapsible ? onToggleExpanded : undefined}
+            >
+                {/* Left side */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1 }}>
                     <Typography variant="h6" sx={{
                         fontWeight: 600,
-                        color: record.active ? 'text.primary' : 'text.disabled'
+                        color: record.active ? 'text.primary' : 'text.disabled',
+                        minWidth: 150,
                     }}>
                         {record.requestModel || 'Specified model name'}
                     </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Chip
                         label={`Use ${record.providers.length} ${record.providers.length === 1 ? 'Key' : 'Keys'}`}
                         size="small"
                         variant="outlined"
+                        onClick={(e) => e.stopPropagation()}
                         sx={{
                             opacity: record.active ? 1 : 0.5,
                             borderColor: record.active ? 'inherit' : 'text.disabled',
-                            color: record.active ? 'inherit' : 'text.disabled'
+                            color: record.active ? 'inherit' : 'text.disabled',
+                            minWidth: 90,
                         }}
                     />
                     <Chip
@@ -482,8 +499,10 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                         size="small"
                         color={record.active ? "success" : "default"}
                         variant={record.active ? "filled" : "outlined"}
+                        onClick={(e) => e.stopPropagation()}
                         sx={{
                             opacity: record.active ? 1 : 0.7,
+                            minWidth: 75,
                         }}
                     />
                     <Switch
@@ -494,21 +513,41 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                         color="success"
                         onClick={(e) => e.stopPropagation()}
                     />
+                </Box>
+                {/* Right side */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Box onClick={(e) => e.stopPropagation()}>{extraActions}</Box>
                     {record.responseModel && <Chip
                         label={`Response as ${record.responseModel}`}
                         size="small"
                         color="info"
+                        onClick={(e) => e.stopPropagation()}
                         sx={{
                             opacity: record.active ? 1 : 0.5,
                             backgroundColor: record.active ? 'info.main' : 'action.disabled',
                             color: record.active ? 'info.contrastText' : 'text.disabled'
                         }}
                     />}
+                    {collapsible && (
+                        <IconButton
+                            size="small"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onToggleExpanded();
+                            }}
+                            sx={{
+                                transition: 'transform 0.2s',
+                                transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                            }}
+                        >
+                            <ExpandMoreIcon />
+                        </IconButton>
+                    )}
                 </Box>
             </SummarySection>
 
             {/* Expanded Content - Graph View */}
-            <Collapse in={expanded} timeout="auto" unmountOnExit>
+            <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                 <CardContent sx={{ pt: 0 }}>
                     <Stack spacing={3}>
                         {/* Graph Visualization */}

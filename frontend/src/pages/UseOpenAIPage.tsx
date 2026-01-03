@@ -8,6 +8,8 @@ import TabTemplatePage from '../components/TabTemplatePage';
 import {api, getBaseUrl} from '../services/api';
 import type { Provider } from '../types/provider';
 import { ApiConfigRow } from "@/components/ApiConfigRow";
+import CardGrid from "@/components/CardGrid.tsx";
+import UnifiedCard from "@/components/UnifiedCard.tsx";
 
 interface UseOpenAIPageProps {
     showTokenModal: boolean;
@@ -18,6 +20,7 @@ interface UseOpenAIPageProps {
 }
 
 const ruleId = "built-in-openai";
+const scenario = "openai";
 
 const UseOpenAIPage: React.FC<UseOpenAIPageProps> = ({
     showTokenModal,
@@ -27,7 +30,7 @@ const UseOpenAIPage: React.FC<UseOpenAIPageProps> = ({
     providers
 }) => {
     const [baseUrl, setBaseUrl] = React.useState<string>('');
-    const [rule, setRule] = React.useState<any>(null);
+    const [rules, setRules] = React.useState<any>(null);
     const [loadingRule, setLoadingRule] = React.useState(true);
     const navigate = useNavigate();
 
@@ -45,10 +48,14 @@ const UseOpenAIPage: React.FC<UseOpenAIPageProps> = ({
         setBaseUrl(url);
 
         // Fetch rule information
-        const result = await api.getRule(ruleId);
+        const result = await api.getRules(scenario);
+        console.log('getRules result:', result);
         if (result.success) {
-            setRule(result.data);
-            console.log(rule)
+            // getRules returns an array, we need the first item or filter by ruleId
+            const ruleData = Array.isArray(result.data)
+                ? result.data : [];
+            console.log('ruleData:', ruleData);
+            setRules(ruleData);
         }
         setLoadingRule(false);
     };
@@ -57,14 +64,15 @@ const UseOpenAIPage: React.FC<UseOpenAIPageProps> = ({
         loadData();
     }, []);
 
-    const openaiBaseUrl = `${baseUrl}/openai`;
-    const modelName = rule?.request_model;
+    // const modelName = rules?.request_model;
 
     const header = (
         <Box sx={{p: 2}}>
             <BaseUrlRow
                 label="Base URL"
-                path="/openai"
+                path="/tingly/openai"
+                legacyLabel="(Legacy) Base URL"
+                legacyPath="/openai"
                 baseUrl={baseUrl}
                 onCopy={(url) => copyToClipboard(url, 'OpenAI Base URL')}
                 urlLabel="OpenAI Base URL"
@@ -83,40 +91,52 @@ const UseOpenAIPage: React.FC<UseOpenAIPageProps> = ({
                     </Tooltip>
                 </Box>
             </ApiConfigRow>
-            <ApiConfigRow
-                label="Model Name"
-                value={modelName}
-                onCopy={() => copyToClipboard(modelName, 'Model Name')}
-                isClickable={true}
-            >
-                <Box sx={{display: 'flex', gap: 0.5, ml: 'auto'}}>
-                    {/* <Tooltip title="Edit Rule">
-                        <IconButton onClick={() => navigate('/routing?expand=openai')} size="small">
-                            <EditIcon fontSize="small"/>
-                        </IconButton>
-                    </Tooltip> */}
-                    <Tooltip title="Copy Model">
-                        <IconButton onClick={() => copyToClipboard(modelName, 'Model Name')} size="small">
-                            <CopyIcon fontSize="small"/>
-                        </IconButton>
-                    </Tooltip>
-                </Box>
-            </ApiConfigRow>
+            {/*<ApiConfigRow*/}
+            {/*    label="Model Name"*/}
+            {/*    value={modelName}*/}
+            {/*    onCopy={() => copyToClipboard(modelName, 'Model Name')}*/}
+            {/*    isClickable={true}*/}
+            {/*>*/}
+            {/*    <Box sx={{display: 'flex', gap: 0.5, ml: 'auto'}}>*/}
+            {/*        /!* <Tooltip title="Edit Rule">*/}
+            {/*            <IconButton onClick={() => navigate('/routing?expand=openai')} size="small">*/}
+            {/*                <EditIcon fontSize="small"/>*/}
+            {/*            </IconButton>*/}
+            {/*        </Tooltip> *!/*/}
+            {/*        <Tooltip title="Copy Model">*/}
+            {/*            <IconButton onClick={() => copyToClipboard(modelName, 'Model Name')} size="small">*/}
+            {/*                <CopyIcon fontSize="small"/>*/}
+            {/*            </IconButton>*/}
+            {/*        </Tooltip>*/}
+            {/*    </Box>*/}
+            {/*</ApiConfigRow>*/}
         </Box>
     );
 
     return (
-        <TabTemplatePage
-            title="Use OpenAI SDK"
-            rule={rule}
-            header={header}
-            showTokenModal={showTokenModal}
-            setShowTokenModal={setShowTokenModal}
-            token={token}
-            showNotification={showNotification}
-            providers={providers}
-            onRuleChange={setRule}
-        />
+        <CardGrid>
+            <UnifiedCard
+                title="Use OpenAI SDK"
+                size="full"
+            >
+                {header}
+            </UnifiedCard>
+            <TabTemplatePage
+                title={
+                    <Tooltip title="Use as model name in your API requests to forward">
+                        Use Model
+                    </Tooltip>
+                }
+                rules={rules}
+                collapsible={true}
+                showTokenModal={showTokenModal}
+                setShowTokenModal={setShowTokenModal}
+                token={token}
+                showNotification={showNotification}
+                providers={providers}
+                onRulesChange={(rules) => setRules(rules)}
+            />
+        </CardGrid>
     );
 };
 

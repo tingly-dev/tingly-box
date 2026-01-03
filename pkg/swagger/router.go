@@ -25,6 +25,8 @@ type RouteConfig struct {
 	Middleware     []gin.HandlerFunc
 	Deprecated     bool
 	DeprecatedMsg  string
+	QueryParams    []QueryParamConfig // Query parameters
+	QueryModel     interface{}        // Query model for swagger documentation
 }
 
 // ErrorResponseConfig defines error response configuration for swagger
@@ -32,6 +34,18 @@ type ErrorResponseConfig struct {
 	Code    int
 	Message string
 	Model   interface{}
+}
+
+// QueryParamConfig defines configuration for a single query parameter
+type QueryParamConfig struct {
+	Name        string
+	Type        string
+	Required    bool
+	Default     interface{}
+	Description string
+	Enum        []interface{}
+	Minimum     *int
+	Maximum     *int
 }
 
 // RouteGroup manages a group of related routes
@@ -291,6 +305,45 @@ func WithDeprecated(message string) func(*RouteConfig) {
 	}
 }
 
+// WithQuery adds a simple query parameter (optional by default)
+func WithQuery(name, paramType, description string) func(*RouteConfig) {
+	return func(rc *RouteConfig) {
+		rc.QueryParams = append(rc.QueryParams, QueryParamConfig{
+			Name:        name,
+			Type:        paramType,
+			Required:    false,
+			Description: description,
+		})
+	}
+}
+
+// WithQueryRequired adds a required query parameter
+func WithQueryRequired(name, paramType, description string) func(*RouteConfig) {
+	return func(rc *RouteConfig) {
+		rc.QueryParams = append(rc.QueryParams, QueryParamConfig{
+			Name:        name,
+			Type:        paramType,
+			Required:    true,
+			Description: description,
+		})
+	}
+}
+
+// WithQueryConfig adds a query parameter with full configuration
+func WithQueryConfig(name string, config QueryParamConfig) func(*RouteConfig) {
+	return func(rc *RouteConfig) {
+		config.Name = name
+		rc.QueryParams = append(rc.QueryParams, config)
+	}
+}
+
+// WithQueryModel sets a query model for swagger documentation
+func WithQueryModel(model interface{}) func(*RouteConfig) {
+	return func(rc *RouteConfig) {
+		rc.QueryModel = model
+	}
+}
+
 // authMiddleware is a placeholder for authentication middleware
 func (rg *RouteGroup) authMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -389,6 +442,21 @@ func (rm *RouteManager) generateRouteAnnotations(group *RouteGroup, route RouteC
 	swaggerPath := rm.convertPathFormat(fullPath)
 	methodLower := strings.ToLower(route.Method)
 	annotations.WriteString("// @Router " + swaggerPath + "[" + methodLower + "]\n")
+
+	// Add query parameters from QueryParams
+	for _, param := range route.QueryParams {
+		required := "false"
+		if param.Required {
+			required = "true"
+		}
+		annotations.WriteString("// @Param " + param.Name + " query " + param.Type + " " + required + " \"" + param.Description + "\"\n")
+	}
+
+	// Add query model if specified
+	if route.QueryModel != nil {
+		modelName := getModelName(route.QueryModel)
+		annotations.WriteString("// @Param " + modelName + " query " + modelName + " true \"Query parameters\"\n")
+	}
 
 	// Add request model if specified
 	if route.RequestModel != nil {

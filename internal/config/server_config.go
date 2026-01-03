@@ -349,6 +349,45 @@ func (c *Config) GetRuleByUUID(UUID string) *Rule {
 	return nil
 }
 
+// GetRuleByRequestModelAndScenario returns the Rule for the given request model and scenario
+func (c *Config) GetRuleByRequestModelAndScenario(requestModel string, scenario RuleScenario) *Rule {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	for _, rule := range c.Rules {
+		if rule.RequestModel == requestModel && rule.GetScenario() == scenario {
+			return &rule
+		}
+	}
+	return nil
+}
+
+// GetUUIDByRequestModelAndScenario returns the UUID for the given request model and scenario
+func (c *Config) GetUUIDByRequestModelAndScenario(requestModel string, scenario RuleScenario) string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	for _, rule := range c.Rules {
+		if rule.RequestModel == requestModel && rule.GetScenario() == scenario {
+			return rule.UUID
+		}
+	}
+	return ""
+}
+
+// IsRequestModelInScenario checks if the given model name is a request model in the given scenario
+func (c *Config) IsRequestModelInScenario(modelName string, scenario RuleScenario) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	for _, rc := range c.Rules {
+		if rc.RequestModel == modelName && rc.GetScenario() == scenario {
+			return true
+		}
+	}
+	return false
+}
+
 // SetRequestConfigs updates all Rules
 func (c *Config) SetRequestConfigs(requestConfigs []Rule) error {
 	c.mu.Lock()
@@ -1058,6 +1097,7 @@ func init() {
 	DefaultRules = []Rule{
 		{
 			UUID:          "tingly",
+			Scenario:      ScenarioOpenAI,
 			RequestModel:  "tingly",
 			ResponseModel: "",
 			Description:   "Default proxy rule in tingly-box for general use with OpenAI or Anthropic",
@@ -1070,6 +1110,7 @@ func init() {
 		},
 		{
 			UUID:          "built-in-anthropic",
+			Scenario:      ScenarioAnthropic,
 			RequestModel:  "tingly/anthropic",
 			ResponseModel: "",
 			Description:   "Default proxy rule in tingly-box for general use with Anthropic",
@@ -1082,6 +1123,7 @@ func init() {
 		},
 		{
 			UUID:          "built-in-openai",
+			Scenario:      ScenarioOpenAI,
 			RequestModel:  "tingly/openai",
 			ResponseModel: "",
 			Description:   "Default proxy rule in tingly-box for general use with OpenAI",
@@ -1094,6 +1136,7 @@ func init() {
 		},
 		{
 			UUID:          "built-in-cc",
+			Scenario:      ScenarioClaudeCode,
 			RequestModel:  "tingly/cc",
 			ResponseModel: "",
 			Description:   "Default proxy rule for Claude Code",
@@ -1106,6 +1149,7 @@ func init() {
 		},
 		{
 			UUID:          "claude-code",
+			Scenario:      ScenarioClaudeCode,
 			RequestModel:  "claude-code",
 			ResponseModel: "",
 			Description:   "Default proxy rule for Claude Code",

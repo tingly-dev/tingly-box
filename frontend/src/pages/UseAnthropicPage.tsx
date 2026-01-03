@@ -8,6 +8,8 @@ import {BaseUrlRow} from '../components/BaseUrlRow';
 import TabTemplatePage from '../components/TabTemplatePage';
 import {api, getBaseUrl} from '../services/api';
 import type { Provider } from '../types/provider';
+import CardGrid from "@/components/CardGrid.tsx";
+import UnifiedCard from "@/components/UnifiedCard.tsx";
 
 interface UseAnthropicPageProps {
     showTokenModal: boolean;
@@ -18,7 +20,7 @@ interface UseAnthropicPageProps {
 }
 
 const ruleId = "built-in-anthropic";
-const ruleName = "tingly/anthropic"
+const scenario = "anthropic";
 
 const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
     showTokenModal,
@@ -28,7 +30,7 @@ const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
     providers
 }) => {
     const [baseUrl, setBaseUrl] = React.useState<string>('');
-    const [rule, setRule] = React.useState<any>(null);
+    const [rules, setRules] = React.useState<any>(null);
     const [loadingRule, setLoadingRule] = React.useState(true);
     const navigate = useNavigate();
 
@@ -46,9 +48,14 @@ const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
         setBaseUrl(url);
 
         // Fetch rule information
-        const result = await api.getRule(ruleId);
+        const result = await api.getRules(scenario);
+        console.log('getRules result:', result);
         if (result.success) {
-            setRule(result.data);
+            console.log('result.data:', result.data);
+            // getRules returns an array, we need the first item or filter by ruleId
+            const ruleData = result.data;
+            console.log('ruleData:', ruleData);
+            setRules(ruleData);
         }
         setLoadingRule(false);
     };
@@ -57,16 +64,18 @@ const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
         loadData();
     }, []);
 
-    const modelName = rule?.request_model;
+    // const modelName = rules?.request_model;
 
     const header = (
         <Box sx={{p: 2}}>
             <BaseUrlRow
                 label="Base URL"
-                path="/anthropic"
+                path="/tingly/anthropic"
+                legacyPath ="/anthropic"
+                legacyLabel="(Legacy) Base URL "
                 baseUrl={baseUrl}
-                onCopy={(url) => copyToClipboard(url, 'Anthropic Base URL')}
                 urlLabel="Anthropic Base URL"
+                onCopy={(url) => copyToClipboard(url, 'Anthropic Base URL')}
             />
             <ApiConfigRow label="API Key" showEllipsis={true}>
                 <Box sx={{display: 'flex', gap: 0.5, ml: 'auto'}}>
@@ -82,40 +91,52 @@ const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
                     </Tooltip>
                 </Box>
             </ApiConfigRow>
-            <ApiConfigRow
-                label="Model Name"
-                value={modelName}
-                onCopy={() => copyToClipboard(modelName, 'Model Name')}
-                isClickable={true}
-            >
-                <Box sx={{display: 'flex', gap: 0.5, ml: 'auto'}}>
-                    {/* <Tooltip title="Edit Rule">
-                        <IconButton onClick={() => navigate('/routing?expand=anthropic')} size="small">
-                            <EditIcon fontSize="small"/>
-                        </IconButton>
-                    </Tooltip> */}
-                    <Tooltip title="Copy Model">
-                        <IconButton onClick={() => copyToClipboard(modelName || ruleId, 'Model Name')} size="small">
-                            <CopyIcon fontSize="small"/>
-                        </IconButton>
-                    </Tooltip>
-                </Box>
-            </ApiConfigRow>
+            {/*<ApiConfigRow*/}
+            {/*    label="Model Name"*/}
+            {/*    value={modelName}*/}
+            {/*    onCopy={() => copyToClipboard(modelName, 'Model Name')}*/}
+            {/*    isClickable={true}*/}
+            {/*>*/}
+            {/*    <Box sx={{display: 'flex', gap: 0.5, ml: 'auto'}}>*/}
+            {/*        /!* <Tooltip title="Edit Rule">*/}
+            {/*            <IconButton onClick={() => navigate('/routing?expand=anthropic')} size="small">*/}
+            {/*                <EditIcon fontSize="small"/>*/}
+            {/*            </IconButton>*/}
+            {/*        </Tooltip> *!/*/}
+            {/*        <Tooltip title="Copy Model">*/}
+            {/*            <IconButton onClick={() => copyToClipboard(modelName || ruleId, 'Model Name')} size="small">*/}
+            {/*                <CopyIcon fontSize="small"/>*/}
+            {/*            </IconButton>*/}
+            {/*        </Tooltip>*/}
+            {/*    </Box>*/}
+            {/*</ApiConfigRow>*/}
         </Box>
     );
 
     return (
-        <TabTemplatePage
-            title="Use Anthropic SDK"
-            rule={rule}
-            header={header}
-            showTokenModal={showTokenModal}
-            setShowTokenModal={setShowTokenModal}
-            token={token}
-            showNotification={showNotification}
-            providers={providers}
-            onRuleChange={setRule}
-        />
+        <CardGrid>
+            <UnifiedCard
+                title="Use Anthropic SDK"
+                size="full"
+            >
+                {header}
+            </UnifiedCard>
+            <TabTemplatePage
+                title={
+                    <Tooltip title="Use as model name in your API requests to forward">
+                        Use Model
+                    </Tooltip>
+                }
+                rules={rules}
+                collapsible={true}
+                showTokenModal={showTokenModal}
+                setShowTokenModal={setShowTokenModal}
+                token={token}
+                showNotification={showNotification}
+                providers={providers}
+                onRulesChange={(rules) => setRules(rules)}
+            />
+        </CardGrid>
     );
 };
 

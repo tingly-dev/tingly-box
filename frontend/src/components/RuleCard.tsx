@@ -1,310 +1,311 @@
-import {
-    Delete as DeleteIcon,
-    ExpandLess as ExpandLessIcon,
-    ExpandMore as ExpandMoreIcon,
-    Save as SaveIcon,
-    MoreVert as MoreVertIcon,
-    Settings as SettingsIcon,
-    Refresh as RefreshIcon
-} from '@mui/icons-material';
-import {
-    Box,
-    Button,
-    Card,
-    CardContent,
-    Chip,
-    Collapse,
-    IconButton,
-    Stack,
-    Switch,
-    TextField,
-    Typography,
-    Menu,
-    MenuItem,
-    ListItemIcon,
-    ListItemText
-} from '@mui/material';
-import { styled } from '@mui/material/styles';
-import React, { useState } from 'react';
-import ProviderConfig from './ProviderConfig';
+import { PlayArrow as ProbeIcon } from '@mui/icons-material';
+import { Button, Dialog, DialogContent, DialogTitle, Tooltip, Typography } from '@mui/material';
+import React, { useCallback, useState } from 'react';
+import type { ProbeResponse } from '../client';
+import Probe from '../components/Probe';
+import RuleGraphV2 from '../components/RuleGraphV2';
+import { api } from '../services/api';
+import type { Provider, ProviderModelsDataByUuid } from '../types/provider';
+import type { ConfigRecord, Rule } from './RuleGraphTypes';
 
-interface ConfigProvider {
-    uuid: string;
-    provider: string;
-    model: string;
-    isManualInput?: boolean;
-    weight?: number;
-    active?: boolean;
-    time_window?: number;
-}
-
-interface ConfigRecord {
-    uuid: string;
-    requestModel: string;
-    responseModel: string;
-    active: boolean;
-    providers: ConfigProvider[];
-}
-
-interface RuleCardProps {
-    record: ConfigRecord;
-    providers: any[];
-    providerModels: any;
+export interface RuleCardProps {
+    rule: Rule;
+    providers: Provider[];
+    providerModelsByUuid: ProviderModelsDataByUuid;
+    providerUuidToName: { [uuid: string]: string };
     saving: boolean;
-    expanded: boolean;
-    onUpdateRecord: (field: keyof ConfigRecord, value: any) => void;
-    onUpdateProvider: (providerId: string, field: keyof ConfigProvider, value: any) => void;
-    onAddProvider: () => void;
-    onDeleteProvider: (providerId: string) => void;
-    onRefreshModels: (providerName: string) => void;
-    onSave: () => void;
-    onDelete: () => void;
-    onReset: () => void;
-    onToggleExpanded: () => void;
+    showNotification: (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
+    onRuleChange?: (updatedRule: Rule) => void;
+    onProviderModelsChange?: (providerUuid: string, models: any) => void;
+    onRefreshProvider?: (providerUuid: string) => void;
+    onModelSelectOpen: (ruleUuid: string, configRecord: ConfigRecord, mode: 'edit' | 'add', providerUuid?: string) => void;
+    collapsible?: boolean;
+    initiallyExpanded?: boolean;
 }
 
-const StyledCard = styled(Card, {
-    shouldForwardProp: (prop) => prop !== 'active',
-})<{ active: boolean }>(({ active }) => ({
-    transition: 'all 0.2s ease-in-out',
-}));
+export const RuleCard: React.FC<RuleCardProps> = ({
+    rule,
+    providers,
+    providerModelsByUuid,
+    providerUuidToName,
+    saving,
+    showNotification,
+    onRuleChange,
+    onProviderModelsChange,
+    onRefreshProvider,
+    onModelSelectOpen,
+    collapsible = false,
+    initiallyExpanded = !collapsible,
+}) => {
+    const [configRecord, setConfigRecord] = useState<ConfigRecord | null>(null);
+    const [expanded, setExpanded] = useState(initiallyExpanded);
 
-const SummarySection = styled(Box)(({ theme }) => ({
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: theme.spacing(2),
-    cursor: 'pointer',
-    '&:hover': {
-        backgroundColor: 'action.hover',
-    },
-}));
+    // Probe state
+    const [isProbing, setIsProbing] = useState(false);
+    const [probeResult, setProbeResult] = useState<ProbeResponse | null>(null);
+    const [detailsExpanded, setDetailsExpanded] = useState(false);
+    const [probeDialogOpen, setProbeDialogOpen] = useState(false);
 
-const RuleCard: React.FC<RuleCardProps> = ({
-                                               record,
-                                               providers,
-                                               providerModels,
-                                               saving,
-                                               expanded,
-                                               onUpdateRecord,
-                                               onUpdateProvider,
-                                               onAddProvider,
-                                               onDeleteProvider,
-                                               onRefreshModels,
-                                               onSave,
-                                               onDelete,
-                                               onReset,
-                                               onToggleExpanded
-                                           }) => {
-    const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
-    const [showResponseField, setShowResponseField] = useState(false);
-    const menuOpen = Boolean(menuAnchorEl);
+    // Convert rule to ConfigRecord format
+    React.useEffect(() => {
+        if (rule && providers.length > 0) {
+            const services = rule.services || [];
+            const providersList = services.map((service: any) => ({
+                uuid: service.id || service.uuid || crypto.randomUUID(),
+                provider: service.provider || '',
+                model: service.model || '',
+                isManualInput: false,
+                weight: service.weight || 0,
+                active: service.active !== undefined ? service.active : true,
+                time_window: service.time_window || 0,
+            }));
 
-    const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
-        event.stopPropagation();
-        setMenuAnchorEl(event.currentTarget);
-    };
-
-    const handleMenuClose = () => {
-        setMenuAnchorEl(null);
-    };
-
-    const handleConfigureResponse = () => {
-        handleMenuClose();
-        // TODO: Add configure response logic
-        console.log('Configure response for:', record.responseModel);
-    };
-
-    const handleConfigureResponseModel = () => {
-        handleMenuClose();
-        // Show the response field and expand the card
-        setShowResponseField(true);
-        if (!expanded) {
-            onToggleExpanded();
-        }
-        // Use a timeout to ensure the field is rendered before focusing
-        setTimeout(() => {
-            const responseField = document.getElementById(`response-model-${record.uuid}`) as HTMLInputElement;
-            if (responseField) {
-                responseField.focus();
-                responseField.select();
+            if (providersList.length === 0) {
+                providersList.push({
+                    uuid: crypto.randomUUID(),
+                    provider: '',
+                    model: '',
+                });
             }
-        }, 100);
-    };
+
+            const newConfigRecord: ConfigRecord = {
+                uuid: rule.uuid || crypto.randomUUID(),
+                requestModel: rule.request_model || '',
+                responseModel: rule.response_model || '',
+                active: rule.active !== undefined ? rule.active : true,
+                providers: providersList,
+            };
+
+            setConfigRecord(newConfigRecord);
+        }
+    }, [rule, providers]);
+
+    const handleProbe = useCallback(async () => {
+        if (!configRecord?.providers.length || !configRecord.providers[0].provider || !configRecord.providers[0].model) {
+            return;
+        }
+
+        const providerUuid = configRecord.providers[0].provider;
+        const model = configRecord.providers[0].model;
+
+        setIsProbing(true);
+        setProbeResult(null);
+        setProbeDialogOpen(true);
+
+        try {
+            const result = await api.probeModel(providerUuid, model);
+            setProbeResult(result);
+        } catch (error) {
+            console.error('Probe error:', error);
+            setProbeResult({
+                success: false,
+                error: {
+                    message: (error as Error).message,
+                    type: 'client_error'
+                }
+            });
+        } finally {
+            setIsProbing(false);
+        }
+    }, [configRecord]);
+
+    const handleRefreshModels = useCallback(async (providerUuid: string) => {
+        if (!providerUuid) return;
+
+        if (onRefreshProvider) {
+            onRefreshProvider(providerUuid);
+            return;
+        }
+
+        try {
+            const result = await api.updateProviderModelsByUUID(providerUuid);
+            if (result.success && result.data && onProviderModelsChange) {
+                onProviderModelsChange(providerUuid, result.data);
+                showNotification(`Models refreshed successfully!`, 'success');
+            } else {
+                showNotification(`Failed to refresh models`, 'error');
+            }
+        } catch (error) {
+            console.error('Error refreshing models:', error);
+            showNotification(`Error refreshing models`, 'error');
+        }
+    }, [onRefreshProvider, onProviderModelsChange, showNotification]);
+
+    const handleFetchModels = useCallback(async (providerUuid: string) => {
+        if (!providerUuid || providerModelsByUuid[providerUuid]) return;
+
+        try {
+            const result = await api.getProviderModelsByUUID(providerUuid);
+            if (result.success && result.data && onProviderModelsChange) {
+                onProviderModelsChange(providerUuid, result.data);
+            }
+        } catch (error) {
+            console.error(`Failed to fetch models for provider ${providerUuid}:`, error);
+        }
+    }, [providerModelsByUuid, onProviderModelsChange]);
+
+    const autoSave = useCallback(async (newConfigRecord: ConfigRecord) => {
+        if (!newConfigRecord.requestModel) return false;
+
+        for (const provider of newConfigRecord.providers) {
+            if (provider.provider && !provider.model) {
+                return false;
+            }
+        }
+
+        try {
+            const ruleData = {
+                uuid: rule.uuid,
+                request_model: newConfigRecord.requestModel,
+                response_model: newConfigRecord.responseModel,
+                active: newConfigRecord.active,
+                services: newConfigRecord.providers
+                    .filter(p => p.provider && p.model)
+                    .map(provider => ({
+                        provider: provider.provider,
+                        model: provider.model,
+                        weight: provider.weight || 0,
+                        active: provider.active !== undefined ? provider.active : true,
+                        time_window: provider.time_window || 0,
+                    })),
+            };
+
+            const result = await api.updateRule(rule.uuid, ruleData);
+            console.log("update rule: ", result)
+            if (result.success) {
+                onRuleChange?.({
+                    ...rule,
+                    request_model: ruleData.request_model,
+                    response_model: ruleData.response_model,
+                    active: ruleData.active,
+                    services: ruleData.services,
+                });
+                return true;
+            } else {
+                showNotification(`Failed to save: ${result.error || 'Unknown error'}`, 'error');
+                return false;
+            }
+        } catch (error) {
+            console.error('Error saving rule:', error);
+            showNotification(`Error saving configuration`, 'error');
+            return false;
+        }
+    }, [rule, onRuleChange, showNotification]);
+
+    const handleUpdateRecord = useCallback(async (field: keyof ConfigRecord, value: any) => {
+        if (configRecord) {
+            const previousRecord = { ...configRecord };
+            const updated = { ...configRecord, [field]: value };
+            setConfigRecord(updated);
+
+            const success = await autoSave(updated);
+            if (!success) {
+                // Rollback on error
+                setConfigRecord(previousRecord);
+            }
+        }
+    }, [configRecord, autoSave]);
+
+    const handleDeleteProvider = useCallback(async (_recordId: string, providerId: string) => {
+        if (configRecord) {
+            const previousRecord = { ...configRecord };
+            const updated = {
+                ...configRecord,
+                providers: configRecord.providers.filter(p => p.uuid !== providerId),
+            };
+            setConfigRecord(updated);
+
+            const success = await autoSave(updated);
+            if (!success) {
+                // Rollback on error
+                setConfigRecord(previousRecord);
+            }
+        }
+    }, [configRecord, autoSave]);
+
+    const handleProviderNodeClick = useCallback((providerUuid: string) => {
+        if (configRecord) {
+            onModelSelectOpen(rule.uuid, configRecord, 'edit', providerUuid);
+        }
+    }, [configRecord, rule.uuid, onModelSelectOpen]);
+
+    const handleAddProviderButtonClick = useCallback(() => {
+        if (configRecord) {
+            onModelSelectOpen(rule.uuid, configRecord, 'add');
+        }
+    }, [configRecord, rule.uuid, onModelSelectOpen]);
+
+    if (!configRecord) return null;
 
     return (
-        <StyledCard active={record.active}>
-            <SummarySection onClick={onToggleExpanded}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                        {record.requestModel || 'Specified model name'}
+        <>
+            <RuleGraphV2
+                record={configRecord}
+                recordUuid={configRecord.uuid}
+                providers={providers}
+                providerUuidToName={providerUuidToName}
+                saving={saving}
+                expanded={expanded}
+                collapsible={collapsible}
+                onUpdateRecord={handleUpdateRecord}
+                onDeleteProvider={handleDeleteProvider}
+                onRefreshModels={handleRefreshModels}
+                onToggleExpanded={() => setExpanded(!expanded)}
+                onProviderNodeClick={handleProviderNodeClick}
+                onAddProviderButtonClick={handleAddProviderButtonClick}
+                extraActions={
+                    <Tooltip title="Test connection to provider">
+                        <Button
+                            size="small"
+                            onClick={handleProbe}
+                            disabled={!configRecord.providers[0]?.provider || !configRecord.providers[0]?.model || isProbing}
+                            startIcon={<ProbeIcon fontSize="small" />}
+                            sx={{
+                                minWidth: 'auto',
+                                color: isProbing ? 'primary.main' : 'text.secondary',
+                                '&:hover': {
+                                    backgroundColor: 'primary.main',
+                                    color: 'primary.contrastText',
+                                },
+                                '&:disabled': {
+                                    color: 'text.disabled',
+                                }
+                            }}
+                        >
+                            Test
+                        </Button>
+                    </Tooltip>
+                }
+            />
+
+            {/* Probe Result Dialog */}
+            <Dialog
+                open={probeDialogOpen}
+                onClose={() => setProbeDialogOpen(false)}
+                maxWidth="md"
+                fullWidth
+                PaperProps={{
+                    sx: { height: 'auto', maxHeight: '80vh' }
+                }}
+            >
+                <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Typography variant="h6">Connection Test Result</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                        {providerUuidToName[configRecord?.providers[0]?.provider || '']} / {configRecord?.providers[0]?.model}
                     </Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Chip
-                            // icon={<ApiIcon sx={{ fontSize: 16 }} />}
-                            label={`use ${record.providers.length} keys`}
-                            size="small"
-                            variant="outlined"
-                        />
-                        <Chip
-                            label={record.active ? 'Active' : 'Inactive'}
-                            color={record.active ? 'success' : 'default'}
-                            size="small"
-                        />
-                        {
-                            record.responseModel && <Chip
-                                label={`Response as ${record.responseModel}`}
-                                size="small"
-                                color={'info'}
-                            />
-                        }
-                    </Box>
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    {/* Action Buttons */}
-                    <Box sx={{ display: 'flex', gap: 0.5, mr: 1 }}>
-                        <Button
-                            variant="contained"
-                            color="primary"
-                            size="small"
-                            startIcon={<SaveIcon />}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onSave();
-                            }}
-                            disabled={saving}
-                            sx={{ minWidth: 'auto', px: 1.5 }}
-                        >
-                            {saving ? 'Saving...' : 'Save'}
-                        </Button>
-                        <Button
-                            startIcon={<RefreshIcon />}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onReset();
-                            }}
-                            variant="outlined"
-                            size="small"
-                            disabled={saving}
-                            sx={{ minWidth: 'auto', px: 1.5 }}
-                        >
-                            Reset
-                        </Button>
-                        <IconButton
-                            size="small"
-                            onClick={handleMenuClick}
-                            disabled={saving}
-                            sx={{ ml: 0.5 }}
-                        >
-                            <MoreVertIcon />
-                        </IconButton>
-                        <Menu
-                            anchorEl={menuAnchorEl}
-                            open={menuOpen}
-                            onClose={handleMenuClose}
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            {!record.responseModel ? (
-                                <MenuItem onClick={handleConfigureResponseModel}>
-                                    <ListItemIcon>
-                                        <SettingsIcon fontSize="small" />
-                                    </ListItemIcon>
-                                    <ListItemText>Configure Response Model</ListItemText>
-                                </MenuItem>
-                            ) : (
-                                <MenuItem onClick={handleConfigureResponse}>
-                                    <ListItemIcon>
-                                        <SettingsIcon fontSize="small" />
-                                    </ListItemIcon>
-                                    <ListItemText>Configure Response</ListItemText>
-                                </MenuItem>
-                            )}
-                            <MenuItem onClick={(e) => {
-                                e.stopPropagation();
-                                onDelete();
-                            }}>
-
-                                <ListItemIcon>
-                                    <DeleteIcon fontSize="small" />
-                                </ListItemIcon>
-                                <ListItemText>Delete Rule</ListItemText>
-                            </MenuItem>
-                        </Menu>
-                    </Box>
-                    <Switch
-                        checked={record.active}
-                        onChange={(e) => onUpdateRecord('active', e.target.checked)}
-                        size="small"
-                        disabled={saving}
-                        onClick={(e) => e.stopPropagation()}
+                </DialogTitle>
+                <DialogContent>
+                    <Probe
+                        provider={configRecord?.providers[0]?.provider}
+                        model={configRecord?.providers[0]?.model}
+                        isProbing={isProbing}
+                        probeResult={probeResult}
+                        onToggleDetails={() => setDetailsExpanded(!detailsExpanded)}
+                        detailsExpanded={detailsExpanded}
                     />
-                    <IconButton
-                        size="small"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onToggleExpanded();
-                        }}
-                    >
-                        {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                    </IconButton>
-                </Box>
-            </SummarySection>
-
-            <Collapse in={expanded} timeout="auto" unmountOnExit>
-                <CardContent sx={{ pt: 0 }}>
-                    <Stack spacing={2}>
-                        {/* Model Configuration */}
-                        <Box>
-                            <Typography variant="subtitle1" sx={{ fontWeight: 600, color: 'text.primary', mb: 1.5 }}>
-                                Local Model
-                            </Typography>
-                            <Stack direction="row" spacing={1}>
-                                <TextField
-                                    id={`request-model-${record.uuid}`}
-                                    label="Request Model"
-                                    value={record.requestModel}
-                                    onChange={(e) => onUpdateRecord('requestModel', e.target.value)}
-                                    helperText="Enter specified model name"
-                                    size="small"
-                                    disabled={!record.active}
-                                    fullWidth
-                                />
-                                <TextField
-                                    id={`response-model-${record.uuid}`}
-                                    label="Response Model"
-                                    value={record.responseModel}
-                                    onChange={(e) => {
-                                        onUpdateRecord('responseModel', e.target.value);
-                                        if (e.target.value) {
-                                            setShowResponseField(false);
-                                        }
-                                    }}
-                                    helperText={record.responseModel ? "Model to return as" : "Leave empty for as-is response"}
-                                    size="small"
-                                    disabled={!record.active}
-                                    sx={{
-                                        minWidth: 200,
-                                        display: record.responseModel || showResponseField ? 'block' : 'none'
-                                    }}
-                                />
-                            </Stack>
-                        </Box>
-
-                        {/* Provider Configuration */}
-                        <ProviderConfig
-                            providers={record.providers}
-                            availableProviders={providers}
-                            providerModels={providerModels}
-                            active={record.active}
-                            onAddProvider={onAddProvider}
-                            onDeleteProvider={onDeleteProvider}
-                            onUpdateProvider={onUpdateProvider}
-                            onRefreshModels={onRefreshModels}
-                        />
-                    </Stack>
-                </CardContent>
-            </Collapse>
-        </StyledCard>
+                </DialogContent>
+            </Dialog>
+        </>
     );
 };
 

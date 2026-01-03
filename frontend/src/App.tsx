@@ -9,7 +9,6 @@ import Home from './pages/Home';
 import Login from './pages/Login';
 import ApiKeyPage from './pages/ApiKeyPage';
 import OAuthPage from './pages/OAuthPage';
-import RulePage from './pages/RulePage';
 import System from './pages/System';
 import UseOpenAIPageWrapper from './pages/wrappers/UseOpenAIPageWrapper';
 import UseAnthropicPageWrapper from './pages/wrappers/UseAnthropicPageWrapper';
@@ -39,7 +38,6 @@ function App() {
                                             {/* Other routes */}
                                             <Route path="/api-keys" element={<ApiKeyPage />} />
                                             <Route path="/oauth" element={<OAuthPage />} />
-                                            <Route path="/routing" element={<RulePage />} />
                                             <Route path="/system" element={<System />} />
                                         </Routes>
                                     </Layout>
