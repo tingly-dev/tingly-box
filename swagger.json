@@ -629,6 +629,15 @@
         "produces": [
           "application/json"
         ],
+        "parameters": [
+          {
+            "name": "scenario",
+            "in": "query",
+            "description": "Filter by scenario",
+            "required": true,
+            "type": "string"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -1207,6 +1216,10 @@
           "type": "string",
           "description": "Field response_model"
         },
+        "scenario": {
+          "type": "string",
+          "description": "Field scenario"
+        },
         "services": {
           "type": "array",
           "description": "Field services",
@@ -1221,6 +1234,7 @@
       },
       "required": [
         "uuid",
+        "scenario",
         "request_model",
         "response_model",
         "description",
@@ -2219,6 +2233,10 @@
           "type": "string",
           "description": "Field response_model"
         },
+        "scenario": {
+          "type": "string",
+          "description": "Field scenario"
+        },
         "services": {
           "type": "array",
           "description": "Field services",
@@ -2233,6 +2251,7 @@
       },
       "required": [
         "uuid",
+        "scenario",
         "request_model",
         "response_model",
         "description",
@@ -2645,6 +2664,10 @@
           "type": "string",
           "description": "Field response_model"
         },
+        "scenario": {
+          "type": "string",
+          "description": "Field scenario"
+        },
         "services": {
           "type": "array",
           "description": "Field services",
@@ -2659,6 +2682,7 @@
       },
       "required": [
         "uuid",
+        "scenario",
         "request_model",
         "response_model",
         "description",
@@ -2774,28 +2798,28 @@
   },
   "tags": [
     {
+      "name": "testing",
+      "description": "Operations related to testing"
+    },
+    {
+      "name": "logs",
+      "description": "Operations related to logs"
+    },
+    {
       "name": "server",
       "description": "Operations related to server"
-    },
-    {
-      "name": "rules",
-      "description": "Operations related to rules"
-    },
-    {
-      "name": "history",
-      "description": "Operations related to history"
     },
     {
       "name": "models",
       "description": "Operations related to models"
     },
     {
-      "name": "testing",
-      "description": "Operations related to testing"
-    },
-    {
       "name": "token",
       "description": "Operations related to token"
+    },
+    {
+      "name": "providers",
+      "description": "Operations related to providers"
     },
     {
       "name": "oauth",
@@ -2806,12 +2830,12 @@
       "description": "Operations related to info"
     },
     {
-      "name": "logs",
-      "description": "Operations related to logs"
+      "name": "rules",
+      "description": "Operations related to rules"
     },
     {
-      "name": "providers",
-      "description": "Operations related to providers"
+      "name": "history",
+      "description": "Operations related to history"
     }
   ]
 }
