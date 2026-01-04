@@ -336,9 +336,9 @@ func (h *ConfigHandler) UpdateProvider(c *gin.Context) {
 		TokenRequestFormat: config.TokenRequestFormat,
 		RedirectURL:        req.RedirectURL,
 		ConsoleURL:         config.ConsoleURL,
-		AuthExtraParams:    config.AuthExtraParams,
-		TokenExtraParams:   config.TokenExtraParams,
-		TokenExtraHeaders:  config.TokenExtraHeaders,
+		DeviceCodeURL:      config.DeviceCodeURL,
+		GrantType:          config.GrantType,
+		Hook:               config.Hook,
 	}
 
 	h.registry.Register(newConfig)
@@ -375,9 +375,9 @@ func (h *ConfigHandler) DeleteProvider(c *gin.Context) {
 		OAuthMethod:        config.OAuthMethod,
 		TokenRequestFormat: config.TokenRequestFormat,
 		ConsoleURL:         config.ConsoleURL,
-		AuthExtraParams:    config.AuthExtraParams,
-		TokenExtraParams:   config.TokenExtraParams,
-		TokenExtraHeaders:  config.TokenExtraHeaders,
+		DeviceCodeURL:      config.DeviceCodeURL,
+		GrantType:          config.GrantType,
+		Hook:               config.Hook,
 	})
 
 	c.JSON(http.StatusOK, gin.H{
@@ -413,9 +413,9 @@ func LoadProviderConfigs(registry *oauth.Registry, configs []ProviderConfigInput
 				TokenRequestFormat: existing.TokenRequestFormat,
 				RedirectURL:        cfg.RedirectURL,
 				ConsoleURL:         existing.ConsoleURL,
-				AuthExtraParams:    existing.AuthExtraParams,
-				TokenExtraParams:   existing.TokenExtraParams,
-				TokenExtraHeaders:  existing.TokenExtraHeaders,
+				DeviceCodeURL:      existing.DeviceCodeURL,
+				GrantType:          existing.GrantType,
+				Hook:               existing.Hook,
 			})
 		}
 	}
