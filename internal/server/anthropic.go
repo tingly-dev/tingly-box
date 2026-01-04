@@ -161,6 +161,9 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 	if req.MaxTokens > int64(maxAllowed) {
 		req.MaxTokens = int64(maxAllowed)
 	}
+	if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil {
+		req.MaxTokens = *thinkBudget + 1
+	}
 
 	// Set provider UUID in context (Service.Provider uses UUID, not name)
 	c.Set("provider", provider.UUID)

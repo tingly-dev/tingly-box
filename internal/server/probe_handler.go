@@ -18,6 +18,9 @@ import (
 	"github.com/openai/openai-go/v3"
 )
 
+// ClaudeCodeSystemHeader MENTION: this a special process for subscriptions
+const ClaudeCodeSystemHeader = "You are Claude Code, Anthropic's official CLI for Claude."
+
 // HandleProbeProvider tests a provider's API key and connectivity
 func (s *Server) HandleProbeProvider(c *gin.Context) {
 	var req ProbeProviderRequest
@@ -315,14 +318,24 @@ func (s *Server) probeWithAnthropic(c *gin.Context, provider *config.Provider, m
 	// Get Anthropic client from pool (supports proxy, OAuth headers, and caching)
 	anthropicClient := s.clientPool.GetAnthropicClient(provider)
 
+	// Determine system message based on OAuth provider type
+	systemMessages := []anthropic.TextBlockParam{
+		{
+			Text: "work as `echo`",
+		},
+	}
+	if provider.AuthType == config.AuthTypeOAuth && provider.OAuthDetail != nil &&
+		provider.OAuthDetail.ProviderType == "claude_code" {
+		// Prepend Claude Code system message as the first block
+		systemMessages = append([]anthropic.TextBlockParam{{
+			Text: ClaudeCodeSystemHeader,
+		}}, systemMessages...)
+	}
+
 	// Create message request using Anthropic SDK
 	messageRequest := anthropic.MessageNewParams{
-		Model: anthropic.Model(model), // Use empty stats for probe testing
-		System: []anthropic.TextBlockParam{
-			{
-				Text: "work as `echo`",
-			},
-		},
+		Model:  anthropic.Model(model), // Use empty stats for probe testing
+		System: systemMessages,
 		Messages: []anthropic.MessageParam{
 			anthropic.NewUserMessage(anthropic.NewTextBlock("hi")),
 		},
