@@ -16,6 +16,7 @@ const (
 	ProviderGitHub      ProviderType = "github"
 	ProviderQwenCode    ProviderType = "qwen_code"
 	ProviderAntigravity ProviderType = "antigravity"
+	ProviderIFlow       ProviderType = "iflow"
 	ProviderMock        ProviderType = "mock"
 )
 
@@ -24,7 +25,7 @@ func ParseProviderType(s string) (ProviderType, error) {
 	p := ProviderType(s)
 	// Validate by checking against known providers
 	switch p {
-	case ProviderClaudeCode, ProviderOpenAI, ProviderGoogle, ProviderGemini, ProviderGitHub, ProviderQwenCode, ProviderAntigravity, ProviderMock:
+	case ProviderClaudeCode, ProviderOpenAI, ProviderGoogle, ProviderGemini, ProviderGitHub, ProviderQwenCode, ProviderAntigravity, ProviderIFlow, ProviderMock:
 		return p, nil
 	default:
 		return "", fmt.Errorf("unknown provider type: %s", s)
@@ -189,6 +190,9 @@ type Token struct {
 
 	// ResourceURL is the optional resource URL endpoint (for some providers like Qwen)
 	ResourceURL string `json:"resource_url,omitempty"`
+
+	// Metadata contains additional provider-specific information (email, project_id, api_key, etc)
+	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
 // Valid returns true if the token is valid and not expired

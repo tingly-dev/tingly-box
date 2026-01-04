@@ -142,6 +142,26 @@ func DefaultRegistry() *Registry {
 		Hook:               &QwenHook{},
 	})
 
+	// iFlow OAuth (Chinese AI platform)
+	// https://iflow.cn/
+	// Uses custom OAuth with phone-based login and Basic Auth for token requests
+	// Reference: https://github.com/router-for-me/CLIProxyAPI
+	registry.Register(&ProviderConfig{
+		Type:         ProviderIFlow,
+		DisplayName:  "iFlow",
+		ClientID:     "10009311001",
+		ClientSecret: "4Z3YjXycVsQvyGF1etiNlIBB4RsqSDtW",
+		AuthURL:      "https://iflow.cn/oauth",
+		TokenURL:     "https://iflow.cn/oauth/token",
+		Scopes:       []string{},
+		AuthStyle:    AuthStyleInHeader, // Uses Basic Auth
+		ConsoleURL:   "https://platform.iflow.cn/",
+		Hook: &IFlowHook{
+			ClientID:     "10009311001",
+			ClientSecret: "4Z3YjXycVsQvyGF1etiNlIBB4RsqSDtW",
+		},
+	})
+
 	return registry
 }
 

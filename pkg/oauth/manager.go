@@ -393,6 +393,18 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 		token.Expiry = time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)
 	}
 
+	// Call provider's after-token hook to fetch additional metadata
+	if config.Hook != nil && token.AccessToken != "" {
+		metadata, err := config.Hook.AfterToken(ctx, token.AccessToken, client)
+		if err != nil {
+			fmt.Printf("[OAuth] AfterToken hook failed: %v\n", err)
+			// Continue even if AfterToken fails, as we already have the token
+		}
+		if metadata != nil {
+			token.Metadata = metadata
+		}
+	}
+
 	return token, nil
 }
 
