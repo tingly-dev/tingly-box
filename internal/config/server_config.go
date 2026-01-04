@@ -917,20 +917,6 @@ func getProviderModelsFromAPI(provider *Provider) ([]string, error) {
 		if provider.AuthType == AuthTypeOAuth && provider.OAuthDetail != nil {
 			req.Header.Set("Authorization", "Bearer "+accessToken)
 			req.Header.Set("anthropic-version", "2023-06-01")
-			providerType := oauth.ProviderType(provider.OAuthDetail.ProviderType)
-			if headers := client.GetOAuthCustomHeaders(providerType); len(headers) > 0 {
-				for k, v := range headers {
-					req.Header.Set(k, v)
-				}
-			}
-			// Add custom query params
-			if params := client.GetOAuthCustomParams(providerType); len(params) > 0 {
-				q := req.URL.Query()
-				for k, v := range params {
-					q.Add(k, v)
-				}
-				req.URL.RawQuery = q.Encode()
-			}
 		} else {
 			req.Header.Set("x-api-key", accessToken)
 			req.Header.Set("anthropic-version", "2023-06-01")
@@ -940,8 +926,14 @@ func getProviderModelsFromAPI(provider *Provider) ([]string, error) {
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	// Create HTTP client with proxy support
-	httpClient := client.CreateHTTPClientWithProxy(provider.ProxyURL)
+	// Create HTTP client with proxy and OAuth hook support
+	var httpClient *http.Client
+	if provider.AuthType == AuthTypeOAuth && provider.OAuthDetail != nil {
+		providerType := oauth.ProviderType(provider.OAuthDetail.ProviderType)
+		httpClient = client.CreateHTTPClientForProvider(providerType, provider.ProxyURL, true)
+	} else {
+		httpClient = client.CreateHTTPClientWithProxy(provider.ProxyURL)
+	}
 	httpClient.Timeout = 30 * time.Second
 
 	resp, err := httpClient.Do(req)
