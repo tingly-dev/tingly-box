@@ -95,15 +95,14 @@ func (s *Server) CreateRule(c *gin.Context) {
 		})
 		return
 	}
-	uid, err := uuid.NewUUID()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+	if rule.Scenario == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"error":   err.Error(),
+			"error":   "Unknown scenario",
 		})
 		return
 	}
-	rule.UUID = uid.String()
+	rule.UUID = uuid.NewString()
 
 	cfg := s.config
 	if cfg == nil {

@@ -93,7 +93,7 @@ func (p *Provider) IsOAuthExpired() bool {
 // Rule represents a request/response configuration with load balancing support
 type Rule struct {
 	UUID                string       `json:"uuid"`
-	Scenario            RuleScenario `json:"scenario" yaml:"scenario"` // openai, anthropic, claude_code; defaults to openai
+	Scenario            RuleScenario `json:"scenario,required" yaml:"scenario"` // openai, anthropic, claude_code; defaults to openai
 	RequestModel        string       `json:"request_model" yaml:"request_model"`
 	ResponseModel       string       `json:"response_model" yaml:"response_model"`
 	Description         string       `json:"description"`
