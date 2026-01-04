@@ -274,6 +274,7 @@ func runCreateUpdateRuleWithAuth(t *testing.T, ts *TestServer) {
 	req, _ := http.NewRequest("POST", "/api/v1/rule/test-rule-uuid", CreateJSONBody(map[string]interface{}{
 		"name":           "test-name",
 		"uuid":           "test-rule-uuid",
+		"scenario":       "openai",
 		"response_model": "gpt-4",
 		"provider":       "openai",
 		"default_model":  "gpt-4-turbo",
