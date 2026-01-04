@@ -246,6 +246,14 @@ func runRulesEndpointWithAuth(t *testing.T, ts *TestServer) {
 	w := httptest.NewRecorder()
 	ts.ginEngine.ServeHTTP(w, req)
 
+	assert.Equal(t, 400, w.Code)
+
+	// new with scenario
+	req, _ = http.NewRequest("GET", "/api/v1/rules?scenario=openai", nil)
+	req.Header.Set("Authorization", "Bearer "+userToken)
+	w = httptest.NewRecorder()
+	ts.ginEngine.ServeHTTP(w, req)
+
 	assert.Equal(t, 200, w.Code)
 
 	var response map[string]interface{}
