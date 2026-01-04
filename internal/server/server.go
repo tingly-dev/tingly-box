@@ -44,8 +44,8 @@ type Server struct {
 	// OAuth manager
 	oauthManager *oauth2.Manager
 
-	// Token refresher for OAuth auto-refresh
-	tokenRefresher *TokenRefresher
+	// OAuth refresher for OAuth auto-refresh
+	oauthRefresher *OAuthRefresher
 
 	// template manager for provider templates
 	templateManager *config.TemplateManager
@@ -223,7 +223,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.loadBalancer = loadBalancer
 	server.loadBalancerAPI = loadBalancerAPI
 	server.oauthManager = oauthManager
-	server.tokenRefresher = tokenRefresher
+	server.oauthRefresher = tokenRefresher
 
 	// Initialize template manager with GitHub URL for template sync
 	const templateGitHubURL = "https://raw.githubusercontent.com/tingly-dev/tingly-box/main/internal/config/provider_templates.json"
@@ -380,8 +380,8 @@ func (s *Server) Start(port int) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	if s.tokenRefresher != nil {
-		go s.tokenRefresher.Start(ctx)
+	if s.oauthRefresher != nil {
+		go s.oauthRefresher.Start(ctx)
 		log.Println("OAuth token auto-refresh started")
 	}
 
@@ -479,8 +479,8 @@ func (s *Server) Stop(ctx context.Context) error {
 	}
 
 	// Stop token refresher
-	if s.tokenRefresher != nil {
-		s.tokenRefresher.Stop()
+	if s.oauthRefresher != nil {
+		s.oauthRefresher.Stop()
 		log.Println("OAuth token auto-refresh stopped")
 	}
 
