@@ -173,7 +173,7 @@ jobs:
           PKG_TYPE: ${{ env.PKG_TYPE }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          FULL_TAG="npx-$VERSION"
+          FULL_TAG="npx-${PKG_TYPE}-$VERSION"
 
           echo "Creating NPX tag and release for $FULL_TAG"
 
@@ -185,7 +185,7 @@ jobs:
           fi
 
           cat > npx_release_notes.md << EOF
-          ## 📦 NPX Package Release - $VERSION
+          ## 📦 NPX Package Release - $VERSION ($PKG_TYPE)
 
           Based on GitHub Release: [${RELEASE_TAG}](https://github.com/tingly-dev/tingly-box/releases/tag/${RELEASE_TAG})
 
@@ -209,71 +209,17 @@ jobs:
 
           if gh release view "$FULL_TAG" >/dev/null 2>&1; then
             echo "Release $FULL_TAG already exists, updating..."
-            gh release edit "$FULL_TAG" --notes-file npx_release_notes.md --title "NPX Package $VERSION"
+            gh release edit "$FULL_TAG" --notes-file npx_release_notes.md --title "NPX Package $VERSION ($PKG_TYPE)"
           else
             PRERELEASE_FLAG=""
             if [[ "$VERSION" == *-* ]]; then
               PRERELEASE_FLAG="--prerelease"
             fi
             gh release create "$FULL_TAG" \
-              --title "NPX Package $VERSION" \
+              --title "NPX Package $VERSION ($PKG_TYPE)" \
               --notes-file npx_release_notes.md \
               ${PRERELEASE_FLAG}
           fi
-
-      - name: Update release repository with NPX info
-        env:
-          VERSION: ${{ needs.setup.outputs.npx_version }}
-          RELEASE_TAG: ${{ needs.setup.outputs.release_tag }}
-          PKG_TYPE: ${{ env.PKG_TYPE }}
-          PKG_NAME: ${{ env.PKG_NAME }}
-          SSH_PRIVATE_KEY: ${{ secrets.RELEASE_REPO_SSH_KEY }}
-        run: |
-          mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan github.com >> ~/.ssh/known_hosts
-          chmod 644 ~/.ssh/known_hosts
-
-          TEMP_DIR=$(mktemp -d)
-          git clone "git@github.com:tingly-dev/tingly-box-release.git" "$TEMP_DIR"
-          cd "$TEMP_DIR"
-          git checkout main
-
-          JSON_KEY="npx_${PKG_TYPE}_version"
-
-          if [ -f "LATEST.json" ]; then
-            echo "Updating existing LATEST.json..."
-            jq --arg version "$VERSION" \
-               --arg release_tag "$RELEASE_TAG" \
-               --arg npx_tag "npx-$VERSION" \
-               --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-               --arg pkg_type "$PKG_TYPE" \
-               --arg pkg_name "$PKG_NAME" \
-               ".release_tag = \$release_tag | .npx_latest_tag = \$npx_tag | .\$pkg_type = \$version | .npx_\${pkg_type}_package = \$pkg_name | .\${pkg_type}_updated_at = \$timestamp" \
-               LATEST.json > LATEST.tmp && mv LATEST.tmp LATEST.json
-          else
-            echo "Creating new LATEST.json..."
-            cat > LATEST.json << EOF
-          {
-            "release_tag": "$RELEASE_TAG",
-            "npx_latest_tag": "npx-$VERSION",
-            "npx_${PKG_TYPE}_version": "$VERSION",
-            "npx_${PKG_TYPE}_package": "$PKG_NAME",
-            "${PKG_TYPE}_updated_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "workflow_run": "${{ github.workflow }}",
-            "repository": "${{ github.repository }}"
-          }
-          EOF
-          fi
-
-          cat LATEST.json
-
-          git add LATEST.json
-          git commit -m "Update LATEST.json with $PKG_NAME $VERSION based on $RELEASE_TAG"
-          git push origin main
-
-          rm -rf "$TEMP_DIR"
 
   # Publish GUI NPX package
   publish-gui:
@@ -368,7 +314,7 @@ jobs:
           PKG_TYPE: ${{ env.PKG_TYPE }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          FULL_TAG="npx-$VERSION"
+          FULL_TAG="npx-${PKG_TYPE}-$VERSION"
 
           echo "Creating NPX tag and release for $FULL_TAG"
 
@@ -380,7 +326,7 @@ jobs:
           fi
 
           cat > npx_release_notes.md << EOF
-          ## 📦 NPX Package Release - $VERSION
+          ## 📦 NPX Package Release - $VERSION ($PKG_TYPE)
 
           Based on GitHub Release: [${RELEASE_TAG}](https://github.com/tingly-dev/tingly-box/releases/tag/${RELEASE_TAG})
 
@@ -404,68 +350,14 @@ jobs:
 
           if gh release view "$FULL_TAG" >/dev/null 2>&1; then
             echo "Release $FULL_TAG already exists, updating..."
-            gh release edit "$FULL_TAG" --notes-file npx_release_notes.md --title "NPX Package $VERSION"
+            gh release edit "$FULL_TAG" --notes-file npx_release_notes.md --title "NPX Package $VERSION ($PKG_TYPE)"
           else
             PRERELEASE_FLAG=""
             if [[ "$VERSION" == *-* ]]; then
               PRERELEASE_FLAG="--prerelease"
             fi
             gh release create "$FULL_TAG" \
-              --title "NPX Package $VERSION" \
+              --title "NPX Package $VERSION ($PKG_TYPE)" \
               --notes-file npx_release_notes.md \
               ${PRERELEASE_FLAG}
           fi
-
-      - name: Update release repository with NPX info
-        env:
-          VERSION: ${{ needs.setup.outputs.npx_version }}
-          RELEASE_TAG: ${{ needs.setup.outputs.release_tag }}
-          PKG_TYPE: ${{ env.PKG_TYPE }}
-          PKG_NAME: ${{ env.PKG_NAME }}
-          SSH_PRIVATE_KEY: ${{ secrets.RELEASE_REPO_SSH_KEY }}
-        run: |
-          mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan github.com >> ~/.ssh/known_hosts
-          chmod 644 ~/.ssh/known_hosts
-
-          TEMP_DIR=$(mktemp -d)
-          git clone "git@github.com:tingly-dev/tingly-box-release.git" "$TEMP_DIR"
-          cd "$TEMP_DIR"
-          git checkout main
-
-          JSON_KEY="npx_${PKG_TYPE}_version"
-
-          if [ -f "LATEST.json" ]; then
-            echo "Updating existing LATEST.json..."
-            jq --arg version "$VERSION" \
-               --arg release_tag "$RELEASE_TAG" \
-               --arg npx_tag "npx-$VERSION" \
-               --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-               --arg pkg_type "$PKG_TYPE" \
-               --arg pkg_name "$PKG_NAME" \
-               ".release_tag = \$release_tag | .npx_latest_tag = \$npx_tag | .\$pkg_type = \$version | .npx_\${pkg_type}_package = \$pkg_name | .\${pkg_type}_updated_at = \$timestamp" \
-               LATEST.json > LATEST.tmp && mv LATEST.tmp LATEST.json
-          else
-            echo "Creating new LATEST.json..."
-            cat > LATEST.json << EOF
-          {
-            "release_tag": "$RELEASE_TAG",
-            "npx_latest_tag": "npx-$VERSION",
-            "npx_${PKG_TYPE}_version": "$VERSION",
-            "npx_${PKG_TYPE}_package": "$PKG_NAME",
-            "${PKG_TYPE}_updated_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "workflow_run": "${{ github.workflow }}",
-            "repository": "${{ github.repository }}"
-          }
-          EOF
-          fi
-
-          cat LATEST.json
-
-          git add LATEST.json
-          git commit -m "Update LATEST.json with $PKG_NAME $VERSION based on $RELEASE_TAG"
-          git push origin main
-
-          rm -rf "$TEMP_DIR"
