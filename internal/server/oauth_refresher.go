@@ -10,9 +10,14 @@ import (
 	oauth2 "tingly-box/pkg/oauth"
 )
 
+// tokenManager defines the interface for token refresh operations
+type tokenManager interface {
+	RefreshToken(ctx context.Context, userID string, providerType oauth2.ProviderType, refreshToken string) (*oauth2.Token, error)
+}
+
 // OAuthRefresher handles periodic OAuth token refresh
 type OAuthRefresher struct {
-	manager       *oauth2.Manager
+	manager       tokenManager
 	serverConfig  *config.Config
 	checkInterval time.Duration // Check every 10 minutes
 	refreshBuffer time.Duration // Refresh if expires within 5 minutes
@@ -89,6 +94,13 @@ func (tr *OAuthRefresher) Stop() {
 		close(tr.stopChan)
 		tr.stopChan = make(chan struct{})
 	}
+}
+
+// Running returns true if the refresher is currently running
+func (tr *OAuthRefresher) Running() bool {
+	tr.mu.RLock()
+	defer tr.mu.RUnlock()
+	return tr.running
 }
 
 // CheckAndRefreshTokens checks all OAuth providers and refreshes tokens if needed
