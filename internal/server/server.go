@@ -8,13 +8,13 @@ import (
 	"net/http"
 	"path/filepath"
 	"time"
-	oauth2 "tingly-box/pkg/oauth"
 
 	"tingly-box/internal/auth"
 	"tingly-box/internal/config"
 	"tingly-box/internal/obs"
 	"tingly-box/internal/server/middleware"
 	"tingly-box/internal/util"
+	oauth2 "tingly-box/pkg/oauth"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/browser"
@@ -43,6 +43,9 @@ type Server struct {
 
 	// OAuth manager
 	oauthManager *oauth2.Manager
+
+	// Token refresher for OAuth auto-refresh
+	tokenRefresher *TokenRefresher
 
 	// template manager for provider templates
 	templateManager *config.TemplateManager
@@ -210,6 +213,9 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	}
 	oauthManager := oauth2.NewManager(oauthConfig, registry)
 
+	// Initialize token refresher for OAuth auto-refresh
+	tokenRefresher := NewTokenRefresher(oauthManager, cfg)
+
 	// Update server with dependencies
 	server.statsMW = statsMW
 	server.authMW = authMW
@@ -217,6 +223,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.loadBalancer = loadBalancer
 	server.loadBalancerAPI = loadBalancerAPI
 	server.oauthManager = oauthManager
+	server.tokenRefresher = tokenRefresher
 
 	// Initialize template manager with GitHub URL for template sync
 	const templateGitHubURL = "https://raw.githubusercontent.com/tingly-dev/tingly-box/main/internal/config/provider_templates.json"
@@ -369,6 +376,15 @@ func (s *Server) UseLoadBalanceEndpoints() {
 
 // Start starts the HTTP server
 func (s *Server) Start(port int) error {
+	// Start token refresher background goroutine
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if s.tokenRefresher != nil {
+		go s.tokenRefresher.Start(ctx)
+		log.Println("OAuth token auto-refresh started")
+	}
+
 	// Start configuration watcher
 	if s.watcher != nil {
 		if err := s.watcher.Start(); err != nil {
@@ -460,6 +476,12 @@ func (s *Server) GetLoadBalancer() *LoadBalancer {
 func (s *Server) Stop(ctx context.Context) error {
 	if s.httpServer == nil {
 		return nil
+	}
+
+	// Stop token refresher
+	if s.tokenRefresher != nil {
+		s.tokenRefresher.Stop()
+		log.Println("OAuth token auto-refresh stopped")
 	}
 
 	// Stop debug middleware
