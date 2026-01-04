@@ -228,9 +228,22 @@ func (m *Manager) buildAuthURL(config *ProviderConfig, state string, codeVerifie
 		query.Set("code_challenge_method", "S256")
 	}
 
-	// Add provider-specific extra parameters
-	for key, value := range config.AuthExtraParams {
-		query.Set(key, value)
+	// Call provider's auth hook if present
+	if config.Hook != nil {
+		// Convert query to map for hook
+		params := make(map[string]string)
+		for k, v := range query {
+			if len(v) > 0 {
+				params[k] = v[0]
+			}
+		}
+		if err := config.Hook.BeforeAuth(params); err != nil {
+			return "", "", err
+		}
+		// Convert back to query
+		for k, v := range params {
+			query.Set(k, v)
+		}
 	}
 
 	u.RawQuery = query.Encode()
@@ -315,11 +328,6 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 		params["code_verifier"] = codeVerifier
 	}
 
-	// Add provider-specific extra parameters
-	for key, value := range config.TokenExtraParams {
-		params[key] = value
-	}
-
 	reqBody, contentType, err := buildRequestBody(params, useJSON)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build request body: %w", err)
@@ -333,9 +341,18 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("Accept", "application/json")
 
-	// Add provider-specific extra headers (may override Content-Type above)
-	for key, value := range config.TokenExtraHeaders {
-		req.Header.Set(key, value)
+	// Call provider's token hook if present
+	if config.Hook != nil {
+		if err := config.Hook.BeforeToken(params, req.Header); err != nil {
+			return nil, err
+		}
+		// Rebuild body in case hook modified params
+		reqBody, contentType, err = buildRequestBody(params, useJSON)
+		if err != nil {
+			return nil, fmt.Errorf("failed to rebuild request body: %w", err)
+		}
+		req.Body = io.NopCloser(reqBody)
+		req.Header.Set("Content-Type", contentType)
 	}
 
 	// Debug: print request details
@@ -424,11 +441,6 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 		"client_secret": config.ClientSecret,
 	}
 
-	// Add provider-specific extra parameters
-	for key, value := range config.TokenExtraParams {
-		params[key] = value
-	}
-
 	reqBody, contentType, err := buildRequestBody(params, useJSON)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build request body: %w", err)
@@ -442,9 +454,18 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("Accept", "application/json")
 
-	// Add provider-specific extra headers (may override Content-Type above)
-	for key, value := range config.TokenExtraHeaders {
-		req.Header.Set(key, value)
+	// Call provider's token hook if present
+	if config.Hook != nil {
+		if err := config.Hook.BeforeToken(params, req.Header); err != nil {
+			return nil, err
+		}
+		// Rebuild body in case hook modified params
+		reqBody, contentType, err = buildRequestBody(params, useJSON)
+		if err != nil {
+			return nil, fmt.Errorf("failed to rebuild request body: %w", err)
+		}
+		req.Body = io.NopCloser(reqBody)
+		req.Header.Set("Content-Type", contentType)
 	}
 
 	// Debug: print request details
@@ -582,9 +603,18 @@ func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, pro
 	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("Accept", "application/json")
 
-	// Add provider-specific extra headers
-	for key, value := range config.AuthExtraParams {
-		req.Header.Set(key, value)
+	// Call provider's token hook if present
+	if config.Hook != nil {
+		if err := config.Hook.BeforeToken(params, req.Header); err != nil {
+			return nil, err
+		}
+		// Rebuild body in case hook modified params
+		reqBody, contentType, err = buildRequestBody(params, useJSON)
+		if err != nil {
+			return nil, fmt.Errorf("failed to rebuild request body: %w", err)
+		}
+		req.Body = io.NopCloser(reqBody)
+		req.Header.Set("Content-Type", contentType)
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -712,9 +742,18 @@ func (m *Manager) pollTokenRequest(ctx context.Context, config *ProviderConfig, 
 	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("Accept", "application/json")
 
-	// Add provider-specific extra headers
-	for key, value := range config.TokenExtraHeaders {
-		req.Header.Set(key, value)
+	// Call provider's token hook if present
+	if config.Hook != nil {
+		if err := config.Hook.BeforeToken(params, req.Header); err != nil {
+			return nil, err
+		}
+		// Rebuild body in case hook modified params
+		reqBody, contentType, err = buildRequestBody(params, useJSON)
+		if err != nil {
+			return nil, fmt.Errorf("failed to rebuild request body: %w", err)
+		}
+		req.Body = io.NopCloser(reqBody)
+		req.Header.Set("Content-Type", contentType)
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}

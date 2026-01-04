@@ -1,9 +1,5 @@
 package oauth
 
-import (
-	"github.com/google/uuid"
-)
-
 // Registry manages OAuth provider configurations
 type Registry struct {
 	providers map[ProviderType]*ProviderConfig
@@ -66,19 +62,7 @@ func DefaultRegistry() *Registry {
 		OAuthMethod:        OAuthMethodPKCE,        // Uses PKCE for security
 		TokenRequestFormat: TokenRequestFormatJSON, // Anthropic requires JSON format
 		ConsoleURL:         "https://console.anthropic.com/",
-
-		AuthExtraParams: map[string]string{
-			"code":          "true",
-			"response_type": "code",
-		},
-		TokenExtraHeaders: map[string]string{
-			"Content-Type":    "application/json",
-			"User-Agent":      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-			"Accept":          "application/json, text/plain, */*",
-			"Accept-Language": "en-US,en;q=0.9",
-			"Referer":         "https://claude.ai/",
-			"Origin":          "https://claude.ai",
-		},
+		Hook:               &AnthropicHook{},
 	})
 
 	// OpenAI OAuth
@@ -92,6 +76,7 @@ func DefaultRegistry() *Registry {
 		Scopes:       []string{"api", "offline_access"},
 		AuthStyle:    AuthStyleInHeader,
 		ConsoleURL:   "https://platform.openai.com/",
+		Hook:         &NoopHook{},
 	})
 
 	// TODO: Google OAuth (for Gemini/Vertex AI)
@@ -105,6 +90,7 @@ func DefaultRegistry() *Registry {
 		Scopes:       []string{"https://www.googleapis.com/auth/cloud-platform"},
 		AuthStyle:    AuthStyleInHeader,
 		ConsoleURL:   "https://console.cloud.google.com/",
+		Hook:         &NoopHook{},
 	})
 
 	// Gemini CLI OAuth (Google OAuth with Gemini CLI's built-in credentials)
@@ -124,11 +110,7 @@ func DefaultRegistry() *Registry {
 		AuthStyle:   AuthStyleInHeader,
 		OAuthMethod: OAuthMethodPKCE, // Uses PKCE for security
 		ConsoleURL:  "https://console.cloud.google.com/",
-
-		AuthExtraParams: map[string]string{
-			"access_type": "offline", // To get refresh token
-			"prompt":      "consent", // Force consent dialog to ensure refresh token is returned
-		},
+		Hook:        &GeminiHook{},
 	})
 
 	// GitHub OAuth (for GitHub Copilot)
@@ -144,6 +126,7 @@ func DefaultRegistry() *Registry {
 		Scopes:       []string{"read:user", "user:email"},
 		AuthStyle:    AuthStyleInParams, // GitHub uses params for auth
 		ConsoleURL:   "https://github.com/settings/developers",
+		Hook:         &NoopHook{},
 	})
 
 	// Antigravity OAuth (Google OAuth with Antigravity credentials)
@@ -165,12 +148,7 @@ func DefaultRegistry() *Registry {
 		AuthStyle:   AuthStyleInHeader,
 		OAuthMethod: OAuthMethodPKCE,
 		ConsoleURL:  "https://console.cloud.google.com/",
-
-		AuthExtraParams: map[string]string{
-			"access_type":            "offline", // To get refresh token
-			"prompt":                 "consent", // Force consent dialog
-			"include_granted_scopes": "true",    // Include granted scopes
-		},
+		Hook:        &AntigravityHook{},
 	})
 
 	// Mock OAuth provider for testing
@@ -185,6 +163,7 @@ func DefaultRegistry() *Registry {
 		Scopes:       []string{"test", "read", "write"},
 		AuthStyle:    AuthStyleInParams,
 		ConsoleURL:   "",
+		Hook:         &NoopHook{},
 	})
 
 	// Qwen OAuth (Device Code Flow with PKCE)
@@ -203,9 +182,7 @@ func DefaultRegistry() *Registry {
 		OAuthMethod:        OAuthMethodDeviceCodePKCE,
 		TokenRequestFormat: TokenRequestFormatForm,
 		ConsoleURL:         "https://chat.qwen.ai/",
-		AuthExtraParams: map[string]string{
-			"x-request-id": uuid.New().String(),
-		},
+		Hook:               &QwenHook{},
 	})
 
 	return registry

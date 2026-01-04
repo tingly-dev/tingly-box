@@ -244,7 +244,6 @@ func setupProvider(config *ExampleConfig) (*oauth2.Registry, *oauth2.ProviderCon
 
 	providerConfig := &oauth2.ProviderConfig{
 		Type:               defaultConfig.Type,
-		GrantType:          defaultConfig.GrantType,
 		DisplayName:        defaultConfig.DisplayName,
 		ClientID:           config.ClientID,
 		ClientSecret:       clientSecret,
@@ -257,9 +256,8 @@ func setupProvider(config *ExampleConfig) (*oauth2.Registry, *oauth2.ProviderCon
 		TokenRequestFormat: defaultConfig.TokenRequestFormat,
 		RedirectURL:        fmt.Sprintf("%s/callback", config.BaseURL),
 		ConsoleURL:         defaultConfig.ConsoleURL,
-		AuthExtraParams:    defaultConfig.AuthExtraParams,
-		TokenExtraParams:   defaultConfig.TokenExtraParams,
-		TokenExtraHeaders:  defaultConfig.TokenExtraHeaders,
+		GrantType:          defaultConfig.GrantType,
+		Hook:               defaultConfig.Hook,
 	}
 	registry.Register(providerConfig)
 

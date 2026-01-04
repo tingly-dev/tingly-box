@@ -109,17 +109,8 @@ type ProviderConfig struct {
 	// Default is TokenRequestFormatForm (standard OAuth)
 	TokenRequestFormat TokenRequestFormat
 
-	// AuthExtraParams are additional parameters to send in auth requests
-	// Some providers require extra fields in the authorization URL
-	AuthExtraParams map[string]string
-
-	// TokenExtraParams are additional parameters to send in token requests
-	// Some providers require extra fields beyond the standard OAuth parameters
-	TokenExtraParams map[string]string
-
-	// TokenExtraHeaders are additional headers to send in token requests
-	// Useful for client impersonation with custom User-Agent, etc.
-	TokenExtraHeaders map[string]string
+	// Hook is the request preprocessing hook for provider-specific behavior
+	Hook RequestHook
 }
 
 // TokenRequestFormat represents the format of token request body
