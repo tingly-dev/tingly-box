@@ -1,4 +1,4 @@
-name: Github Tag Release
+name: Github Release
 
 on:
   push:
@@ -11,13 +11,42 @@ on:
         required: true
         type: string
         default: 'v1.0.0'
+      build_gui:
+        description: 'Build GUI version'
+        required: false
+        type: boolean
+        default: true
       
 env:
   GO_VERSION: '1.25'
   NODE_VERSION: '20'
 
 jobs:
-  build:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      build_gui: ${{ steps.set_vars.outputs.build_gui }}
+      release_tag: ${{ steps.set_vars.outputs.release_tag }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set variables
+        id: set_vars
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "release_tag=${{ github.event.inputs.release_tag }}" >> $GITHUB_OUTPUT
+            echo "build_gui=${{ github.event.inputs.build_gui }}" >> $GITHUB_OUTPUT
+          else
+            echo "release_tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+            echo "build_gui=true" >> $GITHUB_OUTPUT
+          fi
+
+  build-cli:
+    needs: setup
     runs-on: ${{ matrix.runs-on }}
     strategy:
       matrix:
@@ -134,12 +163,144 @@ jobs:
           startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
-          name: binary-${{ matrix.suffix }}
+          name: cli-${{ matrix.suffix }}
           path: ./dist/tingly-box-${{ matrix.suffix }}${{ matrix.exe }}
           retention-days: 7
-      
+
+  build-gui:
+    needs: setup
+    if: needs.setup.outputs.build_gui == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          # macOS builds
+          - os: macos-latest
+            platform: macos
+            arch: arm64
+            goos: darwin
+            goarch: arm64
+          # Windows builds
+          - os: windows-latest
+            platform: windows
+            arch: amd64
+            goos: windows
+            goarch: amd64
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up tag environment
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "RELEASE_TAG=${{ github.event.inputs.release_tag }}" >> $GITHUB_ENV
+            echo "TAG_EXISTS=$(git tag -l "${{ github.event.inputs.release_tag }}" | wc -l)" >> $GITHUB_ENV
+          else
+            echo "RELEASE_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+            echo "TAG_EXISTS=1" >> $GITHUB_ENV
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ matrix.goarch }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-${{ matrix.goarch }}-
+            ${{ runner.os }}-go-
+
+      - name: Cache pnpm modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pnpm-store
+            frontend/node_modules
+          key: ${{ runner.os }}-pnpm-${{ matrix.goarch }}-${{ hashFiles('frontend/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-${{ matrix.goarch }}-
+            ${{ runner.os }}-pnpm-
+
+      - name: Install go-task
+        run: go install github.com/go-task/task/v3/cmd/task@latest
+
+      - name: Install wails3
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@latest
+
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Install frontend dependencies
+        shell: bash
+        run: |
+          echo "@swc/core" | pnpm approve-builds
+          pnpm install --frozen-lockfile
+        working-directory: ./frontend
+
+      - name: Install openapi-generator-cli
+        run: npm install -g @openapitools/openapi-generator-cli
+
+      - name: Run codegen
+        run: task codegen
+
+      - name: Install NSIS (Windows only)
+        if: matrix.platform == 'windows'
+        run: choco install nsis -y
+
+      - name: Build Go binary (macOS)
+        if: matrix.platform == 'macos'
+        run: |
+          task darwin:package
+
+          mkdir -p dist
+
+          cd bin
+          ls -la .
+          zip -r ../dist/tingly-box-gui-macos-arm64.zip TinglyBox.app
+          cd ..
+
+          cd dist
+          ls -la .
+
+      - name: Build Go binary (Windows)
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          task windows:build PRODUCTION=true
+
+          New-Item -ItemType Directory -Force -Path dist
+
+          cd bin
+          Get-ChildItem
+          Compress-Archive -Path TinglyBox.exe -DestinationPath ../dist/tingly-box-gui-windows-amd64.zip
+          cd ..
+
+          cd dist
+          Get-ChildItem
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gui-${{ matrix.platform }}-${{ matrix.arch }}
+          path: ./dist/
+          retention-days: 7
+
   github-release:
-    needs: build
+    needs: [setup, build-cli]
     runs-on: ubuntu-latest
     if: |
       (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
@@ -153,38 +314,48 @@ jobs:
 
       - name: Set up tag environment
         run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "RELEASE_TAG=${{ github.event.inputs.release_tag }}" >> $GITHUB_ENV
-            echo "TAG_EXISTS=$(git tag -l "${{ github.event.inputs.release_tag }}" | wc -l)" >> $GITHUB_ENV
-          else
-            echo "RELEASE_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
-            echo "TAG_EXISTS=1" >> $GITHUB_ENV
-          fi
+          echo "RELEASE_TAG=${{ needs.setup.outputs.release_tag }}" >> $GITHUB_ENV
 
-      - name: Download build artifacts
+      - name: Download CLI artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: binary-*
-          path: ./dist
+          pattern: cli-*
+          path: ./dist/cli
+          merge-multiple: true
+
+      - name: Download GUI artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: gui-*
+          path: ./dist/gui
           merge-multiple: true
 
       - name: Package binaries with proper extensions
         run: |
-          cd dist
+          mkdir -p release
 
-          chmod +x tingly-box-* || true
+          # Process CLI binaries
+          if [ -d "dist/cli" ]; then
+            cd dist/cli
+            chmod +x tingly-box-* || true
 
-          # Package all binaries as zip
-          for binary in tingly-box-*; do
-            zip "${binary%.exe}.zip" "$binary"
-          done
+            # Package all CLI binaries as zip
+            for binary in tingly-box-*; do
+              zip "../../release/${binary%.exe}.zip" "$binary"
+            done
+            cd ../..
+          fi
 
-          # Move packages to dist root
-          mv *.zip ../
+          # Process GUI binaries (already zipped)
+          if [ -d "dist/gui" ]; then
+            cp dist/gui/*/*.zip release/ 2>/dev/null || true
+            cp dist/gui/*.zip release/ 2>/dev/null || true
+          fi
 
           # Create checksums for all files
-          cd ..
+          cd release
           sha256sum *.zip > checksums.txt
+          cd ..
 
       - name: Generate changelog
         run: |
@@ -196,8 +367,8 @@ jobs:
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           files: |
-            *.zip
-            checksums.txt
+            release/*.zip
+            release/checksums.txt
           body_path: release-notes.md
           draft: false
           prerelease: false
