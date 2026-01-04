@@ -40,7 +40,7 @@ func (fl *FileLock) TryLock() error {
 	}
 
 	// Try to acquire exclusive lock with immediate failure if locked
-	flag := windows.LOCKFILE_EXCLUSIVE_LOCK | windows.LOCKFILE_FAIL_IMMEDIATELY
+	flag := uint32(windows.LOCKFILE_EXCLUSIVE_LOCK | windows.LOCKFILE_FAIL_IMMEDIATELY)
 	var overlapped windows.Overlapped
 	err = windows.LockFileEx(
 		windows.Handle(fl.file.Fd()),
@@ -108,7 +108,7 @@ func (fl *FileLock) IsLocked() bool {
 	}
 	defer file.Close()
 
-	flag := windows.LOCKFILE_EXCLUSIVE_LOCK | windows.LOCKFILE_FAIL_IMMEDIATELY
+	flag := uint32(windows.LOCKFILE_EXCLUSIVE_LOCK | windows.LOCKFILE_FAIL_IMMEDIATELY)
 	var overlapped windows.Overlapped
 	err = windows.LockFileEx(
 		windows.Handle(file.Fd()),
