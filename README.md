@@ -13,6 +13,7 @@
 - **Unified API** – Single OpenAI‑compatible endpoint for many providers
 - **Load Balancing** – Distribute traffic across multiple API tokens using routing tactics
 - **Auto API Translation** – Seamlessly translate between OpenAI‑ and Anthropic‑style APIs
+- **OAuth Support** – Connect providers like Claude Code without API keys, use your existing quota anywhere
 - **High Performance** – Additional latency typically **< 1ms**
 - **JWT Authentication** – Separate user tokens and model tokens
 - **Web Management UI** – Visual provider, routing, and model management
@@ -98,17 +99,36 @@ print(response)
 # Settings file (~/.claude/settings.json)
 {
   "env": {
+    "DISABLE_TELEMETRY": "1",
+    "DISABLE_ERROR_REPORTING": "1",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "API_TIMEOUT_MS": "3000000",
     "ANTHROPIC_AUTH_TOKEN": "{content after tingly token cmd 'Current API Key from Global Config'}",
-    "ANTHROPIC_BASE_URL": "http://localhost:12580/anthropic",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "tingly",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "tingly",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "tingly",
-    "ANTHROPIC_MODEL": "tingly"
+    "ANTHROPIC_BASE_URL": "http://localhost:8080/tingly/claude_code",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "tingly/cc",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "tingly/cc",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "tingly/cc",
+    "ANTHROPIC_MODEL": "tingly/cc",
+    "hasCompletedOnboarding": true
   }
 }
 ```
 
 > Tingly Box proxies requests transparently for SDKs and CLI tools.
+
+**Using OAuth Providers**
+
+You can also add OAuth providers (like Claude Code) and use your existing quota in any OpenAI-compatible tool:
+
+```bash
+# 1. Add Claude Code via OAuth in Web UI (http://localhost:12580)
+# 2. Configure your tool with Tingly Box endpoint
+```
+
+
+Requests route through your OAuth-authorized provider, using your existing Claude Code quota instead of requiring a separate API key.
+
+This works with any tool that supports OpenAI-compatible endpoints: Cherry Studio, VS Code extensions, or custom AI agents.
 
 ---
 
