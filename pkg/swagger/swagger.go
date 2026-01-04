@@ -333,6 +333,39 @@ func (rm *RouteManager) GenerateSwaggerJSON() (string, error) {
 			pathParams := rm.extractPathParams(route.Path)
 			operation.Parameters = append(operation.Parameters, pathParams...)
 
+			// Handle query parameters from QueryParams
+			for _, param := range route.QueryParams {
+				swaggerParam := Parameter{
+					Name:        param.Name,
+					In:          "query",
+					Description: param.Description,
+					Required:    param.Required,
+					Type:        param.Type,
+				}
+				if param.Default != nil {
+					swaggerParam.Default = param.Default
+				}
+				if param.Minimum != nil {
+					minVal := float64(*param.Minimum)
+					swaggerParam.Minimum = &minVal
+				}
+				if param.Maximum != nil {
+					maxVal := float64(*param.Maximum)
+					swaggerParam.Maximum = &maxVal
+				}
+				if len(param.Enum) > 0 {
+					swaggerParam.Enum = param.Enum
+				}
+				operation.Parameters = append(operation.Parameters, swaggerParam)
+			}
+
+			// Handle query model
+			if route.QueryModel != nil {
+				modelName := getModelName(route.QueryModel)
+				modelSet[modelName] = route.QueryModel
+				operation.Parameters = append(operation.Parameters, rm.generateQueryParameters(route.QueryModel)...)
+			}
+
 			// Handle request model
 			if route.RequestModel != nil {
 				modelName := getModelName(route.RequestModel)

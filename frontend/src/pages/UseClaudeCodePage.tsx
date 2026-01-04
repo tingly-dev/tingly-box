@@ -5,6 +5,8 @@ import TabTemplatePage from '../components/TabTemplatePage';
 import { api, getBaseUrl } from '../services/api';
 import type { Provider } from '../types/provider';
 import { useTranslation } from 'react-i18next';
+import CardGrid from "@/components/CardGrid.tsx";
+import UnifiedCard from "@/components/UnifiedCard.tsx";
 
 interface UseClaudeCodePageProps {
     showTokenModal: boolean;
@@ -70,7 +72,7 @@ const UseClaudeCodePage: React.FC<UseClaudeCodePageProps> = ({
     };
 
     const getClaudeCodeBaseUrl = () => {
-        const url = `${baseUrl}/anthropic`;
+        const url = `${baseUrl}/tingly/claude_code`;
         return isDockerMode ? toDockerUrl(url) : url;
     };
 
@@ -116,9 +118,9 @@ node --eval '
     };
     if (fs.existsSync(settingsPath)) {
         const content = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
-        fs.writeFileSync(settingsPath, JSON.stringify({ ...content, env }, 2), "utf-8");
+        fs.writeFileSync(settingsPath, JSON.stringify({ ...content, env }, null, 2), "utf-8");
     } else {
-        fs.writeFileSync(settingsPath, JSON.stringify({ env }, 2), "utf-8");
+        fs.writeFileSync(settingsPath, JSON.stringify({ env }, null, 2), "utf-8");
     }
 '`;
     };
@@ -137,9 +139,9 @@ node --eval '
     const filePath = path.join(homeDir, ".claude.json");
     if (fs.existsSync(filePath)) {
         const content = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-        fs.writeFileSync(filePath,JSON.stringify({ ...content, hasCompletedOnboarding: true }, 2), "utf-8");
+        fs.writeFileSync(filePath, JSON.stringify({ ...content, hasCompletedOnboarding: true }, null, 2), "utf-8");
     } else {
-        fs.writeFileSync(filePath,JSON.stringify({ hasCompletedOnboarding: true }), "utf-8");
+        fs.writeFileSync(filePath, JSON.stringify({ hasCompletedOnboarding: true }, null, 2), "utf-8");
     }'`;
     };
 
@@ -159,8 +161,8 @@ node --eval '
                         filename={claudeJsonMode === 'json' ? 'Add the env section into ~/.claude/setting.json' : 'Script to setup ~/.claude/settings.json'}
                         wrap={true}
                         onCopy={(code) => copyToClipboard(code, claudeJsonMode === 'json' ? 'settings.json' : 'script')}
-                        maxHeight={220}
-                        minHeight={220}
+                        maxHeight={180}
+                        minHeight={180}
                         headerActions={
                             <ToggleButtonGroup
                                 value={claudeJsonMode}
@@ -195,8 +197,8 @@ node --eval '
                         filename={claudeJsonMode === 'json' ? 'Set hasCompletedOnboarding into ~/.claude.json' : 'Script to setup ~/.claude.json'}
                         wrap={true}
                         onCopy={(code) => copyToClipboard(code, claudeJsonMode === 'json' ? '.claude.json' : 'script')}
-                        maxHeight={220}
-                        minHeight={220}
+                        maxHeight={180}
+                        minHeight={180}
                         headerActions={
                             <ToggleButtonGroup
                                 value={claudeJsonMode}
@@ -220,17 +222,23 @@ node --eval '
     );
 
     return (
-        <TabTemplatePage
-            title="Use Claude Code"
-            rule={rule}
-            header={header}
-            showTokenModal={showTokenModal}
-            setShowTokenModal={setShowTokenModal}
-            token={token}
-            showNotification={showNotification}
-            providers={providers}
-            onRuleChange={setRule}
-        />
+        <CardGrid>
+            <UnifiedCard
+                title="Use Claude Code"
+                size="full"
+            >
+                {header}
+            </UnifiedCard>
+            <TabTemplatePage
+                rules={[rule]}
+                showTokenModal={showTokenModal}
+                setShowTokenModal={setShowTokenModal}
+                token={token}
+                showNotification={showNotification}
+                providers={providers}
+                onRulesChange={(rules) => setRule(rules[0])}
+            />
+        </CardGrid>
     );
 };
 

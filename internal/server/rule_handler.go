@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// GetRules returns all rules
+// GetRules returns all rules, require filtered by scenario
 func (s *Server) GetRules(c *gin.Context) {
 	cfg := s.config
 	if cfg == nil {
@@ -22,6 +22,24 @@ func (s *Server) GetRules(c *gin.Context) {
 	}
 
 	rules := cfg.GetRequestConfigs()
+
+	// Filter by scenario if provided
+	scenario := c.Query("scenario")
+	if scenario != "" {
+		filteredRules := make([]config.Rule, 0)
+		for _, rule := range rules {
+			if string(rule.GetScenario()) == scenario {
+				filteredRules = append(filteredRules, rule)
+			}
+		}
+		rules = filteredRules
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Scenario not found in request",
+		})
+		return
+	}
 
 	response := RulesResponse{
 		Success: true,
@@ -77,15 +95,14 @@ func (s *Server) CreateRule(c *gin.Context) {
 		})
 		return
 	}
-	uid, err := uuid.NewUUID()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+	if rule.Scenario == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"error":   err.Error(),
+			"error":   "Unknown scenario",
 		})
 		return
 	}
-	rule.UUID = uid.String()
+	rule.UUID = uuid.NewString()
 
 	cfg := s.config
 	if cfg == nil {

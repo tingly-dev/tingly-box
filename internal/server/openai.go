@@ -72,12 +72,9 @@ func (s *Server) OpenAIListModels(c *gin.Context) {
 
 // OpenAIChatCompletions handles OpenAI v1 chat completion requests
 func (s *Server) OpenAIChatCompletions(c *gin.Context) {
-	// Use the existing ChatCompletions logic for OpenAI compatibility
-	s.ChatCompletions(c)
-}
 
-// ChatCompletions handles OpenAI-compatible chat completion requests
-func (s *Server) ChatCompletions(c *gin.Context) {
+	scenario := c.Param("scenario")
+
 	// Read raw body
 	bodyBytes, err := c.GetRawData()
 	if err != nil {
@@ -142,15 +139,44 @@ func (s *Server) ChatCompletions(c *gin.Context) {
 	}
 
 	// Determine provider & model
-	provider, selectedService, rule, err := s.DetermineProviderAndModel(req.Model)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
-		return
+	var (
+		provider        *config.Provider
+		selectedService *config.Service
+		rule            *config.Rule
+	)
+	if scenario == "" {
+		provider, selectedService, rule, err = s.DetermineProviderAndModel(req.Model)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error: ErrorDetail{
+					Message: err.Error(),
+					Type:    "invalid_request_error",
+				},
+			})
+			return
+		}
+	} else {
+		// Convert string to RuleScenario and validate
+		scenarioType := config.RuleScenario(scenario)
+		if !isValidRuleScenario(scenarioType) {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error: ErrorDetail{
+					Message: fmt.Sprintf("invalid scenario: %s", scenario),
+					Type:    "invalid_request_error",
+				},
+			})
+			return
+		}
+		provider, selectedService, rule, err = s.DetermineProviderAndModelWithScenario(scenarioType, req.Model)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error: ErrorDetail{
+					Message: err.Error(),
+					Type:    "invalid_request_error",
+				},
+			})
+			return
+		}
 	}
 
 	// Set the rule and provider in context so middleware can use the same rule
@@ -466,4 +492,14 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 	// Send the final [DONE] message
 	c.Writer.Write([]byte("data: [DONE]\n\n"))
 	flusher.Flush()
+}
+
+// isValidRuleScenario checks if the given scenario is a valid RuleScenario
+func isValidRuleScenario(scenario config.RuleScenario) bool {
+	switch scenario {
+	case config.ScenarioOpenAI, config.ScenarioAnthropic, config.ScenarioClaudeCode:
+		return true
+	default:
+		return false
+	}
 }

@@ -157,6 +157,70 @@ func (s *Server) determineProvider(model, explicitProvider string) (*config.Prov
 	return nil, fmt.Errorf("no enabled providers available")
 }
 
+// DetermineProviderAndModelWithScenario
+func (s *Server) DetermineProviderAndModelWithScenario(scenario config.RuleScenario, modelName string) (*config.Provider, *config.Service, *config.Rule, error) {
+	// Check if this is the request model name first
+	c := s.config
+	if c != nil && c.IsRequestModelInScenario(modelName, scenario) {
+		// Get the Rule for this specific request model using the same method as middleware
+		uuid := c.GetUUIDByRequestModelAndScenario(modelName, scenario)
+		rules := c.GetRequestConfigs()
+		var rule *config.Rule
+		var ruleIdx int = -1
+		for i := range rules {
+			if rules[i].UUID == uuid && rules[i].Active {
+				rule = &rules[i] // Get pointer to actual rule in config
+				ruleIdx = i
+				break
+			}
+		}
+
+		if rule != nil && rule.Active {
+			// Set the rule in the context so middleware can use the same rule
+			// We need to pass this context to the actual HTTP handler, but this function
+			// doesn't have access to the Gin context. For now, we'll use a different approach.
+
+			// Use the load balancer to select service
+			selectedService, err := s.loadBalancer.SelectService(rule)
+			if err != nil {
+				return nil, nil, nil, fmt.Errorf("failed to select service: %w", err)
+			}
+
+			if selectedService == nil {
+				return nil, nil, nil, fmt.Errorf("no available service for request model '%s'", modelName)
+			}
+
+			// Verify the provider exists and is enabled
+			provider, err := c.GetProviderByUUID(selectedService.Provider)
+			if err != nil {
+				return nil, nil, nil, fmt.Errorf("provider '%s' not found: %w", selectedService.Provider, err)
+			}
+
+			if !provider.Enabled {
+				return nil, nil, nil, fmt.Errorf("provider '%s' is not enabled", selectedService.Provider)
+			}
+
+			// Update the current service index for the rule
+			s.loadBalancer.UpdateServiceIndex(rule, selectedService)
+
+			// Persist the updated CurrentServiceIndex to config
+			// This is critical for round-robin to work correctly across requests
+			if ruleIdx >= 0 {
+				if err := c.UpdateRequestConfigAt(ruleIdx, *rule); err != nil {
+					// Log error but don't fail the request
+					fmt.Printf("Warning: failed to persist CurrentServiceIndex: %v\n", err)
+				}
+			}
+
+			// Return provider, selected service, and rule
+			return provider, selectedService, rule, nil
+		}
+		return nil, nil, nil, fmt.Errorf("provider or model not configured for request model '%s'", modelName)
+	}
+
+	return nil, nil, nil, fmt.Errorf("provider or model not configured for request model '%s'", modelName)
+}
+
 // DetermineProviderAndModel resolves the model name and finds the appropriate provider using load balancing
 func (s *Server) DetermineProviderAndModel(modelName string) (*config.Provider, *config.Service, *config.Rule, error) {
 	// Check if this is the request model name first
