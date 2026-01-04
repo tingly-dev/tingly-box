@@ -1,48 +1,5 @@
 package oauth
 
-// Registry manages OAuth provider configurations
-type Registry struct {
-	providers map[ProviderType]*ProviderConfig
-}
-
-// NewRegistry creates a new OAuth provider registry
-func NewRegistry() *Registry {
-	return &Registry{
-		providers: make(map[ProviderType]*ProviderConfig),
-	}
-}
-
-// Register adds or updates a provider configuration
-func (r *Registry) Register(config *ProviderConfig) {
-	r.providers[config.Type] = config
-}
-
-// Unregister removes a provider configuration
-func (r *Registry) Unregister(providerType ProviderType) {
-	delete(r.providers, providerType)
-}
-
-// Get returns a provider configuration
-func (r *Registry) Get(providerType ProviderType) (*ProviderConfig, bool) {
-	config, ok := r.providers[providerType]
-	return config, ok
-}
-
-// List returns all registered provider types
-func (r *Registry) List() []ProviderType {
-	types := make([]ProviderType, 0, len(r.providers))
-	for t := range r.providers {
-		types = append(types, t)
-	}
-	return types
-}
-
-// IsRegistered checks if a provider is registered
-func (r *Registry) IsRegistered(providerType ProviderType) bool {
-	_, ok := r.providers[providerType]
-	return ok
-}
-
 // DefaultRegistry returns a registry with default provider configurations
 // Note: Client ID and Secret must be set from environment variables or config
 func DefaultRegistry() *Registry {
@@ -186,6 +143,49 @@ func DefaultRegistry() *Registry {
 	})
 
 	return registry
+}
+
+// Registry manages OAuth provider configurations
+type Registry struct {
+	providers map[ProviderType]*ProviderConfig
+}
+
+// NewRegistry creates a new OAuth provider registry
+func NewRegistry() *Registry {
+	return &Registry{
+		providers: make(map[ProviderType]*ProviderConfig),
+	}
+}
+
+// Register adds or updates a provider configuration
+func (r *Registry) Register(config *ProviderConfig) {
+	r.providers[config.Type] = config
+}
+
+// Unregister removes a provider configuration
+func (r *Registry) Unregister(providerType ProviderType) {
+	delete(r.providers, providerType)
+}
+
+// Get returns a provider configuration
+func (r *Registry) Get(providerType ProviderType) (*ProviderConfig, bool) {
+	config, ok := r.providers[providerType]
+	return config, ok
+}
+
+// List returns all registered provider types
+func (r *Registry) List() []ProviderType {
+	types := make([]ProviderType, 0, len(r.providers))
+	for t := range r.providers {
+		types = append(types, t)
+	}
+	return types
+}
+
+// IsRegistered checks if a provider is registered
+func (r *Registry) IsRegistered(providerType ProviderType) bool {
+	_, ok := r.providers[providerType]
+	return ok
 }
 
 // ProviderInfo returns information about a provider
