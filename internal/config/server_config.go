@@ -668,6 +668,21 @@ func (c *Config) ListProviders() []*Provider {
 	return c.Providers
 }
 
+// ListOAuthProviders returns all OAuth-enabled providers
+func (c *Config) ListOAuthProviders() ([]*Provider, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	var oauthProviders []*Provider
+	for _, p := range c.Providers {
+		if p.AuthType == AuthTypeOAuth && p.OAuthDetail != nil {
+			oauthProviders = append(oauthProviders, p)
+		}
+	}
+
+	return oauthProviders, nil
+}
+
 // AddProvider adds a new provider using Provider struct
 func (c *Config) AddProvider(provider *Provider) error {
 	c.mu.Lock()
