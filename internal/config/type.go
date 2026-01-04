@@ -29,11 +29,12 @@ const (
 
 // OAuthDetail contains OAuth-specific authentication information
 type OAuthDetail struct {
-	AccessToken  string `json:"access_token"`  // OAuth access token
-	ProviderType string `json:"provider_type"` // anthropic, google, etc. for token manager lookup
-	UserID       string `json:"user_id"`       // OAuth user identifier
-	RefreshToken string `json:"refresh_token"` // Token for refreshing access token
-	ExpiresAt    string `json:"expires_at"`    // Token expiration time (RFC3339)
+	AccessToken  string                 `json:"access_token"`  // OAuth access token
+	ProviderType string                 `json:"provider_type"` // anthropic, google, etc. for token manager lookup
+	UserID       string                 `json:"user_id"`       // OAuth user identifier
+	RefreshToken string                 `json:"refresh_token"` // Token for refreshing access token
+	ExpiresAt    string                 `json:"expires_at"`    // Token expiration time (RFC3339)
+	ExtraFields  map[string]interface{} `json:"extra_fields"`  // Any extra field for some special clients
 }
 
 // IsExpired checks if the OAuth token is expired
