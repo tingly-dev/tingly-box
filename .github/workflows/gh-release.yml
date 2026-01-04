@@ -43,7 +43,7 @@ jobs:
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "release_tag=${{ github.event.inputs.release_tag }}" >> $GITHUB_OUTPUT
             echo "build_gui=${{ github.event.inputs.build_gui }}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event_name }}" == "push" ] && startsWith("${GITHUB_REF}", "refs/tags/"); then
+          elif [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             echo "release_tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
             echo "build_gui=true" >> $GITHUB_OUTPUT
           else
@@ -87,7 +87,7 @@ jobs:
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "RELEASE_TAG=${{ github.event.inputs.release_tag }}" >> $GITHUB_ENV
             echo "TAG_EXISTS=$(git tag -l "${{ github.event.inputs.release_tag }}" | wc -l)" >> $GITHUB_ENV
-          elif [ "${{ github.event_name }}" == "push" ] && startsWith("${GITHUB_REF}", "refs/tags/"); then
+          elif [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             echo "RELEASE_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
             echo "TAG_EXISTS=1" >> $GITHUB_ENV
           else
@@ -207,7 +207,7 @@ jobs:
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "RELEASE_TAG=${{ github.event.inputs.release_tag }}" >> $GITHUB_ENV
             echo "TAG_EXISTS=$(git tag -l "${{ github.event.inputs.release_tag }}" | wc -l)" >> $GITHUB_ENV
-          elif [ "${{ github.event_name }}" == "push" ] && startsWith("${GITHUB_REF}", "refs/tags/"); then
+          elif [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             echo "RELEASE_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
             echo "TAG_EXISTS=1" >> $GITHUB_ENV
           else
