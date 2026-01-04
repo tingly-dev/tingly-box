@@ -338,15 +338,14 @@ func (s *Server) UseAIEndpoints() {
 func (s *Server) SetupMixinEndpoints(group *gin.RouterGroup) {
 	// Chat completions endpoint (OpenAI compatible)
 	group.POST("/chat/completions", s.authMW.ModelAuthMiddleware(), s.OpenAIChatCompletions)
-	// Models endpoint (OpenAI compatible)
-	group.GET("/models", s.authMW.ModelAuthMiddleware(), s.OpenAIListModels)
 
 	// Chat completions endpoint (Anthropic compatible)
 	group.POST("/messages", s.authMW.ModelAuthMiddleware(), s.AnthropicMessages)
 	// Count tokens endpoint (Anthropic compatible)
 	group.POST("/messages/count_tokens", s.authMW.ModelAuthMiddleware(), s.AnthropicCountTokens)
-	// Models endpoint (Anthropic compatible)
-	//group.GET("/models", s.authMW.ModelAuthMiddleware(), s.AnthropicListModels)
+
+	// Models endpoint (routed by scenario: openai -> OpenAIListModels, anthropic/claude_code -> AnthropicListModels)
+	group.GET("/models", s.authMW.ModelAuthMiddleware(), s.ListModelsByScenario)
 }
 
 func (s *Server) SetupOpenAIEndpoints(group *gin.RouterGroup) {
