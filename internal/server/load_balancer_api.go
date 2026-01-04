@@ -24,8 +24,7 @@ func NewLoadBalancerAPI(loadBalancer *LoadBalancer, cfg *config.Config) *LoadBal
 }
 
 // RegisterRoutes registers the load balancer API routes
-func (api *LoadBalancerAPI) RegisterRoutes(router *gin.RouterGroup) {
-	loadBalancer := router.Group("/load-balancer")
+func (api *LoadBalancerAPI) RegisterRoutes(loadBalancer *gin.RouterGroup) {
 	{
 		// Rule management
 		loadBalancer.GET("/rules/:ruleId", api.GetRule)

@@ -263,6 +263,7 @@ func (ts *TestServer) AddTestRule(t *testing.T, requestModel, providerName, mode
 	// Create a simple rule with proper LBTactic
 	rule := config.Rule{
 		UUID:          requestModel,
+		Scenario:      config.ScenarioOpenAI,
 		RequestModel:  requestModel,
 		ResponseModel: model,
 		Services: []config.Service{

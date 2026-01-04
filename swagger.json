@@ -629,6 +629,15 @@
         "produces": [
           "application/json"
         ],
+        "parameters": [
+          {
+            "name": "scenario",
+            "in": "query",
+            "description": "Filter by scenario",
+            "required": true,
+            "type": "string"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -1207,6 +1216,10 @@
           "type": "string",
           "description": "Field response_model"
         },
+        "scenario": {
+          "type": "string",
+          "description": "Field scenario"
+        },
         "services": {
           "type": "array",
           "description": "Field services",
@@ -1221,6 +1234,7 @@
       },
       "required": [
         "uuid",
+        "scenario",
         "request_model",
         "response_model",
         "description",
@@ -2191,12 +2205,68 @@
         "data"
       ]
     },
+    "Rule": {
+      "type": "object",
+      "properties": {
+        "active": {
+          "type": "boolean",
+          "description": "Field active"
+        },
+        "current_service_index": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field current_service_index"
+        },
+        "description": {
+          "type": "string",
+          "description": "Field description"
+        },
+        "lb_tactic": {
+          "description": "Field lb_tactic",
+          "$ref": "#/definitions/Tactic"
+        },
+        "request_model": {
+          "type": "string",
+          "description": "Field request_model"
+        },
+        "response_model": {
+          "type": "string",
+          "description": "Field response_model"
+        },
+        "scenario": {
+          "type": "string",
+          "description": "Field scenario"
+        },
+        "services": {
+          "type": "array",
+          "description": "Field services",
+          "items": {
+            "$ref": "#/definitions/Service"
+          }
+        },
+        "uuid": {
+          "type": "string",
+          "description": "Field uuid"
+        }
+      },
+      "required": [
+        "uuid",
+        "scenario",
+        "request_model",
+        "response_model",
+        "description",
+        "services",
+        "current_service_index",
+        "lb_tactic",
+        "active"
+      ]
+    },
     "RuleResponse": {
       "type": "object",
       "properties": {
         "data": {
-          "type": "object",
-          "description": "Field data"
+          "description": "Field data",
+          "$ref": "#/definitions/Rule"
         },
         "success": {
           "type": "boolean",
@@ -2594,6 +2664,10 @@
           "type": "string",
           "description": "Field response_model"
         },
+        "scenario": {
+          "type": "string",
+          "description": "Field scenario"
+        },
         "services": {
           "type": "array",
           "description": "Field services",
@@ -2608,6 +2682,7 @@
       },
       "required": [
         "uuid",
+        "scenario",
         "request_model",
         "response_model",
         "description",
@@ -2723,16 +2798,20 @@
   },
   "tags": [
     {
+      "name": "testing",
+      "description": "Operations related to testing"
+    },
+    {
+      "name": "logs",
+      "description": "Operations related to logs"
+    },
+    {
       "name": "server",
       "description": "Operations related to server"
     },
     {
-      "name": "history",
-      "description": "Operations related to history"
-    },
-    {
-      "name": "testing",
-      "description": "Operations related to testing"
+      "name": "models",
+      "description": "Operations related to models"
     },
     {
       "name": "token",
@@ -2743,24 +2822,20 @@
       "description": "Operations related to providers"
     },
     {
-      "name": "logs",
-      "description": "Operations related to logs"
-    },
-    {
-      "name": "rules",
-      "description": "Operations related to rules"
-    },
-    {
-      "name": "models",
-      "description": "Operations related to models"
-    },
-    {
       "name": "oauth",
       "description": "Operations related to oauth"
     },
     {
       "name": "info",
       "description": "Operations related to info"
+    },
+    {
+      "name": "rules",
+      "description": "Operations related to rules"
+    },
+    {
+      "name": "history",
+      "description": "Operations related to history"
     }
   ]
 }

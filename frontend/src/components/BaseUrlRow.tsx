@@ -12,6 +12,8 @@ interface BaseUrlRowProps {
     baseUrl: string;
     onCopy: (url: string, label: string) => void;
     urlLabel?: string;
+    legacyPath?: string;
+    legacyLabel?: string;
 }
 
 const toDockerUrl = (url: string): string => {
@@ -25,7 +27,9 @@ export const BaseUrlRow: React.FC<BaseUrlRowProps> = ({
     path,
     baseUrl,
     onCopy,
-    urlLabel
+    urlLabel,
+    legacyPath,
+    legacyLabel = 'Legacy'
 }) => {
     const { t } = useTranslation();
     const [isDockerMode, setIsDockerMode] = React.useState(false);
@@ -36,9 +40,17 @@ export const BaseUrlRow: React.FC<BaseUrlRowProps> = ({
         return isDockerMode ? toDockerUrl(url) : url;
     }, [baseUrl, path, isDockerMode]);
 
-    const displayUrl = urlLabel || label;
+    // Build legacy URL if legacyPath is provided
+    const legacyUrl = React.useMemo(() => {
+        if (!legacyPath) return null;
+        const url = `${baseUrl}${legacyPath}`;
+        return isDockerMode ? toDockerUrl(url) : url;
+    }, [baseUrl, legacyPath, isDockerMode]);
 
-    return (
+    const displayUrl = urlLabel || label;
+    const displayLegacyUrl = legacyLabel;
+
+    const renderUrlRow = (rowLabel: string, url: string, displayLabel: string) => (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, maxWidth: 700 }}>
             <Typography
                 variant="body2"
@@ -49,11 +61,11 @@ export const BaseUrlRow: React.FC<BaseUrlRowProps> = ({
                     fontWeight: 500
                 }}
             >
-                {label}:
+                {rowLabel}:
             </Typography>
             <Typography
                 variant="body2"
-                onClick={() => onCopy(fullUrl, displayUrl)}
+                onClick={() => onCopy(url, displayLabel)}
                 sx={{
                     fontFamily: 'monospace',
                     fontSize: '0.75rem',
@@ -69,12 +81,11 @@ export const BaseUrlRow: React.FC<BaseUrlRowProps> = ({
                     borderRadius: 1,
                     transition: 'all 0.2s ease-in-out'
                 }}
-                title={`Click to copy ${displayUrl}`}
+                title={`Click to copy ${displayLabel}`}
             >
-                {fullUrl}
+                {url}
             </Typography>
             <Box sx={{ display: 'flex', gap: 0.5, ml: 'auto' }}>
-
                 <Tooltip title={t('serverInfo.docker.tooltip')}>
                     <IconButton
                         onClick={() => setIsDockerMode(!isDockerMode)}
@@ -115,12 +126,19 @@ export const BaseUrlRow: React.FC<BaseUrlRowProps> = ({
                     </IconButton>
                 </Tooltip>
                 <Tooltip title="Copy Base URL">
-                    <IconButton onClick={() => onCopy(fullUrl, displayUrl)} size="small">
+                    <IconButton onClick={() => onCopy(url, displayLabel)} size="small">
                         <CopyIcon fontSize="small" />
                     </IconButton>
                 </Tooltip>
             </Box>
         </Box>
+    );
+
+    return (
+        <>
+            {renderUrlRow(label, fullUrl, displayUrl)}
+            {legacyUrl && renderUrlRow(legacyLabel, legacyUrl, displayLegacyUrl)}
+        </>
     );
 };
 

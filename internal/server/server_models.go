@@ -135,8 +135,8 @@ type ClearStatsResponse struct {
 
 // RuleResponse represents a rule configuration response
 type RuleResponse struct {
-	Success bool        `json:"success" example:"true"`
-	Data    interface{} `json:"data"`
+	Success bool         `json:"success" example:"true"`
+	Data    *config.Rule `json:"data"`
 }
 
 // RuleSummaryResponse represents a rule summary response

@@ -451,6 +451,7 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 	apiV1.GET("/rules", s.GetRules,
 		swagger.WithDescription("Get all configured rules"),
 		swagger.WithTags("rules"),
+		swagger.WithQueryRequired("scenario", "string", "Filter by scenario"),
 		swagger.WithResponseModel(RulesResponse{}),
 	)
 

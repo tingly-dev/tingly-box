@@ -422,6 +422,7 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 		// Add a rule that routes to Anthropic-style provider (glm)
 		rule := map[string]interface{}{
 			"uuid":           "test-rule-uuid",
+			"scenario":       "anthropic",
 			"request_model":  "real-anthropic-test",
 			"response_model": "glm-4.5-air",
 			"services": []map[string]interface{}{
@@ -493,6 +494,7 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 		// Add a rule that routes to OpenAI-style provider (qwen)
 		rule := map[string]interface{}{
 			"uuid":           "test-rule-uuid",
+			"scenario":       "openai",
 			"request_model":  "real-openai-test",
 			"response_model": "qwen-plus",
 			"services": []map[string]interface{}{
@@ -565,6 +567,7 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 		// Add a rule that routes to Anthropic-style provider (glm)
 		rule := map[string]interface{}{
 			"uuid":           "test-rule-uuid",
+			"scenario":       "anthropic",
 			"request_model":  "real-func-test",
 			"response_model": "glm-4.5-air",
 			"services": []map[string]interface{}{
