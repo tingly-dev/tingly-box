@@ -429,6 +429,7 @@ func printTokenResult(token *oauth2.Token, userID string, oauthConfig *oauth2.Co
 		ExpiresIn:   token.Expiry.UTC().Unix(),
 		ResourceURL: token.ResourceURL,
 		Provider:    token.Provider,
+		Metadata:    token.Metadata,
 	}
 	if showFullToken {
 		displayToken.AccessToken = token.AccessToken
@@ -469,6 +470,14 @@ func printTokenResult(token *oauth2.Token, userID string, oauthConfig *oauth2.Co
 		if !savedToken.Expiry.IsZero() {
 			fmt.Printf("  - Expires At: %s\n", savedToken.Expiry.Format(time.RFC3339))
 			fmt.Printf("  - Time Remaining: %s\n", time.Until(savedToken.Expiry).Round(time.Second))
+		}
+
+		// Print metadata details
+		if savedToken.Metadata != nil && len(savedToken.Metadata) > 0 {
+			fmt.Println("\n  Metadata (provider-specific):")
+			for key, value := range savedToken.Metadata {
+				fmt.Printf("    - %s: %v\n", key, value)
+			}
 		}
 	}
 
