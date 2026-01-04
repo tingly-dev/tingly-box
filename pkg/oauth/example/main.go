@@ -244,7 +244,6 @@ func setupProvider(config *ExampleConfig) (*oauth2.Registry, *oauth2.ProviderCon
 
 	providerConfig := &oauth2.ProviderConfig{
 		Type:               defaultConfig.Type,
-		GrantType:          defaultConfig.GrantType,
 		DisplayName:        defaultConfig.DisplayName,
 		ClientID:           config.ClientID,
 		ClientSecret:       clientSecret,
@@ -257,9 +256,8 @@ func setupProvider(config *ExampleConfig) (*oauth2.Registry, *oauth2.ProviderCon
 		TokenRequestFormat: defaultConfig.TokenRequestFormat,
 		RedirectURL:        fmt.Sprintf("%s/callback", config.BaseURL),
 		ConsoleURL:         defaultConfig.ConsoleURL,
-		AuthExtraParams:    defaultConfig.AuthExtraParams,
-		TokenExtraParams:   defaultConfig.TokenExtraParams,
-		TokenExtraHeaders:  defaultConfig.TokenExtraHeaders,
+		GrantType:          defaultConfig.GrantType,
+		Hook:               defaultConfig.Hook,
 	}
 	registry.Register(providerConfig)
 
@@ -431,6 +429,7 @@ func printTokenResult(token *oauth2.Token, userID string, oauthConfig *oauth2.Co
 		ExpiresIn:   token.Expiry.UTC().Unix(),
 		ResourceURL: token.ResourceURL,
 		Provider:    token.Provider,
+		Metadata:    token.Metadata,
 	}
 	if showFullToken {
 		displayToken.AccessToken = token.AccessToken
@@ -471,6 +470,14 @@ func printTokenResult(token *oauth2.Token, userID string, oauthConfig *oauth2.Co
 		if !savedToken.Expiry.IsZero() {
 			fmt.Printf("  - Expires At: %s\n", savedToken.Expiry.Format(time.RFC3339))
 			fmt.Printf("  - Time Remaining: %s\n", time.Until(savedToken.Expiry).Round(time.Second))
+		}
+
+		// Print metadata details
+		if savedToken.Metadata != nil && len(savedToken.Metadata) > 0 {
+			fmt.Println("\n  Metadata (provider-specific):")
+			for key, value := range savedToken.Metadata {
+				fmt.Printf("    - %s: %v\n", key, value)
+			}
 		}
 	}
 
