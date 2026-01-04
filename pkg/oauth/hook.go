@@ -166,20 +166,16 @@ func (h *AntigravityHook) AfterToken(ctx context.Context, accessToken string, ht
 
 // Antigravity API constants for project discovery
 const (
-	antigravityAPIEndpoint    = "https://cloudcode-pa.googleapis.com"
-	antigravityAPIVersion     = "v1internal"
-	antigravityAPIUserAgent   = "google-api-nodejs-client/9.15.1"
-	antigravityAPIClient      = "google-cloud-sdk vscode_cloudshelleditor/0.1"
-	antigravityClientMetadata = `{"ideType":"IDE_UNSPECIFIED","platform":"PLATFORM_UNSPECIFIED","pluginType":"GEMINI"}`
+	antigravityAPIEndpoint  = "https://cloudcode-pa.googleapis.com"
+	antigravityAPIVersion   = "v1internal"
+	antigravityAPIUserAgent = "antigravity/1.11.9 windows/amd64"
 )
 
 // fetchAntigravityProjectID retrieves the project ID for the authenticated user via loadCodeAssist.
 func fetchAntigravityProjectID(ctx context.Context, accessToken string, httpClient *http.Client) (string, error) {
 	loadReqBody := map[string]any{
 		"metadata": map[string]string{
-			"ideType":    "IDE_UNSPECIFIED",
-			"platform":   "PLATFORM_UNSPECIFIED",
-			"pluginType": "GEMINI",
+			"ideType": "ANTIGRAVITY",
 		},
 	}
 
@@ -196,8 +192,7 @@ func fetchAntigravityProjectID(ctx context.Context, accessToken string, httpClie
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", antigravityAPIUserAgent)
-	req.Header.Set("X-Goog-Api-Client", antigravityAPIClient)
-	req.Header.Set("Client-Metadata", antigravityClientMetadata)
+	req.Header.Set("Host", "cloudcode-pa.googleapis.com")
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
