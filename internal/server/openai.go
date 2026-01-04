@@ -494,6 +494,32 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 	flusher.Flush()
 }
 
+// ListModelsByScenario handles the /v1/models endpoint for scenario-based routing
+func (s *Server) ListModelsByScenario(c *gin.Context) {
+	scenario := c.Param("scenario")
+
+	// Convert string to RuleScenario and validate
+	scenarioType := config.RuleScenario(scenario)
+	if !isValidRuleScenario(scenarioType) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"message": fmt.Sprintf("invalid scenario: %s", scenario),
+				"type":    "invalid_request_error",
+			},
+		})
+		return
+	}
+
+	// Route to appropriate handler based on scenario
+	switch scenarioType {
+	case config.ScenarioAnthropic, config.ScenarioClaudeCode:
+		s.AnthropicListModels(c)
+	default:
+		// OpenAI is the default
+		s.OpenAIListModels(c)
+	}
+}
+
 // isValidRuleScenario checks if the given scenario is a valid RuleScenario
 func isValidRuleScenario(scenario config.RuleScenario) bool {
 	switch scenario {
