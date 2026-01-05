@@ -6,7 +6,7 @@ cd "$SCRIPT_DIR"
 
 # Default values
 OUTPUT="output.gif"
-DURATION=500
+DURATION=1800
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do

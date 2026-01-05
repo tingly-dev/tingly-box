@@ -10,7 +10,7 @@
 
 ---
 
-![Tingly Box Web UI Demo](https://raw.githubusercontent.com/andreasfoo/images/main/uPic/2025%2012%2022%2014%2045.gif)
+![Tingly Box Web UI Demo](./docs/images/output.gif)
 
 ## ✨ Key Features
 
