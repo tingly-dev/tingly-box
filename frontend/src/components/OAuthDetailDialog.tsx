@@ -14,7 +14,7 @@ import {
     TextField,
     Typography,
 } from '@mui/material';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {type Provider } from '../types/provider';
 
 interface OAuthEditFormData {
@@ -44,14 +44,16 @@ const OAuthDetailDialog = ({ open, provider, onClose, onSubmit }: OAuthDetailDia
     const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
     // Update form data when provider changes
-    if (provider && (formData.name !== provider.name || formData.apiBase !== provider.api_base)) {
-        setFormData({
-            name: provider.name,
-            apiBase: provider.api_base,
-            apiStyle: provider.api_style || 'openai',
-            enabled: provider.enabled,
-        });
-    }
+    useEffect(() => {
+        if (provider) {
+            setFormData({
+                name: provider.name,
+                apiBase: provider.api_base,
+                apiStyle: provider.api_style || 'openai',
+                enabled: provider.enabled,
+            });
+        }
+    }, [provider?.name, provider?.api_base, provider?.api_style, provider?.enabled]);
 
     const formatDate = (dateStr?: string) => {
         if (!dateStr) return 'N/A';
@@ -145,7 +147,7 @@ const OAuthDetailDialog = ({ open, provider, onClose, onSubmit }: OAuthDetailDia
                         <TextField
                             size="small"
                             fullWidth
-                            label="Provider Name"
+                            label="Custom Name"
                             value={formData.name}
                             onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                             required
