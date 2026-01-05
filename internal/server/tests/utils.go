@@ -21,7 +21,6 @@ import (
 	"tingly-box/internal/constant"
 	"tingly-box/internal/loadbalance"
 	"tingly-box/internal/server"
-	"tingly-box/internal/util"
 )
 
 // TestServer represents a test server wrapper
@@ -265,9 +264,9 @@ func (ts *TestServer) AddTestProviderWithURL(t *testing.T, name, url, apiStyle s
 // AddTestRule adds a test rule that routes to a specific provider
 func (ts *TestServer) AddTestRule(t *testing.T, requestModel, providerName, model string) {
 	// Create a simple rule with proper LBTactic
-	rule := model.Rule{
+	rule := typ.Rule{
 		UUID:          requestModel,
-		Scenario:      model.ScenarioOpenAI,
+		Scenario:      typ.ScenarioOpenAI,
 		RequestModel:  requestModel,
 		ResponseModel: model,
 		Services: []loadbalance.Service{
@@ -279,9 +278,9 @@ func (ts *TestServer) AddTestRule(t *testing.T, requestModel, providerName, mode
 				TimeWindow: 300,
 			},
 		},
-		LBTactic: model.Tactic{
+		LBTactic: typ.Tactic{
 			Type:   loadbalance.TacticRoundRobin,
-			Params: model.DefaultRoundRobinParams(),
+			Params: typ.DefaultRoundRobinParams(),
 		},
 		Active: true,
 	}
@@ -348,7 +347,7 @@ type TestConfigDir struct {
 // when the test finishes.
 func NewTestConfigDirCopy(t *testing.T) *TestConfigDir {
 	// Get the real config directory path
-	realConfigDir := util.GetTinglyConfDir()
+	realConfigDir := constant.GetTinglyConfDir()
 
 	// Check if real config directory exists
 	if _, err := os.Stat(realConfigDir); os.IsNotExist(err) {
