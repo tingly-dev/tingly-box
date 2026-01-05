@@ -20,7 +20,7 @@ import (
 	"tingly-box/internal/obs"
 	"tingly-box/internal/server/background"
 	"tingly-box/internal/server/middleware"
-	"tingly-box/internal/util"
+	"tingly-box/internal/util/network"
 	oauth2 "tingly-box/pkg/oauth"
 )
 
@@ -401,7 +401,7 @@ func (s *Server) Start(port int) error {
 		Handler: s.engine,
 	}
 
-	resolvedHost := util.ResolveHost(s.host)
+	resolvedHost := network.ResolveHost(s.host)
 	if !s.enableUI {
 		fmt.Printf("OpenAI v1 Chat API endpoint: http://%s:%d/openai/v1/chat/completions\n", resolvedHost, port)
 		fmt.Printf("Anthropic v1 Message API endpoint: http://%s:%d/anthropic/v1/messages\n", resolvedHost, port)

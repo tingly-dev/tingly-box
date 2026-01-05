@@ -13,9 +13,9 @@ import (
 	"tingly-box/internal/config"
 	"tingly-box/internal/manager"
 	"tingly-box/internal/server"
-	"tingly-box/internal/util"
 	"tingly-box/internal/util/daemon"
 	"tingly-box/internal/util/lock"
+	"tingly-box/internal/util/network"
 )
 
 const (
@@ -39,7 +39,7 @@ type BannerConfig struct {
 func printBanner(cfg BannerConfig) {
 	if !cfg.EnableUI {
 		// Resolve host for display
-		resolvedHost := util.ResolveHost(cfg.Host)
+		resolvedHost := network.ResolveHost(cfg.Host)
 		fmt.Printf("API endpoint: http://%s:%d/v1/chat/completions\n", resolvedHost, cfg.Port)
 		return
 	}
