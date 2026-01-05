@@ -327,8 +327,8 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 			Email: "ops@tingly.dev",
 		},
 		License: swagger.SwaggerLicense{
-			Name: "Apache License\nVersion 2.0",
-			URL:  "https://www.apache.org/licenses/LICENSE-2.0",
+			Name: "Mozilla Public License\nVersion 2.0",
+			URL:  "https://www.mozilla.org/en-US/MPL/2.0/",
 		},
 	})
 
