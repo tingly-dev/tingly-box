@@ -3,95 +3,12 @@ package adaptor
 import (
 	"encoding/json"
 	"strings"
-	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/shared"
 )
-
-// ConvertAnthropicToOpenAIResponse converts an Anthropic response to OpenAI format
-func ConvertAnthropicToOpenAIResponse(
-	anthropicResp *anthropic.Message,
-	responseModel string,
-) map[string]interface{} {
-
-	message := make(map[string]interface{})
-	var toolCalls []map[string]interface{}
-	var textContent string
-
-	// Walk Anthropic content blocks
-	for _, block := range anthropicResp.Content {
-
-		switch block.Type {
-
-		case "text":
-			textContent += block.Text
-
-		case "tool_use":
-			// Anthropic → OpenAI tool call
-			toolCalls = append(toolCalls, map[string]interface{}{
-				"id":   block.ID,
-				"type": "function",
-				"function": map[string]interface{}{
-					"name":      block.Name,
-					"arguments": block.Input, // map[string]any (NOT stringified yet)
-				},
-			})
-		}
-	}
-
-	// OpenAI expects arguments as STRING
-	for _, tc := range toolCalls {
-		fn := tc["function"].(map[string]interface{})
-		if args, ok := fn["arguments"]; ok {
-			if b, err := json.Marshal(args); err == nil {
-				fn["arguments"] = string(b)
-			}
-		}
-	}
-
-	// Set role from Anthropic response (required by OpenAI format)
-	message["role"] = string(anthropicResp.Role)
-
-	if textContent != "" {
-		message["content"] = textContent
-	}
-	if len(toolCalls) > 0 {
-		message["tool_calls"] = toolCalls
-	}
-
-	// Map stop reason
-	finishReason := "stop"
-	switch anthropicResp.StopReason {
-	case "tool_use":
-		finishReason = "tool_calls"
-	case "max_tokens":
-		finishReason = "length"
-	}
-
-	response := map[string]interface{}{
-		"id":      anthropicResp.ID,
-		"object":  "chat.completion",
-		"created": time.Now().Unix(),
-		"model":   responseModel,
-		"choices": []map[string]interface{}{
-			{
-				"index":         0,
-				"message":       message,
-				"finish_reason": finishReason,
-			},
-		},
-		"usage": map[string]interface{}{
-			"prompt_tokens":     anthropicResp.Usage.InputTokens,
-			"completion_tokens": anthropicResp.Usage.OutputTokens,
-			"total_tokens":      anthropicResp.Usage.InputTokens + anthropicResp.Usage.OutputTokens,
-		},
-	}
-
-	return response
-}
 
 // ConvertAnthropicToolsToOpenAI converts Anthropic tools to OpenAI format
 func ConvertAnthropicToolsToOpenAI(tools []anthropic.ToolUnionParam) []openai.ChatCompletionToolUnionParam {
@@ -164,6 +81,17 @@ func ConvertAnthropicToOpenAIRequest(anthropicReq *anthropic.MessageNewParams) *
 		Model: openai.ChatModel(anthropicReq.Model),
 	}
 
+	isThinking := IsThinkingEnabled(anthropicReq)
+	if isThinking {
+		openaiReq.SetExtraFields(
+			map[string]interface{}{
+				"thinking": map[string]interface{}{
+					"type": "enabled",
+				},
+			},
+		)
+	}
+
 	// Set MaxTokens
 	openaiReq.MaxTokens = openai.Opt(anthropicReq.MaxTokens)
 
@@ -176,6 +104,16 @@ func ConvertAnthropicToOpenAIRequest(anthropicReq *anthropic.MessageNewParams) *
 		} else if string(msg.Role) == "assistant" {
 			// Convert assistant message with potential tool_use blocks
 			openaiMsg := convertAnthropicAssistantMessageToOpenAI(msg)
+			// Guard reasoning_content here
+			if extra := openaiMsg.ExtraFields(); extra != nil {
+				if _, ok := extra["reasoning_content"]; !ok {
+					extra["reasoning_content"] = ""
+				}
+				openaiMsg.SetExtraFields(extra)
+			} else {
+				openaiMsg.SetExtraFields(map[string]any{"reasoning_content": ""})
+			}
+
 			openaiReq.Messages = append(openaiReq.Messages, openaiMsg)
 		}
 	}
@@ -241,6 +179,7 @@ func ConvertTextBlocksToString(blocks []anthropic.TextBlockParam) string {
 func convertAnthropicAssistantMessageToOpenAI(msg anthropic.MessageParam) openai.ChatCompletionMessageParamUnion {
 	var textContent string
 	var toolCalls []map[string]interface{}
+	var thinking string
 
 	// Process content blocks
 	for _, block := range msg.Content {
@@ -260,6 +199,8 @@ func convertAnthropicAssistantMessageToOpenAI(msg anthropic.MessageParam) openai
 				toolCall["function"].(map[string]interface{})["arguments"] = string(argsBytes)
 			}
 			toolCalls = append(toolCalls, toolCall)
+		} else if block.OfThinking != nil {
+			thinking = block.OfThinking.Thinking
 		}
 	}
 
@@ -273,6 +214,11 @@ func convertAnthropicAssistantMessageToOpenAI(msg anthropic.MessageParam) openai
 		if len(toolCalls) > 0 {
 			msgMap["tool_calls"] = toolCalls
 		}
+		// Add reasoning_content only if thinking exists
+		if thinking != "" {
+			msgMap["reasoning_content"] = thinking
+		}
+
 		msgBytes, _ := json.Marshal(msgMap)
 		var result openai.ChatCompletionMessageParamUnion
 		_ = json.Unmarshal(msgBytes, &result)
@@ -280,6 +226,19 @@ func convertAnthropicAssistantMessageToOpenAI(msg anthropic.MessageParam) openai
 	}
 
 	// Simple text-only assistant message
+	if thinking != "" {
+		// Use JSON marshaling to include reasoning_content
+		msgMap := map[string]interface{}{
+			"role":              "assistant",
+			"content":           textContent,
+			"reasoning_content": thinking,
+		}
+		msgBytes, _ := json.Marshal(msgMap)
+		var result openai.ChatCompletionMessageParamUnion
+		_ = json.Unmarshal(msgBytes, &result)
+		return result
+	}
+
 	return openai.AssistantMessage(textContent)
 }
 
@@ -332,4 +291,18 @@ func convertAnthropicUserMessageToOpenAI(msg anthropic.MessageParam) []openai.Ch
 	}
 
 	return result
+}
+
+// IsThinkingEnabled checks if thinking mode is enabled in the Anthropic request
+func IsThinkingEnabled(anthropicReq *anthropic.MessageNewParams) bool {
+	isThinking := anthropicReq.Thinking.OfEnabled != nil
+	for _, msg := range anthropicReq.Messages {
+		for _, block := range msg.Content {
+			if block.OfThinking != nil {
+				return true
+			}
+
+		}
+	}
+	return isThinking
 }
