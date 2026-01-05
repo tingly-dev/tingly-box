@@ -20,6 +20,12 @@ import (
 //go:embed provider_templates.json
 var embeddedTemplatesJSON []byte
 
+const DefaultTemplateHTTPTimeout = 30 * time.Second // Default HTTP timeout for fetching templates
+
+const DefaultTemplateCacheTTL = 12 * time.Hour // Default TTL for template cache
+
+const TemplateCacheFileName = "provider_template.json"
+
 // ProviderTemplate represents a predefined provider configuration template
 type ProviderTemplate struct {
 	ID                     string            `json:"id"`
@@ -438,9 +444,3 @@ func (tm *TemplateManager) GetMaxTokensForModel(provider, model string) int {
 	// Fallback to global default
 	return constant2.DefaultMaxTokens
 }
-
-const DefaultTemplateHTTPTimeout = 30 * time.Second // Default HTTP timeout for fetching templates
-
-const DefaultTemplateCacheTTL = 12 * time.Hour // Default TTL for template cache
-
-const TemplateCacheFileName = "provider_template.json"
