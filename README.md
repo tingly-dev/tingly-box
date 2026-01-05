@@ -1,8 +1,12 @@
 # Tingly Box
 
-**Tingly Box** is a high‑performance desktop LLM proxy designed for personal or local use, providing a **unified OpenAI‑compatible API** for hundreds of model providers. It enables centralized credential management, routing, and load balancing with low latency.
+**Tingly Box** is a high‑performance desktop LLM proxy for personal or local use. It unifies access to hundreds of models from diverse providers through a single, unified API without locking you into any one vendor.
 
-> Think of Tingly Box as a *model gateway* between your applications and multiple LLM vendors.
+- **Credential Management**: Store and manage API keys, OAuth tokens, and other credentials in one place.  
+- **Flexible Routing & Model Switching**: Define custom routes, alias model names, and switch target models on the fly—no code changes needed.  
+- **Provider‑Agnostic Compatibility**: Seamlessly supports OpenAI, Anthropic, Google, and other API styles through a consistent interface.
+
+> Think of Tingly Box as your personal *LLM gateway*—simplifying integration, boosting flexibility, and keeping your workflows future‑proof.
 
 ---
 
