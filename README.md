@@ -31,8 +31,11 @@
 **From npm (recommended)**
 
 ```bash
-# install and run
+# Install and run
 npx tingly-box@latest start
+
+# Or preview GUI version (MacOS ARM / M-Chip only)
+npx tingly-box-gui@latest
 ```
 
 **From source code**
