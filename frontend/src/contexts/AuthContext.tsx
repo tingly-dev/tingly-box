@@ -45,10 +45,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const initializeAuth = async () => {
             try {
                 // First, check if there's a token in URL parameters
+                // Support both 'token' and 'user_auth_token' parameters
                 const urlParams = new URLSearchParams(window.location.search);
-                const urlToken = urlParams.get('user_auth_token');
-
-                console.log("url token", urlToken)
+                const urlToken = urlParams.get('token') || urlParams.get('user_auth_token');
 
                 let finalToken = null;
 
@@ -57,8 +56,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                     finalToken = urlToken;
                     localStorage.setItem('user_auth_token', urlToken);
 
-                    // Clean up URL by removing the token parameter (optional, for security and aesthetics)
-                    const cleanUrl = window.location.pathname + window.location.hash;
+                    // Clean up URL by removing the token parameter (for security and aesthetics)
+                    const cleanPath = window.location.pathname;
+                    const hash = window.location.hash;
+                    const cleanUrl = cleanPath + hash;
                     window.history.replaceState({}, '', cleanUrl);
                 } else {
                     // If no URL token, check localStorage
