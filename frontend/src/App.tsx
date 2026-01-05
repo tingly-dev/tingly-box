@@ -10,9 +10,9 @@ import Login from './pages/Login';
 import ApiKeyPage from './pages/ApiKeyPage';
 import OAuthPage from './pages/OAuthPage';
 import System from './pages/System';
-import UseOpenAIPageWrapper from './pages/wrappers/UseOpenAIPageWrapper';
-import UseAnthropicPageWrapper from './pages/wrappers/UseAnthropicPageWrapper';
-import UseClaudeCodePageWrapper from './pages/wrappers/UseClaudeCodePageWrapper';
+import UseOpenAIPage from './pages/UseOpenAIPage';
+import UseAnthropicPage from './pages/UseAnthropicPage';
+import UseClaudeCodePage from './pages/UseClaudeCodePage';
 import theme from './theme';
 
 function App() {
@@ -32,9 +32,9 @@ function App() {
                                             <Route path="/" element={<Dashboard />} />
                                             <Route path="/home" element={<Home />} />
                                             {/* Function panel routes */}
-                                            <Route path="/use-openai" element={<UseOpenAIPageWrapper />} />
-                                            <Route path="/use-anthropic" element={<UseAnthropicPageWrapper />} />
-                                            <Route path="/use-claude-code" element={<UseClaudeCodePageWrapper />} />
+                                            <Route path="/use-openai" element={<UseOpenAIPage />} />
+                                            <Route path="/use-anthropic" element={<UseAnthropicPage />} />
+                                            <Route path="/use-claude-code" element={<UseClaudeCodePage />} />
                                             {/* Other routes */}
                                             <Route path="/api-keys" element={<ApiKeyPage />} />
                                             <Route path="/oauth" element={<OAuthPage />} />

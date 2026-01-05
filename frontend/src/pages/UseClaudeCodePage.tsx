@@ -2,32 +2,27 @@ import { Box, Typography, ToggleButton, ToggleButtonGroup } from '@mui/material'
 import React from 'react';
 import CodeBlock from '../components/CodeBlock';
 import TabTemplatePage from '../components/TabTemplatePage';
+import PageLayout from '../components/PageLayout';
 import { api, getBaseUrl } from '../services/api';
 import type { Provider } from '../types/provider';
 import { useTranslation } from 'react-i18next';
 import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
-
-interface UseClaudeCodePageProps {
-    showTokenModal: boolean;
-    setShowTokenModal: (show: boolean) => void;
-    token: string;
-    showNotification: (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
-    providers: Provider[];
-}
+import { useFunctionPanelData } from '../hooks/useFunctionPanelData';
 
 const ruleId = "built-in-cc";
 
 type ClaudeJsonMode = 'json' | 'script';
 
-const UseClaudeCodePage: React.FC<UseClaudeCodePageProps> = ({
-    showTokenModal,
-    setShowTokenModal,
-    token,
-    showNotification,
-    providers
-}) => {
+const UseClaudeCodePage: React.FC = () => {
     const { t } = useTranslation();
+    const {
+        showTokenModal,
+        setShowTokenModal,
+        token,
+        showNotification,
+        providers,
+    } = useFunctionPanelData();
     const [baseUrl, setBaseUrl] = React.useState<string>('');
     const [rule, setRule] = React.useState<any>(null);
     const [defaultModel, setDefaultModel] = React.useState("");
@@ -222,24 +217,26 @@ node --eval '
     );
 
     return (
-        <CardGrid>
-            <UnifiedCard
-                title="Use Claude Code"
-                size="full"
-            >
-                {header}
-            </UnifiedCard>
-            <TabTemplatePage
-                rules={[rule]}
-                showTokenModal={showTokenModal}
-                setShowTokenModal={setShowTokenModal}
-                token={token}
-                showNotification={showNotification}
-                providers={providers}
-                onRulesChange={(rules) => setRule(rules[0])}
-                allowToggleRule={false}
-            />
-        </CardGrid>
+        <PageLayout>
+            <CardGrid>
+                <UnifiedCard
+                    title="Use Claude Code"
+                    size="full"
+                >
+                    {header}
+                </UnifiedCard>
+                <TabTemplatePage
+                    rules={[rule]}
+                    showTokenModal={showTokenModal}
+                    setShowTokenModal={setShowTokenModal}
+                    token={token}
+                    showNotification={showNotification}
+                    providers={providers}
+                    onRulesChange={(rules) => setRule(rules[0])}
+                    allowToggleRule={false}
+                />
+            </CardGrid>
+        </PageLayout>
     );
 };
 

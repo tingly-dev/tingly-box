@@ -5,30 +5,25 @@ import {Box, Button, IconButton, Tooltip, Typography} from '@mui/material';
 import {useNavigate} from 'react-router-dom';
 import {BaseUrlRow} from '../components/BaseUrlRow';
 import TabTemplatePage from '../components/TabTemplatePage';
+import PageLayout from '../components/PageLayout';
 import {api, getBaseUrl} from '../services/api';
 import type { Provider } from '../types/provider';
 import { ApiConfigRow } from "@/components/ApiConfigRow";
 import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
-
-interface UseOpenAIPageProps {
-    showTokenModal: boolean;
-    setShowTokenModal: (show: boolean) => void;
-    token: string;
-    showNotification: (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
-    providers: Provider[];
-}
+import { useFunctionPanelData } from '../hooks/useFunctionPanelData';
 
 const ruleId = "built-in-openai";
 const scenario = "openai";
 
-const UseOpenAIPage: React.FC<UseOpenAIPageProps> = ({
-    showTokenModal,
-    setShowTokenModal,
-    token,
-    showNotification,
-    providers
-}) => {
+const UseOpenAIPage: React.FC = () => {
+    const {
+        showTokenModal,
+        setShowTokenModal,
+        token,
+        showNotification,
+        providers,
+    } = useFunctionPanelData();
     const [baseUrl, setBaseUrl] = React.useState<string>('');
     const [rules, setRules] = React.useState<any>(null);
     const [loadingRule, setLoadingRule] = React.useState(true);
@@ -143,44 +138,46 @@ const UseOpenAIPage: React.FC<UseOpenAIPageProps> = ({
     );
 
     return (
-        <CardGrid>
-            <UnifiedCard
-                title="OpenAI SDK Configuration"
-                size="full"
-                rightAction={
-                    <Tooltip title="Create new routing rule">
-                        <Button
-                            variant="contained"
-                            startIcon={<AddIcon />}
-                            onClick={handleCreateRule}
-                            size="small"
-                        >
-                            New Rule
-                        </Button>
-                    </Tooltip>
-                }
-            >
-                {header}
-            </UnifiedCard>
-            <TabTemplatePage
-                title={
-                    <Tooltip title="Use as model name in your API requests to forward">
-                        Models and Forwarding Rules
-                    </Tooltip>
-                }
-                rules={rules}
-                collapsible={true}
-                showTokenModal={showTokenModal}
-                setShowTokenModal={setShowTokenModal}
-                token={token}
-                showNotification={showNotification}
-                providers={providers}
-                onRulesChange={(rules) => setRules(rules)}
-                newlyCreatedRuleUuids={newlyCreatedRuleUuids}
-                // allowDeleteRule={true}
-                // onRuleDelete={handleRuleDelete}
-            />
-        </CardGrid>
+        <PageLayout>
+            <CardGrid>
+                <UnifiedCard
+                    title="OpenAI SDK Configuration"
+                    size="full"
+                    rightAction={
+                        <Tooltip title="Create new routing rule">
+                            <Button
+                                variant="contained"
+                                startIcon={<AddIcon />}
+                                onClick={handleCreateRule}
+                                size="small"
+                            >
+                                New Rule
+                            </Button>
+                        </Tooltip>
+                    }
+                >
+                    {header}
+                </UnifiedCard>
+                <TabTemplatePage
+                    title={
+                        <Tooltip title="Use as model name in your API requests to forward">
+                            Models and Forwarding Rules
+                        </Tooltip>
+                    }
+                    rules={rules}
+                    collapsible={true}
+                    showTokenModal={showTokenModal}
+                    setShowTokenModal={setShowTokenModal}
+                    token={token}
+                    showNotification={showNotification}
+                    providers={providers}
+                    onRulesChange={(rules) => setRules(rules)}
+                    newlyCreatedRuleUuids={newlyCreatedRuleUuids}
+                    // allowDeleteRule={true}
+                    // onRuleDelete={handleRuleDelete}
+                />
+            </CardGrid>
+        </PageLayout>
     );
 };
 

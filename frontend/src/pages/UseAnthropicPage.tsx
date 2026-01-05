@@ -6,29 +6,24 @@ import {useNavigate} from 'react-router-dom';
 import {ApiConfigRow} from '../components/ApiConfigRow';
 import {BaseUrlRow} from '../components/BaseUrlRow';
 import TabTemplatePage from '../components/TabTemplatePage';
+import PageLayout from '../components/PageLayout';
 import {api, getBaseUrl} from '../services/api';
 import type { Provider } from '../types/provider';
 import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
-
-interface UseAnthropicPageProps {
-    showTokenModal: boolean;
-    setShowTokenModal: (show: boolean) => void;
-    token: string;
-    showNotification: (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
-    providers: Provider[];
-}
+import { useFunctionPanelData } from '../hooks/useFunctionPanelData';
 
 const ruleId = "built-in-anthropic";
 const scenario = "anthropic";
 
-const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
-    showTokenModal,
-    setShowTokenModal,
-    token,
-    showNotification,
-    providers
-}) => {
+const UseAnthropicPage: React.FC = () => {
+    const {
+        showTokenModal,
+        setShowTokenModal,
+        token,
+        showNotification,
+        providers,
+    } = useFunctionPanelData();
     const [baseUrl, setBaseUrl] = React.useState<string>('');
     const [rules, setRules] = React.useState<any>(null);
     const [loadingRule, setLoadingRule] = React.useState(true);
@@ -143,44 +138,46 @@ const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
     );
 
     return (
-        <CardGrid>
-            <UnifiedCard
-                title="Anthropic SDK Configuration"
-                size="full"
-                rightAction={
-                    <Tooltip title="Create new routing rule">
-                        <Button
-                            variant="contained"
-                            startIcon={<AddIcon />}
-                            onClick={handleCreateRule}
-                            size="small"
-                        >
-                            New Rule
-                        </Button>
-                    </Tooltip>
-                }
-            >
-                {header}
-            </UnifiedCard>
-            <TabTemplatePage
-                title={
-                    <Tooltip title="Use as model name in your API requests to forward">
-                        Models and Forwarding Rules
-                    </Tooltip>
-                }
-                rules={rules}
-                collapsible={true}
-                showTokenModal={showTokenModal}
-                setShowTokenModal={setShowTokenModal}
-                token={token}
-                showNotification={showNotification}
-                providers={providers}
-                onRulesChange={(rules) => setRules(rules)}
-                newlyCreatedRuleUuids={newlyCreatedRuleUuids}
-                // allowDeleteRule={true}
-                // onRuleDelete={handleRuleDelete}
-            />
-        </CardGrid>
+        <PageLayout>
+            <CardGrid>
+                <UnifiedCard
+                    title="Anthropic SDK Configuration"
+                    size="full"
+                    rightAction={
+                        <Tooltip title="Create new routing rule">
+                            <Button
+                                variant="contained"
+                                startIcon={<AddIcon />}
+                                onClick={handleCreateRule}
+                                size="small"
+                            >
+                                New Rule
+                            </Button>
+                        </Tooltip>
+                    }
+                >
+                    {header}
+                </UnifiedCard>
+                <TabTemplatePage
+                    title={
+                        <Tooltip title="Use as model name in your API requests to forward">
+                            Models and Forwarding Rules
+                        </Tooltip>
+                    }
+                    rules={rules}
+                    collapsible={true}
+                    showTokenModal={showTokenModal}
+                    setShowTokenModal={setShowTokenModal}
+                    token={token}
+                    showNotification={showNotification}
+                    providers={providers}
+                    onRulesChange={(rules) => setRules(rules)}
+                    newlyCreatedRuleUuids={newlyCreatedRuleUuids}
+                    // allowDeleteRule={true}
+                    // onRuleDelete={handleRuleDelete}
+                />
+            </CardGrid>
+        </PageLayout>
     );
 };
 
