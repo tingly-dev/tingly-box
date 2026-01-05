@@ -91,7 +91,7 @@ jobs:
       id-token: write
     env:
       PKG_NAME: tingly-box
-      PKG_DIR: npx/tingly-box
+      PKG_DIR: build/npx/tingly-box
       PKG_TYPE: cli
     steps:
       - name: Checkout code
@@ -232,7 +232,7 @@ jobs:
     if: needs.setup.outputs.publish_gui == 'true'
     env:
       PKG_NAME: tingly-box-gui
-      PKG_DIR: npx/tingly-box-gui
+      PKG_DIR: build/npx/tingly-box-gui
       PKG_TYPE: gui
     steps:
       - name: Checkout code
