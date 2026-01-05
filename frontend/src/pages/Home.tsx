@@ -49,6 +49,7 @@ const Home = () => {
         apiBase: '',
         apiStyle: undefined,
         token: '',
+        noKeyRequired: false,
     });
 
     const token = generatedToken || apiKey;
@@ -119,6 +120,7 @@ const Home = () => {
             apiBase: '',
             apiStyle: undefined,
             token: '',
+            noKeyRequired: false,
         });
         setAddDialogOpen(true);
     };
@@ -138,6 +140,7 @@ const Home = () => {
             api_base: providerFormData.apiBase,
             api_style: providerFormData.apiStyle,
             token: providerFormData.token,
+            no_key_required: providerFormData.noKeyRequired || false,
         };
 
         const result = await api.addProvider(providerData);
@@ -149,6 +152,7 @@ const Home = () => {
                 apiBase: '',
                 apiStyle: undefined,
                 token: '',
+                noKeyRequired: false,
             });
             setAddDialogOpen(false);
             await loadProviders();

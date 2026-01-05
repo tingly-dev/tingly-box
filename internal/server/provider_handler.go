@@ -13,12 +13,13 @@ import (
 // maskProviderForResponse masks sensitive data and returns a safe ProviderResponse
 func maskProviderForResponse(provider *config.Provider) ProviderResponse {
 	resp := ProviderResponse{
-		UUID:     provider.UUID,
-		Name:     provider.Name,
-		APIBase:  provider.APIBase,
-		APIStyle: string(provider.APIStyle),
-		Enabled:  provider.Enabled,
-		AuthType: string(provider.AuthType),
+		UUID:          provider.UUID,
+		Name:          provider.Name,
+		APIBase:       provider.APIBase,
+		APIStyle:      string(provider.APIStyle),
+		NoKeyRequired: provider.NoKeyRequired,
+		Enabled:       provider.Enabled,
+		AuthType:      string(provider.AuthType),
 	}
 
 	switch provider.AuthType {
@@ -74,6 +75,15 @@ func (s *Server) CreateProvider(c *gin.Context) {
 		return
 	}
 
+	// Custom validation: token is required unless NoKeyRequired is true
+	if !req.NoKeyRequired && req.Token == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Token is required when No Key Required is false",
+		})
+		return
+	}
+
 	// check existing
 	_, err := s.config.GetProviderByName(req.Name)
 	if err == nil {
@@ -103,12 +113,13 @@ func (s *Server) CreateProvider(c *gin.Context) {
 		return
 	}
 	provider := &config.Provider{
-		UUID:     uid.String(),
-		Name:     req.Name,
-		APIBase:  req.APIBase,
-		APIStyle: config.APIStyle(req.APIStyle),
-		Token:    req.Token,
-		Enabled:  req.Enabled,
+		UUID:          uid.String(),
+		Name:          req.Name,
+		APIBase:       req.APIBase,
+		APIStyle:      config.APIStyle(req.APIStyle),
+		Token:         req.Token,
+		NoKeyRequired: req.NoKeyRequired,
+		Enabled:       req.Enabled,
 	}
 
 	err = s.config.AddProvider(provider)
@@ -243,6 +254,9 @@ func (s *Server) UpdateProvider(c *gin.Context) {
 	// Only update token if it's provided and not empty
 	if req.Token != nil && *req.Token != "" {
 		provider.Token = *req.Token
+	}
+	if req.NoKeyRequired != nil {
+		provider.NoKeyRequired = *req.NoKeyRequired
 	}
 	if req.Enabled != nil {
 		provider.Enabled = *req.Enabled

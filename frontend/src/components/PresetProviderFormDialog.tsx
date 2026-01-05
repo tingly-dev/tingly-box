@@ -19,7 +19,7 @@ import {
     Checkbox,
     Grid,
 } from '@mui/material';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getProvidersByStyle } from '../services/serviceProviders';
 import api from '../services/api';
@@ -31,6 +31,7 @@ export interface EnhancedProviderFormData {
     apiBase: string;
     apiStyle: 'openai' | 'anthropic' | undefined;
     token: string;
+    noKeyRequired?: boolean;
     enabled?: boolean;
 }
 
@@ -60,7 +61,8 @@ const PresetProviderFormDialog = ({
     const defaultSubmitText = mode === 'add' ? t('providerDialog.addButton') : t('common.saveChanges');
 
     const [verifying, setVerifying] = useState(false);
-    const [noApiKey, setNoApiKey] = useState(false);
+    const [noApiKey, setNoApiKey] = useState(data.noKeyRequired || false);
+    const [isCustomUrl, setIsCustomUrl] = useState(false);
     const [verificationResult, setVerificationResult] = useState<{
         success: boolean;
         message: string;
@@ -69,6 +71,30 @@ const PresetProviderFormDialog = ({
         modelsCount?: number;
     } | null>(null);
     const [styleChangedWarning, setStyleChangedWarning] = useState(false);
+
+    // Sync noApiKey state with data.noKeyRequired prop
+    useEffect(() => {
+        setNoApiKey(data.noKeyRequired || false);
+    }, [data.noKeyRequired]);
+
+    // Determine if current URL is custom (not from presets)
+    useEffect(() => {
+        if (data.apiBase && data.apiStyle) {
+            const providers = getCurrentProviders();
+            const isPreset = providers.some(p => p.baseUrl === data.apiBase);
+            setIsCustomUrl(!isPreset);
+        } else {
+            setIsCustomUrl(false);
+        }
+    }, [data.apiBase, data.apiStyle]);
+
+    // Reset noApiKey when switching between preset/custom
+    useEffect(() => {
+        if (!isCustomUrl && noApiKey) {
+            setNoApiKey(false);
+            onChange('noKeyRequired', false);
+        }
+    }, [isCustomUrl]);
 
     const openaiProviders = getProvidersByStyle('openai');
     const anthropicProviders = getProvidersByStyle('anthropic');
@@ -87,9 +113,11 @@ const PresetProviderFormDialog = ({
         if (typeof newValue === 'string') {
             // Custom input - only update apiBase
             onChange('apiBase', newValue);
+            setIsCustomUrl(true);
         } else if (newValue && newValue.baseUrl) {
             // Preset selected - update apiBase
             onChange('apiBase', newValue.baseUrl);
+            setIsCustomUrl(false);
             // If name is empty and token is empty, set default name
             if (!data.name && !data.token) {
                 onChange('name', t('providerDialog.keyName.autoFill', { title: newValue.title }));
@@ -97,6 +125,7 @@ const PresetProviderFormDialog = ({
         } else if (newValue === null) {
             // Clear selection - only clear apiBase, preserve name
             onChange('apiBase', '');
+            setIsCustomUrl(true);
         }
     };
 
@@ -210,6 +239,7 @@ const PresetProviderFormDialog = ({
                                 if (oldStyle && newStyle && oldStyle !== newStyle) {
                                     onChange('apiBase', '');
                                     onChange('name', '');
+                                    setIsCustomUrl(false);
                                     // Show warning only in edit mode
                                     if (mode === 'edit') {
                                         setStyleChangedWarning(true);
@@ -312,6 +342,7 @@ const PresetProviderFormDialog = ({
                                     onInputChange={(_event, newInputValue) => {
                                         // Allow custom input
                                         onChange('apiBase', newInputValue);
+                                        setIsCustomUrl(true);
                                         setVerificationResult(null);
                                     }}
                                     renderOption={(props, option) => (
@@ -358,22 +389,25 @@ const PresetProviderFormDialog = ({
                                     helperText={mode === 'edit' && t('providerDialog.apiKey.helperEdit')}
                                     disabled={noApiKey}
                                 />
-                                <FormControlLabel
-                                    control={
-                                        <Switch
-                                            size="small"
-                                            checked={noApiKey}
-                                            onChange={(e) => {
-                                                setNoApiKey(e.target.checked);
-                                                setVerificationResult(null);
-                                                if (e.target.checked) {
-                                                    onChange('token', '');
-                                                }
-                                            }}
-                                        />
-                                    }
-                                    label="No Key Required"
-                                />
+                                {isCustomUrl && (
+                                    <FormControlLabel
+                                        control={
+                                            <Switch
+                                                size="small"
+                                                checked={noApiKey}
+                                                onChange={(e) => {
+                                                    setNoApiKey(e.target.checked);
+                                                    onChange('noKeyRequired', e.target.checked);
+                                                    setVerificationResult(null);
+                                                    if (e.target.checked) {
+                                                        onChange('token', '');
+                                                    }
+                                                }}
+                                            />
+                                        }
+                                        label="No Key Required"
+                                    />
+                                )}
 
                                 {/* Verification Result */}
                                 {verificationResult && (
