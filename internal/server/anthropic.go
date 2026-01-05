@@ -153,16 +153,17 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 
 	// Ensure max_tokens is set (Anthropic API requires this)
 	// and cap it at the model's maximum allowed value
-	if req.MaxTokens == 0 {
-		req.MaxTokens = int64(s.config.GetDefaultMaxTokens())
-	}
-	// Cap max_tokens at the model's maximum to prevent API errors
-	maxAllowed := s.templateManager.GetMaxTokensForModel(provider.Name, actualModel)
-	if req.MaxTokens > int64(maxAllowed) {
-		req.MaxTokens = int64(maxAllowed)
-	}
 	if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil {
-		req.MaxTokens = *thinkBudget + 1
+
+	} else {
+		if req.MaxTokens == 0 {
+			req.MaxTokens = int64(s.config.GetDefaultMaxTokens())
+		}
+		// Cap max_tokens at the model's maximum to prevent API errors
+		maxAllowed := s.templateManager.GetMaxTokensForModel(provider.Name, actualModel)
+		if req.MaxTokens > int64(maxAllowed) {
+			req.MaxTokens = int64(maxAllowed)
+		}
 	}
 
 	// Set provider UUID in context (Service.Provider uses UUID, not name)
