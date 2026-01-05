@@ -278,11 +278,9 @@ func TestConfig_OpenBrowser_DefaultValue(t *testing.T) {
 		t.Fatalf("Failed to create config: %v", err)
 	}
 
-	// Note: The zero value for bool is false. The default behavior of opening
-	// the browser is controlled by the CLI flag default (true) and the server
-	// option default (true), not by this config field.
-	if cfg.GetOpenBrowser() {
-		t.Error("Expected OpenBrowser to default to false (zero value), got true")
+	// OpenBrowser defaults to true for CLI mode (runtime-only setting)
+	if !cfg.GetOpenBrowser() {
+		t.Error("Expected OpenBrowser to default to true, got false")
 	}
 }
 
@@ -315,7 +313,7 @@ func TestConfig_SetOpenBrowser(t *testing.T) {
 	}
 }
 
-// TestConfig_OpenBrowser_Persistence tests that OpenBrowser is persisted to JSON
+// TestConfig_OpenBrowser_Persistence tests that OpenBrowser is NOT persisted to JSON
 func TestConfig_OpenBrowser_Persistence(t *testing.T) {
 	configDir := t.TempDir()
 
@@ -342,12 +340,14 @@ func TestConfig_OpenBrowser_Persistence(t *testing.T) {
 		t.Fatalf("Failed to unmarshal config JSON: %v", err)
 	}
 
-	// Verify OpenBrowser is in JSON and set to false
-	openBrowserVal, ok := jsonConfig["open_browser"]
-	if !ok {
-		t.Error("OpenBrowser field not found in JSON config")
-	} else if openBrowserVal != false {
-		t.Errorf("Expected open_browser to be false in JSON, got %v", openBrowserVal)
+	// Verify OpenBrowser is NOT in JSON (it has json:"-" tag)
+	if _, ok := jsonConfig["open_browser"]; ok {
+		t.Error("OpenBrowser field should NOT be in JSON config (it has json:\"-\" tag)")
+	}
+
+	// Also check for other possible key names
+	if _, ok := jsonConfig["OpenBrowser"]; ok {
+		t.Error("OpenBrowser field should NOT be in JSON config (it has json:\"-\" tag)")
 	}
 }
 
@@ -359,9 +359,9 @@ func TestAppConfig_OpenBrowser_Delegation(t *testing.T) {
 		t.Fatalf("Failed to create AppConfig: %v", err)
 	}
 
-	// Test default value (false is the zero value for bool)
-	if appCfg.GetOpenBrowser() {
-		t.Error("Expected AppConfig OpenBrowser to default to false (zero value)")
+	// OpenBrowser defaults to true (runtime-only setting)
+	if !appCfg.GetOpenBrowser() {
+		t.Error("Expected AppConfig OpenBrowser to default to true")
 	}
 
 	// Test setting via AppConfig

@@ -84,6 +84,25 @@ func (s *Server) CreateProvider(c *gin.Context) {
 		return
 	}
 
+	// Backend verification: Verify provider connection before saving (skip if no key required)
+	// This is a safety measure in addition to frontend verification
+	if !req.NoKeyRequired && req.Token != "" {
+		probeReq := &ProbeProviderRequest{
+			Name:     req.Name,
+			APIBase:  req.APIBase,
+			APIStyle: req.APIStyle,
+			Token:    req.Token,
+		}
+		success, message, _, err := s.testProviderConnectivity(probeReq)
+		if err != nil || !success {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"error":   fmt.Sprintf("Provider verification failed: %s", message),
+			})
+			return
+		}
+	}
+
 	// check existing
 	_, err := s.config.GetProviderByName(req.Name)
 	if err == nil {

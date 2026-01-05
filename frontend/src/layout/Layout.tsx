@@ -99,7 +99,7 @@ const Layout = ({ children }: LayoutProps) => {
 
     const menuGroups: MenuGroup[] = [
         {
-            key: 'home',
+            key: 'scenario',
             label: t('layout.nav.home'),
             icon: <DashboardIcon sx={{ fontSize: 20 }} />,
             items: [
