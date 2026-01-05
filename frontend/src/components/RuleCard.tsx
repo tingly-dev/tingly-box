@@ -1,5 +1,5 @@
-import { PlayArrow as ProbeIcon } from '@mui/icons-material';
-import { Button, Dialog, DialogContent, DialogTitle, Tooltip, Typography } from '@mui/material';
+import { Delete as DeleteIcon, PlayArrow as ProbeIcon } from '@mui/icons-material';
+import { Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Tooltip, Typography } from '@mui/material';
 import React, { useCallback, useState } from 'react';
 import type { ProbeResponse } from '../client';
 import Probe from '../components/Probe';
@@ -21,6 +21,9 @@ export interface RuleCardProps {
     onModelSelectOpen: (ruleUuid: string, configRecord: ConfigRecord, mode: 'edit' | 'add', providerUuid?: string) => void;
     collapsible?: boolean;
     initiallyExpanded?: boolean;
+    allowDeleteRule?: boolean;
+    onRuleDelete?: (ruleUuid: string) => void;
+    allowToggleRule?: boolean;
 }
 
 export const RuleCard: React.FC<RuleCardProps> = ({
@@ -36,6 +39,9 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     onModelSelectOpen,
     collapsible = false,
     initiallyExpanded = !collapsible,
+    allowDeleteRule = false,
+    onRuleDelete,
+    allowToggleRule = true,
 }) => {
     const [configRecord, setConfigRecord] = useState<ConfigRecord | null>(null);
     const [expanded, setExpanded] = useState(initiallyExpanded);
@@ -45,6 +51,9 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     const [probeResult, setProbeResult] = useState<ProbeResponse | null>(null);
     const [detailsExpanded, setDetailsExpanded] = useState(false);
     const [probeDialogOpen, setProbeDialogOpen] = useState(false);
+
+    // Delete confirmation state
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
     // Convert rule to ConfigRecord format
     React.useEffect(() => {
@@ -235,6 +244,32 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         }
     }, [configRecord, rule.uuid, onModelSelectOpen]);
 
+    const handleDeleteButtonClick = useCallback(() => {
+        setDeleteDialogOpen(true);
+    }, []);
+
+    const confirmDeleteRule = useCallback(async () => {
+        if (!onRuleDelete || !rule.uuid) {
+            setDeleteDialogOpen(false);
+            return;
+        }
+
+        try {
+            const result = await api.deleteRule(rule.uuid);
+            if (result.success) {
+                showNotification('Rule deleted successfully!', 'success');
+                onRuleDelete(rule.uuid);
+            } else {
+                showNotification(`Failed to delete rule: ${result.error || 'Unknown error'}`, 'error');
+            }
+        } catch (error) {
+            console.error('Error deleting rule:', error);
+            showNotification('Failed to delete routing rule', 'error');
+        } finally {
+            setDeleteDialogOpen(false);
+        }
+    }, [rule.uuid, onRuleDelete, showNotification]);
+
     if (!configRecord) return null;
 
     return (
@@ -247,6 +282,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 saving={saving}
                 expanded={expanded}
                 collapsible={collapsible}
+                allowToggleRule={allowToggleRule}
                 onUpdateRecord={handleUpdateRecord}
                 onDeleteProvider={handleDeleteProvider}
                 onRefreshModels={handleRefreshModels}
@@ -254,27 +290,48 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 onProviderNodeClick={handleProviderNodeClick}
                 onAddProviderButtonClick={handleAddProviderButtonClick}
                 extraActions={
-                    <Tooltip title="Test connection to provider">
-                        <Button
-                            size="small"
-                            onClick={handleProbe}
-                            disabled={!configRecord.providers[0]?.provider || !configRecord.providers[0]?.model || isProbing}
-                            startIcon={<ProbeIcon fontSize="small" />}
-                            sx={{
-                                minWidth: 'auto',
-                                color: isProbing ? 'primary.main' : 'text.secondary',
-                                '&:hover': {
-                                    backgroundColor: 'primary.main',
-                                    color: 'primary.contrastText',
-                                },
-                                '&:disabled': {
-                                    color: 'text.disabled',
-                                }
-                            }}
-                        >
-                            Test
-                        </Button>
-                    </Tooltip>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Tooltip title="Test connection to provider">
+                            <Button
+                                size="small"
+                                onClick={handleProbe}
+                                disabled={!configRecord.providers[0]?.provider || !configRecord.providers[0]?.model || isProbing}
+                                startIcon={<ProbeIcon fontSize="small" />}
+                                sx={{
+                                    minWidth: 'auto',
+                                    color: isProbing ? 'primary.main' : 'text.secondary',
+                                    '&:hover': {
+                                        backgroundColor: 'primary.main',
+                                        color: 'primary.contrastText',
+                                    },
+                                    '&:disabled': {
+                                        color: 'text.disabled',
+                                    }
+                                }}
+                            >
+                                Test
+                            </Button>
+                        </Tooltip>
+                        {allowDeleteRule && (
+                            <Tooltip title="Delete routing rule">
+                                <Button
+                                    size="small"
+                                    onClick={handleDeleteButtonClick}
+                                    startIcon={<DeleteIcon fontSize="small" />}
+                                    sx={{
+                                        minWidth: 'auto',
+                                        color: 'error.main',
+                                        '&:hover': {
+                                            backgroundColor: 'error.main',
+                                            color: 'error.contrastText',
+                                        },
+                                    }}
+                                >
+                                    Delete
+                                </Button>
+                            </Tooltip>
+                        )}
+                    </Box>
                 }
             />
 
@@ -304,6 +361,29 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                         detailsExpanded={detailsExpanded}
                     />
                 </DialogContent>
+            </Dialog>
+
+            {/* Delete Confirmation Dialog */}
+            <Dialog
+                open={deleteDialogOpen}
+                onClose={() => setDeleteDialogOpen(false)}
+                maxWidth="sm"
+                fullWidth
+            >
+                <DialogTitle>Delete Routing Rule</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        Are you sure you want to delete this routing rule? This action cannot be undone.
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setDeleteDialogOpen(false)} color="primary">
+                        Cancel
+                    </Button>
+                    <Button onClick={confirmDeleteRule} color="error" variant="contained">
+                        Delete
+                    </Button>
+                </DialogActions>
             </Dialog>
         </>
     );

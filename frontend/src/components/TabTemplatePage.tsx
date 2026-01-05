@@ -18,6 +18,9 @@ export interface TabTemplatePageProps {
     providers: Provider[];
     onRulesChange?: (updatedRules: Rule[]) => void;
     collapsible?: boolean;
+    allowDeleteRule?: boolean;
+    onRuleDelete?: (ruleUuid: string) => void;
+    allowToggleRule?: boolean;
 }
 
 const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
@@ -30,6 +33,9 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
     onRulesChange,
     title="",
     collapsible = false,
+    allowDeleteRule = false,
+    onRuleDelete,
+    allowToggleRule = true,
 }) => {
     const [providerModelsByUuid, setProviderModelsByUuid] = useState<ProviderModelsDataByUuid>({});
     const [refreshingProviders, setRefreshingProviders] = useState<string[]>([]);
@@ -224,6 +230,9 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
                         onRefreshProvider={handleRefreshModels}
                         collapsible={collapsible}
                         onModelSelectOpen={openModelSelectDialog}
+                        allowDeleteRule={allowDeleteRule}
+                        onRuleDelete={onRuleDelete}
+                        allowToggleRule={allowToggleRule}
                     />
             ))}
             </UnifiedCard>
