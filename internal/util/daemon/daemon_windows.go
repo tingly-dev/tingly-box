@@ -1,6 +1,6 @@
-//go:build !windows
+//go:build windows
 
-package util
+package daemon
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 )
 
 // Daemonize detaches the process from the terminal and runs in the background
-// This works on Unix-like systems (Linux, macOS)
+// This works on Windows by creating a detached process
 func Daemonize() error {
 	// Check if we're already the child process
 	if IsDaemonProcess() {
@@ -35,9 +35,10 @@ func Daemonize() error {
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 
-	// Set process attributes to detach from terminal
+	// Windows: CREATE_NEW_PROCESS_GROUP (0x200) | DETACHED_PROCESS (0x8)
+	// This creates a detached process that doesn't inherit console
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setsid: true, // Create new session
+		CreationFlags: 0x00000208, // CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS
 	}
 
 	// Start the daemonized process
