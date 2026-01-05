@@ -26,7 +26,7 @@ type TinglyService struct {
 }
 
 // NewTinglyService creates a new UI service instance
-func NewTinglyService(configDir string, port int) (*TinglyService, error) {
+func NewTinglyService(configDir string, port int, debug bool) (*TinglyService, error) {
 	appConfig, err := config.NewAppConfig(config.WithConfigDir(configDir))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create app config: %w", err)
@@ -37,8 +37,8 @@ func NewTinglyService(configDir string, port int) (*TinglyService, error) {
 	serverManager := manager.NewServerManager(
 		appConfig,
 		manager.WithUI(true),
-		manager.WithAdaptor(false),
-		manager.WithDebug(false),
+		manager.WithAdaptor(true),
+		manager.WithDebug(debug),
 		manager.WithOpenBrowser(false), // GUI doesn't need browser auto-open
 	)
 
@@ -93,6 +93,8 @@ func (s *TinglyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // ServiceStartup is called when the service starts
 func (s *TinglyService) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
+	s.Start(ctx)
+
 	// Store the application instance for later use
 	s.app = application.Get()
 

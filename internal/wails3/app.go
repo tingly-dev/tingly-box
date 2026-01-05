@@ -20,14 +20,14 @@ const (
 var App *application.App
 var tinglyService *services.TinglyService
 
-func newApp() *application.App {
+func newApp(port int, debug bool) *application.App {
 	// Create UI service
 	home, err := util.GetUserPath()
 	if err != nil {
 		log.Fatal(err)
 	}
 	configDir := filepath.Join(home, ".tingly-box")
-	tinglyService, err = services.NewTinglyService(configDir, DefaultPort)
+	tinglyService, err = services.NewTinglyService(configDir, port, debug)
 	if err != nil {
 		log.Fatalf("Failed to create UI service: %v", err)
 	}
