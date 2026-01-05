@@ -12,6 +12,7 @@ import (
 	"tingly-box/internal/auth"
 	"tingly-box/internal/config"
 	"tingly-box/internal/obs"
+	"tingly-box/internal/server/background"
 	"tingly-box/internal/server/middleware"
 	"tingly-box/internal/util"
 	oauth2 "tingly-box/pkg/oauth"
@@ -45,7 +46,7 @@ type Server struct {
 	oauthManager *oauth2.Manager
 
 	// OAuth refresher for OAuth auto-refresh
-	oauthRefresher *OAuthRefresher
+	oauthRefresher *background.OAuthRefresher
 
 	// template manager for provider templates
 	templateManager *config.TemplateManager
@@ -214,7 +215,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	oauthManager := oauth2.NewManager(oauthConfig, registry)
 
 	// Initialize token refresher for OAuth auto-refresh
-	tokenRefresher := NewTokenRefresher(oauthManager, cfg)
+	tokenRefresher := background.NewTokenRefresher(oauthManager, cfg)
 
 	// Update server with dependencies
 	server.statsMW = statsMW
