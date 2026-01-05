@@ -13,15 +13,52 @@ import (
 	"tingly-box/internal/server"
 	"tingly-box/internal/util"
 
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
-// stopServer stops the running server using the file lock
-func stopServer(fileLock *lock.FileLock) error {
-	return stopServerWithFileLock(fileLock)
+const (
+	// URL templates for displaying to users
+	webUITpl             = "http://localhost:%d/home"
+	webUITokenTpl        = "http://localhost:%d/home?token=%s"
+	openAIEndpointTpl    = "http://localhost:%d/tingly/openai/v1/chat/completions"
+	anthropicEndpointTpl = "http://localhost:%d/tingly/anthropic/v1/messages"
+)
+
+// BannerConfig holds configuration for banner display
+type BannerConfig struct {
+	Port         int
+	Host         string
+	EnableUI     bool
+	GlobalConfig *config.Config
+	IsDaemon     bool
 }
 
-// stopServerWithFileLock handles the server stopping logic
+// printBanner prints the server access banner
+func printBanner(cfg BannerConfig) {
+	if !cfg.EnableUI {
+		// Resolve host for display
+		resolvedHost := util.ResolveHost(cfg.Host)
+		fmt.Printf("API endpoint: http://%s:%d/v1/chat/completions\n", resolvedHost, cfg.Port)
+		return
+	}
+
+	// Show all access URLs when UI is enabled
+	fmt.Println("\nYou can access the service at:")
+	if cfg.GlobalConfig.HasUserToken() {
+		fmt.Printf("  Web UI:       "+webUITokenTpl+"\n", cfg.Port, cfg.GlobalConfig.GetUserToken())
+	} else {
+		fmt.Printf("  Web UI:       "+webUITpl+"\n", cfg.Port)
+	}
+	fmt.Printf("  OpenAI API:   "+openAIEndpointTpl+"\n", cfg.Port)
+	fmt.Printf("  Anthropic API: "+anthropicEndpointTpl+"\n", cfg.Port)
+
+	if cfg.IsDaemon {
+		fmt.Println("\nServer is running in background. Use 'tingly-box stop' to stop.")
+	}
+}
+
+// stopServer stops the running server using the file lock
 func stopServerWithFileLock(fileLock *lock.FileLock) error {
 	// Get PID from lock file
 	pid, err := fileLock.GetPID()
@@ -57,6 +94,81 @@ func stopServerWithFileLock(fileLock *lock.FileLock) error {
 	return nil
 }
 
+// resolveStartOptions resolves start options from CLI flags and config
+// This is shared between start and restart commands
+type startFlags struct {
+	port                 int
+	host                 string
+	enableUI             bool
+	enableDebug          bool
+	enableOpenBrowser    bool
+	enableStyleTransform bool
+	daemon               bool
+	logFile              string
+}
+
+// addStartFlags adds all start-related flags to a command
+// This is shared between start and restart commands
+func addStartFlags(cmd *cobra.Command, flags *startFlags) {
+	cmd.Flags().IntVarP(&flags.port, "port", "p", 0, "Server port (default: from config or 12580)")
+	cmd.Flags().StringVar(&flags.host, "host", "localhost", "Server host")
+	cmd.Flags().BoolVarP(&flags.enableUI, "ui", "u", true, "Enable web UI (default: true)")
+	cmd.Flags().BoolVar(&flags.enableDebug, "debug", false, "Enable debug mode including gin, low level logging and so on (default: false)")
+	cmd.Flags().BoolVar(&flags.enableOpenBrowser, "browser", true, "Auto-open browser when server starts (default: true)")
+	cmd.Flags().BoolVar(&flags.enableStyleTransform, "adapter", true, "Enable API style transformation (default: true)")
+	cmd.Flags().BoolVar(&flags.daemon, "daemon", false, "Run as daemon in background (default: false)")
+	cmd.Flags().StringVar(&flags.logFile, "log-file", "", "Log file path for daemon mode (default: ~/.tingly-box/tingly-box.log)")
+}
+
+func resolveStartOptions(cmd *cobra.Command, flags startFlags, appConfig *config.AppConfig) startServerOptions {
+	// Apply priority: CLI flag > Config > Default
+	resolvedDebug := flags.enableDebug
+	if !cmd.Flags().Changed("debug") {
+		resolvedDebug = appConfig.GetDebug()
+	}
+
+	resolvedOpenBrowser := flags.enableOpenBrowser
+	if !cmd.Flags().Changed("browser") {
+		resolvedOpenBrowser = appConfig.GetOpenBrowser()
+	}
+
+	resolvedPort := flags.port
+	if resolvedPort == 0 {
+		resolvedPort = appConfig.GetServerPort()
+	} else {
+		appConfig.SetServerPort(flags.port)
+	}
+
+	return startServerOptions{
+		Host:              flags.host,
+		Port:              resolvedPort,
+		EnableUI:          flags.enableUI,
+		EnableDebug:       resolvedDebug,
+		EnableAdaptor:     flags.enableStyleTransform,
+		EnableOpenBrowser: resolvedOpenBrowser,
+		Daemon:            flags.daemon,
+		LogFile:           flags.logFile,
+	}
+}
+
+// doStopServer stops the running server
+func doStopServer(appConfig *config.AppConfig) error {
+	fileLock := lock.NewFileLock(appConfig.ConfigDir())
+
+	if !fileLock.IsLocked() {
+		fmt.Println("Server is not running")
+		return nil
+	}
+
+	fmt.Println("Stopping server...")
+	if err := stopServerWithFileLock(fileLock); err != nil {
+		return fmt.Errorf("failed to stop server: %w", err)
+	}
+
+	fmt.Println("Server stopped successfully")
+	return nil
+}
+
 // startServerOptions contains options for starting the server
 type startServerOptions struct {
 	Host              string
@@ -65,10 +177,60 @@ type startServerOptions struct {
 	EnableDebug       bool
 	EnableAdaptor     bool
 	EnableOpenBrowser bool
+	Daemon            bool
+	LogFile           string
 }
 
 // startServer handles the server starting logic
 func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
+	// Handle daemon mode
+	if opts.Daemon {
+		// Determine log file path
+		logFile := opts.LogFile
+		if logFile == "" {
+			// Default to config directory
+			logFile = appConfig.ConfigDir() + "/tingly-box.log"
+		}
+
+		// If not yet daemonized, fork and exit
+		if !util.IsDaemonProcess() {
+			// Resolve port for display
+			port := opts.Port
+			if port == 0 {
+				port = appConfig.GetServerPort()
+			}
+
+			_ = util.NewLogger(util.DefaultLogRotationConfig(logFile))
+
+			fmt.Printf("Starting daemon process...\n")
+			fmt.Printf("Logging to: %s\n", logFile)
+			fmt.Printf("Server starting on port %d...\n", port)
+
+			// Show banner in parent process before forking
+			printBanner(BannerConfig{
+				Port:         port,
+				Host:         opts.Host,
+				EnableUI:     opts.EnableUI,
+				GlobalConfig: appConfig.GetGlobalConfig(),
+				IsDaemon:     true,
+			})
+
+			// Fork and detach
+			if err := util.Daemonize(); err != nil {
+				return fmt.Errorf("failed to daemonize: %w", err)
+			}
+			// Daemonize() calls os.Exit(0), so we never reach here
+		}
+
+		// In child process - redirect stdout and stderr to log file
+		logWriter := util.NewLogger(util.DefaultLogRotationConfig(logFile))
+
+		// Also set up logrus to write to file
+		logrus.SetOutput(logWriter)
+
+		_ = logWriter
+	}
+
 	var port int = opts.Port
 	if port == 0 {
 		port = appConfig.GetServerPort()
@@ -82,6 +244,14 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 	// Check if server is already running using file lock
 	if fileLock.IsLocked() {
 		fmt.Printf("Server is already running on port %d\n", port)
+		printBanner(BannerConfig{
+			Port:         port,
+			Host:         opts.Host,
+			EnableUI:     opts.EnableUI,
+			GlobalConfig: appConfig.GetGlobalConfig(),
+			IsDaemon:     false,
+		})
+		fmt.Println("Tip: Use 'tingly-box stop' to stop the running server first")
 		return nil
 	}
 
@@ -112,11 +282,13 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 
 	fmt.Printf("Server starting on port %d...\n", port)
 
-	if !opts.EnableUI {
-		// Resolve host for display
-		resolvedHost := util.ResolveHost(opts.Host)
-		fmt.Printf("API endpoint: http://%s:%d/v1/chat/completions\n", resolvedHost, port)
-	}
+	printBanner(BannerConfig{
+		Port:         port,
+		Host:         opts.Host,
+		EnableUI:     opts.EnableUI,
+		GlobalConfig: appConfig.GetGlobalConfig(),
+		IsDaemon:     false,
+	})
 
 	// Wait for either server error, shutdown signal, or web UI stop request
 	select {
@@ -139,12 +311,7 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 
 // StartCommand represents the start server command
 func StartCommand(appConfig *config.AppConfig) *cobra.Command {
-	var port int
-	var enableUI bool
-	var enableDebug bool
-	var enableOpenBrowser bool
-	var host string
-	var enableStyleTransform bool
+	var flags startFlags
 
 	cmd := &cobra.Command{
 		Use:   "start",
@@ -152,41 +319,12 @@ func StartCommand(appConfig *config.AppConfig) *cobra.Command {
 		Long: `Start the Tingly Box HTTP server that provides the unified API endpoint.
 The server will handle request routing to configured AI providers.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Apply priority: CLI flag > Config > Default
-			resolvedDebug := enableDebug
-			if !cmd.Flags().Changed("debug") {
-				resolvedDebug = appConfig.GetDebug()
-			}
-
-			resolvedOpenBrowser := enableOpenBrowser
-			if !cmd.Flags().Changed("browser") {
-				resolvedOpenBrowser = appConfig.GetOpenBrowser()
-			}
-
-			resolvedPort := port
-			if resolvedPort == 0 {
-				resolvedPort = appConfig.GetServerPort()
-			} else {
-				appConfig.SetServerPort(port)
-			}
-
-			return startServer(appConfig, startServerOptions{
-				Host:              host,
-				Port:              resolvedPort,
-				EnableUI:          enableUI,
-				EnableDebug:       resolvedDebug,
-				EnableAdaptor:     enableStyleTransform,
-				EnableOpenBrowser: resolvedOpenBrowser,
-			})
+			opts := resolveStartOptions(cmd, flags, appConfig)
+			return startServer(appConfig, opts)
 		},
 	}
 
-	cmd.Flags().IntVarP(&port, "port", "p", 0, "Server port (default: from config or 12580)")
-	cmd.Flags().StringVar(&host, "host", "localhost", "Server host")
-	cmd.Flags().BoolVarP(&enableUI, "ui", "u", true, "Enable web UI (default: true)")
-	cmd.Flags().BoolVar(&enableDebug, "debug", false, "Enable debug mode including gin, low level logging and so on (default: false)")
-	cmd.Flags().BoolVar(&enableOpenBrowser, "browser", true, "Auto-open browser when server starts (default: true)")
-	cmd.Flags().BoolVar(&enableStyleTransform, "adapter", true, "Enable API style transformation (default: true)")
+	addStartFlags(cmd, &flags)
 	return cmd
 }
 
@@ -198,20 +336,7 @@ func StopCommand(appConfig *config.AppConfig) *cobra.Command {
 		Long: `Stop the running Tingly Box HTTP server gracefully.
 All ongoing requests will be completed before shutdown.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fileLock := lock.NewFileLock(appConfig.ConfigDir())
-
-			if !fileLock.IsLocked() {
-				fmt.Println("Server is not running")
-				return nil
-			}
-
-			fmt.Println("Stopping server...")
-			if err := stopServerWithFileLock(fileLock); err != nil {
-				return fmt.Errorf("failed to stop server: %w", err)
-			}
-
-			fmt.Println("Server stopped successfully")
-			return nil
+			return doStopServer(appConfig)
 		},
 	}
 
@@ -237,9 +362,9 @@ show configuration information including number of providers and server port.`,
 				fmt.Printf("Running\n")
 				port := appConfig.GetServerPort()
 				fmt.Printf("Port: %d\n", port)
-				fmt.Printf("OpenAI Style API Endpoint: http://localhost:%d/openai/v1/chat/completions\n", port)
-				fmt.Printf("Anthropic Style API Endpoint: http://localhost:%d/anthropic/v1/messages\n", port)
-				fmt.Printf("Web UI: http://localhost:%d/dashboard\n", port)
+				fmt.Printf("OpenAI Style API Endpoint: "+openAIEndpointTpl+"\n", port)
+				fmt.Printf("Anthropic Style API Endpoint: "+anthropicEndpointTpl+"\n", port)
+				fmt.Printf("Web UI: "+webUITpl+"\n", port)
 				if globalConfig.HasUserToken() {
 					fmt.Printf("UI Management Key: %s\n", globalConfig.GetUserToken())
 				}
@@ -291,10 +416,7 @@ show configuration information including number of providers and server port.`,
 
 // RestartCommand represents the restart server command
 func RestartCommand(appConfig *config.AppConfig) *cobra.Command {
-	var port int
-	var host string
-	var debug bool
-	var openBrowser bool
+	var flags startFlags
 
 	cmd := &cobra.Command{
 		Use:   "restart",
@@ -303,27 +425,7 @@ func RestartCommand(appConfig *config.AppConfig) *cobra.Command {
 This command will stop the current server (if running) and start a new instance.
 The restart is graceful - ongoing requests will be completed before shutdown.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Apply priority: CLI flag > Config > Default
-			resolvedDebug := debug
-			if !cmd.Flags().Changed("debug") {
-				resolvedDebug = appConfig.GetDebug()
-			}
-
-			resolvedOpenBrowser := openBrowser
-			if !cmd.Flags().Changed("browser") {
-				resolvedOpenBrowser = appConfig.GetOpenBrowser()
-			}
-
-			resolvedPort := port
-			if resolvedPort == 0 {
-				resolvedPort = appConfig.GetServerPort()
-			} else {
-				appConfig.SetServerPort(port)
-			}
-
-			if err := appConfig.SetServerPort(resolvedPort); err != nil {
-				return fmt.Errorf("failed to set server port: %w", err)
-			}
+			opts := resolveStartOptions(cmd, flags, appConfig)
 
 			fileLock := lock.NewFileLock(appConfig.ConfigDir())
 			wasRunning := fileLock.IsLocked()
@@ -341,20 +443,11 @@ The restart is graceful - ongoing requests will be completed before shutdown.`,
 				fmt.Println("Server was not running, starting it...")
 			}
 
-			// Start new server using non-blocking mode
-			return startServer(appConfig, startServerOptions{
-				Host:              host,
-				Port:              resolvedPort,
-				EnableUI:          true,
-				EnableDebug:       resolvedDebug,
-				EnableOpenBrowser: resolvedOpenBrowser,
-			})
+			// Start new server
+			return startServer(appConfig, opts)
 		},
 	}
 
-	cmd.Flags().StringVar(&host, "host", "localhost", "Server host")
-	cmd.Flags().IntVarP(&port, "port", "p", 0, "Server port (default: from config or 12580)")
-	cmd.Flags().BoolVar(&debug, "debug", false, "Enable debug mode (default: from config or false)")
-	cmd.Flags().BoolVar(&openBrowser, "browser", true, "Auto-open browser when server starts (default: true)")
+	addStartFlags(cmd, &flags)
 	return cmd
 }

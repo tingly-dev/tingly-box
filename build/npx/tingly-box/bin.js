@@ -73,6 +73,13 @@ function validateTransportVersion(version) {
 
 const { version: VERSION, remainingArgs } = parseTransportVersion();
 
+// Default parameters to use when no arguments are provided
+const DEFAULT_ARGS = [
+	// Add your default parameters here, e.g.:
+	"start",
+	"--daemon",
+];
+
 async function getPlatformArchAndBinary() {
 	const platform = process.platform;
 	const arch = process.arch;
@@ -341,7 +348,10 @@ function formatBytes(bytes) {
     console.log(`🔍 Executing binary: ${binaryPath}`);
 
     try {
-        execFileSync(binaryPath, remainingArgs, {
+        // Use default args if no arguments provided
+        const argsToUse = remainingArgs.length > 0 ? remainingArgs : DEFAULT_ARGS;
+
+        execFileSync(binaryPath, argsToUse, {
             stdio: "inherit",
             encoding: 'utf8'
         });

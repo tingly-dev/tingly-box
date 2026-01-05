@@ -16,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/sirupsen/logrus"
 )
 
 // Manager handles OAuth flows
@@ -832,22 +834,22 @@ func isTransientDeviceCodeError(err error) bool {
 
 // debugRequest prints HTTP request details for debugging
 func (m *Manager) debugRequest(req *http.Request, isJSON bool) {
-	fmt.Printf("\n=== OAuth Debug: HTTP Request ===\n")
-	fmt.Printf("Method: %s\n", req.Method)
-	fmt.Printf("URL: %s\n", req.URL.String())
-	fmt.Printf("\nHeaders:\n")
+	logrus.Debug("=== OAuth Debug: HTTP Request ===")
+	logrus.Debugf("Method: %s", req.Method)
+	logrus.Debugf("URL: %s", req.URL.String())
+	logrus.Debug("Headers:")
 	for key, values := range req.Header {
 		for _, value := range values {
 			// Mask sensitive headers
 			if strings.EqualFold(key, "Authorization") {
 				value = "***REDACTED***"
 			}
-			fmt.Printf("  %s: %s\n", key, value)
+			logrus.Debugf("  %s: %s", key, value)
 		}
 	}
 
 	if req.Body != nil && req.Body != http.NoBody {
-		fmt.Printf("\nBody:\n")
+		logrus.Debug("Body:")
 		// Read body to print it (but we need to restore it for the actual request)
 		bodyBytes, err := io.ReadAll(req.Body)
 		if err == nil {
@@ -856,19 +858,19 @@ func (m *Manager) debugRequest(req *http.Request, isJSON bool) {
 				var formatted any
 				if json.Unmarshal(bodyBytes, &formatted) == nil {
 					if pretty, err := json.MarshalIndent(formatted, "", "  "); err == nil {
-						fmt.Printf("%s\n", string(pretty))
+						logrus.Debugf("%s", string(pretty))
 					} else {
-						fmt.Printf("%s\n", string(bodyBytes))
+						logrus.Debugf("%s", string(bodyBytes))
 					}
 				} else {
-					fmt.Printf("%s\n", string(bodyBytes))
+					logrus.Debugf("%s", string(bodyBytes))
 				}
 			} else {
-				fmt.Printf("%s\n", string(bodyBytes))
+				logrus.Debugf("%s", string(bodyBytes))
 			}
 			// Restore body for actual request
 			req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 		}
 	}
-	fmt.Printf("================================\n\n")
+	logrus.Debug("================================")
 }

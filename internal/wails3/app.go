@@ -18,16 +18,16 @@ const (
 )
 
 var App *application.App
-var uiService *services.ProxyService
+var tinglyService *services.TinglyService
 
-func newApp() *application.App {
+func newApp(port int, debug bool) *application.App {
 	// Create UI service
 	home, err := util.GetUserPath()
 	if err != nil {
 		log.Fatal(err)
 	}
 	configDir := filepath.Join(home, ".tingly-box")
-	uiService, err = services.NewUIService(configDir, 12580)
+	tinglyService, err = services.NewTinglyService(configDir, port, debug)
 	if err != nil {
 		log.Fatalf("Failed to create UI service: %v", err)
 	}
@@ -43,7 +43,7 @@ func newApp() *application.App {
 		Description: AppDescription,
 		Services: []application.Service{
 			application.NewService(&services.GreetService{}),
-			application.NewService(uiService),
+			application.NewService(tinglyService),
 		},
 		Assets: application.AssetOptions{
 			Handler: embdHandler,

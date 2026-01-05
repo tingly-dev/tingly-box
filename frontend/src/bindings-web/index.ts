@@ -2,24 +2,24 @@
 // This file provides mock implementations when Wails bindings are not available
 
 
-export const ProxyService = {
+export const TinglyService = {
     GetGinEngine: async () => {
-        console.warn('[Mock] ProxyService.GetGinEngine called - returning null');
+        console.warn('[Mock] TinglyService.GetGinEngine called - returning null');
         return null;
     },
     GetPort: async () => {
-        console.warn('[Mock] ProxyService.GetPort called - returning 8080');
+        console.warn('[Mock] TinglyService.GetPort called - returning 8080');
         return 8080;
     },
     GetUserAuthToken: async () => {
-        console.warn('[Mock] ProxyService.GetUserAuthToken called - returning empty string');
+        console.warn('[Mock] TinglyService.GetUserAuthToken called - returning empty string');
         return '';
     },
     Start: async () => {
-        console.warn('[Mock] ProxyService.Start called - no-op');
+        console.warn('[Mock] TinglyService.Start called - no-op');
     },
     Stop: async () => {
-        console.warn('[Mock] ProxyService.Stop called - no-op');
+        console.warn('[Mock] TinglyService.Stop called - no-op');
     }
 };
 
@@ -30,4 +30,4 @@ export const GreetService = {
     }
 };
 
-export default ProxyService;
+export default TinglyService;

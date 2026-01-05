@@ -1,6 +1,6 @@
 // API service layer for communicating with the backend
 
-import ProxyService from "@/bindings";
+import TinglyService from "@/bindings";
 import {
     Configuration,
     HistoryApi,
@@ -51,15 +51,15 @@ export const getBaseUrl = async (): Promise<string> => {
 
     // Check if we're in GUI mode
     if (import.meta.env.VITE_PKG_MODE === "gui") {
-        const proxy = ProxyService;
-        if (proxy) {
-            console.log(proxy)
+        const svc = TinglyService;
+        if (svc) {
+            console.log(svc)
             try {
-                const port = await proxy.GetPort();
+                const port = await svc.GetPort();
                 basePath = `http://localhost:${port}`;
                 console.log("Using GUI mode base path:", basePath);
             } catch (err) {
-                console.error('Failed to get port from ProxyService:', err);
+                console.error('Failed to get port from TinglyService:', err);
             }
         }
     } else {
@@ -77,22 +77,22 @@ const createApiConfig = async () => {
 
     // Check if we're in GUI mode
     if (import.meta.env.VITE_PKG_MODE === "gui") {
-        const proxy = ProxyService;
-        if (proxy) {
+        const svc = TinglyService;
+        if (svc) {
             try {
                 // Get token from GUI
-                const guiToken = await proxy.GetUserAuthToken();
+                const guiToken = await svc.GetUserAuthToken();
                 if (guiToken) {
                     token = guiToken;
                     console.log("Using GUI mode token");
                 }
 
                 // Get port and construct base path
-                const port = await proxy.GetPort();
+                const port = await svc.GetPort();
                 basePath = `http://localhost:${port}`;
                 console.log("Using GUI mode base path:", basePath);
             } catch (err) {
-                console.error('Failed to get configuration from ProxyService:', err);
+                console.error('Failed to get configuration from TinglyService:', err);
             }
         }
     } else {
