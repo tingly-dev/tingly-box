@@ -91,7 +91,7 @@ from openai import OpenAI
 
 client = OpenAI(
     api_key="your-tingly-model-token",
-    base_url="http://localhost:12580/openai/v1"
+    base_url="http://localhost:12580/tingly/openai/v1"
 )
 
 response = client.chat.completions.create(
@@ -113,7 +113,7 @@ print(response)
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
     "API_TIMEOUT_MS": "3000000",
     "ANTHROPIC_AUTH_TOKEN": "{content after tingly token cmd 'Current API Key from Global Config'}",
-    "ANTHROPIC_BASE_URL": "http://localhost:8080/tingly/claude_code",
+    "ANTHROPIC_BASE_URL": "http://localhost:12580/tingly/claude_code",
     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "tingly/cc",
     "ANTHROPIC_DEFAULT_OPUS_MODEL": "tingly/cc",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "tingly/cc",
@@ -146,7 +146,7 @@ This works with any tool that supports OpenAI-compatible endpoints: Cherry Studi
 ## 🖥 Web Management UI
 
 ```bash
-tingly-box start
+npx tingly-box start
 ```
 
 ---
@@ -207,4 +207,4 @@ We welcome contributions! Follow these steps, inspired by popular open-source re
 
 ------
 
-Apache-2.0 License · © Tingly
+Apache-2.0 License · © Tingly Dev
