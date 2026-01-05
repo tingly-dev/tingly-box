@@ -1,4 +1,4 @@
-package config
+package template
 
 import (
 	_ "embed"
@@ -11,6 +11,10 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"tingly-box/internal/config/typ"
+	constant2 "tingly-box/internal/constant"
+	"tingly-box/internal/helper"
 )
 
 //go:embed provider_templates.json
@@ -73,7 +77,7 @@ type TemplateManager struct {
 // NewTemplateManager creates a new template manager.
 // If githubURL is empty, only embedded templates will be used (no GitHub sync).
 func NewTemplateManager(githubURL string) *TemplateManager {
-	configDir := GetTinglyConfDir()
+	configDir := constant2.GetTinglyConfDir()
 	return &TemplateManager{
 		githubURL: githubURL,
 		templates: make(map[string]*ProviderTemplate),
@@ -374,7 +378,7 @@ func ValidateTemplate(tmpl *ProviderTemplate) error {
 // 1. Provider API (real-time, no cache)
 // 2. GitHub templates (cached remote)
 // 3. Embedded templates (local fallback)
-func (tm *TemplateManager) GetModelsForProvider(provider *Provider) ([]string, TemplateSource, error) {
+func (tm *TemplateManager) GetModelsForProvider(provider *typ.Provider) ([]string, TemplateSource, error) {
 	// Get template from templates map (could be GitHub or embedded)
 	tm.mu.RLock()
 	tmpl := tm.templates[provider.Name]
@@ -388,7 +392,7 @@ func (tm *TemplateManager) GetModelsForProvider(provider *Provider) ([]string, T
 
 	// Tier 1: Try provider API first if supported (no cache)
 	if tmpl != nil && tmpl.SupportsModelsEndpoint {
-		models, apiErr := getProviderModelsFromAPI(provider)
+		models, apiErr := helper.GetProviderModelsFromAPI(provider)
 		if apiErr == nil && len(models) > 0 {
 			return models, TemplateSourceAPI, nil
 		}
@@ -432,5 +436,11 @@ func (tm *TemplateManager) GetMaxTokensForModel(provider, model string) int {
 	}
 
 	// Fallback to global default
-	return DefaultMaxTokens
+	return constant2.DefaultMaxTokens
 }
+
+const DefaultTemplateHTTPTimeout = 30 * time.Second // Default HTTP timeout for fetching templates
+
+const DefaultTemplateCacheTTL = 12 * time.Hour // Default TTL for template cache
+
+const TemplateCacheFileName = "provider_template.json"

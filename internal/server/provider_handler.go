@@ -3,15 +3,16 @@ package server
 import (
 	"fmt"
 	"net/http"
-	"tingly-box/internal/config"
-	"tingly-box/internal/obs"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+
+	"tingly-box/internal/config/typ"
+	"tingly-box/internal/obs"
 )
 
 // maskProviderForResponse masks sensitive data and returns a safe ProviderResponse
-func maskProviderForResponse(provider *config.Provider) ProviderResponse {
+func maskProviderForResponse(provider *typ.Provider) ProviderResponse {
 	resp := ProviderResponse{
 		UUID:          provider.UUID,
 		Name:          provider.Name,
@@ -23,10 +24,10 @@ func maskProviderForResponse(provider *config.Provider) ProviderResponse {
 	}
 
 	switch provider.AuthType {
-	case config.AuthTypeOAuth:
+	case typ.AuthTypeOAuth:
 		// For OAuth, return masked OAuthDetail
 		if provider.OAuthDetail != nil {
-			resp.OAuthDetail = &config.OAuthDetail{
+			resp.OAuthDetail = &typ.OAuthDetail{
 				//AccessToken:  maskToken(provider.OAuthDetail.AccessToken),
 				AccessToken:  provider.OAuthDetail.AccessToken,
 				RefreshToken: provider.OAuthDetail.RefreshToken,
@@ -36,7 +37,7 @@ func maskProviderForResponse(provider *config.Provider) ProviderResponse {
 				// Don't return refresh_token in responses
 			}
 		}
-	case config.AuthTypeAPIKey, "":
+	case typ.AuthTypeAPIKey, "":
 		// For api_key (or empty for backward compatibility), return masked Token
 		//resp.Token = maskToken(provider.Token)
 		resp.Token = provider.Token
@@ -131,11 +132,11 @@ func (s *Server) CreateProvider(c *gin.Context) {
 		})
 		return
 	}
-	provider := &config.Provider{
+	provider := &typ.Provider{
 		UUID:          uid.String(),
 		Name:          req.Name,
 		APIBase:       req.APIBase,
-		APIStyle:      config.APIStyle(req.APIStyle),
+		APIStyle:      typ.APIStyle(req.APIStyle),
 		Token:         req.Token,
 		NoKeyRequired: req.NoKeyRequired,
 		Enabled:       req.Enabled,
@@ -268,7 +269,7 @@ func (s *Server) UpdateProvider(c *gin.Context) {
 		provider.APIBase = *req.APIBase
 	}
 	if req.APIStyle != nil {
-		provider.APIStyle = config.APIStyle(*req.APIStyle)
+		provider.APIStyle = typ.APIStyle(*req.APIStyle)
 	}
 	// Only update token if it's provided and not empty
 	if req.Token != nil && *req.Token != "" {

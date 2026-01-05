@@ -1,4 +1,4 @@
-package config
+package db
 
 import (
 	"errors"
@@ -12,6 +12,10 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+
+	"tingly-box/internal/config/typ"
+	"tingly-box/internal/constant"
+	"tingly-box/internal/loadbalance"
 )
 
 const defaultServiceTimeWindow = 300
@@ -51,7 +55,7 @@ func NewStatsStore(baseDir string) (*StatsStore, error) {
 		return nil, fmt.Errorf("failed to create stats store directory: %w", err)
 	}
 
-	dbPath := filepath.Join(baseDir, StatsDBFileName)
+	dbPath := filepath.Join(baseDir, constant.StatsDBFileName)
 	log.Printf("Opening SQLite database: %s", dbPath)
 	// Configure SQLite with busy timeout and other settings to prevent hangs
 	// Use pure Go driver by ensuring modernc.org/sqlite is used
@@ -84,16 +88,16 @@ func (ss *StatsStore) ServiceKey(provider, model string) string {
 }
 
 // Snapshot returns a copy of all stats keyed by provider:model.
-func (ss *StatsStore) Snapshot() map[string]ServiceStats {
+func (ss *StatsStore) Snapshot() map[string]loadbalance.ServiceStats {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
 
 	var records []ServiceStatsRecord
 	if err := ss.db.Find(&records).Error; err != nil {
-		return make(map[string]ServiceStats)
+		return make(map[string]loadbalance.ServiceStats)
 	}
 
-	snapshot := make(map[string]ServiceStats, len(records))
+	snapshot := make(map[string]loadbalance.ServiceStats, len(records))
 	for _, record := range records {
 		key := ss.ServiceKey(record.Provider, record.Model)
 		snapshot[key] = record.toServiceStats()
@@ -103,7 +107,7 @@ func (ss *StatsStore) Snapshot() map[string]ServiceStats {
 }
 
 // Get returns stats for a specific provider/model combination.
-func (ss *StatsStore) Get(provider, model string) (ServiceStats, bool) {
+func (ss *StatsStore) Get(provider, model string) (loadbalance.ServiceStats, bool) {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
 
@@ -112,17 +116,17 @@ func (ss *StatsStore) Get(provider, model string) (ServiceStats, bool) {
 		First(&record).Error
 
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return ServiceStats{}, false
+		return loadbalance.ServiceStats{}, false
 	}
 	if err != nil {
-		return ServiceStats{}, false
+		return loadbalance.ServiceStats{}, false
 	}
 
 	return record.toServiceStats(), true
 }
 
 // UpdateFromService stores the current stats from a service into the store.
-func (ss *StatsStore) UpdateFromService(service *Service) error {
+func (ss *StatsStore) UpdateFromService(service *loadbalance.Service) error {
 	if service == nil {
 		return nil
 	}
@@ -166,9 +170,9 @@ func (ss *StatsStore) UpdateFromService(service *Service) error {
 }
 
 // RecordUsage records usage for a service and persists the updated stats.
-func (ss *StatsStore) RecordUsage(service *Service, inputTokens, outputTokens int) (ServiceStats, error) {
+func (ss *StatsStore) RecordUsage(service *loadbalance.Service, inputTokens, outputTokens int) (loadbalance.ServiceStats, error) {
 	if service == nil {
-		return ServiceStats{}, nil
+		return loadbalance.ServiceStats{}, nil
 	}
 
 	ss.mu.Lock()
@@ -194,7 +198,7 @@ func (ss *StatsStore) RecordUsage(service *Service, inputTokens, outputTokens in
 			WindowStart: time.Now(),
 		}
 	} else if err != nil {
-		return ServiceStats{}, err
+		return loadbalance.ServiceStats{}, err
 	}
 
 	// Update stats
@@ -215,14 +219,14 @@ func (ss *StatsStore) RecordUsage(service *Service, inputTokens, outputTokens in
 	record.LastUsed = now
 
 	if err := ss.db.Save(&record).Error; err != nil {
-		return ServiceStats{}, err
+		return loadbalance.ServiceStats{}, err
 	}
 
 	return record.toServiceStats(), nil
 }
 
 // HydrateRules injects stored stats into the provided rules and initializes missing entries.
-func (ss *StatsStore) HydrateRules(rules []Rule) error {
+func (ss *StatsStore) HydrateRules(rules []typ.Rule) error {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
 
@@ -297,8 +301,8 @@ func (ss *StatsStore) ClearAll() error {
 }
 
 // toServiceStats converts a ServiceStatsRecord to ServiceStats.
-func (r *ServiceStatsRecord) toServiceStats() ServiceStats {
-	return ServiceStats{
+func (r *ServiceStatsRecord) toServiceStats() loadbalance.ServiceStats {
+	return loadbalance.ServiceStats{
 		ServiceID:            r.ServiceID,
 		RequestCount:         r.RequestCount,
 		LastUsed:             r.LastUsed,

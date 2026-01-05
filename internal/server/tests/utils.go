@@ -12,12 +12,16 @@ import (
 	"strings"
 	"testing"
 
-	"tingly-box/internal/config"
-	"tingly-box/internal/server"
-
 	"github.com/gin-gonic/gin"
 	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
+
+	"tingly-box/internal/config"
+	"tingly-box/internal/config/typ"
+	"tingly-box/internal/constant"
+	"tingly-box/internal/loadbalance"
+	"tingly-box/internal/server"
+	"tingly-box/internal/util"
 )
 
 // TestServer represents a test server wrapper
@@ -125,13 +129,13 @@ func (ts *TestServer) AddTestProviders(t *testing.T) {
 	}
 
 	for _, p := range providers {
-		provider := &config.Provider{
+		provider := &typ.Provider{
 			UUID:    p.uuid,
 			Name:    p.name,
 			APIBase: p.apiBase,
 			Token:   p.token,
 			Enabled: true,
-			Timeout: int64(config.DefaultRequestTimeout),
+			Timeout: int64(constant.DefaultRequestTimeout),
 		}
 		if err := ts.appConfig.AddProvider(provider); err != nil {
 			t.Fatalf("Failed to add provider %s: %v", p.name, err)
@@ -193,13 +197,13 @@ func AssertJSONResponse(t *testing.T, resp *http.Response, expectedStatus int, c
 }
 
 // CreateTestProvider creates a test provider configuration
-func CreateTestProvider(name, apiBase, token string) *config.Provider {
-	return &config.Provider{
+func CreateTestProvider(name, apiBase, token string) *typ.Provider {
+	return &typ.Provider{
 		Name:    name,
 		APIBase: apiBase,
 		Token:   token,
 		Enabled: true,
-		Timeout: int64(config.DefaultRequestTimeout),
+		Timeout: int64(constant.DefaultRequestTimeout),
 	}
 }
 
@@ -228,14 +232,14 @@ func CaptureRequest(handler gin.HandlerFunc) (*http.Request, map[string]interfac
 
 // AddTestProvider adds a single test provider
 func (ts *TestServer) AddTestProvider(t *testing.T, name, apiBase, apiStyle string, enabled bool) {
-	provider := &config.Provider{
+	provider := &typ.Provider{
 		UUID:     name, // for test, use name as uuid for convenience
 		Name:     name,
 		APIBase:  apiBase,
-		APIStyle: config.APIStyle(apiStyle),
+		APIStyle: typ.APIStyle(apiStyle),
 		Token:    "test-token",
 		Enabled:  enabled,
-		Timeout:  int64(config.DefaultRequestTimeout),
+		Timeout:  int64(constant.DefaultRequestTimeout),
 	}
 	if err := ts.appConfig.AddProvider(provider); err != nil {
 		t.Fatalf("Failed to add provider %s: %v", name, err)
@@ -244,14 +248,14 @@ func (ts *TestServer) AddTestProvider(t *testing.T, name, apiBase, apiStyle stri
 
 // AddTestProviderWithURL adds a provider with a specific URL
 func (ts *TestServer) AddTestProviderWithURL(t *testing.T, name, url, apiStyle string, enabled bool) {
-	provider := &config.Provider{
+	provider := &typ.Provider{
 		UUID:     name, // use name as uuid for convenience
 		Name:     name,
 		APIBase:  url,
-		APIStyle: config.APIStyle(apiStyle),
+		APIStyle: typ.APIStyle(apiStyle),
 		Token:    "test-token",
 		Enabled:  enabled,
-		Timeout:  int64(config.DefaultRequestTimeout),
+		Timeout:  int64(constant.DefaultRequestTimeout),
 	}
 	if err := ts.appConfig.AddProvider(provider); err != nil {
 		t.Fatalf("Failed to add provider %s: %v", name, err)
@@ -261,12 +265,12 @@ func (ts *TestServer) AddTestProviderWithURL(t *testing.T, name, url, apiStyle s
 // AddTestRule adds a test rule that routes to a specific provider
 func (ts *TestServer) AddTestRule(t *testing.T, requestModel, providerName, model string) {
 	// Create a simple rule with proper LBTactic
-	rule := config.Rule{
+	rule := model.Rule{
 		UUID:          requestModel,
-		Scenario:      config.ScenarioOpenAI,
+		Scenario:      model.ScenarioOpenAI,
 		RequestModel:  requestModel,
 		ResponseModel: model,
-		Services: []config.Service{
+		Services: []loadbalance.Service{
 			{
 				Provider:   providerName,
 				Model:      model,
@@ -275,9 +279,9 @@ func (ts *TestServer) AddTestRule(t *testing.T, requestModel, providerName, mode
 				TimeWindow: 300,
 			},
 		},
-		LBTactic: config.Tactic{
-			Type:   config.TacticRoundRobin,
-			Params: config.DefaultRoundRobinParams(),
+		LBTactic: model.Tactic{
+			Type:   loadbalance.TacticRoundRobin,
+			Params: model.DefaultRoundRobinParams(),
 		},
 		Active: true,
 	}
@@ -344,7 +348,7 @@ type TestConfigDir struct {
 // when the test finishes.
 func NewTestConfigDirCopy(t *testing.T) *TestConfigDir {
 	// Get the real config directory path
-	realConfigDir := config.GetTinglyConfDir()
+	realConfigDir := util.GetTinglyConfDir()
 
 	// Check if real config directory exists
 	if _, err := os.Stat(realConfigDir); os.IsNotExist(err) {

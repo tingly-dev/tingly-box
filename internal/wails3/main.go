@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"log"
 
-	"tingly-box/internal/util"
-
 	"github.com/gin-gonic/gin"
+
+	"tingly-box/internal/util"
 )
 
 func init() {

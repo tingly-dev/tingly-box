@@ -3,12 +3,13 @@ package main
 import (
 	"fmt"
 	"os"
-	"tingly-box/internal/cli"
-	"tingly-box/internal/config"
-	"tingly-box/internal/util"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+
+	"tingly-box/internal/cli"
+	"tingly-box/internal/config"
+	"tingly-box/internal/util"
 )
 
 var rootCmd = &cobra.Command{

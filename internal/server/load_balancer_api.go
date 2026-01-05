@@ -4,9 +4,11 @@ import (
 	"net/http"
 	"strconv"
 
-	"tingly-box/internal/config"
-
 	"github.com/gin-gonic/gin"
+
+	"tingly-box/internal/config"
+	"tingly-box/internal/config/typ"
+	"tingly-box/internal/loadbalance"
 )
 
 // LoadBalancerAPI provides REST endpoints for load balancer management
@@ -94,14 +96,14 @@ func (api *LoadBalancerAPI) UpdateRuleTactic(c *gin.Context) {
 	}
 
 	// Validate tactic
-	tacticType := config.ParseTacticType(req.Tactic)
-	if !config.IsValidTactic(req.Tactic) {
+	tacticType := loadbalance.ParseTacticType(req.Tactic)
+	if !typ.IsValidTactic(req.Tactic) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported tactic: " + req.Tactic})
 		return
 	}
 
 	// Create tactic with params using the helper function
-	rule.LBTactic = config.ParseTacticFromMap(tacticType, req.Params)
+	rule.LBTactic = typ.ParseTacticFromMap(tacticType, req.Params)
 	if err := api.config.UpdateRequestConfigByUUID(ruleId, *rule); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update rule: " + err.Error()})
 		return
@@ -164,7 +166,7 @@ func (api *LoadBalancerAPI) GetServiceStats(c *gin.Context) {
 	}
 
 	services := rule.GetServices()
-	var foundService *config.Service
+	var foundService *loadbalance.Service
 	for _, service := range services {
 		if service.ServiceID() == serviceId {
 			foundService = &service
@@ -199,7 +201,7 @@ func (api *LoadBalancerAPI) ClearServiceStats(c *gin.Context) {
 	}
 
 	services := rule.GetServices()
-	var foundService *config.Service
+	var foundService *loadbalance.Service
 	for _, service := range services {
 		if service.ServiceID() == serviceId {
 			foundService = &service

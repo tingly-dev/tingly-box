@@ -7,15 +7,15 @@ import (
 	"strings"
 	"sync"
 
-	"tingly-box/internal/config"
-	"tingly-box/pkg/client"
-	"tingly-box/pkg/oauth"
-
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/openai/openai-go/v3"
 	openaiOption "github.com/openai/openai-go/v3/option"
 	"github.com/sirupsen/logrus"
+
+	"tingly-box/internal/config/typ"
+	"tingly-box/pkg/client"
+	"tingly-box/pkg/oauth"
 )
 
 // ClientPool manages OpenAI and Anthropic client instances for different providers
@@ -35,7 +35,7 @@ func NewClientPool() *ClientPool {
 
 // GetOpenAIClient returns an OpenAI client for the specified provider
 // It creates a new client if one doesn't exist for the provider
-func (p *ClientPool) GetOpenAIClient(provider *config.Provider) *openai.Client {
+func (p *ClientPool) GetOpenAIClient(provider *typ.Provider) *openai.Client {
 	// Generate unique key for provider
 	key := p.generateProviderKey(provider)
 
@@ -82,7 +82,7 @@ func (p *ClientPool) GetOpenAIClient(provider *config.Provider) *openai.Client {
 
 // GetAnthropicClient returns an Anthropic client for the specified provider
 // It creates a new client if one doesn't exist for the provider
-func (p *ClientPool) GetAnthropicClient(provider *config.Provider) anthropic.Client {
+func (p *ClientPool) GetAnthropicClient(provider *typ.Provider) anthropic.Client {
 	// Generate unique key for provider
 	key := p.generateProviderKey(provider)
 
@@ -119,14 +119,14 @@ func (p *ClientPool) GetAnthropicClient(provider *config.Provider) anthropic.Cli
 	}
 
 	// Add proxy and/or custom headers if configured
-	if provider.ProxyURL != "" || provider.AuthType == config.AuthTypeOAuth {
+	if provider.ProxyURL != "" || provider.AuthType == typ.AuthTypeOAuth {
 		var providerType oauth.ProviderType
 		if provider.OAuthDetail != nil {
 			providerType = oauth.ProviderType(provider.OAuthDetail.ProviderType)
 		}
-		httpClient := client.CreateHTTPClientForProvider(providerType, provider.ProxyURL, provider.AuthType == config.AuthTypeOAuth)
+		httpClient := client.CreateHTTPClientForProvider(providerType, provider.ProxyURL, provider.AuthType == typ.AuthTypeOAuth)
 
-		if provider.AuthType == config.AuthTypeOAuth && provider.OAuthDetail != nil {
+		if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
 			logrus.Infof("Using custom headers/params for OAuth provider type: %s", provider.OAuthDetail.ProviderType)
 		}
 		if provider.ProxyURL != "" {
@@ -145,7 +145,7 @@ func (p *ClientPool) GetAnthropicClient(provider *config.Provider) anthropic.Cli
 
 // generateProviderKey creates a unique key for a provider
 // Uses combination of name, API base, hash of the token, and proxy URL for uniqueness
-func (p *ClientPool) generateProviderKey(provider *config.Provider) string {
+func (p *ClientPool) generateProviderKey(provider *typ.Provider) string {
 	return fmt.Sprintf("%s:%s:%s:%s", provider.Name, provider.APIBase, hashToken(provider.GetAccessToken()), hashToken(provider.ProxyURL))
 }
 
@@ -173,7 +173,7 @@ func (p *ClientPool) Clear() {
 }
 
 // RemoveProvider removes a specific provider's client from the pool
-func (p *ClientPool) RemoveProvider(provider *config.Provider) {
+func (p *ClientPool) RemoveProvider(provider *typ.Provider) {
 	key := p.generateProviderKey(provider)
 
 	p.mutex.Lock()

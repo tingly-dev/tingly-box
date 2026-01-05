@@ -8,12 +8,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"tingly-box/internal/auth"
 	"tingly-box/internal/config"
+	"tingly-box/internal/config/typ"
+	"tingly-box/internal/constant"
 	"tingly-box/internal/manager"
 	"tingly-box/internal/obs"
-
-	"github.com/spf13/cobra"
 )
 
 // ShellCommand represents the interactive CLI command
@@ -164,15 +166,15 @@ func addProviderInteractive(appConfig *config.AppConfig, reader *bufio.Reader, l
 	styleInput, _ := reader.ReadString('\n')
 	styleInput = strings.TrimSpace(strings.TrimSuffix(styleInput, "\n"))
 
-	var apiStyle config.APIStyle = config.APIStyleOpenAI
+	var apiStyle typ.APIStyle = typ.APIStyleOpenAI
 	switch styleInput {
 	case "2", "anthropic":
-		apiStyle = config.APIStyleAnthropic
+		apiStyle = typ.APIStyleAnthropic
 	case "1", "openai", "":
-		apiStyle = config.APIStyleOpenAI
+		apiStyle = typ.APIStyleOpenAI
 	default:
 		fmt.Printf("Invalid choice '%s', using default: openai\n", styleInput)
-		apiStyle = config.APIStyleOpenAI
+		apiStyle = typ.APIStyleOpenAI
 	}
 
 	if err := appConfig.AddProviderByName(name, apiBase, token); err != nil {
@@ -522,7 +524,7 @@ func handleSystemInfo(logger *obs.MemoryLogger) {
 
 	fmt.Println("\n🔧 Configuration:")
 	homeDir, _ := os.UserHomeDir()
-	fmt.Printf("  Config File: %s/%s/config.enc\n", homeDir, config.ConfigDirName)
+	fmt.Printf("  Config File: %s/%s/config.enc\n", homeDir, constant.ConfigDirName)
 }
 
 // handleGenerateExample generates and displays API example

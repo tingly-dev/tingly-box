@@ -1,10 +1,12 @@
-package config
+package template
 
 import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"tingly-box/internal/config/typ"
 )
 
 // TestNewTemplateManager tests the TemplateManager constructor
@@ -241,7 +243,7 @@ func TestTemplateManagerGetModelsForProvider(t *testing.T) {
 				t.Fatalf("Initialize failed: %v", err)
 			}
 
-			provider := &Provider{Name: tt.providerName}
+			provider := &typ.Provider{Name: tt.providerName}
 			models, source, err := tm.GetModelsForProvider(provider)
 
 			if tt.expectError {

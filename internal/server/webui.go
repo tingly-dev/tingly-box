@@ -10,12 +10,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gin-gonic/gin"
+
 	assets "tingly-box/internal"
-	"tingly-box/internal/config"
+	"tingly-box/internal/config/typ"
 	"tingly-box/internal/obs"
 	"tingly-box/pkg/swagger"
-
-	"github.com/gin-gonic/gin"
 )
 
 // GlobalServerManager manages the global server instance for web UI control
@@ -94,7 +94,7 @@ func (s *Server) HandleProbeModel(c *gin.Context) {
 
 	// Find the provider for this rule
 	providers := s.config.ListProviders()
-	var provider *config.Provider
+	var provider *typ.Provider
 	var model = req.Model
 
 	for _, p := range providers {
@@ -129,9 +129,9 @@ func (s *Server) HandleProbeModel(c *gin.Context) {
 	var err error
 
 	switch provider.APIStyle {
-	case config.APIStyleAnthropic:
+	case typ.APIStyleAnthropic:
 		responseContent, usage, err = s.probeWithAnthropic(c, provider, model)
-	case config.APIStyleOpenAI:
+	case typ.APIStyleOpenAI:
 		fallthrough
 	default:
 		responseContent, usage, err = s.probeWithOpenAI(c, provider, model)

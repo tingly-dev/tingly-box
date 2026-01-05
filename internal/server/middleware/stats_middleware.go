@@ -6,15 +6,19 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"tingly-box/internal/config"
 
 	"github.com/gin-gonic/gin"
+
+	"tingly-box/internal/config"
+	"tingly-box/internal/config/typ"
+	"tingly-box/internal/db"
+	"tingly-box/internal/loadbalance"
 )
 
 // StatsMiddleware tracks usage statistics by updating service-embedded stats
 type StatsMiddleware struct {
-	config     *config.Config     // Reference to config to access config and rules
-	statsStore *config.StatsStore // Dedicated stats store for persistence
+	config     *config.Config // Reference to config to access config and rules
+	statsStore *db.StatsStore // Dedicated stats store for persistence
 }
 
 // NewStatsMiddleware creates a new statistics middleware
@@ -75,7 +79,7 @@ func (sm *StatsMiddleware) extractAndRecordUsage(c *gin.Context, responseBody st
 
 	// Get the rule information from context (set by handlers)
 	if rule, exists := c.Get("rule"); exists {
-		if rulePtr, ok := rule.(*config.Rule); ok {
+		if rulePtr, ok := rule.(*typ.Rule); ok {
 			// Record usage directly on the rule's services (same rule as handler used)
 			inputTokens, outputTokens := sm.extractTokenUsage(responseBody, c.Request.URL.Path)
 			sm.RecordUsageOnRule(rulePtr, provider, model, inputTokens, outputTokens)
@@ -229,7 +233,7 @@ func (sm *StatsMiddleware) RecordUsage(serviceID string, inputTokens, outputToke
 }
 
 // RecordUsageOnRule records usage directly on a specific rule's services
-func (sm *StatsMiddleware) RecordUsageOnRule(rule *config.Rule, provider, model string, inputTokens, outputTokens int) {
+func (sm *StatsMiddleware) RecordUsageOnRule(rule *typ.Rule, provider, model string, inputTokens, outputTokens int) {
 	// Look through the services in the specific rule to find the matching one
 	for i := range rule.Services {
 		service := &rule.Services[i]
@@ -245,7 +249,7 @@ func (sm *StatsMiddleware) RecordUsageOnRule(rule *config.Rule, provider, model 
 }
 
 // persistServiceStats writes the updated stats into the dedicated stats store.
-func (sm *StatsMiddleware) persistServiceStats(service *config.Service) {
+func (sm *StatsMiddleware) persistServiceStats(service *loadbalance.Service) {
 	if sm.statsStore == nil {
 		return
 	}

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"tingly-box/internal/config"
+	"tingly-box/internal/config/typ"
 	oauth2 "tingly-box/pkg/oauth"
 )
 
@@ -242,13 +243,13 @@ func TestOAuthRefresherActualRefresh(t *testing.T) {
 	mockMgr := &mockTokenRefresher{}
 
 	// Create a provider with an expiring token (expires in 2 minutes)
-	provider := &config.Provider{
+	provider := &typ.Provider{
 		UUID:     "test-provider-uuid",
 		Name:     "TestOAuthProvider",
 		APIBase:  "https://api.test.com",
-		APIStyle: config.APIStyleOpenAI,
-		AuthType: config.AuthTypeOAuth,
-		OAuthDetail: &config.OAuthDetail{
+		APIStyle: typ.APIStyleOpenAI,
+		AuthType: typ.AuthTypeOAuth,
+		OAuthDetail: &typ.OAuthDetail{
 			AccessToken:  "old_access_token",
 			RefreshToken: "refresh_token_123",
 			ProviderType: "claude_code", // Valid provider type
@@ -304,13 +305,13 @@ func TestOAuthRefresherSkipValidTokens(t *testing.T) {
 	mockMgr := &mockTokenRefresher{}
 
 	// Create a provider with a valid token (expires in 1 hour)
-	provider := &config.Provider{
+	provider := &typ.Provider{
 		UUID:     "test-provider-uuid",
 		Name:     "TestOAuthProvider",
 		APIBase:  "https://api.test.com",
-		APIStyle: config.APIStyleOpenAI,
-		AuthType: config.AuthTypeOAuth,
-		OAuthDetail: &config.OAuthDetail{
+		APIStyle: typ.APIStyleOpenAI,
+		AuthType: typ.AuthTypeOAuth,
+		OAuthDetail: &typ.OAuthDetail{
 			AccessToken:  "valid_access_token",
 			RefreshToken: "refresh_token_123",
 			ProviderType: "claude_code", // Valid provider type

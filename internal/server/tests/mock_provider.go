@@ -10,10 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"tingly-box/internal/config"
-	"tingly-box/internal/server"
-
 	"github.com/stretchr/testify/assert"
+
+	"tingly-box/internal/config/typ"
+	"tingly-box/internal/constant"
+	"tingly-box/internal/server"
 )
 
 // MockProviderServer represents a mock AI provider server
@@ -369,13 +370,13 @@ func NewMockProviderTestSuite(t *testing.T) *MockProviderTestSuite {
 	providerName := "mock-provider"
 
 	// Add provider through the config
-	provider := &config.Provider{
+	provider := &typ.Provider{
 		UUID:    providerName,
 		Name:    providerName,
 		APIBase: suite.mockServer.GetURL(),
 		Token:   "mock-token",
 		Enabled: true,
-		Timeout: int64(config.DefaultRequestTimeout),
+		Timeout: int64(constant.DefaultRequestTimeout),
 	}
 	err := suite.testServer.appConfig.AddProvider(provider)
 	if err != nil {

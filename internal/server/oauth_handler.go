@@ -7,13 +7,13 @@ import (
 	"html/template"
 	"net/http"
 	"time"
-	oauth2 "tingly-box/pkg/oauth"
-	"tingly-box/pkg/swagger"
-
-	"tingly-box/internal/config"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+
+	"tingly-box/internal/config/typ"
+	oauth2 "tingly-box/pkg/oauth"
+	"tingly-box/pkg/swagger"
 )
 
 // =============================================
@@ -658,21 +658,21 @@ func (s *Server) OAuthCallback(c *gin.Context) {
 
 	// Determine API base and style based on provider type
 	var apiBase string
-	var apiStyle config.APIStyle
+	var apiStyle typ.APIStyle
 	switch token.Provider {
 	case oauth2.ProviderClaudeCode:
 		apiBase = "https://api.anthropic.com"
-		apiStyle = config.APIStyleAnthropic
+		apiStyle = typ.APIStyleAnthropic
 	case oauth2.ProviderGoogle:
 		apiBase = "https://generativelanguage.googleapis.com"
-		apiStyle = config.APIStyleOpenAI
+		apiStyle = typ.APIStyleOpenAI
 	case oauth2.ProviderOpenAI:
 		apiBase = "https://api.openai.com/v1"
-		apiStyle = config.APIStyleOpenAI
+		apiStyle = typ.APIStyleOpenAI
 	default:
 		// For mock and unknown providers
 		apiBase = "mock"
-		apiStyle = config.APIStyleOpenAI
+		apiStyle = typ.APIStyleOpenAI
 	}
 
 	// Build expires_at string
@@ -682,14 +682,14 @@ func (s *Server) OAuthCallback(c *gin.Context) {
 	}
 
 	// Create Provider with OAuth credentials
-	provider := &config.Provider{
+	provider := &typ.Provider{
 		UUID:     providerUUID.String(),
 		Name:     providerName,
 		APIBase:  apiBase,
 		APIStyle: apiStyle,
 		Enabled:  true,
-		AuthType: config.AuthTypeOAuth,
-		OAuthDetail: &config.OAuthDetail{
+		AuthType: typ.AuthTypeOAuth,
+		OAuthDetail: &typ.OAuthDetail{
 			AccessToken:  token.AccessToken,
 			ProviderType: string(token.Provider),
 			UserID:       uuid.New().String(),
@@ -747,7 +747,7 @@ func (s *Server) RefreshOAuthToken(c *gin.Context) {
 	}
 
 	// Check if provider uses OAuth
-	if provider.AuthType != config.AuthTypeOAuth || provider.OAuthDetail == nil {
+	if provider.AuthType != typ.AuthTypeOAuth || provider.OAuthDetail == nil {
 		c.JSON(http.StatusBadRequest, OAuthErrorResponse{
 			Success: false,
 			Error:   "Provider does not use OAuth authentication",

@@ -4,37 +4,37 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
-	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
-	"tingly-box/internal/auth"
-	"tingly-box/pkg/client"
-	"tingly-box/pkg/oauth"
-
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+
+	"tingly-box/internal/auth"
+	"tingly-box/internal/config/template"
+	"tingly-box/internal/config/typ"
+	constant2 "tingly-box/internal/constant"
+	"tingly-box/internal/db"
+	"tingly-box/internal/helper"
+	"tingly-box/internal/loadbalance"
 )
 
 // Config represents the global configuration
 type Config struct {
-	Rules            []Rule `yaml:"rules" json:"rules"`                           // List of request configurations
-	DefaultRequestID int    `yaml:"default_request_id" json:"default_request_id"` // Index of the default Rule
-	UserToken        string `yaml:"user_token" json:"user_token"`                 // User token for UI and control API authentication
-	ModelToken       string `yaml:"model_token" json:"model_token"`               // Model token for OpenAI and Anthropic API authentication
-	EncryptProviders bool   `yaml:"encrypt_providers" json:"encrypt_providers"`   // Whether to encrypt provider info (default false)
+	Rules            []typ.Rule `yaml:"rules" json:"rules"`                           // List of request configurations
+	DefaultRequestID int        `yaml:"default_request_id" json:"default_request_id"` // Index of the default Rule
+	UserToken        string     `yaml:"user_token" json:"user_token"`                 // User token for UI and control API authentication
+	ModelToken       string     `yaml:"model_token" json:"model_token"`               // Model token for OpenAI and Anthropic API authentication
+	EncryptProviders bool       `yaml:"encrypt_providers" json:"encrypt_providers"`   // Whether to encrypt provider info (default false)
 
 	// Merged fields from Config struct
-	ProvidersV1 map[string]*Provider `json:"providers"`
-	Providers   []*Provider          `json:"providers_v2,omitempty"`
-	ServerPort  int                  `json:"server_port"`
-	JWTSecret   string               `json:"jwt_secret"`
+	ProvidersV1 map[string]*typ.Provider `json:"providers"`
+	Providers   []*typ.Provider          `json:"providers_v2,omitempty"`
+	ServerPort  int                      `json:"server_port"`
+	JWTSecret   string                   `json:"jwt_secret"`
 
 	// Server settings
 	DefaultMaxTokens int  `json:"default_max_tokens"` // Default max_tokens for anthropic API requests
@@ -49,8 +49,8 @@ type Config struct {
 	ConfigDir  string `yaml:"-" json:"-"`
 
 	modelManager    *ModelListManager
-	statsStore      *StatsStore
-	templateManager *TemplateManager
+	statsStore      *db.StatsStore
+	templateManager *template.TemplateManager
 
 	mu sync.RWMutex
 }
@@ -58,7 +58,7 @@ type Config struct {
 // NewConfig creates a new global configuration manager
 func NewConfig() (*Config, error) {
 	// Use the same config directory as the main config
-	configDir := GetTinglyConfDir()
+	configDir := constant2.GetTinglyConfDir()
 	if configDir == "" {
 		return nil, fmt.Errorf("config directory is empty")
 	}
@@ -87,7 +87,7 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 	}
 
 	// Initialize stats store before loading config so load can hydrate runtime stats
-	statsStore, err := NewStatsStore(filepath.Join(configDir, StateDirName))
+	statsStore, err := db.NewStatsStore(filepath.Join(configDir, constant2.StateDirName))
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize stats store: %w", err)
 	}
@@ -135,8 +135,8 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 		updated = true
 	}
 	if cfg.Providers == nil {
-		cfg.ProvidersV1 = make(map[string]*Provider)
-		cfg.Providers = make([]*Provider, 0)
+		cfg.ProvidersV1 = make(map[string]*typ.Provider)
+		cfg.Providers = make([]*typ.Provider, 0)
 		updated = true
 	}
 	if cfg.ServerPort == 0 {
@@ -144,7 +144,7 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 		updated = true
 	}
 	if cfg.DefaultMaxTokens == 0 {
-		cfg.DefaultMaxTokens = DefaultMaxTokens
+		cfg.DefaultMaxTokens = constant2.DefaultMaxTokens
 		updated = true
 	}
 	if cfg.ErrorLogFilterExpression == "" {
@@ -163,7 +163,7 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 	}
 
 	// Initialize provider model manager
-	providerModelManager, err := NewProviderModelManager(filepath.Join(configDir, ModelsDirName))
+	providerModelManager, err := NewProviderModelManager(filepath.Join(configDir, constant2.ModelsDirName))
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize provider model manager: %w", err)
 	}
@@ -221,7 +221,7 @@ func (c *Config) refreshStatsFromStore() error {
 }
 
 // AddRule updates the default Rule
-func (c *Config) AddRule(rule Rule) error {
+func (c *Config) AddRule(rule typ.Rule) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -246,7 +246,7 @@ func (c *Config) AddRule(rule Rule) error {
 	return c.save()
 }
 
-func (c *Config) UpdateRule(uid string, rule Rule) error {
+func (c *Config) UpdateRule(uid string, rule typ.Rule) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -271,7 +271,7 @@ func (c *Config) UpdateRule(uid string, rule Rule) error {
 }
 
 // AddRequestConfig adds a new Rule
-func (c *Config) AddRequestConfig(reqConfig Rule) error {
+func (c *Config) AddRequestConfig(reqConfig typ.Rule) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -280,7 +280,7 @@ func (c *Config) AddRequestConfig(reqConfig Rule) error {
 }
 
 // GetDefaultRequestConfig returns the default Rule
-func (c *Config) GetDefaultRequestConfig() *Rule {
+func (c *Config) GetDefaultRequestConfig() *typ.Rule {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -300,7 +300,7 @@ func (c *Config) SetDefaultRequestID(id int) error {
 }
 
 // GetRequestConfigs returns all Rules
-func (c *Config) GetRequestConfigs() []Rule {
+func (c *Config) GetRequestConfigs() []typ.Rule {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -342,7 +342,7 @@ func (c *Config) GetUUIDByRequestModel(requestModel string) string {
 }
 
 // GetRuleByUUID returns the Rule for the given request uuid
-func (c *Config) GetRuleByUUID(UUID string) *Rule {
+func (c *Config) GetRuleByUUID(UUID string) *typ.Rule {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -355,7 +355,7 @@ func (c *Config) GetRuleByUUID(UUID string) *Rule {
 }
 
 // GetRuleByRequestModelAndScenario returns the Rule for the given request model and scenario
-func (c *Config) GetRuleByRequestModelAndScenario(requestModel string, scenario RuleScenario) *Rule {
+func (c *Config) GetRuleByRequestModelAndScenario(requestModel string, scenario typ.RuleScenario) *typ.Rule {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -368,7 +368,7 @@ func (c *Config) GetRuleByRequestModelAndScenario(requestModel string, scenario 
 }
 
 // GetUUIDByRequestModelAndScenario returns the UUID for the given request model and scenario
-func (c *Config) GetUUIDByRequestModelAndScenario(requestModel string, scenario RuleScenario) string {
+func (c *Config) GetUUIDByRequestModelAndScenario(requestModel string, scenario typ.RuleScenario) string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -381,7 +381,7 @@ func (c *Config) GetUUIDByRequestModelAndScenario(requestModel string, scenario 
 }
 
 // IsRequestModelInScenario checks if the given model name is a request model in the given scenario
-func (c *Config) IsRequestModelInScenario(modelName string, scenario RuleScenario) bool {
+func (c *Config) IsRequestModelInScenario(modelName string, scenario typ.RuleScenario) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -394,7 +394,7 @@ func (c *Config) IsRequestModelInScenario(modelName string, scenario RuleScenari
 }
 
 // SetRequestConfigs updates all Rules
-func (c *Config) SetRequestConfigs(requestConfigs []Rule) error {
+func (c *Config) SetRequestConfigs(requestConfigs []typ.Rule) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -404,7 +404,7 @@ func (c *Config) SetRequestConfigs(requestConfigs []Rule) error {
 }
 
 // UpdateRequestConfigAt updates the Rule at the given index
-func (c *Config) UpdateRequestConfigAt(index int, reqConfig Rule) error {
+func (c *Config) UpdateRequestConfigAt(index int, reqConfig typ.Rule) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -417,7 +417,7 @@ func (c *Config) UpdateRequestConfigAt(index int, reqConfig Rule) error {
 }
 
 // UpdateRequestConfigByRequestModel updates a Rule by its request model name
-func (c *Config) UpdateRequestConfigByRequestModel(requestModel string, reqConfig Rule) error {
+func (c *Config) UpdateRequestConfigByRequestModel(requestModel string, reqConfig typ.Rule) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -432,7 +432,7 @@ func (c *Config) UpdateRequestConfigByRequestModel(requestModel string, reqConfi
 }
 
 // UpdateRequestConfigByUUID updates a Rule by its UUID
-func (c *Config) UpdateRequestConfigByUUID(uuid string, reqConfig Rule) error {
+func (c *Config) UpdateRequestConfigByUUID(uuid string, reqConfig typ.Rule) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -447,7 +447,7 @@ func (c *Config) UpdateRequestConfigByUUID(uuid string, reqConfig Rule) error {
 }
 
 // AddOrUpdateRequestConfigByRequestModel adds a new Rule or updates an existing one by request model name
-func (c *Config) AddOrUpdateRequestConfigByRequestModel(reqConfig Rule) error {
+func (c *Config) AddOrUpdateRequestConfigByRequestModel(reqConfig typ.Rule) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -561,7 +561,7 @@ func (c *Config) GetModelToken() string {
 }
 
 // GetStatsStore returns the dedicated stats store (may be nil in tests).
-func (c *Config) GetStatsStore() *StatsStore {
+func (c *Config) GetStatsStore() *db.StatsStore {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -624,11 +624,11 @@ func (c *Config) AddProviderByName(name, apiBase, token string) error {
 		return errors.New("API base URL cannot be empty")
 	}
 
-	provider := &Provider{
+	provider := &typ.Provider{
 		UUID:     generateUUID(), // Generate a new UUID for the provider
 		Name:     name,
 		APIBase:  apiBase,
-		APIStyle: APIStyleOpenAI, // default to openai
+		APIStyle: typ.APIStyleOpenAI, // default to openai
 		Token:    token,
 		Enabled:  true,
 	}
@@ -639,7 +639,7 @@ func (c *Config) AddProviderByName(name, apiBase, token string) error {
 }
 
 // GetProviderByUUID returns a provider
-func (c *Config) GetProviderByUUID(uuid string) (*Provider, error) {
+func (c *Config) GetProviderByUUID(uuid string) (*typ.Provider, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -652,7 +652,7 @@ func (c *Config) GetProviderByUUID(uuid string) (*Provider, error) {
 	return nil, fmt.Errorf("provider '%s' not found", uuid)
 }
 
-func (c *Config) GetProviderByName(name string) (*Provider, error) {
+func (c *Config) GetProviderByName(name string) (*typ.Provider, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -666,7 +666,7 @@ func (c *Config) GetProviderByName(name string) (*Provider, error) {
 }
 
 // ListProviders returns all providers
-func (c *Config) ListProviders() []*Provider {
+func (c *Config) ListProviders() []*typ.Provider {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -674,13 +674,13 @@ func (c *Config) ListProviders() []*Provider {
 }
 
 // ListOAuthProviders returns all OAuth-enabled providers
-func (c *Config) ListOAuthProviders() ([]*Provider, error) {
+func (c *Config) ListOAuthProviders() ([]*typ.Provider, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	var oauthProviders []*Provider
+	var oauthProviders []*typ.Provider
 	for _, p := range c.Providers {
-		if p.AuthType == AuthTypeOAuth && p.OAuthDetail != nil {
+		if p.AuthType == typ.AuthTypeOAuth && p.OAuthDetail != nil {
 			oauthProviders = append(oauthProviders, p)
 		}
 	}
@@ -689,7 +689,7 @@ func (c *Config) ListOAuthProviders() ([]*Provider, error) {
 }
 
 // AddProvider adds a new provider using Provider struct
-func (c *Config) AddProvider(provider *Provider) error {
+func (c *Config) AddProvider(provider *typ.Provider) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -706,7 +706,7 @@ func (c *Config) AddProvider(provider *Provider) error {
 }
 
 // UpdateProvider updates an existing provider by UUID
-func (c *Config) UpdateProvider(uuid string, provider *Provider) error {
+func (c *Config) UpdateProvider(uuid string, provider *typ.Provider) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -850,7 +850,7 @@ func (c *Config) SetErrorLogFilterExpression(expr string) error {
 // FetchAndSaveProviderModels fetches models from a provider with fallback hierarchy
 func (c *Config) FetchAndSaveProviderModels(uid string) error {
 	c.mu.RLock()
-	var provider *Provider
+	var provider *typ.Provider
 	for _, p := range c.Providers {
 		if p.UUID == uid {
 			provider = p
@@ -864,7 +864,7 @@ func (c *Config) FetchAndSaveProviderModels(uid string) error {
 	}
 
 	// Try provider API first
-	models, err := getProviderModelsFromAPI(provider)
+	models, err := helper.GetProviderModelsFromAPI(provider)
 	if err != nil {
 		logrus.Errorf("Failed to fetch models from API: %v", err)
 	} else {
@@ -885,148 +885,39 @@ func (c *Config) FetchAndSaveProviderModels(uid string) error {
 	return fmt.Errorf("failed to fetch models (API: %v, template fallback: not available)", err)
 }
 
-// getProviderModelsFromAPI fetches models from provider API via real HTTP requests
-func getProviderModelsFromAPI(provider *Provider) ([]string, error) {
-	// Construct the models endpoint URL
-	// For Anthropic-style providers, ensure they have a version suffix
-	apiBase := strings.TrimSuffix(provider.APIBase, "/")
-	if provider.APIStyle == APIStyleAnthropic {
-		// Check if already has version suffix like /v1, /v2, etc.
-		matches := strings.Split(apiBase, "/")
-		if len(matches) > 0 {
-			last := matches[len(matches)-1]
-			// If no version suffix, add v1
-			if !strings.HasPrefix(last, "v") {
-				apiBase = apiBase + "/v1"
-			}
-		} else {
-			// If split failed, just add v1
-			apiBase = apiBase + "/v1"
-		}
-	}
-	modelsURL, err := url.Parse(apiBase + "/models")
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse models URL: %w", err)
-	}
-
-	// Create HTTP request
-	req, err := http.NewRequest("GET", modelsURL.String(), nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
-	}
-
-	// Set headers based on provider style and auth type
-	accessToken := provider.GetAccessToken()
-	if provider.APIStyle == APIStyleAnthropic {
-		// Add OAuth custom headers if applicable
-		if provider.AuthType == AuthTypeOAuth && provider.OAuthDetail != nil {
-			req.Header.Set("Authorization", "Bearer "+accessToken)
-			req.Header.Set("anthropic-version", "2023-06-01")
-		} else {
-			req.Header.Set("x-api-key", accessToken)
-			req.Header.Set("anthropic-version", "2023-06-01")
-		}
-	} else {
-		req.Header.Set("Authorization", "Bearer "+accessToken)
-		req.Header.Set("Content-Type", "application/json")
-	}
-
-	// Create HTTP client with proxy and OAuth hook support
-	var httpClient *http.Client
-	if provider.AuthType == AuthTypeOAuth && provider.OAuthDetail != nil {
-		providerType := oauth.ProviderType(provider.OAuthDetail.ProviderType)
-		httpClient = client.CreateHTTPClientForProvider(providerType, provider.ProxyURL, true)
-	} else {
-		httpClient = client.CreateHTTPClientWithProxy(provider.ProxyURL)
-	}
-	httpClient.Timeout = 30 * time.Second
-
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("HTTP request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Check response status
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("provider returned status %d: %s", resp.StatusCode, string(bodyBytes))
-	}
-
-	// Parse response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	// Parse JSON response based on OpenAI-compatible format
-	var modelsResponse struct {
-		Data []struct {
-			ID string `json:"id"`
-		} `json:"data"`
-		Error *struct {
-			Message string `json:"message"`
-			Type    string `json:"type"`
-		} `json:"error"`
-	}
-
-	if err := json.Unmarshal(body, &modelsResponse); err != nil {
-		return nil, fmt.Errorf("failed to parse JSON response: %w", err)
-	}
-
-	// Check for API error
-	if modelsResponse.Error != nil {
-		return nil, fmt.Errorf("API error: %s (type: %s)", modelsResponse.Error.Message, modelsResponse.Error.Type)
-	}
-
-	// Extract model IDs
-	var models []string
-	for _, model := range modelsResponse.Data {
-		if model.ID != "" {
-			models = append(models, model.ID)
-		}
-	}
-
-	if len(models) == 0 {
-		return nil, fmt.Errorf("no models found in provider response")
-	}
-
-	return models, nil
-}
-
 func (c *Config) GetModelManager() *ModelListManager {
 	return c.modelManager
 }
 
 // SetTemplateManager sets the template manager for provider templates
-func (c *Config) SetTemplateManager(tm *TemplateManager) {
+func (c *Config) SetTemplateManager(tm *template.TemplateManager) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.templateManager = tm
 }
 
 // GetTemplateManager returns the template manager
-func (c *Config) GetTemplateManager() *TemplateManager {
+func (c *Config) GetTemplateManager() *template.TemplateManager {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.templateManager
 }
 
 // isTacticValid checks if the tactic params are valid (not zero values)
-func isTacticValid(tactic *Tactic) bool {
+func isTacticValid(tactic *typ.Tactic) bool {
 	if tactic.Params == nil {
 		return false
 	}
 
 	// Check for invalid zero values in params
 	switch p := tactic.Params.(type) {
-	case *RoundRobinParams:
+	case *typ.RoundRobinParams:
 		return p.RequestThreshold > 0
-	case *TokenBasedParams:
+	case *typ.TokenBasedParams:
 		return p.TokenThreshold > 0
-	case *HybridParams:
+	case *typ.HybridParams:
 		return p.RequestThreshold > 0 && p.TokenThreshold > 0
-	case *RandomParams:
+	case *typ.RandomParams:
 		// Random params has no fields, always valid if not nil
 		return true
 	default:
@@ -1074,7 +965,7 @@ func generateUUID() string {
 
 func (c *Config) CreateDefaultConfig() error {
 	// Create a default Rule
-	c.Rules = []Rule{}
+	c.Rules = []typ.Rule{}
 	c.DefaultRequestID = 0
 	// Set default auth tokens if not already set
 	if c.UserToken == "" {
@@ -1088,8 +979,8 @@ func (c *Config) CreateDefaultConfig() error {
 		c.ModelToken = "tingly-box-" + modelToken
 	}
 	// Initialize merged fields with defaults
-	c.ProvidersV1 = make(map[string]*Provider)
-	c.Providers = make([]*Provider, 0)
+	c.ProvidersV1 = make(map[string]*typ.Provider)
+	c.Providers = make([]*typ.Provider, 0)
 	c.ServerPort = 12580
 	c.JWTSecret = generateSecret()
 	// Set default error log filter expression
@@ -1103,72 +994,72 @@ func (c *Config) CreateDefaultConfig() error {
 	return nil
 }
 
-var DefaultRules []Rule
+var DefaultRules []typ.Rule
 
 func init() {
-	DefaultRules = []Rule{
+	DefaultRules = []typ.Rule{
 		{
 			UUID:          "tingly",
-			Scenario:      ScenarioOpenAI,
+			Scenario:      typ.ScenarioOpenAI,
 			RequestModel:  "tingly",
 			ResponseModel: "",
 			Description:   "Default proxy rule in tingly-box for general use with OpenAI or Anthropic",
-			Services:      []Service{}, // Empty services initially
-			LBTactic: Tactic{ // Initialize with default round-robin tactic
-				Type:   TacticRoundRobin,
-				Params: DefaultRoundRobinParams(),
+			Services:      []loadbalance.Service{}, // Empty services initially
+			LBTactic: typ.Tactic{ // Initialize with default round-robin tactic
+				Type:   loadbalance.TacticRoundRobin,
+				Params: typ.DefaultRoundRobinParams(),
 			},
 			Active: true,
 		},
 		{
 			UUID:          "built-in-anthropic",
-			Scenario:      ScenarioAnthropic,
+			Scenario:      typ.ScenarioAnthropic,
 			RequestModel:  "tingly/anthropic",
 			ResponseModel: "",
 			Description:   "Default proxy rule in tingly-box for general use with Anthropic",
-			Services:      []Service{}, // Empty services initially
-			LBTactic: Tactic{ // Initialize with default round-robin tactic
-				Type:   TacticRoundRobin,
-				Params: DefaultRoundRobinParams(),
+			Services:      []loadbalance.Service{}, // Empty services initially
+			LBTactic: typ.Tactic{ // Initialize with default round-robin tactic
+				Type:   loadbalance.TacticRoundRobin,
+				Params: typ.DefaultRoundRobinParams(),
 			},
 			Active: true,
 		},
 		{
 			UUID:          "built-in-openai",
-			Scenario:      ScenarioOpenAI,
+			Scenario:      typ.ScenarioOpenAI,
 			RequestModel:  "tingly/openai",
 			ResponseModel: "",
 			Description:   "Default proxy rule in tingly-box for general use with OpenAI",
-			Services:      []Service{}, // Empty services initially
-			LBTactic: Tactic{ // Initialize with default round-robin tactic
-				Type:   TacticRoundRobin,
-				Params: DefaultRoundRobinParams(),
+			Services:      []loadbalance.Service{}, // Empty services initially
+			LBTactic: typ.Tactic{ // Initialize with default round-robin tactic
+				Type:   loadbalance.TacticRoundRobin,
+				Params: typ.DefaultRoundRobinParams(),
 			},
 			Active: true,
 		},
 		{
 			UUID:          "built-in-cc",
-			Scenario:      ScenarioClaudeCode,
+			Scenario:      typ.ScenarioClaudeCode,
 			RequestModel:  "tingly/cc",
 			ResponseModel: "",
 			Description:   "Default proxy rule for Claude Code",
-			Services:      []Service{}, // Empty services initially
-			LBTactic: Tactic{ // Initialize with default round-robin tactic
-				Type:   TacticRoundRobin,
-				Params: DefaultRoundRobinParams(),
+			Services:      []loadbalance.Service{}, // Empty services initially
+			LBTactic: typ.Tactic{ // Initialize with default round-robin tactic
+				Type:   loadbalance.TacticRoundRobin,
+				Params: typ.DefaultRoundRobinParams(),
 			},
 			Active: true,
 		},
 		{
 			UUID:          "claude-code",
-			Scenario:      ScenarioClaudeCode,
+			Scenario:      typ.ScenarioClaudeCode,
 			RequestModel:  "claude-code",
 			ResponseModel: "",
 			Description:   "Default proxy rule for Claude Code",
-			Services:      []Service{}, // Empty services initially
-			LBTactic: Tactic{ // Initialize with default round-robin tactic
-				Type:   TacticRoundRobin,
-				Params: DefaultRoundRobinParams(),
+			Services:      []loadbalance.Service{}, // Empty services initially
+			LBTactic: typ.Tactic{ // Initialize with default round-robin tactic
+				Type:   loadbalance.TacticRoundRobin,
+				Params: typ.DefaultRoundRobinParams(),
 			},
 			Active: true,
 		},

@@ -2,9 +2,10 @@ package server
 
 import (
 	"time"
-	"tingly-box/internal/config"
 
 	"github.com/openai/openai-go/v3"
+
+	"tingly-box/internal/config/typ"
 )
 
 // Error Models
@@ -135,8 +136,8 @@ type ClearStatsResponse struct {
 
 // RuleResponse represents a rule configuration response
 type RuleResponse struct {
-	Success bool         `json:"success" example:"true"`
-	Data    *config.Rule `json:"data"`
+	Success bool      `json:"success" example:"true"`
+	Data    *typ.Rule `json:"data"`
 }
 
 // RuleSummaryResponse represents a rule summary response
@@ -183,15 +184,15 @@ type ProbeProviderResponseData struct {
 
 // ProviderResponse represents a provider configuration with masked token
 type ProviderResponse struct {
-	UUID          string              `json:"uuid" example:"0123456789ABCDEF"`
-	Name          string              `json:"name" example:"openai"`
-	APIBase       string              `json:"api_base" example:"https://api.openai.com/v1"`
-	APIStyle      string              `json:"api_style" example:"openai"`
-	Token         string              `json:"token" example:"sk-***...***"` // Only populated for api_key auth type
-	NoKeyRequired bool                `json:"no_key_required" example:"false"`
-	Enabled       bool                `json:"enabled" example:"true"`
-	AuthType      string              `json:"auth_type,omitempty" example:"api_key"` // api_key or oauth
-	OAuthDetail   *config.OAuthDetail `json:"oauth_detail,omitempty"`                // OAuth credentials (only for oauth auth type)
+	UUID          string           `json:"uuid" example:"0123456789ABCDEF"`
+	Name          string           `json:"name" example:"openai"`
+	APIBase       string           `json:"api_base" example:"https://api.openai.com/v1"`
+	APIStyle      string           `json:"api_style" example:"openai"`
+	Token         string           `json:"token" example:"sk-***...***"` // Only populated for api_key auth type
+	NoKeyRequired bool             `json:"no_key_required" example:"false"`
+	Enabled       bool             `json:"enabled" example:"true"`
+	AuthType      string           `json:"auth_type,omitempty" example:"api_key"` // api_key or oauth
+	OAuthDetail   *typ.OAuthDetail `json:"oauth_detail,omitempty"`                // OAuth credentials (only for oauth auth type)
 }
 
 // ProvidersResponse represents the response for listing providers
@@ -232,10 +233,10 @@ type RulesResponse struct {
 	Data    interface{} `json:"data"`
 }
 
-type CreateRuleRequest config.Rule
+type CreateRuleRequest typ.Rule
 
 // UpdateRuleRequest represents the request to set/update a rule
-type UpdateRuleRequest config.Rule
+type UpdateRuleRequest typ.Rule
 
 // UpdateRuleResponse represents the response for setting/updating a rule
 type UpdateRuleResponse struct {

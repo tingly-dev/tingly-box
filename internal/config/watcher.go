@@ -11,8 +11,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// ConfigWatcher monitors configuration changes and triggers reloads
-type ConfigWatcher struct {
+// Watcher monitors configuration changes and triggers reloads
+type Watcher struct {
 	config      *Config
 	watcher     *fsnotify.Watcher
 	callbacks   []func(*Config)
@@ -23,13 +23,13 @@ type ConfigWatcher struct {
 }
 
 // NewConfigWatcher creates a new configuration watcher
-func NewConfigWatcher(config *Config) (*ConfigWatcher, error) {
+func NewConfigWatcher(config *Config) (*Watcher, error) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create file watcher: %w", err)
 	}
 
-	cw := &ConfigWatcher{
+	cw := &Watcher{
 		config:  config,
 		watcher: watcher,
 		stopCh:  make(chan struct{}),
@@ -39,7 +39,7 @@ func NewConfigWatcher(config *Config) (*ConfigWatcher, error) {
 }
 
 // AddCallback adds a callback function to be called when configuration changes
-func (cw *ConfigWatcher) AddCallback(callback func(*Config)) {
+func (cw *Watcher) AddCallback(callback func(*Config)) {
 	cw.mu.Lock()
 	defer cw.mu.Unlock()
 
@@ -47,7 +47,7 @@ func (cw *ConfigWatcher) AddCallback(callback func(*Config)) {
 }
 
 // Start starts watching for configuration changes
-func (cw *ConfigWatcher) Start() error {
+func (cw *Watcher) Start() error {
 	cw.mu.Lock()
 	defer cw.mu.Unlock()
 
@@ -77,7 +77,7 @@ func (cw *ConfigWatcher) Start() error {
 }
 
 // Stop stops the configuration watcher
-func (cw *ConfigWatcher) Stop() error {
+func (cw *Watcher) Stop() error {
 	cw.mu.Lock()
 	defer cw.mu.Unlock()
 
@@ -92,7 +92,7 @@ func (cw *ConfigWatcher) Stop() error {
 }
 
 // watchLoop monitors file system events
-func (cw *ConfigWatcher) watchLoop() {
+func (cw *Watcher) watchLoop() {
 	debounceTimer := time.NewTimer(0)
 	<-debounceTimer.C // Stop the initial timer
 
@@ -127,7 +127,7 @@ func (cw *ConfigWatcher) watchLoop() {
 }
 
 // isConfigEvent checks if an event is related to our config files
-func (cw *ConfigWatcher) isConfigEvent(event fsnotify.Event) bool {
+func (cw *Watcher) isConfigEvent(event fsnotify.Event) bool {
 	configFile := cw.config.ConfigFile
 	configDir := filepath.Dir(configFile)
 	providerConfigFile := filepath.Join(configDir, "config.json")
@@ -151,7 +151,7 @@ func (cw *ConfigWatcher) isConfigEvent(event fsnotify.Event) bool {
 }
 
 // handleConfigChange processes configuration changes
-func (cw *ConfigWatcher) handleConfigChange(event fsnotify.Event) {
+func (cw *Watcher) handleConfigChange(event fsnotify.Event) {
 	configFile := cw.config.ConfigFile
 	configDir := filepath.Dir(configFile)
 	providerConfigFile := filepath.Join(configDir, "config.json")
@@ -202,6 +202,6 @@ func (cw *ConfigWatcher) handleConfigChange(event fsnotify.Event) {
 }
 
 // TriggerReload manually triggers a configuration reload
-func (cw *ConfigWatcher) TriggerReload() error {
+func (cw *Watcher) TriggerReload() error {
 	return cw.config.load()
 }

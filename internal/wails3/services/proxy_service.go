@@ -7,12 +7,12 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gin-gonic/gin"
+	"github.com/wailsapp/wails/v3/pkg/application"
+
 	"tingly-box/internal/config"
 	"tingly-box/internal/manager"
 	"tingly-box/internal/server"
-
-	"github.com/gin-gonic/gin"
-	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // TinglyService manages the web UI and HTTP server functionality

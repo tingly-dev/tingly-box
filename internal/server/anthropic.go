@@ -8,14 +8,15 @@ import (
 	"net/http"
 	"strings"
 	"time"
-	"tingly-box/pkg/adaptor"
-
-	"tingly-box/internal/config"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+
+	"tingly-box/internal/config/typ"
+	"tingly-box/internal/loadbalance"
+	"tingly-box/pkg/adaptor"
 )
 
 // Use official Anthropic SDK types directly
@@ -104,9 +105,9 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 
 	// Determine provider & model
 	var (
-		provider        *config.Provider
-		selectedService *config.Service
-		rule            *config.Rule
+		provider        *typ.Provider
+		selectedService *loadbalance.Service
+		rule            *typ.Rule
 	)
 	if scenario == "" {
 		provider, selectedService, rule, err = s.DetermineProviderAndModel(proxyModel)
@@ -121,7 +122,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		}
 	} else {
 		// Convert string to RuleScenario and validate
-		scenarioType := config.RuleScenario(scenario)
+		scenarioType := typ.RuleScenario(scenario)
 		if !isValidRuleScenario(scenarioType) {
 			c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{
@@ -467,7 +468,7 @@ func (s *Server) AnthropicCountTokens(c *gin.Context) {
 }
 
 // forwardAnthropicRequestRaw forwards request from raw map using Anthropic SDK
-func (s *Server) forwardAnthropicRequestRaw(provider *config.Provider, rawReq map[string]interface{}, model string) (*anthropic.Message, error) {
+func (s *Server) forwardAnthropicRequestRaw(provider *typ.Provider, rawReq map[string]interface{}, model string) (*anthropic.Message, error) {
 	// Get or create Anthropic client from pool
 	client := s.clientPool.GetAnthropicClient(provider)
 	logrus.Debugf("Anthropic API Token Length: %d", len(provider.Token))
@@ -552,7 +553,7 @@ func (s *Server) forwardAnthropicRequestRaw(provider *config.Provider, rawReq ma
 }
 
 // forwardAnthropicRequest forwards request using Anthropic SDK with proper types
-func (s *Server) forwardAnthropicRequest(provider *config.Provider, req anthropic.MessageNewParams) (*anthropic.Message, error) {
+func (s *Server) forwardAnthropicRequest(provider *typ.Provider, req anthropic.MessageNewParams) (*anthropic.Message, error) {
 	// Get or create Anthropic client from pool
 	client := s.clientPool.GetAnthropicClient(provider)
 
@@ -569,7 +570,7 @@ func (s *Server) forwardAnthropicRequest(provider *config.Provider, req anthropi
 }
 
 // forwardAnthropicStreamRequest forwards streaming request using Anthropic SDK
-func (s *Server) forwardAnthropicStreamRequest(provider *config.Provider, req anthropic.MessageNewParams) (*anthropicstream.Stream[anthropic.MessageStreamEventUnion], error) {
+func (s *Server) forwardAnthropicStreamRequest(provider *typ.Provider, req anthropic.MessageNewParams) (*anthropicstream.Stream[anthropic.MessageStreamEventUnion], error) {
 	// Get or create Anthropic client from pool
 	client := s.clientPool.GetAnthropicClient(provider)
 

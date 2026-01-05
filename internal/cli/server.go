@@ -6,15 +6,16 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
-	"tingly-box/internal/lock"
+
+	"github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
 
 	"tingly-box/internal/config"
 	"tingly-box/internal/manager"
 	"tingly-box/internal/server"
 	"tingly-box/internal/util"
-
-	"github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
+	"tingly-box/internal/util/daemon"
+	"tingly-box/internal/util/lock"
 )
 
 const (
@@ -193,14 +194,14 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 		}
 
 		// If not yet daemonized, fork and exit
-		if !util.IsDaemonProcess() {
+		if !daemon.IsDaemonProcess() {
 			// Resolve port for display
 			port := opts.Port
 			if port == 0 {
 				port = appConfig.GetServerPort()
 			}
 
-			_ = util.NewLogger(util.DefaultLogRotationConfig(logFile))
+			_ = daemon.NewLogger(daemon.DefaultLogRotationConfig(logFile))
 
 			fmt.Printf("Starting daemon process...\n")
 			fmt.Printf("Logging to: %s\n", logFile)
@@ -216,14 +217,14 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 			})
 
 			// Fork and detach
-			if err := util.Daemonize(); err != nil {
+			if err := daemon.Daemonize(); err != nil {
 				return fmt.Errorf("failed to daemonize: %w", err)
 			}
 			// Daemonize() calls os.Exit(0), so we never reach here
 		}
 
 		// In child process - redirect stdout and stderr to log file
-		logWriter := util.NewLogger(util.DefaultLogRotationConfig(logFile))
+		logWriter := daemon.NewLogger(daemon.DefaultLogRotationConfig(logFile))
 
 		// Also set up logrus to write to file
 		logrus.SetOutput(logWriter)

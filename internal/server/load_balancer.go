@@ -4,15 +4,17 @@ import (
 	"fmt"
 	"sync"
 	"time"
-	"tingly-box/internal/server/middleware"
 
 	"tingly-box/internal/config"
+	"tingly-box/internal/config/typ"
+	"tingly-box/internal/loadbalance"
+	"tingly-box/internal/server/middleware"
 )
 
 // LoadBalancer manages load balancing across multiple services
 type LoadBalancer struct {
-	tactics map[config.TacticType]config.LoadBalancingTactic
-	stats   map[string]*config.ServiceStats
+	tactics map[loadbalance.TacticType]typ.LoadBalancingTactic
+	stats   map[string]*loadbalance.ServiceStats
 	statsMW *middleware.StatsMiddleware
 	config  *config.Config
 	mutex   sync.RWMutex
@@ -21,8 +23,8 @@ type LoadBalancer struct {
 // NewLoadBalancer creates a new load balancer
 func NewLoadBalancer(statsMW *middleware.StatsMiddleware, cfg *config.Config) *LoadBalancer {
 	lb := &LoadBalancer{
-		tactics: make(map[config.TacticType]config.LoadBalancingTactic),
-		stats:   make(map[string]*config.ServiceStats),
+		tactics: make(map[loadbalance.TacticType]typ.LoadBalancingTactic),
+		stats:   make(map[string]*loadbalance.ServiceStats),
 		statsMW: statsMW,
 		config:  cfg,
 	}
@@ -35,13 +37,13 @@ func NewLoadBalancer(statsMW *middleware.StatsMiddleware, cfg *config.Config) *L
 
 // initializeDefaultTactics initializes default load balancing tactics
 func (lb *LoadBalancer) initializeDefaultTactics() {
-	lb.tactics[config.TacticRoundRobin] = config.NewRoundRobinTactic()
-	lb.tactics[config.TacticTokenBased] = config.NewTokenBasedTactic(10000)
-	lb.tactics[config.TacticHybrid] = config.NewHybridTactic(100, 10000)
+	lb.tactics[loadbalance.TacticRoundRobin] = typ.NewRoundRobinTactic()
+	lb.tactics[loadbalance.TacticTokenBased] = typ.NewTokenBasedTactic(10000)
+	lb.tactics[loadbalance.TacticHybrid] = typ.NewHybridTactic(100, 10000)
 }
 
 // RegisterTactic registers a custom tactic
-func (lb *LoadBalancer) RegisterTactic(tacticType config.TacticType, tactic config.LoadBalancingTactic) {
+func (lb *LoadBalancer) RegisterTactic(tacticType loadbalance.TacticType, tactic typ.LoadBalancingTactic) {
 	lb.mutex.Lock()
 	defer lb.mutex.Unlock()
 
@@ -49,7 +51,7 @@ func (lb *LoadBalancer) RegisterTactic(tacticType config.TacticType, tactic conf
 }
 
 // SelectService selects the best service for a rule based on the configured tactic
-func (lb *LoadBalancer) SelectService(rule *config.Rule) (*config.Service, error) {
+func (lb *LoadBalancer) SelectService(rule *typ.Rule) (*loadbalance.Service, error) {
 	if rule == nil {
 		return nil, fmt.Errorf("rule is nil")
 	}
@@ -60,7 +62,7 @@ func (lb *LoadBalancer) SelectService(rule *config.Rule) (*config.Service, error
 	}
 
 	// Filter active services
-	var activeServices []config.Service
+	var activeServices []loadbalance.Service
 	for _, service := range services {
 		if service.Active {
 			activeServices = append(activeServices, service)
@@ -91,7 +93,7 @@ func (lb *LoadBalancer) SelectService(rule *config.Rule) (*config.Service, error
 }
 
 // getTactic retrieves a tactic by type
-func (lb *LoadBalancer) getTactic(tacticType config.TacticType) (config.LoadBalancingTactic, bool) {
+func (lb *LoadBalancer) getTactic(tacticType loadbalance.TacticType) (typ.LoadBalancingTactic, bool) {
 	lb.mutex.RLock()
 	defer lb.mutex.RUnlock()
 
@@ -100,7 +102,7 @@ func (lb *LoadBalancer) getTactic(tacticType config.TacticType) (config.LoadBala
 }
 
 // UpdateServiceIndex updates the current service index for a rule
-func (lb *LoadBalancer) UpdateServiceIndex(rule *config.Rule, selectedService *config.Service) {
+func (lb *LoadBalancer) UpdateServiceIndex(rule *typ.Rule, selectedService *loadbalance.Service) {
 	if rule == nil || selectedService == nil {
 		return
 	}
@@ -121,7 +123,7 @@ func (lb *LoadBalancer) RecordUsage(provider, model string, inputTokens, outputT
 }
 
 // GetServiceStats returns statistics for a specific service
-func (lb *LoadBalancer) GetServiceStats(provider, model string) *config.ServiceStats {
+func (lb *LoadBalancer) GetServiceStats(provider, model string) *loadbalance.ServiceStats {
 	if lb.config == nil {
 		return nil
 	}
@@ -148,8 +150,8 @@ func (lb *LoadBalancer) GetServiceStats(provider, model string) *config.ServiceS
 
 // GetAllServiceStats returns all service statistics from all active rules.
 // Stats are keyed by provider:model since stats are global (shared across rules).
-func (lb *LoadBalancer) GetAllServiceStats() map[string]*config.ServiceStats {
-	result := make(map[string]*config.ServiceStats)
+func (lb *LoadBalancer) GetAllServiceStats() map[string]*loadbalance.ServiceStats {
+	result := make(map[string]*loadbalance.ServiceStats)
 
 	// Read from config file (source of truth)
 	if lb.config != nil {
@@ -231,7 +233,7 @@ func (lb *LoadBalancer) ClearAllStats() {
 }
 
 // ValidateRule validates a rule configuration
-func (lb *LoadBalancer) ValidateRule(rule *config.Rule) error {
+func (lb *LoadBalancer) ValidateRule(rule *typ.Rule) error {
 	if rule == nil {
 		return fmt.Errorf("rule is nil")
 	}
@@ -269,7 +271,7 @@ func (lb *LoadBalancer) ValidateRule(rule *config.Rule) error {
 }
 
 // GetRuleSummary returns a summary of rule configuration and statistics
-func (lb *LoadBalancer) GetRuleSummary(rule *config.Rule) map[string]interface{} {
+func (lb *LoadBalancer) GetRuleSummary(rule *typ.Rule) map[string]interface{} {
 	if rule == nil {
 		return nil
 	}

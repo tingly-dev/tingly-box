@@ -6,9 +6,10 @@ import (
 	"os"
 	"strings"
 
-	"tingly-box/internal/config"
-
 	"github.com/spf13/cobra"
+
+	"tingly-box/internal/config"
+	"tingly-box/internal/config/typ"
 )
 
 // APIStyle represents the API style/version for a provider
@@ -164,7 +165,7 @@ func addProviderWithConfirmation(appConfig *config.AppConfig, reader *bufio.Read
 
 	// Update the provider to set the API style
 	if provider, err := appConfig.GetProviderByName(name); err == nil {
-		provider.APIStyle = config.APIStyle(apiStyle)
+		provider.APIStyle = typ.APIStyle(apiStyle)
 		// Save the configuration
 		if saveErr := appConfig.Save(); saveErr != nil {
 			fmt.Printf("Warning: failed to save API style configuration: %v\n", saveErr)

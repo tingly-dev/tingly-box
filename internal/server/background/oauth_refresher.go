@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"tingly-box/internal/config"
+	"tingly-box/internal/config/typ"
 	oauth2 "tingly-box/pkg/oauth"
 )
 
@@ -138,7 +139,7 @@ func (tr *OAuthRefresher) CheckAndRefreshTokens() {
 }
 
 // refreshProviderToken refreshes a single provider's token
-func (tr *OAuthRefresher) refreshProviderToken(provider *config.Provider) {
+func (tr *OAuthRefresher) refreshProviderToken(provider *typ.Provider) {
 	providerType, err := oauth2.ParseProviderType(provider.OAuthDetail.ProviderType)
 	if err != nil {
 		fmt.Printf("[OAuthRefresher] Invalid provider type for %s: %v\n", provider.Name, err)

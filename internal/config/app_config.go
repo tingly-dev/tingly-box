@@ -13,6 +13,10 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+
+	"tingly-box/internal/config/typ"
+	constant2 "tingly-box/internal/constant"
+	"tingly-box/internal/db"
 )
 
 // AppConfig holds the application configuration with encrypted storage
@@ -43,7 +47,7 @@ func WithConfigDir(dir string) AppConfigOption {
 func NewAppConfig(opts ...AppConfigOption) (*AppConfig, error) {
 	// Default options
 	options := &appConfigOptions{
-		configDir: GetTinglyConfDir(),
+		configDir: constant2.GetTinglyConfDir(),
 	}
 
 	// Apply provided options
@@ -135,27 +139,27 @@ func (ac *AppConfig) AddProviderByName(name, apiBase, token string) error {
 }
 
 // GetProviderByUUID returns a provider by uuid
-func (ac *AppConfig) GetProviderByUUID(uuid string) (*Provider, error) {
+func (ac *AppConfig) GetProviderByUUID(uuid string) (*typ.Provider, error) {
 	return ac.config.GetProviderByUUID(uuid)
 }
 
 // GetProviderByName returns a provider by name
-func (ac *AppConfig) GetProviderByName(name string) (*Provider, error) {
+func (ac *AppConfig) GetProviderByName(name string) (*typ.Provider, error) {
 	return ac.config.GetProviderByName(name)
 }
 
 // ListProviders returns all providers
-func (ac *AppConfig) ListProviders() []*Provider {
+func (ac *AppConfig) ListProviders() []*typ.Provider {
 	return ac.config.ListProviders()
 }
 
 // AddProvider adds a new provider using Provider struct
-func (ac *AppConfig) AddProvider(provider *Provider) error {
+func (ac *AppConfig) AddProvider(provider *typ.Provider) error {
 	return ac.config.AddProvider(provider)
 }
 
 // UpdateProvider updates an existing provider by UUID
-func (ac *AppConfig) UpdateProvider(uuid string, provider *Provider) error {
+func (ac *AppConfig) UpdateProvider(uuid string, provider *typ.Provider) error {
 	return ac.config.UpdateProvider(uuid, provider)
 }
 
@@ -245,7 +249,7 @@ func (ac *AppConfig) Load() error {
 		return fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
-	statsStore, err := NewStatsStore(filepath.Join(ac.configDir, StateDirName))
+	statsStore, err := db.NewStatsStore(filepath.Join(ac.configDir, constant2.StateDirName))
 	if err != nil {
 		return fmt.Errorf("failed to initialize stats store: %w", err)
 	}
@@ -261,7 +265,7 @@ func (ac *AppConfig) Load() error {
 	ac.config.modelManager = existingModelManager
 	ac.config.statsStore = statsStore
 	if ac.config.modelManager == nil {
-		modelManager, err := NewProviderModelManager(filepath.Join(ac.configDir, ModelsDirName))
+		modelManager, err := NewProviderModelManager(filepath.Join(ac.configDir, constant2.ModelsDirName))
 		if err != nil {
 			ac.mu.Unlock()
 			return fmt.Errorf("failed to initialize model manager: %w", err)

@@ -5,9 +5,10 @@ import (
 	"net/http"
 	"strings"
 
-	"tingly-box/internal/config"
-
 	"github.com/gin-gonic/gin"
+
+	"tingly-box/internal/config/typ"
+	"tingly-box/internal/loadbalance"
 )
 
 // GenerateToken handles token generation requests
@@ -113,7 +114,7 @@ func (s *Server) GetToken(c *gin.Context) {
 }
 
 // determineProvider selects the appropriate provider based on model or explicit provider name
-func (s *Server) determineProvider(model, explicitProvider string) (*config.Provider, error) {
+func (s *Server) determineProvider(model, explicitProvider string) (*typ.Provider, error) {
 	providers := s.config.ListProviders()
 
 	if len(providers) == 0 {
@@ -158,14 +159,14 @@ func (s *Server) determineProvider(model, explicitProvider string) (*config.Prov
 }
 
 // DetermineProviderAndModelWithScenario
-func (s *Server) DetermineProviderAndModelWithScenario(scenario config.RuleScenario, modelName string) (*config.Provider, *config.Service, *config.Rule, error) {
+func (s *Server) DetermineProviderAndModelWithScenario(scenario typ.RuleScenario, modelName string) (*typ.Provider, *loadbalance.Service, *typ.Rule, error) {
 	// Check if this is the request model name first
 	c := s.config
 	if c != nil && c.IsRequestModelInScenario(modelName, scenario) {
 		// Get the Rule for this specific request model using the same method as middleware
 		uuid := c.GetUUIDByRequestModelAndScenario(modelName, scenario)
 		rules := c.GetRequestConfigs()
-		var rule *config.Rule
+		var rule *typ.Rule
 		var ruleIdx int = -1
 		for i := range rules {
 			if rules[i].UUID == uuid && rules[i].Active {
@@ -222,14 +223,14 @@ func (s *Server) DetermineProviderAndModelWithScenario(scenario config.RuleScena
 }
 
 // DetermineProviderAndModel resolves the model name and finds the appropriate provider using load balancing
-func (s *Server) DetermineProviderAndModel(modelName string) (*config.Provider, *config.Service, *config.Rule, error) {
+func (s *Server) DetermineProviderAndModel(modelName string) (*typ.Provider, *loadbalance.Service, *typ.Rule, error) {
 	// Check if this is the request model name first
 	c := s.config
 	if c != nil && c.IsRequestModel(modelName) {
 		// Get the Rule for this specific request model using the same method as middleware
 		uuid := c.GetUUIDByRequestModel(modelName)
 		rules := c.GetRequestConfigs()
-		var rule *config.Rule
+		var rule *typ.Rule
 		var ruleIdx int = -1
 		for i := range rules {
 			if rules[i].UUID == uuid && rules[i].Active {
@@ -286,7 +287,7 @@ func (s *Server) DetermineProviderAndModel(modelName string) (*config.Provider, 
 }
 
 // determineProviderFallback is the fallback logic for provider determination
-func (s *Server) determineProviderFallback(model string) (*config.Provider, error) {
+func (s *Server) determineProviderFallback(model string) (*typ.Provider, error) {
 	providers := s.config.ListProviders()
 
 	if len(providers) == 0 {

@@ -5,13 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"tingly-box/internal/config"
-	"tingly-box/pkg/adaptor"
 
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/sirupsen/logrus"
+
+	"tingly-box/internal/config/typ"
+	"tingly-box/internal/loadbalance"
+	"tingly-box/pkg/adaptor"
 )
 
 // OpenAIListModels handles the /v1/models endpoint (OpenAI compatible)
@@ -140,9 +142,9 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 
 	// Determine provider & model
 	var (
-		provider        *config.Provider
-		selectedService *config.Service
-		rule            *config.Rule
+		provider        *typ.Provider
+		selectedService *loadbalance.Service
+		rule            *typ.Rule
 	)
 	if scenario == "" {
 		provider, selectedService, rule, err = s.DetermineProviderAndModel(req.Model)
@@ -157,7 +159,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 		}
 	} else {
 		// Convert string to RuleScenario and validate
-		scenarioType := config.RuleScenario(scenario)
+		scenarioType := typ.RuleScenario(scenario)
 		if !isValidRuleScenario(scenarioType) {
 			c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{
@@ -268,7 +270,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 }
 
 // handleNonStreamingRequest handles non-streaming chat completion requests
-func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *config.Provider, req *openai.ChatCompletionNewParams, responseModel string) {
+func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, req *openai.ChatCompletionNewParams, responseModel string) {
 	// Forward request to provider
 	response, err := s.forwardOpenAIRequest(provider, req)
 	if err != nil {
@@ -312,7 +314,7 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *config.Prov
 }
 
 // forwardOpenAIRequest forwards the request to the selected provider using OpenAI library
-func (s *Server) forwardOpenAIRequest(provider *config.Provider, req *openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
+func (s *Server) forwardOpenAIRequest(provider *typ.Provider, req *openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
 	// Get or create OpenAI client from pool
 	client := s.clientPool.GetOpenAIClient(provider)
 	logrus.Infof("provider: %s", provider.Name)
@@ -332,7 +334,7 @@ func (s *Server) forwardOpenAIRequest(provider *config.Provider, req *openai.Cha
 }
 
 // forwardOpenAIStreamRequest forwards the streaming request to the selected provider using OpenAI library
-func (s *Server) forwardOpenAIStreamRequest(provider *config.Provider, req *openai.ChatCompletionNewParams) (*ssestream.Stream[openai.ChatCompletionChunk], error) {
+func (s *Server) forwardOpenAIStreamRequest(provider *typ.Provider, req *openai.ChatCompletionNewParams) (*ssestream.Stream[openai.ChatCompletionChunk], error) {
 	// Get or create OpenAI client from pool
 	client := s.clientPool.GetOpenAIClient(provider)
 	logrus.Infof("provider: %s (streaming)", provider.Name)
@@ -348,7 +350,7 @@ func (s *Server) forwardOpenAIStreamRequest(provider *config.Provider, req *open
 }
 
 // handleStreamingRequest handles streaming chat completion requests
-func (s *Server) handleStreamingRequest(c *gin.Context, provider *config.Provider, req *openai.ChatCompletionNewParams, responseModel string) {
+func (s *Server) handleStreamingRequest(c *gin.Context, provider *typ.Provider, req *openai.ChatCompletionNewParams, responseModel string) {
 	// Create streaming request
 	stream, err := s.forwardOpenAIStreamRequest(provider, req)
 	if err != nil {
@@ -499,7 +501,7 @@ func (s *Server) ListModelsByScenario(c *gin.Context) {
 	scenario := c.Param("scenario")
 
 	// Convert string to RuleScenario and validate
-	scenarioType := config.RuleScenario(scenario)
+	scenarioType := typ.RuleScenario(scenario)
 	if !isValidRuleScenario(scenarioType) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": gin.H{
@@ -512,7 +514,7 @@ func (s *Server) ListModelsByScenario(c *gin.Context) {
 
 	// Route to appropriate handler based on scenario
 	switch scenarioType {
-	case config.ScenarioAnthropic, config.ScenarioClaudeCode:
+	case typ.ScenarioAnthropic, typ.ScenarioClaudeCode:
 		s.AnthropicListModels(c)
 	default:
 		// OpenAI is the default
@@ -521,9 +523,9 @@ func (s *Server) ListModelsByScenario(c *gin.Context) {
 }
 
 // isValidRuleScenario checks if the given scenario is a valid RuleScenario
-func isValidRuleScenario(scenario config.RuleScenario) bool {
+func isValidRuleScenario(scenario typ.RuleScenario) bool {
 	switch scenario {
-	case config.ScenarioOpenAI, config.ScenarioAnthropic, config.ScenarioClaudeCode:
+	case typ.ScenarioOpenAI, typ.ScenarioAnthropic, typ.ScenarioClaudeCode:
 		return true
 	default:
 		return false

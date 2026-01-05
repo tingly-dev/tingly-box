@@ -4,6 +4,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"tingly-box/internal/config/typ"
+	"tingly-box/internal/constant"
+	"tingly-box/internal/loadbalance"
 )
 
 func migrate(c *Config) error {
@@ -32,9 +36,9 @@ func migrate20251220(c *Config) {
 		// Check if params are nil or have invalid zero values
 		if !isTacticValid(&c.Rules[i].LBTactic) {
 			// Set default tactic if params are invalid
-			c.Rules[i].LBTactic = Tactic{
-				Type:   TacticRoundRobin,
-				Params: DefaultRoundRobinParams(),
+			c.Rules[i].LBTactic = typ.Tactic{
+				Type:   loadbalance.TacticRoundRobin,
+				Params: typ.DefaultRoundRobinParams(),
 			}
 			needsSave = true
 		}
@@ -53,7 +57,7 @@ func migrate20251221(c *Config) {
 	// Ensure all providers have a valid timeout (set to default if zero)
 	for _, p := range c.Providers {
 		if p.Timeout == 0 {
-			p.Timeout = int64(DefaultRequestTimeout)
+			p.Timeout = int64(constant.DefaultRequestTimeout)
 			needsSave = true
 		}
 	}
@@ -72,11 +76,11 @@ func migrate20251221(c *Config) {
 	}
 
 	// Initialize Providers slice
-	c.Providers = make([]*Provider, 0, len(c.Providers))
+	c.Providers = make([]*typ.Provider, 0, len(c.Providers))
 
 	// Migrate each v1 provider to v2
 	for _, pv1 := range c.ProvidersV1 {
-		providerV2 := &Provider{
+		providerV2 := &typ.Provider{
 			UUID:        pv1.UUID,
 			Name:        pv1.Name,
 			APIBase:     pv1.APIBase,
@@ -84,9 +88,9 @@ func migrate20251221(c *Config) {
 			Token:       pv1.Token,
 			Enabled:     pv1.Enabled,
 			ProxyURL:    pv1.ProxyURL,
-			Timeout:     int64(DefaultRequestTimeout), // Default timeout from constants
-			Tags:        []string{},                   // Empty tags
-			Models:      []string{},                   // Empty models initially
+			Timeout:     int64(constant.DefaultRequestTimeout), // Default timeout from constants
+			Tags:        []string{},                            // Empty tags
+			Models:      []string{},                            // Empty models initially
 			LastUpdated: time.Now().Format(time.RFC3339),
 		}
 
@@ -124,7 +128,7 @@ func migrate20251225(c *Config) {
 	for _, p := range c.Providers {
 		// second
 		if p.Timeout >= 30*60 {
-			p.Timeout = int64(DefaultMaxTimeout)
+			p.Timeout = int64(constant.DefaultMaxTimeout)
 		}
 	}
 }
@@ -133,12 +137,12 @@ func migrate20260103(c *Config) {
 	needsSave := false
 
 	// Map of default rule UUIDs to their scenarios
-	scenarioMap := map[string]RuleScenario{
-		"tingly":             ScenarioOpenAI,
-		"built-in-openai":    ScenarioOpenAI,
-		"built-in-anthropic": ScenarioAnthropic,
-		"built-in-cc":        ScenarioClaudeCode,
-		"claude-code":        ScenarioClaudeCode,
+	scenarioMap := map[string]typ.RuleScenario{
+		"tingly":             typ.ScenarioOpenAI,
+		"built-in-openai":    typ.ScenarioOpenAI,
+		"built-in-anthropic": typ.ScenarioAnthropic,
+		"built-in-cc":        typ.ScenarioClaudeCode,
+		"claude-code":        typ.ScenarioClaudeCode,
 	}
 
 	for i := range c.Rules {
@@ -155,7 +159,7 @@ func migrate20260103(c *Config) {
 			needsSave = true
 		} else {
 			// For non-default rules, set to openai as default
-			rule.Scenario = ScenarioOpenAI
+			rule.Scenario = typ.ScenarioOpenAI
 			needsSave = true
 		}
 	}

@@ -3,11 +3,12 @@ package server
 import (
 	"fmt"
 	"net/http"
-	"tingly-box/internal/config"
-	"tingly-box/internal/obs"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+
+	"tingly-box/internal/config/typ"
+	"tingly-box/internal/obs"
 )
 
 // GetRules returns all rules, require filtered by scenario
@@ -26,7 +27,7 @@ func (s *Server) GetRules(c *gin.Context) {
 	// Filter by scenario if provided
 	scenario := c.Query("scenario")
 	if scenario != "" {
-		filteredRules := make([]config.Rule, 0)
+		filteredRules := make([]typ.Rule, 0)
 		for _, rule := range rules {
 			if string(rule.GetScenario()) == scenario {
 				filteredRules = append(filteredRules, rule)
@@ -87,7 +88,7 @@ func (s *Server) GetRule(c *gin.Context) {
 }
 
 func (s *Server) CreateRule(c *gin.Context) {
-	var rule config.Rule
+	var rule typ.Rule
 	if err := c.ShouldBindJSON(&rule); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
@@ -153,7 +154,7 @@ func (s *Server) UpdateRule(c *gin.Context) {
 		return
 	}
 
-	var rule config.Rule
+	var rule typ.Rule
 
 	if err := c.ShouldBindJSON(&rule); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{

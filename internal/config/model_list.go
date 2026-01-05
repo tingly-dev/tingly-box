@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/goccy/go-yaml"
+
+	"tingly-box/internal/config/typ"
 )
 
 // ModelList represents the models available for a specific provider
@@ -41,7 +43,7 @@ func (mm *ModelListManager) getFilePath(providerUUID string) string {
 }
 
 // SaveModels saves models for a provider by UUID
-func (mm *ModelListManager) SaveModels(provider *Provider, apiBase string, models []string) error {
+func (mm *ModelListManager) SaveModels(provider *typ.Provider, apiBase string, models []string) error {
 	providerModels := &ModelList{
 		Provider:    provider.Name,
 		UUID:        provider.UUID,

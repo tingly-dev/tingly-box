@@ -4,14 +4,15 @@ import (
 	"testing"
 
 	"github.com/openai/openai-go/v3"
-	"tingly-box/internal/config"
+
+	"tingly-box/internal/config/typ"
 )
 
 func TestClientPool_GetClient(t *testing.T) {
 	pool := NewClientPool()
 
 	// Create test provider
-	provider := &config.Provider{
+	provider := &typ.Provider{
 		Name:    "test-provider",
 		Token:   "test-token-12345678",
 		APIBase: "https://api.openai.com/v1",
@@ -39,13 +40,13 @@ func TestClientPool_DifferentProviders(t *testing.T) {
 	pool := NewClientPool()
 
 	// Create different providers
-	provider1 := &config.Provider{
+	provider1 := &typ.Provider{
 		Name:    "provider1",
 		Token:   "token1-12345678",
 		APIBase: "https://api.openai.com/v1",
 	}
 
-	provider2 := &config.Provider{
+	provider2 := &typ.Provider{
 		Name:    "provider2",
 		Token:   "token2-87654321",
 		APIBase: "https://api.openai.com/v1",
@@ -68,7 +69,7 @@ func TestClientPool_DifferentProviders(t *testing.T) {
 func TestClientPool_ConcurrentAccess(t *testing.T) {
 	pool := NewClientPool()
 
-	provider := &config.Provider{
+	provider := &typ.Provider{
 		Name:    "concurrent-provider",
 		Token:   "concurrent-token-12345678",
 		APIBase: "https://api.openai.com/v1",
@@ -112,13 +113,13 @@ func TestClientPool_Clear(t *testing.T) {
 	pool := NewClientPool()
 
 	// Add some clients
-	provider1 := &config.Provider{
+	provider1 := &typ.Provider{
 		Name:    "provider1",
 		Token:   "token1-12345678",
 		APIBase: "https://api.openai.com/v1",
 	}
 
-	provider2 := &config.Provider{
+	provider2 := &typ.Provider{
 		Name:    "provider2",
 		Token:   "token2-87654321",
 		APIBase: "https://api.openai.com/v1",
@@ -144,13 +145,13 @@ func TestClientPool_Clear(t *testing.T) {
 func TestClientPool_RemoveProvider(t *testing.T) {
 	pool := NewClientPool()
 
-	provider1 := &config.Provider{
+	provider1 := &typ.Provider{
 		Name:    "provider1",
 		Token:   "token1-12345678",
 		APIBase: "https://api.openai.com/v1",
 	}
 
-	provider2 := &config.Provider{
+	provider2 := &typ.Provider{
 		Name:    "provider2",
 		Token:   "token2-87654321",
 		APIBase: "https://api.openai.com/v1",
@@ -183,7 +184,7 @@ func TestClientPool_RemoveProvider(t *testing.T) {
 func TestClientPool_Stats(t *testing.T) {
 	pool := NewClientPool()
 
-	provider := &config.Provider{
+	provider := &typ.Provider{
 		Name:    "stats-provider",
 		Token:   "stats-token-12345678",
 		APIBase: "https://api.openai.com/v1",

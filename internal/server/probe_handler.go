@@ -10,12 +10,13 @@ import (
 	"net/url"
 	"strings"
 	"time"
-	"tingly-box/internal/config"
-	"tingly-box/internal/obs"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
+
+	"tingly-box/internal/config/typ"
+	"tingly-box/internal/obs"
 )
 
 // ClaudeCodeSystemHeader MENTION: this a special process for subscriptions
@@ -107,10 +108,10 @@ func (s *Server) HandleProbeProvider(c *gin.Context) {
 // testProviderConnectivity tests if a provider's API key and connectivity are working using cascading validation
 func (s *Server) testProviderConnectivity(req *ProbeProviderRequest) (bool, string, int, error) {
 	// Create a temporary provider config
-	provider := &config.Provider{
+	provider := &typ.Provider{
 		Name:     req.Name,
 		APIBase:  req.APIBase,
-		APIStyle: config.APIStyle(req.APIStyle),
+		APIStyle: typ.APIStyle(req.APIStyle),
 		Token:    req.Token,
 		Enabled:  true,
 	}
@@ -145,10 +146,10 @@ func (s *Server) testProviderConnectivity(req *ProbeProviderRequest) (bool, stri
 }
 
 // getProviderModelsForProbe is a simplified version of getProviderModelsFromAPI for probing
-func (s *Server) getProviderModelsForProbe(provider *config.Provider) ([]string, error) {
+func (s *Server) getProviderModelsForProbe(provider *typ.Provider) ([]string, error) {
 	// Construct the models endpoint URL
 	apiBase := strings.TrimSuffix(provider.APIBase, "/")
-	if provider.APIStyle == config.APIStyleAnthropic {
+	if provider.APIStyle == typ.APIStyleAnthropic {
 		// Check if already has version suffix like /v1, /v2, etc.
 		matches := strings.Split(apiBase, "/")
 		if len(matches) > 0 {
@@ -175,7 +176,7 @@ func (s *Server) getProviderModelsForProbe(provider *config.Provider) ([]string,
 	}
 
 	// Set headers based on provider style
-	if provider.APIStyle == config.APIStyleAnthropic {
+	if provider.APIStyle == typ.APIStyleAnthropic {
 		req.Header.Set("x-api-key", provider.Token)
 		req.Header.Set("anthropic-version", "2023-06-01")
 	} else {
@@ -248,7 +249,7 @@ func (s *Server) getProviderModelsForProbe(provider *config.Provider) ([]string,
 }
 
 // probeWithOpenAI handles probe requests for OpenAI-style APIs
-func (s *Server) probeWithOpenAI(c *gin.Context, provider *config.Provider, model string) (string, ProbeUsage, error) {
+func (s *Server) probeWithOpenAI(c *gin.Context, provider *typ.Provider, model string) (string, ProbeUsage, error) {
 	startTime := time.Now()
 
 	// Get OpenAI client from pool (supports proxy and caching)
@@ -312,7 +313,7 @@ func (s *Server) probeWithOpenAI(c *gin.Context, provider *config.Provider, mode
 }
 
 // probeWithAnthropic handles probe requests for Anthropic-style APIs
-func (s *Server) probeWithAnthropic(c *gin.Context, provider *config.Provider, model string) (string, ProbeUsage, error) {
+func (s *Server) probeWithAnthropic(c *gin.Context, provider *typ.Provider, model string) (string, ProbeUsage, error) {
 	startTime := time.Now()
 
 	// Get Anthropic client from pool (supports proxy, OAuth headers, and caching)
@@ -324,7 +325,7 @@ func (s *Server) probeWithAnthropic(c *gin.Context, provider *config.Provider, m
 			Text: "work as `echo`",
 		},
 	}
-	if provider.AuthType == config.AuthTypeOAuth && provider.OAuthDetail != nil &&
+	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil &&
 		provider.OAuthDetail.ProviderType == "claude_code" {
 		// Prepend Claude Code system message as the first block
 		systemMessages = append([]anthropic.TextBlockParam{{
@@ -393,14 +394,14 @@ func (s *Server) probeWithAnthropic(c *gin.Context, provider *config.Provider, m
 }
 
 // probeChatEndpoint tests chat completion with minimal request
-func (s *Server) probeChatEndpoint(provider *config.Provider) error {
+func (s *Server) probeChatEndpoint(provider *typ.Provider) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	switch provider.APIStyle {
-	case config.APIStyleOpenAI:
+	case typ.APIStyleOpenAI:
 		return s.probeOpenAIChat(ctx, provider)
-	case config.APIStyleAnthropic:
+	case typ.APIStyleAnthropic:
 		return s.probeAnthropicChat(ctx, provider)
 	default:
 		return fmt.Errorf("unsupported API style: %s", provider.APIStyle)
@@ -408,7 +409,7 @@ func (s *Server) probeChatEndpoint(provider *config.Provider) error {
 }
 
 // probeOptionsEndpoint tests with OPTIONS request
-func (s *Server) probeOptionsEndpoint(provider *config.Provider) error {
+func (s *Server) probeOptionsEndpoint(provider *typ.Provider) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -418,7 +419,7 @@ func (s *Server) probeOptionsEndpoint(provider *config.Provider) error {
 	}
 
 	// Set authentication headers
-	if provider.APIStyle == config.APIStyleAnthropic {
+	if provider.APIStyle == typ.APIStyleAnthropic {
 		req.Header.Set("x-api-key", provider.Token)
 		req.Header.Set("anthropic-version", "2023-06-01")
 	} else {
@@ -441,7 +442,7 @@ func (s *Server) probeOptionsEndpoint(provider *config.Provider) error {
 }
 
 // probeOpenAIChat tests OpenAI chat endpoint with minimal message
-func (s *Server) probeOpenAIChat(ctx context.Context, provider *config.Provider) error {
+func (s *Server) probeOpenAIChat(ctx context.Context, provider *typ.Provider) error {
 	apiBase := strings.TrimSuffix(provider.APIBase, "/")
 	if !strings.Contains(apiBase, "/v1") {
 		apiBase = apiBase + "/v1"
@@ -485,7 +486,7 @@ func (s *Server) probeOpenAIChat(ctx context.Context, provider *config.Provider)
 }
 
 // probeAnthropicChat tests Anthropic messages endpoint with minimal message
-func (s *Server) probeAnthropicChat(ctx context.Context, provider *config.Provider) error {
+func (s *Server) probeAnthropicChat(ctx context.Context, provider *typ.Provider) error {
 	apiBase := strings.TrimSuffix(provider.APIBase, "/")
 	if !strings.Contains(apiBase, "/v1") {
 		apiBase = apiBase + "/v1"
