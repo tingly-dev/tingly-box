@@ -2,8 +2,8 @@ import { Delete as DeleteIcon, PlayArrow as ProbeIcon } from '@mui/icons-materia
 import { Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Tooltip, Typography } from '@mui/material';
 import React, { useCallback, useState } from 'react';
 import type { ProbeResponse } from '../client';
-import Probe from '../components/Probe';
-import RuleGraphV2 from '../components/RuleGraphV2';
+import Probe from './ProbeModal.tsx';
+import RuleGraphV2 from './RuleGraph.tsx';
 import { api } from '../services/api';
 import type { Provider, ProviderModelsDataByUuid } from '../types/provider';
 import type { ConfigRecord, Rule } from './RuleGraphTypes';

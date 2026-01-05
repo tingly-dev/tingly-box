@@ -4,7 +4,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import {Box, Button, IconButton, Tooltip, Typography} from '@mui/material';
 import {useNavigate} from 'react-router-dom';
 import {BaseUrlRow} from '../components/BaseUrlRow';
-import TabTemplatePage from '../components/TabTemplatePage';
+import TemplatePage from '../components/TemplatePage.tsx';
 import PageLayout from '../components/PageLayout';
 import {api, getBaseUrl} from '../services/api';
 import type { Provider } from '../types/provider';
@@ -158,7 +158,7 @@ const UseOpenAIPage: React.FC = () => {
                 >
                     {header}
                 </UnifiedCard>
-                <TabTemplatePage
+                <TemplatePage
                     title={
                         <Tooltip title="Use as model name in your API requests to forward">
                             Models and Forwarding Rules

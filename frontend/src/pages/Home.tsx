@@ -18,7 +18,7 @@ import Anthropic from "@lobehub/icons/es/Anthropic"
 import Claude from "@lobehub/icons/es/Claude"
 import { Add as AddIcon } from '@mui/icons-material';
 import { PageLayout } from '../components/PageLayout';
-import PresetProviderFormDialog, { type EnhancedProviderFormData } from '../components/PresetProviderFormDialog';
+import ProviderFormDialog, { type EnhancedProviderFormData } from '../components/ProviderFormDialog.tsx';
 import { api } from '../services/api';
 import type { Provider } from '../types/provider';
 import UseOpenAIPage from './UseOpenAIPage';
@@ -274,7 +274,7 @@ const Home = () => {
             )}
 
             {/* Add Provider Dialog */}
-            <PresetProviderFormDialog
+            <ProviderFormDialog
                 open={addDialogOpen}
                 onClose={() => setAddDialogOpen(false)}
                 onSubmit={handleAddProviderSubmit}

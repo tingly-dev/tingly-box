@@ -1,7 +1,7 @@
 import { Box, Typography, ToggleButton, ToggleButtonGroup } from '@mui/material';
 import React from 'react';
 import CodeBlock from '../components/CodeBlock';
-import TabTemplatePage from '../components/TabTemplatePage';
+import TemplatePage from '../components/TemplatePage.tsx';
 import PageLayout from '../components/PageLayout';
 import { api, getBaseUrl } from '../services/api';
 import type { Provider } from '../types/provider';
@@ -225,7 +225,7 @@ node --eval '
                 >
                     {header}
                 </UnifiedCard>
-                <TabTemplatePage
+                <TemplatePage
                     rules={[rule]}
                     showTokenModal={showTokenModal}
                     setShowTokenModal={setShowTokenModal}

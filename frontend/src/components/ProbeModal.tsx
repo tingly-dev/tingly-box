@@ -36,7 +36,7 @@ interface ProbeProps {
     detailsExpanded?: boolean;
 }
 
-const Probe = ({ provider, model, isProbing = false, probeResult = null, onToggleDetails, detailsExpanded = false }: ProbeProps) => {
+const ProbeModal = ({ provider, model, isProbing = false, probeResult = null, onToggleDetails, detailsExpanded = false }: ProbeProps) => {
     const theme = useTheme();
 
     // Internal state for details expansion if not controlled externally
@@ -273,4 +273,4 @@ const Probe = ({ provider, model, isProbing = false, probeResult = null, onToggl
     );
 };
 
-export default memo(Probe);
+export default memo(ProbeModal);

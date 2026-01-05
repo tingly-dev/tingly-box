@@ -2,7 +2,7 @@ import { Add } from '@mui/icons-material';
 import { Alert, Box, Button, Snackbar, Stack, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { PageLayout } from '../components/PageLayout';
-import PresetProviderFormDialog from '../components/PresetProviderFormDialog.tsx';
+import ProviderFormDialog from '../components/ProviderFormDialog.tsx';
 import { type ProviderFormData } from '../components/ProviderFormDialog.tsx';
 import UnifiedCard from '../components/UnifiedCard';
 import { api } from '../services/api';
@@ -188,7 +188,7 @@ const ApiKeyPage = () => {
             )}
 
             {/* API Key Provider Dialog */}
-            <PresetProviderFormDialog
+            <ProviderFormDialog
                 open={dialogOpen}
                 onClose={() => setDialogOpen(false)}
                 onSubmit={handleProviderSubmit}

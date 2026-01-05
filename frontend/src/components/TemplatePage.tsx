@@ -24,7 +24,7 @@ export interface TabTemplatePageProps {
     newlyCreatedRuleUuids?: Set<string>;
 }
 
-const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
+const TemplatePage: React.FC<TabTemplatePageProps> = ({
     rules,
     showTokenModal,
     setShowTokenModal,
@@ -291,4 +291,4 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
     );
 };
 
-export default TabTemplatePage;
+export default TemplatePage;

@@ -46,7 +46,7 @@ interface PresetProviderFormDialogProps {
     submitText?: string;
 }
 
-const PresetProviderFormDialog = ({
+const ProviderFormDialog = ({
     open,
     onClose,
     onSubmit,
@@ -478,4 +478,4 @@ const PresetProviderFormDialog = ({
     );
 };
 
-export default PresetProviderFormDialog;
+export default ProviderFormDialog;
