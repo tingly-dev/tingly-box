@@ -49,10 +49,12 @@ func claudeCodeHook(req *http.Request) error {
 	req.Header.Set("x-stainless-os", "MacOS")
 	req.Header.Set("x-stainless-timeout", "3000")
 
-	// Add beta query parameter
+	// Add beta query parameter if not already present
 	q := req.URL.Query()
-	q.Add("beta", "true")
-	req.URL.RawQuery = q.Encode()
+	if !q.Has("beta") {
+		q.Add("beta", "true")
+		req.URL.RawQuery = q.Encode()
+	}
 
 	return nil
 }
