@@ -15,8 +15,8 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// ProxyService manages the web UI and HTTP server functionality
-type ProxyService struct {
+// TinglyService manages the web UI and HTTP server functionality
+type TinglyService struct {
 	appConfig     *config.AppConfig
 	serverManager *manager.ServerManager
 	httpServer    *server.Server
@@ -25,8 +25,8 @@ type ProxyService struct {
 	app           *application.App
 }
 
-// NewUIService creates a new UI service instance
-func NewUIService(configDir string, port int) (*ProxyService, error) {
+// NewTinglyService creates a new UI service instance
+func NewTinglyService(configDir string, port int) (*TinglyService, error) {
 	appConfig, err := config.NewAppConfig(config.WithConfigDir(configDir))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create app config: %w", err)
@@ -42,7 +42,7 @@ func NewUIService(configDir string, port int) (*ProxyService, error) {
 		manager.WithOpenBrowser(false), // GUI doesn't need browser auto-open
 	)
 
-	res := &ProxyService{
+	res := &TinglyService{
 		appConfig:     appConfig,
 		serverManager: serverManager,
 		shutdownChan:  make(chan struct{}),
@@ -55,7 +55,7 @@ func NewUIService(configDir string, port int) (*ProxyService, error) {
 }
 
 // Start starts the UI service
-func (s *ProxyService) Start(ctx context.Context) error {
+func (s *TinglyService) Start(ctx context.Context) error {
 	go func() {
 		err := s.serverManager.Start()
 		if err != nil {
@@ -66,7 +66,7 @@ func (s *ProxyService) Start(ctx context.Context) error {
 }
 
 // Stop stops the UI service gracefully
-func (s *ProxyService) Stop() error {
+func (s *TinglyService) Stop() error {
 	if !s.isRunning {
 		return nil
 	}
@@ -81,20 +81,18 @@ func (s *ProxyService) Stop() error {
 	return err
 }
 
-func (s *ProxyService) GetGinEngine() *gin.Engine {
+func (s *TinglyService) GetGinEngine() *gin.Engine {
 	return s.serverManager.GetGinEngine()
 }
 
 // ServeHTTP implements the http.Handler interface
-func (s *ProxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (s *TinglyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// All requests go to the Gin router
 	s.serverManager.ServeHTTP(w, r)
 }
 
 // ServiceStartup is called when the service starts
-func (s *ProxyService) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
-	s.Start(ctx)
-
+func (s *TinglyService) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
 	// Store the application instance for later use
 	s.app = application.Get()
 
@@ -116,17 +114,17 @@ func (s *ProxyService) ServiceStartup(ctx context.Context, options application.S
 }
 
 // ServiceShutdown is called when the service shuts down
-func (s *ProxyService) ServiceShutdown(ctx context.Context) error {
+func (s *TinglyService) ServiceShutdown(ctx context.Context) error {
 	// Clean up resources if needed
 	return nil
 }
 
-func (s *ProxyService) GetUserAuthToken() string {
+func (s *TinglyService) GetUserAuthToken() string {
 	fmt.Println("Getting auth token")
 	return s.appConfig.GetGlobalConfig().GetUserToken()
 }
 
-func (s *ProxyService) GetPort() int {
+func (s *TinglyService) GetPort() int {
 	fmt.Println("Getting port")
 	return s.appConfig.GetGlobalConfig().GetServerPort()
 }
