@@ -393,7 +393,7 @@ const Layout = ({ children }: LayoutProps) => {
                 sx={{
                     flexGrow: 1,
                     width: { sm: `calc(100% - ${drawerWidth}px)` },
-                    minHeight: '100vh',
+                    height: '100vh',
                     display: 'flex',
                     flexDirection: 'column',
                 }}
@@ -403,7 +403,6 @@ const Layout = ({ children }: LayoutProps) => {
                         flex: 1,
                         p: 3,
                         overflowY: 'auto',
-                        height: '100%',
                         scrollBehavior: 'smooth',
                         '&::-webkit-scrollbar': {
                             width: 8,
