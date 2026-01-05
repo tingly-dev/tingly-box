@@ -43,6 +43,8 @@ npx tingly-box@latest start
 # - task: https://taskfile.dev/installation/, or `go install github.com/go-task/task/v3/cmd/task@latest`
 # - openapi-generator-cli: `npm install @openapitools/openapi-generator-cli -g`
 
+git submodule update --init --recursive
+
 # Build CLI binary
 task go:build
 
