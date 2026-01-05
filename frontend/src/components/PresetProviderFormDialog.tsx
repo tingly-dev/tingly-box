@@ -1,4 +1,4 @@
-import { Refresh, WarningAmber } from '@mui/icons-material';
+import { WarningAmber, Close } from '@mui/icons-material';
 import {
     Alert,
     Autocomplete,
@@ -16,8 +16,10 @@ import {
     Switch,
     TextField,
     Typography,
+    Checkbox,
+    Grid,
 } from '@mui/material';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getProvidersByStyle } from '../services/serviceProviders';
 import api from '../services/api';
@@ -29,6 +31,7 @@ export interface EnhancedProviderFormData {
     apiBase: string;
     apiStyle: 'openai' | 'anthropic' | undefined;
     token: string;
+    noKeyRequired?: boolean;
     enabled?: boolean;
 }
 
@@ -58,6 +61,8 @@ const PresetProviderFormDialog = ({
     const defaultSubmitText = mode === 'add' ? t('providerDialog.addButton') : t('common.saveChanges');
 
     const [verifying, setVerifying] = useState(false);
+    const [noApiKey, setNoApiKey] = useState(data.noKeyRequired || false);
+    const [isCustomUrl, setIsCustomUrl] = useState(false);
     const [verificationResult, setVerificationResult] = useState<{
         success: boolean;
         message: string;
@@ -66,6 +71,30 @@ const PresetProviderFormDialog = ({
         modelsCount?: number;
     } | null>(null);
     const [styleChangedWarning, setStyleChangedWarning] = useState(false);
+
+    // Sync noApiKey state with data.noKeyRequired prop
+    useEffect(() => {
+        setNoApiKey(data.noKeyRequired || false);
+    }, [data.noKeyRequired]);
+
+    // Determine if current URL is custom (not from presets)
+    useEffect(() => {
+        if (data.apiBase && data.apiStyle) {
+            const providers = getCurrentProviders();
+            const isPreset = providers.some(p => p.baseUrl === data.apiBase);
+            setIsCustomUrl(!isPreset);
+        } else {
+            setIsCustomUrl(false);
+        }
+    }, [data.apiBase, data.apiStyle]);
+
+    // Reset noApiKey when switching between preset/custom
+    useEffect(() => {
+        if (!isCustomUrl && noApiKey) {
+            setNoApiKey(false);
+            onChange('noKeyRequired', false);
+        }
+    }, [isCustomUrl]);
 
     const openaiProviders = getProvidersByStyle('openai');
     const anthropicProviders = getProvidersByStyle('anthropic');
@@ -84,9 +113,11 @@ const PresetProviderFormDialog = ({
         if (typeof newValue === 'string') {
             // Custom input - only update apiBase
             onChange('apiBase', newValue);
+            setIsCustomUrl(true);
         } else if (newValue && newValue.baseUrl) {
             // Preset selected - update apiBase
             onChange('apiBase', newValue.baseUrl);
+            setIsCustomUrl(false);
             // If name is empty and token is empty, set default name
             if (!data.name && !data.token) {
                 onChange('name', t('providerDialog.keyName.autoFill', { title: newValue.title }));
@@ -94,17 +125,24 @@ const PresetProviderFormDialog = ({
         } else if (newValue === null) {
             // Clear selection - only clear apiBase, preserve name
             onChange('apiBase', '');
+            setIsCustomUrl(true);
         }
     };
 
     // Handle verification
     const handleVerify = async () => {
+        // Skip verification if no API key mode is enabled
+        if (noApiKey) {
+            setVerificationResult(null);
+            return true;
+        }
+
         if (!data.name || !data.apiBase || !data.token || !data.apiStyle) {
             setVerificationResult({
                 success: false,
                 message: t('providerDialog.verification.missingFields'),
             });
-            return;
+            return false;
         }
 
         setVerifying(true);
@@ -125,12 +163,14 @@ const PresetProviderFormDialog = ({
                     responseTime: result.data.response_time_ms,
                     modelsCount: result.data.models_count,
                 });
+                return true;
             } else {
                 setVerificationResult({
                     success: false,
                     message: result.error?.message || t('providerDialog.verification.failed'),
                     details: result.error?.type,
                 });
+                return false;
             }
         } catch (error) {
             setVerificationResult({
@@ -138,15 +178,47 @@ const PresetProviderFormDialog = ({
                 message: t('providerDialog.verification.networkError'),
                 details: error instanceof Error ? error.message : 'Unknown error',
             });
+            return false;
         } finally {
             setVerifying(false);
         }
     };
 
+    // Wrapped submit handler that includes verification
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        // Skip verification for edit mode with empty token, or if no API key is checked
+        const shouldVerify = mode === 'add' ? !noApiKey : (data.token !== '' && !noApiKey);
+
+        if (shouldVerify) {
+            const verified = await handleVerify();
+            if (!verified) {
+                // Verification failed, don't submit
+                return;
+            }
+        }
+
+        // Call the original onSubmit
+        onSubmit(e);
+    };
+
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-            <DialogTitle>{title || defaultTitle}</DialogTitle>
-            <form onSubmit={onSubmit}>
+            <DialogTitle>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    {title || defaultTitle}
+                    <IconButton
+                        aria-label="close"
+                        onClick={onClose}
+                        sx={{ ml: 2 }}
+                        size="small"
+                    >
+                        <Close />
+                    </IconButton>
+                </Box>
+            </DialogTitle>
+            <form onSubmit={handleSubmit}>
                 <DialogContent sx={{ pb: 1 }}>
                     <Stack spacing={2.5}>
                         {/* API Style Selection - Form Field Style */}
@@ -167,6 +239,7 @@ const PresetProviderFormDialog = ({
                                 if (oldStyle && newStyle && oldStyle !== newStyle) {
                                     onChange('apiBase', '');
                                     onChange('name', '');
+                                    setIsCustomUrl(false);
                                     // Show warning only in edit mode
                                     if (mode === 'edit') {
                                         setStyleChangedWarning(true);
@@ -269,6 +342,7 @@ const PresetProviderFormDialog = ({
                                     onInputChange={(_event, newInputValue) => {
                                         // Allow custom input
                                         onChange('apiBase', newInputValue);
+                                        setIsCustomUrl(true);
                                         setVerificationResult(null);
                                     }}
                                     renderOption={(props, option) => (
@@ -298,7 +372,7 @@ const PresetProviderFormDialog = ({
                                     }}
                                 />
 
-                                {/* API Key Field */}
+                                {/* API Key Field with No Key Required switch */}
                                 <TextField
                                     size="small"
                                     fullWidth
@@ -310,10 +384,30 @@ const PresetProviderFormDialog = ({
                                         // Clear verification result when token changes
                                         setVerificationResult(null);
                                     }}
-                                    required={mode === 'add'}
+                                    required={mode === 'add' && !noApiKey}
                                     placeholder={mode === 'add' ? t('providerDialog.apiKey.placeholderAdd') : t('providerDialog.apiKey.placeholderEdit')}
                                     helperText={mode === 'edit' && t('providerDialog.apiKey.helperEdit')}
+                                    disabled={noApiKey}
                                 />
+                                {isCustomUrl && (
+                                    <FormControlLabel
+                                        control={
+                                            <Switch
+                                                size="small"
+                                                checked={noApiKey}
+                                                onChange={(e) => {
+                                                    setNoApiKey(e.target.checked);
+                                                    onChange('noKeyRequired', e.target.checked);
+                                                    setVerificationResult(null);
+                                                    if (e.target.checked) {
+                                                        onChange('token', '');
+                                                    }
+                                                }}
+                                            />
+                                        }
+                                        label="No Key Required"
+                                    />
+                                )}
 
                                 {/* Verification Result */}
                                 {verificationResult && (
@@ -368,20 +462,16 @@ const PresetProviderFormDialog = ({
                     </Stack>
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Button onClick={onClose}>{t('common.cancel')}</Button>
-                    <Button
-                        variant="outlined"
-                        onClick={handleVerify}
-                        disabled={verifying || !data.apiStyle || !data.apiBase || !data.token}
-                        size="small"
-                        startIcon={verifying ? <CircularProgress size={16} /> : <Refresh />}
-                    >
-                        {verifying ? t('providerDialog.verification.verifying') : t('common.verify')}
+                    <Button type="submit" variant="contained" size="small" disabled={verifying}>
+                        {verifying ? (
+                            <>
+                                <CircularProgress size={16} sx={{ mr: 1 }} />
+                                {mode === 'add' ? 'Adding...' : 'Saving...'}
+                            </>
+                        ) : (
+                            submitText || defaultSubmitText
+                        )}
                     </Button>
-                    <Button type="submit" variant="contained" size="small">
-                        {submitText || defaultSubmitText}
-                    </Button>
-
                 </DialogActions>
             </form>
         </Dialog>

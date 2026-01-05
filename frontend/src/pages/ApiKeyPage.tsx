@@ -46,7 +46,8 @@ const ApiKeyPage = () => {
             apiStyle: undefined,
             token: '',
             enabled: true,
-        });
+            noKeyRequired: false,
+        } as any);
         setDialogOpen(true);
     };
 
@@ -70,14 +71,19 @@ const ApiKeyPage = () => {
             api_base: providerFormData.apiBase,
             api_style: providerFormData.apiStyle,
             token: providerFormData.token,
+            no_key_required: (providerFormData as any).noKeyRequired || false,
             ...(dialogMode === 'edit' && { enabled: providerFormData.enabled }),
         };
 
         const result = dialogMode === 'add'
             ? await api.addProvider(providerData)
             : await api.updateProvider(providerFormData.uuid!, {
-                ...providerData,
-                token: providerFormData.token || undefined,
+                name: providerData.name,
+                api_base: providerData.api_base,
+                api_style: providerData.api_style,
+                token: providerData.token || undefined,
+                no_key_required: providerData.no_key_required,
+                enabled: providerData.enabled,
             });
 
         if (result.success) {
@@ -124,7 +130,8 @@ const ApiKeyPage = () => {
                 apiStyle: provider.api_style || 'openai',
                 token: provider.token || "",
                 enabled: provider.enabled,
-            });
+                noKeyRequired: provider.no_key_required || false,
+            } as any);
             setDialogOpen(true);
         } else {
             showNotification(`Failed to load provider details: ${result.error}`, 'error');

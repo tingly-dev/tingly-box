@@ -40,7 +40,7 @@ type Config struct {
 	DefaultMaxTokens int  `json:"default_max_tokens"` // Default max_tokens for anthropic API requests
 	Verbose          bool `json:"verbose"`            // Verbose mode for detailed logging
 	Debug            bool `json:"debug"`              // Debug mode for Gin debug level logging
-	OpenBrowser      bool `json:"open_browser"`       // Auto-open browser in web UI mode (default: true)
+	OpenBrowser      bool `yaml:"-" json:"-"`         // Auto-open browser in web UI mode (default: true)
 
 	// Error log settings
 	ErrorLogFilterExpression string `json:"error_log_filter_expression"` // Expression for filtering error log entries (default: "StatusCode >= 400 && Path matches '^/api/'")
@@ -150,6 +150,11 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 	if cfg.ErrorLogFilterExpression == "" {
 		cfg.ErrorLogFilterExpression = "StatusCode >= 400 && Path matches '^/api/'"
 		updated = true
+	}
+	// Default OpenBrowser to true (runtime-only setting, not persisted)
+	if !cfg.OpenBrowser {
+		cfg.OpenBrowser = true
+		// Don't mark as updated since we don't want to save this
 	}
 	if updated {
 		if err := cfg.save(); err != nil {
@@ -819,12 +824,12 @@ func (c *Config) GetOpenBrowser() bool {
 	return c.OpenBrowser
 }
 
-// SetOpenBrowser updates the open browser setting
+// SetOpenBrowser updates the open browser setting (runtime only, not persisted)
 func (c *Config) SetOpenBrowser(openBrowser bool) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.OpenBrowser = openBrowser
-	return c.save()
+	return nil
 }
 
 // GetErrorLogFilterExpression returns the error log filter expression

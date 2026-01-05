@@ -26,7 +26,7 @@ export default {
     "slogan": "Ready for AI Agent Dev",
     "version": "version {{version}}",
     "nav": {
-      "home": "Home",
+      "home": "Scenario",
       "settings": "Settings",
       "useOpenAI": "OpenAI SDK",
       "useAnthropic": "Anthropic SDK",
