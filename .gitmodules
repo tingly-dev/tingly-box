@@ -1,0 +1,4 @@
+[submodule "libs/openai-go"]
+	path = libs/openai-go
+	url = git@github.com:tingly-dev/openai-go.git
+	branch = "fork"
