@@ -27,7 +27,7 @@ func newApp() *application.App {
 		log.Fatal(err)
 	}
 	configDir := filepath.Join(home, ".tingly-box")
-	tinglyService, err = services.NewTinglyService(configDir, 12580)
+	tinglyService, err = services.NewTinglyService(configDir, DefaultPort)
 	if err != nil {
 		log.Fatalf("Failed to create UI service: %v", err)
 	}

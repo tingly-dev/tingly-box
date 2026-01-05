@@ -54,7 +54,7 @@ func NewTinglyService(configDir string, port int) (*TinglyService, error) {
 	return res, nil
 }
 
-// Start starts the UI service
+// Start starts the UI service synchronously and returns any error
 func (s *TinglyService) Start(ctx context.Context) error {
 	go func() {
 		err := s.serverManager.Start()
