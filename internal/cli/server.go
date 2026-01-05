@@ -13,6 +13,7 @@ import (
 	"tingly-box/internal/server"
 	"tingly-box/internal/util"
 
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -23,6 +24,39 @@ const (
 	openAIEndpointTpl    = "http://localhost:%d/tingly/openai/v1/chat/completions"
 	anthropicEndpointTpl = "http://localhost:%d/tingly/anthropic/v1/messages"
 )
+
+// BannerConfig holds configuration for banner display
+type BannerConfig struct {
+	Port         int
+	Host         string
+	EnableUI     bool
+	GlobalConfig *config.Config
+	IsDaemon     bool
+}
+
+// printBanner prints the server access banner
+func printBanner(cfg BannerConfig) {
+	if !cfg.EnableUI {
+		// Resolve host for display
+		resolvedHost := util.ResolveHost(cfg.Host)
+		fmt.Printf("API endpoint: http://%s:%d/v1/chat/completions\n", resolvedHost, cfg.Port)
+		return
+	}
+
+	// Show all access URLs when UI is enabled
+	fmt.Println("\nYou can access the service at:")
+	if cfg.GlobalConfig.HasUserToken() {
+		fmt.Printf("  Web UI:       "+webUITokenTpl+"\n", cfg.Port, cfg.GlobalConfig.GetUserToken())
+	} else {
+		fmt.Printf("  Web UI:       "+webUITpl+"\n", cfg.Port)
+	}
+	fmt.Printf("  OpenAI API:   "+openAIEndpointTpl+"\n", cfg.Port)
+	fmt.Printf("  Anthropic API: "+anthropicEndpointTpl+"\n", cfg.Port)
+
+	if cfg.IsDaemon {
+		fmt.Println("\nServer is running in background. Use 'tingly-box stop' to stop.")
+	}
+}
 
 // stopServer stops the running server using the file lock
 func stopServer(fileLock *lock.FileLock) error {
@@ -73,10 +107,60 @@ type startServerOptions struct {
 	EnableDebug       bool
 	EnableAdaptor     bool
 	EnableOpenBrowser bool
+	Daemon            bool
+	LogFile           string
 }
 
 // startServer handles the server starting logic
 func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
+	// Handle daemon mode
+	if opts.Daemon {
+		// Determine log file path
+		logFile := opts.LogFile
+		if logFile == "" {
+			// Default to config directory
+			logFile = appConfig.ConfigDir() + "/tingly-box.log"
+		}
+
+		// If not yet daemonized, fork and exit
+		if !util.IsDaemonProcess() {
+			// Resolve port for display
+			port := opts.Port
+			if port == 0 {
+				port = appConfig.GetServerPort()
+			}
+
+			_ = util.NewLogger(util.DefaultLogRotationConfig(logFile))
+
+			fmt.Printf("Starting daemon process...\n")
+			fmt.Printf("Logging to: %s\n", logFile)
+			fmt.Printf("Server starting on port %d...\n", port)
+
+			// Show banner in parent process before forking
+			printBanner(BannerConfig{
+				Port:         port,
+				Host:         opts.Host,
+				EnableUI:     opts.EnableUI,
+				GlobalConfig: appConfig.GetGlobalConfig(),
+				IsDaemon:     true,
+			})
+
+			// Fork and detach
+			if err := util.Daemonize(); err != nil {
+				return fmt.Errorf("failed to daemonize: %w", err)
+			}
+			// Daemonize() calls os.Exit(0), so we never reach here
+		}
+
+		// In child process - redirect stdout and stderr to log file
+		logWriter := util.NewLogger(util.DefaultLogRotationConfig(logFile))
+
+		// Also set up logrus to write to file
+		logrus.SetOutput(logWriter)
+
+		_ = logWriter
+	}
+
 	var port int = opts.Port
 	if port == 0 {
 		port = appConfig.GetServerPort()
@@ -89,17 +173,15 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 
 	// Check if server is already running using file lock
 	if fileLock.IsLocked() {
-		globalConfig := appConfig.GetGlobalConfig()
 		fmt.Printf("Server is already running on port %d\n", port)
-		fmt.Println("\nYou can access the service at:")
-		if globalConfig.HasUserToken() {
-			fmt.Printf("  Web UI:       "+webUITokenTpl+"\n", port, globalConfig.GetUserToken())
-		} else {
-			fmt.Printf("  Web UI:       "+webUITpl+"\n", port)
-		}
-		fmt.Printf("  OpenAI API:   "+openAIEndpointTpl+"\n", port)
-		fmt.Printf("  Anthropic API: "+anthropicEndpointTpl+"\n", port)
-		fmt.Println("\nTip: Use 'tingly-box stop' to stop the running server first")
+		printBanner(BannerConfig{
+			Port:         port,
+			Host:         opts.Host,
+			EnableUI:     opts.EnableUI,
+			GlobalConfig: appConfig.GetGlobalConfig(),
+			IsDaemon:     false,
+		})
+		fmt.Println("Tip: Use 'tingly-box stop' to stop the running server first")
 		return nil
 	}
 
@@ -130,23 +212,13 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 
 	fmt.Printf("Server starting on port %d...\n", port)
 
-	if !opts.EnableUI {
-		// Resolve host for display
-		resolvedHost := util.ResolveHost(opts.Host)
-		fmt.Printf("API endpoint: http://%s:%d/v1/chat/completions\n", resolvedHost, port)
-	} else {
-		// Show all access URLs when UI is enabled
-		globalConfig := appConfig.GetGlobalConfig()
-		fmt.Println("\nYou can access the service at:")
-		if globalConfig.HasUserToken() {
-			fmt.Printf("  Web UI:       "+webUITokenTpl+"\n", port, globalConfig.GetUserToken())
-		} else {
-			fmt.Printf("  Web UI:       "+webUITpl+"\n", port)
-		}
-		fmt.Printf("  OpenAI API:   "+openAIEndpointTpl+"\n", port)
-		fmt.Printf("  Anthropic API: "+anthropicEndpointTpl+"\n", port)
-		fmt.Println("\nPress Ctrl+C to stop the server")
-	}
+	printBanner(BannerConfig{
+		Port:         port,
+		Host:         opts.Host,
+		EnableUI:     opts.EnableUI,
+		GlobalConfig: appConfig.GetGlobalConfig(),
+		IsDaemon:     false,
+	})
 
 	// Wait for either server error, shutdown signal, or web UI stop request
 	select {
@@ -175,6 +247,8 @@ func StartCommand(appConfig *config.AppConfig) *cobra.Command {
 	var enableOpenBrowser bool
 	var host string
 	var enableStyleTransform bool
+	var daemon bool
+	var logFile string
 
 	cmd := &cobra.Command{
 		Use:   "start",
@@ -207,6 +281,8 @@ The server will handle request routing to configured AI providers.`,
 				EnableDebug:       resolvedDebug,
 				EnableAdaptor:     enableStyleTransform,
 				EnableOpenBrowser: resolvedOpenBrowser,
+				Daemon:            daemon,
+				LogFile:           logFile,
 			})
 		},
 	}
@@ -217,6 +293,8 @@ The server will handle request routing to configured AI providers.`,
 	cmd.Flags().BoolVar(&enableDebug, "debug", false, "Enable debug mode including gin, low level logging and so on (default: false)")
 	cmd.Flags().BoolVar(&enableOpenBrowser, "browser", true, "Auto-open browser when server starts (default: true)")
 	cmd.Flags().BoolVar(&enableStyleTransform, "adapter", true, "Enable API style transformation (default: true)")
+	cmd.Flags().BoolVar(&daemon, "daemon", false, "Run as daemon in background (default: false)")
+	cmd.Flags().StringVar(&logFile, "log-file", "", "Log file path for daemon mode (default: ~/.tingly-box/tingly-box.log)")
 	return cmd
 }
 
