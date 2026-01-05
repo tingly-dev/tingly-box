@@ -32,6 +32,7 @@ const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
     const [baseUrl, setBaseUrl] = React.useState<string>('');
     const [rules, setRules] = React.useState<any>(null);
     const [loadingRule, setLoadingRule] = React.useState(true);
+    const [newlyCreatedRuleUuids, setNewlyCreatedRuleUuids] = React.useState<Set<string>>(new Set());
     const navigate = useNavigate();
 
     const copyToClipboard = async (text: string, label: string) => {
@@ -53,7 +54,9 @@ const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
                 services: []
             };
             const result = await api.createRule('', newRuleData);
-            if (result.success) {
+            if (result.success && result.data?.uuid) {
+                // Add the new rule UUID to the set so it auto-expands
+                setNewlyCreatedRuleUuids(prev => new Set(prev).add(result.data.uuid));
                 showNotification('Routing rule created successfully!', 'success');
                 loadData(); // Reload the rules list
             } else {
@@ -173,6 +176,7 @@ const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
                 showNotification={showNotification}
                 providers={providers}
                 onRulesChange={(rules) => setRules(rules)}
+                newlyCreatedRuleUuids={newlyCreatedRuleUuids}
                 // allowDeleteRule={true}
                 // onRuleDelete={handleRuleDelete}
             />

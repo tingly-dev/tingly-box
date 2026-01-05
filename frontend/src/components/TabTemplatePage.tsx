@@ -21,6 +21,7 @@ export interface TabTemplatePageProps {
     allowDeleteRule?: boolean;
     onRuleDelete?: (ruleUuid: string) => void;
     allowToggleRule?: boolean;
+    newlyCreatedRuleUuids?: Set<string>;
 }
 
 const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
@@ -36,6 +37,7 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
     allowDeleteRule = false,
     onRuleDelete,
     allowToggleRule = true,
+    newlyCreatedRuleUuids,
 }) => {
     const [providerModelsByUuid, setProviderModelsByUuid] = useState<ProviderModelsDataByUuid>({});
     const [refreshingProviders, setRefreshingProviders] = useState<string[]>([]);
@@ -229,6 +231,11 @@ const TabTemplatePage: React.FC<TabTemplatePageProps> = ({
                         onProviderModelsChange={handleProviderModelsChange}
                         onRefreshProvider={handleRefreshModels}
                         collapsible={collapsible}
+                        initiallyExpanded={
+                            newlyCreatedRuleUuids?.has(rule.uuid) ||
+                            !collapsible ||
+                            rules.length === 1
+                        }
                         onModelSelectOpen={openModelSelectDialog}
                         allowDeleteRule={allowDeleteRule}
                         onRuleDelete={onRuleDelete}
