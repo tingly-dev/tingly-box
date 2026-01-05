@@ -166,7 +166,7 @@ jobs:
           CGO_ENABLED=1 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build \
             -ldflags="${LDFLAGS}" \
             -o ./dist/tingly-box-${{ matrix.suffix }}${{ matrix.exe }} \
-            ./cmd/tingly-box
+            ./internal/cmd/tingly-box
 
           # Make binary executable for non-Windows
           [ "${{ matrix.goos }}" != "windows" ] && chmod +x ./dist/tingly-box-${{ matrix.suffix }}${{ matrix.exe }} || true
