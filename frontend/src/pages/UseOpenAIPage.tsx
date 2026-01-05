@@ -1,7 +1,7 @@
-import React from 'react';
-import {ContentCopy as CopyIcon, Edit as EditIcon} from '@mui/icons-material';
+import React, { useCallback } from 'react';
+import {Add as AddIcon, ContentCopy as CopyIcon, Edit as EditIcon} from '@mui/icons-material';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import {Box, IconButton, Tooltip, Typography} from '@mui/material';
+import {Box, Button, IconButton, Tooltip, Typography} from '@mui/material';
 import {useNavigate} from 'react-router-dom';
 import {BaseUrlRow} from '../components/BaseUrlRow';
 import TabTemplatePage from '../components/TabTemplatePage';
@@ -32,6 +32,7 @@ const UseOpenAIPage: React.FC<UseOpenAIPageProps> = ({
     const [baseUrl, setBaseUrl] = React.useState<string>('');
     const [rules, setRules] = React.useState<any>(null);
     const [loadingRule, setLoadingRule] = React.useState(true);
+    const [newlyCreatedRuleUuids, setNewlyCreatedRuleUuids] = React.useState<Set<string>>(new Set());
     const navigate = useNavigate();
 
     const copyToClipboard = async (text: string, label: string) => {
@@ -42,6 +43,34 @@ const UseOpenAIPage: React.FC<UseOpenAIPageProps> = ({
             showNotification('Failed to copy to clipboard', 'error');
         }
     };
+
+    const handleCreateRule = async () => {
+        try {
+            const newRuleData = {
+                scenario: scenario,
+                request_model: `model-${crypto.randomUUID().slice(0, 8)}`,
+                response_model: '',
+                active: true,
+                services: []
+            };
+            const result = await api.createRule('', newRuleData);
+            if (result.success && result.data?.uuid) {
+                // Add the new rule UUID to the set so it auto-expands
+                setNewlyCreatedRuleUuids(prev => new Set(prev).add(result.data.uuid));
+                showNotification('Routing rule created successfully!', 'success');
+                loadData(); // Reload the rules list
+            } else {
+                showNotification(`Failed to create rule: ${result.error || 'Unknown error'}`, 'error');
+            }
+        } catch (error) {
+            console.error('Error creating rule:', error);
+            showNotification('Failed to create routing rule', 'error');
+        }
+    };
+
+    const handleRuleDelete = useCallback((deletedRuleUuid: string) => {
+        setRules((prevRules: any[]) => (prevRules || []).filter(r => r.uuid !== deletedRuleUuid));
+    }, []);
 
     const loadData = async () => {
         const url = await getBaseUrl();
@@ -116,15 +145,27 @@ const UseOpenAIPage: React.FC<UseOpenAIPageProps> = ({
     return (
         <CardGrid>
             <UnifiedCard
-                title="Use OpenAI SDK"
+                title="OpenAI SDK Configuration"
                 size="full"
+                rightAction={
+                    <Tooltip title="Create new routing rule">
+                        <Button
+                            variant="contained"
+                            startIcon={<AddIcon />}
+                            onClick={handleCreateRule}
+                            size="small"
+                        >
+                            New Rule
+                        </Button>
+                    </Tooltip>
+                }
             >
                 {header}
             </UnifiedCard>
             <TabTemplatePage
                 title={
                     <Tooltip title="Use as model name in your API requests to forward">
-                        Use Model
+                        Models and Forwarding Rules
                     </Tooltip>
                 }
                 rules={rules}
@@ -135,6 +176,9 @@ const UseOpenAIPage: React.FC<UseOpenAIPageProps> = ({
                 showNotification={showNotification}
                 providers={providers}
                 onRulesChange={(rules) => setRules(rules)}
+                newlyCreatedRuleUuids={newlyCreatedRuleUuids}
+                // allowDeleteRule={true}
+                // onRuleDelete={handleRuleDelete}
             />
         </CardGrid>
     );

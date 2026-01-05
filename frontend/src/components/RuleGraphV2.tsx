@@ -39,6 +39,7 @@ interface RuleGraphProps {
     saving: boolean;
     expanded: boolean;
     collapsible?: boolean;
+    allowToggleRule?: boolean;
     recordUuid: string;
     onUpdateRecord: (field: keyof ConfigRecord, value: any) => void;
     onDeleteProvider: (recordId: string, providerId: string) => void;
@@ -449,6 +450,7 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
     saving,
     expanded,
     collapsible = false,
+    allowToggleRule = true,
     recordUuid,
     onUpdateRecord,
     onDeleteProvider,
@@ -508,7 +510,7 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                     <Switch
                         checked={record.active}
                         onChange={(e) => onUpdateRecord('active', e.target.checked)}
-                        disabled={saving}
+                        disabled={saving || !allowToggleRule}
                         size="small"
                         color="success"
                         onClick={(e) => e.stopPropagation()}

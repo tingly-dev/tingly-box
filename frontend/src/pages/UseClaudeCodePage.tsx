@@ -237,6 +237,7 @@ node --eval '
                 showNotification={showNotification}
                 providers={providers}
                 onRulesChange={(rules) => setRule(rules[0])}
+                allowToggleRule={false}
             />
         </CardGrid>
     );

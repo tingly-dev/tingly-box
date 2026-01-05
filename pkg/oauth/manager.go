@@ -379,7 +379,7 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("token exchange failed: status %d, body: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("token exchange failed: status %d, body: %d", resp.StatusCode, len(string(body)))
 	}
 
 	// Parse response directly into Token
@@ -504,7 +504,7 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("refresh token failed: status %d, body: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("refresh token failed: status %d, body: %d", resp.StatusCode, len(string(body)))
 	}
 
 	// Parse response directly into Token
@@ -638,7 +638,7 @@ func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, pro
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("device code request failed: status %d, body: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("device code request failed: status %d, body: %d", resp.StatusCode, len(string(body)))
 	}
 
 	// Parse device code response
@@ -796,7 +796,7 @@ func (m *Manager) pollTokenRequest(ctx context.Context, config *ProviderConfig, 
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("token poll failed: status %d, body: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("token poll failed: status %d, body: %d", resp.StatusCode, len(string(body)))
 	}
 
 	// Parse token response directly into Token
