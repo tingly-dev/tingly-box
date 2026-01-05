@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/google/uuid"
 	"github.com/openai/openai-go/v3"
 )
 
@@ -27,34 +28,24 @@ func ConvertOpenAIToAnthropicResponse(openaiResp *openai.ChatCompletion, model s
 	}
 
 	// Add content from OpenAI response
-	var contentBlocks []map[string]interface{}
+	var contentBlocks []anthropic.ContentBlockParamUnion
 	for _, choice := range openaiResp.Choices {
 		// Add text content if present
 		if choice.Message.Content != "" {
-			contentBlocks = append(contentBlocks, map[string]interface{}{
-				"type": "text",
-				"text": choice.Message.Content,
-			})
+			contentBlocks = append(contentBlocks, anthropic.NewTextBlock(choice.Message.Content))
+		}
+
+		if extra := choice.Message.JSON.ExtraFields; extra != nil {
+			if thinking, ok := extra["reasoning_content"]; ok {
+				// a fake signature
+				contentBlocks = append(contentBlocks, anthropic.NewThinkingBlock("thinking-"+uuid.New().String()[0:6], fmt.Sprintf("%s", thinking)))
+			}
 		}
 
 		// Convert tool_calls to tool_use blocks
 		if len(choice.Message.ToolCalls) > 0 {
 			for _, toolCall := range choice.Message.ToolCalls {
-				toolUseBlock := map[string]interface{}{
-					"type": "tool_use",
-					"id":   toolCall.ID,
-					"name": toolCall.Function.Name,
-				}
-
-				// Parse function arguments
-				if toolCall.Function.Arguments != "" {
-					var args map[string]interface{}
-					if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err == nil {
-						toolUseBlock["input"] = args
-					}
-				}
-
-				contentBlocks = append(contentBlocks, toolUseBlock)
+				contentBlocks = append(contentBlocks, anthropic.NewToolUseBlock(toolCall.ID, toolCall.Function.Arguments, toolCall.Function.Name))
 			}
 
 			// If there were tool calls, set stop_reason to tool_use
