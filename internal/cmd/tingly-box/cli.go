@@ -17,7 +17,21 @@ var rootCmd = &cobra.Command{
 	Long: `Tingly Box is a provider-agnostic desktop AI model proxy and key manager.
 It provides a unified OpenAI-compatible endpoint that routes requests to multiple
 AI providers, with flexible configuration and secure credential management.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		// Default to start command when no subcommand is provided
+		startCmd := cli.StartCommand(appConfig)
+		startCmd.SetArgs([]string{})
+		if err := startCmd.Execute(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	},
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		// Skip PersistentPreRun for root command's default Run
+		// Root command has no parent, so check if Parent() is nil
+		if cmd.Parent() == nil {
+			return
+		}
 		verbose, _ := cmd.Flags().GetBool("verbose")
 		// Apply priority: CLI flag > Config > Default
 		if !cmd.Flags().Changed("verbose") && appConfig != nil {
