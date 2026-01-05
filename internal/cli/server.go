@@ -16,6 +16,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	// URL templates for displaying to users
+	webUITpl             = "http://localhost:%d/home"
+	webUITokenTpl        = "http://localhost:%d/home?token=%s"
+	openAIEndpointTpl    = "http://localhost:%d/tingly/openai/v1/chat/completions"
+	anthropicEndpointTpl = "http://localhost:%d/tingly/anthropic/v1/messages"
+)
+
 // stopServer stops the running server using the file lock
 func stopServer(fileLock *lock.FileLock) error {
 	return stopServerWithFileLock(fileLock)
@@ -81,7 +89,17 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 
 	// Check if server is already running using file lock
 	if fileLock.IsLocked() {
+		globalConfig := appConfig.GetGlobalConfig()
 		fmt.Printf("Server is already running on port %d\n", port)
+		fmt.Println("\nYou can access the service at:")
+		if globalConfig.HasUserToken() {
+			fmt.Printf("  Web UI:       "+webUITokenTpl+"\n", port, globalConfig.GetUserToken())
+		} else {
+			fmt.Printf("  Web UI:       "+webUITpl+"\n", port)
+		}
+		fmt.Printf("  OpenAI API:   "+openAIEndpointTpl+"\n", port)
+		fmt.Printf("  Anthropic API: "+anthropicEndpointTpl+"\n", port)
+		fmt.Println("\nTip: Use 'tingly-box stop' to stop the running server first")
 		return nil
 	}
 
@@ -116,6 +134,18 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 		// Resolve host for display
 		resolvedHost := util.ResolveHost(opts.Host)
 		fmt.Printf("API endpoint: http://%s:%d/v1/chat/completions\n", resolvedHost, port)
+	} else {
+		// Show all access URLs when UI is enabled
+		globalConfig := appConfig.GetGlobalConfig()
+		fmt.Println("\nYou can access the service at:")
+		if globalConfig.HasUserToken() {
+			fmt.Printf("  Web UI:       "+webUITokenTpl+"\n", port, globalConfig.GetUserToken())
+		} else {
+			fmt.Printf("  Web UI:       "+webUITpl+"\n", port)
+		}
+		fmt.Printf("  OpenAI API:   "+openAIEndpointTpl+"\n", port)
+		fmt.Printf("  Anthropic API: "+anthropicEndpointTpl+"\n", port)
+		fmt.Println("\nPress Ctrl+C to stop the server")
 	}
 
 	// Wait for either server error, shutdown signal, or web UI stop request
@@ -237,9 +267,9 @@ show configuration information including number of providers and server port.`,
 				fmt.Printf("Running\n")
 				port := appConfig.GetServerPort()
 				fmt.Printf("Port: %d\n", port)
-				fmt.Printf("OpenAI Style API Endpoint: http://localhost:%d/openai/v1/chat/completions\n", port)
-				fmt.Printf("Anthropic Style API Endpoint: http://localhost:%d/anthropic/v1/messages\n", port)
-				fmt.Printf("Web UI: http://localhost:%d/dashboard\n", port)
+				fmt.Printf("OpenAI Style API Endpoint: "+openAIEndpointTpl+"\n", port)
+				fmt.Printf("Anthropic Style API Endpoint: "+anthropicEndpointTpl+"\n", port)
+				fmt.Printf("Web UI: "+webUITpl+"\n", port)
 				if globalConfig.HasUserToken() {
 					fmt.Printf("UI Management Key: %s\n", globalConfig.GetUserToken())
 				}
