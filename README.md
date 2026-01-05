@@ -207,4 +207,4 @@ We welcome contributions! Follow these steps, inspired by popular open-source re
 
 ------
 
-Apache-2.0 License · © Tingly Dev
+Mozilla Public License Version 2.0 · © Tingly Dev

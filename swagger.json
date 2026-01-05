@@ -8,8 +8,8 @@
       "email": "ops@tingly.dev"
     },
     "license": {
-      "name": "Apache License\nVersion 2.0",
-      "url": "https://www.apache.org/licenses/LICENSE-2.0"
+      "name": "Mozilla Public License\nVersion 2.0",
+      "url": "https://www.mozilla.org/en-US/MPL/2.0/"
     },
     "version": "1.0.0"
   },
