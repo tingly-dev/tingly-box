@@ -165,7 +165,7 @@ const UseAnthropicPage: React.FC<UseAnthropicPageProps> = ({
             <TabTemplatePage
                 title={
                     <Tooltip title="Use as model name in your API requests to forward">
-                        Routing Rules
+                        Models and Forwarding Rules
                     </Tooltip>
                 }
                 rules={rules}

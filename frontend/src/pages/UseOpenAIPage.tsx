@@ -165,7 +165,7 @@ const UseOpenAIPage: React.FC<UseOpenAIPageProps> = ({
             <TabTemplatePage
                 title={
                     <Tooltip title="Use as model name in your API requests to forward">
-                        Routing Rules
+                        Models and Forwarding Rules
                     </Tooltip>
                 }
                 rules={rules}
