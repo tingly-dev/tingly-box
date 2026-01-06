@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "child_process";
-import { chmodSync, createWriteStream, existsSync, fsyncSync, mkdirSync } from "fs";
-import { tmpdir } from "os";
+import { chmodSync, createWriteStream, existsSync, fsyncSync, mkdirSync, statSync } from "fs";
 import { join } from "path";
 import { Readable } from "stream";
 import { ProxyAgent } from "undici";
+import unzipper from "unzipper";
 
 // Configuration for binary downloads
 const BASE_URL = "https://github.com/tingly-dev/tingly-box/releases/download/";
@@ -199,62 +199,94 @@ async function downloadAndExtractZip(url, extractDir, binaryName) {
 		process.exit(1);
 	}
 
-	// Create a temporary file for the ZIP
-	const zipPath = join(tmpdir(), `tingly-box-${Date.now()}.zip`);
-	const fileStream = createWriteStream(zipPath, { flags: "w" });
-
 	const contentLength = res.headers.get("content-length");
 	const totalSize = contentLength ? parseInt(contentLength, 10) : null;
 	let downloadedSize = 0;
 
-	await new Promise((resolve, reject) => {
-		try {
-			const nodeStream = Readable.fromWeb(res.body);
+	// Convert the fetch response body to a Node.js readable stream
+	const nodeStream = Readable.fromWeb(res.body);
 
-			nodeStream.on("data", (chunk) => {
-				downloadedSize += chunk.length;
-				if (totalSize) {
-					const progress = ((downloadedSize / totalSize) * 100).toFixed(1);
-					process.stdout.write(`\r⏱️ Downloading ZIP: ${progress}% (${formatBytes(downloadedSize)}/${formatBytes(totalSize)})`);
-				} else {
-					process.stdout.write(`\r⏱️ Downloaded: ${formatBytes(downloadedSize)}`);
-				}
-			});
-
-			nodeStream.pipe(fileStream);
-			fileStream.on("finish", () => {
-				process.stdout.write("\n");
-				resolve();
-			});
-			fileStream.on("error", reject);
-			nodeStream.on("error", reject);
-		} catch (error) {
-			reject(error);
-		}
-	});
-
-	// Extract the ZIP file using system unzip command
-	try {
-		console.log(`📦 Extracting ZIP...`);
-		execFileSync("unzip", ["-q", "-o", zipPath, "-d", extractDir]);
-		console.log(`✅ Extracted ZIP to ${extractDir}`);
-	} catch (error) {
-		console.error(`❌ Failed to extract ZIP: ${error.message}`);
-		// Fallback: try using Python to extract
-		try {
-			execFileSync("python3", ["-m", "zipfile", "-e", zipPath, extractDir]);
-			console.log(`✅ Extracted ZIP using Python`);
-		} catch (pythonError) {
-			console.error(`❌ Failed to extract ZIP with Python too: ${pythonError.message}`);
-			process.exit(1);
+	// Collect the entire ZIP into a buffer
+	const chunks = [];
+	for await (const chunk of nodeStream) {
+		chunks.push(chunk);
+		downloadedSize += chunk.length;
+		if (totalSize) {
+			const progress = ((downloadedSize / totalSize) * 100).toFixed(1);
+			process.stdout.write(`\r⏱️ Downloading: ${progress}% (${formatBytes(downloadedSize)}/${formatBytes(totalSize)})`);
+		} else {
+			process.stdout.write(`\r⏱️ Downloaded: ${formatBytes(downloadedSize)}`);
 		}
 	}
+	const zipBuffer = Buffer.concat(chunks);
 
-	// Clean up the ZIP file
+	// Extract ZIP from buffer using unzipper
 	try {
-		execFileSync("rm", ["-f", zipPath]);
+		console.log(`\n📦 Extracting ZIP to ${extractDir}...`);
+
+		const directory = await unzipper.Open.buffer(zipBuffer);
+
+		// Debug: List all entries in the ZIP
+		console.log(`📋 ZIP contents (${directory.files.length} entries):`);
+		for (const file of directory.files) {
+			console.log(`  ${file.type}: ${file.path} (permissions: ${file.unixPermissions?.toString(8)})`);
+		}
+
+		// Extract all files to the target directory
+		for (const file of directory.files) {
+			// Skip directory entries and __MACOSX metadata
+			if (file.type === 'Directory' || file.path.startsWith('__MACOSX/') || file.path.includes('.DS_Store')) {
+				console.log(`⏭️  Skipping: ${file.path} (type: ${file.type})`);
+				continue;
+			}
+
+			const filePath = join(extractDir, file.path);
+			// Get parent directory of the file in the ZIP
+			const pathParts = file.path.split('/');
+			pathParts.pop(); // Remove the filename
+			const fileDir = pathParts.length > 0 ? join(extractDir, ...pathParts) : extractDir;
+
+			console.log(`📄 Extracting: ${file.path} -> ${filePath}`);
+
+			// Ensure parent directory exists
+			if (fileDir !== extractDir && !existsSync(fileDir)) {
+				mkdirSync(fileDir, { recursive: true });
+			}
+
+			// Remove existing directory if it exists (this was created incorrectly before)
+			if (existsSync(filePath) && statSync(filePath).isDirectory()) {
+				console.log(`🧹 Removing incorrect directory: ${filePath}`);
+				// Can't easily remove a directory in Node without fs.rm (Node 14.14+)
+				// Skip and let user clean up manually
+				console.log(`⚠️  Please manually remove: rm -rf "${filePath}"`);
+				continue;
+			}
+
+			// Extract file
+			const content = await file.buffer();
+			const fileStream = createWriteStream(filePath);
+			await new Promise((resolve, reject) => {
+				fileStream.write(content, (err) => {
+					if (err) reject(err);
+					else {
+						fileStream.end();
+						resolve();
+					}
+				});
+			});
+			// Set file permissions after writing
+			if (process.platform !== "win32") {
+				// Use ZIP permissions if available, otherwise default to 0o755 (executable)
+				const permissions = file.unixPermissions && file.unixPermissions > 0 ? file.unixPermissions : 0o755;
+				chmodSync(filePath, permissions);
+			}
+		}
+
+		console.log(`✅ Extracted ZIP to ${extractDir}`);
 	} catch (error) {
-		// Ignore cleanup errors
+		console.error(`\n❌ Failed to extract ZIP: ${error.message}`);
+		console.error(`Stack: ${error.stack}`);
+		process.exit(1);
 	}
 }
 
