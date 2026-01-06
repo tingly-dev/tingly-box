@@ -229,8 +229,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.oauthRefresher = tokenRefresher
 
 	// Initialize template manager with GitHub URL for template sync
-	const templateGitHubURL = "https://raw.githubusercontent.com/tingly-dev/tingly-box/main/internal/config/provider_templates.json"
-	templateManager := template.NewTemplateManager(templateGitHubURL)
+	templateManager := template.NewDefaultTemplateManager()
 	if err := templateManager.Initialize(); err != nil {
 		log.Printf("Failed to fetch from GitHub, using embedded provider templates: %v", err)
 	} else {

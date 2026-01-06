@@ -212,7 +212,7 @@ func TestTemplateManagerGetModelsForProvider(t *testing.T) {
 		},
 		{
 			name:           "Provider with predefined models from GitHub - minimax",
-			githubURL:      "https://raw.githubusercontent.com/tingly-dev/tingly-box/main/internal/config/provider_templates.json",
+			githubURL:      "https://raw.githubusercontent.com/tingly-dev/tingly-box/main/internal/config/provider_templates/provider_templates.json",
 			providerName:   "minimax",
 			expectError:    false,
 			expectModels:   true,
