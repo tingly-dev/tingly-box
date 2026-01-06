@@ -1,4 +1,4 @@
-import { Cancel, CheckCircle, ContentCopy, Delete, Edit, Visibility } from '@mui/icons-material';
+import { Cancel, CheckCircle, ContentCopy, Delete, Edit, ListAlt, Visibility } from '@mui/icons-material';
 import {
     Box,
     Button,
@@ -21,6 +21,7 @@ import { useState } from 'react';
 import api from '../services/api';
 import type { Provider } from '../types/provider';
 import { ApiStyleBadge } from '@/components/ApiStyleBadge.tsx';
+import ModelListDialog from '@/components/ModelListDialog';
 
 interface ApiKeyTableProps {
     providers: Provider[];
@@ -42,6 +43,11 @@ interface DeleteModalState {
     providerName: string;
 }
 
+interface ModelListDialogState {
+    open: boolean;
+    provider: Provider | null;
+}
+
 const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete }: ApiKeyTableProps) => {
     const [tokenModal, setTokenModal] = useState<TokenModalState>({
         open: false,
@@ -53,6 +59,10 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete }: ApiKeyTableProps
         open: false,
         providerUuid: '',
         providerName: '',
+    });
+    const [modelListDialog, setModelListDialog] = useState<ModelListDialogState>({
+        open: false,
+        provider: null,
     });
 
     const fetchFullToken = async (providerUuid: string): Promise<string> => {
@@ -130,6 +140,17 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete }: ApiKeyTableProps
         return `${prefix}${'*'.repeat(4)}${suffix}`;
     };
 
+    const handleModelListClick = (providerUuid: string) => {
+        const provider = providers.find((p) => p.uuid === providerUuid);
+        if (provider) {
+            setModelListDialog({ open: true, provider });
+        }
+    };
+
+    const handleCloseModelListDialog = () => {
+        setModelListDialog({ open: false, provider: null });
+    };
+
     return (
         <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
             <Table>
@@ -140,6 +161,7 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete }: ApiKeyTableProps
                         <TableCell sx={{ fontWeight: 600, minWidth: 200 }}>API Base</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>API Style</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Actions</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Model List</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Status</TableCell>
                     </TableRow>
                 </TableHead>
@@ -205,6 +227,22 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete }: ApiKeyTableProps
                                         </Tooltip>
                                     )}
                                 </Stack>
+                            </TableCell>
+                            <TableCell>
+                                <Button
+                                    variant="outlined"
+                                    size="small"
+                                    startIcon={<ListAlt />}
+                                    onClick={() => handleModelListClick(provider.uuid)}
+                                    disabled={!provider.enabled}
+                                    sx={{
+                                        textTransform: 'none',
+                                        borderRadius: 1.5,
+                                        fontSize: '0.8rem',
+                                    }}
+                                >
+                                    Models
+                                </Button>
                             </TableCell>
                             <TableCell>
                                 <Stack direction="row" alignItems="center" spacing={1}>
@@ -326,6 +364,13 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete }: ApiKeyTableProps
                     </Stack>
                 </Box>
             </Modal>
+
+            {/* Model List Dialog */}
+            <ModelListDialog
+                open={modelListDialog.open}
+                onClose={handleCloseModelListDialog}
+                provider={modelListDialog.provider}
+            />
         </TableContainer>
     );
 };

@@ -13,6 +13,7 @@ import System from './pages/System';
 import UseOpenAIPage from './pages/UseOpenAIPage';
 import UseAnthropicPage from './pages/UseAnthropicPage';
 import UseClaudeCodePage from './pages/UseClaudeCodePage';
+import ModelTestPage from './pages/ModelTestPage';
 import theme from './theme';
 
 function App() {
@@ -39,6 +40,7 @@ function App() {
                                             <Route path="/api-keys" element={<ApiKeyPage />} />
                                             <Route path="/oauth" element={<OAuthPage />} />
                                             <Route path="/system" element={<System />} />
+                                            <Route path="/model-test/:providerUuid" element={<ModelTestPage />} />
                                         </Routes>
                                     </Layout>
                                 </ProtectedRoute>

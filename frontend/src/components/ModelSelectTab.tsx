@@ -2,6 +2,7 @@ import { CheckCircle } from '@mui/icons-material';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
 import {
@@ -50,6 +51,10 @@ interface ProviderSelectTabProps {
     onRefresh?: (provider: Provider) => void;
     onCustomModelSave?: (provider: Provider, customModel: string) => void;
     refreshingProviders?: string[]; // These are UUIDs
+    // Single provider mode props
+    singleProvider?: Provider | null; // If provided, only show this provider
+    onTest?: (model: string) => void; // Callback for Test button
+    testing?: boolean; // Whether a test is in progress
 }
 
 export default function ModelSelectTab({
@@ -63,11 +68,18 @@ export default function ModelSelectTab({
     onRefresh,
     onCustomModelSave,
     refreshingProviders = [], // These are UUIDs
+    singleProvider,
+    onTest,
+    testing = false,
 }: ProviderSelectTabProps) {
     const [internalCurrentTab, setInternalCurrentTab] = useState(0);
     const [isInitialized, setIsInitialized] = useState(false);
     const { customModels, saveCustomModel, removeCustomModel } = useCustomModels();
     const gridLayout = useGridLayout();
+
+    // In single provider mode, use only that provider
+    const displayProviders = singleProvider ? [singleProvider] : providers;
+    const isSingleProviderMode = singleProvider !== null && singleProvider !== undefined;
 
     // State for model probing
     const [probingModels, setProbingModels] = useState<Set<string>>(new Set());
@@ -89,8 +101,8 @@ export default function ModelSelectTab({
 
     // Memoize enabled providers to avoid repeated filtering
     const enabledProviders = React.useMemo(
-        () => (providers || []).filter(provider => provider.enabled),
-        [providers]
+        () => displayProviders.filter(provider => provider.enabled),
+        [displayProviders]
     );
 
     // Pagination and search
@@ -280,7 +292,7 @@ export default function ModelSelectTab({
             <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
 
                 <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-                    Credentials ({providers.length})
+                    Credentials ({displayProviders.length})
                 </Typography>
                 <Tabs
                     value={currentTab}
@@ -401,6 +413,7 @@ export default function ModelSelectTab({
                                             onClick={() => handleCustomModelEdit(provider)}
                                             sx={{
                                                 height: 40,
+                                                minWidth: 110,
                                                 borderColor: 'primary.main',
                                                 color: 'primary.main',
                                                 '&:hover': {
@@ -418,6 +431,7 @@ export default function ModelSelectTab({
                                             disabled={!onRefresh || isRefreshing}
                                             sx={{
                                                 height: 40,
+                                                minWidth: 110,
                                                 borderColor: isRefreshing ? 'grey.300' : 'primary.main',
                                                 color: isRefreshing ? 'grey.500' : 'primary.main',
                                                 '&:hover': !isRefreshing ? {
@@ -432,6 +446,30 @@ export default function ModelSelectTab({
                                         >
                                             {isRefreshing ? 'Fetching...' : 'Refresh'}
                                         </Button>
+                                        {onTest && (
+                                            <Button
+                                                variant="outlined"
+                                                startIcon={testing ? <CircularProgress size={16} /> : <PlayArrowIcon />}
+                                                onClick={() => selectedModel && onTest(selectedModel)}
+                                                disabled={!selectedModel || testing}
+                                                sx={{
+                                                    height: 40,
+                                                    minWidth: 110,
+                                                    borderColor: !selectedModel || testing ? 'grey.300' : 'primary.main',
+                                                    color: !selectedModel || testing ? 'grey.500' : 'primary.main',
+                                                    '&:hover': (!selectedModel || testing) ? {} : {
+                                                        backgroundColor: 'primary.50',
+                                                        borderColor: 'primary.dark',
+                                                    },
+                                                    '&:disabled': {
+                                                        borderColor: 'grey.300',
+                                                        color: 'grey.500',
+                                                    }
+                                                }}
+                                            >
+                                                {testing ? 'Testing...' : 'Test'}
+                                            </Button>
+                                        )}
                                     </Stack>
                                 </Stack>
 

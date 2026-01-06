@@ -1,6 +1,7 @@
 package server
 
 import (
+	"strings"
 	"time"
 
 	"github.com/openai/openai-go/v3"
@@ -364,9 +365,10 @@ type ProbeUsage struct {
 
 // ProbeResponseData represents the response data structure
 type ProbeResponseData struct {
-	Request  ProbeRequestDetail  `json:"request"`
-	Response ProbeResponseDetail `json:"response"`
-	Usage    ProbeUsage          `json:"usage"`
+	Request     ProbeRequestDetail  `json:"request"`
+	Response    ProbeResponseDetail `json:"response"`
+	Usage       ProbeUsage          `json:"usage"`
+	CurlCommand string              `json:"curl_command,omitempty"`
 }
 
 // ProbeResponseDetail represents the API response
@@ -406,6 +408,45 @@ func NewMockRequest(provider, model string) ProbeRequestDetail {
 		Provider:  provider,
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
+}
+
+// GenerateCurlCommand generates a curl command for testing the provider
+func GenerateCurlCommand(apiBase, apiStyle, token, model string) string {
+	baseURL := strings.TrimSuffix(apiBase, "/")
+	var endpoint string
+	var requestBody string
+
+	if apiStyle == "anthropic" {
+		endpoint = "/v1/messages"
+		requestBody = `{
+  "model": "` + model + `",
+  "max_tokens": 1024,
+  "messages": [
+    {"role": "user", "content": "Hello, world!"}
+  ]
+}`
+	} else {
+		// OpenAI style (default for ollama and others)
+		// For OpenAI style, we need to ensure the URL is correct
+		// The provider's APIBase should already include the correct path
+		// Don't add /v1 if the base URL already has it (like ollama with /v1/v1)
+		endpoint = "/chat/completions"
+		requestBody = `{
+  "model": "` + model + `",
+  "messages": [
+    {"role": "user", "content": "Hello, world!"}
+  ]
+}`
+	}
+
+	url := baseURL + endpoint
+
+	curl := "curl -X POST \"" + url + "\" \\\n" +
+		"  -H \"Content-Type: application/json\" \\\n" +
+		"  -H \"Authorization: Bearer " + token + "\" \\\n" +
+		"  -d '" + requestBody + "'"
+
+	return curl
 }
 
 // ProbeResponse represents the overall probe response
