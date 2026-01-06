@@ -784,7 +784,7 @@ func (s *Server) OAuthCallback(c *gin.Context) {
 		apiStyle = typ.APIStyleAnthropic
 	case oauth2.ProviderGoogle:
 		apiBase = "https://generativelanguage.googleapis.com"
-		apiStyle = typ.APIStyleOpenAI
+		apiStyle = typ.APIStyleGoogle
 	case oauth2.ProviderOpenAI:
 		apiBase = "https://api.openai.com/v1"
 		apiStyle = typ.APIStyleOpenAI

@@ -12,6 +12,7 @@ type APIStyle string
 const (
 	APIStyleOpenAI    APIStyle = "openai"
 	APIStyleAnthropic APIStyle = "anthropic"
+	APIStyleGoogle    APIStyle = "google"
 )
 
 // RuleScenario represents the scenario for a routing rule
