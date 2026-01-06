@@ -1,11 +1,11 @@
 package template
 
 import (
+	"context"
 	_ "embed"
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -162,13 +162,13 @@ func (tm *TemplateManager) GetVersion() string {
 }
 
 // FetchFromGitHub fetches templates from GitHub and updates the storage
-func (tm *TemplateManager) FetchFromGitHub() (*ProviderTemplateRegistry, error) {
+func (tm *TemplateManager) FetchFromGitHub(ctx context.Context) (*ProviderTemplateRegistry, error) {
 	// If no GitHub URL is configured, return error immediately
 	if tm.githubURL == "" {
 		return nil, fmt.Errorf("no GitHub URL configured")
 	}
 
-	req, err := http.NewRequest("GET", tm.githubURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", tm.githubURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -245,7 +245,7 @@ type TemplateCacheData struct {
 func (tm *TemplateManager) loadCache() (*ProviderTemplateRegistry, error) {
 	cacheFile := filepath.Join(tm.cachePath, TemplateCacheFileName)
 
-	data, err := ioutil.ReadFile(cacheFile)
+	data, err := os.ReadFile(cacheFile)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil // Cache doesn't exist, not an error
@@ -295,7 +295,7 @@ func (tm *TemplateManager) saveCache(registry *ProviderTemplateRegistry) error {
 
 	// Write to temp file first, then rename for atomicity
 	tmpFile := cacheFile + ".tmp"
-	if err := ioutil.WriteFile(tmpFile, data, 0644); err != nil {
+	if err := os.WriteFile(tmpFile, data, 0644); err != nil {
 		return fmt.Errorf("failed to write cache file: %w", err)
 	}
 
@@ -311,7 +311,7 @@ func (tm *TemplateManager) saveCache(registry *ProviderTemplateRegistry) error {
 // - PreferenceDefault: Cache -> GitHub -> Embedded
 // - PreferenceEmbedded: Embedded only (no network requests)
 // - PreferenceEmbeddedFirst: Embedded -> Cache -> GitHub
-func (tm *TemplateManager) Initialize() error {
+func (tm *TemplateManager) Initialize(ctx context.Context) error {
 	// First, always load embedded templates as immutable fallback
 	if err := tm.loadEmbeddedTemplates(); err != nil {
 		return err
@@ -353,7 +353,7 @@ func (tm *TemplateManager) Initialize() error {
 				return nil
 			}
 			// Cache miss or expired - try GitHub
-			registry, err := tm.FetchFromGitHub()
+			registry, err := tm.FetchFromGitHub(ctx)
 			if err == nil {
 				// GitHub fetch successful - save to cache
 				_ = tm.saveCache(registry) // Ignore save errors, we have the data
@@ -384,33 +384,7 @@ func (tm *TemplateManager) loadEmbeddedTemplates() error {
 	// Make a deep copy for embedded (immutable fallback)
 	embeddedCopy := make(map[string]*ProviderTemplate, len(registry.Providers))
 	for k, v := range registry.Providers {
-		// Deep copy the template
-		tmplCopy := *v
-		// Copy models slice
-		if v.Models != nil {
-			tmplCopy.Models = make([]string, len(v.Models))
-			copy(tmplCopy.Models, v.Models)
-		}
-		// Copy model limits map
-		if v.ModelLimits != nil {
-			tmplCopy.ModelLimits = make(map[string]int, len(v.ModelLimits))
-			for mk, mv := range v.ModelLimits {
-				tmplCopy.ModelLimits[mk] = mv
-			}
-		}
-		// Copy metadata
-		if v.Metadata != nil {
-			tmplCopy.Metadata = make(map[string]string, len(v.Metadata))
-			for mk, mv := range v.Metadata {
-				tmplCopy.Metadata[mk] = mv
-			}
-		}
-		// Copy tags
-		if v.Tags != nil {
-			tmplCopy.Tags = make([]string, len(v.Tags))
-			copy(tmplCopy.Tags, v.Tags)
-		}
-		embeddedCopy[k] = &tmplCopy
+		embeddedCopy[k] = deepCopyTemplate(v)
 	}
 
 	tm.mu.Lock()
@@ -453,20 +427,9 @@ func (tm *TemplateManager) findTemplateByProvider(provider *typ.Provider) *Provi
 	// OAuth providers: match by OAuthProvider only, no fallback
 	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
 		oauthProviderType := provider.OAuthDetail.ProviderType
-		// Search in current templates (check if template has oauth_provider field matching)
-		for _, tmpl := range tm.templates {
-			if tmpl.OAuthProvider == oauthProviderType {
-				return tmpl
-			}
-		}
-		// Search in embedded templates
-		for _, tmpl := range tm.embedded {
-			if tmpl.OAuthProvider == oauthProviderType {
-				return tmpl
-			}
-		}
-		// OAuth providers: no match found, return nil (no fallback)
-		return nil
+		return tm.searchTemplates(func(tmpl *ProviderTemplate) bool {
+			return tmpl.OAuthProvider == oauthProviderType
+		})
 	}
 
 	// API key providers: match by APIBase based on APIStyle
@@ -478,36 +441,68 @@ func (tm *TemplateManager) findTemplateByProvider(provider *typ.Provider) *Provi
 	// Determine which base URL field to match based on APIStyle
 	switch provider.APIStyle {
 	case typ.APIStyleAnthropic:
-		// Match against BaseURLAnthropic
-		for _, tmpl := range tm.templates {
-			if tmpl.BaseURLAnthropic == apiBase {
-				return tmpl
-			}
-		}
-		// Search in embedded templates
-		for _, tmpl := range tm.embedded {
-			if tmpl.BaseURLAnthropic == apiBase {
-				return tmpl
-			}
-		}
+		return tm.searchTemplates(func(tmpl *ProviderTemplate) bool {
+			return tmpl.BaseURLAnthropic == apiBase
+		})
 	case typ.APIStyleOpenAI:
 		fallthrough
 	default:
-		// Match against BaseURLOpenAI (default)
-		for _, tmpl := range tm.templates {
-			if tmpl.BaseURLOpenAI == apiBase {
-				return tmpl
-			}
+		return tm.searchTemplates(func(tmpl *ProviderTemplate) bool {
+			return tmpl.BaseURLOpenAI == apiBase
+		})
+	}
+}
+
+// searchTemplates searches for a template by matcher function in both templates and embedded maps
+func (tm *TemplateManager) searchTemplates(matcher func(*ProviderTemplate) bool) *ProviderTemplate {
+	// Search in current templates first
+	for _, tmpl := range tm.templates {
+		if matcher(tmpl) {
+			return tmpl
 		}
-		// Search in embedded templates
-		for _, tmpl := range tm.embedded {
-			if tmpl.BaseURLOpenAI == apiBase {
-				return tmpl
-			}
+	}
+	// Search in embedded templates
+	for _, tmpl := range tm.embedded {
+		if matcher(tmpl) {
+			return tmpl
+		}
+	}
+	return nil
+}
+
+// deepCopyTemplate creates a deep copy of a ProviderTemplate
+func deepCopyTemplate(tmpl *ProviderTemplate) *ProviderTemplate {
+	result := *tmpl
+
+	// Copy models slice
+	if tmpl.Models != nil {
+		result.Models = make([]string, len(tmpl.Models))
+		copy(result.Models, tmpl.Models)
+	}
+
+	// Copy model limits map
+	if tmpl.ModelLimits != nil {
+		result.ModelLimits = make(map[string]int, len(tmpl.ModelLimits))
+		for k, v := range tmpl.ModelLimits {
+			result.ModelLimits[k] = v
 		}
 	}
 
-	return nil
+	// Copy metadata map
+	if tmpl.Metadata != nil {
+		result.Metadata = make(map[string]string, len(tmpl.Metadata))
+		for k, v := range tmpl.Metadata {
+			result.Metadata[k] = v
+		}
+	}
+
+	// Copy tags slice
+	if tmpl.Tags != nil {
+		result.Tags = make([]string, len(tmpl.Tags))
+		copy(result.Tags, tmpl.Tags)
+	}
+
+	return &result
 }
 
 // GetModelsForProvider returns models for a provider using 3-tier fallback hierarchy:
