@@ -120,6 +120,14 @@ func (s *Server) HandleProbeModel(c *gin.Context) {
 
 	startTime := time.Now()
 
+	// Generate curl command for this provider/model
+	curlCommand := GenerateCurlCommand(
+		provider.APIBase,
+		string(provider.APIStyle),
+		provider.Token,
+		model,
+	)
+
 	// Create the mock request data that would be sent to the API
 	mockRequest := NewMockRequest(provider.Name, req.Model)
 
@@ -154,15 +162,10 @@ func (s *Server) HandleProbeModel(c *gin.Context) {
 			Success: false,
 			Error:   &errorResp,
 			Data: &ProbeResponseData{
-				Request: mockRequest,
-				Response: ProbeResponseDetail{
-					Content:      "",
-					Model:        model,
-					Provider:     provider.Name,
-					FinishReason: "error",
-					Error:        errorMessage,
-				},
-				Usage: ProbeUsage{},
+				Request:     mockRequest,
+				Response:    ProbeResponseDetail{Content: "", Model: model, Provider: provider.Name, FinishReason: "error", Error: errorMessage},
+				Usage:       ProbeUsage{},
+				CurlCommand: curlCommand,
 			},
 		})
 		return
@@ -177,12 +180,10 @@ func (s *Server) HandleProbeModel(c *gin.Context) {
 	c.JSON(http.StatusOK, ProbeResponse{
 		Success: true,
 		Data: &ProbeResponseData{
-			Request: mockRequest,
-			Response: ProbeResponseDetail{
-				Content:      responseContent,
-				FinishReason: finishReason,
-			},
-			Usage: usage,
+			Request:     mockRequest,
+			Response:    ProbeResponseDetail{Content: responseContent, FinishReason: finishReason},
+			Usage:       usage,
+			CurlCommand: curlCommand,
 		},
 	})
 }
