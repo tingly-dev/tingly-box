@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -182,6 +183,47 @@ func generateRandomSuffix(length int) string {
 	bytes := make([]byte, length/2+1)
 	rand.Read(bytes)
 	return hex.EncodeToString(bytes)[:length]
+}
+
+// normalizeAPIBase normalizes an API base URL by ensuring it has protocol and path suffix
+// Examples:
+//   - normalizeAPIBase("portal.qwen.ai", "/v1") => "https://portal.qwen.ai/v1"
+//   - normalizeAPIBase("https://api.example.com", "/v1") => "https://api.example.com/v1"
+//   - normalizeAPIBase("api.example.com/v1", "/v1") => "https://api.example.com/v1"
+//   - normalizeAPIBase("https://api.example.com/", "/v1") => "https://api.example.com/v1"
+//   - normalizeAPIBase("https://api.example.com/v1", "/v1") => "https://api.example.com/v1"
+//   - normalizeAPIBase("https://api.example.com/v2", "/v1") => "https://api.example.com/v2"
+func normalizeAPIBase(baseURL, pathSuffix string) string {
+	// Ensure URL has a protocol scheme
+	if !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {
+		baseURL = "https://" + baseURL
+	}
+
+	// Remove trailing slash from base URL
+	baseURL = strings.TrimSuffix(baseURL, "/")
+
+	// Remove leading slash from path suffix
+	pathSuffix = strings.TrimPrefix(pathSuffix, "/")
+
+	// Check if base URL already ends with the path suffix
+	if strings.HasSuffix(baseURL, pathSuffix) {
+		return baseURL
+	}
+
+	// Check if base URL already has a version path (e.g., /v2, /v3)
+	// In that case, keep the existing version
+	if strings.Contains(baseURL, "/v") {
+		parts := strings.Split(baseURL, "/")
+		for _, part := range parts {
+			if strings.HasPrefix(part, "v") && len(part) > 1 && part[1] >= '0' && part[1] <= '9' {
+				// Found a version path like v1, v2, etc., keep it
+				return baseURL
+			}
+		}
+	}
+
+	// Add the path suffix
+	return fmt.Sprintf("%s/%s", baseURL, pathSuffix)
 }
 
 func (s *Server) useOAuthEndpoints(manager *swagger.RouteManager) {
@@ -938,17 +980,20 @@ func (s *Server) createProviderFromToken(token *oauth2.Token, providerType oauth
 	var apiStyle typ.APIStyle
 
 	// If token contains ResourceURL from OAuth response, use it
-	if token.ResourceURL != "" {
-		apiBase = token.ResourceURL
-		fmt.Printf("[OAuth] Using ResourceURL from token: %s\n", apiBase)
-	} else {
+	{
 		// Otherwise use provider default
 		switch providerType {
 		case oauth2.ProviderClaudeCode:
 			apiBase = "https://api.anthropic.com"
 			apiStyle = typ.APIStyleAnthropic
 		case oauth2.ProviderQwenCode:
-			apiBase = "https://portal.qwen.ai/v1"
+			if token.ResourceURL != "" {
+				// Normalize ResourceURL: ensure it has /v1 suffix for OpenAI-compatible API
+				apiBase = normalizeAPIBase(token.ResourceURL, "/v1")
+				fmt.Printf("[OAuth] Using ResourceURL from token: %s (normalized to: %s)\n", token.ResourceURL, apiBase)
+			} else {
+				apiBase = "https://portal.qwen.ai/v1"
+			}
 			apiStyle = typ.APIStyleOpenAI
 		case oauth2.ProviderGoogle:
 			apiBase = "https://generativelanguage.googleapis.com"
