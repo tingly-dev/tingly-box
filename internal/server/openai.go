@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"tingly-box/internal/typ"
 
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
@@ -13,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"tingly-box/internal/loadbalance"
+	"tingly-box/internal/typ"
 	"tingly-box/pkg/adaptor"
 )
 

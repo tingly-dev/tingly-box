@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"tingly-box/internal/typ"
 
 	"github.com/spf13/cobra"
 
@@ -16,6 +15,7 @@ import (
 	"tingly-box/internal/constant"
 	"tingly-box/internal/manager"
 	"tingly-box/internal/obs"
+	"tingly-box/internal/typ"
 )
 
 // ShellCommand represents the interactive CLI command

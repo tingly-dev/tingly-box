@@ -2,9 +2,10 @@ package server
 
 import (
 	"time"
-	"tingly-box/internal/typ"
 
 	"github.com/openai/openai-go/v3"
+
+	"tingly-box/internal/typ"
 )
 
 // Error Models

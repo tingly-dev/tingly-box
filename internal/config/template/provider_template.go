@@ -11,10 +11,10 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
-	"tingly-box/internal/typ"
 
-	constant2 "tingly-box/internal/constant"
+	"tingly-box/internal/constant"
 	"tingly-box/internal/helper"
+	"tingly-box/internal/typ"
 )
 
 //go:embed provider_templates.json
@@ -89,7 +89,7 @@ func NewDefaultTemplateManager() *TemplateManager {
 // NewTemplateManager creates a new template manager.
 // If githubURL is empty, only embedded templates will be used (no GitHub sync).
 func NewTemplateManager(githubURL string) *TemplateManager {
-	configDir := constant2.GetTinglyConfDir()
+	configDir := constant.GetTinglyConfDir()
 	return &TemplateManager{
 		githubURL: githubURL,
 		templates: make(map[string]*ProviderTemplate),
@@ -448,5 +448,5 @@ func (tm *TemplateManager) GetMaxTokensForModel(provider, model string) int {
 	}
 
 	// Fallback to global default
-	return constant2.DefaultMaxTokens
+	return constant.DefaultMaxTokens
 }

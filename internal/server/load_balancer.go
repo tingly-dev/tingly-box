@@ -4,16 +4,16 @@ import (
 	"fmt"
 	"sync"
 	"time"
-	typ2 "tingly-box/internal/typ"
 
 	"tingly-box/internal/config"
 	"tingly-box/internal/loadbalance"
 	"tingly-box/internal/server/middleware"
+	typ "tingly-box/internal/typ"
 )
 
 // LoadBalancer manages load balancing across multiple services
 type LoadBalancer struct {
-	tactics map[loadbalance.TacticType]typ2.LoadBalancingTactic
+	tactics map[loadbalance.TacticType]typ.LoadBalancingTactic
 	stats   map[string]*loadbalance.ServiceStats
 	statsMW *middleware.StatsMiddleware
 	config  *config.Config
@@ -23,7 +23,7 @@ type LoadBalancer struct {
 // NewLoadBalancer creates a new load balancer
 func NewLoadBalancer(statsMW *middleware.StatsMiddleware, cfg *config.Config) *LoadBalancer {
 	lb := &LoadBalancer{
-		tactics: make(map[loadbalance.TacticType]typ2.LoadBalancingTactic),
+		tactics: make(map[loadbalance.TacticType]typ.LoadBalancingTactic),
 		stats:   make(map[string]*loadbalance.ServiceStats),
 		statsMW: statsMW,
 		config:  cfg,
@@ -37,13 +37,13 @@ func NewLoadBalancer(statsMW *middleware.StatsMiddleware, cfg *config.Config) *L
 
 // initializeDefaultTactics initializes default load balancing tactics
 func (lb *LoadBalancer) initializeDefaultTactics() {
-	lb.tactics[loadbalance.TacticRoundRobin] = typ2.NewRoundRobinTactic()
-	lb.tactics[loadbalance.TacticTokenBased] = typ2.NewTokenBasedTactic(10000)
-	lb.tactics[loadbalance.TacticHybrid] = typ2.NewHybridTactic(100, 10000)
+	lb.tactics[loadbalance.TacticRoundRobin] = typ.NewRoundRobinTactic()
+	lb.tactics[loadbalance.TacticTokenBased] = typ.NewTokenBasedTactic(10000)
+	lb.tactics[loadbalance.TacticHybrid] = typ.NewHybridTactic(100, 10000)
 }
 
 // RegisterTactic registers a custom tactic
-func (lb *LoadBalancer) RegisterTactic(tacticType loadbalance.TacticType, tactic typ2.LoadBalancingTactic) {
+func (lb *LoadBalancer) RegisterTactic(tacticType loadbalance.TacticType, tactic typ.LoadBalancingTactic) {
 	lb.mutex.Lock()
 	defer lb.mutex.Unlock()
 
@@ -51,7 +51,7 @@ func (lb *LoadBalancer) RegisterTactic(tacticType loadbalance.TacticType, tactic
 }
 
 // SelectService selects the best service for a rule based on the configured tactic
-func (lb *LoadBalancer) SelectService(rule *typ2.Rule) (*loadbalance.Service, error) {
+func (lb *LoadBalancer) SelectService(rule *typ.Rule) (*loadbalance.Service, error) {
 	if rule == nil {
 		return nil, fmt.Errorf("rule is nil")
 	}
@@ -93,7 +93,7 @@ func (lb *LoadBalancer) SelectService(rule *typ2.Rule) (*loadbalance.Service, er
 }
 
 // getTactic retrieves a tactic by type
-func (lb *LoadBalancer) getTactic(tacticType loadbalance.TacticType) (typ2.LoadBalancingTactic, bool) {
+func (lb *LoadBalancer) getTactic(tacticType loadbalance.TacticType) (typ.LoadBalancingTactic, bool) {
 	lb.mutex.RLock()
 	defer lb.mutex.RUnlock()
 
@@ -102,7 +102,7 @@ func (lb *LoadBalancer) getTactic(tacticType loadbalance.TacticType) (typ2.LoadB
 }
 
 // UpdateServiceIndex updates the current service index for a rule
-func (lb *LoadBalancer) UpdateServiceIndex(rule *typ2.Rule, selectedService *loadbalance.Service) {
+func (lb *LoadBalancer) UpdateServiceIndex(rule *typ.Rule, selectedService *loadbalance.Service) {
 	if rule == nil || selectedService == nil {
 		return
 	}
@@ -233,7 +233,7 @@ func (lb *LoadBalancer) ClearAllStats() {
 }
 
 // ValidateRule validates a rule configuration
-func (lb *LoadBalancer) ValidateRule(rule *typ2.Rule) error {
+func (lb *LoadBalancer) ValidateRule(rule *typ.Rule) error {
 	if rule == nil {
 		return fmt.Errorf("rule is nil")
 	}
@@ -271,7 +271,7 @@ func (lb *LoadBalancer) ValidateRule(rule *typ2.Rule) error {
 }
 
 // GetRuleSummary returns a summary of rule configuration and statistics
-func (lb *LoadBalancer) GetRuleSummary(rule *typ2.Rule) map[string]interface{} {
+func (lb *LoadBalancer) GetRuleSummary(rule *typ.Rule) map[string]interface{} {
 	if rule == nil {
 		return nil
 	}

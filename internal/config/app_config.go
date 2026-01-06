@@ -13,10 +13,10 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"tingly-box/internal/typ"
 
-	constant2 "tingly-box/internal/constant"
+	"tingly-box/internal/constant"
 	"tingly-box/internal/db"
+	"tingly-box/internal/typ"
 )
 
 // AppConfig holds the application configuration with encrypted storage
@@ -47,7 +47,7 @@ func WithConfigDir(dir string) AppConfigOption {
 func NewAppConfig(opts ...AppConfigOption) (*AppConfig, error) {
 	// Default options
 	options := &appConfigOptions{
-		configDir: constant2.GetTinglyConfDir(),
+		configDir: constant.GetTinglyConfDir(),
 	}
 
 	// Apply provided options
@@ -249,7 +249,7 @@ func (ac *AppConfig) Load() error {
 		return fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
-	statsStore, err := db.NewStatsStore(filepath.Join(ac.configDir, constant2.StateDirName))
+	statsStore, err := db.NewStatsStore(filepath.Join(ac.configDir, constant.StateDirName))
 	if err != nil {
 		return fmt.Errorf("failed to initialize stats store: %w", err)
 	}
@@ -265,7 +265,7 @@ func (ac *AppConfig) Load() error {
 	ac.config.modelManager = existingModelManager
 	ac.config.statsStore = statsStore
 	if ac.config.modelManager == nil {
-		modelManager, err := NewProviderModelManager(filepath.Join(ac.configDir, constant2.ModelsDirName))
+		modelManager, err := NewProviderModelManager(filepath.Join(ac.configDir, constant.ModelsDirName))
 		if err != nil {
 			ac.mu.Unlock()
 			return fmt.Errorf("failed to initialize model manager: %w", err)

@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
-	"tingly-box/internal/typ"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -16,6 +15,7 @@ import (
 
 	"tingly-box/internal/constant"
 	"tingly-box/internal/loadbalance"
+	"tingly-box/internal/typ"
 )
 
 const defaultServiceTimeWindow = 300

@@ -9,12 +9,12 @@ import (
 	"sync"
 	"testing"
 	"time"
-	"tingly-box/internal/typ"
 
 	"github.com/stretchr/testify/assert"
 
 	"tingly-box/internal/constant"
 	"tingly-box/internal/server"
+	"tingly-box/internal/typ"
 )
 
 // MockProviderServer represents a mock AI provider server

@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 	"time"
-	"tingly-box/internal/typ"
 
 	"tingly-box/internal/config"
+	"tingly-box/internal/typ"
 	oauth2 "tingly-box/pkg/oauth"
 )
 

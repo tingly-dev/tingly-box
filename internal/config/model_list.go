@@ -6,9 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"time"
-	"tingly-box/internal/typ"
 
 	"github.com/goccy/go-yaml"
+
+	"tingly-box/internal/typ"
 )
 
 // ModelList represents the models available for a specific provider

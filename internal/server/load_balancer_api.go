@@ -3,12 +3,12 @@ package server
 import (
 	"net/http"
 	"strconv"
-	"tingly-box/internal/typ"
 
 	"github.com/gin-gonic/gin"
 
 	"tingly-box/internal/config"
 	"tingly-box/internal/loadbalance"
+	"tingly-box/internal/typ"
 )
 
 // LoadBalancerAPI provides REST endpoints for load balancer management

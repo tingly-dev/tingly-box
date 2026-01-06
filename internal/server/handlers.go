@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"tingly-box/internal/typ"
 
 	"github.com/gin-gonic/gin"
 
 	"tingly-box/internal/loadbalance"
+	"tingly-box/internal/typ"
 )
 
 // GenerateToken handles token generation requests

@@ -2,12 +2,12 @@ package config
 
 import (
 	"time"
-	typ2 "tingly-box/internal/typ"
 
 	"github.com/google/uuid"
 
 	"tingly-box/internal/constant"
 	"tingly-box/internal/loadbalance"
+	typ "tingly-box/internal/typ"
 )
 
 func migrate(c *Config) error {
@@ -36,9 +36,9 @@ func migrate20251220(c *Config) {
 		// Check if params are nil or have invalid zero values
 		if !isTacticValid(&c.Rules[i].LBTactic) {
 			// Set default tactic if params are invalid
-			c.Rules[i].LBTactic = typ2.Tactic{
+			c.Rules[i].LBTactic = typ.Tactic{
 				Type:   loadbalance.TacticRoundRobin,
-				Params: typ2.DefaultRoundRobinParams(),
+				Params: typ.DefaultRoundRobinParams(),
 			}
 			needsSave = true
 		}
@@ -76,11 +76,11 @@ func migrate20251221(c *Config) {
 	}
 
 	// Initialize Providers slice
-	c.Providers = make([]*typ2.Provider, 0, len(c.Providers))
+	c.Providers = make([]*typ.Provider, 0, len(c.Providers))
 
 	// Migrate each v1 provider to v2
 	for _, pv1 := range c.ProvidersV1 {
-		providerV2 := &typ2.Provider{
+		providerV2 := &typ.Provider{
 			UUID:        pv1.UUID,
 			Name:        pv1.Name,
 			APIBase:     pv1.APIBase,
@@ -137,12 +137,12 @@ func migrate20260103(c *Config) {
 	needsSave := false
 
 	// Map of default rule UUIDs to their scenarios
-	scenarioMap := map[string]typ2.RuleScenario{
-		"tingly":             typ2.ScenarioOpenAI,
-		"built-in-openai":    typ2.ScenarioOpenAI,
-		"built-in-anthropic": typ2.ScenarioAnthropic,
-		"built-in-cc":        typ2.ScenarioClaudeCode,
-		"claude-code":        typ2.ScenarioClaudeCode,
+	scenarioMap := map[string]typ.RuleScenario{
+		"tingly":             typ.ScenarioOpenAI,
+		"built-in-openai":    typ.ScenarioOpenAI,
+		"built-in-anthropic": typ.ScenarioAnthropic,
+		"built-in-cc":        typ.ScenarioClaudeCode,
+		"claude-code":        typ.ScenarioClaudeCode,
 	}
 
 	for i := range c.Rules {
@@ -159,7 +159,7 @@ func migrate20260103(c *Config) {
 			needsSave = true
 		} else {
 			// For non-default rules, set to openai as default
-			rule.Scenario = typ2.ScenarioOpenAI
+			rule.Scenario = typ.ScenarioOpenAI
 			needsSave = true
 		}
 	}

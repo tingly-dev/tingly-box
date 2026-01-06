@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-	"tingly-box/internal/typ"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
@@ -16,6 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"tingly-box/internal/loadbalance"
+	"tingly-box/internal/typ"
 	"tingly-box/pkg/adaptor"
 )
 

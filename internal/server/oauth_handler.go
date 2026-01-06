@@ -7,11 +7,11 @@ import (
 	"html/template"
 	"net/http"
 	"time"
-	"tingly-box/internal/typ"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"tingly-box/internal/typ"
 	oauth2 "tingly-box/pkg/oauth"
 	"tingly-box/pkg/swagger"
 )
