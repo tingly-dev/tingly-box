@@ -104,14 +104,32 @@ const OAuthAuthorizationDialog = ({
                                       open,
                                       onClose,
                                       authData,
-                                      onSuccess
+                                      onSuccess,
+                                      onError
                                   }: {
     open: boolean;
     onClose: () => void;
     authData: OAuthAuthorizationData | null;
     onSuccess?: () => void;
+    onError?: (error: string) => void;
 }) => {
     const [opened, setOpened] = useState(false);
+    const [pollCount, setPollCount] = useState(0);
+    const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+    const [showTimeoutDialog, setShowTimeoutDialog] = useState(false);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+    // Polling constants
+    const POLL_INTERVAL = 2000; // 2 seconds
+    const CONFIRM_THRESHOLD = 30; // 1 minute (30 * 2s)
+    const MAX_POLL_COUNT = 90; // 3 minutes (90 * 2s)
+
+    // Clean up polling on unmount
+    useEffect(() => {
+        return () => {
+            // Cleanup will be handled by the polling function itself
+        };
+    }, []);
 
     // Auto-open authorization URL when dialog opens
     useEffect(() => {
@@ -125,32 +143,71 @@ const OAuthAuthorizationDialog = ({
                 }
             }
             setOpened(true);
+            setPollCount(0);
+            setShowConfirmDialog(false);
+            setShowTimeoutDialog(false);
+            setErrorMessage(null);
 
-            // START POLLING LOGIC - PLACEHOLDER FOR USER TO IMPLEMENT
-            // TODO: Implement polling for session status
+            // Start polling
             if (authData.session_id) {
                 pollSessionStatus(authData.session_id);
             }
         }
         if (!open) {
             setOpened(false);
+            setPollCount(0);
+            setShowConfirmDialog(false);
+            setShowTimeoutDialog(false);
         }
     }, [open, authData, opened]);
 
-    // POLLING PLACEHOLDER - User needs to implement this with actual API call
+    // Polling logic with two-tier timeout
     const pollSessionStatus = async (sessionId: string) => {
-        const interval = setInterval(async () => {
-            // TODO: Replace with actual API call
-            const {oauthApi} = await api.instances()
-            const response = await oauthApi.apiV1OauthStatusGet(sessionId);
-            if (response.data.data.status === 'success') {
-                clearInterval(interval);
-                onSuccess?.();
-            } else if (response.data.data.status === 'failed') {
-                clearInterval(interval);
-                // Handle error
+        let intervalId: NodeJS.Timeout | null = null;
+        let currentPollCount = 0;
+
+        const doPoll = async () => {
+            currentPollCount++;
+            setPollCount(currentPollCount);
+
+            try {
+                const {oauthApi} = await api.instances();
+                const response = await oauthApi.apiV1OauthStatusGet(sessionId);
+
+                if (response.data.data.status === 'success') {
+                    // Success - stop polling and notify
+                    if (intervalId) clearInterval(intervalId);
+                    onSuccess?.();
+                    return;
+                } else if (response.data.data.status === 'failed') {
+                    // Failed - stop polling and show error
+                    if (intervalId) clearInterval(intervalId);
+                    const error = response.data.data.error || 'Authorization failed';
+                    setErrorMessage(error);
+                    onError?.(error);
+                    return;
+                } else if (response.data.data.status === 'pending') {
+                    // Still pending - check thresholds
+                    if (currentPollCount >= MAX_POLL_COUNT) {
+                        // Max timeout reached
+                        if (intervalId) clearInterval(intervalId);
+                        setShowTimeoutDialog(true);
+                    } else if (currentPollCount === CONFIRM_THRESHOLD) {
+                        // Show confirmation dialog
+                        setShowConfirmDialog(true);
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to poll OAuth status:', error);
+                // Continue polling on transient errors
             }
-        }, 2000); // Poll every 2 seconds
+        };
+
+        // Initial poll
+        doPoll();
+
+        // Set up interval
+        intervalId = setInterval(doPoll, POLL_INTERVAL);
     };
 
     const copyUserCode = () => {
@@ -160,8 +217,8 @@ const OAuthAuthorizationDialog = ({
     };
 
     const handleCompleted = () => {
-        // Call onSuccess callback to let parent handle refresh logic
-        onSuccess?.();
+        // User confirms completion - let polling continue to verify
+        setShowConfirmDialog(false);
     };
 
     const handleOpenAuthPage = () => {
@@ -175,24 +232,41 @@ const OAuthAuthorizationDialog = ({
         }
     };
 
+    // Calculate remaining time
+    const getRemainingTime = () => {
+        const remaining = (MAX_POLL_COUNT - pollCount) * POLL_INTERVAL / 1000;
+        if (remaining < 60) {
+            return `${Math.ceil(remaining)} seconds`;
+        }
+        return `${Math.ceil(remaining / 60)} minutes`;
+    };
+
     if (!authData) return null;
 
     const isDeviceCode = authData.flow_type === 'device_code';
 
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-            <DialogTitle>
+        <>
+        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth aria-labelledby="oauth-auth-title">
+            <DialogTitle id="oauth-auth-title">
                 <Stack direction="row" alignItems="center" justifyContent="space-between">
                     <Typography variant="h6">
                         {isDeviceCode ? 'Device Code Authorization' : 'OAuth Authorization'}
                     </Typography>
-                    <IconButton onClick={onClose} size="small">
+                    <IconButton onClick={onClose} size="small" aria-label="Close dialog">
                         <Close/>
                     </IconButton>
                 </Stack>
             </DialogTitle>
             <DialogContent>
                 <Stack spacing={3}>
+                    {/* Error message */}
+                    {errorMessage && (
+                        <Alert severity="error" aria-live="polite">
+                            Authorization failed: {errorMessage}
+                        </Alert>
+                    )}
+
                     <Alert severity="info">
                         {isDeviceCode
                             ? `Follow these steps to authorize ${authData.provider}:`
@@ -210,6 +284,7 @@ const OAuthAuthorizationDialog = ({
                                 startIcon={<OpenInNew/>}
                                 onClick={handleOpenAuthPage}
                                 fullWidth
+                                aria-label="Open authorization page in new tab"
                             >
                                 Open Authorization Page
                             </Button>
@@ -233,12 +308,14 @@ const OAuthAuthorizationDialog = ({
                                     border: '2px dashed',
                                     borderColor: 'primary.main',
                                 }}
+                                role="region"
+                                aria-label="User code for device authorization"
                             >
-                                <Typography variant="h4" sx={{fontFamily: 'monospace', letterSpacing: 2}}>
+                                <Typography variant="h4" sx={{fontFamily: 'monospace', letterSpacing: 2}} aria-label={`User code is ${authData.user_code || '------'}`}>
                                     {authData.user_code || '------'}
                                 </Typography>
                                 {authData.user_code && (
-                                    <IconButton onClick={copyUserCode} size="small">
+                                    <IconButton onClick={copyUserCode} size="small" aria-label="Copy user code to clipboard">
                                         <ContentCopy/>
                                     </IconButton>
                                 )}
@@ -253,11 +330,14 @@ const OAuthAuthorizationDialog = ({
                                 : 'Step 1: Complete authorization'}
                         </Typography>
                         <Box sx={{display: 'flex', alignItems: 'center', gap: 2}}>
-                            <CircularProgress size={20}/>
+                            <CircularProgress size={20} aria-label="Checking authorization status"/>
                             <Typography variant="body2" color="text.secondary">
                                 {isDeviceCode
                                     ? 'Waiting for you to complete the authorization...'
                                     : 'Waiting for authorization to complete...'}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ml: 'auto'}}>
+                                {getRemainingTime()} remaining
                             </Typography>
                         </Box>
                     </Box>
@@ -277,6 +357,7 @@ const OAuthAuthorizationDialog = ({
                             startIcon={<OpenInNew/>}
                             onClick={handleOpenAuthPage}
                             fullWidth
+                            aria-label="Open authorization page again in new tab"
                         >
                             Open Authorization Page Again
                         </Button>
@@ -290,12 +371,84 @@ const OAuthAuthorizationDialog = ({
                         onClick={handleCompleted}
                         fullWidth
                         sx={{mt: 3}}
+                        aria-label="I have completed the authorization process"
                     >
                         I've Completed Authorization
                     </Button>
                 </Stack>
             </DialogContent>
         </Dialog>
+
+        {/* Confirmation Dialog */}
+        <Dialog open={showConfirmDialog} onClose={() => setShowConfirmDialog(false)} maxWidth="sm" fullWidth aria-labelledby="oauth-confirm-title">
+            <DialogTitle id="oauth-confirm-title">Still Waiting for Authorization</DialogTitle>
+            <DialogContent>
+                <Stack spacing={2}>
+                    <Alert severity="info">
+                        We've been waiting for about a minute. Have you completed the authorization?
+                    </Alert>
+                    <Typography variant="body2" color="text.secondary">
+                        If you've already completed the authorization in the other window, click "Yes, I'm done" below.
+                        The system will continue to verify the authorization status.
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                        If you haven't completed it yet, you can continue. The system will keep checking for up to 3 minutes.
+                    </Typography>
+                    <Stack direction="row" spacing={2} sx={{mt: 2}}>
+                        <Button
+                            variant="contained"
+                            onClick={handleCompleted}
+                            fullWidth
+                            aria-label="Yes, I have completed the authorization"
+                        >
+                            Yes, I'm Done
+                        </Button>
+                        <Button
+                            variant="outlined"
+                            onClick={() => setShowConfirmDialog(false)}
+                            fullWidth
+                            aria-label="Continue waiting for authorization"
+                        >
+                            Still Working on It
+                        </Button>
+                    </Stack>
+                </Stack>
+            </DialogContent>
+        </Dialog>
+
+        {/* Timeout Dialog */}
+        <Dialog open={showTimeoutDialog} onClose={onClose} maxWidth="sm" fullWidth aria-labelledby="oauth-timeout-title">
+            <DialogTitle id="oauth-timeout-title">Authorization Timeout</DialogTitle>
+            <DialogContent>
+                <Stack spacing={2}>
+                    <Alert severity="warning">
+                        Authorization check has timed out after 3 minutes.
+                    </Alert>
+                    <Typography variant="body2" color="text.secondary">
+                        The system couldn't confirm that the authorization was completed. This could mean:
+                    </Typography>
+                    <ul style={{margin: 0, paddingLeft: '1.5rem'}}>
+                        <li>The authorization window was closed without completing</li>
+                        <li>There was a delay in the authorization process</li>
+                        <li>The authorization was denied</li>
+                    </ul>
+                    <Typography variant="body2" color="text.secondary">
+                        If you did complete the authorization successfully, the provider may have been added.
+                        Please check your provider list and try again if needed.
+                    </Typography>
+                    <Button
+                        variant="contained"
+                        onClick={onClose}
+                        fullWidth
+                        sx={{mt: 2}}
+                        aria-label="Close authorization dialog"
+                    >
+                        Close
+                    </Button>
+                </Stack>
+            </DialogContent>
+        </Dialog>
+        </>
     );
 };
 
@@ -310,6 +463,11 @@ const OAuthDialog = ({open, onClose, onSuccess}: OAuthDialogProps) => {
         onSuccess?.();
         setAuthDialogOpen(false);
         onClose();
+    };
+
+    const handleAuthorizationError = (error: string) => {
+        // Keep dialog open to show error
+        console.error('OAuth authorization failed:', error);
     };
 
     const handleProviderClick = async (provider: OAuthProvider) => {
@@ -480,6 +638,7 @@ const OAuthDialog = ({open, onClose, onSuccess}: OAuthDialogProps) => {
                 onClose={() => setAuthDialogOpen(false)}
                 authData={authData}
                 onSuccess={handleAuthorizationCompleted}
+                onError={handleAuthorizationError}
             />
         </>
     );
