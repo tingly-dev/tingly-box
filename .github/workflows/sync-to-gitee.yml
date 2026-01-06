@@ -1,0 +1,225 @@
+name: Sync Release to Gitee
+
+on:
+  workflow_run:
+    workflows: ["Github Release"]
+    types:
+      - completed
+    branches:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'GitHub release tag to sync (e.g., v1.0.0)'
+        required: true
+        type: string
+      source_repo:
+        description: 'Source repository (owner/repo)'
+        required: false
+        type: string
+        default: 'tingly-dev/tingly-box'
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  sync-to-gitee:
+    name: Sync to Gitee
+    runs-on: ubuntu-latest
+    # Only run if the upstream workflow succeeded
+    if: |
+      github.event.workflow_run.conclusion == 'success' ||
+      github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          repository: ${{ github.event.inputs.source_repo || github.repository }}
+
+      - name: Set release tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            RELEASE_TAG="${{ github.event.inputs.release_tag }}"
+          else
+            # Extract tag from workflow_run trigger
+            # workflow_run.event is 'push' and ref is the tag
+            REF="${{ github.event.workflow_run.head_branch }}"
+            # If the ref contains 'refs/tags/', extract the tag
+            if [[ "$REF" == refs/tags/* ]]; then
+              RELEASE_TAG="${REF#refs/tags/}"
+            else
+              # Try to get tag from the workflow_run head_sha
+              RELEASE_TAG=$(git tag --points-at "${{ github.event.workflow_run.head_sha }}" | head -n 1)
+              # If no tag found, error out
+              if [ -z "$RELEASE_TAG" ]; then
+                echo "Error: Could not determine release tag from workflow_run event"
+                exit 1
+              fi
+            fi
+          fi
+          echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
+          echo "Syncing release: $RELEASE_TAG"
+
+      - name: Check if GitHub Release exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.tag.outputs.release_tag }}
+        run: |
+          echo "Checking if release $RELEASE_TAG exists..."
+
+          if ! gh release view "$RELEASE_TAG" --repo "${{ github.event.inputs.source_repo || github.repository }}" >/dev/null 2>&1; then
+            echo "Error: Release $RELEASE_TAG does not exist!"
+            exit 1
+          fi
+
+          echo "✅ Release $RELEASE_TAG found"
+
+      - name: Download binaries from GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.tag.outputs.release_tag }}
+          SOURCE_REPO: ${{ github.event.inputs.source_repo || github.repository }}
+        run: |
+          echo "Downloading binaries from release $RELEASE_TAG..."
+
+          # Create download directory
+          mkdir -p ./downloads
+
+          # Get all assets from the release
+          gh release view "$RELEASE_TAG" --repo "$SOURCE_REPO" --json assets --jq '.assets[].name' | while read -r asset_name; do
+            # Skip if asset name is empty
+            [ -z "$asset_name" ] && continue
+
+            echo "Downloading: $asset_name"
+            gh release download "$RELEASE_TAG" --repo "$SOURCE_REPO" --pattern "$asset_name" --dir ./downloads --clobber
+          done
+
+          echo "Downloaded files:"
+          ls -lh ./downloads
+
+          # Verify at least one file was downloaded
+          if [ -z "$(ls -A ./downloads)" ]; then
+            echo "Error: No files were downloaded from release"
+            exit 1
+          fi
+
+      - name: Clone Gitee repository
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+          GITEE_REPO: ${{ secrets.GITEE_REPO_URL }}
+        run: |
+          # Parse Gitee repo URL (format: https://gitee.com/owner/repo.git)
+          if [ -z "$GITEE_REPO" ]; then
+            echo "Error: GITEE_REPO_URL secret is not set"
+            echo "Please set GITEE_REPO_URL in GitHub repository secrets"
+            exit 1
+          fi
+
+          # Extract repo path for git clone
+          GITEE_REPO_HTTPS="${GITEE_REPO%.git}"
+          GITEE_REPO_AUTH="https://oauth2:${GITEE_TOKEN}@${GITEE_REPO_HTTPS#https://}"
+
+          echo "Cloning Gitee repository..."
+          git clone "$GITEE_REPO_AUTH" ./gitee-repo
+
+          if [ ! -d "./gitee-repo" ]; then
+            echo "Error: Failed to clone Gitee repository"
+            exit 1
+          fi
+
+          echo "✅ Gitee repository cloned successfully"
+
+      - name: Prepare binaries for Gitee
+        env:
+          RELEASE_TAG: ${{ steps.tag.outputs.release_tag }}
+        run: |
+          # Create release directory in Gitee repo
+          RELEASE_DIR="./gitee-repo/releases/${RELEASE_TAG}"
+
+          echo "Preparing binaries in $RELEASE_DIR..."
+          mkdir -p "$RELEASE_DIR"
+
+          # Copy all downloaded binaries
+          cp -r ./downloads/* "$RELEASE_DIR/"
+
+          # Create checksums file
+          cd "$RELEASE_DIR"
+          if command -v sha256sum &> /dev/null; then
+            sha256sum * > SHA256SUMS.txt
+          else
+            shasum -a 256 * > SHA256SUMS.txt
+          fi
+
+          echo "Prepared files:"
+          ls -lh "$RELEASE_DIR"
+
+      - name: Commit and push to Gitee
+        env:
+          RELEASE_TAG: ${{ steps.tag.outputs.release_tag }}
+          SOURCE_REPO: ${{ github.event.inputs.source_repo || github.repository }}
+        run: |
+          cd ./gitee-repo
+
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Create release branch
+          RELEASE_BRANCH="release-${RELEASE_TAG}"
+
+          # Check if branch exists
+          if git rev-parse "$RELEASE_BRANCH" >/dev/null 2>&1; then
+            echo "Branch $RELEASE_BRANCH exists, checking out..."
+            git checkout "$RELEASE_BRANCH"
+          else
+            echo "Creating new branch $RELEASE_BRANCH..."
+            git checkout -b "$RELEASE_BRANCH"
+          fi
+
+          # Add all files
+          git add "releases/${RELEASE_TAG}/"
+
+          # Check if there are changes to commit
+          if git diff --staged --quiet; then
+            echo "⚠️ No changes to commit"
+          else
+            echo "Committing changes..."
+            git commit -m "$(cat <<EOF
+          chore: sync binaries from GitHub release ${RELEASE_TAG}
+
+          - GitHub Release: ${RELEASE_TAG}
+          - Source: https://github.com/${SOURCE_REPO}/releases/tag/${RELEASE_TAG}
+          - Synced at: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+          - Files: $(ls -1 releases/${RELEASE_TAG}/ | wc -l) files synced
+          EOF
+          )"
+
+            # Push to Gitee
+            echo "Pushing to Gitee..."
+            git push origin "$RELEASE_BRANCH"
+
+            # Create tag in Gitee
+            if git rev-parse "$RELEASE_TAG" >/dev/null 2>&1; then
+              echo "⚠️ Tag $RELEASE_TAG already exists in Gitee repo"
+            else
+              git tag "$RELEASE_TAG"
+              git push origin "$RELEASE_TAG"
+              echo "✅ Created and pushed tag $RELEASE_TAG to Gitee"
+            fi
+          fi
+
+      - name: Summary
+        env:
+          RELEASE_TAG: ${{ steps.tag.outputs.release_tag }}
+          SOURCE_REPO: ${{ github.event.inputs.source_repo || github.repository }}
+        run: |
+          echo "## ✅ Sync to Gitee completed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Release Tag** | \`${RELEASE_TAG}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Branch** | \`release-${RELEASE_TAG}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Source** | [${SOURCE_REPO}](https://github.com/${SOURCE_REPO}/releases/tag/${RELEASE_TAG}) |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Files Synced** | $(ls -1 ./downloads | wc -l) |" >> $GITHUB_STEP_SUMMARY
