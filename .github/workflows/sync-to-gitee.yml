@@ -135,22 +135,42 @@ jobs:
         env:
           RELEASE_TAG: ${{ steps.tag.outputs.release_tag }}
         run: |
+          # Debug: Check current directory and contents
+          echo "Current working directory: $(pwd)"
+          echo "Files in current directory:"
+          ls -la
+
+          # Check if gitee-repo exists
+          if [ ! -d "./gitee-repo" ]; then
+            echo "Error: ./gitee-repo directory does not exist!"
+            echo "This step needs to run after 'Clone Gitee repository'"
+            exit 1
+          fi
+
           # Create release directory in Gitee repo
           RELEASE_DIR="./gitee-repo/releases/${RELEASE_TAG}"
 
           echo "Preparing binaries in $RELEASE_DIR..."
           mkdir -p "$RELEASE_DIR"
 
+          # Verify directory was created
+          if [ ! -d "$RELEASE_DIR" ]; then
+            echo "Error: Failed to create directory $RELEASE_DIR"
+            exit 1
+          fi
+
           # Copy all downloaded binaries
           cp -r ./downloads/* "$RELEASE_DIR/"
 
           # Create checksums file
-          cd "$RELEASE_DIR"
-          if command -v sha256sum &> /dev/null; then
-            sha256sum * > SHA256SUMS.txt
-          else
-            shasum -a 256 * > SHA256SUMS.txt
-          fi
+          (
+            cd "$RELEASE_DIR"
+            if command -v sha256sum &> /dev/null; then
+              sha256sum * > SHA256SUMS.txt
+            else
+              shasum -a 256 * > SHA256SUMS.txt
+            fi
+          )
 
           echo "Prepared files:"
           ls -lh "$RELEASE_DIR"
