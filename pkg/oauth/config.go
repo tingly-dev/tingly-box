@@ -193,6 +193,9 @@ type Token struct {
 
 	// Metadata contains additional provider-specific information (email, project_id, api_key, etc)
 	Metadata map[string]any `json:"metadata,omitempty"`
+
+	// SessionID is the OAuth session ID for status tracking
+	SessionID string `json:"-"`
 }
 
 // Valid returns true if the token is valid and not expired

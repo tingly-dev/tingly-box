@@ -20,6 +20,27 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// SessionStatus represents the status of an OAuth session
+type SessionStatus string
+
+const (
+	SessionStatusPending SessionStatus = "pending" // Authorization initiated
+	SessionStatusSuccess SessionStatus = "success" // Provider created successfully
+	SessionStatusFailed  SessionStatus = "failed"  // Authorization failed
+)
+
+// SessionState holds information about an OAuth session
+type SessionState struct {
+	SessionID    string        `json:"session_id"`
+	Status       SessionStatus `json:"status"`
+	Provider     ProviderType  `json:"provider"`
+	UserID       string        `json:"user_id"`
+	CreatedAt    time.Time     `json:"created_at"`
+	ExpiresAt    time.Time     `json:"expires_at"`
+	ProviderUUID string        `json:"provider_uuid,omitempty"` // Set when success
+	Error        string        `json:"error,omitempty"`         // Set when failed
+}
+
 // Manager handles OAuth flows
 type Manager struct {
 	config   *Config
@@ -28,6 +49,10 @@ type Manager struct {
 	// State management for OAuth flow
 	states map[string]*StateData
 	mu     sync.RWMutex
+
+	// Session management for OAuth authorization tracking
+	sessions   map[string]*SessionState
+	sessionsMu sync.RWMutex
 }
 
 // StateData holds information about an OAuth state
@@ -42,6 +67,7 @@ type StateData struct {
 	Name          string // Optional custom provider name
 	CodeVerifier  string // PKCE code verifier (for PKCE flow)
 	RedirectURI   string // Actual redirect_uri used in auth request (must match in token request)
+	SessionID     string // Session ID for status tracking
 }
 
 // NewManager creates a new OAuth manager
@@ -57,10 +83,12 @@ func NewManager(config *Config, registry *Registry) *Manager {
 		config:   config,
 		registry: registry,
 		states:   make(map[string]*StateData),
+		sessions: make(map[string]*SessionState),
 	}
 
 	// Start cleanup goroutine
 	go m.cleanupExpiredStates()
+	go m.cleanupExpiredSessions()
 
 	return m
 }
@@ -154,7 +182,7 @@ func (m *Manager) cleanupExpiredStates() {
 }
 
 // GetAuthURL generates the OAuth authorization URL for a provider
-func (m *Manager) GetAuthURL(ctx context.Context, userID string, providerType ProviderType, redirectTo string, name string) (string, string, error) {
+func (m *Manager) GetAuthURL(ctx context.Context, userID string, providerType ProviderType, redirectTo string, name string, sessionID string) (string, string, error) {
 	config, ok := m.registry.Get(providerType)
 	if !ok {
 		return "", "", fmt.Errorf("%w: %s", ErrInvalidProvider, providerType)
@@ -195,6 +223,7 @@ func (m *Manager) GetAuthURL(ctx context.Context, userID string, providerType Pr
 		Name:         name,
 		CodeVerifier: codeVerifier,
 		RedirectURI:  redirectURI,
+		SessionID:    sessionID,
 	}); err != nil {
 		return "", "", err
 	}
@@ -295,6 +324,7 @@ func (m *Manager) HandleCallback(ctx context.Context, r *http.Request) (*Token, 
 	token.Provider = stateData.Provider
 	token.RedirectTo = stateData.RedirectTo
 	token.Name = stateData.Name
+	token.SessionID = stateData.SessionID
 
 	// Save token
 	if err := m.config.TokenStorage.SaveToken(stateData.UserID, stateData.Provider, token); err != nil {
@@ -884,4 +914,96 @@ func (m *Manager) debugRequest(req *http.Request, isJSON bool) {
 		}
 	}
 	logrus.Debug("================================")
+}
+
+// =============================================
+// Session Management for OAuth Status Tracking
+// =============================================
+
+// generateSessionID generates a unique session ID
+func (m *Manager) generateSessionID() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("failed to generate session ID: %w", err)
+	}
+	return hex.EncodeToString(b), nil
+}
+
+// CreateSession creates a new OAuth session with pending status
+func (m *Manager) CreateSession(userID string, provider ProviderType) (*SessionState, error) {
+	sessionID, err := m.generateSessionID()
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	session := &SessionState{
+		SessionID: sessionID,
+		Status:    SessionStatusPending,
+		Provider:  provider,
+		UserID:    userID,
+		CreatedAt: now,
+		ExpiresAt: now.Add(10 * time.Minute), // Session expires after 10 minutes
+	}
+
+	m.sessionsMu.Lock()
+	m.sessions[sessionID] = session
+	m.sessionsMu.Unlock()
+
+	return session, nil
+}
+
+// GetSession retrieves a session by ID
+func (m *Manager) GetSession(sessionID string) (*SessionState, error) {
+	m.sessionsMu.RLock()
+	defer m.sessionsMu.RUnlock()
+
+	session, ok := m.sessions[sessionID]
+	if !ok {
+		return nil, fmt.Errorf("session not found")
+	}
+
+	if time.Now().After(session.ExpiresAt) {
+		return nil, fmt.Errorf("session expired")
+	}
+
+	return session, nil
+}
+
+// UpdateSessionStatus updates the status of a session
+func (m *Manager) UpdateSessionStatus(sessionID string, status SessionStatus, providerUUID string, errMsg string) error {
+	m.sessionsMu.Lock()
+	defer m.sessionsMu.Unlock()
+
+	session, ok := m.sessions[sessionID]
+	if !ok {
+		return fmt.Errorf("session not found")
+	}
+
+	session.Status = status
+	if providerUUID != "" {
+		session.ProviderUUID = providerUUID
+	}
+	if errMsg != "" {
+		session.Error = errMsg
+	}
+
+	return nil
+}
+
+// cleanupExpiredSessions removes expired sessions periodically
+func (m *Manager) cleanupExpiredSessions() {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		m.sessionsMu.Lock()
+		now := time.Now()
+		for key, session := range m.sessions {
+			if now.After(session.ExpiresAt) {
+				delete(m.sessions, key)
+			}
+		}
+		m.sessionsMu.Unlock()
+	}
 }
