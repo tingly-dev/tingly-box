@@ -268,7 +268,8 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 			GlobalConfig: appConfig.GetGlobalConfig(),
 			IsDaemon:     false,
 		})
-		fmt.Println("Tip: Use 'tingly-box stop' to stop the running server first")
+		fmt.Println("Tip: Use 'tingly-box restart' or 'npx tingly-box restart' to restart the server")
+		fmt.Println("     Use 'tingly-box stop' or 'npx tingly-box stop' to stop it")
 		return nil
 	}
 
