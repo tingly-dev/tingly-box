@@ -683,9 +683,9 @@ func (m *Manager) PollForToken(ctx context.Context, data *DeviceCodeData, callba
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	// Create a timeout context with 5 minute limit for polling
+	// Create a timeout context with 2 minute limit for polling
 	// User needs time to: open link, enter code, and complete authorization
-	const pollTimeout = 5 * time.Minute
+	const pollTimeout = 2 * time.Minute
 	timeoutCtx, cancel := context.WithTimeout(ctx, pollTimeout)
 	defer cancel()
 
