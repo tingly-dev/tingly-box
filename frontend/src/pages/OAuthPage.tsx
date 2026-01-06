@@ -41,6 +41,11 @@ const OAuthPage = () => {
         setOAuthDialogOpen(true);
     };
 
+    const handleOAuthSuccess = () => {
+        showNotification('OAuth provider added successfully!', 'success');
+        loadProviders();
+    };
+
     const loadProviders = async () => {
         setLoading(true);
         const result = await api.getProviders();
@@ -166,7 +171,7 @@ const OAuthPage = () => {
             <OAuthDialog
                 open={oauthDialogOpen}
                 onClose={() => setOAuthDialogOpen(false)}
-                onSuccess={() => window.location.reload()}
+                onSuccess={handleOAuthSuccess}
             />
 
             {/* OAuth Detail/Edit Dialog */}

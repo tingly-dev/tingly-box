@@ -1,20 +1,20 @@
-import {Close, Launch, ContentCopy, OpenInNew, CheckCircle} from '@mui/icons-material';
+import {CheckCircle, Close, ContentCopy, Launch, OpenInNew} from '@mui/icons-material';
 import {
+    Alert,
     Box,
     Button,
     Card,
     CardContent,
+    CircularProgress,
     Dialog,
     DialogContent,
     DialogTitle,
     IconButton,
     Stack,
     Typography,
-    Alert,
-    CircularProgress,
 } from '@mui/material';
-import {Claude, Google, Qwen, Gemini} from '@lobehub/icons';
-import {useState, useEffect} from 'react';
+import {Claude, Gemini, Google, Qwen} from '@lobehub/icons';
+import {useEffect, useState} from 'react';
 import api from "@/services/api.ts";
 
 interface OAuthProvider {
@@ -90,6 +90,7 @@ interface OAuthAuthorizationData {
     interval?: number;
     provider?: string;
     flow_type: 'standard' | 'device_code';
+    session_id?: string; // Session ID for status tracking
 }
 
 interface OAuthDialogProps {
@@ -100,11 +101,11 @@ interface OAuthDialogProps {
 
 // OAuth Authorization Dialog - unified UI for both standard and device code flow
 const OAuthAuthorizationDialog = ({
-    open,
-    onClose,
-    authData,
-    onSuccess
-}: {
+                                      open,
+                                      onClose,
+                                      authData,
+                                      onSuccess
+                                  }: {
     open: boolean;
     onClose: () => void;
     authData: OAuthAuthorizationData | null;
@@ -124,11 +125,33 @@ const OAuthAuthorizationDialog = ({
                 }
             }
             setOpened(true);
+
+            // START POLLING LOGIC - PLACEHOLDER FOR USER TO IMPLEMENT
+            // TODO: Implement polling for session status
+            if (authData.session_id) {
+                pollSessionStatus(authData.session_id);
+            }
         }
         if (!open) {
             setOpened(false);
         }
     }, [open, authData, opened]);
+
+    // POLLING PLACEHOLDER - User needs to implement this with actual API call
+    const pollSessionStatus = async (sessionId: string) => {
+        const interval = setInterval(async () => {
+            // TODO: Replace with actual API call
+            const {oauthApi} = await api.instances()
+            const response = await oauthApi.apiV1OauthStatusGet(sessionId);
+            if (response.data.data.status === 'success') {
+                clearInterval(interval);
+                onSuccess?.();
+            } else if (response.data.data.status === 'failed') {
+                clearInterval(interval);
+                // Handle error
+            }
+        }, 2000); // Poll every 2 seconds
+    };
 
     const copyUserCode = () => {
         if (authData?.user_code) {
@@ -230,7 +253,7 @@ const OAuthAuthorizationDialog = ({
                                 : 'Step 1: Complete authorization'}
                         </Typography>
                         <Box sx={{display: 'flex', alignItems: 'center', gap: 2}}>
-                            <CircularProgress size={20} />
+                            <CircularProgress size={20}/>
                             <Typography variant="body2" color="text.secondary">
                                 {isDeviceCode
                                     ? 'Waiting for you to complete the authorization...'
@@ -324,7 +347,8 @@ const OAuthDialog = ({open, onClose, onSuccess}: OAuthDialogProps) => {
                     expires_in: data.expires_in,
                     interval: data.interval,
                     provider: provider.name,
-                    flow_type: flowType
+                    flow_type: flowType,
+                    session_id: data.session_id, // Session ID for status tracking
                 });
                 setAuthDialogOpen(true);
             }
@@ -339,124 +363,125 @@ const OAuthDialog = ({open, onClose, onSuccess}: OAuthDialogProps) => {
 
     return (
         <>
-        <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-            <DialogTitle>
-                <Stack direction="row" alignItems="center" justifyContent="space-between">
-                    <Typography variant="h6">Add OAuth Provider</Typography>
-                    <IconButton onClick={onClose} size="small">
-                        <Close/>
-                    </IconButton>
-                </Stack>
-            </DialogTitle>
-            <DialogContent>
-                <Box sx={{mb: 3}}>
-                    <Typography variant="body2" color="text.secondary">
-                        Select a provider to authorize access via OAuth. You will be redirected to the provider&apos;s
-                        authorization page.
-                    </Typography>
-                </Box>
-
-                <Box
-                    sx={{
-                        display: 'grid',
-                        gridTemplateColumns: {
-                            xs: '1fr',
-                            sm: 'repeat(2, 1fr)',
-                            md: 'repeat(3, 1fr)',
-                        },
-                        gap: 2,
-                    }}
-                >
-                    {oauthProviders.filter((provider) => {
-                        if (provider.enabled === false) return false;
-                        if (provider.dev && !import.meta.env.DEV) return false;
-                        return true;
-                    }).map((provider) => {
-                        return (
-                            <Box key={provider.id}>
-                                <Card
-                                    sx={{
-                                        height: '100%',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s',
-                                        border: '1px solid',
-                                        borderColor: 'divider',
-                                        '&:hover': {
-                                            borderColor: provider.color,
-                                            boxShadow: 2,
-                                        },
-                                    }}
-                                    onClick={() => handleProviderClick(provider)}
-                                >
-                                    <CardContent sx={{flex: 1, display: 'flex', flexDirection: 'column'}}>
-                                        <Stack direction="row" alignItems="center" spacing={2} sx={{mb: 2}}>
-                                            <Box
-                                                sx={{
-                                                    fontSize: 32,
-                                                    width: 48,
-                                                    height: 48,
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    bgcolor: `${provider.color}15`,
-                                                    borderRadius: 2,
-                                                }}
-                                            >
-                                                {provider.icon}
-                                            </Box>
-                                            <Box sx={{flex: 1}}>
-                                                <Typography variant="subtitle1" sx={{fontWeight: 600}}>
-                                                    {provider.displayName}
-                                                </Typography>
-                                                <Typography variant="caption" color="text.secondary">
-                                                    {provider.name}
-                                                </Typography>
-                                            </Box>
-                                        </Stack>
-
-                                        <Typography variant="body2" color="text.secondary" sx={{mb: 2}}>
-                                            {provider.description}
-                                        </Typography>
-
-                                        <Box sx={{mt: 'auto'}}>
-                                            <Button
-                                                variant="outlined"
-                                                size="small"
-                                                startIcon={<Launch/>}
-                                                disabled={authorizing === provider.id}
-                                                fullWidth
-                                            >
-                                                {authorizing === provider.id ? 'Authorizing...' : 'Authorize'}
-                                            </Button>
-                                        </Box>
-                                    </CardContent>
-                                </Card>
-                            </Box>
-                        );
-                    })}
-                </Box>
-
-                {/* Empty state for future providers */}
-                {oauthProviders.filter((provider) => provider.enabled !== false && (!provider.dev || import.meta.env.DEV)).length === 0 && (
-                    <Box textAlign="center" py={4}>
+            <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+                <DialogTitle>
+                    <Stack direction="row" alignItems="center" justifyContent="space-between">
+                        <Typography variant="h6">Add OAuth Provider</Typography>
+                        <IconButton onClick={onClose} size="small">
+                            <Close/>
+                        </IconButton>
+                    </Stack>
+                </DialogTitle>
+                <DialogContent>
+                    <Box sx={{mb: 3}}>
                         <Typography variant="body2" color="text.secondary">
-                            No OAuth providers configured yet.
+                            Select a provider to authorize access via OAuth. You will be redirected to the
+                            provider&apos;s
+                            authorization page.
                         </Typography>
                     </Box>
-                )}
-            </DialogContent>
-        </Dialog>
 
-        {/* OAuth Authorization Dialog */}
-        <OAuthAuthorizationDialog
-            open={authDialogOpen}
-            onClose={() => setAuthDialogOpen(false)}
-            authData={authData}
-            onSuccess={handleAuthorizationCompleted}
-        />
-    </>
+                    <Box
+                        sx={{
+                            display: 'grid',
+                            gridTemplateColumns: {
+                                xs: '1fr',
+                                sm: 'repeat(2, 1fr)',
+                                md: 'repeat(3, 1fr)',
+                            },
+                            gap: 2,
+                        }}
+                    >
+                        {oauthProviders.filter((provider) => {
+                            if (provider.enabled === false) return false;
+                            if (provider.dev && !import.meta.env.DEV) return false;
+                            return true;
+                        }).map((provider) => {
+                            return (
+                                <Box key={provider.id}>
+                                    <Card
+                                        sx={{
+                                            height: '100%',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s',
+                                            border: '1px solid',
+                                            borderColor: 'divider',
+                                            '&:hover': {
+                                                borderColor: provider.color,
+                                                boxShadow: 2,
+                                            },
+                                        }}
+                                        onClick={() => handleProviderClick(provider)}
+                                    >
+                                        <CardContent sx={{flex: 1, display: 'flex', flexDirection: 'column'}}>
+                                            <Stack direction="row" alignItems="center" spacing={2} sx={{mb: 2}}>
+                                                <Box
+                                                    sx={{
+                                                        fontSize: 32,
+                                                        width: 48,
+                                                        height: 48,
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        bgcolor: `${provider.color}15`,
+                                                        borderRadius: 2,
+                                                    }}
+                                                >
+                                                    {provider.icon}
+                                                </Box>
+                                                <Box sx={{flex: 1}}>
+                                                    <Typography variant="subtitle1" sx={{fontWeight: 600}}>
+                                                        {provider.displayName}
+                                                    </Typography>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        {provider.name}
+                                                    </Typography>
+                                                </Box>
+                                            </Stack>
+
+                                            <Typography variant="body2" color="text.secondary" sx={{mb: 2}}>
+                                                {provider.description}
+                                            </Typography>
+
+                                            <Box sx={{mt: 'auto'}}>
+                                                <Button
+                                                    variant="outlined"
+                                                    size="small"
+                                                    startIcon={<Launch/>}
+                                                    disabled={authorizing === provider.id}
+                                                    fullWidth
+                                                >
+                                                    {authorizing === provider.id ? 'Authorizing...' : 'Authorize'}
+                                                </Button>
+                                            </Box>
+                                        </CardContent>
+                                    </Card>
+                                </Box>
+                            );
+                        })}
+                    </Box>
+
+                    {/* Empty state for future providers */}
+                    {oauthProviders.filter((provider) => provider.enabled !== false && (!provider.dev || import.meta.env.DEV)).length === 0 && (
+                        <Box textAlign="center" py={4}>
+                            <Typography variant="body2" color="text.secondary">
+                                No OAuth providers configured yet.
+                            </Typography>
+                        </Box>
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            {/* OAuth Authorization Dialog */}
+            <OAuthAuthorizationDialog
+                open={authDialogOpen}
+                onClose={() => setAuthDialogOpen(false)}
+                authData={authData}
+                onSuccess={handleAuthorizationCompleted}
+            />
+        </>
     );
 };
 
