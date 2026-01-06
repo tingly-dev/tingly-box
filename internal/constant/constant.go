@@ -1,21 +1,17 @@
-package config
+package constant
 
 import (
 	"path/filepath"
-	"time"
+
 	"tingly-box/internal/util"
 )
 
 const (
 	// ConfigDirName is the main configuration directory name
-	ConfigDirName = ".tingly-box"
 
 	// ModelsDirName is the subdirectory for provider model configurations
-	ModelsDirName = "models"
 
-	LogDirName      = "log"
-	StateDirName    = "state"
-	StatsDBFileName = "stats.db" // SQLite database file
+	LogDirName = "log"
 
 	// DebugLogFileName is the name of the debug log file
 	DebugLogFileName = "bad_requests.log"
@@ -28,16 +24,26 @@ const (
 	// DefaultMaxTokens is the default max_tokens value for API requests
 	DefaultMaxTokens = 8192
 
-	// Load balancing threshold defaults
-	DefaultRequestThreshold = int64(10)    // Default request threshold for round-robin and hybrid tactics
-	DefaultTokenThreshold   = int64(10000) // Default token threshold for token-based and hybrid tactics
-
-	DefaultTemplateHTTPTimeout = 30 * time.Second // Default HTTP timeout for fetching templates
-
 	// Template cache constants
-	DefaultTemplateCacheTTL = 12 * time.Hour // Default TTL for template cache
-	TemplateCacheFileName   = "provider_template.json"
+
 )
+
+const StateDirName = "state"
+
+const StatsDBFileName = "stats.db" // SQLite database file
+
+// Load balancing threshold defaults
+const DefaultRequestThreshold = int64(10)  // Default request threshold for round-robin and hybrid tactics
+const DefaultTokenThreshold = int64(10000) // Default token threshold for token-based and hybrid tactics
+
+const ConfigDirName = ".tingly-box"
+
+const ModelsDirName = "models"
+
+// GetStateDir returns the directory used for persisted runtime state
+func GetStateDir() string {
+	return filepath.Join(GetTinglyConfDir(), StateDirName)
+}
 
 // GetTinglyConfDir returns the config directory path (default: ~/.tingly-box)
 func GetTinglyConfDir() string {
@@ -52,9 +58,4 @@ func GetTinglyConfDir() string {
 // GetModelsDir returns the models directory path
 func GetModelsDir() string {
 	return filepath.Join(GetTinglyConfDir(), ModelsDirName)
-}
-
-// GetStateDir returns the directory used for persisted runtime state
-func GetStateDir() string {
-	return filepath.Join(GetTinglyConfDir(), StateDirName)
 }

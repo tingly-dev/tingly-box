@@ -5,6 +5,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
+
 	"tingly-box/internal/config"
 )
 

@@ -4,10 +4,10 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/gin-gonic/gin"
+
 	"tingly-box/internal/auth"
 	"tingly-box/internal/config"
-
-	"github.com/gin-gonic/gin"
 )
 
 // AuthMiddleware provides authentication middleware for different types of authentication

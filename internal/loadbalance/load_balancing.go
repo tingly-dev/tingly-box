@@ -1,4 +1,4 @@
-package config
+package loadbalance
 
 import (
 	"encoding/json"

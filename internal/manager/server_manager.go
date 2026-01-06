@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gin-gonic/gin"
+
 	"tingly-box/internal/config"
 	"tingly-box/internal/server"
-
-	"github.com/gin-gonic/gin"
 )
 
 const StopTimeout = time.Second * 10

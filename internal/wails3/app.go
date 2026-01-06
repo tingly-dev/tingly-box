@@ -5,11 +5,11 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/wailsapp/wails/v3/pkg/application"
+
 	assets "tingly-box/internal"
 	"tingly-box/internal/util"
 	"tingly-box/internal/wails3/services"
-
-	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 const (

@@ -9,17 +9,19 @@ import (
 	"path/filepath"
 	"time"
 
-	"tingly-box/internal/auth"
-	"tingly-box/internal/config"
-	"tingly-box/internal/obs"
-	"tingly-box/internal/server/background"
-	"tingly-box/internal/server/middleware"
-	"tingly-box/internal/util"
-	oauth2 "tingly-box/pkg/oauth"
-
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/browser"
 	"github.com/sirupsen/logrus"
+
+	"tingly-box/internal/auth"
+	"tingly-box/internal/config"
+	"tingly-box/internal/config/template"
+	"tingly-box/internal/constant"
+	"tingly-box/internal/obs"
+	"tingly-box/internal/server/background"
+	"tingly-box/internal/server/middleware"
+	"tingly-box/internal/util/network"
+	oauth2 "tingly-box/pkg/oauth"
 )
 
 // Server represents the HTTP server
@@ -28,7 +30,7 @@ type Server struct {
 	jwtManager *auth.JWTManager
 	engine     *gin.Engine
 	httpServer *http.Server
-	watcher    *config.ConfigWatcher
+	watcher    *config.Watcher
 	logger     *obs.MemoryLogger
 
 	// middleware
@@ -49,7 +51,7 @@ type Server struct {
 	oauthRefresher *background.OAuthRefresher
 
 	// template manager for provider templates
-	templateManager *config.TemplateManager
+	templateManager *template.TemplateManager
 
 	// options
 	enableUI      bool
@@ -166,7 +168,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 
 	// Initialize debug middleware (only if debug mode is enabled)
 	var errorMW *middleware.ErrorLogMiddleware
-	errorLogPath := filepath.Join(cfg.ConfigDir, config.LogDirName, config.DebugLogFileName)
+	errorLogPath := filepath.Join(cfg.ConfigDir, constant.LogDirName, constant.DebugLogFileName)
 	errorMW = middleware.NewErrorLogMiddleware(errorLogPath, 10)
 
 	// Set filter expression from config
@@ -227,8 +229,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.oauthRefresher = tokenRefresher
 
 	// Initialize template manager with GitHub URL for template sync
-	const templateGitHubURL = "https://raw.githubusercontent.com/tingly-dev/tingly-box/main/internal/config/provider_templates.json"
-	templateManager := config.NewTemplateManager(templateGitHubURL)
+	templateManager := template.NewDefaultTemplateManager()
 	if err := templateManager.Initialize(); err != nil {
 		log.Printf("Failed to fetch from GitHub, using embedded provider templates: %v", err)
 	} else {
@@ -399,7 +400,7 @@ func (s *Server) Start(port int) error {
 		Handler: s.engine,
 	}
 
-	resolvedHost := util.ResolveHost(s.host)
+	resolvedHost := network.ResolveHost(s.host)
 	if !s.enableUI {
 		fmt.Printf("OpenAI v1 Chat API endpoint: http://%s:%d/openai/v1/chat/completions\n", resolvedHost, port)
 		fmt.Printf("Anthropic v1 Message API endpoint: http://%s:%d/anthropic/v1/messages\n", resolvedHost, port)

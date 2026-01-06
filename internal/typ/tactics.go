@@ -1,4 +1,4 @@
-package config
+package typ
 
 import (
 	"encoding/json"
@@ -6,6 +6,9 @@ import (
 	"math/rand"
 	"strings"
 	"sync"
+
+	"tingly-box/internal/constant"
+	"tingly-box/internal/loadbalance"
 )
 
 // Global state for round-robin tactics (keyed by rule UUID)
@@ -14,8 +17,8 @@ var globalRoundRobinStreaks sync.Map
 
 // Tactic bundles the strategy type and its parameters together
 type Tactic struct {
-	Type   TacticType   `json:"type" yaml:"type"`
-	Params TacticParams `json:"params" yaml:"params"`
+	Type   loadbalance.TacticType `json:"type" yaml:"type"`
+	Params TacticParams           `json:"params" yaml:"params"`
 }
 
 // UnmarshalJSON handles the polymorphic decoding of TacticParams
@@ -34,13 +37,13 @@ func (tc *Tactic) UnmarshalJSON(data []byte) error {
 
 	// Assign the concrete struct based on the type
 	switch tc.Type {
-	case TacticRoundRobin:
+	case loadbalance.TacticRoundRobin:
 		tc.Params = &RoundRobinParams{}
-	case TacticTokenBased:
+	case loadbalance.TacticTokenBased:
 		tc.Params = &TokenBasedParams{}
-	case TacticHybrid:
+	case loadbalance.TacticHybrid:
 		tc.Params = &HybridParams{}
-	case TacticRandom:
+	case loadbalance.TacticRandom:
 		tc.Params = &RandomParams{}
 	default:
 		return nil
@@ -62,32 +65,32 @@ func (tc *Tactic) Instantiate() LoadBalancingTactic {
 
 // ParseTacticFromMap creates a Tactic from a tactic type and parameter map.
 // This is useful for parsing API request parameters into a Tactic configuration.
-func ParseTacticFromMap(tacticType TacticType, params map[string]interface{}) Tactic {
+func ParseTacticFromMap(tacticType loadbalance.TacticType, params map[string]interface{}) Tactic {
 	var tacticParams TacticParams
 	switch tacticType {
-	case TacticRoundRobin:
+	case loadbalance.TacticRoundRobin:
 		if params != nil {
 			tacticParams = &RoundRobinParams{
-				RequestThreshold: getIntParamFromMap(params, "request_threshold", DefaultRequestThreshold),
+				RequestThreshold: getIntParamFromMap(params, "request_threshold", constant.DefaultRequestThreshold),
 			}
 		} else {
 			tacticParams = DefaultRoundRobinParams()
 		}
-	case TacticRandom:
+	case loadbalance.TacticRandom:
 		tacticParams = DefaultRandomParams()
-	case TacticTokenBased:
+	case loadbalance.TacticTokenBased:
 		if params != nil {
 			tacticParams = &TokenBasedParams{
-				TokenThreshold: getIntParamFromMap(params, "token_threshold", DefaultTokenThreshold),
+				TokenThreshold: getIntParamFromMap(params, "token_threshold", constant.DefaultTokenThreshold),
 			}
 		} else {
 			tacticParams = DefaultTokenBasedParams()
 		}
-	case TacticHybrid:
+	case loadbalance.TacticHybrid:
 		if params != nil {
 			tacticParams = &HybridParams{
-				RequestThreshold: getIntParamFromMap(params, "request_threshold", DefaultRequestThreshold),
-				TokenThreshold:   getIntParamFromMap(params, "token_threshold", DefaultTokenThreshold),
+				RequestThreshold: getIntParamFromMap(params, "request_threshold", constant.DefaultRequestThreshold),
+				TokenThreshold:   getIntParamFromMap(params, "token_threshold", constant.DefaultTokenThreshold),
 			}
 		} else {
 			tacticParams = DefaultHybridParams()
@@ -174,17 +177,17 @@ func NewRandomParams() TacticParams {
 
 // DefaultParams returns default parameters for each tactic type
 func DefaultRoundRobinParams() TacticParams {
-	return RoundRobinParams{RequestThreshold: DefaultRequestThreshold}
+	return RoundRobinParams{RequestThreshold: constant.DefaultRequestThreshold}
 }
 
 func DefaultTokenBasedParams() TacticParams {
-	return TokenBasedParams{TokenThreshold: DefaultTokenThreshold}
+	return TokenBasedParams{TokenThreshold: constant.DefaultTokenThreshold}
 }
 
 func DefaultHybridParams() TacticParams {
 	return HybridParams{
-		RequestThreshold: DefaultRequestThreshold,
-		TokenThreshold:   DefaultTokenThreshold,
+		RequestThreshold: constant.DefaultRequestThreshold,
+		TokenThreshold:   constant.DefaultTokenThreshold,
 	}
 }
 
@@ -215,9 +218,9 @@ func AsRandomParams(p TacticParams) (RandomParams, bool) {
 
 // LoadBalancingTactic defines the interface for load balancing strategies
 type LoadBalancingTactic interface {
-	SelectService(rule *Rule) *Service
+	SelectService(rule *Rule) *loadbalance.Service
 	GetName() string
-	GetType() TacticType
+	GetType() loadbalance.TacticType
 }
 
 // RoundRobinTactic implements round-robin load balancing based on request count
@@ -227,7 +230,7 @@ type RoundRobinTactic struct {
 
 // NewRoundRobinTactic creates a new round-robin tactic with optional threshold parameter
 func NewRoundRobinTactic(requestThreshold ...int64) *RoundRobinTactic {
-	threshold := DefaultRequestThreshold // Default 100 requests per service
+	threshold := constant.DefaultRequestThreshold // Default 100 requests per service
 	if len(requestThreshold) > 0 && requestThreshold[0] > 0 {
 		threshold = requestThreshold[0]
 	}
@@ -235,7 +238,7 @@ func NewRoundRobinTactic(requestThreshold ...int64) *RoundRobinTactic {
 }
 
 // SelectService selects the next service based on round-robin with request threshold
-func (rr *RoundRobinTactic) SelectService(rule *Rule) *Service {
+func (rr *RoundRobinTactic) SelectService(rule *Rule) *loadbalance.Service {
 	// Get active services once to avoid duplicate filtering
 	activeServices := rule.GetActiveServices()
 	if len(activeServices) == 0 {
@@ -286,8 +289,8 @@ func (rr *RoundRobinTactic) GetName() string {
 	return "Round Robin"
 }
 
-func (rr *RoundRobinTactic) GetType() TacticType {
-	return TacticRoundRobin
+func (rr *RoundRobinTactic) GetType() loadbalance.TacticType {
+	return loadbalance.TacticRoundRobin
 }
 
 // TokenBasedTactic implements load balancing based on token consumption
@@ -298,13 +301,13 @@ type TokenBasedTactic struct {
 // NewTokenBasedTactic creates a new token-based tactic
 func NewTokenBasedTactic(tokenThreshold int64) *TokenBasedTactic {
 	if tokenThreshold <= 0 {
-		tokenThreshold = DefaultTokenThreshold // Default threshold
+		tokenThreshold = constant.DefaultTokenThreshold // Default threshold
 	}
 	return &TokenBasedTactic{TokenThreshold: tokenThreshold}
 }
 
 // SelectService selects service based on token consumption thresholds
-func (tb *TokenBasedTactic) SelectService(rule *Rule) *Service {
+func (tb *TokenBasedTactic) SelectService(rule *Rule) *loadbalance.Service {
 	// Get active services once to avoid duplicate filtering
 	activeServices := rule.GetActiveServices()
 	if len(activeServices) == 0 {
@@ -326,7 +329,7 @@ func (tb *TokenBasedTactic) SelectService(rule *Rule) *Service {
 	}
 
 	// Find service with lowest token usage in current window
-	var selectedService *Service
+	var selectedService *loadbalance.Service
 	var lowestTokens int64 = -1
 
 	for _, service := range activeServices {
@@ -344,8 +347,8 @@ func (tb *TokenBasedTactic) GetName() string {
 	return "Token Based"
 }
 
-func (tb *TokenBasedTactic) GetType() TacticType {
-	return TacticTokenBased
+func (tb *TokenBasedTactic) GetType() loadbalance.TacticType {
+	return loadbalance.TacticTokenBased
 }
 
 // HybridTactic implements a hybrid load balancing strategy
@@ -357,10 +360,10 @@ type HybridTactic struct {
 // NewHybridTactic creates a new hybrid tactic
 func NewHybridTactic(requestThreshold, tokenThreshold int64) *HybridTactic {
 	if requestThreshold <= 0 {
-		requestThreshold = DefaultRequestThreshold // Default
+		requestThreshold = constant.DefaultRequestThreshold // Default
 	}
 	if tokenThreshold <= 0 {
-		tokenThreshold = DefaultTokenThreshold // Default
+		tokenThreshold = constant.DefaultTokenThreshold // Default
 	}
 	return &HybridTactic{
 		RequestThreshold: requestThreshold,
@@ -369,7 +372,7 @@ func NewHybridTactic(requestThreshold, tokenThreshold int64) *HybridTactic {
 }
 
 // SelectService selects service based on both request count and token consumption
-func (ht *HybridTactic) SelectService(rule *Rule) *Service {
+func (ht *HybridTactic) SelectService(rule *Rule) *loadbalance.Service {
 	// Get active services once to avoid duplicate filtering
 	activeServices := rule.GetActiveServices()
 	if len(activeServices) == 0 {
@@ -391,7 +394,7 @@ func (ht *HybridTactic) SelectService(rule *Rule) *Service {
 	}
 
 	// Score services based on combined usage (lower score is better)
-	var selectedService *Service
+	var selectedService *loadbalance.Service
 	var lowestScore int64 = -1
 
 	for _, service := range activeServices {
@@ -412,8 +415,8 @@ func (ht *HybridTactic) GetName() string {
 	return "Hybrid"
 }
 
-func (ht *HybridTactic) GetType() TacticType {
-	return TacticHybrid
+func (ht *HybridTactic) GetType() loadbalance.TacticType {
+	return loadbalance.TacticHybrid
 }
 
 // RandomTactic implements random selection with weighted probability
@@ -425,7 +428,7 @@ func NewRandomTactic() *RandomTactic {
 }
 
 // SelectService selects a service randomly based on weights
-func (rt *RandomTactic) SelectService(rule *Rule) *Service {
+func (rt *RandomTactic) SelectService(rule *Rule) *loadbalance.Service {
 	// Use the rule's method to get active services
 	activeServices := rule.GetActiveServices()
 	if len(activeServices) == 0 {
@@ -463,15 +466,15 @@ func (rt *RandomTactic) GetName() string {
 	return "Random"
 }
 
-func (rt *RandomTactic) GetType() TacticType {
-	return TacticRandom
+func (rt *RandomTactic) GetType() loadbalance.TacticType {
+	return loadbalance.TacticRandom
 }
 
 // Pre-created singleton tactic instances
 var (
 	defaultRoundRobinTactic = NewRoundRobinTactic()
-	defaultTokenBasedTactic = NewTokenBasedTactic(DefaultTokenThreshold)
-	defaultHybridTactic     = NewHybridTactic(DefaultRequestThreshold, DefaultTokenThreshold)
+	defaultTokenBasedTactic = NewTokenBasedTactic(constant.DefaultTokenThreshold)
+	defaultHybridTactic     = NewHybridTactic(constant.DefaultRequestThreshold, constant.DefaultTokenThreshold)
 	defaultRandomTactic     = NewRandomTactic()
 )
 
@@ -490,33 +493,33 @@ func IsValidTactic(tacticStr string) bool {
 	return validTactics[input]
 }
 
-func CreateTacticWithTypedParams(tacticType TacticType, params TacticParams) LoadBalancingTactic {
+func CreateTacticWithTypedParams(tacticType loadbalance.TacticType, params TacticParams) LoadBalancingTactic {
 	switch tacticType {
-	case TacticRoundRobin:
+	case loadbalance.TacticRoundRobin:
 		if rp, ok := params.(*RoundRobinParams); ok {
 			return NewRoundRobinTactic(rp.RequestThreshold)
 		}
-	case TacticTokenBased:
+	case loadbalance.TacticTokenBased:
 		if tp, ok := params.(*TokenBasedParams); ok {
 			return NewTokenBasedTactic(tp.TokenThreshold)
 		}
-	case TacticHybrid:
+	case loadbalance.TacticHybrid:
 		if hp, ok := params.(*HybridParams); ok {
 			return NewHybridTactic(hp.RequestThreshold, hp.TokenThreshold)
 		}
-	case TacticRandom:
+	case loadbalance.TacticRandom:
 		return defaultRandomTactic
 	}
 	return GetDefaultTactic(tacticType)
 }
 
-func GetDefaultTactic(tType TacticType) LoadBalancingTactic {
+func GetDefaultTactic(tType loadbalance.TacticType) LoadBalancingTactic {
 	switch tType {
-	case TacticTokenBased:
+	case loadbalance.TacticTokenBased:
 		return defaultTokenBasedTactic
-	case TacticHybrid:
+	case loadbalance.TacticHybrid:
 		return defaultHybridTactic
-	case TacticRandom:
+	case loadbalance.TacticRandom:
 		return defaultRandomTactic
 	default:
 		return defaultRoundRobinTactic

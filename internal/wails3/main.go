@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"log"
 
-	"tingly-box/internal/util"
-
 	"github.com/gin-gonic/gin"
+
+	"tingly-box/internal/util/network"
 )
 
 func init() {
@@ -54,7 +54,7 @@ func main() {
 	}
 
 	// Check if port is available before starting the app
-	available, info := util.IsPortAvailableWithInfo("localhost", port)
+	available, info := network.IsPortAvailableWithInfo("localhost", port)
 	log.Printf("[Port Check] Port %d: available=%v, info=%s", port, available, info)
 
 	if !available {
