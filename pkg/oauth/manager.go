@@ -950,6 +950,13 @@ func (m *Manager) CreateSession(userID string, provider ProviderType) (*SessionS
 	m.sessions[sessionID] = session
 	m.sessionsMu.Unlock()
 
+	logrus.WithFields(logrus.Fields{
+		"session_id": sessionID,
+		"provider":   provider,
+		"user_id":    userID,
+		"status":     SessionStatusPending,
+	}).Info("[OAuth] Session created")
+
 	return session, nil
 }
 
@@ -977,6 +984,7 @@ func (m *Manager) UpdateSessionStatus(sessionID string, status SessionStatus, pr
 
 	session, ok := m.sessions[sessionID]
 	if !ok {
+		logrus.WithField("session_id", sessionID).Warn("[OAuth] Failed to update session: not found")
 		return fmt.Errorf("session not found")
 	}
 
@@ -986,6 +994,22 @@ func (m *Manager) UpdateSessionStatus(sessionID string, status SessionStatus, pr
 	}
 	if errMsg != "" {
 		session.Error = errMsg
+	}
+
+	// Log session status change
+	logEntry := logrus.WithFields(logrus.Fields{
+		"session_id":    sessionID,
+		"provider":      session.Provider,
+		"new_status":    status,
+		"provider_uuid": providerUUID,
+	})
+
+	if status == SessionStatusSuccess {
+		logEntry.Info("[OAuth] Session completed successfully")
+	} else if status == SessionStatusFailed {
+		logEntry.WithField("error", errMsg).Error("[OAuth] Session failed")
+	} else {
+		logEntry.Debug("[OAuth] Session status updated")
 	}
 
 	return nil
