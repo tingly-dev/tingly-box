@@ -376,8 +376,98 @@
       "models": [],
       "model_limits": {},
       "supports_models_endpoint": true
+    },
+    "claude_code": {
+      "id": "claude_code",
+      "name": "Anthropic Claude Code (OAuth)",
+      "status": "active",
+      "valid": true,
+      "website": "https://claude.ai",
+      "description": "Anthropic Claude Code API via OAuth authorization",
+      "auth_type": "oauth",
+      "api_doc": "https://docs.anthropic.com/en/api/getting-started-with-claude",
+      "model_doc": "https://docs.anthropic.com/en/docs/about-claude/models",
+      "pricing_doc": "https://www.anthropic.com/pricing",
+      "base_url_openai": null,
+      "base_url_anthropic": "https://api.anthropic.com",
+      "models": [],
+      "model_limits": {
+        "claude-3-5-sonnet": 8192,
+        "claude-3-5-haiku": 8192,
+        "claude-3-opus": 4096,
+        "claude-3-sonnet": 8192,
+        "claude-3-haiku": 4096
+      },
+      "supports_models_endpoint": true,
+      "oauth_provider": "claude_code"
+    },
+    "qwen_code": {
+      "id": "qwen_code",
+      "name": "Qwen Code (OAuth)",
+      "status": "active",
+      "valid": true,
+      "website": "https://portal.qwen.ai",
+      "description": "Qwen Code API via OAuth device code flow",
+      "auth_type": "oauth",
+      "api_doc": "https://portal.qwen.ai/docs",
+      "model_doc": "https://portal.qwen.ai/docs/models",
+      "pricing_doc": "https://portal.qwen.ai/docs/pricing",
+      "base_url_openai": "https://portal.qwen.ai/v1",
+      "base_url_anthropic": null,
+      "models": [
+        "qwen3-coder-plus",
+        "qwen3-coder-flash",
+        "vision-model"
+      ],
+      "model_limits": {
+        "qwen3-coder-plus": 8192,
+        "qwen3-coder-flash": 2048,
+        "vision-model": 2048
+      },
+      "supports_models_endpoint": false,
+      "oauth_provider": "qwen_code"
+    },
+    "gemini_oauth": {
+      "id": "gemini_oauth",
+      "name": "Google Gemini CLI (OAuth)",
+      "status": "active",
+      "valid": true,
+      "website": "https://ai.google.dev",
+      "description": "Google Gemini API via OAuth authorization",
+      "auth_type": "oauth",
+      "api_doc": "https://ai.google.dev/gemini-api/docs/oauth",
+      "model_doc": "https://ai.google.dev/gemini-api/docs/models",
+      "pricing_doc": "https://ai.google.dev/gemini-api/docs/pricing",
+      "base_url_openai": "https://generativelanguage.googleapis.com/v1beta/openai",
+      "base_url_anthropic": null,
+      "models": [],
+      "model_limits": {
+        "gemini-2.0-flash": 8192,
+        "gemini-1.5-pro": 8192,
+        "gemini-1.5-flash": 8192
+      },
+      "supports_models_endpoint": true,
+      "oauth_provider": "gemini"
+    },
+    "antigravity": {
+      "id": "antigravity",
+      "name": "Antigravity (Google OAuth)",
+      "status": "active",
+      "valid": true,
+      "website": "https://cloud.google.com",
+      "description": "Antigravity services via Google OAuth",
+      "auth_type": "oauth",
+      "api_doc": "https://cloud.google.com/docs",
+      "model_doc": "",
+      "pricing_doc": "",
+      "base_url_openai": "https://generativelanguage.googleapis.com",
+      "base_url_anthropic": null,
+      "models": [],
+      "model_limits": {},
+      "supports_models_endpoint": false,
+      "oauth_provider": "antigravity"
     }
   },
-  "version": "1.0.1",
-  "last_updated": "2025-12-29T00:00:00Z"
+  "version": "1.1.0",
+  "last_updated": "2025-01-06T00:00:00Z"
 }
