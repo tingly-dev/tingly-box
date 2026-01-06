@@ -1,4 +1,4 @@
-import {Close, Launch, ContentCopy, OpenInNew, CheckCircle, Refresh} from '@mui/icons-material';
+import {Close, Launch, ContentCopy, OpenInNew, CheckCircle} from '@mui/icons-material';
 import {
     Box,
     Button,
@@ -14,7 +14,7 @@ import {
     CircularProgress,
 } from '@mui/material';
 import {Claude, Google, Qwen, Gemini} from '@lobehub/icons';
-import {useState} from 'react';
+import {useState, useEffect} from 'react';
 import api from "@/services/api.ts";
 
 interface OAuthProvider {
@@ -29,7 +29,8 @@ interface OAuthProvider {
     deviceCodeFlow?: boolean;
 }
 
-const OAUTH_PROVIDERS: OAuthProvider[] = [
+// Fallback hardcoded providers for development or when API is unavailable
+const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
     {
         id: 'claude_code',
         name: 'Claude Code',
@@ -80,80 +81,100 @@ const OAUTH_PROVIDERS: OAuthProvider[] = [
     // Add more providers as needed
 ];
 
-interface DeviceCodeData {
-    device_code: string;
-    user_code: string;
-    verification_uri: string;
+interface OAuthAuthorizationData {
+    auth_url?: string;
+    user_code?: string;
+    verification_uri?: string;
     verification_uri_complete?: string;
-    expires_in: number;
-    interval: number;
-    provider: string;
+    expires_in?: number;
+    interval?: number;
+    provider?: string;
+    flow_type: 'standard' | 'device_code';
 }
 
 interface OAuthDialogProps {
     open: boolean;
     onClose: () => void;
-    onProviderAdded?: () => void; // Callback when provider is added
 }
 
-// Device Code Flow Dialog
-const DeviceCodeDialog = ({open, onClose, deviceCodeData, onProviderAdded}: {
+// OAuth Authorization Dialog - unified UI for both standard and device code flow
+const OAuthAuthorizationDialog = ({
+    open,
+    onClose,
+    authData
+}: {
     open: boolean;
     onClose: () => void;
-    deviceCodeData: DeviceCodeData | null;
-    onProviderAdded?: () => void;
+    authData: OAuthAuthorizationData | null;
 }) => {
-    const [status, setStatus] = useState<'pending' | 'verifying' | 'success'>('pending');
+    const [opened, setOpened] = useState(false);
 
-    const handleVerificationComplete = async () => {
-        setStatus('verifying');
-        // Trigger refresh callback
-        if (onProviderAdded) {
-            await onProviderAdded();
+    // Auto-open authorization URL when dialog opens
+    useEffect(() => {
+        if (open && authData && !opened) {
+            if (authData.flow_type === 'standard' && authData.auth_url) {
+                window.open(authData.auth_url, '_blank');
+            } else if (authData.flow_type === 'device_code') {
+                const url = authData.verification_uri_complete || authData.verification_uri;
+                if (url) {
+                    window.open(url, '_blank');
+                }
+            }
+            setOpened(true);
         }
-        setStatus('success');
-        // Close dialog after showing success state
-        setTimeout(() => {
-            onClose();
-            setStatus('pending');
-        }, 2000);
-    };
+        if (!open) {
+            setOpened(false);
+        }
+    }, [open, authData, opened]);
 
     const copyUserCode = () => {
-        if (deviceCodeData) {
-            navigator.clipboard.writeText(deviceCodeData.user_code);
+        if (authData?.user_code) {
+            void navigator.clipboard.writeText(authData.user_code);
         }
     };
 
-    if (!deviceCodeData) return null;
+    const handleCompleted = () => {
+        // Refresh the page to check for new providers
+        window.location.reload();
+    };
+
+    const handleOpenAuthPage = () => {
+        if (authData?.flow_type === 'standard' && authData.auth_url) {
+            window.open(authData.auth_url, '_blank');
+        } else if (authData?.flow_type === 'device_code') {
+            const url = authData.verification_uri_complete || authData.verification_uri;
+            if (url) {
+                window.open(url, '_blank');
+            }
+        }
+    };
+
+    if (!authData) return null;
+
+    const isDeviceCode = authData.flow_type === 'device_code';
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
             <DialogTitle>
                 <Stack direction="row" alignItems="center" justifyContent="space-between">
-                    <Typography variant="h6">Device Code Authorization</Typography>
-                    <IconButton onClick={onClose} size="small" disabled={status === 'verifying'}>
+                    <Typography variant="h6">
+                        {isDeviceCode ? 'Device Code Authorization' : 'OAuth Authorization'}
+                    </Typography>
+                    <IconButton onClick={onClose} size="small">
                         <Close/>
                     </IconButton>
                 </Stack>
             </DialogTitle>
             <DialogContent>
-                {status === 'success' ? (
-                    <Stack spacing={3} alignItems="center" py={4}>
-                        <CheckCircle sx={{fontSize: 64, color: 'success.main'}} />
-                        <Typography variant="h6" color="success.main">
-                            Provider Added Successfully!
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary" textAlign="center">
-                            The {deviceCodeData.provider} provider has been added to your account.
-                        </Typography>
-                    </Stack>
-                ) : (
-                    <Stack spacing={3}>
-                        <Alert severity="info">
-                            Follow these steps to authorize {deviceCodeData.provider}:
-                        </Alert>
+                <Stack spacing={3}>
+                    <Alert severity="info">
+                        {isDeviceCode
+                            ? `Follow these steps to authorize ${authData.provider}:`
+                            : `Complete the authorization in the opened window for ${authData.provider}.`
+                        }
+                    </Alert>
 
+                    {isDeviceCode && authData.user_code && (
                         <Box>
                             <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                                 Step 1: Visit the authorization page
@@ -161,19 +182,18 @@ const DeviceCodeDialog = ({open, onClose, deviceCodeData, onProviderAdded}: {
                             <Button
                                 variant="outlined"
                                 startIcon={<OpenInNew/>}
-                                href={deviceCodeData.verification_uri_complete || deviceCodeData.verification_uri}
-                                target="_blank"
-                                rel="noopener noreferrer"
+                                onClick={handleOpenAuthPage}
                                 fullWidth
-                                disabled={status === 'verifying'}
                             >
-                                Open {deviceCodeData.verification_uri_complete ? 'Auto-filled Link' : 'Authorization Page'}
+                                Open Authorization Page
                             </Button>
                         </Box>
+                    )}
 
+                    {isDeviceCode && (
                         <Box>
                             <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                                Step 2: Enter this code
+                                Step {authData.user_code ? '2: Enter this code' : '1: Enter the code'}
                             </Typography>
                             <Box
                                 sx={{
@@ -189,72 +209,75 @@ const DeviceCodeDialog = ({open, onClose, deviceCodeData, onProviderAdded}: {
                                 }}
                             >
                                 <Typography variant="h4" sx={{fontFamily: 'monospace', letterSpacing: 2}}>
-                                    {deviceCodeData.user_code}
+                                    {authData.user_code || '------'}
                                 </Typography>
-                                <IconButton onClick={copyUserCode} size="small">
-                                    <ContentCopy/>
-                                </IconButton>
+                                {authData.user_code && (
+                                    <IconButton onClick={copyUserCode} size="small">
+                                        <ContentCopy/>
+                                    </IconButton>
+                                )}
                             </Box>
                         </Box>
+                    )}
 
-                        <Box>
-                            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                                Step 3: Complete authorization
+                    <Box>
+                        <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                            {isDeviceCode
+                                ? `Step ${authData.user_code ? '3' : '2'}: Complete authorization`
+                                : 'Step 1: Complete authorization'}
+                        </Typography>
+                        <Box sx={{display: 'flex', alignItems: 'center', gap: 2}}>
+                            <CircularProgress size={20} />
+                            <Typography variant="body2" color="text.secondary">
+                                {isDeviceCode
+                                    ? 'Waiting for you to complete the authorization...'
+                                    : 'Waiting for authorization to complete...'}
                             </Typography>
-                            {status === 'verifying' ? (
-                                <Box sx={{display: 'flex', alignItems: 'center', gap: 2, py: 1}}>
-                                    <CircularProgress size={20} />
-                                    <Typography variant="body2" color="text.secondary">
-                                        Verifying...
-                                    </Typography>
-                                </Box>
-                            ) : (
-                                <Box sx={{display: 'flex', flexDirection: 'column', gap: 2}}>
-                                    <Box sx={{display: 'flex', alignItems: 'center', gap: 2}}>
-                                        <CircularProgress size={20} />
-                                        <Typography variant="body2" color="text.secondary">
-                                            Waiting for you to complete the authorization...
-                                        </Typography>
-                                    </Box>
-
-                                    <Button
-                                        variant="contained"
-                                        color="primary"
-                                        startIcon={<CheckCircle/>}
-                                        onClick={handleVerificationComplete}
-                                        fullWidth
-                                        sx={{mt: 1}}
-                                    >
-                                        I've Completed Authorization
-                                    </Button>
-                                </Box>
-                            )}
                         </Box>
+                    </Box>
 
+                    {authData.expires_in && (
                         <Alert severity="warning">
-                            This code expires in {Math.floor(deviceCodeData.expires_in / 60)} minutes.
-                            Click the button above after you complete the authorization.
+                            {isDeviceCode
+                                ? `This code expires in ${Math.floor(authData.expires_in / 60)} minutes.`
+                                : 'Please complete the authorization promptly.'}
+                            {isDeviceCode && ' Once authorized, the provider will be automatically added.'}
                         </Alert>
-                    </Stack>
-                )}
+                    )}
+
+                    {!isDeviceCode && (
+                        <Button
+                            variant="outlined"
+                            startIcon={<OpenInNew/>}
+                            onClick={handleOpenAuthPage}
+                            fullWidth
+                        >
+                            Open Authorization Page Again
+                        </Button>
+                    )}
+
+                    {/* Completion button - user can click when done */}
+                    <Button
+                        variant="contained"
+                        color="primary"
+                        startIcon={<CheckCircle/>}
+                        onClick={handleCompleted}
+                        fullWidth
+                        sx={{mt: 3}}
+                    >
+                        I've Completed Authorization
+                    </Button>
+                </Stack>
             </DialogContent>
         </Dialog>
     );
 };
 
-const OAuthDialog = ({open, onClose, onProviderAdded}: OAuthDialogProps) => {
+const OAuthDialog = ({open, onClose}: OAuthDialogProps) => {
     const [authorizing, setAuthorizing] = useState<string | null>(null);
-    const [deviceCodeData, setDeviceCodeData] = useState<DeviceCodeData | null>(null);
-    const [deviceCodeDialogOpen, setDeviceCodeDialogOpen] = useState(false);
-
-    const handleProviderAdded = async () => {
-        // Call the parent callback if provided
-        if (onProviderAdded) {
-            await onProviderAdded();
-        }
-        // Also refresh the page to ensure provider list is updated
-        window.location.reload();
-    };
+    const [authDialogOpen, setAuthDialogOpen] = useState(false);
+    const [authData, setAuthData] = useState<OAuthAuthorizationData | null>(null);
+    const [oauthProviders, setOAuthProviders] = useState<OAuthProvider[]>(FALLBACK_OAUTH_PROVIDERS);
 
     const handleProviderClick = async (provider: OAuthProvider) => {
         if (provider.enabled === false) return;
@@ -276,26 +299,27 @@ const OAuthDialog = ({open, onClose, onProviderAdded}: OAuthDialogProps) => {
             if (response.data.success) {
                 const data = response.data.data as any;
 
-                // Check if this is device code flow (has user_code) or standard auth code flow (has auth_url)
+                // Determine flow type and set auth data
+                let flowType: 'standard' | 'device_code' = 'standard';
+
                 if (data.user_code) {
-                    // Device code flow
-                    setDeviceCodeData(data);
-                    setDeviceCodeDialogOpen(true);
-                    setAuthorizing(null);
-                    return;
-                } else if (data.auth_url) {
-                    // Standard auth code flow - open URL in new window
-                    window.open(data.auth_url, '_blank');
+                    flowType = 'device_code';
                 }
+
+                setAuthData({
+                    auth_url: data.auth_url,
+                    user_code: data.user_code,
+                    verification_uri: data.verification_uri,
+                    verification_uri_complete: data.verification_uri_complete,
+                    expires_in: data.expires_in,
+                    interval: data.interval,
+                    provider: provider.name,
+                    flow_type: flowType
+                });
+                setAuthDialogOpen(true);
             }
 
             console.log('Authorize OAuth for:', provider.id);
-
-            // For standard flow, close dialog after authorization initiated
-            if (!provider.deviceCodeFlow) {
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                onClose();
-            }
         } catch (error) {
             console.error('OAuth authorization failed:', error);
         } finally {
@@ -333,7 +357,7 @@ const OAuthDialog = ({open, onClose, onProviderAdded}: OAuthDialogProps) => {
                         gap: 2,
                     }}
                 >
-                    {OAUTH_PROVIDERS.filter((provider) => {
+                    {oauthProviders.filter((provider) => {
                         if (provider.enabled === false) return false;
                         if (provider.dev && !import.meta.env.DEV) return false;
                         return true;
@@ -405,7 +429,7 @@ const OAuthDialog = ({open, onClose, onProviderAdded}: OAuthDialogProps) => {
                 </Box>
 
                 {/* Empty state for future providers */}
-                {OAUTH_PROVIDERS.length === 0 && (
+                {oauthProviders.filter((provider) => provider.enabled !== false && (!provider.dev || import.meta.env.DEV)).length === 0 && (
                     <Box textAlign="center" py={4}>
                         <Typography variant="body2" color="text.secondary">
                             No OAuth providers configured yet.
@@ -415,12 +439,11 @@ const OAuthDialog = ({open, onClose, onProviderAdded}: OAuthDialogProps) => {
             </DialogContent>
         </Dialog>
 
-        {/* Device Code Flow Dialog */}
-        <DeviceCodeDialog
-            open={deviceCodeDialogOpen}
-            onClose={() => setDeviceCodeDialogOpen(false)}
-            deviceCodeData={deviceCodeData}
-            onProviderAdded={handleProviderAdded}
+        {/* OAuth Authorization Dialog */}
+        <OAuthAuthorizationDialog
+            open={authDialogOpen}
+            onClose={() => setAuthDialogOpen(false)}
+            authData={authData}
         />
     </>
     );
