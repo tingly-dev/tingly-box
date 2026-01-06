@@ -182,7 +182,7 @@ func (m *Manager) cleanupExpiredStates() {
 }
 
 // GetAuthURL generates the OAuth authorization URL for a provider
-func (m *Manager) GetAuthURL(ctx context.Context, userID string, providerType ProviderType, redirectTo string, name string, sessionID string) (string, string, error) {
+func (m *Manager) GetAuthURL(userID string, providerType ProviderType, redirectTo string, name string, sessionID string) (string, string, error) {
 	config, ok := m.registry.Get(providerType)
 	if !ok {
 		return "", "", fmt.Errorf("%w: %s", ErrInvalidProvider, providerType)

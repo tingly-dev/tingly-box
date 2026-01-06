@@ -639,7 +639,7 @@ func (s *Server) AuthorizeOAuth(c *gin.Context) {
 	}
 
 	// Handle standard authorization code flow
-	authURL, state, err := s.oauthManager.GetAuthURL(c.Request.Context(), userID, providerType, req.Redirect, req.Name, session.SessionID)
+	authURL, state, err := s.oauthManager.GetAuthURL(userID, providerType, req.Redirect, req.Name, session.SessionID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, OAuthErrorResponse{
 			Success: false,

@@ -118,6 +118,50 @@ const OAuthPage = () => {
 
     return (
         <PageLayout loading={loading}>
+            {/* Dev Mode Debug Panel */}
+            {import.meta.env.DEV && (
+                <Box sx={{ mb: 2 }}>
+                    <Alert severity="info">
+                        <Typography variant="subtitle2" gutterBottom>
+                            Development Mode - OAuth Debug Panel
+                        </Typography>
+                        <Stack direction="row" spacing={2} sx={{ mt: 1 }}>
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={() => {
+                                    setOAuthDialogOpen(true);
+                                }}
+                            >
+                                Open OAuth Dialog
+                            </Button>
+                            {providers.length > 0 && (
+                                <Button
+                                    variant="outlined"
+                                    size="small"
+                                    onClick={() => {
+                                        setOAuthDetailProvider(providers[0]);
+                                        setOAuthDetailDialogOpen(true);
+                                    }}
+                                >
+                                    Open Detail Dialog
+                                </Button>
+                            )}
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                color="secondary"
+                                onClick={() => {
+                                    showNotification('Test notification!', 'success');
+                                }}
+                            >
+                                Test Notification
+                            </Button>
+                        </Stack>
+                    </Alert>
+                </Box>
+            )}
+
             {providers.length > 0 && (
                 <UnifiedCard
                     title="OAuth Providers"

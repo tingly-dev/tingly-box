@@ -1,4 +1,4 @@
-import {CheckCircle, Close, ContentCopy, Launch, OpenInNew} from '@mui/icons-material';
+import {Close, ContentCopy, Launch, OpenInNew} from '@mui/icons-material';
 import {
     Alert,
     Box,
@@ -163,6 +163,36 @@ const OAuthAuthorizationDialog = ({
 
     // Polling logic with two-tier timeout
     const pollSessionStatus = async (sessionId: string) => {
+        // Dev mode: fast track test sessions
+        if (import.meta.env.DEV && sessionId.startsWith('test-')) {
+            console.log('[DEV] Fast tracking test session:', sessionId);
+
+            // Test confirm dialog (triggers after 3 seconds)
+            if (sessionId === 'test-confirm') {
+                setTimeout(() => {
+                    setShowConfirmDialog(true);
+                }, 3000);
+                return;
+            }
+
+            // Test timeout dialog (triggers immediately)
+            if (sessionId === 'test-timeout') {
+                setTimeout(() => {
+                    setShowTimeoutDialog(true);
+                }, 500);
+                return;
+            }
+
+            // Test error state (triggers immediately)
+            if (sessionId === 'test-fail') {
+                setTimeout(() => {
+                    setErrorMessage('Test authorization failed - this is a simulated error');
+                    onError?.('Test authorization failed');
+                }, 500);
+                return;
+            }
+        }
+
         let intervalId: NodeJS.Timeout | null = null;
         let currentPollCount = 0;
 
@@ -362,19 +392,6 @@ const OAuthAuthorizationDialog = ({
                             Open Authorization Page Again
                         </Button>
                     )}
-
-                    {/* Completion button - user can click when done */}
-                    <Button
-                        variant="contained"
-                        color="primary"
-                        startIcon={<CheckCircle/>}
-                        onClick={handleCompleted}
-                        fullWidth
-                        sx={{mt: 3}}
-                        aria-label="I have completed the authorization process"
-                    >
-                        I've Completed Authorization
-                    </Button>
                 </Stack>
             </DialogContent>
         </Dialog>
@@ -538,6 +555,89 @@ const OAuthDialog = ({open, onClose, onSuccess}: OAuthDialogProps) => {
                             authorization page.
                         </Typography>
                     </Box>
+
+                    {/* Dev Mode Debug Buttons */}
+                    {import.meta.env.DEV && (
+                        <Box sx={{mb: 3}}>
+                            <Alert severity="info" sx={{mb: 2}}>
+                                <Typography variant="caption" color="text.secondary">
+                                    Dev Mode: Quick test OAuth authorization flows
+                                </Typography>
+                            </Alert>
+                            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                                {/* Quick provider tests */}
+                                <Button
+                                    variant="outlined"
+                                    size="small"
+                                    onClick={() => handleProviderClick(oauthProviders[0])}
+                                    disabled={!oauthProviders[0]?.enabled}
+                                >
+                                    Test {oauthProviders[0]?.displayName || 'Claude'}
+                                </Button>
+                                <Button
+                                    variant="outlined"
+                                    size="small"
+                                    onClick={() => handleProviderClick(oauthProviders[3])}
+                                    disabled={!oauthProviders[3]?.enabled}
+                                >
+                                    Test {oauthProviders[3]?.displayName || 'Qwen'}
+                                </Button>
+
+                                {/* Mock UI tests */}
+                                <Button
+                                    variant="outlined"
+                                    size="small"
+                                    color="info"
+                                    onClick={() => {
+                                        setAuthData({
+                                            flow_type: 'standard',
+                                            auth_url: 'https://example.com/oauth',
+                                            provider: 'Test Standard',
+                                            session_id: 'test-confirm',
+                                        });
+                                        setAuthDialogOpen(true);
+                                    }}
+                                >
+                                    Test Confirm Dialog (3s)
+                                </Button>
+                                <Button
+                                    variant="outlined"
+                                    size="small"
+                                    color="warning"
+                                    onClick={() => {
+                                        setAuthData({
+                                            flow_type: 'device_code',
+                                            user_code: 'TEST-1234',
+                                            verification_uri: 'https://example.com/verify',
+                                            expires_in: 600,
+                                            interval: 5,
+                                            provider: 'Test Device',
+                                            session_id: 'test-timeout',
+                                        });
+                                        setAuthDialogOpen(true);
+                                    }}
+                                >
+                                    Test Timeout (0.5s)
+                                </Button>
+                                <Button
+                                    variant="outlined"
+                                    size="small"
+                                    color="error"
+                                    onClick={() => {
+                                        setAuthData({
+                                            flow_type: 'standard',
+                                            auth_url: '',
+                                            provider: 'Test Error',
+                                            session_id: 'test-fail',
+                                        });
+                                        setAuthDialogOpen(true);
+                                    }}
+                                >
+                                    Test Error State (0.5s)
+                                </Button>
+                            </Stack>
+                        </Box>
+                    )}
 
                     <Box
                         sx={{
