@@ -2,8 +2,8 @@
 # Stage 1: Build
 FROM golang:1.25-alpine AS builder
 
-# Install git, nodejs, npm, pnpm, java, and other build dependencies
-RUN apk add --no-cache git nodejs npm ca-certificates tzdata curl jq openjdk17-jre
+# Install git, nodejs, npm, pnpm, java, gcc (for CGO), and other build dependencies
+RUN apk add --no-cache git nodejs npm ca-certificates tzdata curl jq openjdk17-jre gcc musl-dev
 
 # Install pnpm
 RUN npm install -g pnpm
@@ -14,20 +14,32 @@ RUN go install github.com/go-task/task/v3/cmd/task@latest
 # Install openapi-generator-cli
 RUN npm install -g @openapitools/openapi-generator-cli
 
+# Pre-download openapi-generator JAR to avoid network issues during build
+RUN mkdir -p /usr/local/lib/node_modules/@openapitools/openapi-generator-cli/versions && \
+    curl -fsSL --retry 3 --retry-delay 2 \
+    https://repo1.maven.org/maven2/org/openapitools/openapi-generator-cli/7.17.0/openapi-generator-cli-7.17.0.jar \
+    -o /usr/local/lib/node_modules/@openapitools/openapi-generator-cli/versions/7.17.0.jar
+
 # Set the Current Working Directory inside the container
 WORKDIR /app
 
-# Copy go mod and sum files for faster builds
+# Copy go mod and sum files
 COPY go.mod go.sum ./
 
-# Download dependencies
-RUN go mod download
-
-# Copy the entire source code
+# Copy the entire source code (including submodule if initialized)
 COPY . .
 
+# Ensure openai-go submodule exists (clone if user hasn't initialized submodules)
+RUN if [ ! -f libs/openai-go/go.mod ]; then \
+      rm -rf libs/openai-go && \
+      git clone -b fork --depth 1 https://github.com/tingly-dev/openai-go.git libs/openai-go; \
+    fi
+
+# Download dependencies (must be after source copy due to local replace directive)
+RUN go mod download
+
 # Now build using the created Taskfile
-RUN CI=true task cli:build
+RUN CGO_ENABLED=1 CI=true task cli:build
 
 # Rename binary to expected name
 RUN mv ./build/tingly-box ./tingly
@@ -73,7 +85,7 @@ CMD ["sh", "-c", "echo '======================================' && \
      echo '  http://localhost:8080/dashboard?user_auth_token=tingly-box-user-token' && \
      echo '======================================' && \
      rm -f /app/.tingly-box/tingly-server.pid && \
-     exec tingly start --port 8080"]
+     exec tingly start --host 0.0.0.0 --port 8080"]
 
 # Volumes for persistent data
 VOLUME ["/app/.tingly-box", "/app/memory", "/app/logs"]
