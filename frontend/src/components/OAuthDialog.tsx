@@ -95,17 +95,20 @@ interface OAuthAuthorizationData {
 interface OAuthDialogProps {
     open: boolean;
     onClose: () => void;
+    onSuccess?: () => void;
 }
 
 // OAuth Authorization Dialog - unified UI for both standard and device code flow
 const OAuthAuthorizationDialog = ({
     open,
     onClose,
-    authData
+    authData,
+    onSuccess
 }: {
     open: boolean;
     onClose: () => void;
     authData: OAuthAuthorizationData | null;
+    onSuccess?: () => void;
 }) => {
     const [opened, setOpened] = useState(false);
 
@@ -134,8 +137,8 @@ const OAuthAuthorizationDialog = ({
     };
 
     const handleCompleted = () => {
-        // Refresh the page to check for new providers
-        window.location.reload();
+        // Call onSuccess callback to let parent handle refresh logic
+        onSuccess?.();
     };
 
     const handleOpenAuthPage = () => {
@@ -273,11 +276,18 @@ const OAuthAuthorizationDialog = ({
     );
 };
 
-const OAuthDialog = ({open, onClose}: OAuthDialogProps) => {
+const OAuthDialog = ({open, onClose, onSuccess}: OAuthDialogProps) => {
     const [authorizing, setAuthorizing] = useState<string | null>(null);
     const [authDialogOpen, setAuthDialogOpen] = useState(false);
     const [authData, setAuthData] = useState<OAuthAuthorizationData | null>(null);
     const [oauthProviders, setOAuthProviders] = useState<OAuthProvider[]>(FALLBACK_OAUTH_PROVIDERS);
+
+    const handleAuthorizationCompleted = () => {
+        // Refresh data, close both dialogs
+        onSuccess?.();
+        setAuthDialogOpen(false);
+        onClose();
+    };
 
     const handleProviderClick = async (provider: OAuthProvider) => {
         if (provider.enabled === false) return;
@@ -444,6 +454,7 @@ const OAuthDialog = ({open, onClose}: OAuthDialogProps) => {
             open={authDialogOpen}
             onClose={() => setAuthDialogOpen(false)}
             authData={authData}
+            onSuccess={handleAuthorizationCompleted}
         />
     </>
     );

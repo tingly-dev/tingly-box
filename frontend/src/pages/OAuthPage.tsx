@@ -166,6 +166,7 @@ const OAuthPage = () => {
             <OAuthDialog
                 open={oauthDialogOpen}
                 onClose={() => setOAuthDialogOpen(false)}
+                onSuccess={() => window.location.reload()}
             />
 
             {/* OAuth Detail/Edit Dialog */}
