@@ -667,7 +667,7 @@ func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, pro
 
 // PollForToken polls the token endpoint until the user completes authentication
 // or the device code expires
-// Polling timeout is limited to 1 minute
+// Polling timeout is limited to 5 minutes (user needs time to complete auth)
 func (m *Manager) PollForToken(ctx context.Context, data *DeviceCodeData, callback func(*Token)) (*Token, error) {
 	config, ok := m.registry.Get(data.Provider)
 	if !ok {
@@ -683,10 +683,13 @@ func (m *Manager) PollForToken(ctx context.Context, data *DeviceCodeData, callba
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	// Create a timeout context with 1 minute limit for polling
-	const pollTimeout = 1 * time.Minute
+	// Create a timeout context with 5 minute limit for polling
+	// User needs time to: open link, enter code, and complete authorization
+	const pollTimeout = 5 * time.Minute
 	timeoutCtx, cancel := context.WithTimeout(ctx, pollTimeout)
 	defer cancel()
+
+	fmt.Printf("[OAuth] Device code polling started for %s, timeout: %v\n", data.Provider, pollTimeout)
 
 	for {
 		select {
@@ -695,16 +698,20 @@ func (m *Manager) PollForToken(ctx context.Context, data *DeviceCodeData, callba
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case <-ticker.C:
+			fmt.Printf("[OAuth] Polling token endpoint for %s...\n", data.Provider)
 			token, err := m.pollTokenRequest(ctx, config, data.DeviceCode, data.CodeVerifier)
 			if err != nil {
 				// Check if error is a transient error that we should retry
 				if isTransientDeviceCodeError(err) {
+					fmt.Printf("[OAuth] Authorization pending for %s, continuing poll...\n", data.Provider)
 					time.Sleep(interval)
 					continue
 				}
+				fmt.Printf("[OAuth] Polling error for %s: %v\n", data.Provider, err)
 				return nil, err
 			}
 
+			fmt.Printf("[OAuth] Successfully obtained token for %s\n", data.Provider)
 			// Successfully got token
 			token.Provider = data.Provider
 			token.RedirectTo = data.RedirectTo
@@ -794,11 +801,15 @@ func (m *Manager) pollTokenRequest(ctx context.Context, config *ProviderConfig, 
 			case "access_denied", "expired_token":
 				return nil, fmt.Errorf("device code error: %s", errResp.Error)
 			}
+			// Unknown error in 400 response
+			return nil, fmt.Errorf("device code error (400): %s - body: %s", errResp.Error, string(body))
 		}
+		// 400 but no valid error response
+		return nil, fmt.Errorf("device code error (400): body: %s", string(body))
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("token poll failed: status %d, body: %d", resp.StatusCode, len(string(body)))
+		return nil, fmt.Errorf("token poll failed: status %d, body: %s", resp.StatusCode, string(body))
 	}
 
 	// Parse token response directly into Token

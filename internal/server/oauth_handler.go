@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -139,6 +140,25 @@ type OAuthErrorResponse struct {
 type OAuthMessageResponse struct {
 	Success bool   `json:"success" example:"true"`
 	Message string `json:"message" example:"Operation successful"`
+}
+
+// =============================================
+// OAuth Device Code Flow Models
+// =============================================
+
+// OAuthDeviceCodeResponse represents the response for device code flow initiation
+type OAuthDeviceCodeResponse struct {
+	Success bool   `json:"success" example:"true"`
+	Message string `json:"message,omitempty" example:"Device code flow initiated"`
+	Data    struct {
+		DeviceCode              string `json:"device_code" example:"MN-12345678-abcdef"`
+		UserCode                string `json:"user_code" example:"ABCD-EFGH"`
+		VerificationURI         string `json:"verification_uri" example:"https://chat.qwen.ai/activate"`
+		VerificationURIComplete string `json:"verification_uri_complete,omitempty" example:"https://chat.qwen.ai/activate?user_code=ABCD-EFGH"`
+		ExpiresIn               int64  `json:"expires_in" example:"1800"`
+		Interval                int64  `json:"interval" example:"5"`
+		Provider                string `json:"provider" example:"qwen_code"`
+	} `json:"data"`
 }
 
 // OAuthProviderDataResponse represents a single provider data response
@@ -469,9 +489,66 @@ func (s *Server) AuthorizeOAuth(c *gin.Context) {
 		return
 	}
 
+	// Check if provider uses device code flow
+	config, ok := s.oauthManager.GetRegistry().Get(providerType)
+	if !ok {
+		c.JSON(http.StatusNotFound, OAuthErrorResponse{
+			Success: false,
+			Error:   "Provider not found",
+		})
+		return
+	}
+
 	userID := req.UserID
 
-	// Get auth URL with name parameter
+	// Handle device code flow (OAuthMethodDeviceCode or OAuthMethodDeviceCodePKCE)
+	if config.OAuthMethod == oauth2.OAuthMethodDeviceCode || config.OAuthMethod == oauth2.OAuthMethodDeviceCodePKCE {
+		deviceCodeData, err := s.oauthManager.InitiateDeviceCodeFlow(c.Request.Context(), userID, providerType, req.Redirect, req.Name)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, OAuthErrorResponse{
+				Success: false,
+				Error:   err.Error(),
+			})
+			return
+		}
+
+		// Start polling for token in background
+		go func() {
+			fmt.Printf("[OAuth] Starting device code polling for %s in background\n", providerType)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+
+			token, err := s.oauthManager.PollForToken(ctx, deviceCodeData, nil)
+			if err != nil {
+				fmt.Printf("[OAuth] Device code polling failed for %s: %v\n", providerType, err)
+				return
+			}
+
+			fmt.Printf("[OAuth] Device code polling succeeded for %s, creating provider\n", providerType)
+			// Create provider with OAuth credentials after successful polling
+			if err := s.createProviderFromToken(token, providerType, req.Name); err != nil {
+				fmt.Printf("[OAuth] Failed to create provider for %s: %v\n", providerType, err)
+			}
+		}()
+
+		// Return device code flow response
+		resp := OAuthDeviceCodeResponse{
+			Success: true,
+			Message: "Device code flow initiated",
+		}
+		resp.Data.DeviceCode = deviceCodeData.DeviceCode
+		resp.Data.UserCode = deviceCodeData.UserCode
+		resp.Data.VerificationURI = deviceCodeData.VerificationURI
+		resp.Data.VerificationURIComplete = deviceCodeData.VerificationURIComplete
+		resp.Data.ExpiresIn = deviceCodeData.ExpiresIn
+		resp.Data.Interval = deviceCodeData.Interval
+		resp.Data.Provider = string(providerType)
+
+		c.JSON(http.StatusOK, resp)
+		return
+	}
+
+	// Handle standard authorization code flow
 	authURL, state, err := s.oauthManager.GetAuthURL(c.Request.Context(), userID, providerType, req.Redirect, req.Name)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, OAuthErrorResponse{
@@ -827,4 +904,106 @@ func (s *Server) RefreshOAuthToken(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, resp)
+}
+
+// createProviderFromToken creates a provider from an OAuth token
+// This helper is used by both OAuthCallback and device code flow
+func (s *Server) createProviderFromToken(token *oauth2.Token, providerType oauth2.ProviderType, customName string) error {
+	// Get custom name from token (stored in state during authorize)
+	if customName == "" {
+		customName = token.Name
+	}
+
+	// Generate unique provider name with random suffix
+	pType := string(providerType)
+	var providerName string
+	if customName != "" {
+		// Use custom name from state
+		providerName = customName
+	} else {
+		// Auto-generate name with 6-char random suffix
+		randomSuffix := generateRandomSuffix(6)
+		providerName = fmt.Sprintf("%s-%s", pType, randomSuffix)
+	}
+
+	// Generate UUID for the provider
+	providerUUID, err := uuid.NewUUID()
+	if err != nil {
+		return fmt.Errorf("failed to generate provider UUID: %w", err)
+	}
+
+	// Determine API base and style based on provider type
+	// Priority: token.ResourceURL > provider default > mock
+	var apiBase string
+	var apiStyle typ.APIStyle
+
+	// If token contains ResourceURL from OAuth response, use it
+	if token.ResourceURL != "" {
+		apiBase = token.ResourceURL
+		fmt.Printf("[OAuth] Using ResourceURL from token: %s\n", apiBase)
+	} else {
+		// Otherwise use provider default
+		switch providerType {
+		case oauth2.ProviderClaudeCode:
+			apiBase = "https://api.anthropic.com"
+			apiStyle = typ.APIStyleAnthropic
+		case oauth2.ProviderQwenCode:
+			apiBase = "https://portal.qwen.ai/v1"
+			apiStyle = typ.APIStyleOpenAI
+		case oauth2.ProviderGoogle:
+			apiBase = "https://generativelanguage.googleapis.com"
+			apiStyle = typ.APIStyleOpenAI
+		case oauth2.ProviderOpenAI:
+			apiBase = "https://api.openai.com/v1"
+			apiStyle = typ.APIStyleOpenAI
+		default:
+			// For mock and unknown providers
+			apiBase = "mock"
+			apiStyle = typ.APIStyleOpenAI
+		}
+	}
+
+	// For providers without ResourceURL, determine APIStyle if not set
+	if apiStyle == "" {
+		apiStyle = typ.APIStyleOpenAI
+	}
+
+	// Build expires_at string
+	var expiresAt string
+	if !token.Expiry.IsZero() {
+		expiresAt = token.Expiry.Format(time.RFC3339)
+	}
+
+	// Create Provider with OAuth credentials
+	provider := &typ.Provider{
+		UUID:     providerUUID.String(),
+		Name:     providerName,
+		APIBase:  apiBase,
+		APIStyle: apiStyle,
+		Enabled:  true,
+		AuthType: typ.AuthTypeOAuth,
+		OAuthDetail: &typ.OAuthDetail{
+			AccessToken:  token.AccessToken,
+			ProviderType: string(token.Provider),
+			UserID:       uuid.New().String(),
+			RefreshToken: token.RefreshToken,
+			ExpiresAt:    expiresAt,
+		},
+	}
+
+	// Save provider to config
+	if err := s.config.AddProvider(provider); err != nil {
+		return fmt.Errorf("failed to save provider: %w", err)
+	}
+
+	// Log the successful provider creation
+	if s.logger != nil {
+		s.logger.LogAction("oauth_provider_created", map[string]interface{}{
+			"provider_name": providerName,
+			"provider_type": string(token.Provider),
+			"uuid":          providerUUID.String(),
+		}, true, "OAuth provider created successfully")
+	}
+
+	return nil
 }
