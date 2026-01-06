@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"tingly-box/internal/typ"
 
 	"github.com/spf13/cobra"
 
 	"tingly-box/internal/config"
-	"tingly-box/internal/config/typ"
 )
 
 // APIStyle represents the API style/version for a provider

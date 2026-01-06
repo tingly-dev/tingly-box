@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"tingly-box/internal/typ"
 
 	"github.com/gin-gonic/gin"
 
 	"tingly-box/internal/config"
-	"tingly-box/internal/config/typ"
 	"tingly-box/internal/db"
 	"tingly-box/internal/loadbalance"
 )

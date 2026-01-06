@@ -9,10 +9,10 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"tingly-box/internal/typ"
 
 	"github.com/stretchr/testify/assert"
 
-	"tingly-box/internal/config/typ"
 	"tingly-box/internal/constant"
 	"tingly-box/internal/server"
 )

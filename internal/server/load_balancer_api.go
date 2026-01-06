@@ -3,11 +3,11 @@ package server
 import (
 	"net/http"
 	"strconv"
+	"tingly-box/internal/typ"
 
 	"github.com/gin-gonic/gin"
 
 	"tingly-box/internal/config"
-	"tingly-box/internal/config/typ"
 	"tingly-box/internal/loadbalance"
 )
 

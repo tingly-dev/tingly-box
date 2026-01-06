@@ -3,8 +3,7 @@ package loadbalance
 import (
 	"testing"
 	"time"
-
-	"tingly-box/internal/config/typ"
+	typ2 "tingly-box/internal/typ"
 )
 
 func TestService_ServiceID(t *testing.T) {
@@ -123,7 +122,7 @@ func TestServiceStats_ResetWindow(t *testing.T) {
 }
 
 func TestRule_GetServices_Single(t *testing.T) {
-	rule := &typ.Rule{
+	rule := &typ2.Rule{
 		RequestModel: "test",
 		Services: []Service{
 			{
@@ -162,7 +161,7 @@ func TestRule_GetServices_Single(t *testing.T) {
 }
 
 func TestRule_GetServices_New(t *testing.T) {
-	rule := &typ.Rule{
+	rule := &typ2.Rule{
 		RequestModel: "test",
 		Services: []Service{
 			{
@@ -207,11 +206,11 @@ func TestRule_GetServices_New(t *testing.T) {
 
 func TestRule_GetTacticType(t *testing.T) {
 	// Rule with explicit tactic (token_based)
-	ruleWithTactic := &typ.Rule{
+	ruleWithTactic := &typ2.Rule{
 		RequestModel: "test",
-		LBTactic: typ.Tactic{
+		LBTactic: typ2.Tactic{
 			Type:   TacticTokenBased,
-			Params: typ.DefaultTokenBasedParams(),
+			Params: typ2.DefaultTokenBasedParams(),
 		},
 	}
 	if ruleWithTactic.GetTacticType() != TacticTokenBased {
@@ -219,9 +218,9 @@ func TestRule_GetTacticType(t *testing.T) {
 	}
 
 	// Rule without tactic (should default to round robin)
-	ruleWithoutTactic := &typ.Rule{
+	ruleWithoutTactic := &typ2.Rule{
 		RequestModel: "test",
-		LBTactic: typ.Tactic{
+		LBTactic: typ2.Tactic{
 			Type:   0, // Type 0 means uninitialized
 			Params: nil,
 		},

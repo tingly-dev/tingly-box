@@ -5,8 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
-
-	"tingly-box/internal/config/typ"
+	"tingly-box/internal/typ"
 )
 
 // TestNewTemplateManager tests the TemplateManager constructor

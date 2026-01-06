@@ -2,10 +2,9 @@ package server
 
 import (
 	"testing"
+	"tingly-box/internal/typ"
 
 	"github.com/openai/openai-go/v3"
-
-	"tingly-box/internal/config/typ"
 )
 
 func TestClientPool_GetClient(t *testing.T) {

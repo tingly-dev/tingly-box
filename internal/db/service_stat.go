@@ -8,12 +8,12 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+	"tingly-box/internal/typ"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	"tingly-box/internal/config/typ"
 	"tingly-box/internal/constant"
 	"tingly-box/internal/loadbalance"
 )

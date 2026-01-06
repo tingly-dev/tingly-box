@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"tingly-box/internal/typ"
 
 	"github.com/gin-gonic/gin"
 
-	"tingly-box/internal/config/typ"
 	"tingly-box/internal/loadbalance"
 )
 

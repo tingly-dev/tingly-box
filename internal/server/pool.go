@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"tingly-box/internal/typ"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
@@ -13,7 +14,6 @@ import (
 	openaiOption "github.com/openai/openai-go/v3/option"
 	"github.com/sirupsen/logrus"
 
-	"tingly-box/internal/config/typ"
 	"tingly-box/pkg/client"
 	"tingly-box/pkg/oauth"
 )

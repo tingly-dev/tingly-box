@@ -7,12 +7,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"tingly-box/internal/typ"
 
 	"github.com/spf13/cobra"
 
 	"tingly-box/internal/auth"
 	"tingly-box/internal/config"
-	"tingly-box/internal/config/typ"
 	"tingly-box/internal/constant"
 	"tingly-box/internal/manager"
 	"tingly-box/internal/obs"

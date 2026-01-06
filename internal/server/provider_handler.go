@@ -3,11 +3,11 @@ package server
 import (
 	"fmt"
 	"net/http"
+	"tingly-box/internal/typ"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"tingly-box/internal/config/typ"
 	"tingly-box/internal/obs"
 )
 

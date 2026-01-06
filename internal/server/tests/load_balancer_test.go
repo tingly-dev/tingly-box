@@ -9,13 +9,13 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	typ2 "tingly-box/internal/typ"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"tingly-box/internal/config"
-	"tingly-box/internal/config/typ"
 	"tingly-box/internal/constant"
 	"tingly-box/internal/loadbalance"
 	"tingly-box/internal/server"
@@ -40,8 +40,8 @@ func TestLoadBalancer_RoundRobin(t *testing.T) {
 	defer lb.Stop()
 
 	// Create test rule with multiple services using new LBTactic format
-	rule := &typ.Rule{
-		Scenario:     typ.ScenarioOpenAI,
+	rule := &typ2.Rule{
+		Scenario:     typ2.ScenarioOpenAI,
 		RequestModel: "test",
 		UUID:         uuid.New().String(),
 		Services: []loadbalance.Service{
@@ -61,9 +61,9 @@ func TestLoadBalancer_RoundRobin(t *testing.T) {
 			},
 		},
 		CurrentServiceIndex: 0, // Start with first service
-		LBTactic: typ.Tactic{
+		LBTactic: typ2.Tactic{
 			Type:   loadbalance.TacticRoundRobin,
-			Params: &typ.RoundRobinParams{RequestThreshold: 1},
+			Params: &typ2.RoundRobinParams{RequestThreshold: 1},
 		},
 		Active: true,
 	}
@@ -139,8 +139,8 @@ func TestLoadBalancer_EnabledFilter(t *testing.T) {
 	defer lb.Stop()
 
 	// Create test rule with mixed enabled/disabled services
-	rule := &typ.Rule{
-		Scenario:     typ.ScenarioOpenAI,
+	rule := &typ2.Rule{
+		Scenario:     typ2.ScenarioOpenAI,
 		RequestModel: "test",
 		UUID:         uuid.New().String(),
 		Services: []loadbalance.Service{
@@ -166,9 +166,9 @@ func TestLoadBalancer_EnabledFilter(t *testing.T) {
 				TimeWindow: 300,
 			},
 		},
-		LBTactic: typ.Tactic{
+		LBTactic: typ2.Tactic{
 			Type:   loadbalance.TacticRoundRobin,
-			Params: typ.DefaultRoundRobinParams(),
+			Params: typ2.DefaultRoundRobinParams(),
 		},
 		Active: true,
 	}
@@ -209,8 +209,8 @@ func TestLoadBalancer_RecordUsage(t *testing.T) {
 	defer lb.Stop()
 
 	// Create a rule with the test service so RecordUsage can find it
-	testRule := typ.Rule{
-		Scenario:     typ.ScenarioOpenAI,
+	testRule := typ2.Rule{
+		Scenario:     typ2.ScenarioOpenAI,
 		RequestModel: "test-model",
 		UUID:         uuid.New().String(),
 		Services: []loadbalance.Service{
@@ -267,8 +267,8 @@ func TestLoadBalancer_ValidateRule(t *testing.T) {
 	defer lb.Stop()
 
 	// Test valid rule
-	validRule := &typ.Rule{
-		Scenario:     typ.ScenarioOpenAI,
+	validRule := &typ2.Rule{
+		Scenario:     typ2.ScenarioOpenAI,
 		RequestModel: "test",
 		UUID:         uuid.New().String(),
 		Services: []loadbalance.Service{
@@ -288,8 +288,8 @@ func TestLoadBalancer_ValidateRule(t *testing.T) {
 	}
 
 	// Test rule with no services
-	invalidRule1 := &typ.Rule{
-		Scenario:     typ.ScenarioOpenAI,
+	invalidRule1 := &typ2.Rule{
+		Scenario:     typ2.ScenarioOpenAI,
 		RequestModel: "test",
 		Services:     []loadbalance.Service{},
 		Active:       true,
@@ -300,8 +300,8 @@ func TestLoadBalancer_ValidateRule(t *testing.T) {
 	}
 
 	// Test rule with no enabled services
-	invalidRule2 := &typ.Rule{
-		Scenario:     typ.ScenarioOpenAI,
+	invalidRule2 := &typ2.Rule{
+		Scenario:     typ2.ScenarioOpenAI,
 		RequestModel: "test",
 		Services: []loadbalance.Service{
 			{
@@ -334,13 +334,13 @@ func TestLoadBalancer_GetRuleSummary(t *testing.T) {
 	defer lb.Stop()
 
 	// Create test rule
-	rule := &typ.Rule{
-		Scenario:     typ.ScenarioOpenAI,
+	rule := &typ2.Rule{
+		Scenario:     typ2.ScenarioOpenAI,
 		RequestModel: "test",
 		UUID:         uuid.New().String(),
-		LBTactic: typ.Tactic{
+		LBTactic: typ2.Tactic{
 			Type:   loadbalance.TacticHybrid,
-			Params: typ.DefaultHybridParams(),
+			Params: typ2.DefaultHybridParams(),
 		},
 		Services: []loadbalance.Service{
 			{
@@ -421,8 +421,8 @@ func TestLoadBalancerAPI_RuleManagement(t *testing.T) {
 	// Create test rule with multiple services
 	ruleName := "test-rule"
 	ruleUUID := uuid.New().String()
-	rule := typ.Rule{
-		Scenario:     typ.ScenarioOpenAI,
+	rule := typ2.Rule{
+		Scenario:     typ2.ScenarioOpenAI,
 		RequestModel: ruleName,
 		UUID:         ruleUUID,
 		Services: []loadbalance.Service{
@@ -589,8 +589,8 @@ func TestLoadBalancerAPI_CurrentService(t *testing.T) {
 
 	// Create test rule
 	ruleName := "current-test-rule"
-	rule := typ.Rule{
-		Scenario:     typ.ScenarioOpenAI,
+	rule := typ2.Rule{
+		Scenario:     typ2.ScenarioOpenAI,
 		RequestModel: ruleName,
 		UUID:         uuid.New().String(),
 		Services: []loadbalance.Service{
@@ -681,8 +681,8 @@ func TestLoadBalancerAPI_Authentication(t *testing.T) {
 	// Create a test rule
 	ruleName := "auth-test-rule"
 	ruleUUID := uuid.New().String()
-	rule := typ.Rule{
-		Scenario:     typ.ScenarioOpenAI,
+	rule := typ2.Rule{
+		Scenario:     typ2.ScenarioOpenAI,
 		RequestModel: ruleName,
 		UUID:         ruleUUID,
 		Services: []loadbalance.Service{
@@ -769,8 +769,8 @@ func TestLoadBalancerFunctionality(t *testing.T) {
 	}()
 
 	// Add test rule with multiple services
-	testRule := typ.Rule{
-		Scenario:     typ.ScenarioOpenAI,
+	testRule := typ2.Rule{
+		Scenario:     typ2.ScenarioOpenAI,
 		RequestModel: "tingly",
 		UUID:         uuid.New().String(),
 		Services: []loadbalance.Service{
@@ -790,9 +790,9 @@ func TestLoadBalancerFunctionality(t *testing.T) {
 			},
 		},
 		CurrentServiceIndex: 0,
-		LBTactic: typ.Tactic{
+		LBTactic: typ2.Tactic{
 			Type:   loadbalance.TacticRoundRobin,
-			Params: typ.DefaultRoundRobinParams(),
+			Params: typ2.DefaultRoundRobinParams(),
 		},
 		Active: true,
 	}
@@ -861,8 +861,8 @@ func TestLoadBalancer_WeightedRandom(t *testing.T) {
 	defer lb.Stop()
 
 	// Create test rule with weighted services using new LBTactic format
-	rule := &typ.Rule{
-		Scenario:     typ.ScenarioOpenAI,
+	rule := &typ2.Rule{
+		Scenario:     typ2.ScenarioOpenAI,
 		RequestModel: "test",
 		Services: []loadbalance.Service{
 			{
@@ -880,9 +880,9 @@ func TestLoadBalancer_WeightedRandom(t *testing.T) {
 				TimeWindow: 300,
 			},
 		},
-		LBTactic: typ.Tactic{
+		LBTactic: typ2.Tactic{
 			Type:   loadbalance.TacticRandom,
-			Params: typ.NewRandomParams(),
+			Params: typ2.NewRandomParams(),
 		},
 		Active: true,
 	}
@@ -931,7 +931,7 @@ func TestLoadBalancer_WithMockProvider(t *testing.T) {
 	defer Cleanup()
 
 	// Add mock provider to test server config
-	provider := &typ.Provider{
+	provider := &typ2.Provider{
 		Name:    "mock-provider",
 		APIBase: mockServer.GetURL(),
 		Token:   "mock-token",
@@ -951,8 +951,8 @@ func TestLoadBalancer_WithMockProvider(t *testing.T) {
 	})
 
 	// Create a rule with the mock provider
-	rule := typ.Rule{
-		Scenario:     typ.ScenarioOpenAI,
+	rule := typ2.Rule{
+		Scenario:     typ2.ScenarioOpenAI,
 		RequestModel: "gpt-3.5-turbo",
 		UUID:         uuid.New().String(),
 		Services: []loadbalance.Service{
@@ -1024,8 +1024,8 @@ func TestLoadBalancer_RoundRobinThreshold2(t *testing.T) {
 	defer lb.Stop()
 
 	// Create test rule with 3 services to make the rotation more interesting
-	rule := &typ.Rule{
-		Scenario:     typ.ScenarioOpenAI,
+	rule := &typ2.Rule{
+		Scenario:     typ2.ScenarioOpenAI,
 		RequestModel: "test",
 		UUID:         uuid.New().String(),
 		Services: []loadbalance.Service{
@@ -1052,9 +1052,9 @@ func TestLoadBalancer_RoundRobinThreshold2(t *testing.T) {
 			},
 		},
 		CurrentServiceIndex: 0, // Start with first service
-		LBTactic: typ.Tactic{
+		LBTactic: typ2.Tactic{
 			Type:   loadbalance.TacticRoundRobin,
-			Params: &typ.RoundRobinParams{RequestThreshold: 2}, // Threshold of 2 requests
+			Params: &typ2.RoundRobinParams{RequestThreshold: 2}, // Threshold of 2 requests
 		},
 		Active: true,
 	}

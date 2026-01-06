@@ -11,13 +11,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	typ2 "tingly-box/internal/typ"
 
 	"github.com/gin-gonic/gin"
 	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
 
 	"tingly-box/internal/config"
-	"tingly-box/internal/config/typ"
 	"tingly-box/internal/constant"
 	"tingly-box/internal/loadbalance"
 	"tingly-box/internal/server"
@@ -128,7 +128,7 @@ func (ts *TestServer) AddTestProviders(t *testing.T) {
 	}
 
 	for _, p := range providers {
-		provider := &typ.Provider{
+		provider := &typ2.Provider{
 			UUID:    p.uuid,
 			Name:    p.name,
 			APIBase: p.apiBase,
@@ -196,8 +196,8 @@ func AssertJSONResponse(t *testing.T, resp *http.Response, expectedStatus int, c
 }
 
 // CreateTestProvider creates a test provider configuration
-func CreateTestProvider(name, apiBase, token string) *typ.Provider {
-	return &typ.Provider{
+func CreateTestProvider(name, apiBase, token string) *typ2.Provider {
+	return &typ2.Provider{
 		Name:    name,
 		APIBase: apiBase,
 		Token:   token,
@@ -231,11 +231,11 @@ func CaptureRequest(handler gin.HandlerFunc) (*http.Request, map[string]interfac
 
 // AddTestProvider adds a single test provider
 func (ts *TestServer) AddTestProvider(t *testing.T, name, apiBase, apiStyle string, enabled bool) {
-	provider := &typ.Provider{
+	provider := &typ2.Provider{
 		UUID:     name, // for test, use name as uuid for convenience
 		Name:     name,
 		APIBase:  apiBase,
-		APIStyle: typ.APIStyle(apiStyle),
+		APIStyle: typ2.APIStyle(apiStyle),
 		Token:    "test-token",
 		Enabled:  enabled,
 		Timeout:  int64(constant.DefaultRequestTimeout),
@@ -247,11 +247,11 @@ func (ts *TestServer) AddTestProvider(t *testing.T, name, apiBase, apiStyle stri
 
 // AddTestProviderWithURL adds a provider with a specific URL
 func (ts *TestServer) AddTestProviderWithURL(t *testing.T, name, url, apiStyle string, enabled bool) {
-	provider := &typ.Provider{
+	provider := &typ2.Provider{
 		UUID:     name, // use name as uuid for convenience
 		Name:     name,
 		APIBase:  url,
-		APIStyle: typ.APIStyle(apiStyle),
+		APIStyle: typ2.APIStyle(apiStyle),
 		Token:    "test-token",
 		Enabled:  enabled,
 		Timeout:  int64(constant.DefaultRequestTimeout),
@@ -264,9 +264,9 @@ func (ts *TestServer) AddTestProviderWithURL(t *testing.T, name, url, apiStyle s
 // AddTestRule adds a test rule that routes to a specific provider
 func (ts *TestServer) AddTestRule(t *testing.T, requestModel, providerName, model string) {
 	// Create a simple rule with proper LBTactic
-	rule := typ.Rule{
+	rule := typ2.Rule{
 		UUID:          requestModel,
-		Scenario:      typ.ScenarioOpenAI,
+		Scenario:      typ2.ScenarioOpenAI,
 		RequestModel:  requestModel,
 		ResponseModel: model,
 		Services: []loadbalance.Service{
@@ -278,9 +278,9 @@ func (ts *TestServer) AddTestRule(t *testing.T, requestModel, providerName, mode
 				TimeWindow: 300,
 			},
 		},
-		LBTactic: typ.Tactic{
+		LBTactic: typ2.Tactic{
 			Type:   loadbalance.TacticRoundRobin,
-			Params: typ.DefaultRoundRobinParams(),
+			Params: typ2.DefaultRoundRobinParams(),
 		},
 		Active: true,
 	}

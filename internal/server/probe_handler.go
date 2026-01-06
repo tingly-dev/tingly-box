@@ -10,12 +10,12 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"tingly-box/internal/typ"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 
-	"tingly-box/internal/config/typ"
 	"tingly-box/internal/obs"
 )
 

@@ -9,11 +9,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"tingly-box/internal/typ"
 
 	"github.com/gin-gonic/gin"
 
 	assets "tingly-box/internal"
-	"tingly-box/internal/config/typ"
 	"tingly-box/internal/obs"
 	"tingly-box/pkg/swagger"
 )

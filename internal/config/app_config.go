@@ -13,8 +13,8 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"tingly-box/internal/typ"
 
-	"tingly-box/internal/config/typ"
 	constant2 "tingly-box/internal/constant"
 	"tingly-box/internal/db"
 )
