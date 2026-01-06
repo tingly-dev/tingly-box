@@ -300,7 +300,7 @@ func TestValidateTemplate(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name: "Missing both base URLs",
+			name: "Missing base_url for non-OAuth template",
 			template: &ProviderTemplate{
 				ID:   "test",
 				Name: "Test Provider",
@@ -313,6 +313,57 @@ func TestValidateTemplate(t *testing.T) {
 				ID:               "test",
 				Name:             "Test Provider",
 				BaseURLAnthropic: "https://api.test.com",
+			},
+			expectError: false,
+		},
+		{
+			name: "Valid OAuth template with auth_type and oauth_provider",
+			template: &ProviderTemplate{
+				ID:            "test_oauth",
+				Name:          "Test OAuth Provider",
+				AuthType:      "oauth",
+				OAuthProvider: "claude_code",
+			},
+			expectError: false,
+		},
+		{
+			name: "OAuth template without oauth_provider field",
+			template: &ProviderTemplate{
+				ID:       "test_oauth",
+				Name:     "Test OAuth Provider",
+				AuthType: "oauth",
+			},
+			expectError: true,
+		},
+		{
+			name: "OAuth template without base_url is valid",
+			template: &ProviderTemplate{
+				ID:            "test_oauth",
+				Name:          "Test OAuth Provider",
+				AuthType:      "oauth",
+				OAuthProvider: "claude_code",
+			},
+			expectError: false,
+		},
+		{
+			name: "OAuth template with both oauth_provider and base_url is also valid",
+			template: &ProviderTemplate{
+				ID:            "test_oauth",
+				Name:          "Test OAuth Provider",
+				AuthType:      "oauth",
+				OAuthProvider: "claude_code",
+				BaseURLOpenAI: "https://api.test.com/v1",
+			},
+			expectError: false,
+		},
+		{
+			name: "Template with auth_type=key and oauth_provider is unusual but not invalid",
+			template: &ProviderTemplate{
+				ID:            "test",
+				Name:          "Test Provider",
+				AuthType:      "key",
+				OAuthProvider: "some_provider",
+				BaseURLOpenAI: "https://api.test.com/v1",
 			},
 			expectError: false,
 		},
