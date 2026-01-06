@@ -230,7 +230,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 
 	// Initialize template manager with GitHub URL for template sync
 	templateManager := template.NewEmbeddedOnlyTemplateManager()
-	if err := templateManager.Initialize(); err != nil {
+	if err := templateManager.Initialize(context.Background()); err != nil {
 		log.Printf("Failed to fetch from GitHub, using embedded provider templates: %v", err)
 	} else {
 		log.Printf("Provider templates initialized (version: %s)", templateManager.GetVersion())
