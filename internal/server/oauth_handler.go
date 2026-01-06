@@ -55,8 +55,17 @@ type OAuthAuthorizeResponse struct {
 	Success bool   `json:"success" example:"true"`
 	Message string `json:"message,omitempty" example:"Authorization initiated"`
 	Data    struct {
-		AuthURL string `json:"auth_url" example:"https://claude.ai/oauth/authorize?..."`
-		State   string `json:"state" example:"random_state_string"`
+		AuthURL   string `json:"auth_url,omitempty" example:"https://claude.ai/oauth/authorize?..."`
+		State     string `json:"state,omitempty" example:"random_state_string"`
+		SessionID string `json:"session_id,omitempty" example:"abc123def456"` // For status tracking
+		// Device code flow fields
+		DeviceCode              string `json:"device_code,omitempty" example:"MN-12345678-abcdef"`
+		UserCode                string `json:"user_code,omitempty" example:"ABCD-EFGH"`
+		VerificationURI         string `json:"verification_uri,omitempty" example:"https://chat.qwen.ai/activate"`
+		VerificationURIComplete string `json:"verification_uri_complete,omitempty" example:"https://chat.qwen.ai/activate?user_code=ABCD-EFGH"`
+		ExpiresIn               int64  `json:"expires_in,omitempty" example:"1800"`
+		Interval                int64  `json:"interval,omitempty" example:"5"`
+		Provider                string `json:"provider,omitempty" example:"qwen_code"`
 	} `json:"data"`
 }
 
@@ -176,6 +185,17 @@ type OAuthCallbackDataResponse struct {
 	TokenType    string `json:"token_type,omitempty" example:"Bearer"`
 	ExpiresAt    string `json:"expires_at,omitempty" example:"2024-01-01T12:00:00Z"`
 	Provider     string `json:"provider,omitempty" example:"anthropic"`
+}
+
+// OAuthSessionStatusResponse represents the session status check response
+type OAuthSessionStatusResponse struct {
+	Success bool `json:"success" example:"true"`
+	Data    struct {
+		SessionID    string `json:"session_id" example:"abc123def456"`
+		Status       string `json:"status" example:"success"`
+		ProviderUUID string `json:"provider_uuid,omitempty" example:"550e8400-e29b-41d4-a716-446655440000"`
+		Error        string `json:"error,omitempty" example:"Authorization failed"`
+	} `json:"data"`
 }
 
 // generateRandomSuffix generates a random alphanumeric suffix of specified length
@@ -347,6 +367,14 @@ func (s *Server) useOAuthEndpoints(manager *swagger.RouteManager) {
 		swagger.WithTags("oauth"),
 		swagger.WithDescription("List all OAuth tokens for a user"),
 		swagger.WithResponseModel(OAuthTokensResponse{}),
+	)
+
+	// OAuth Session Status
+	apiV1.GET("/oauth/status", s.GetOAuthSessionStatus,
+		swagger.WithTags("oauth"),
+		swagger.WithDescription("Get OAuth session status"),
+		swagger.WithQueryRequired("session_id", "string", "session id to check oauth status"),
+		swagger.WithResponseModel(OAuthSessionStatusResponse{}),
 	)
 
 	// OAuth Callback (no authentication required - called by OAuth provider)
@@ -543,6 +571,16 @@ func (s *Server) AuthorizeOAuth(c *gin.Context) {
 
 	userID := req.UserID
 
+	// Create session for status tracking
+	session, err := s.oauthManager.CreateSession(userID, providerType)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, OAuthErrorResponse{
+			Success: false,
+			Error:   "Failed to create session: " + err.Error(),
+		})
+		return
+	}
+
 	// Handle device code flow (OAuthMethodDeviceCode or OAuthMethodDeviceCodePKCE)
 	if config.OAuthMethod == oauth2.OAuthMethodDeviceCode || config.OAuthMethod == oauth2.OAuthMethodDeviceCodePKCE {
 		deviceCodeData, err := s.oauthManager.InitiateDeviceCodeFlow(c.Request.Context(), userID, providerType, req.Redirect, req.Name)
@@ -563,21 +601,31 @@ func (s *Server) AuthorizeOAuth(c *gin.Context) {
 			token, err := s.oauthManager.PollForToken(ctx, deviceCodeData, nil)
 			if err != nil {
 				fmt.Printf("[OAuth] Device code polling failed for %s: %v\n", providerType, err)
+				// Update session status to failed
+				_ = s.oauthManager.UpdateSessionStatus(session.SessionID, oauth2.SessionStatusFailed, "", err.Error())
 				return
 			}
 
 			fmt.Printf("[OAuth] Device code polling succeeded for %s, creating provider\n", providerType)
 			// Create provider with OAuth credentials after successful polling
-			if err := s.createProviderFromToken(token, providerType, req.Name); err != nil {
+			providerUUID, err := s.createProviderFromToken(token, providerType, req.Name)
+			if err != nil {
 				fmt.Printf("[OAuth] Failed to create provider for %s: %v\n", providerType, err)
+				// Update session status to failed
+				_ = s.oauthManager.UpdateSessionStatus(session.SessionID, oauth2.SessionStatusFailed, "", err.Error())
+				return
 			}
+
+			// Update session status to success
+			_ = s.oauthManager.UpdateSessionStatus(session.SessionID, oauth2.SessionStatusSuccess, providerUUID, "")
 		}()
 
-		// Return device code flow response
-		resp := OAuthDeviceCodeResponse{
+		// Return device code flow response with session_id
+		resp := OAuthAuthorizeResponse{
 			Success: true,
 			Message: "Device code flow initiated",
 		}
+		resp.Data.SessionID = session.SessionID
 		resp.Data.DeviceCode = deviceCodeData.DeviceCode
 		resp.Data.UserCode = deviceCodeData.UserCode
 		resp.Data.VerificationURI = deviceCodeData.VerificationURI
@@ -591,7 +639,7 @@ func (s *Server) AuthorizeOAuth(c *gin.Context) {
 	}
 
 	// Handle standard authorization code flow
-	authURL, state, err := s.oauthManager.GetAuthURL(c.Request.Context(), userID, providerType, req.Redirect, req.Name)
+	authURL, state, err := s.oauthManager.GetAuthURL(c.Request.Context(), userID, providerType, req.Redirect, req.Name, session.SessionID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, OAuthErrorResponse{
 			Success: false,
@@ -600,13 +648,14 @@ func (s *Server) AuthorizeOAuth(c *gin.Context) {
 		return
 	}
 
-	// Return JSON response
+	// Return JSON response with session_id
 	resp := OAuthAuthorizeResponse{
 		Success: true,
 		Message: "Authorization initiated",
 	}
 	resp.Data.AuthURL = authURL
 	resp.Data.State = state
+	resp.Data.SessionID = session.SessionID
 
 	c.JSON(http.StatusOK, resp)
 }
@@ -751,93 +800,24 @@ func (s *Server) OAuthCallback(c *gin.Context) {
 		return
 	}
 
-	// Get custom name from token (stored in state during authorize)
-	customName := token.Name
-
-	// Generate unique provider name with random suffix
-	providerType := string(token.Provider)
-	var providerName string
-	if customName != "" {
-		// Use custom name from state
-		providerName = customName
-	} else {
-		// Auto-generate name with 6-char random suffix
-		randomSuffix := generateRandomSuffix(6)
-		providerName = fmt.Sprintf("%s-%s", providerType, randomSuffix)
-	}
-
-	// Generate UUID for the provider
-	providerUUID, err := uuid.NewUUID()
+	// Use createProviderFromToken to create the provider
+	providerUUID, err := s.createProviderFromToken(token, token.Provider, "")
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "oauth_error.html", gin.H{
-			"error": fmt.Sprintf("Failed to generate provider UUID: %v", err),
+			"error": fmt.Sprintf("Failed to create provider: %v", err),
 		})
 		return
 	}
 
-	// Determine API base and style based on provider type
-	var apiBase string
-	var apiStyle typ.APIStyle
-	switch token.Provider {
-	case oauth2.ProviderClaudeCode:
-		apiBase = "https://api.anthropic.com"
-		apiStyle = typ.APIStyleAnthropic
-	case oauth2.ProviderGoogle:
-		apiBase = "https://generativelanguage.googleapis.com"
-		apiStyle = typ.APIStyleGoogle
-	case oauth2.ProviderOpenAI:
-		apiBase = "https://api.openai.com/v1"
-		apiStyle = typ.APIStyleOpenAI
-	default:
-		// For mock and unknown providers
-		apiBase = "mock"
-		apiStyle = typ.APIStyleOpenAI
-	}
-
-	// Build expires_at string
-	var expiresAt string
-	if !token.Expiry.IsZero() {
-		expiresAt = token.Expiry.Format(time.RFC3339)
-	}
-
-	// Create Provider with OAuth credentials
-	provider := &typ.Provider{
-		UUID:     providerUUID.String(),
-		Name:     providerName,
-		APIBase:  apiBase,
-		APIStyle: apiStyle,
-		Enabled:  true,
-		AuthType: typ.AuthTypeOAuth,
-		OAuthDetail: &typ.OAuthDetail{
-			AccessToken:  token.AccessToken,
-			ProviderType: string(token.Provider),
-			UserID:       uuid.New().String(),
-			RefreshToken: token.RefreshToken,
-			ExpiresAt:    expiresAt,
-		},
-	}
-
-	// Save provider to config
-	if err := s.config.AddProvider(provider); err != nil {
-		c.HTML(http.StatusInternalServerError, "oauth_error.html", gin.H{
-			"error": fmt.Sprintf("Failed to save provider: %v", err),
-		})
-		return
-	}
-
-	// Log the successful provider creation
-	if s.logger != nil {
-		s.logger.LogAction("oauth_provider_created", map[string]interface{}{
-			"provider_name": providerName,
-			"provider_type": string(token.Provider),
-			"uuid":          providerUUID.String(),
-		}, true, "OAuth provider created successfully")
+	// Update session status to success if session ID exists
+	if token.SessionID != "" {
+		_ = s.oauthManager.UpdateSessionStatus(token.SessionID, oauth2.SessionStatusSuccess, providerUUID, "")
 	}
 
 	// Return success HTML page to inform the user
 	c.HTML(http.StatusOK, "oauth_success.html", gin.H{
 		"provider":      string(token.Provider),
-		"provider_name": providerName,
+		"provider_name": "",                             // Will be shown with UUID in the page
 		"access_token":  token.AccessToken[:20] + "...", // Partially show token
 		"token_type":    token.TokenType,
 	})
@@ -950,7 +930,8 @@ func (s *Server) RefreshOAuthToken(c *gin.Context) {
 
 // createProviderFromToken creates a provider from an OAuth token
 // This helper is used by both OAuthCallback and device code flow
-func (s *Server) createProviderFromToken(token *oauth2.Token, providerType oauth2.ProviderType, customName string) error {
+// Returns the provider UUID or an error
+func (s *Server) createProviderFromToken(token *oauth2.Token, providerType oauth2.ProviderType, customName string) (string, error) {
 	// Get custom name from token (stored in state during authorize)
 	if customName == "" {
 		customName = token.Name
@@ -971,7 +952,7 @@ func (s *Server) createProviderFromToken(token *oauth2.Token, providerType oauth
 	// Generate UUID for the provider
 	providerUUID, err := uuid.NewUUID()
 	if err != nil {
-		return fmt.Errorf("failed to generate provider UUID: %w", err)
+		return "", fmt.Errorf("failed to generate provider UUID: %w", err)
 	}
 
 	// Determine API base and style based on provider type
@@ -1038,7 +1019,7 @@ func (s *Server) createProviderFromToken(token *oauth2.Token, providerType oauth
 
 	// Save provider to config
 	if err := s.config.AddProvider(provider); err != nil {
-		return fmt.Errorf("failed to save provider: %w", err)
+		return "", fmt.Errorf("failed to save provider: %w", err)
 	}
 
 	// Log the successful provider creation
@@ -1050,5 +1031,36 @@ func (s *Server) createProviderFromToken(token *oauth2.Token, providerType oauth
 		}, true, "OAuth provider created successfully")
 	}
 
-	return nil
+	return providerUUID.String(), nil
+}
+
+// GetOAuthSessionStatus returns the status of an OAuth session
+// GET /api/v1/oauth/status?session_id=xxx
+func (s *Server) GetOAuthSessionStatus(c *gin.Context) {
+	sessionID := c.Query("session_id")
+	if sessionID == "" {
+		c.JSON(http.StatusBadRequest, OAuthErrorResponse{
+			Success: false,
+			Error:   "session_id parameter is required",
+		})
+		return
+	}
+
+	session, err := s.oauthManager.GetSession(sessionID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, OAuthSessionStatusResponse{
+			Success: false,
+		})
+		return
+	}
+
+	resp := OAuthSessionStatusResponse{
+		Success: true,
+	}
+	resp.Data.SessionID = session.SessionID
+	resp.Data.Status = string(session.Status)
+	resp.Data.ProviderUUID = session.ProviderUUID
+	resp.Data.Error = session.Error
+
+	c.JSON(http.StatusOK, resp)
 }
