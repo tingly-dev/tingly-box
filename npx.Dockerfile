@@ -30,10 +30,12 @@ EXPOSE 12580
 # Environment variables for configuration
 ENV TINGLY_PORT=12580
 ENV TINGLY_HOST=0.0.0.0
+# Preserve version string with leading zeros
+ENV TINGLY_VERSION="${TINGLY_VERSION}"
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD npx tingly-box@${TINGLY_VERSION} status || exit 1
+    CMD sh -c "npx 'tingly-box@${TINGLY_VERSION}' status || exit 1"
 
 # Default command: download and run tingly-box via npx
 # The binary will be cached in ~/.npm/_npx for subsequent runs
@@ -42,7 +44,7 @@ CMD ["sh", "-c", "echo '======================================' && \
      echo '  Web UI will be available at:' && \
      echo '  http://localhost:12580/dashboard?user_auth_token=tingly-box-user-token' && \
      echo '======================================' && \
-     exec npx tingly-box@${TINGLY_VERSION} start --host 0.0.0.0 --port 12580"]
+     exec npx 'tingly-box@${TINGLY_VERSION}' start --host 0.0.0.0 --port 12580"]
 
 # Volumes for persistent data
 VOLUME ["/app/.tingly-box", "/app/memory", "/app/logs"]
