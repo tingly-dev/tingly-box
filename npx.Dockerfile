@@ -2,17 +2,33 @@
 # This image uses npm to install tingly-box globally, resulting in a smaller image size
 
 ARG TINGLY_VERSION=latest
-FROM node:20-alpine
+FROM node:20-slim
+
+# Expose the default port
+EXPOSE 12580
+
+# Environment variables for configuration
+ENV TINGLY_PORT=12580
+ENV TINGLY_HOST=0.0.0.0
 
 # Install runtime dependencies
-RUN apk add --no-cache ca-certificates tzdata su-exec
-
-# Update npm to latest version
-RUN npm install -g npm@latest
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    tzdata \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for security
-RUN addgroup -S tingly && \
-    adduser -S -G tingly tingly
+RUN groupadd -r tingly && \
+    useradd -r -g tingly tingly
+
+# Update npm to latest version (as root)
+RUN npm install -g npm@latest
+
+# Install tingly-box globally during build (as root)
+RUN npm install -g tingly-box@${TINGLY_VERSION}
+
+# Grant tingly user access to npm global directories and cache
+RUN chown -R tingly:tingly /usr/local/lib/node_modules /usr/local/bin /root/.npm
 
 # Set working directory
 WORKDIR /app
@@ -21,29 +37,24 @@ WORKDIR /app
 RUN mkdir -p /app/.tingly-box /app/memory /app/logs && \
     chown -R tingly:tingly /app
 
+RUN mkdir /home/tingly && chown -R tingly:tingly /home/tingly/
+
 # Switch to non-root user
 USER tingly
 
-# Expose the default port
-EXPOSE 12580
-
-# Environment variables for configuration
-ENV TINGLY_PORT=12580
-ENV TINGLY_HOST=0.0.0.0
-ENV TINGLY_VERSION="${TINGLY_VERSION}"
+RUN tingly-box version
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD tingly-box status || exit 1
+    CMD tingly-box version || exit 1
 
-# Default command: install and run tingly-box via npm
+# Default command: run tingly-box
 CMD ["sh", "-c", "echo '======================================' && \
      echo '  Tingly Box is starting up...' && \
      echo '  Installing version:' ${TINGLY_VERSION} && \
      echo '  Web UI will be available at:' && \
      echo '  http://localhost:12580/dashboard?user_auth_token=tingly-box-user-token' && \
      echo '======================================' && \
-     npm install -g tingly-box@${TINGLY_VERSION} && \
      exec tingly-box start --host 0.0.0.0 --port 12580"]
 
 # Volumes for persistent data
