@@ -235,7 +235,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           # Create release branch
-          RELEASE_BRANCH="${RELEASE_TAG}"
+          RELEASE_BRANCH="release-${RELEASE_TAG}"
 
           # Check if branch exists
           if git rev-parse "$RELEASE_BRANCH" >/dev/null 2>&1; then
