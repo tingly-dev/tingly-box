@@ -62,7 +62,18 @@ task cli:build
 task wails:build
 ```
 
-**From Docker**
+**From Docker (Github)**
+
+```bash
+mkdir tingly-data
+docker run -d \
+  --name tingly-box \
+  -p 12580:12580 \
+  -v `pwd`/data:/home/tingly/.tingly-box \
+  ghcr.io/tingly-dev/tingly-box
+```
+
+**From Docker (Build from sketch)**
 
 ```bash
 # Pull and run the NPX-based image (recommended - smaller size, auto-updates)
