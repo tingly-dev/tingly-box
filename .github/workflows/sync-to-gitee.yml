@@ -118,6 +118,19 @@ jobs:
           # Add Gitee to known_hosts
           ssh-keyscan -t rsa gitee.com >> ~/.ssh/known_hosts
 
+          # Configure SSH for better reliability to Gitee
+          cat >> ~/.ssh/config <<EOF
+          Host gitee.com
+            HostName gitee.com
+            User git
+            IdentityFile ~/.ssh/id_rsa
+            IdentitiesOnly yes
+            ServerAliveInterval 60
+            ServerAliveCountMax 5
+            ConnectTimeout 30
+            TCPKeepAlive yes
+          EOF
+
           # Verify GITEE_REPO is set
           if [ -z "$GITEE_REPO" ]; then
             echo "Error: GITEE_REPO_SSH secret is not set"
@@ -228,19 +241,59 @@ jobs:
           EOF
           )"
 
-            # Push to Gitee
+            # Push to Gitee with retry mechanism
             echo "Pushing to Gitee..."
-            git push origin "$RELEASE_BRANCH"
+            MAX_RETRIES=3
+            RETRY_COUNT=0
+            PUSH_SUCCESS=false
+
+            while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$PUSH_SUCCESS" = false ]; do
+              if git push origin "$RELEASE_BRANCH" --timeout=300; then
+                PUSH_SUCCESS=true
+                echo "✅ Push succeeded on attempt $((RETRY_COUNT + 1))"
+              else
+                RETRY_COUNT=$((RETRY_COUNT + 1))
+                if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                  echo "⚠️ Push failed (attempt $RETRY_COUNT/$MAX_RETRIES), retrying in 10 seconds..."
+                  sleep 10
+                else
+                  echo "❌ Push failed after $MAX_RETRIES attempts"
+                  exit 1
+                fi
+              fi
+            done
 
             # Create tag in Gitee
             if git rev-parse "$RELEASE_TAG" >/dev/null 2>&1; then
               echo "⚠️ Tag $RELEASE_TAG already exists in Gitee repo"
             else
               git tag "$RELEASE_TAG"
-              git push origin "$RELEASE_TAG"
+
+              # Push tag with retry mechanism
+              echo "Pushing tag to Gitee..."
+              RETRY_COUNT=0
+              TAG_PUSH_SUCCESS=false
+
+              while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$TAG_PUSH_SUCCESS" = false ]; do
+                if git push origin "$RELEASE_TAG" --timeout=300; then
+                  TAG_PUSH_SUCCESS=true
+                  echo "✅ Tag push succeeded on attempt $((RETRY_COUNT + 1))"
+                else
+                  RETRY_COUNT=$((RETRY_COUNT + 1))
+                  if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                    echo "⚠️ Tag push failed (attempt $RETRY_COUNT/$MAX_RETRIES), retrying in 10 seconds..."
+                    sleep 10
+                  else
+                    echo "❌ Tag push failed after $MAX_RETRIES attempts"
+                    exit 1
+                  fi
+                fi
+              done
+
               echo "✅ Created and pushed tag $RELEASE_TAG to Gitee"
             fi
           fi
+        timeout-minutes: 10
 
       - name: Summary
         env:
