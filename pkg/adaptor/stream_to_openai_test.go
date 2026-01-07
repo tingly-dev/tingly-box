@@ -54,7 +54,7 @@ func TestHandleAnthropicToOpenAIStreamResponse(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 
 	// Run the handler
-	err := HandleAnthropicToOpenAIStreamResponse(c, stream, model)
+	err := HandleAnthropicToOpenAIStreamResponse(c, nil, stream, model)
 	require.NoError(t, err)
 
 	// Verify the response
