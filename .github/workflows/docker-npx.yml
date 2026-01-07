@@ -1,0 +1,102 @@
+name: Docker NPX Image Build and Push
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag (e.g., v1.0.0)'
+        required: true
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: tingly-box
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Determine version tag
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TAG="${{ github.event.inputs.release_tag }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+
+          # Validate tag format
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
+            echo "Error: Invalid tag format. Expected format: v1.0.0 or v1.0.0-beta"
+            exit 1
+          fi
+
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "is_prerelease=$([[ "$TAG" == *-* ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "Building image for tag: $TAG"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/tingly-dev/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ steps.version.outputs.tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.tag }}
+            type=raw,value=latest,enable=${{ steps.version.outputs.is_prerelease != 'true' }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./npx.Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+      - name: Generate image digest summary
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          ## Docker Image Published :rocket:
+
+          **Tag:** `${{ steps.version.outputs.tag }}`
+          **Image:** `${{ env.REGISTRY }}/tingly-dev/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}`
+
+          ### Pull Command
+          ```bash
+          docker pull ${{ env.REGISTRY }}/tingly-dev/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}
+          ```
+
+          ### Run Command
+          ```bash
+          mkdir tingly-data
+          docker run -d \
+            --name tingly-box \
+            -p 12580:12580 \
+            -v `pwd`/tingly-data:/app/.tingly-box \
+            ${{ env.REGISTRY }}/tingly-dev/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}
+          ```
+          EOF
