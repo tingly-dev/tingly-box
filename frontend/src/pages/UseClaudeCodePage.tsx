@@ -9,6 +9,8 @@ import { useTranslation } from 'react-i18next';
 import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import { useFunctionPanelData } from '../hooks/useFunctionPanelData';
+import EmptyStateGuide from '../components/EmptyStateGuide';
+import ProviderFormDialog, { type EnhancedProviderFormData } from '../components/ProviderFormDialog';
 
 const ruleId = "built-in-cc";
 
@@ -30,12 +32,59 @@ const UseClaudeCodePage: React.FC = () => {
     const [isDockerMode, setIsDockerMode] = React.useState(false);
     const [claudeJsonMode, setClaudeJsonMode] = React.useState<ClaudeJsonMode>('json');
 
+    // Provider dialog state
+    const [providerDialogOpen, setProviderDialogOpen] = React.useState(false);
+    const [providerFormData, setProviderFormData] = React.useState<EnhancedProviderFormData>({
+        name: '',
+        apiBase: '',
+        apiStyle: undefined,
+        token: '',
+        enabled: true,
+        noKeyRequired: false,
+    });
+
     const copyToClipboard = async (text: string, label: string) => {
         try {
             await navigator.clipboard.writeText(text);
             showNotification(`${label} copied to clipboard!`, 'success');
         } catch (err) {
             showNotification('Failed to copy to clipboard', 'error');
+        }
+    };
+
+    // Provider dialog handlers
+    const handleAddProviderClick = () => {
+        setProviderFormData({
+            name: '',
+            apiBase: '',
+            apiStyle: 'anthropic', // Default to Anthropic for Claude Code
+            token: '',
+            enabled: true,
+            noKeyRequired: false,
+        });
+        setProviderDialogOpen(true);
+    };
+
+    const handleProviderSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        const providerData = {
+            name: providerFormData.name,
+            api_base: providerFormData.apiBase,
+            api_style: providerFormData.apiStyle,
+            token: providerFormData.token,
+            no_key_required: providerFormData.noKeyRequired,
+        };
+
+        const result = await api.addProvider(providerData);
+
+        if (result.success) {
+            showNotification('API Key added successfully!', 'success');
+            setProviderDialogOpen(false);
+            // Reload providers through the hook
+            window.location.reload();
+        } else {
+            showNotification(`Failed to add API Key: ${result.error}`, 'error');
         }
     };
 
@@ -216,6 +265,32 @@ node --eval '
         </Box>
     );
 
+    // Show empty state if no providers
+    if (!providers.length) {
+        return (
+            <PageLayout>
+                <CardGrid>
+                    <UnifiedCard title="Use Claude Code" size="full">
+                        <EmptyStateGuide
+                            title="No API Keys Configured"
+                            description="Add an Anthropic API key to get started with Claude Code"
+                            buttonText="Add API Key"
+                            onButtonClick={handleAddProviderClick}
+                        />
+                    </UnifiedCard>
+                    <ProviderFormDialog
+                        open={providerDialogOpen}
+                        onClose={() => setProviderDialogOpen(false)}
+                        onSubmit={handleProviderSubmit}
+                        data={providerFormData}
+                        onChange={(field, value) => setProviderFormData(prev => ({ ...prev, [field]: value }))}
+                        mode="add"
+                    />
+                </CardGrid>
+            </PageLayout>
+        );
+    }
+
     return (
         <PageLayout>
             <CardGrid>
@@ -234,6 +309,14 @@ node --eval '
                     providers={providers}
                     onRulesChange={(rules) => setRule(rules[0])}
                     allowToggleRule={false}
+                />
+                <ProviderFormDialog
+                    open={providerDialogOpen}
+                    onClose={() => setProviderDialogOpen(false)}
+                    onSubmit={handleProviderSubmit}
+                    data={providerFormData}
+                    onChange={(field, value) => setProviderFormData(prev => ({ ...prev, [field]: value }))}
+                    mode="add"
                 />
             </CardGrid>
         </PageLayout>

@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
-import {Add as AddIcon, ContentCopy as CopyIcon, Edit as EditIcon} from '@mui/icons-material';
+import {Add as AddIcon, ContentCopy as CopyIcon, Edit as EditIcon, Key as KeyIcon} from '@mui/icons-material';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import {Box, Button, IconButton, Tooltip, Typography} from '@mui/material';
+import {Box, Button, IconButton, Stack, Tooltip, Typography} from '@mui/material';
 import {useNavigate} from 'react-router-dom';
 import {BaseUrlRow} from '../components/BaseUrlRow';
 import TemplatePage from '../components/TemplatePage.tsx';
@@ -12,6 +12,8 @@ import { ApiConfigRow } from "@/components/ApiConfigRow";
 import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import { useFunctionPanelData } from '../hooks/useFunctionPanelData';
+import EmptyStateGuide from '../components/EmptyStateGuide';
+import ProviderFormDialog, { type EnhancedProviderFormData } from '../components/ProviderFormDialog';
 
 const ruleId = "built-in-openai";
 const scenario = "openai";
@@ -29,6 +31,17 @@ const UseOpenAIPage: React.FC = () => {
     const [loadingRule, setLoadingRule] = React.useState(true);
     const [newlyCreatedRuleUuids, setNewlyCreatedRuleUuids] = React.useState<Set<string>>(new Set());
     const navigate = useNavigate();
+
+    // Provider dialog state
+    const [providerDialogOpen, setProviderDialogOpen] = React.useState(false);
+    const [providerFormData, setProviderFormData] = React.useState<EnhancedProviderFormData>({
+        name: '',
+        apiBase: '',
+        apiStyle: undefined,
+        token: '',
+        enabled: true,
+        noKeyRequired: false,
+    });
 
     const copyToClipboard = async (text: string, label: string) => {
         try {
@@ -66,6 +79,42 @@ const UseOpenAIPage: React.FC = () => {
     const handleRuleDelete = useCallback((deletedRuleUuid: string) => {
         setRules((prevRules: any[]) => (prevRules || []).filter(r => r.uuid !== deletedRuleUuid));
     }, []);
+
+    // Provider dialog handlers
+    const handleAddProviderClick = () => {
+        setProviderFormData({
+            name: '',
+            apiBase: '',
+            apiStyle: 'openai', // Default to OpenAI for this page
+            token: '',
+            enabled: true,
+            noKeyRequired: false,
+        });
+        setProviderDialogOpen(true);
+    };
+
+    const handleProviderSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        const providerData = {
+            name: providerFormData.name,
+            api_base: providerFormData.apiBase,
+            api_style: providerFormData.apiStyle,
+            token: providerFormData.token,
+            no_key_required: providerFormData.noKeyRequired,
+        };
+
+        const result = await api.addProvider(providerData);
+
+        if (result.success) {
+            showNotification('API Key added successfully!', 'success');
+            setProviderDialogOpen(false);
+            // Reload providers through the hook
+            window.location.reload();
+        } else {
+            showNotification(`Failed to add API Key: ${result.error}`, 'error');
+        }
+    };
 
     const loadData = async () => {
         const url = await getBaseUrl();
@@ -137,6 +186,32 @@ const UseOpenAIPage: React.FC = () => {
         </Box>
     );
 
+    // Show empty state if no providers
+    if (!providers.length) {
+        return (
+            <PageLayout>
+                <CardGrid>
+                    <UnifiedCard title="OpenAI SDK Configuration" size="full">
+                        <EmptyStateGuide
+                            title="No API Keys Configured"
+                            description="Add your OpenAI API key to get started with the OpenAI SDK"
+                            buttonText="Add API Key"
+                            onButtonClick={handleAddProviderClick}
+                        />
+                    </UnifiedCard>
+                    <ProviderFormDialog
+                        open={providerDialogOpen}
+                        onClose={() => setProviderDialogOpen(false)}
+                        onSubmit={handleProviderSubmit}
+                        data={providerFormData}
+                        onChange={(field, value) => setProviderFormData(prev => ({ ...prev, [field]: value }))}
+                        mode="add"
+                    />
+                </CardGrid>
+            </PageLayout>
+        );
+    }
+
     return (
         <PageLayout>
             <CardGrid>
@@ -144,16 +219,28 @@ const UseOpenAIPage: React.FC = () => {
                     title="OpenAI SDK Configuration"
                     size="full"
                     rightAction={
-                        <Tooltip title="Create new routing rule">
-                            <Button
-                                variant="contained"
-                                startIcon={<AddIcon />}
-                                onClick={handleCreateRule}
-                                size="small"
-                            >
-                                New Rule
-                            </Button>
-                        </Tooltip>
+                        <Stack direction="row" spacing={1}>
+                            <Tooltip title="Add new API Key">
+                                <Button
+                                    variant="outlined"
+                                    startIcon={<KeyIcon />}
+                                    onClick={handleAddProviderClick}
+                                    size="small"
+                                >
+                                    Add API Key
+                                </Button>
+                            </Tooltip>
+                            <Tooltip title="Create new routing rule">
+                                <Button
+                                    variant="contained"
+                                    startIcon={<AddIcon />}
+                                    onClick={handleCreateRule}
+                                    size="small"
+                                >
+                                    New Rule
+                                </Button>
+                            </Tooltip>
+                        </Stack>
                     }
                 >
                     {header}
@@ -173,8 +260,16 @@ const UseOpenAIPage: React.FC = () => {
                     providers={providers}
                     onRulesChange={(rules) => setRules(rules)}
                     newlyCreatedRuleUuids={newlyCreatedRuleUuids}
-                    // allowDeleteRule={true}
-                    // onRuleDelete={handleRuleDelete}
+                    allowDeleteRule={true}
+                    onRuleDelete={handleRuleDelete}
+                />
+                <ProviderFormDialog
+                    open={providerDialogOpen}
+                    onClose={() => setProviderDialogOpen(false)}
+                    onSubmit={handleProviderSubmit}
+                    data={providerFormData}
+                    onChange={(field, value) => setProviderFormData(prev => ({ ...prev, [field]: value }))}
+                    mode="add"
                 />
             </CardGrid>
         </PageLayout>
