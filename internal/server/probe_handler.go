@@ -264,8 +264,8 @@ func (s *Server) probeWithOpenAI(c *gin.Context, provider *typ.Provider, model s
 		},
 	}
 
-	// Make request using OpenAI SDK
-	resp, err := openaiClient.Client().Chat.Completions.New(c.Request.Context(), *chatRequest)
+	// Make request using wrapper method
+	resp, err := openaiClient.ChatCompletionsNew(c.Request.Context(), *chatRequest)
 	processingTime := time.Since(startTime).Milliseconds()
 
 	var responseContent string
@@ -343,8 +343,8 @@ func (s *Server) probeWithAnthropic(c *gin.Context, provider *typ.Provider, mode
 		MaxTokens: 100,
 	}
 
-	// Make request using Anthropic SDK
-	resp, err := anthropicClient.Client().Messages.New(c.Request.Context(), messageRequest)
+	// Make request using wrapper method
+	resp, err := anthropicClient.MessagesNew(c.Request.Context(), messageRequest)
 	processingTime := time.Since(startTime).Milliseconds()
 
 	var responseContent string

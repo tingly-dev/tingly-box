@@ -319,11 +319,8 @@ func (s *Server) forwardOpenAIRequest(provider *typ.Provider, req *openai.ChatCo
 	wrapper := s.clientPool.GetOpenAIClient(provider, string(req.Model))
 	logrus.Infof("provider: %s", provider.Name)
 
-	// Get the underlying SDK client
-	client := wrapper.Client()
-
-	// Make the request using OpenAI library
-	chatCompletion, err := client.Chat.Completions.New(context.Background(), *req)
+	// Make the request using wrapper method
+	chatCompletion, err := wrapper.ChatCompletionsNew(context.Background(), *req)
 	if err != nil {
 		logrus.Error(err)
 		return nil, fmt.Errorf("failed to create chat completion: %w", err)
@@ -338,11 +335,8 @@ func (s *Server) forwardOpenAIStreamRequest(provider *typ.Provider, req *openai.
 	wrapper := s.clientPool.GetOpenAIClient(provider, "")
 	logrus.Infof("provider: %s (streaming)", provider.Name)
 
-	// Get the underlying SDK client
-	client := wrapper.Client()
-
-	// Make the streaming request using OpenAI library
-	stream := client.Chat.Completions.NewStreaming(context.Background(), *req)
+	// Make the streaming request using wrapper method
+	stream := wrapper.ChatCompletionsNewStreaming(context.Background(), *req)
 
 	return stream, nil
 }
