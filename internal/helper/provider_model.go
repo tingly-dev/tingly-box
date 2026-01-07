@@ -8,9 +8,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
-
+	"tingly-box/internal/llmclient/httpclient"
 	"tingly-box/internal/typ"
-	"tingly-box/pkg/client"
 	"tingly-box/pkg/oauth"
 )
 
@@ -64,9 +63,9 @@ func GetProviderModelsFromAPI(provider *typ.Provider) ([]string, error) {
 	var httpClient *http.Client
 	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
 		providerType := oauth.ProviderType(provider.OAuthDetail.ProviderType)
-		httpClient = client.CreateHTTPClientForProvider(providerType, provider.ProxyURL, true)
+		httpClient = httpclient.CreateHTTPClientForProvider(providerType, provider.ProxyURL, true)
 	} else {
-		httpClient = client.CreateHTTPClientWithProxy(provider.ProxyURL)
+		httpClient = httpclient.CreateHTTPClientWithProxy(provider.ProxyURL)
 	}
 	httpClient.Timeout = 30 * time.Second
 

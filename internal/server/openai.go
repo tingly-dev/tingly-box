@@ -315,16 +315,15 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 
 // forwardOpenAIRequest forwards the request to the selected provider using OpenAI library
 func (s *Server) forwardOpenAIRequest(provider *typ.Provider, req *openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
-	// Get or create OpenAI client from pool
-	client := s.clientPool.GetOpenAIClient(provider)
+	// Get or create OpenAI client wrapper from pool
+	wrapper := s.clientPool.GetOpenAIClient(provider, string(req.Model))
 	logrus.Infof("provider: %s", provider.Name)
 
-	// Since  openai.ChatCompletionNewParams is a type alias to openai.ChatCompletionNewParams,
-	// we can directly use it as the request parameters
-	chatReq := *req
+	// Get the underlying SDK client
+	client := wrapper.Client()
 
 	// Make the request using OpenAI library
-	chatCompletion, err := client.Chat.Completions.New(context.Background(), chatReq)
+	chatCompletion, err := client.Chat.Completions.New(context.Background(), *req)
 	if err != nil {
 		logrus.Error(err)
 		return nil, fmt.Errorf("failed to create chat completion: %w", err)
@@ -335,16 +334,15 @@ func (s *Server) forwardOpenAIRequest(provider *typ.Provider, req *openai.ChatCo
 
 // forwardOpenAIStreamRequest forwards the streaming request to the selected provider using OpenAI library
 func (s *Server) forwardOpenAIStreamRequest(provider *typ.Provider, req *openai.ChatCompletionNewParams) (*ssestream.Stream[openai.ChatCompletionChunk], error) {
-	// Get or create OpenAI client from pool
-	client := s.clientPool.GetOpenAIClient(provider)
+	// Get or create OpenAI client wrapper from pool
+	wrapper := s.clientPool.GetOpenAIClient(provider, "")
 	logrus.Infof("provider: %s (streaming)", provider.Name)
 
-	// Since  openai.ChatCompletionNewParams is a type alias to openai.ChatCompletionNewParams,
-	// we can directly use it as the request parameters
-	chatReq := *req
+	// Get the underlying SDK client
+	client := wrapper.Client()
 
 	// Make the streaming request using OpenAI library
-	stream := client.Chat.Completions.NewStreaming(context.Background(), chatReq)
+	stream := client.Chat.Completions.NewStreaming(context.Background(), *req)
 
 	return stream, nil
 }

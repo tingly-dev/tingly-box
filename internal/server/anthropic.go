@@ -437,8 +437,11 @@ func (s *Server) AnthropicCountTokens(c *gin.Context) {
 
 	// If the provider uses Anthropic API style, use the actual count_tokens endpoint
 	if apiStyle == "anthropic" {
-		// Get or create Anthropic client from pool
-		client := s.clientPool.GetAnthropicClient(provider)
+		// Get or create Anthropic client wrapper from pool
+		wrapper := s.clientPool.GetAnthropicClient(provider, actualModel)
+
+		// Get the underlying SDK client
+		client := wrapper.Client()
 
 		// Make the request using Anthropic SDK with timeout (provider.Timeout is in seconds)
 		timeout := time.Duration(provider.Timeout) * time.Second
@@ -475,9 +478,12 @@ func (s *Server) AnthropicCountTokens(c *gin.Context) {
 
 // forwardAnthropicRequestRaw forwards request from raw map using Anthropic SDK
 func (s *Server) forwardAnthropicRequestRaw(provider *typ.Provider, rawReq map[string]interface{}, model string) (*anthropic.Message, error) {
-	// Get or create Anthropic client from pool
-	client := s.clientPool.GetAnthropicClient(provider)
+	// Get or create Anthropic client wrapper from pool
+	wrapper := s.clientPool.GetAnthropicClient(provider, model)
 	logrus.Debugf("Anthropic API Token Length: %d", len(provider.Token))
+
+	// Get the underlying SDK client
+	client := wrapper.Client()
 
 	// Extract and convert messages from raw request
 	messagesData, ok := rawReq["messages"].([]interface{})
@@ -560,8 +566,11 @@ func (s *Server) forwardAnthropicRequestRaw(provider *typ.Provider, rawReq map[s
 
 // forwardAnthropicRequest forwards request using Anthropic SDK with proper types
 func (s *Server) forwardAnthropicRequest(provider *typ.Provider, req anthropic.MessageNewParams) (*anthropic.Message, error) {
-	// Get or create Anthropic client from pool
-	client := s.clientPool.GetAnthropicClient(provider)
+	// Get or create Anthropic client wrapper from pool
+	wrapper := s.clientPool.GetAnthropicClient(provider, string(req.Model))
+
+	// Get the underlying SDK client
+	client := wrapper.Client()
 
 	// Make the request using Anthropic SDK with timeout (provider.Timeout is in seconds)
 	timeout := time.Duration(provider.Timeout) * time.Second
@@ -577,10 +586,13 @@ func (s *Server) forwardAnthropicRequest(provider *typ.Provider, req anthropic.M
 
 // forwardAnthropicStreamRequest forwards streaming request using Anthropic SDK
 func (s *Server) forwardAnthropicStreamRequest(provider *typ.Provider, req anthropic.MessageNewParams) (*anthropicstream.Stream[anthropic.MessageStreamEventUnion], error) {
-	// Get or create Anthropic client from pool
-	client := s.clientPool.GetAnthropicClient(provider)
+	// Get or create Anthropic client wrapper from pool
+	wrapper := s.clientPool.GetAnthropicClient(provider, string(req.Model))
 
 	logrus.Debugln("Creating Anthropic streaming request")
+
+	// Get the underlying SDK client
+	client := wrapper.Client()
 
 	// Use background context for streaming
 	// The stream will manage its own lifecycle and timeout

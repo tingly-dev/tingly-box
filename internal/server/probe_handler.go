@@ -253,7 +253,7 @@ func (s *Server) probeWithOpenAI(c *gin.Context, provider *typ.Provider, model s
 	startTime := time.Now()
 
 	// Get OpenAI client from pool (supports proxy and caching)
-	openaiClient := s.clientPool.GetOpenAIClient(provider)
+	openaiClient := s.clientPool.GetOpenAIClient(provider, "")
 
 	// Create chat completion request using OpenAI SDK
 	chatRequest := &openai.ChatCompletionNewParams{
@@ -265,7 +265,7 @@ func (s *Server) probeWithOpenAI(c *gin.Context, provider *typ.Provider, model s
 	}
 
 	// Make request using OpenAI SDK
-	resp, err := openaiClient.Chat.Completions.New(c.Request.Context(), *chatRequest)
+	resp, err := openaiClient.Client().Chat.Completions.New(c.Request.Context(), *chatRequest)
 	processingTime := time.Since(startTime).Milliseconds()
 
 	var responseContent string
@@ -317,7 +317,7 @@ func (s *Server) probeWithAnthropic(c *gin.Context, provider *typ.Provider, mode
 	startTime := time.Now()
 
 	// Get Anthropic client from pool (supports proxy, OAuth headers, and caching)
-	anthropicClient := s.clientPool.GetAnthropicClient(provider)
+	anthropicClient := s.clientPool.GetAnthropicClient(provider, model)
 
 	// Determine system message based on OAuth provider type
 	systemMessages := []anthropic.TextBlockParam{
@@ -344,7 +344,7 @@ func (s *Server) probeWithAnthropic(c *gin.Context, provider *typ.Provider, mode
 	}
 
 	// Make request using Anthropic SDK
-	resp, err := anthropicClient.Messages.New(c.Request.Context(), messageRequest)
+	resp, err := anthropicClient.Client().Messages.New(c.Request.Context(), messageRequest)
 	processingTime := time.Since(startTime).Milliseconds()
 
 	var responseContent string

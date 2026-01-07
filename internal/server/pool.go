@@ -4,40 +4,33 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"strings"
 	"sync"
+	llmclient "tingly-box/internal/llmclient"
 
-	"github.com/anthropics/anthropic-sdk-go"
-	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
-	"github.com/openai/openai-go/v3"
-	openaiOption "github.com/openai/openai-go/v3/option"
 	"github.com/sirupsen/logrus"
 
 	"tingly-box/internal/typ"
-	"tingly-box/pkg/client"
-	"tingly-box/pkg/oauth"
 )
 
-// ClientPool manages OpenAI and Anthropic client instances for different providers
+// ClientPool manages unified client instances for different providers
 type ClientPool struct {
-	openaiClients    map[string]*openai.Client
-	anthropicClients map[string]anthropic.Client
+	openaiClients    map[string]*llmclient.OpenAIClient
+	anthropicClients map[string]*llmclient.AnthropicClient
 	mutex            sync.RWMutex
 }
 
 // NewClientPool creates a new client pool
 func NewClientPool() *ClientPool {
 	return &ClientPool{
-		openaiClients:    make(map[string]*openai.Client),
-		anthropicClients: make(map[string]anthropic.Client),
+		openaiClients:    make(map[string]*llmclient.OpenAIClient),
+		anthropicClients: make(map[string]*llmclient.AnthropicClient),
 	}
 }
 
-// GetOpenAIClient returns an OpenAI client for the specified provider
-// It creates a new client if one doesn't exist for the provider
-func (p *ClientPool) GetOpenAIClient(provider *typ.Provider) *openai.Client {
+// GetOpenAIClient returns an OpenAI client wrapper for the specified provider
+func (p *ClientPool) GetOpenAIClient(provider *typ.Provider, model string) *llmclient.OpenAIClient {
 	// Generate unique key for provider
-	key := p.generateProviderKey(provider)
+	key := p.generateProviderKey(provider, model)
 
 	// Try to get existing client with read lock first
 	p.mutex.RLock()
@@ -58,33 +51,24 @@ func (p *ClientPool) GetOpenAIClient(provider *typ.Provider) *openai.Client {
 		return client
 	}
 
-	// Create new client with proxy support if configured
+	// Create new client using factory
 	logrus.Infof("Creating new OpenAI client for provider: %s (API: %s)", provider.Name, provider.APIBase)
 
-	options := []openaiOption.RequestOption{
-		openaiOption.WithAPIKey(provider.GetAccessToken()),
-		openaiOption.WithBaseURL(provider.APIBase),
+	client, err := llmclient.NewOpenAIClient(provider)
+	if err != nil {
+		logrus.Errorf("Failed to create OpenAI client for provider %s: %v", provider.Name, err)
+		return nil
 	}
-
-	// Add proxy if configured
-	if provider.ProxyURL != "" {
-		httpClient := client.CreateHTTPClientWithProxy(provider.ProxyURL)
-		options = append(options, openaiOption.WithHTTPClient(httpClient))
-		logrus.Infof("Using proxy for OpenAI client: %s", provider.ProxyURL)
-	}
-
-	openaiClient := openai.NewClient(options...)
 
 	// Store in pool
-	p.openaiClients[key] = &openaiClient
-	return &openaiClient
+	p.openaiClients[key] = client
+	return client
 }
 
-// GetAnthropicClient returns an Anthropic client for the specified provider
-// It creates a new client if one doesn't exist for the provider
-func (p *ClientPool) GetAnthropicClient(provider *typ.Provider) anthropic.Client {
+// GetAnthropicClient returns an Anthropic client wrapper for the specified provider
+func (p *ClientPool) GetAnthropicClient(provider *typ.Provider, model string) *llmclient.AnthropicClient {
 	// Generate unique key for provider
-	key := p.generateProviderKey(provider)
+	key := p.generateProviderKey(provider, model)
 
 	// Try to get existing client with read lock first
 	p.mutex.RLock()
@@ -105,52 +89,26 @@ func (p *ClientPool) GetAnthropicClient(provider *typ.Provider) anthropic.Client
 		return client
 	}
 
-	// Create new client with proxy support if configured
-	var apiBase = provider.APIBase
-	if strings.HasSuffix(apiBase, "/v1") {
-		apiBase = apiBase[:len(apiBase)-3]
+	// Create new client using factory
+	logrus.Infof("Creating new Anthropic client for provider: %s (API: %s)", provider.Name, provider.APIBase)
+
+	client, err := llmclient.NewAnthropicClient(provider)
+	if err != nil {
+		logrus.Errorf("Failed to create Anthropic client for provider %s: %v", provider.Name, err)
+		return nil
 	}
-
-	logrus.Infof("Creating new Anthropic client for provider: %s (API: %s)", provider.Name, apiBase)
-
-	options := []anthropicOption.RequestOption{
-		anthropicOption.WithAPIKey(provider.GetAccessToken()),
-		anthropicOption.WithBaseURL(apiBase),
-	}
-
-	// Add proxy and/or custom headers if configured
-	if provider.ProxyURL != "" || provider.AuthType == typ.AuthTypeOAuth {
-		var providerType oauth.ProviderType
-		if provider.OAuthDetail != nil {
-			providerType = oauth.ProviderType(provider.OAuthDetail.ProviderType)
-		}
-		httpClient := client.CreateHTTPClientForProvider(providerType, provider.ProxyURL, provider.AuthType == typ.AuthTypeOAuth)
-
-		if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
-			logrus.Infof("Using custom headers/params for OAuth provider type: %s", provider.OAuthDetail.ProviderType)
-		}
-		if provider.ProxyURL != "" {
-			logrus.Infof("Using proxy for Anthropic client: %s", provider.ProxyURL)
-		}
-
-		options = append(options, anthropicOption.WithHTTPClient(httpClient))
-	}
-
-	anthropicClient := anthropic.NewClient(options...)
 
 	// Store in pool
-	p.anthropicClients[key] = anthropicClient
-	return anthropicClient
+	p.anthropicClients[key] = client
+	return client
 }
 
 // generateProviderKey creates a unique key for a provider
-// Uses combination of name, API base, hash of the token, and proxy URL for uniqueness
-func (p *ClientPool) generateProviderKey(provider *typ.Provider) string {
-	return fmt.Sprintf("%s:%s:%s:%s", provider.Name, provider.APIBase, hashToken(provider.GetAccessToken()), hashToken(provider.ProxyURL))
+func (p *ClientPool) generateProviderKey(provider *typ.Provider, model string) string {
+	return fmt.Sprintf("%s:%s:%s:%s", provider.UUID, model, hashToken(provider.ProxyURL))
 }
 
 // hashToken creates a secure hash of the token for key generation
-// This ensures different tokens for the same provider get different clients
 func hashToken(token string) string {
 	if token == "" {
 		return ""
@@ -162,19 +120,18 @@ func hashToken(token string) string {
 }
 
 // Clear removes all clients from the pool
-// Useful for cleanup or when all providers change
 func (p *ClientPool) Clear() {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
-	p.openaiClients = make(map[string]*openai.Client)
-	p.anthropicClients = make(map[string]anthropic.Client)
+	p.openaiClients = make(map[string]*llmclient.OpenAIClient)
+	p.anthropicClients = make(map[string]*llmclient.AnthropicClient)
 	logrus.Info("Client pools cleared")
 }
 
 // RemoveProvider removes a specific provider's client from the pool
-func (p *ClientPool) RemoveProvider(provider *typ.Provider) {
-	key := p.generateProviderKey(provider)
+func (p *ClientPool) RemoveProvider(provider *typ.Provider, model string) {
+	key := p.generateProviderKey(provider, model)
 
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
@@ -190,7 +147,7 @@ func (p *ClientPool) RemoveProvider(provider *typ.Provider) {
 	}
 
 	if removed {
-		logrus.Infof("Removed clients for provider: %s", provider.Name)
+		logrus.Infof("Removed client for provider: %s", provider.Name)
 	}
 }
 
@@ -202,7 +159,6 @@ func (p *ClientPool) Size() int {
 }
 
 // GetProviderKeys returns all provider keys currently in the pool
-// Useful for debugging and monitoring
 func (p *ClientPool) GetProviderKeys() []string {
 	p.mutex.RLock()
 	defer p.mutex.RUnlock()
