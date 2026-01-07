@@ -92,3 +92,13 @@ func (c *AnthropicClient) MessagesCountTokens(ctx context.Context, req anthropic
 func (c *AnthropicClient) BetaMessagesCountTokens(ctx context.Context, req anthropic.BetaMessageCountTokensParams) (*anthropic.BetaMessageTokensCount, error) {
 	return c.client.Beta.Messages.CountTokens(ctx, req)
 }
+
+// BetaMessagesNew creates a new beta message request
+func (c *AnthropicClient) BetaMessagesNew(ctx context.Context, req anthropic.BetaMessageNewParams) (*anthropic.BetaMessage, error) {
+	return c.client.Beta.Messages.New(ctx, req)
+}
+
+// BetaMessagesNewStreaming creates a new beta streaming message request
+func (c *AnthropicClient) BetaMessagesNewStreaming(ctx context.Context, req anthropic.BetaMessageNewParams) *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion] {
+	return c.client.Beta.Messages.NewStreaming(ctx, req)
+}
