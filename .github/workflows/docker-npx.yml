@@ -1,9 +1,9 @@
 name: Docker NPX Image Build and Push
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'
+  # push:
+  #   tags:
+  #     - 'v*.*.*'
   workflow_dispatch:
     inputs:
       release_tag:
@@ -30,20 +30,33 @@ jobs:
         id: version
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            TAG="${{ github.event.inputs.release_tag }}"
+            # Manual trigger: use the provided tag
+            INPUT_TAG="${{ github.event.inputs.release_tag }}"
+
+            # Add 'v' prefix if not present
+            if [[ ! "$INPUT_TAG" =~ ^v ]]; then
+              TAG="v${INPUT_TAG}"
+            else
+              TAG="$INPUT_TAG"
+            fi
           else
+            # Push tag: use the git ref
             TAG="${GITHUB_REF#refs/tags/}"
           fi
 
           # Validate tag format
-          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]; then
             echo "Error: Invalid tag format. Expected format: v1.0.0 or v1.0.0-beta"
             exit 1
           fi
 
+          # Strip 'v' prefix for npm version
+          NPM_VERSION="${TAG#v}"
+
           echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "npm_version=$NPM_VERSION" >> $GITHUB_OUTPUT
           echo "is_prerelease=$([[ "$TAG" == *-* ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
-          echo "Building image for tag: $TAG"
+          echo "Building image for tag: $TAG (npm version: $NPM_VERSION)"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -76,6 +89,8 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
+          build-args: |
+            TINGLY_VERSION=${{ steps.version.outputs.npm_version }}
 
       - name: Generate image digest summary
         run: |
