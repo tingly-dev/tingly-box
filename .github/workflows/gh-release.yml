@@ -63,10 +63,10 @@ jobs:
             goarch: amd64
             suffix: linux-amd64
             runs-on: ubuntu-latest
-          # - goos: darwin
-          #   goarch: amd64
-          #   suffix: macos-amd64
-          #   runs-on: macos-latest-large
+          - goos: darwin
+            goarch: amd64
+            suffix: macos-amd64
+            runs-on: macos-15-intel
           - goos: darwin
             goarch: arm64
             suffix: macos-arm64

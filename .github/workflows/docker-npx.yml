@@ -74,8 +74,8 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/tingly-dev/${{ env.IMAGE_NAME }}
           tags: |
-            type=semver,pattern={{version}},value=${{ steps.version.outputs.tag }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.tag }}
+            type=raw,value=${{ steps.version.outputs.tag }}
+            type=raw,value=${{ steps.version.outputs.npm_version }}
             type=raw,value=latest,enable=${{ steps.version.outputs.is_prerelease != 'true' }}
 
       - name: Build and push Docker image
@@ -88,7 +88,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           build-args: |
             TINGLY_VERSION=${{ steps.version.outputs.npm_version }}
 
