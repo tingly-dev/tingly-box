@@ -69,7 +69,7 @@ mkdir tingly-data
 docker run -d \
   --name tingly-box \
   -p 12580:12580 \
-  -v `pwd`/data:/home/tingly/.tingly-box \
+  -v `pwd`/tingly-data:/home/tingly/.tingly-box \
   ghcr.io/tingly-dev/tingly-box
 ```
 
