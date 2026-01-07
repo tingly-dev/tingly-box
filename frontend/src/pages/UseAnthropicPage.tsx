@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
-import {Add as AddIcon, ContentCopy as CopyIcon, Edit as EditIcon} from '@mui/icons-material';
+import {Add as AddIcon, ContentCopy as CopyIcon, Edit as EditIcon, Key as KeyIcon} from '@mui/icons-material';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import {Box, Button, IconButton, Tooltip, Typography} from '@mui/material';
+import {Box, Button, IconButton, Stack, Tooltip, Typography} from '@mui/material';
 import {useNavigate} from 'react-router-dom';
 import {ApiConfigRow} from '../components/ApiConfigRow';
 import {BaseUrlRow} from '../components/BaseUrlRow';
@@ -12,6 +12,10 @@ import type { Provider } from '../types/provider';
 import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import { useFunctionPanelData } from '../hooks/useFunctionPanelData';
+import { useProviderDialog } from '../hooks/useProviderDialog';
+import EmptyStateGuide from '../components/EmptyStateGuide';
+import ProviderFormDialog from '../components/ProviderFormDialog';
+import OAuthDialog from '../components/OAuthDialog';
 
 const ruleId = "built-in-anthropic";
 const scenario = "anthropic";
@@ -29,6 +33,15 @@ const UseAnthropicPage: React.FC = () => {
     const [loadingRule, setLoadingRule] = React.useState(true);
     const [newlyCreatedRuleUuids, setNewlyCreatedRuleUuids] = React.useState<Set<string>>(new Set());
     const navigate = useNavigate();
+
+    // Provider dialog hook
+    const providerDialog = useProviderDialog(showNotification, {
+        defaultApiStyle: 'anthropic',
+        onProviderAdded: () => window.location.reload(),
+    });
+
+    // OAuth dialog state
+    const [oauthDialogOpen, setOAuthDialogOpen] = React.useState(false);
 
     const copyToClipboard = async (text: string, label: string) => {
         try {
@@ -137,6 +150,37 @@ const UseAnthropicPage: React.FC = () => {
         </Box>
     );
 
+    // Show empty state if no providers
+    if (!providers.length) {
+        return (
+            <PageLayout>
+                <CardGrid>
+                    <UnifiedCard title="Anthropic SDK Configuration" size="full">
+                        <EmptyStateGuide
+                            title="No Providers Configured"
+                            description="Add an API key or OAuth provider to get started"
+                            onAddApiKeyClick={providerDialog.handleAddProviderClick}
+                            onAddOAuthClick={() => setOAuthDialogOpen(true)}
+                        />
+                    </UnifiedCard>
+                    <ProviderFormDialog
+                        open={providerDialog.providerDialogOpen}
+                        onClose={providerDialog.handleCloseDialog}
+                        onSubmit={providerDialog.handleProviderSubmit}
+                        data={providerDialog.providerFormData}
+                        onChange={providerDialog.handleFieldChange}
+                        mode="add"
+                        isFirstProvider={providers.length === 0}
+                    />
+                    <OAuthDialog
+                        open={oauthDialogOpen}
+                        onClose={() => setOAuthDialogOpen(false)}
+                    />
+                </CardGrid>
+            </PageLayout>
+        );
+    }
+
     return (
         <PageLayout>
             <CardGrid>
@@ -144,16 +188,28 @@ const UseAnthropicPage: React.FC = () => {
                     title="Anthropic SDK Configuration"
                     size="full"
                     rightAction={
-                        <Tooltip title="Create new routing rule">
-                            <Button
-                                variant="contained"
-                                startIcon={<AddIcon />}
-                                onClick={handleCreateRule}
-                                size="small"
-                            >
-                                New Rule
-                            </Button>
-                        </Tooltip>
+                        <Stack direction="row" spacing={1}>
+                            <Tooltip title="Add new API Key">
+                                <Button
+                                    variant="outlined"
+                                    startIcon={<KeyIcon />}
+                                    onClick={providerDialog.handleAddProviderClick}
+                                    size="small"
+                                >
+                                    Add API Key
+                                </Button>
+                            </Tooltip>
+                            <Tooltip title="Create new routing rule">
+                                <Button
+                                    variant="contained"
+                                    startIcon={<AddIcon />}
+                                    onClick={handleCreateRule}
+                                    size="small"
+                                >
+                                    New Rule
+                                </Button>
+                            </Tooltip>
+                        </Stack>
                     }
                 >
                     {header}
@@ -173,8 +229,17 @@ const UseAnthropicPage: React.FC = () => {
                     providers={providers}
                     onRulesChange={(rules) => setRules(rules)}
                     newlyCreatedRuleUuids={newlyCreatedRuleUuids}
-                    // allowDeleteRule={true}
-                    // onRuleDelete={handleRuleDelete}
+                    allowDeleteRule={true}
+                    onRuleDelete={handleRuleDelete}
+                />
+                <ProviderFormDialog
+                    open={providerDialog.providerDialogOpen}
+                    onClose={providerDialog.handleCloseDialog}
+                    onSubmit={providerDialog.handleProviderSubmit}
+                    data={providerDialog.providerFormData}
+                    onChange={providerDialog.handleFieldChange}
+                    mode="add"
+                    isFirstProvider={providers.length === 0}
                 />
             </CardGrid>
         </PageLayout>

@@ -999,19 +999,6 @@ var DefaultRules []typ.Rule
 func init() {
 	DefaultRules = []typ.Rule{
 		{
-			UUID:          "tingly",
-			Scenario:      typ.ScenarioOpenAI,
-			RequestModel:  "tingly",
-			ResponseModel: "",
-			Description:   "Default proxy rule in tingly-box for general use with OpenAI or Anthropic",
-			Services:      []loadbalance.Service{}, // Empty services initially
-			LBTactic: typ.Tactic{ // Initialize with default round-robin tactic
-				Type:   loadbalance.TacticRoundRobin,
-				Params: typ.DefaultRoundRobinParams(),
-			},
-			Active: true,
-		},
-		{
 			UUID:          "built-in-anthropic",
 			Scenario:      typ.ScenarioAnthropic,
 			RequestModel:  "tingly/anthropic",
@@ -1050,43 +1037,6 @@ func init() {
 			},
 			Active: true,
 		},
-		{
-			UUID:          "claude-code",
-			Scenario:      typ.ScenarioClaudeCode,
-			RequestModel:  "claude-code",
-			ResponseModel: "",
-			Description:   "Default proxy rule for Claude Code",
-			Services:      []loadbalance.Service{}, // Empty services initially
-			LBTactic: typ.Tactic{ // Initialize with default round-robin tactic
-				Type:   loadbalance.TacticRoundRobin,
-				Params: typ.DefaultRoundRobinParams(),
-			},
-			Active: true,
-		},
-		//{
-		//	UUID:          "built-in-litellm-openai",
-		//	RequestModel:  "gpt-5",
-		//	ResponseModel: "",
-		//	Description:   "Default proxy rule for litellm openai compatible",
-		//	Services:      []Service{}, // Empty services initially
-		//	LBTactic: Tactic{ // Initialize with default round-robin tactic
-		//		Type:   TacticRoundRobin,
-		//		Params: DefaultRoundRobinParams(),
-		//	},
-		//	Active: true,
-		//},
-		//{
-		//	UUID:          "built-in-litellm-anthropic",
-		//	RequestModel:  "claude-sonnet-4-5",
-		//	ResponseModel: "",
-		//	Description:   "Default proxy rule for litellm anthropic compatible",
-		//	Services:      []Service{}, // Empty services initially
-		//	LBTactic: Tactic{ // Initialize with default round-robin tactic
-		//		Type:   TacticRoundRobin,
-		//		Params: DefaultRoundRobinParams(),
-		//	},
-		//	Active: true,
-		//},
 	}
 }
 

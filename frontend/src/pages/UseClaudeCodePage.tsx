@@ -9,6 +9,10 @@ import { useTranslation } from 'react-i18next';
 import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import { useFunctionPanelData } from '../hooks/useFunctionPanelData';
+import { useProviderDialog } from '../hooks/useProviderDialog';
+import EmptyStateGuide from '../components/EmptyStateGuide';
+import ProviderFormDialog from '../components/ProviderFormDialog';
+import OAuthDialog from '../components/OAuthDialog';
 
 const ruleId = "built-in-cc";
 
@@ -29,6 +33,15 @@ const UseClaudeCodePage: React.FC = () => {
     const [loadingRule, setLoadingRule] = React.useState(true);
     const [isDockerMode, setIsDockerMode] = React.useState(false);
     const [claudeJsonMode, setClaudeJsonMode] = React.useState<ClaudeJsonMode>('json');
+
+    // Provider dialog hook
+    const providerDialog = useProviderDialog(showNotification, {
+        defaultApiStyle: 'anthropic',
+        onProviderAdded: () => window.location.reload(),
+    });
+
+    // OAuth dialog state
+    const [oauthDialogOpen, setOAuthDialogOpen] = React.useState(false);
 
     const copyToClipboard = async (text: string, label: string) => {
         try {
@@ -216,6 +229,37 @@ node --eval '
         </Box>
     );
 
+    // Show empty state if no providers
+    if (!providers.length) {
+        return (
+            <PageLayout>
+                <CardGrid>
+                    <UnifiedCard title="Use Claude Code" size="full">
+                        <EmptyStateGuide
+                            title="No Providers Configured"
+                            description="Add an API key or OAuth provider to get started"
+                            onAddApiKeyClick={providerDialog.handleAddProviderClick}
+                            onAddOAuthClick={() => setOAuthDialogOpen(true)}
+                        />
+                    </UnifiedCard>
+                    <ProviderFormDialog
+                        open={providerDialog.providerDialogOpen}
+                        onClose={providerDialog.handleCloseDialog}
+                        onSubmit={providerDialog.handleProviderSubmit}
+                        data={providerDialog.providerFormData}
+                        onChange={providerDialog.handleFieldChange}
+                        mode="add"
+                        isFirstProvider={providers.length === 0}
+                    />
+                    <OAuthDialog
+                        open={oauthDialogOpen}
+                        onClose={() => setOAuthDialogOpen(false)}
+                    />
+                </CardGrid>
+            </PageLayout>
+        );
+    }
+
     return (
         <PageLayout>
             <CardGrid>
@@ -234,6 +278,15 @@ node --eval '
                     providers={providers}
                     onRulesChange={(rules) => setRule(rules[0])}
                     allowToggleRule={false}
+                />
+                <ProviderFormDialog
+                    open={providerDialog.providerDialogOpen}
+                    onClose={providerDialog.handleCloseDialog}
+                    onSubmit={providerDialog.handleProviderSubmit}
+                    data={providerDialog.providerFormData}
+                    onChange={providerDialog.handleFieldChange}
+                    mode="add"
+                    isFirstProvider={providers.length === 0}
                 />
             </CardGrid>
         </PageLayout>
