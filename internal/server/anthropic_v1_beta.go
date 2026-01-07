@@ -13,6 +13,7 @@ import (
 
 	"tingly-box/internal/loadbalance"
 	"tingly-box/internal/typ"
+	"tingly-box/pkg/adaptor"
 )
 
 // anthropicMessagesBeta implements beta messages API
@@ -106,14 +107,63 @@ func (s *Server) anthropicMessagesBeta(c *gin.Context, bodyBytes []byte, rawReq 
 		}
 		return
 	} else {
-		// For beta API, we currently only support direct Anthropic API calls
-		// OpenAI adaptor is not supported for beta API yet
-		c.JSON(http.StatusUnprocessableEntity, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Beta API currently only supports providers with Anthropic API style",
-				Type:    "api_error",
-			},
-		})
+		// Check if adaptor is enabled
+		if !s.enableAdaptor {
+			c.JSON(http.StatusUnprocessableEntity, ErrorResponse{
+				Error: ErrorDetail{
+					Message: "Request format adaptation is disabled. Cannot send Anthropic beta request to OpenAI-style provider. Use --adapter flag to enable format conversion.",
+					Type:    "adapter_disabled",
+				},
+			})
+			return
+		}
+
+		// Use OpenAI conversion path (default behavior)
+		if isStreaming {
+			// Convert Anthropic beta request to OpenAI format for streaming
+			openaiReq := adaptor.ConvertAnthropicBetaToOpenAIRequest(&req, true)
+
+			// Create streaming request
+			stream, err := s.forwardOpenAIStreamRequest(provider, openaiReq)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, ErrorResponse{
+					Error: ErrorDetail{
+						Message: "Failed to create streaming request: " + err.Error(),
+						Type:    "api_error",
+					},
+				})
+				return
+			}
+
+			// Handle the streaming response
+			err = adaptor.HandleOpenAIToAnthropicBetaStreamResponse(c, openaiReq, stream, proxyModel)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, ErrorResponse{
+					Error: ErrorDetail{
+						Message: err.Error(),
+						Type:    "api_error",
+						Code:    "streaming_unsupported",
+					},
+				})
+			}
+
+		} else {
+			// Handle non-streaming request - convert beta response to OpenAI and back
+			openaiReq := adaptor.ConvertAnthropicBetaToOpenAIRequest(&req, true)
+			response, err := s.forwardOpenAIRequest(provider, openaiReq)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, ErrorResponse{
+					Error: ErrorDetail{
+						Message: "Failed to forward request: " + err.Error(),
+						Type:    "api_error",
+					},
+				})
+				return
+			}
+			// Convert OpenAI response back to Anthropic beta format
+			anthropicResp := adaptor.ConvertOpenAIToAnthropicBetaResponse(response, proxyModel)
+			c.JSON(http.StatusOK, anthropicResp)
+		}
 	}
 }
 

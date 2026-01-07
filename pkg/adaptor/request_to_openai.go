@@ -422,3 +422,356 @@ func IsThinkingEnabled(anthropicReq *anthropic.MessageNewParams) bool {
 	}
 	return isThinking
 }
+
+// IsThinkingEnabledBeta checks if thinking mode is enabled in the Anthropic beta request
+func IsThinkingEnabledBeta(anthropicReq *anthropic.BetaMessageNewParams) bool {
+	isThinking := anthropicReq.Thinking.OfEnabled != nil
+	for _, msg := range anthropicReq.Messages {
+		for _, block := range msg.Content {
+			if block.OfThinking != nil {
+				return true
+			}
+
+		}
+	}
+	return isThinking
+}
+
+// ConvertAnthropicBetaToOpenAIRequest converts Anthropic beta request to OpenAI format
+func ConvertAnthropicBetaToOpenAIRequest(anthropicReq *anthropic.BetaMessageNewParams, compatible bool) *openai.ChatCompletionNewParams {
+	openaiReq := &openai.ChatCompletionNewParams{
+		Model: openai.ChatModel(anthropicReq.Model),
+	}
+
+	isThinking := IsThinkingEnabledBeta(anthropicReq)
+	if isThinking {
+		openaiReq.SetExtraFields(
+			map[string]interface{}{
+				"thinking": map[string]interface{}{
+					"type": "enabled",
+				},
+			},
+		)
+	}
+
+	// Set MaxTokens
+	openaiReq.MaxTokens = openai.Opt(anthropicReq.MaxTokens)
+
+	// Convert messages
+	for _, msg := range anthropicReq.Messages {
+		if string(msg.Role) == "user" {
+			// User messages may contain tool_result blocks - need special handling
+			messages := convertAnthropicBetaUserMessageToOpenAI(msg)
+			openaiReq.Messages = append(openaiReq.Messages, messages...)
+		} else if string(msg.Role) == "assistant" {
+			// Convert assistant message with potential tool_use blocks
+			openaiMsg := convertAnthropicBetaAssistantMessageToOpenAI(msg)
+			// Guard reasoning_content here
+			if extra := openaiMsg.ExtraFields(); extra != nil {
+				if _, ok := extra["reasoning_content"]; !ok {
+					extra["reasoning_content"] = ""
+				}
+				openaiMsg.SetExtraFields(extra)
+			} else {
+				openaiMsg.SetExtraFields(map[string]any{"reasoning_content": ""})
+			}
+
+			openaiReq.Messages = append(openaiReq.Messages, openaiMsg)
+		}
+	}
+
+	// Convert system message
+	if len(anthropicReq.System) > 0 {
+		systemStr := ConvertBetaTextBlocksToString(anthropicReq.System)
+		systemMsg := openai.SystemMessage(systemStr)
+		// Add system message at the beginning
+		openaiReq.Messages = append([]openai.ChatCompletionMessageParamUnion{systemMsg}, openaiReq.Messages...)
+	}
+
+	// Convert tools from Anthropic format to OpenAI format
+	if len(anthropicReq.Tools) > 0 {
+		if compatible {
+			openaiReq.Tools = ConvertAnthropicBetaToolsToOpenAIWithTransformedSchema(anthropicReq.Tools)
+		} else {
+			openaiReq.Tools = ConvertAnthropicBetaToolsToOpenAI(anthropicReq.Tools)
+		}
+	}
+
+	// Convert tool choice
+	if anthropicReq.ToolChoice.OfAuto != nil || anthropicReq.ToolChoice.OfTool != nil ||
+		anthropicReq.ToolChoice.OfAny != nil {
+		openaiReq.ToolChoice = ConvertAnthropicBetaToolChoiceToOpenAI(&anthropicReq.ToolChoice)
+	}
+
+	return openaiReq
+}
+
+// ConvertAnthropicBetaToolsToOpenAI converts Anthropic beta tools to OpenAI format
+func ConvertAnthropicBetaToolsToOpenAI(tools []anthropic.BetaToolUnionParam) []openai.ChatCompletionToolUnionParam {
+	if len(tools) == 0 {
+		return nil
+	}
+
+	out := make([]openai.ChatCompletionToolUnionParam, 0, len(tools))
+
+	for _, t := range tools {
+		tool := t.OfTool
+		if tool == nil {
+			continue
+		}
+
+		// Convert Anthropic input schema to OpenAI function parameters
+		// Only include standard JSON Schema fields that OpenAI accepts
+		var parameters map[string]interface{}
+		if tool.InputSchema.Properties != nil || len(tool.InputSchema.Required) > 0 {
+			parameters = make(map[string]interface{})
+			parameters["type"] = "object"
+
+			if tool.InputSchema.Properties != nil {
+				parameters["properties"] = tool.InputSchema.Properties
+			}
+
+			if len(tool.InputSchema.Required) > 0 {
+				parameters["required"] = tool.InputSchema.Required
+			}
+		}
+
+		// Create function with parameters
+		fn := shared.FunctionDefinitionParam{
+			Name:        tool.Name,
+			Description: param.Opt[string]{Value: tool.Description.Value},
+			Parameters:  parameters,
+		}
+
+		out = append(out, openai.ChatCompletionFunctionTool(fn))
+	}
+
+	return out
+}
+
+// ConvertAnthropicBetaToolsToOpenAIWithTransformedSchema converts Anthropic beta tools to OpenAI format
+// with schema field transformation.
+func ConvertAnthropicBetaToolsToOpenAIWithTransformedSchema(tools []anthropic.BetaToolUnionParam) []openai.ChatCompletionToolUnionParam {
+	if len(tools) == 0 {
+		return nil
+	}
+
+	out := make([]openai.ChatCompletionToolUnionParam, 0, len(tools))
+
+	for _, t := range tools {
+		tool := t.OfTool
+		if tool == nil {
+			continue
+		}
+
+		// Convert Anthropic input schema to OpenAI function parameters
+		// Transform excluded fields and apply field name conversions
+		var parameters map[string]interface{}
+		if tool.InputSchema.Properties != nil || len(tool.InputSchema.Required) > 0 {
+			// Build the raw schema first
+			rawSchema := make(map[string]interface{})
+			rawSchema["type"] = "object"
+
+			if tool.InputSchema.Properties != nil {
+				if m, ok := tool.InputSchema.Properties.(map[string]interface{}); ok {
+					rawSchema["properties"] = transformProperties(m)
+				} else {
+					rawSchema["properties"] = tool.InputSchema.Properties
+				}
+			}
+
+			if len(tool.InputSchema.Required) > 0 {
+				rawSchema["required"] = tool.InputSchema.Required
+			}
+
+			parameters = rawSchema
+		}
+
+		// Create function with filtered parameters
+		fn := shared.FunctionDefinitionParam{
+			Name:        tool.Name,
+			Description: param.Opt[string]{Value: tool.Description.Value},
+			Parameters:  parameters,
+		}
+
+		out = append(out, openai.ChatCompletionFunctionTool(fn))
+	}
+
+	return out
+}
+
+// ConvertAnthropicBetaToolChoiceToOpenAI converts Anthropic beta tool_choice to OpenAI format
+func ConvertAnthropicBetaToolChoiceToOpenAI(tc *anthropic.BetaToolChoiceUnionParam) openai.ChatCompletionToolChoiceOptionUnionParam {
+	if tc.OfAuto != nil {
+		return openai.ChatCompletionToolChoiceOptionUnionParam{
+			OfAuto: openai.Opt("auto"),
+		}
+	}
+
+	if tc.OfTool != nil {
+		return openai.ToolChoiceOptionFunctionToolChoice(
+			openai.ChatCompletionNamedToolChoiceFunctionParam{
+				Name: tc.OfTool.Name,
+			},
+		)
+	}
+
+	// OfAny (Anthropic's "required") - map to auto as OpenAI doesn't have direct equivalent
+	if tc.OfAny != nil {
+		return openai.ChatCompletionToolChoiceOptionUnionParam{
+			OfAuto: openai.Opt("auto"),
+		}
+	}
+
+	// Default to auto
+	return openai.ChatCompletionToolChoiceOptionUnionParam{
+		OfAuto: openai.Opt("auto"),
+	}
+}
+
+// ConvertBetaTextBlocksToString converts Anthropic beta TextBlockParam array to string
+func ConvertBetaTextBlocksToString(blocks []anthropic.BetaTextBlockParam) string {
+	var result strings.Builder
+	for _, block := range blocks {
+		result.WriteString(block.Text)
+	}
+	return result.String()
+}
+
+// ConvertBetaContentBlocksToString converts Anthropic beta content blocks to string
+func ConvertBetaContentBlocksToString(blocks []anthropic.BetaContentBlockParamUnion) string {
+	var result strings.Builder
+	for _, block := range blocks {
+		if block.OfText != nil {
+			result.WriteString(block.OfText.Text)
+		}
+	}
+	return result.String()
+}
+
+// convertAnthropicBetaAssistantMessageToOpenAI converts Anthropic beta assistant message to OpenAI format
+func convertAnthropicBetaAssistantMessageToOpenAI(msg anthropic.BetaMessageParam) openai.ChatCompletionMessageParamUnion {
+	var textContent string
+	var toolCalls []map[string]interface{}
+	var thinking string
+
+	// Process content blocks
+	for _, block := range msg.Content {
+		if block.OfText != nil {
+			textContent += block.OfText.Text
+		} else if block.OfToolUse != nil {
+			// Convert tool_use block to OpenAI tool_call format
+			toolCall := map[string]interface{}{
+				"id":   block.OfToolUse.ID,
+				"type": "function",
+				"function": map[string]interface{}{
+					"name": block.OfToolUse.Name,
+				},
+			}
+			// Marshal input to JSON string for OpenAI
+			if argsBytes, err := json.Marshal(block.OfToolUse.Input); err == nil {
+				toolCall["function"].(map[string]interface{})["arguments"] = string(argsBytes)
+			}
+			toolCalls = append(toolCalls, toolCall)
+		} else if block.OfThinking != nil {
+			thinking = block.OfThinking.Thinking
+		}
+	}
+
+	// Build the message based on what we have
+	if len(toolCalls) > 0 {
+		// Use JSON marshaling to create a message with tool_calls
+		msgMap := map[string]interface{}{
+			"role":    "assistant",
+			"content": textContent,
+		}
+		if len(toolCalls) > 0 {
+			msgMap["tool_calls"] = toolCalls
+		}
+		// Add reasoning_content only if thinking exists
+		if thinking != "" {
+			msgMap["reasoning_content"] = thinking
+		}
+
+		msgBytes, _ := json.Marshal(msgMap)
+		var result openai.ChatCompletionMessageParamUnion
+		_ = json.Unmarshal(msgBytes, &result)
+		return result
+	}
+
+	// Simple text-only assistant message
+	if thinking != "" {
+		// Use JSON marshaling to include reasoning_content
+		msgMap := map[string]interface{}{
+			"role":              "assistant",
+			"content":           textContent,
+			"reasoning_content": thinking,
+		}
+		msgBytes, _ := json.Marshal(msgMap)
+		var result openai.ChatCompletionMessageParamUnion
+		_ = json.Unmarshal(msgBytes, &result)
+		return result
+	}
+
+	return openai.AssistantMessage(textContent)
+}
+
+// convertAnthropicBetaUserMessageToOpenAI converts Anthropic beta user message to OpenAI format
+func convertAnthropicBetaUserMessageToOpenAI(msg anthropic.BetaMessageParam) []openai.ChatCompletionMessageParamUnion {
+	var result []openai.ChatCompletionMessageParamUnion
+	var textContent string
+	var hasToolResult bool
+
+	// First, check if there are any tool_result blocks
+	for _, block := range msg.Content {
+		if block.OfToolResult != nil {
+			hasToolResult = true
+			break
+		}
+	}
+
+	// Process content blocks
+	if hasToolResult {
+		// When there are tool_result blocks, we need to create separate messages
+		for _, block := range msg.Content {
+			if block.OfText != nil {
+				textContent += block.OfText.Text
+			} else if block.OfToolResult != nil {
+				// Convert tool_result to OpenAI role="tool" message
+				toolMsg := map[string]interface{}{
+					"role":         "tool",
+					"tool_call_id": block.OfToolResult.ToolUseID,
+					"content":      convertBetaToolResultContent(block.OfToolResult.Content),
+				}
+				msgBytes, _ := json.Marshal(toolMsg)
+				var toolResultMsg openai.ChatCompletionMessageParamUnion
+				_ = json.Unmarshal(msgBytes, &toolResultMsg)
+				result = append(result, toolResultMsg)
+			}
+		}
+		// If there was text content alongside tool results, add it as a user message
+		if textContent != "" {
+			result = append(result, openai.UserMessage(textContent))
+		}
+	} else {
+		// Simple text-only user message
+		contentStr := ConvertBetaContentBlocksToString(msg.Content)
+		if contentStr != "" {
+			result = append(result, openai.UserMessage(contentStr))
+		}
+	}
+
+	return result
+}
+
+// convertBetaToolResultContent extracts the content from a beta tool result block
+func convertBetaToolResultContent(content []anthropic.BetaToolResultBlockParamContentUnion) string {
+	var result strings.Builder
+	for _, c := range content {
+		// Handle text content
+		if c.OfText != nil {
+			result.WriteString(c.OfText.Text)
+		}
+	}
+	return result.String()
+}
