@@ -105,24 +105,72 @@ jobs:
             exit 1
           fi
 
-      - name: Clone Gitee repository
+      - name: Setup SSH key for Gitee
         env:
-          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
-          GITEE_REPO: ${{ secrets.GITEE_REPO_URL }}
+          GITEE_SSH_KEY: ${{ secrets.GITEE_SSH_KEY }}
+          GITEE_REPO: ${{ secrets.GITEE_REPO_SSH }}
         run: |
-          # Parse Gitee repo URL (format: https://gitee.com/owner/repo.git)
-          if [ -z "$GITEE_REPO" ]; then
-            echo "Error: GITEE_REPO_URL secret is not set"
-            echo "Please set GITEE_REPO_URL in GitHub repository secrets"
+          # Setup SSH key
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          # Write SSH key with proper format
+          echo "$GITEE_SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+          # Verify the key was written correctly
+          if [ ! -s ~/.ssh/id_rsa ]; then
+            echo "Error: SSH key is empty or not written correctly"
             exit 1
           fi
 
-          # Extract repo path for git clone
-          GITEE_REPO_HTTPS="${GITEE_REPO%.git}"
-          GITEE_REPO_AUTH="https://oauth2:${GITEE_TOKEN}@${GITEE_REPO_HTTPS#https://}"
+          # Add Gitee to known_hosts
+          ssh-keyscan -t rsa gitee.com >> ~/.ssh/known_hosts 2>/dev/null
 
-          echo "Cloning Gitee repository..."
-          git clone "$GITEE_REPO_AUTH" ./gitee-repo
+          # Configure SSH for better reliability to Gitee
+          cat > ~/.ssh/config <<'EOF'
+          Host gitee.com
+            HostName gitee.com
+            User yzffeng
+            IdentityFile ~/.ssh/id_rsa
+            IdentitiesOnly yes
+            ServerAliveInterval 60
+            ServerAliveCountMax 5
+            ConnectTimeout 30
+            TCPKeepAlive yes
+            StrictHostKeyChecking no
+          EOF
+
+          # Verify GITEE_REPO is set
+          if [ -z "$GITEE_REPO" ]; then
+            echo "Error: GITEE_REPO_SSH secret is not set"
+            echo "Please set GITEE_REPO_SSH in GitHub repository secrets"
+            echo "Example: git@gitee.com:owner/repo.git"
+            exit 1
+          fi
+
+          # Save repo URL for next step
+          echo "GITEE_REPO_SSH=$GITEE_REPO" >> $GITHUB_ENV
+
+          # Test SSH connection
+          echo "Testing SSH connection to Gitee..."
+          if ssh -T git@gitee.com 2>&1 | grep -q "successfully authenticated"; then
+            echo "✅ SSH connection test passed"
+          else
+            # Gitee might return different messages, try a simple git command
+            if timeout 10 git ls-remote "$GITEE_REPO" >/dev/null 2>&1; then
+              echo "✅ Git access test passed"
+            else
+              echo "Warning: Could not verify SSH access, but continuing..."
+            fi
+          fi
+
+          echo "✅ SSH key configured"
+
+      - name: Clone Gitee repository
+        run: |
+          echo "Cloning Gitee repository using SSH..."
+          git clone "$GITEE_REPO_SSH" ./gitee-repo
 
           if [ ! -d "./gitee-repo" ]; then
             echo "Error: Failed to clone Gitee repository"
@@ -135,22 +183,42 @@ jobs:
         env:
           RELEASE_TAG: ${{ steps.tag.outputs.release_tag }}
         run: |
+          # Debug: Check current directory and contents
+          echo "Current working directory: $(pwd)"
+          echo "Files in current directory:"
+          ls -la
+
+          # Check if gitee-repo exists
+          if [ ! -d "./gitee-repo" ]; then
+            echo "Error: ./gitee-repo directory does not exist!"
+            echo "This step needs to run after 'Clone Gitee repository'"
+            exit 1
+          fi
+
           # Create release directory in Gitee repo
-          RELEASE_DIR="./gitee-repo/releases/${RELEASE_TAG}"
+          RELEASE_DIR="./gitee-repo/${RELEASE_TAG}"
 
           echo "Preparing binaries in $RELEASE_DIR..."
           mkdir -p "$RELEASE_DIR"
+
+          # Verify directory was created
+          if [ ! -d "$RELEASE_DIR" ]; then
+            echo "Error: Failed to create directory $RELEASE_DIR"
+            exit 1
+          fi
 
           # Copy all downloaded binaries
           cp -r ./downloads/* "$RELEASE_DIR/"
 
           # Create checksums file
-          cd "$RELEASE_DIR"
-          if command -v sha256sum &> /dev/null; then
-            sha256sum * > SHA256SUMS.txt
-          else
-            shasum -a 256 * > SHA256SUMS.txt
-          fi
+          (
+            cd "$RELEASE_DIR"
+            if command -v sha256sum &> /dev/null; then
+              sha256sum * > SHA256SUMS.txt
+            else
+              shasum -a 256 * > SHA256SUMS.txt
+            fi
+          )
 
           echo "Prepared files:"
           ls -lh "$RELEASE_DIR"
@@ -166,8 +234,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Create release branch
-          RELEASE_BRANCH="release-${RELEASE_TAG}"
+          # Use fixed release branch
+          RELEASE_BRANCH="release"
 
           # Check if branch exists
           if git rev-parse "$RELEASE_BRANCH" >/dev/null 2>&1; then
@@ -179,7 +247,7 @@ jobs:
           fi
 
           # Add all files
-          git add "releases/${RELEASE_TAG}/"
+          git add "${RELEASE_TAG}/"
 
           # Check if there are changes to commit
           if git diff --staged --quiet; then
@@ -196,19 +264,59 @@ jobs:
           EOF
           )"
 
-            # Push to Gitee
+            # Push to Gitee with retry mechanism
             echo "Pushing to Gitee..."
-            git push origin "$RELEASE_BRANCH"
+            MAX_RETRIES=3
+            RETRY_COUNT=0
+            PUSH_SUCCESS=false
+
+            while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$PUSH_SUCCESS" = false ]; do
+              if git push origin "$RELEASE_BRANCH"; then
+                PUSH_SUCCESS=true
+                echo "✅ Push succeeded on attempt $((RETRY_COUNT + 1))"
+              else
+                RETRY_COUNT=$((RETRY_COUNT + 1))
+                if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                  echo "⚠️ Push failed (attempt $RETRY_COUNT/$MAX_RETRIES), retrying in 10 seconds..."
+                  sleep 10
+                else
+                  echo "❌ Push failed after $MAX_RETRIES attempts"
+                  exit 1
+                fi
+              fi
+            done
 
             # Create tag in Gitee
             if git rev-parse "$RELEASE_TAG" >/dev/null 2>&1; then
               echo "⚠️ Tag $RELEASE_TAG already exists in Gitee repo"
             else
               git tag "$RELEASE_TAG"
-              git push origin "$RELEASE_TAG"
+
+              # Push tag with retry mechanism
+              echo "Pushing tag to Gitee..."
+              RETRY_COUNT=0
+              TAG_PUSH_SUCCESS=false
+
+              while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$TAG_PUSH_SUCCESS" = false ]; do
+                if git push origin "$RELEASE_TAG"; then
+                  TAG_PUSH_SUCCESS=true
+                  echo "✅ Tag push succeeded on attempt $((RETRY_COUNT + 1))"
+                else
+                  RETRY_COUNT=$((RETRY_COUNT + 1))
+                  if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                    echo "⚠️ Tag push failed (attempt $RETRY_COUNT/$MAX_RETRIES), retrying in 10 seconds..."
+                    sleep 10
+                  else
+                    echo "❌ Tag push failed after $MAX_RETRIES attempts"
+                    exit 1
+                  fi
+                fi
+              done
+
               echo "✅ Created and pushed tag $RELEASE_TAG to Gitee"
             fi
           fi
+        timeout-minutes: 10
 
       - name: Summary
         env:
