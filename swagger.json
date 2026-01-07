@@ -1150,6 +1150,11 @@
           "description": "Provider name",
           "example": "openai"
         },
+        "no_key_required": {
+          "type": "boolean",
+          "description": "Whether provider requires no API key",
+          "example": false
+        },
         "token": {
           "type": "string",
           "description": "API token",
@@ -1161,6 +1166,7 @@
         "api_base",
         "api_style",
         "token",
+        "no_key_required",
         "enabled"
       ]
     },
@@ -1502,6 +1508,13 @@
           "type": "string",
           "description": "Field expires_at"
         },
+        "extra_fields": {
+          "type": "object",
+          "description": "Field extra_fields",
+          "additionalProperties": {
+            "type": "object"
+          }
+        },
         "provider_type": {
           "type": "string",
           "description": "Field provider_type"
@@ -1520,7 +1533,8 @@
         "provider_type",
         "user_id",
         "refresh_token",
-        "expires_at"
+        "expires_at",
+        "extra_fields"
       ]
     },
     "OAuthMessageResponse": {
@@ -1875,6 +1889,10 @@
     "ProbeResponseData": {
       "type": "object",
       "properties": {
+        "curl_command": {
+          "type": "string",
+          "description": "Field curl_command"
+        },
         "request": {
           "description": "Field request",
           "$ref": "#/definitions/ProbeRequestDetail"
@@ -2060,6 +2078,11 @@
           "description": "Field name",
           "example": "openai"
         },
+        "no_key_required": {
+          "type": "boolean",
+          "description": "Field no_key_required",
+          "example": false
+        },
         "oauth_detail": {
           "description": "Field oauth_detail",
           "$ref": "#/definitions/OAuthDetail"
@@ -2081,6 +2104,7 @@
         "api_base",
         "api_style",
         "token",
+        "no_key_required",
         "enabled"
       ]
     },
@@ -2606,6 +2630,10 @@
           "type": "string",
           "description": "New provider name"
         },
+        "no_key_required": {
+          "type": "boolean",
+          "description": "Whether provider requires no API key"
+        },
         "token": {
           "type": "string",
           "description": "New API token"
@@ -2798,20 +2826,32 @@
   },
   "tags": [
     {
-      "name": "testing",
-      "description": "Operations related to testing"
-    },
-    {
-      "name": "logs",
-      "description": "Operations related to logs"
-    },
-    {
       "name": "server",
       "description": "Operations related to server"
     },
     {
+      "name": "rules",
+      "description": "Operations related to rules"
+    },
+    {
+      "name": "history",
+      "description": "Operations related to history"
+    },
+    {
       "name": "models",
       "description": "Operations related to models"
+    },
+    {
+      "name": "testing",
+      "description": "Operations related to testing"
+    },
+    {
+      "name": "info",
+      "description": "Operations related to info"
+    },
+    {
+      "name": "logs",
+      "description": "Operations related to logs"
     },
     {
       "name": "token",
@@ -2824,18 +2864,6 @@
     {
       "name": "oauth",
       "description": "Operations related to oauth"
-    },
-    {
-      "name": "info",
-      "description": "Operations related to info"
-    },
-    {
-      "name": "rules",
-      "description": "Operations related to rules"
-    },
-    {
-      "name": "history",
-      "description": "Operations related to history"
     }
   ]
 }
