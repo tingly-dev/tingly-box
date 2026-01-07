@@ -233,7 +233,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 				return
 			}
 
-			err = adaptor.HandleAnthropicToOpenAIStreamResponse(c, anthropicReq, stream, responseModel)
+			err = adaptor.HandleAnthropicToOpenAIStreamResponse(c, &anthropicReq, stream, responseModel)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, ErrorResponse{
 					Error: ErrorDetail{
