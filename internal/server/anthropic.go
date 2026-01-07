@@ -192,7 +192,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 				return
 			}
 			// Handle the streaming response
-			s.handleAnthropicStreamResponse(c, stream, proxyModel)
+			s.handleAnthropicStreamResponse(c, req, stream, proxyModel)
 		} else {
 			// Handle non-streaming request
 			anthropicResp, err := s.forwardAnthropicRequest(provider, req)
@@ -246,7 +246,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 			}
 
 			// Handle the streaming response
-			err = adaptor.HandleOpenAIToAnthropicStreamResponse(c, stream, proxyModel)
+			err = adaptor.HandleOpenAIToAnthropicStreamResponse(c, openaiReq, stream, proxyModel)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, ErrorResponse{
 					Error: ErrorDetail{
@@ -604,7 +604,7 @@ func (s *Server) forwardAnthropicStreamRequest(provider *typ.Provider, req anthr
 }
 
 // handleAnthropicStreamResponse processes the Anthropic streaming response and sends it to the client
-func (s *Server) handleAnthropicStreamResponse(c *gin.Context, stream *anthropicstream.Stream[anthropic.MessageStreamEventUnion], model string) {
+func (s *Server) handleAnthropicStreamResponse(c *gin.Context, req anthropic.MessageNewParams, stream *anthropicstream.Stream[anthropic.MessageStreamEventUnion], respModel string) {
 	defer func() {
 		if r := recover(); r != nil {
 			logrus.Debugf("Panic in Anthropic streaming handler: %v", r)
@@ -649,7 +649,7 @@ func (s *Server) handleAnthropicStreamResponse(c *gin.Context, stream *anthropic
 	for stream.Next() {
 		event := stream.Current()
 
-		event.Message.Model = anthropic.Model(model)
+		event.Message.Model = anthropic.Model(respModel)
 
 		// Convert the event to JSON
 		eventJSON, err := json.Marshal(event)

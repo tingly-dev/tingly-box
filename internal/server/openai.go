@@ -233,7 +233,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 				return
 			}
 
-			err = adaptor.HandleAnthropicToOpenAIStreamResponse(c, stream, responseModel)
+			err = adaptor.HandleAnthropicToOpenAIStreamResponse(c, anthropicReq, stream, responseModel)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, ErrorResponse{
 					Error: ErrorDetail{
@@ -244,22 +244,22 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 				return
 			}
 			return
-		}
+		} else {
+			anthropicResp, err := s.forwardAnthropicRequest(provider, anthropicReq)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, ErrorResponse{
+					Error: ErrorDetail{
+						Message: "Failed to forward Anthropic request: " + err.Error(),
+						Type:    "api_error",
+					},
+				})
+				return
+			}
 
-		anthropicResp, err := s.forwardAnthropicRequest(provider, anthropicReq)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, ErrorResponse{
-				Error: ErrorDetail{
-					Message: "Failed to forward Anthropic request: " + err.Error(),
-					Type:    "api_error",
-				},
-			})
+			openaiResp := adaptor.ConvertAnthropicToOpenAIResponse(anthropicResp, responseModel)
+			c.JSON(http.StatusOK, openaiResp)
 			return
 		}
-
-		openaiResp := adaptor.ConvertAnthropicToOpenAIResponse(anthropicResp, responseModel)
-		c.JSON(http.StatusOK, openaiResp)
-		return
 	} else {
 		if isStreaming {
 			s.handleStreamingRequest(c, provider, &req, responseModel)
