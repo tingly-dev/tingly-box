@@ -17,6 +17,17 @@ import (
 	"tingly-box/pkg/adaptor"
 )
 
+// sendSSEvent sends a generic SSE event with JSON data
+func sendSSEvent(c *gin.Context, eventType string, data interface{}) error {
+	eventJSON, err := json.Marshal(data)
+	if err != nil {
+		logrus.Debugf("Failed to marshal SSE event: %v", err)
+		return err
+	}
+	c.SSEvent(eventType, string(eventJSON))
+	return nil
+}
+
 // anthropicMessagesV1 implements standard v1 messages API
 func (s *Server) anthropicMessagesV1(c *gin.Context, bodyBytes []byte, rawReq map[string]interface{}, proxyModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule) {
 	actualModel := selectedService.Model
@@ -33,12 +44,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, bodyBytes []byte, rawReq ma
 	if err := c.ShouldBindJSON(&req); err != nil {
 		// Log the invalid request for debugging
 		logrus.Debugf("Invalid JSON request received: %v\nBody: %s", err, string(bodyBytes))
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Invalid request body: " + err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
+		SendInvalidRequestBodyError(c, err)
 		return
 	}
 
@@ -80,12 +86,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, bodyBytes []byte, rawReq ma
 			// Handle streaming request
 			stream, err := s.forwardAnthropicStreamRequestV1(provider, req)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, ErrorResponse{
-					Error: ErrorDetail{
-						Message: "Failed to create streaming request: " + err.Error(),
-						Type:    "api_error",
-					},
-				})
+				SendStreamingError(c, err)
 				return
 			}
 			// Handle the streaming response
@@ -94,12 +95,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, bodyBytes []byte, rawReq ma
 			// Handle non-streaming request
 			anthropicResp, err := s.forwardAnthropicRequestV1(provider, req)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, ErrorResponse{
-					Error: ErrorDetail{
-						Message: "Failed to forward Anthropic request: " + err.Error(),
-						Type:    "api_error",
-					},
-				})
+				SendForwardingError(c, err)
 				return
 			}
 			// FIXME: now we use req model as resp model
@@ -110,12 +106,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, bodyBytes []byte, rawReq ma
 	} else {
 		// Check if adaptor is enabled
 		if !s.enableAdaptor {
-			c.JSON(http.StatusUnprocessableEntity, ErrorResponse{
-				Error: ErrorDetail{
-					Message: fmt.Sprintf("Request format adaptation is disabled. Cannot send Anthropic request to OpenAI-style provider '%s'. Use --adapter flag to enable format conversion.", provider.Name),
-					Type:    "adapter_disabled",
-				},
-			})
+			SendAdapterDisabledError(c, provider.Name)
 			return
 		}
 
@@ -133,25 +124,14 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, bodyBytes []byte, rawReq ma
 			// Create streaming request
 			stream, err := s.forwardOpenAIStreamRequest(provider, openaiReq)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, ErrorResponse{
-					Error: ErrorDetail{
-						Message: "Failed to create streaming request: " + err.Error(),
-						Type:    "api_error",
-					},
-				})
+				SendStreamingError(c, err)
 				return
 			}
 
 			// Handle the streaming response
 			err = adaptor.HandleOpenAIToAnthropicStreamResponse(c, openaiReq, stream, proxyModel)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, ErrorResponse{
-					Error: ErrorDetail{
-						Message: err.Error(),
-						Type:    "api_error",
-						Code:    "streaming_unsupported",
-					},
-				})
+				SendInternalError(c, err.Error())
 			}
 
 		} else {
@@ -159,12 +139,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, bodyBytes []byte, rawReq ma
 			openaiReq := adaptor.ConvertAnthropicToOpenAIRequest(&req, true)
 			response, err := s.forwardOpenAIRequest(provider, openaiReq)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, ErrorResponse{
-					Error: ErrorDetail{
-						Message: "Failed to forward request: " + err.Error(),
-						Type:    "api_error",
-					},
-				})
+				SendForwardingError(c, err)
 				return
 			}
 			// Convert OpenAI response back to Anthropic format
@@ -209,99 +184,40 @@ func (s *Server) forwardAnthropicStreamRequestV1(provider *typ.Provider, req ant
 
 // handleAnthropicStreamResponseV1 processes the Anthropic streaming response and sends it to the client (v1)
 func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.MessageNewParams, stream *anthropicstream.Stream[anthropic.MessageStreamEventUnion], respModel string) {
-	defer func() {
-		if r := recover(); r != nil {
-			logrus.Debugf("Panic in Anthropic streaming handler: %v", r)
-			// Try to send an error event if possible
-			if c.Writer != nil {
-				c.SSEvent("error", "{\"error\":{\"message\":\"Internal streaming error\",\"type\":\"internal_error\"}}")
-				if flusher, ok := c.Writer.(http.Flusher); ok {
-					flusher.Flush()
-				}
-			}
-		}
-		// Ensure stream is always closed
-		if stream != nil {
-			if err := stream.Close(); err != nil {
-				logrus.Debugf("Error closing Anthropic stream: %v", err)
-			}
-		}
-	}()
+	defer StreamRecoveryHandler(c, stream)
 
 	// Set SSE headers
-	c.Header("Content-Type", "text/event-stream")
-	c.Header("Cache-Control", "no-cache")
-	c.Header("Connection", "keep-alive")
-	c.Header("Access-Control-Allow-Origin", "*")
-	c.Header("Access-Control-Allow-Headers", "Cache-Control")
+	SetupSSEHeaders(c)
 
-	// Create a flusher to ensure immediate sending of data
-	flusher, ok := c.Writer.(http.Flusher)
-	if !ok {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Streaming not supported by this connection",
-				Type:    "api_error",
-				Code:    "streaming_unsupported",
-			},
-		})
+	// Check SSE support
+	if !CheckSSESupport(c) {
 		return
 	}
+
+	flusher, _ := c.Writer.(http.Flusher)
 
 	// Process the stream
 	for stream.Next() {
 		event := stream.Current()
-
 		event.Message.Model = anthropic.Model(respModel)
 
-		// Convert the event to JSON
-		eventJSON, err := json.Marshal(event)
-		if err != nil {
+		// Convert the event to JSON and send as SSE
+		if err := sendSSEvent(c, event.Type, event); err != nil {
 			logrus.Debugf("Failed to marshal Anthropic stream event: %v", err)
 			continue
 		}
-
-		// Send the event as SSE
-		// Anthropic streaming uses server-sent events format
-		// MENTION: keep the format
-		// event: xxx
-		// data: xxx
-		// (extra \n here)
-		c.SSEvent(event.Type, string(eventJSON))
 		flusher.Flush()
 	}
 
 	// Check for stream errors
 	if err := stream.Err(); err != nil {
-		logrus.Debugf("Anthropic stream error: %v", err)
-
-		// Send error event
-		errorEvent := map[string]interface{}{
-			"type": "error",
-			"error": map[string]interface{}{
-				"message": err.Error(),
-				"type":    "stream_error",
-				"code":    "stream_failed",
-			},
-		}
-
-		errorJSON, marshalErr := json.Marshal(errorEvent)
-		if marshalErr != nil {
-			logrus.Debugf("Failed to marshal Anthropic error event: %v", marshalErr)
-			c.SSEvent("error", "{\"error\":{\"message\":\"Failed to marshal error\",\"type\":\"internal_error\"}}")
-		} else {
-			c.SSEvent("error", string(errorJSON))
-		}
+		MarshalAndSendErrorEvent(c, err.Error(), "stream_error", "stream_failed")
 		flusher.Flush()
 		return
 	}
 
-	// Send a final event to indicate completion (similar to OpenAI's [DONE])
-	finishEvent := map[string]interface{}{
-		"type": "message_stop",
-	}
-	finishJSON, _ := json.Marshal(finishEvent)
-	c.SSEvent("", string(finishJSON))
+	// Send completion event
+	SendFinishEvent(c)
 	flusher.Flush()
 }
 
@@ -333,12 +249,7 @@ func (s *Server) anthropicCountTokensV1(c *gin.Context, bodyBytes []byte, rawReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		// Log the invalid request for debugging
 		logrus.Debugf("Invalid JSON request received: %v\nBody: %s", err, string(bodyBytes))
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Invalid request body: " + err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
+		SendInvalidRequestBodyError(c, err)
 		return
 	}
 
@@ -348,24 +259,14 @@ func (s *Server) anthropicCountTokensV1(c *gin.Context, bodyBytes []byte, rawReq
 	if apiStyle == "anthropic" {
 		message, err := wrapper.MessagesCountTokens(ctx, req)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error: ErrorDetail{
-					Message: "Invalid request body: " + err.Error(),
-					Type:    "invalid_request_error",
-				},
-			})
+			SendInvalidRequestBodyError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, message)
 	} else {
 		count, err := countTokensWithTiktoken(string(req.Model), req.Messages, req.System.OfTextBlockArray)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error: ErrorDetail{
-					Message: "Invalid request body: " + err.Error(),
-					Type:    "invalid_request_error",
-				},
-			})
+			SendInvalidRequestBodyError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, anthropic.MessageTokensCount{
