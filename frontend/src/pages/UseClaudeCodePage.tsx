@@ -12,6 +12,7 @@ import { useFunctionPanelData } from '../hooks/useFunctionPanelData';
 import { useProviderDialog } from '../hooks/useProviderDialog';
 import EmptyStateGuide from '../components/EmptyStateGuide';
 import ProviderFormDialog from '../components/ProviderFormDialog';
+import OAuthDialog from '../components/OAuthDialog';
 
 const ruleId = "built-in-cc";
 
@@ -38,6 +39,9 @@ const UseClaudeCodePage: React.FC = () => {
         defaultApiStyle: 'anthropic',
         onProviderAdded: () => window.location.reload(),
     });
+
+    // OAuth dialog state
+    const [oauthDialogOpen, setOAuthDialogOpen] = React.useState(false);
 
     const copyToClipboard = async (text: string, label: string) => {
         try {
@@ -232,10 +236,10 @@ node --eval '
                 <CardGrid>
                     <UnifiedCard title="Use Claude Code" size="full">
                         <EmptyStateGuide
-                            title="No API Keys Configured"
-                            description="Add an Anthropic API key to get started with Claude Code"
-                            buttonText="Add API Key"
-                            onButtonClick={providerDialog.handleAddProviderClick}
+                            title="No Providers Configured"
+                            description="Add an API key or OAuth provider to get started"
+                            onAddApiKeyClick={providerDialog.handleAddProviderClick}
+                            onAddOAuthClick={() => setOAuthDialogOpen(true)}
                         />
                     </UnifiedCard>
                     <ProviderFormDialog
@@ -245,6 +249,11 @@ node --eval '
                         data={providerDialog.providerFormData}
                         onChange={providerDialog.handleFieldChange}
                         mode="add"
+                        isFirstProvider={providers.length === 0}
+                    />
+                    <OAuthDialog
+                        open={oauthDialogOpen}
+                        onClose={() => setOAuthDialogOpen(false)}
                     />
                 </CardGrid>
             </PageLayout>
@@ -277,6 +286,7 @@ node --eval '
                     data={providerDialog.providerFormData}
                     onChange={providerDialog.handleFieldChange}
                     mode="add"
+                    isFirstProvider={providers.length === 0}
                 />
             </CardGrid>
         </PageLayout>

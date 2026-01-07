@@ -1,27 +1,35 @@
-import { Add } from '@mui/icons-material';
-import { Box, Button, Typography } from '@mui/material';
+import { Add, VpnKey } from '@mui/icons-material';
+import { Box, Button, Stack, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 
 interface EmptyStateGuideProps {
     title?: string;
     description?: string;
-    buttonText?: string;
-    onButtonClick?: () => void;
+    showOAuthButton?: boolean;
+    onAddApiKeyClick?: () => void;
+    onAddOAuthClick?: () => void;
 }
 
 const EmptyStateGuide: React.FC<EmptyStateGuideProps> = ({
     title = "No API Keys Configured",
-    description = "Get started by adding your first API key to access AI services",
-    buttonText = "Add API Key",
-    onButtonClick,
+    description = "Get started by adding your first API key or OAuth provider to access AI services",
+    showOAuthButton = true,
+    onAddApiKeyClick,
+    onAddOAuthClick,
 }) => {
     const navigate = useNavigate();
 
-    const handleClick = () => {
-        if (onButtonClick) {
-            onButtonClick();
+    const handleAddApiKeyClick = () => {
+        if (onAddApiKeyClick) {
+            onAddApiKeyClick();
+        }
+    };
+
+    const handleAddOAuthClick = () => {
+        if (onAddOAuthClick) {
+            onAddOAuthClick();
         } else {
-            navigate('/api-keys');
+            navigate('/oauth');
         }
     };
 
@@ -30,7 +38,7 @@ const EmptyStateGuide: React.FC<EmptyStateGuideProps> = ({
             <Button
                 variant="contained"
                 startIcon={<Add />}
-                onClick={handleClick}
+                onClick={handleAddApiKeyClick}
                 size="large"
                 sx={{
                     backgroundColor: 'primary.main',
@@ -53,14 +61,26 @@ const EmptyStateGuide: React.FC<EmptyStateGuideProps> = ({
             <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
                 {description}
             </Typography>
-            <Button
-                variant="contained"
-                startIcon={<Add />}
-                onClick={handleClick}
-                size="large"
-            >
-                {buttonText}
-            </Button>
+            <Stack direction="row" spacing={2} justifyContent="center">
+                <Button
+                    variant="contained"
+                    startIcon={<Add />}
+                    onClick={handleAddApiKeyClick}
+                    size="large"
+                >
+                    Add API Key
+                </Button>
+                {showOAuthButton && (
+                    <Button
+                        variant="outlined"
+                        startIcon={<VpnKey />}
+                        onClick={handleAddOAuthClick}
+                        size="large"
+                    >
+                        Add OAuth
+                    </Button>
+                )}
+            </Stack>
         </Box>
     );
 };

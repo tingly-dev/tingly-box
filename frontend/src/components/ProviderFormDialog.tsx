@@ -44,6 +44,7 @@ interface PresetProviderFormDialogProps {
     mode: 'add' | 'edit';
     title?: string;
     submitText?: string;
+    isFirstProvider?: boolean;
 }
 
 const ProviderFormDialog = ({
@@ -55,6 +56,7 @@ const ProviderFormDialog = ({
     mode,
     title,
     submitText,
+    isFirstProvider = false,
 }: PresetProviderFormDialogProps) => {
     const { t } = useTranslation();
     const defaultTitle = mode === 'add' ? t('providerDialog.addTitle') : t('providerDialog.editTitle');
@@ -221,6 +223,15 @@ const ProviderFormDialog = ({
             <form onSubmit={handleSubmit}>
                 <DialogContent sx={{ pb: 1 }}>
                     <Stack spacing={2.5}>
+                        {/* First Provider Welcome Message */}
+                        {isFirstProvider && mode === 'add' && (
+                            <Alert severity="info" sx={{ mb: 1 }}>
+                                <Typography variant="body2">
+                                    <strong>Getting Started</strong><br />
+                                    Add your first API key to enable AI services. You can add more keys later.
+                                </Typography>
+                            </Alert>
+                        )}
                         {/* API Style Selection - Form Field Style */}
                         <TextField
                             select

@@ -15,6 +15,7 @@ import { useFunctionPanelData } from '../hooks/useFunctionPanelData';
 import { useProviderDialog } from '../hooks/useProviderDialog';
 import EmptyStateGuide from '../components/EmptyStateGuide';
 import ProviderFormDialog from '../components/ProviderFormDialog';
+import OAuthDialog from '../components/OAuthDialog';
 
 const ruleId = "built-in-anthropic";
 const scenario = "anthropic";
@@ -38,6 +39,9 @@ const UseAnthropicPage: React.FC = () => {
         defaultApiStyle: 'anthropic',
         onProviderAdded: () => window.location.reload(),
     });
+
+    // OAuth dialog state
+    const [oauthDialogOpen, setOAuthDialogOpen] = React.useState(false);
 
     const copyToClipboard = async (text: string, label: string) => {
         try {
@@ -153,10 +157,10 @@ const UseAnthropicPage: React.FC = () => {
                 <CardGrid>
                     <UnifiedCard title="Anthropic SDK Configuration" size="full">
                         <EmptyStateGuide
-                            title="No API Keys Configured"
-                            description="Add your Anthropic API key to get started with the Anthropic SDK"
-                            buttonText="Add API Key"
-                            onButtonClick={providerDialog.handleAddProviderClick}
+                            title="No Providers Configured"
+                            description="Add an API key or OAuth provider to get started"
+                            onAddApiKeyClick={providerDialog.handleAddProviderClick}
+                            onAddOAuthClick={() => setOAuthDialogOpen(true)}
                         />
                     </UnifiedCard>
                     <ProviderFormDialog
@@ -166,6 +170,11 @@ const UseAnthropicPage: React.FC = () => {
                         data={providerDialog.providerFormData}
                         onChange={providerDialog.handleFieldChange}
                         mode="add"
+                        isFirstProvider={providers.length === 0}
+                    />
+                    <OAuthDialog
+                        open={oauthDialogOpen}
+                        onClose={() => setOAuthDialogOpen(false)}
                     />
                 </CardGrid>
             </PageLayout>
@@ -230,6 +239,7 @@ const UseAnthropicPage: React.FC = () => {
                     data={providerDialog.providerFormData}
                     onChange={providerDialog.handleFieldChange}
                     mode="add"
+                    isFirstProvider={providers.length === 0}
                 />
             </CardGrid>
         </PageLayout>
