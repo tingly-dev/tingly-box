@@ -131,7 +131,7 @@ jobs:
           cat > ~/.ssh/config <<'EOF'
           Host gitee.com
             HostName gitee.com
-            User git
+            User yzffeng
             IdentityFile ~/.ssh/id_rsa
             IdentitiesOnly yes
             ServerAliveInterval 60
