@@ -66,7 +66,7 @@ jobs:
           - goos: darwin
             goarch: amd64
             suffix: macos-amd64
-            runs-on: macos-13-large
+            runs-on: macos-15-intel
           - goos: darwin
             goarch: arm64
             suffix: macos-arm64
