@@ -292,7 +292,7 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.
 			},
 		}
 		sendAnthropicStreamEvent(c, "error", errorEvent, flusher)
-		return nil
+		return err
 	}
 	return nil
 }
