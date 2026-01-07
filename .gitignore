@@ -72,3 +72,9 @@ dist-ssr
 go.work
 
 # End of https://www.toptal.com/developers/gitignore/api/go
+/openspec/
+/AGENTS.md
+/CLAUDE.md
+/.claude/
+/frontend/openapitools.json
+/openapitools.json
