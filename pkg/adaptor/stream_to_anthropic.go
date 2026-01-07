@@ -49,7 +49,7 @@ const (
 )
 
 // HandleOpenAIToAnthropicStreamResponse processes OpenAI streaming events and converts them to Anthropic format
-func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) error {
+func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompletionNewParams, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) error {
 	logrus.Info("Starting OpenAI to Anthropic streaming response handler")
 	defer func() {
 		if r := recover(); r != nil {

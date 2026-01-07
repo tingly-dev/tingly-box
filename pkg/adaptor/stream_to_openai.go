@@ -15,7 +15,7 @@ import (
 )
 
 // HandleAnthropicToOpenAIStreamResponse processes Anthropic streaming events and converts them to OpenAI format
-func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, stream *anthropicstream.Stream[anthropic.MessageStreamEventUnion], responseModel string) error {
+func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req anthropic.MessageNewParams, stream *anthropicstream.Stream[anthropic.MessageStreamEventUnion], responseModel string) error {
 	logrus.Info("Starting Anthropic to OpenAI streaming response handler")
 	defer func() {
 		if r := recover(); r != nil {
