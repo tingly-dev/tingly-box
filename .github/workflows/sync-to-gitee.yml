@@ -112,14 +112,23 @@ jobs:
         run: |
           # Setup SSH key
           mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          # Write SSH key with proper format
           echo "$GITEE_SSH_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
+          # Verify the key was written correctly
+          if [ ! -s ~/.ssh/id_rsa ]; then
+            echo "Error: SSH key is empty or not written correctly"
+            exit 1
+          fi
+
           # Add Gitee to known_hosts
-          ssh-keyscan -t rsa gitee.com >> ~/.ssh/known_hosts
+          ssh-keyscan -t rsa gitee.com >> ~/.ssh/known_hosts 2>/dev/null
 
           # Configure SSH for better reliability to Gitee
-          cat >> ~/.ssh/config <<EOF
+          cat > ~/.ssh/config <<'EOF'
           Host gitee.com
             HostName gitee.com
             User git
@@ -129,6 +138,7 @@ jobs:
             ServerAliveCountMax 5
             ConnectTimeout 30
             TCPKeepAlive yes
+            StrictHostKeyChecking no
           EOF
 
           # Verify GITEE_REPO is set
@@ -141,6 +151,19 @@ jobs:
 
           # Save repo URL for next step
           echo "GITEE_REPO_SSH=$GITEE_REPO" >> $GITHUB_ENV
+
+          # Test SSH connection
+          echo "Testing SSH connection to Gitee..."
+          if ssh -T git@gitee.com 2>&1 | grep -q "successfully authenticated"; then
+            echo "✅ SSH connection test passed"
+          else
+            # Gitee might return different messages, try a simple git command
+            if timeout 10 git ls-remote "$GITEE_REPO" >/dev/null 2>&1; then
+              echo "✅ Git access test passed"
+            else
+              echo "Warning: Could not verify SSH access, but continuing..."
+            fi
+          fi
 
           echo "✅ SSH key configured"
 
