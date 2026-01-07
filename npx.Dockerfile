@@ -1,11 +1,14 @@
 # NPX-based lightweight Docker image for Tingly Box
-# This image uses npx to download the binary on first run, resulting in a smaller image size
+# This image uses npm to install tingly-box globally, resulting in a smaller image size
 
 ARG TINGLY_VERSION=latest
 FROM node:20-alpine
 
 # Install runtime dependencies
 RUN apk add --no-cache ca-certificates tzdata su-exec
+
+# Update npm to latest version
+RUN npm install -g npm@latest
 
 # Create non-root user for security
 RUN addgroup -S tingly && \
@@ -21,30 +24,27 @@ RUN mkdir -p /app/.tingly-box /app/memory /app/logs && \
 # Switch to non-root user
 USER tingly
 
-# Set environment variables for npx cache directory
-ENV NPX_CACHE_DIR=/app/.npx-cache
-
 # Expose the default port
 EXPOSE 12580
 
 # Environment variables for configuration
 ENV TINGLY_PORT=12580
 ENV TINGLY_HOST=0.0.0.0
-# Preserve version string with leading zeros
 ENV TINGLY_VERSION="${TINGLY_VERSION}"
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD sh -c "npx 'tingly-box@${TINGLY_VERSION}' status || exit 1"
+    CMD tingly-box status || exit 1
 
-# Default command: download and run tingly-box via npx
-# The binary will be cached in ~/.npm/_npx for subsequent runs
+# Default command: install and run tingly-box via npm
 CMD ["sh", "-c", "echo '======================================' && \
-     echo '  Tingly Box (NPX) is starting up...' && \
+     echo '  Tingly Box is starting up...' && \
+     echo '  Installing version:' ${TINGLY_VERSION} && \
      echo '  Web UI will be available at:' && \
      echo '  http://localhost:12580/dashboard?user_auth_token=tingly-box-user-token' && \
      echo '======================================' && \
-     exec npx 'tingly-box@${TINGLY_VERSION}' start --host 0.0.0.0 --port 12580"]
+     npm install -g tingly-box@${TINGLY_VERSION} && \
+     exec tingly-box start --host 0.0.0.0 --port 12580"]
 
 # Volumes for persistent data
 VOLUME ["/app/.tingly-box", "/app/memory", "/app/logs"]
