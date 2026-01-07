@@ -344,15 +344,6 @@ func (s *Server) AnthropicListModels(c *gin.Context) {
 func (s *Server) AnthropicCountTokens(c *gin.Context) {
 	// Check if beta parameter is set to true
 	beta := c.Query("beta") == "true"
-	if !beta {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "The count_tokens endpoint requires beta=true parameter",
-				Type:    "invalid_request_error",
-			},
-		})
-		return
-	}
 
 	// Read the raw request body first for debugging purposes
 	bodyBytes, err := c.GetRawData()
@@ -383,22 +374,8 @@ func (s *Server) AnthropicCountTokens(c *gin.Context) {
 	}
 	logrus.Debugf("Stream requested for AnthropicMessages: %v", isStreaming)
 
-	// Parse into MessageNewParams using SDK's JSON unmarshaling
-	var req anthropic.MessageCountTokensParams
-	if err := c.ShouldBindJSON(&req); err != nil {
-		// Log the invalid request for debugging
-		logrus.Debugf("Invalid JSON request received: %v\nBody: %s", err, string(bodyBytes))
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Invalid request body: " + err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
-		return
-	}
-
 	// Get model from request
-	model := string(req.Model)
+	model := rawReq["model"].(string)
 	if model == "" {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -423,7 +400,6 @@ func (s *Server) AnthropicCountTokens(c *gin.Context) {
 
 	// Use the selected service's model
 	actualModel := selectedService.Model
-	req.Model = anthropic.Model(actualModel)
 
 	// Set provider UUID in context (Service.Provider uses UUID, not name)
 	c.Set("provider", provider.UUID)
@@ -435,20 +411,20 @@ func (s *Server) AnthropicCountTokens(c *gin.Context) {
 		apiStyle = "openai" // default to openai
 	}
 
-	// If the provider uses Anthropic API style, use the actual count_tokens endpoint
-	if apiStyle == "anthropic" {
-		// Get or create Anthropic client wrapper from pool
-		wrapper := s.clientPool.GetAnthropicClient(provider, actualModel)
+	// Get or create Anthropic client wrapper from pool
+	wrapper := s.clientPool.GetAnthropicClient(provider, actualModel)
 
-		// Get the underlying SDK client
-		client := wrapper.Client()
+	// Make the request using Anthropic SDK with timeout (provider.Timeout is in seconds)
+	timeout := time.Duration(provider.Timeout) * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
 
-		// Make the request using Anthropic SDK with timeout (provider.Timeout is in seconds)
-		timeout := time.Duration(provider.Timeout) * time.Second
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		defer cancel()
-		message, err := client.Messages.CountTokens(ctx, req)
-		if err != nil {
+	if beta {
+		// Parse into MessageNewParams using SDK's JSON unmarshaling
+		var req anthropic.BetaMessageCountTokensParams
+		if err := c.ShouldBindJSON(&req); err != nil {
+			// Log the invalid request for debugging
+			logrus.Debugf("Invalid JSON request received: %v\nBody: %s", err, string(bodyBytes))
 			c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{
 					Message: "Invalid request body: " + err.Error(),
@@ -458,10 +434,44 @@ func (s *Server) AnthropicCountTokens(c *gin.Context) {
 			return
 		}
 
-		c.JSON(http.StatusOK, message)
+		req.Model = anthropic.Model(actualModel)
+
+		// If the provider uses Anthropic API style, use the actual count_tokens endpoint
+		if apiStyle == "anthropic" {
+			message, err := wrapper.BetaMessagesCountTokens(ctx, req)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, ErrorResponse{
+					Error: ErrorDetail{
+						Message: "Invalid request body: " + err.Error(),
+						Type:    "invalid_request_error",
+					},
+				})
+				return
+			}
+
+			c.JSON(http.StatusOK, message)
+		} else {
+			count, err := countBetaTokensWithTiktoken(string(req.Model), req.Messages, req.System)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, ErrorResponse{
+					Error: ErrorDetail{
+						Message: "Invalid request body: " + err.Error(),
+						Type:    "invalid_request_error",
+					},
+				})
+				return
+			}
+			c.JSON(http.StatusOK, anthropic.MessageTokensCount{
+				InputTokens: int64(count),
+			})
+		}
+
 	} else {
-		count, err := countTokensWithTiktoken(string(req.Model), req.Messages, req.System.OfTextBlockArray)
-		if err != nil {
+		// Parse into MessageNewParams using SDK's JSON unmarshaling
+		var req anthropic.MessageCountTokensParams
+		if err := c.ShouldBindJSON(&req); err != nil {
+			// Log the invalid request for debugging
+			logrus.Debugf("Invalid JSON request received: %v\nBody: %s", err, string(bodyBytes))
 			c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{
 					Message: "Invalid request body: " + err.Error(),
@@ -470,9 +480,37 @@ func (s *Server) AnthropicCountTokens(c *gin.Context) {
 			})
 			return
 		}
-		c.JSON(http.StatusOK, anthropic.MessageTokensCount{
-			InputTokens: int64(count),
-		})
+
+		req.Model = anthropic.Model(actualModel)
+
+		// If the provider uses Anthropic API style, use the actual count_tokens endpoint
+		if apiStyle == "anthropic" {
+			message, err := wrapper.MessagesCountTokens(ctx, req)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, ErrorResponse{
+					Error: ErrorDetail{
+						Message: "Invalid request body: " + err.Error(),
+						Type:    "invalid_request_error",
+					},
+				})
+				return
+			}
+			c.JSON(http.StatusOK, message)
+		} else {
+			count, err := countTokensWithTiktoken(string(req.Model), req.Messages, req.System.OfTextBlockArray)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, ErrorResponse{
+					Error: ErrorDetail{
+						Message: "Invalid request body: " + err.Error(),
+						Type:    "invalid_request_error",
+					},
+				})
+				return
+			}
+			c.JSON(http.StatusOK, anthropic.MessageTokensCount{
+				InputTokens: int64(count),
+			})
+		}
 	}
 }
 
@@ -481,9 +519,6 @@ func (s *Server) forwardAnthropicRequestRaw(provider *typ.Provider, rawReq map[s
 	// Get or create Anthropic client wrapper from pool
 	wrapper := s.clientPool.GetAnthropicClient(provider, model)
 	logrus.Debugf("Anthropic API Token Length: %d", len(provider.Token))
-
-	// Get the underlying SDK client
-	client := wrapper.Client()
 
 	// Extract and convert messages from raw request
 	messagesData, ok := rawReq["messages"].([]interface{})
@@ -556,7 +591,7 @@ func (s *Server) forwardAnthropicRequestRaw(provider *typ.Provider, rawReq map[s
 	timeout := time.Duration(provider.Timeout) * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	message, err := client.Messages.New(ctx, params)
+	message, err := wrapper.MessagesNew(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -569,14 +604,11 @@ func (s *Server) forwardAnthropicRequest(provider *typ.Provider, req anthropic.M
 	// Get or create Anthropic client wrapper from pool
 	wrapper := s.clientPool.GetAnthropicClient(provider, string(req.Model))
 
-	// Get the underlying SDK client
-	client := wrapper.Client()
-
 	// Make the request using Anthropic SDK with timeout (provider.Timeout is in seconds)
 	timeout := time.Duration(provider.Timeout) * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	message, err := client.Messages.New(ctx, req)
+	message, err := wrapper.MessagesNew(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -591,14 +623,11 @@ func (s *Server) forwardAnthropicStreamRequest(provider *typ.Provider, req anthr
 
 	logrus.Debugln("Creating Anthropic streaming request")
 
-	// Get the underlying SDK client
-	client := wrapper.Client()
-
 	// Use background context for streaming
 	// The stream will manage its own lifecycle and timeout
 	// We don't use a timeout here because streaming responses can take longer
 	ctx := context.Background()
-	stream := client.Messages.NewStreaming(ctx, req)
+	stream := wrapper.MessagesNewStreaming(ctx, req)
 
 	return stream, nil
 }
