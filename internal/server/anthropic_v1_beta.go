@@ -15,8 +15,8 @@ import (
 	"tingly-box/pkg/adaptor"
 )
 
-// anthropicMessagesBeta implements beta messages API
-func (s *Server) anthropicMessagesBeta(c *gin.Context, bodyBytes []byte, rawReq map[string]interface{}, proxyModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule) {
+// anthropicMessagesV1Beta implements beta messages API
+func (s *Server) anthropicMessagesV1Beta(c *gin.Context, bodyBytes []byte, rawReq map[string]interface{}, proxyModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule) {
 	actualModel := selectedService.Model
 
 	// Check if streaming is requested
@@ -71,16 +71,16 @@ func (s *Server) anthropicMessagesBeta(c *gin.Context, bodyBytes []byte, rawReq 
 		// Use direct Anthropic SDK call
 		if isStreaming {
 			// Handle streaming request
-			stream, err := s.forwardAnthropicStreamRequestBeta(provider, req)
+			stream, err := s.forwardAnthropicStreamRequestV1Beta(provider, req)
 			if err != nil {
 				SendStreamingError(c, err)
 				return
 			}
 			// Handle the streaming response
-			s.handleAnthropicStreamResponseBeta(c, req, stream, proxyModel)
+			s.handleAnthropicStreamResponseV1Beta(c, req, stream, proxyModel)
 		} else {
 			// Handle non-streaming request
-			anthropicResp, err := s.forwardAnthropicRequestBeta(provider, req)
+			anthropicResp, err := s.forwardAnthropicRequestV1Beta(provider, req)
 			if err != nil {
 				SendForwardingError(c, err)
 				return
@@ -110,7 +110,7 @@ func (s *Server) anthropicMessagesBeta(c *gin.Context, bodyBytes []byte, rawReq 
 			}
 
 			// Handle the streaming response
-			err = adaptor.HandleOpenAIToAnthropicBetaStreamResponse(c, openaiReq, stream, proxyModel)
+			err = adaptor.HandleOpenAIToAnthropicV1BetaStreamResponse(c, openaiReq, stream, proxyModel)
 			if err != nil {
 				SendInternalError(c, err.Error())
 			}
@@ -130,8 +130,8 @@ func (s *Server) anthropicMessagesBeta(c *gin.Context, bodyBytes []byte, rawReq 
 	}
 }
 
-// forwardAnthropicRequestBeta forwards request using Anthropic SDK with proper types (beta)
-func (s *Server) forwardAnthropicRequestBeta(provider *typ.Provider, req anthropic.BetaMessageNewParams) (*anthropic.BetaMessage, error) {
+// forwardAnthropicRequestV1Beta forwards request using Anthropic SDK with proper types (beta)
+func (s *Server) forwardAnthropicRequestV1Beta(provider *typ.Provider, req anthropic.BetaMessageNewParams) (*anthropic.BetaMessage, error) {
 	// Get or create Anthropic client wrapper from pool
 	wrapper := s.clientPool.GetAnthropicClient(provider, string(req.Model))
 
@@ -147,8 +147,8 @@ func (s *Server) forwardAnthropicRequestBeta(provider *typ.Provider, req anthrop
 	return message, nil
 }
 
-// forwardAnthropicStreamRequestBeta forwards streaming request using Anthropic SDK (beta)
-func (s *Server) forwardAnthropicStreamRequestBeta(provider *typ.Provider, req anthropic.BetaMessageNewParams) (*anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], error) {
+// forwardAnthropicStreamRequestV1Beta forwards streaming request using Anthropic SDK (beta)
+func (s *Server) forwardAnthropicStreamRequestV1Beta(provider *typ.Provider, req anthropic.BetaMessageNewParams) (*anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], error) {
 	// Get or create Anthropic client wrapper from pool
 	wrapper := s.clientPool.GetAnthropicClient(provider, string(req.Model))
 
@@ -163,8 +163,8 @@ func (s *Server) forwardAnthropicStreamRequestBeta(provider *typ.Provider, req a
 	return stream, nil
 }
 
-// handleAnthropicStreamResponseBeta processes the Anthropic beta streaming response and sends it to the client
-func (s *Server) handleAnthropicStreamResponseBeta(c *gin.Context, req anthropic.BetaMessageNewParams, stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], respModel string) {
+// handleAnthropicStreamResponseV1Beta processes the Anthropic beta streaming response and sends it to the client
+func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthropic.BetaMessageNewParams, stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], respModel string) {
 	defer StreamRecoveryHandler(c, stream)
 
 	// Set SSE headers
@@ -180,6 +180,7 @@ func (s *Server) handleAnthropicStreamResponseBeta(c *gin.Context, req anthropic
 	// Process the stream
 	for stream.Next() {
 		event := stream.Current()
+		event.Message.Model = anthropic.Model(respModel)
 
 		// Convert the event to JSON and send as SSE
 		if err := sendSSEvent(c, event.Type, event); err != nil {
@@ -201,8 +202,8 @@ func (s *Server) handleAnthropicStreamResponseBeta(c *gin.Context, req anthropic
 	flusher.Flush()
 }
 
-// anthropicCountTokensBeta implements beta count_tokens
-func (s *Server) anthropicCountTokensBeta(c *gin.Context, bodyBytes []byte, rawReq map[string]interface{}, model string, provider *typ.Provider, selectedService *loadbalance.Service) {
+// anthropicCountTokensV1Beta implements beta count_tokens
+func (s *Server) anthropicCountTokensV1Beta(c *gin.Context, bodyBytes []byte, rawReq map[string]interface{}, model string, provider *typ.Provider, selectedService *loadbalance.Service) {
 	// Use the selected service's model
 	actualModel := selectedService.Model
 

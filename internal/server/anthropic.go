@@ -128,7 +128,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 
 	// Delegate to the appropriate implementation based on beta parameter
 	if beta {
-		s.anthropicMessagesBeta(c, bodyBytes, rawReq, model, provider, selectedService, rule)
+		s.anthropicMessagesV1Beta(c, bodyBytes, rawReq, model, provider, selectedService, rule)
 	} else {
 		s.anthropicMessagesV1(c, bodyBytes, rawReq, model, provider, selectedService, rule)
 	}
@@ -258,7 +258,7 @@ func (s *Server) AnthropicCountTokens(c *gin.Context) {
 
 	// Delegate to the appropriate implementation based on beta parameter
 	if beta {
-		s.anthropicCountTokensBeta(c, bodyBytes, rawReq, model, provider, selectedService)
+		s.anthropicCountTokensV1Beta(c, bodyBytes, rawReq, model, provider, selectedService)
 	} else {
 		s.anthropicCountTokensV1(c, bodyBytes, rawReq, model, provider, selectedService)
 	}

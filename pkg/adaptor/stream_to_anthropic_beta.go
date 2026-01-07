@@ -15,8 +15,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// HandleOpenAIToAnthropicBetaStreamResponse processes OpenAI streaming events and converts them to Anthropic beta format
-func HandleOpenAIToAnthropicBetaStreamResponse(c *gin.Context, req *openai.ChatCompletionNewParams, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) error {
+// HandleOpenAIToAnthropicV1BetaStreamResponse processes OpenAI streaming events and converts them to Anthropic beta format
+func HandleOpenAIToAnthropicV1BetaStreamResponse(c *gin.Context, req *openai.ChatCompletionNewParams, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) error {
 	logrus.Info("Starting OpenAI to Anthropic beta streaming response handler")
 	defer func() {
 		if r := recover(); r != nil {
