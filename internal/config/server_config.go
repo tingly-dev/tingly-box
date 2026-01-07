@@ -999,6 +999,32 @@ var DefaultRules []typ.Rule
 func init() {
 	DefaultRules = []typ.Rule{
 		{
+			UUID:          "built-in-anthropic",
+			Scenario:      typ.ScenarioAnthropic,
+			RequestModel:  "tingly/anthropic",
+			ResponseModel: "",
+			Description:   "Default proxy rule in tingly-box for general use with Anthropic",
+			Services:      []loadbalance.Service{}, // Empty services initially
+			LBTactic: typ.Tactic{ // Initialize with default round-robin tactic
+				Type:   loadbalance.TacticRoundRobin,
+				Params: typ.DefaultRoundRobinParams(),
+			},
+			Active: true,
+		},
+		{
+			UUID:          "built-in-openai",
+			Scenario:      typ.ScenarioOpenAI,
+			RequestModel:  "tingly/openai",
+			ResponseModel: "",
+			Description:   "Default proxy rule in tingly-box for general use with OpenAI",
+			Services:      []loadbalance.Service{}, // Empty services initially
+			LBTactic: typ.Tactic{ // Initialize with default round-robin tactic
+				Type:   loadbalance.TacticRoundRobin,
+				Params: typ.DefaultRoundRobinParams(),
+			},
+			Active: true,
+		},
+		{
 			UUID:          "built-in-cc",
 			Scenario:      typ.ScenarioClaudeCode,
 			RequestModel:  "tingly/cc",
