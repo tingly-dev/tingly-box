@@ -65,7 +65,15 @@ task wails:build
 **From Docker**
 
 ```bash
-# Build Docker image
+# Pull and run the NPX-based image (recommended - smaller size, auto-updates)
+mkdir -p tingly-data
+docker run -d \
+  --name tingly-box \
+  -p 12580:12580 \
+  -v `pwd`/tingly-data:/app/.tingly-box \
+  ghcr.io/tingly-dev/tingly-box:latest
+
+# Or build the full image locally from source
 docker build -t tingly-box:latest .
 
 # Run container
