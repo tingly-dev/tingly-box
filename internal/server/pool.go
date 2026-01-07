@@ -74,7 +74,7 @@ func (p *ClientPool) GetAnthropicClient(provider *typ.Provider, model string) *l
 	p.mutex.RLock()
 	if client, exists := p.anthropicClients[key]; exists {
 		p.mutex.RUnlock()
-		logrus.Debugf("Using cached Anthropic client for provider: %s", provider.Name)
+		logrus.Debugf("Using cached Anthropic client for provider: %s model: %s", provider.Name, model)
 		return client
 	}
 	p.mutex.RUnlock()
