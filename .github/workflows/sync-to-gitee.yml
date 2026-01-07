@@ -105,24 +105,36 @@ jobs:
             exit 1
           fi
 
-      - name: Clone Gitee repository
+      - name: Setup SSH key for Gitee
         env:
-          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
-          GITEE_REPO: ${{ secrets.GITEE_REPO_URL }}
+          GITEE_SSH_KEY: ${{ secrets.GITEE_SSH_KEY }}
+          GITEE_REPO: ${{ secrets.GITEE_REPO_SSH }}
         run: |
-          # Parse Gitee repo URL (format: https://gitee.com/owner/repo.git)
+          # Setup SSH key
+          mkdir -p ~/.ssh
+          echo "$GITEE_SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+          # Add Gitee to known_hosts
+          ssh-keyscan -t rsa gitee.com >> ~/.ssh/known_hosts
+
+          # Verify GITEE_REPO is set
           if [ -z "$GITEE_REPO" ]; then
-            echo "Error: GITEE_REPO_URL secret is not set"
-            echo "Please set GITEE_REPO_URL in GitHub repository secrets"
+            echo "Error: GITEE_REPO_SSH secret is not set"
+            echo "Please set GITEE_REPO_SSH in GitHub repository secrets"
+            echo "Example: git@gitee.com:owner/repo.git"
             exit 1
           fi
 
-          # Extract repo path for git clone
-          GITEE_REPO_HTTPS="${GITEE_REPO%.git}"
-          GITEE_REPO_AUTH="https://oauth2:${GITEE_TOKEN}@${GITEE_REPO_HTTPS#https://}"
+          # Save repo URL for next step
+          echo "GITEE_REPO_SSH=$GITEE_REPO" >> $GITHUB_ENV
 
-          echo "Cloning Gitee repository..."
-          git clone "$GITEE_REPO_AUTH" ./gitee-repo
+          echo "✅ SSH key configured"
+
+      - name: Clone Gitee repository
+        run: |
+          echo "Cloning Gitee repository using SSH..."
+          git clone "$GITEE_REPO_SSH" ./gitee-repo
 
           if [ ! -d "./gitee-repo" ]; then
             echo "Error: Failed to clone Gitee repository"
