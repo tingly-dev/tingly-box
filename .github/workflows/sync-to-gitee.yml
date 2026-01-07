@@ -196,7 +196,7 @@ jobs:
           fi
 
           # Create release directory in Gitee repo
-          RELEASE_DIR="./gitee-repo/releases/${RELEASE_TAG}"
+          RELEASE_DIR="./gitee-repo/${RELEASE_TAG}"
 
           echo "Preparing binaries in $RELEASE_DIR..."
           mkdir -p "$RELEASE_DIR"
@@ -235,7 +235,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           # Create release branch
-          RELEASE_BRANCH="release-${RELEASE_TAG}"
+          RELEASE_BRANCH="${RELEASE_TAG}"
 
           # Check if branch exists
           if git rev-parse "$RELEASE_BRANCH" >/dev/null 2>&1; then
@@ -247,7 +247,7 @@ jobs:
           fi
 
           # Add all files
-          git add "releases/${RELEASE_TAG}/"
+          git add "${RELEASE_TAG}/"
 
           # Check if there are changes to commit
           if git diff --staged --quiet; then
