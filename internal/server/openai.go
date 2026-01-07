@@ -222,7 +222,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 		}
 
 		if isStreaming {
-			stream, err := s.forwardAnthropicStreamRequest(provider, anthropicReq)
+			stream, err := s.ForwardAnthropicStreamRequest(provider, anthropicReq)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, ErrorResponse{
 					Error: ErrorDetail{
@@ -245,7 +245,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 			}
 			return
 		} else {
-			anthropicResp, err := s.forwardAnthropicRequest(provider, anthropicReq)
+			anthropicResp, err := s.ForwardAnthropicRequest(provider, anthropicReq)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, ErrorResponse{
 					Error: ErrorDetail{
