@@ -1,11 +1,13 @@
 package llmclient
 
 import (
+	"context"
 	"tingly-box/internal/llmclient/httpclient"
 	"tingly-box/internal/typ"
 
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
+	"github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/sirupsen/logrus"
 )
 
@@ -51,4 +53,14 @@ func (c *OpenAIClient) Close() error {
 // Client returns the underlying OpenAI SDK client
 func (c *OpenAIClient) Client() *openai.Client {
 	return &c.client
+}
+
+// ChatCompletionsNew creates a new chat completion request
+func (c *OpenAIClient) ChatCompletionsNew(ctx context.Context, req openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
+	return c.client.Chat.Completions.New(ctx, req)
+}
+
+// ChatCompletionsNewStreaming creates a new streaming chat completion request
+func (c *OpenAIClient) ChatCompletionsNewStreaming(ctx context.Context, req openai.ChatCompletionNewParams) *ssestream.Stream[openai.ChatCompletionChunk] {
+	return c.client.Chat.Completions.NewStreaming(ctx, req)
 }
