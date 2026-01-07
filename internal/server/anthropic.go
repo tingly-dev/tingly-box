@@ -225,7 +225,13 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		// Use OpenAI conversion path (default behavior)
 		if isStreaming {
 			// Convert Anthropic request to OpenAI format for streaming
-			openaiReq := adaptor.ConvertAnthropicToOpenAIRequest(&req)
+			openaiReq := adaptor.ConvertAnthropicToOpenAIRequest(&req, true)
+
+			da, _ := json.MarshalIndent(req, "", "    ")
+			fmt.Printf("requst to openai: %s\n", da)
+
+			do, _ := json.MarshalIndent(openaiReq, "", "    ")
+			fmt.Printf("requst to openai: %s\n", do)
 
 			// Create streaming request
 			stream, err := s.forwardOpenAIStreamRequest(provider, openaiReq)
@@ -253,7 +259,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 
 		} else {
 			// Handle non-streaming request
-			openaiReq := adaptor.ConvertAnthropicToOpenAIRequest(&req)
+			openaiReq := adaptor.ConvertAnthropicToOpenAIRequest(&req, true)
 			response, err := s.forwardOpenAIRequest(provider, openaiReq)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, ErrorResponse{
