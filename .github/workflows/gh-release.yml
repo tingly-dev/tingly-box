@@ -383,11 +383,6 @@ jobs:
           fi
           cd ..
 
-      - name: Generate changelog
-        run: |
-          # Use the release tag from environment
-          echo "## Changes in version $RELEASE_TAG" > release-notes.md
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -395,7 +390,7 @@ jobs:
           files: |
             release/*.zip
             release/checksums.txt
-          body_path: release-notes.md
+          generate_release_notes: true
           draft: false
           prerelease: false
         env:
