@@ -17,6 +17,7 @@ type ClientPool struct {
 	openaiClients    map[string]*llmclient.OpenAIClient
 	anthropicClients map[string]*llmclient.AnthropicClient
 	mutex            sync.RWMutex
+	debugMode        bool
 }
 
 // NewClientPool creates a new client pool
@@ -60,6 +61,11 @@ func (p *ClientPool) GetOpenAIClient(provider *typ.Provider, model string) *llmc
 		return nil
 	}
 
+	// Apply debug mode if enabled
+	if p.debugMode {
+		client.SetMode(true)
+	}
+
 	// Store in pool
 	p.openaiClients[key] = client
 	return client
@@ -96,6 +102,11 @@ func (p *ClientPool) GetAnthropicClient(provider *typ.Provider, model string) *l
 	if err != nil {
 		logrus.Errorf("Failed to create Anthropic client for provider %s: %v", provider.Name, err)
 		return nil
+	}
+
+	// Apply debug mode if enabled
+	if p.debugMode {
+		client.SetMode(true)
 	}
 
 	// Store in pool
@@ -188,5 +199,30 @@ func (p *ClientPool) Stats() map[string]interface{} {
 		"anthropic_clients_count": len(p.anthropicClients),
 		"total_clients":           len(p.openaiClients) + len(p.anthropicClients),
 		"provider_keys":           p.GetProviderKeys(),
+		"debug_mode":              p.debugMode,
 	}
+}
+
+// SetMode sets the debug mode for the pool and all existing clients.
+// When debug is true, all API headers and bodies are logged as indented JSON.
+func (p *ClientPool) SetMode(debug bool) {
+	p.mutex.Lock()
+	p.debugMode = debug
+	p.mutex.Unlock()
+
+	if debug {
+		logrus.Info("Enabling debug mode for client pool - all API headers and bodies will be logged")
+	} else {
+		logrus.Info("Disabling debug mode for client pool")
+	}
+
+	// Apply mode to all existing OpenAI clients
+	p.mutex.Lock()
+	for _, client := range p.openaiClients {
+		client.SetMode(debug)
+	}
+	for _, client := range p.anthropicClients {
+		client.SetMode(debug)
+	}
+	p.mutex.Unlock()
 }
