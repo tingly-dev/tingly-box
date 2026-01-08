@@ -4,6 +4,8 @@ go 1.25.3
 
 replace github.com/openai/openai-go/v3 => ./libs/openai-go
 
+replace github.com/anthropics/anthropic-sdk-go => ./libs/anthropic-sdk-go
+
 require (
 	github.com/anthropics/anthropic-sdk-go v1.19.0
 	github.com/expr-lang/expr v1.17.7
