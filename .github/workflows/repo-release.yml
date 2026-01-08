@@ -181,18 +181,24 @@ jobs:
           cd ..
 
       - name: Clone release repository
+        env:
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
         run: |
           git clone "git@github.com:${{ env.RELEASE_REPO }}.git" target-repo
           cd target-repo
 
-          # Remove all existing files except .git
-          find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} \;
+          # Stay on main branch, create version directory under release/
+          mkdir -p release/${RELEASE_TAG}
 
-          # Copy new release files
-          cp -r ../release-repo/* .
+          # Copy new release files to version directory
+          cp -r ../release-repo/* release/${RELEASE_TAG}/
+
+          # Copy LICENSE from source repository to version directory
+          cp ../LICENSE release/${RELEASE_TAG}/ 2>/dev/null || echo "No LICENSE file found in source repository"
 
           # Show what will be committed
           ls -la
+          ls -la release/
 
       - name: Commit and push to release repository
         env:
@@ -210,8 +216,9 @@ jobs:
             git push origin main
             git push origin "${RELEASE_TAG}"
 
-            echo "✅ Successfully synced to ${{ env.RELEASE_REPO }} with tag ${RELEASE_TAG}"
-            echo "📦 CDN URL: https://cdn.jsdelivr.net/gh/${{ env.RELEASE_REPO }}@${RELEASE_TAG}/"
+            echo "✅ Successfully synced to ${{ env.RELEASE_REPO }}/main with tag ${RELEASE_TAG}"
+            echo "📦 Version directory: release/${RELEASE_TAG}/"
+            echo "📦 CDN URL: https://cdn.jsdelivr.net/gh/${{ env.RELEASE_REPO }}@${RELEASE_TAG}/release/${RELEASE_TAG}/"
           else
             echo "⚠️ No changes to commit"
           fi
