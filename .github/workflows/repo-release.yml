@@ -39,72 +39,46 @@ jobs:
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "tag=${{ github.event.inputs.release_tag }}" >> $GITHUB_OUTPUT
           else
-            # Extract tag from workflow run event
-            TAG=$(curl -s \
-              -H "Accept: application/vnd.github.v3+json" \
-              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-              "${{ github.api_url }}/repos/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}/jobs" \
-              | jq -r '.jobs[0].steps[] | select(.name | contains("Set up tag environment")) | .conclusion' \
-              >/dev/null 2>&1)
+            # Get tag from the workflow run head branch/ref
+            REF="${{ github.event.workflow_run.head_branch }}"
 
-            # Try to get tag from the workflow run head branch
-            if [[ "${{ github.event.workflow_run.head_branch }}" =~ ^refs/tags/v ]]; then
-              TAG="${{ github.event.workflow_run.head_branch }}"
-            elif [[ "${{ github.event.workflow_run.head_branch }}" =~ ^v ]]; then
-              TAG="${{ github.event.workflow_run.head_branch }}"
+            if [[ "$REF" =~ refs/tags/v ]]; then
+              TAG="${REF#refs/tags/}"
+            elif [[ "$REF" =~ ^v ]]; then
+              TAG="$REF"
             else
-              # Get the latest tag
+              # Fallback to latest tag
               TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "latest")
             fi
 
             echo "tag=$TAG" >> $GITHUB_OUTPUT
+            echo "Using tag: $TAG"
           fi
 
-      - name: Download CLI artifacts from workflow run
-        uses: actions/download-artifact@v4
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ github.event.workflow_run.id }}
-          pattern: cli-*
-          path: ./dist/cli
-          merge-multiple: true
+      - name: Download release assets from GitHub Release
+        env:
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Create release directory
+          mkdir -p release-repo
+          cd release-repo
 
-      - name: Download GUI artifacts from workflow run
-        uses: actions/download-artifact@v4
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ github.event.workflow_run.id }}
-          pattern: gui-*
-          path: ./dist/gui
-          merge-multiple: true
+          # Get release assets using GitHub CLI
+          gh release download "${RELEASE_TAG}" \
+            --repo "${{ github.repository }}" \
+            --pattern "*.zip" \
+            --pattern "checksums.txt" \
+            --dir .
+
+          echo "Downloaded files:"
+          ls -la
 
       - name: Prepare release files
         env:
           RELEASE_TAG: ${{ steps.tag.outputs.tag }}
         run: |
-          mkdir -p release-repo
-
-          # Copy CLI binaries
-          if [ -d "dist/cli" ]; then
-            cd dist/cli
-            chmod +x tingly-box-* || true
-
-            # Package all CLI binaries as zip
-            for binary in tingly-box-*; do
-              zip "../../release-repo/${binary%.exe}.zip" "$binary"
-            done
-            cd ../..
-          fi
-
-          # Copy GUI binaries (already zipped)
-          if [ -d "dist/gui" ]; then
-            cp dist/gui/*/*.zip release-repo/ 2>/dev/null || true
-            cp dist/gui/*.zip release-repo/ 2>/dev/null || true
-          fi
-
-          # Create checksums for all files
           cd release-repo
-          sha256sum *.zip > checksums.txt 2>/dev/null || true
 
           # Generate README with CDN links
           cat > README.md << 'EOF'
