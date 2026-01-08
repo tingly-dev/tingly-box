@@ -1,4 +1,4 @@
-import { Box, Typography, ToggleButton, ToggleButtonGroup } from '@mui/material';
+import { Box, Typography, ToggleButton, ToggleButtonGroup, Switch, FormControlLabel } from '@mui/material';
 import React from 'react';
 import CodeBlock from '../components/CodeBlock';
 import TemplatePage from '../components/TemplatePage.tsx';
@@ -17,6 +17,7 @@ import OAuthDialog from '../components/OAuthDialog';
 const ruleId = "built-in-cc";
 
 type ClaudeJsonMode = 'json' | 'script';
+type ConfigMode = 'unified' | 'separate';
 
 const UseClaudeCodePage: React.FC = () => {
     const { t } = useTranslation();
@@ -28,11 +29,12 @@ const UseClaudeCodePage: React.FC = () => {
         providers,
     } = useFunctionPanelData();
     const [baseUrl, setBaseUrl] = React.useState<string>('');
-    const [rule, setRule] = React.useState<any>(null);
+    const [rules, setRules] = React.useState<any[]>([]);
     const [defaultModel, setDefaultModel] = React.useState("");
     const [loadingRule, setLoadingRule] = React.useState(true);
     const [isDockerMode, setIsDockerMode] = React.useState(false);
     const [claudeJsonMode, setClaudeJsonMode] = React.useState<ClaudeJsonMode>('json');
+    const [configMode, setConfigMode] = React.useState<ConfigMode>('unified');
 
     // Provider dialog hook
     const providerDialog = useProviderDialog(showNotification, {
@@ -56,24 +58,41 @@ const UseClaudeCodePage: React.FC = () => {
         const url = await getBaseUrl();
         setBaseUrl(url);
 
-        // Fetch rule information
-        const result = await api.getRule(ruleId);
-        if (result.success) {
-            setRule(result.data);
+        setLoadingRule(true);
+
+        if (configMode === 'unified') {
+            const result = await api.getRule(ruleId);
+            if (result.success) {
+                setRules([result.data]);
+            }
+        } else {
+            // Load 4 separate rules for each model variant
+            const modelVariants = ['haiku', 'sonnet', 'opus', 'main'];
+            const loadedRules = await Promise.all(
+                modelVariants.map(async (variant) => {
+                    const result = await api.getRule(`built-in-cc-${variant}`);
+                    if (result.success) {
+                        return result.data;
+                    }
+                    return null;
+                })
+            );
+            setRules(loadedRules.filter((r): r is any => r !== null));
         }
+
         setLoadingRule(false);
     };
 
     React.useEffect(() => {
         loadData();
-    }, []);
+    }, [configMode]);
 
-    // Update defaultModel when rule changes
+    // Update defaultModel when rules change
     React.useEffect(() => {
-        if (rule?.request_model) {
-            setDefaultModel(rule.request_model);
+        if (rules.length > 0 && rules[0]?.request_model) {
+            setDefaultModel(rules[0].request_model);
         }
-    }, [rule]);
+    }, [rules]);
 
     const toDockerUrl = (url: string): string => {
         return url.replace(/\/\/([^/:]+)(?::(\d+))?/, '//host.docker.internal:$2');
@@ -84,8 +103,23 @@ const UseClaudeCodePage: React.FC = () => {
         return isDockerMode ? toDockerUrl(url) : url;
     };
 
+    // Get model name for each variant based on config mode
+    const getModelForVariant = (variant: string): string => {
+        if (configMode === 'unified') {
+            return defaultModel;
+        }
+        // In separate mode, find the corresponding rule
+        const rule = rules.find(r => r?.id === `built-in-cc-${variant}`);
+        return rule?.request_model || defaultModel;
+    };
+
     const generateSettingsConfig = () => {
         const claudeCodeBaseUrl = getClaudeCodeBaseUrl();
+        const haikuModel = getModelForVariant('haiku');
+        const sonnetModel = getModelForVariant('sonnet');
+        const opusModel = getModelForVariant('opus');
+        const mainModel = getModelForVariant('main');
+
         return JSON.stringify({
             env: {
                 DISABLE_TELEMETRY: "1",
@@ -94,16 +128,21 @@ const UseClaudeCodePage: React.FC = () => {
                 API_TIMEOUT_MS: "3000000",
                 ANTHROPIC_AUTH_TOKEN: token,
                 ANTHROPIC_BASE_URL: claudeCodeBaseUrl,
-                ANTHROPIC_DEFAULT_HAIKU_MODEL: defaultModel,
-                ANTHROPIC_DEFAULT_OPUS_MODEL: defaultModel,
-                ANTHROPIC_DEFAULT_SONNET_MODEL: defaultModel,
-                ANTHROPIC_MODEL: defaultModel
+                ANTHROPIC_DEFAULT_HAIKU_MODEL: haikuModel,
+                ANTHROPIC_DEFAULT_OPUS_MODEL: opusModel,
+                ANTHROPIC_DEFAULT_SONNET_MODEL: sonnetModel,
+                ANTHROPIC_MODEL: mainModel
             },
         }, null, 2);
     };
 
     const generateSettingsScript = () => {
         const claudeCodeBaseUrl = getClaudeCodeBaseUrl();
+        const haikuModel = getModelForVariant('haiku');
+        const sonnetModel = getModelForVariant('sonnet');
+        const opusModel = getModelForVariant('opus');
+        const mainModel = getModelForVariant('main');
+
         return `# Configure Claude Code settings
 echo "Configuring Claude Code settings..."
 mkdir -p ~/.claude
@@ -119,10 +158,10 @@ node --eval '
         API_TIMEOUT_MS: "3000000",
         ANTHROPIC_AUTH_TOKEN: "${token}",
         ANTHROPIC_BASE_URL: "${claudeCodeBaseUrl}",
-        ANTHROPIC_DEFAULT_HAIKU_MODEL: "${defaultModel}",
-        ANTHROPIC_DEFAULT_OPUS_MODEL: "${defaultModel}",
-        ANTHROPIC_DEFAULT_SONNET_MODEL: "${defaultModel}",
-        ANTHROPIC_MODEL: "${defaultModel}"
+        ANTHROPIC_DEFAULT_HAIKU_MODEL: "${haikuModel}",
+        ANTHROPIC_DEFAULT_OPUS_MODEL: "${opusModel}",
+        ANTHROPIC_DEFAULT_SONNET_MODEL: "${sonnetModel}",
+        ANTHROPIC_MODEL: "${mainModel}"
     };
     if (fs.existsSync(settingsPath)) {
         const content = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
@@ -154,15 +193,34 @@ node --eval '
     };
 
     const header = (
-        <Box sx={{ p: 2, display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, alignItems: 'stretch' }}>
-            {/* Settings.json section */}
-            <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-                <Box sx={{ mb: 1 }}>
-                    <Typography variant="subtitle2" color="text.secondary">
-                        {t('claudeCode.step1')}
-                    </Typography>
-                </Box>
-                <Box sx={{ flex: 1, height: 400 }}>
+        <>
+            {/* Top bar with switch */}
+            <Box sx={{ px: 2, pt: 2, pb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="subtitle2" color="text.secondary">
+                    {configMode === 'unified' ? t('claudeCode.unifiedConfig') : t('claudeCode.separateConfig')}
+                </Typography>
+                <FormControlLabel
+                    control={
+                        <Switch
+                            checked={configMode === 'separate'}
+                            onChange={(e) => setConfigMode(e.target.checked ? 'separate' : 'unified')}
+                            size="small"
+                        />
+                    }
+                    label={configMode === 'unified' ? t('claudeCode.switchToSeparate') : t('claudeCode.switchToUnified')}
+                    sx={{ '& .MuiFormControlLabel-label': { fontSize: '0.875rem' } }}
+                />
+            </Box>
+            {/* Settings.json and .claude.json sections */}
+            <Box sx={{ p: 2, display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, alignItems: 'stretch' }}>
+                {/* Settings.json section */}
+                <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                    <Box sx={{ mb: 1 }}>
+                        <Typography variant="subtitle2" color="text.secondary">
+                            {t('claudeCode.step1')}
+                        </Typography>
+                    </Box>
+                    <Box sx={{ flex: 1, height: 400 }}>
                     <CodeBlock
                         code={claudeJsonMode === 'json' ? generateSettingsConfig() : generateSettingsScript()}
                         language={claudeJsonMode === 'json' ? 'json' : 'js'}
@@ -226,13 +284,14 @@ node --eval '
                     />
                 </Box>
             </Box>
-        </Box>
+            </Box>
+        </>
     );
 
     // Show empty state if no providers
     if (!providers.length) {
         return (
-            <PageLayout>
+            <PageLayout loading={loadingRule}>
                 <CardGrid>
                     <UnifiedCard title="Use Claude Code" size="full">
                         <EmptyStateGuide
@@ -261,7 +320,7 @@ node --eval '
     }
 
     return (
-        <PageLayout>
+        <PageLayout loading={loadingRule}>
             <CardGrid>
                 <UnifiedCard
                     title="Use Claude Code"
@@ -270,14 +329,15 @@ node --eval '
                     {header}
                 </UnifiedCard>
                 <TemplatePage
-                    rules={[rule]}
+                    rules={rules}
                     showTokenModal={showTokenModal}
                     setShowTokenModal={setShowTokenModal}
                     token={token}
                     showNotification={showNotification}
                     providers={providers}
-                    onRulesChange={(rules) => setRule(rules[0])}
+                    onRulesChange={setRules}
                     allowToggleRule={false}
+                    collapsible={true}
                 />
                 <ProviderFormDialog
                     open={providerDialog.providerDialogOpen}
