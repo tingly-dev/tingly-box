@@ -312,6 +312,10 @@ export default {
     "oneClickScript": "One-Click Script",
     "jsonConfig": "JSON Config",
     "step1": "1. Configure Model",
-    "step2": "2. Skip Onboarding - Make Claude Code directly usable"
+    "step2": "2. Skip Onboarding - Make Claude Code directly usable",
+    "unifiedConfig": "Unified Configuration",
+    "separateConfig": "Separate Configuration",
+    "switchToSeparate": "Switch to Separate",
+    "switchToUnified": "Switch to Unified"
   }
 };

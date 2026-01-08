@@ -83,6 +83,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 responseModel: rule.response_model || '',
                 active: rule.active !== undefined ? rule.active : true,
                 providers: providersList,
+                description: rule.description,
             };
 
             setConfigRecord(newConfigRecord);
@@ -168,6 +169,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 request_model: newConfigRecord.requestModel,
                 response_model: newConfigRecord.responseModel,
                 active: newConfigRecord.active,
+                description: newConfigRecord.description,
                 services: newConfigRecord.providers
                     .filter(p => p.provider && p.model)
                     .map(provider => ({
@@ -187,6 +189,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                     request_model: ruleData.request_model,
                     response_model: ruleData.response_model,
                     active: ruleData.active,
+                    description: ruleData.description,
                     services: ruleData.services,
                 });
                 return true;

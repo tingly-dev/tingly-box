@@ -65,6 +65,7 @@ const SummarySection = styled(Box, {
     shouldForwardProp: (prop) => prop !== 'collapsible',
 })<{ collapsible?: boolean }>(({ theme, collapsible }) => ({
     display: 'flex',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: theme.spacing(2),
@@ -544,6 +545,28 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                         >
                             <ExpandMoreIcon />
                         </IconButton>
+                    )}
+                </Box>
+                <Box
+                    onClick={(e) => e.stopPropagation()}
+                    sx={{
+                        width: '100%',
+                        flexBasis: '100%',
+                        mt: 1,
+                        minHeight: '20px',
+                    }}
+                >
+                    {record.description && (
+                        <Typography
+                            variant="body2"
+                            sx={{
+                                color: 'text.secondary',
+                                fontSize: '0.8rem',
+                                fontStyle: 'italic',
+                            }}
+                        >
+                            {record.description}
+                        </Typography>
                     )}
                 </Box>
             </SummarySection>

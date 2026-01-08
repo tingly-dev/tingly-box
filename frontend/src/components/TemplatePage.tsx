@@ -177,6 +177,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
                 request_model: updated.requestModel,
                 response_model: updated.responseModel,
                 active: updated.active,
+                description: updated.description,
                 services: updated.providers
                     .filter(p => p.provider && p.model)
                     .map(provider => ({
@@ -196,6 +197,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
                         request_model: ruleData.request_model,
                         response_model: ruleData.response_model,
                         active: ruleData.active,
+                        description: ruleData.description,
                         services: ruleData.services,
                     });
                 } else {

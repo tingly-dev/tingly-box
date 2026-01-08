@@ -18,6 +18,7 @@ export interface ConfigRecord {
     responseModel: string;
     active: boolean;
     providers: ConfigProvider[];
+    description?: string;
 }
 
 export interface Rule {
@@ -25,6 +26,7 @@ export interface Rule {
     request_model: string;
     response_model?: string;
     active?: boolean;
+    description?: string;
     services?: Array<{
         id?: string;
         uuid?: string;
