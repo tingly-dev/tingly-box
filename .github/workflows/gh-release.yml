@@ -148,23 +148,16 @@ jobs:
         working-directory: ./frontend
 
       - name: Install UPX
+        if: runner.os != 'macOS'
         run: |
           if [ "${{ runner.os }}" == "Windows" ]; then
-            curl -L -o upx.zip https://github.com/upx/upx/releases/download/v4.2.2/upx-4.2.2-win64.zip
+            curl -L -o upx.zip https://github.com/upx/upx/releases/download/v5.1.0/upx-5.1.0-win64.zip
             unzip -q upx.zip
-            echo "$PWD/upx-4.2.2-win64" >> $GITHUB_PATH
-          elif [ "${{ runner.os }}" == "macOS" ]; then
-            if [ "${{ matrix.goarch }}" == "arm64" ]; then
-              curl -L -o upx.tgz https://github.com/upx/upx/releases/download/v4.2.2/upx-4.2.2-macos_arm64.tar.xz
-            else
-              curl -L -o upx.tgz https://github.com/upx/upx/releases/download/v4.2.2/upx-4.2.2-macos_x86_64.tar.xz
-            fi
-            tar -xf upx.tgz
-            echo "$PWD/upx-4.2.2-*" >> $GITHUB_PATH
+            echo "$PWD/upx-5.1.0-win64" >> $GITHUB_PATH
           else
-            curl -L -o upx.tar.xz https://github.com/upx/upx/releases/download/v4.2.2/upx-4.2.2-amd64_linux.tar.xz
+            curl -L -o upx.tar.xz https://github.com/upx/upx/releases/download/v5.1.0/upx-5.1.0-amd64_linux.tar.xz
             tar -xf upx.tar.xz
-            echo "$PWD/upx-4.2.2-amd64_linux" >> $GITHUB_PATH
+            echo "$PWD/upx-5.1.0-amd64_linux" >> $GITHUB_PATH
           fi
 
       - name: Build Go binary (${{ matrix.suffix }})
@@ -192,16 +185,10 @@ jobs:
           [ "${{ matrix.goos }}" != "windows" ] && chmod +x ./dist/tingly-box-${{ matrix.suffix }}${{ matrix.exe }} || true
 
       - name: Compress binary with UPX
+        if: runner.os != 'macOS'
         shell: bash
         run: |
           BINARY="./dist/tingly-box-${{ matrix.suffix }}${{ matrix.exe }}"
-
-          # Skip UPX compression for Intel macOS
-          if [ "${{ matrix.goos }}" == "darwin" ] && [ "${{ matrix.goarch }}" == "amd64" ]; then
-            echo "⚠️ Skipping UPX compression for macOS AMD64 (Intel)"
-            ls -lh "$BINARY" || true
-            exit 0
-          fi
 
           echo "Original size:"
           ls -lh "$BINARY" || true
