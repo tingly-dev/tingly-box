@@ -116,7 +116,7 @@ func (p *ClientPool) GetAnthropicClient(provider *typ.Provider, model string) *l
 
 // generateProviderKey creates a unique key for a provider
 func (p *ClientPool) generateProviderKey(provider *typ.Provider, model string) string {
-	return fmt.Sprintf("%s:%s:%s:%s", provider.UUID, model, hashToken(provider.ProxyURL))
+	return fmt.Sprintf("%s:%s:%s", provider.UUID, model, hashToken(provider.ProxyURL))
 }
 
 // hashToken creates a secure hash of the token for key generation
