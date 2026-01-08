@@ -384,6 +384,9 @@ jobs:
         run: |
           mkdir -p release
 
+          # Copy LICENSE file
+          cp LICENSE release/LICENSE.txt
+
           # Process CLI binaries
           if [ -d "dist/cli" ]; then
             cd dist/cli
@@ -419,6 +422,7 @@ jobs:
           files: |
             release/*.zip
             release/checksums.txt
+            release/LICENSE.txt
           generate_release_notes: true
           draft: false
           prerelease: false
