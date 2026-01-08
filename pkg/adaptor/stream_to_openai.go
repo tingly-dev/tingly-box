@@ -1,9 +1,9 @@
 package adaptor
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -23,10 +23,12 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 			// Try to send an error event if possible
 			if c.Writer != nil {
 				c.Writer.WriteHeader(http.StatusInternalServerError)
-				c.Writer.Write([]byte("data: {\"error\":{\"message\":\"Internal streaming error\",\"type\":\"internal_error\"}}\n\n"))
-				if flusher, ok := c.Writer.(http.Flusher); ok {
-					flusher.Flush()
-				}
+				c.SSEvent("", map[string]interface{}{
+					"error": map[string]interface{}{
+						"message": "Internal streaming error",
+						"type":    "internal_error",
+					},
+				})
 			}
 		}
 		// Ensure stream is always closed
@@ -44,13 +46,6 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 	c.Header("Connection", "keep-alive")
 	c.Header("Access-Control-Allow-Origin", "*")
 	c.Header("Access-Control-Allow-Headers", "Cache-Control")
-
-	// Create a flusher to ensure immediate sending of data
-	flusher, ok := c.Writer.(http.Flusher)
-	if !ok {
-
-		return errors.New("Streaming not supported by this connection")
-	}
 
 	// Track streaming state
 	var (
@@ -81,7 +76,7 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 					},
 				},
 			}
-			sendOpenAIStreamChunk(c, chunk, flusher)
+			sendOpenAIStreamChunk(c, chunk)
 
 		case "content_block_start":
 			// Content block starting (usually text)
@@ -109,7 +104,7 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 						},
 					},
 				}
-				sendOpenAIStreamChunk(c, chunk, flusher)
+				sendOpenAIStreamChunk(c, chunk)
 			}
 
 		case "content_block_stop":
@@ -146,10 +141,9 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 				}
 			}
 
-			sendOpenAIStreamChunk(c, chunk, flusher)
+			sendOpenAIStreamChunk(c, chunk)
 			// Send final [DONE] message
-			c.Writer.Write([]byte("data: [DONE]\n\n"))
-			flusher.Flush()
+			c.SSEvent("", "[DONE]")
 			return nil
 		}
 	}
@@ -163,21 +157,13 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 		}
 		logrus.Errorf("Anthropic stream error: %v", err)
 		// Send error event
-		errorChunk := map[string]interface{}{
+		c.SSEvent("", map[string]interface{}{
 			"error": map[string]interface{}{
 				"message": err.Error(),
 				"type":    "stream_error",
 				"code":    "stream_failed",
 			},
-		}
-		errorJSON, marshalErr := json.Marshal(errorChunk)
-		if marshalErr != nil {
-			logrus.Errorf("Failed to marshal error chunk: %v", marshalErr)
-			c.Writer.Write([]byte("data: {\"error\":{\"message\":\"Failed to marshal error\",\"type\":\"internal_error\"}}\n\n"))
-		} else {
-			c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", string(errorJSON))))
-		}
-		flusher.Flush()
+		})
 		return nil
 	}
 
@@ -185,12 +171,6 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 }
 
 // sendOpenAIStreamChunk helper function to send a chunk in OpenAI format
-func sendOpenAIStreamChunk(c *gin.Context, chunk map[string]interface{}, flusher http.Flusher) {
-	chunkJSON, err := json.Marshal(chunk)
-	if err != nil {
-		logrus.Errorf("Failed to marshal OpenAI stream chunk: %v", err)
-		return
-	}
-	c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", string(chunkJSON))))
-	flusher.Flush()
+func sendOpenAIStreamChunk(c *gin.Context, chunk map[string]interface{}) {
+	c.SSEvent("", chunk)
 }
