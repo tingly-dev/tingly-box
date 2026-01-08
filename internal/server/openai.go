@@ -316,8 +316,8 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 // forwardOpenAIRequest forwards the request to the selected provider using OpenAI library
 func (s *Server) forwardOpenAIRequest(provider *typ.Provider, req *openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
 	// Get or create OpenAI client wrapper from pool
-	wrapper := s.clientPool.GetOpenAIClient(provider, string(req.Model))
-	logrus.Infof("provider: %s", provider.Name)
+	wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
+	logrus.Infof("provider: %s, model: %s", provider.Name, req.Model)
 
 	// Make the request using wrapper method
 	chatCompletion, err := wrapper.ChatCompletionsNew(context.Background(), *req)

@@ -50,6 +50,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 
 	// Check if beta parameter is set to true
 	beta := c.Query("beta") == "true"
+	logrus.Debugf("scenario: %s beta: %v", scenario, beta)
 
 	// Read the raw request body first for debugging purposes
 	bodyBytes, err := c.GetRawData()
@@ -202,6 +203,7 @@ func (s *Server) AnthropicListModels(c *gin.Context) {
 func (s *Server) AnthropicCountTokens(c *gin.Context) {
 	// Check if beta parameter is set to true
 	beta := c.Query("beta") == "true"
+	logrus.Debugf("scenario: %s beta: %v", c.Query("scenario"), beta)
 
 	// Read the raw request body first for debugging purposes
 	bodyBytes, err := c.GetRawData()
