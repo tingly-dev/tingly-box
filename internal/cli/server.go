@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"syscall"
@@ -184,15 +185,39 @@ type startServerOptions struct {
 
 // startServer handles the server starting logic
 func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
+	// Set logrus level based on debug flag
+	if opts.EnableDebug {
+		appConfig.SetDebug(true)
+		logrus.SetLevel(logrus.DebugLevel)
+		logrus.Info("Debug mode enabled - detailed logging will be shown")
+	} else {
+		logrus.SetLevel(logrus.InfoLevel)
+	}
+
+	// Determine log file path - always use log file with rotation
+	logFile := opts.LogFile
+	if logFile == "" {
+		// Default to config directory
+		logFile = appConfig.ConfigDir() + "/log/tingly-box.log"
+	}
+
+	// Create rotating log writer
+	logWriter := daemon.NewLogger(daemon.DefaultLogRotationConfig(logFile))
+
+	// Set up logrus to write to both stdout and file with rotation
+	if opts.Daemon {
+		// In daemon mode, only write to file ba
+		logrus.SetOutput(logWriter)
+	} else {
+		// In non-daemon mode, write to both stdout and file
+		multiWriter := io.MultiWriter(os.Stdout, logWriter)
+		logrus.SetOutput(multiWriter)
+	}
+
+	logrus.Infof("Logging to file: %s (with rotation)", logFile)
+
 	// Handle daemon mode
 	if opts.Daemon {
-		// Determine log file path
-		logFile := opts.LogFile
-		if logFile == "" {
-			// Default to config directory
-			logFile = appConfig.ConfigDir() + "/tingly-box.log"
-		}
-
 		// If not yet daemonized, fork and exit
 		if !daemon.IsDaemonProcess() {
 			// Resolve port for display
@@ -200,8 +225,6 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 			if port == 0 {
 				port = appConfig.GetServerPort()
 			}
-
-			_ = daemon.NewLogger(daemon.DefaultLogRotationConfig(logFile))
 
 			fmt.Printf("Starting daemon process...\n")
 			fmt.Printf("Logging to: %s\n", logFile)
@@ -222,14 +245,6 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 			}
 			// Daemonize() calls os.Exit(0), so we never reach here
 		}
-
-		// In child process - redirect stdout and stderr to log file
-		logWriter := daemon.NewLogger(daemon.DefaultLogRotationConfig(logFile))
-
-		// Also set up logrus to write to file
-		logrus.SetOutput(logWriter)
-
-		_ = logWriter
 	}
 
 	var port int = opts.Port
