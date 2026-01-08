@@ -33,6 +33,25 @@ jobs:
           fetch-depth: 0
           submodules: true
 
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Setup SSH for GitHub
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.RELEASE_REPO_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+          # Test SSH connectivity
+          echo "Testing SSH connectivity..."
+          ssh -i ~/.ssh/id_ed25519 -T git@github.com || echo "SSH connection test completed"
+
       - name: Set release tag
         id: tag
         run: |
@@ -162,15 +181,9 @@ jobs:
           cd ..
 
       - name: Clone release repository
-        env:
-          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
         run: |
-          git clone https://${{ secrets.GH_TOKEN }}@github.com/${{ env.RELEASE_REPO }}.git target-repo
+          git clone "git@github.com:${{ env.RELEASE_REPO }}.git" target-repo
           cd target-repo
-
-          # Configure git
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
 
           # Remove all existing files except .git
           find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} \;
@@ -184,7 +197,6 @@ jobs:
       - name: Commit and push to release repository
         env:
           RELEASE_TAG: ${{ steps.tag.outputs.tag }}
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           cd target-repo
 
