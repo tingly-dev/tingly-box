@@ -156,6 +156,11 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 
 	// Check for stream errors
 	if err := stream.Err(); err != nil {
+		// EOF is expected when stream ends normally
+		if errors.Is(err, io.EOF) {
+			logrus.Info("Anthropic stream ended normally (EOF)")
+			return nil
+		}
 		logrus.Errorf("Anthropic stream error: %v", err)
 		// Send error event
 		errorChunk := map[string]interface{}{
