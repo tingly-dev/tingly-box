@@ -2,6 +2,7 @@ package llmclient
 
 import (
 	"context"
+	"net/http"
 	"tingly-box/internal/llmclient/httpclient"
 	"tingly-box/internal/typ"
 
@@ -13,8 +14,10 @@ import (
 
 // OpenAIClient wraps the OpenAI SDK client
 type OpenAIClient struct {
-	client   openai.Client
-	provider *typ.Provider
+	client     openai.Client
+	provider   *typ.Provider
+	debugMode  bool
+	httpClient *http.Client
 }
 
 // defaultNewOpenAIClient creates a new OpenAI client wrapper
@@ -24,18 +27,23 @@ func defaultNewOpenAIClient(provider *typ.Provider) (*OpenAIClient, error) {
 		option.WithBaseURL(provider.APIBase),
 	}
 
+	// Create base HTTP client
+	var httpClient *http.Client
 	// Add proxy if configured
 	if provider.ProxyURL != "" {
-		httpClient := httpclient.CreateHTTPClientWithProxy(provider.ProxyURL)
+		httpClient = httpclient.CreateHTTPClientWithProxy(provider.ProxyURL)
 		options = append(options, option.WithHTTPClient(httpClient))
 		logrus.Infof("Using proxy for OpenAI client: %s", provider.ProxyURL)
+	} else {
+		httpClient = http.DefaultClient
 	}
 
 	openaiClient := openai.NewClient(options...)
 
 	return &OpenAIClient{
-		client:   openaiClient,
-		provider: provider,
+		client:     openaiClient,
+		provider:   provider,
+		httpClient: httpClient,
 	}, nil
 }
 
@@ -48,6 +56,19 @@ func (c *OpenAIClient) ProviderType() ProviderType {
 func (c *OpenAIClient) Close() error {
 	// OpenAI client doesn't need explicit closing
 	return nil
+}
+
+// SetMode sets the client mode. When debug is true, all API headers are logged as indented JSON.
+func (c *OpenAIClient) SetMode(debug bool) {
+	c.debugMode = debug
+	if debug {
+		c.applyDebugMode()
+	}
+}
+
+// applyDebugMode wraps the HTTP client with a debug round tripper
+func (c *OpenAIClient) applyDebugMode() {
+	c.httpClient.Transport = NewDebugRoundTripper(c.httpClient.Transport)
 }
 
 // Client returns the underlying OpenAI SDK client

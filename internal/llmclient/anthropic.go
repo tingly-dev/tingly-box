@@ -2,6 +2,7 @@ package llmclient
 
 import (
 	"context"
+	"net/http"
 	"strings"
 	"tingly-box/internal/llmclient/httpclient"
 	"tingly-box/internal/typ"
@@ -15,8 +16,10 @@ import (
 
 // AnthropicClient wraps the Anthropic SDK client
 type AnthropicClient struct {
-	client   anthropic.Client
-	provider *typ.Provider
+	client     anthropic.Client
+	provider   *typ.Provider
+	debugMode  bool
+	httpClient *http.Client
 }
 
 // defaultNewAnthropicClient creates a new Anthropic client wrapper
@@ -32,13 +35,15 @@ func defaultNewAnthropicClient(provider *typ.Provider) (*AnthropicClient, error)
 		anthropicOption.WithBaseURL(apiBase),
 	}
 
+	// Create base HTTP client
+	var httpClient *http.Client
 	// Add proxy and/or custom headers if configured
 	if provider.ProxyURL != "" || provider.AuthType == typ.AuthTypeOAuth {
 		var providerType oauth.ProviderType
 		if provider.OAuthDetail != nil {
 			providerType = oauth.ProviderType(provider.OAuthDetail.ProviderType)
 		}
-		httpClient := httpclient.CreateHTTPClientForProvider(providerType, provider.ProxyURL, provider.AuthType == typ.AuthTypeOAuth)
+		httpClient = httpclient.CreateHTTPClientForProvider(providerType, provider.ProxyURL, provider.AuthType == typ.AuthTypeOAuth)
 
 		if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
 			logrus.Infof("Using custom headers/params for OAuth provider type: %s", provider.OAuthDetail.ProviderType)
@@ -48,13 +53,16 @@ func defaultNewAnthropicClient(provider *typ.Provider) (*AnthropicClient, error)
 		}
 
 		options = append(options, anthropicOption.WithHTTPClient(httpClient))
+	} else {
+		httpClient = http.DefaultClient
 	}
 
 	anthropicClient := anthropic.NewClient(options...)
 
 	return &AnthropicClient{
-		client:   anthropicClient,
-		provider: provider,
+		client:     anthropicClient,
+		provider:   provider,
+		httpClient: httpClient,
 	}, nil
 }
 
@@ -67,6 +75,19 @@ func (c *AnthropicClient) ProviderType() ProviderType {
 func (c *AnthropicClient) Close() error {
 	// Anthropic client doesn't need explicit closing
 	return nil
+}
+
+// SetMode sets the client mode. When debug is true, all API headers are logged as indented JSON.
+func (c *AnthropicClient) SetMode(debug bool) {
+	c.debugMode = debug
+	if debug {
+		c.applyDebugMode()
+	}
+}
+
+// applyDebugMode wraps the HTTP client with a debug round tripper
+func (c *AnthropicClient) applyDebugMode() {
+	c.httpClient.Transport = NewDebugRoundTripper(c.httpClient.Transport)
 }
 
 // Client returns the underlying Anthropic SDK client
