@@ -147,6 +147,26 @@ jobs:
           pnpm build && mkdir -p ../internal/web/dist && cp -R dist/* ../internal/web/dist/
         working-directory: ./frontend
 
+      - name: Install UPX
+        run: |
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            curl -L -o upx.zip https://github.com/upx/upx/releases/download/v4.2.2/upx-4.2.2-win64.zip
+            unzip -q upx.zip
+            echo "$PWD/upx-4.2.2-win64" >> $GITHUB_PATH
+          elif [ "${{ runner.os }}" == "macOS" ]; then
+            if [ "${{ matrix.goarch }}" == "arm64" ]; then
+              curl -L -o upx.tgz https://github.com/upx/upx/releases/download/v4.2.2/upx-4.2.2-macos_arm64.tar.xz
+            else
+              curl -L -o upx.tgz https://github.com/upx/upx/releases/download/v4.2.2/upx-4.2.2-macos_x86_64.tar.xz
+            fi
+            tar -xf upx.tgz
+            echo "$PWD/upx-4.2.2-*" >> $GITHUB_PATH
+          else
+            curl -L -o upx.tar.xz https://github.com/upx/upx/releases/download/v4.2.2/upx-4.2.2-amd64_linux.tar.xz
+            tar -xf upx.tar.xz
+            echo "$PWD/upx-4.2.2-amd64_linux" >> $GITHUB_PATH
+          fi
+
       - name: Build Go binary (${{ matrix.suffix }})
         shell: bash
         run: |
@@ -170,6 +190,20 @@ jobs:
 
           # Make binary executable for non-Windows
           [ "${{ matrix.goos }}" != "windows" ] && chmod +x ./dist/tingly-box-${{ matrix.suffix }}${{ matrix.exe }} || true
+
+      - name: Compress binary with UPX
+        shell: bash
+        run: |
+          BINARY="./dist/tingly-box-${{ matrix.suffix }}${{ matrix.exe }}"
+
+          echo "Original size:"
+          ls -lh "$BINARY" || true
+
+          # Compress with UPX (best compression, preserve permissions)
+          upx --best --lzma "$BINARY"
+
+          echo "Compressed size:"
+          ls -lh "$BINARY" || true
 
       - name: Upload build artifact (${{ matrix.suffix }})
         uses: actions/upload-artifact@v4
