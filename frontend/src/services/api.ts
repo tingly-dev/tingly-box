@@ -627,6 +627,41 @@ export const api = {
     // Direct access to raw API instances for advanced usage
     // Usage: const { providersApi, modelsApi } = await api.instances();
     instances: getApiInstances,
+
+    // Dashboard API calls
+    getLoadBalancerStats: async (): Promise<any> => {
+        return fetchUIAPI('/load-balancer/stats');
+    },
+
+    getLogStats: async (): Promise<any> => {
+        try {
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.logsApi.apiV1LogStatsGet();
+            return response.data;
+        } catch (error: any) {
+            console.error('Failed to get log stats:', error);
+            return { total: 0, level_counts: {} };
+        }
+    },
+
+    getLogs: async (limit: number = 100): Promise<any> => {
+        try {
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.logsApi.apiV1LogGet(limit);
+            return response.data;
+        } catch (error: any) {
+            console.error('Failed to get logs:', error);
+            return { logs: [], total: 0 };
+        }
+    },
+
+    getStatsHistory: async (days: number = 7, provider?: string): Promise<any> => {
+        let url = `/load-balancer/stats/history?days=${days}`;
+        if (provider && provider !== 'all') {
+            url += `&provider=${encodeURIComponent(provider)}`;
+        }
+        return fetchUIAPI(url);
+    },
 };
 
 export default api;

@@ -20,6 +20,23 @@ import (
 
 const defaultServiceTimeWindow = 300
 
+// TokenUsageHistory stores hourly aggregated token usage for historical tracking
+type TokenUsageHistory struct {
+	ID           uint      `gorm:"primaryKey"`
+	Provider     string    `gorm:"index:idx_history_lookup"`
+	Model        string    `gorm:"index:idx_history_lookup"`
+	HourStart    time.Time `gorm:"index:idx_history_lookup"`
+	RequestCount int64     `gorm:"column:request_count"`
+	InputTokens  int64     `gorm:"column:input_tokens"`
+	OutputTokens int64     `gorm:"column:output_tokens"`
+	UpdatedAt    time.Time
+}
+
+// TableName specifies the table name for TokenUsageHistory
+func (TokenUsageHistory) TableName() string {
+	return "token_usage_history"
+}
+
 // ServiceStatsRecord is the GORM model for persisting service statistics
 type ServiceStatsRecord struct {
 	// Composite primary key: provider + model (stats are global, not per-rule)
@@ -74,7 +91,7 @@ func NewStatsStore(baseDir string) (*StatsStore, error) {
 	}
 
 	// Auto-migrate schema, if we add column it would create or update the database table to match the struct definition
-	if err := db.AutoMigrate(&ServiceStatsRecord{}); err != nil {
+	if err := db.AutoMigrate(&ServiceStatsRecord{}, &TokenUsageHistory{}); err != nil {
 		return nil, fmt.Errorf("failed to migrate stats database: %w", err)
 	}
 	log.Printf("Stats store initialization completed")
@@ -313,4 +330,129 @@ func (r *ServiceStatsRecord) toServiceStats() loadbalance.ServiceStats {
 		WindowOutputTokens:   r.WindowOutputTokens,
 		TimeWindow:           r.TimeWindow,
 	}
+}
+
+// RecordHourlyUsage records token usage into the current hour bucket
+func (ss *StatsStore) RecordHourlyUsage(provider, model string, inputTokens, outputTokens int64) error {
+	ss.mu.Lock()
+	defer ss.mu.Unlock()
+
+	// Get the start of current hour
+	now := time.Now()
+	hourStart := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, now.Location())
+
+	// Try to find existing record for this hour
+	var record TokenUsageHistory
+	err := ss.db.Where("provider = ? AND model = ? AND hour_start = ?", provider, model, hourStart).
+		First(&record).Error
+
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		// Create new record
+		record = TokenUsageHistory{
+			Provider:     provider,
+			Model:        model,
+			HourStart:    hourStart,
+			RequestCount: 1,
+			InputTokens:  inputTokens,
+			OutputTokens: outputTokens,
+			UpdatedAt:    now,
+		}
+		return ss.db.Create(&record).Error
+	} else if err != nil {
+		return err
+	}
+
+	// Update existing record
+	record.RequestCount++
+	record.InputTokens += inputTokens
+	record.OutputTokens += outputTokens
+	record.UpdatedAt = now
+
+	return ss.db.Save(&record).Error
+}
+
+// GetHistory returns aggregated hourly token usage history for the specified number of days
+func (ss *StatsStore) GetHistory(days int) ([]TokenUsageHistory, error) {
+	ss.mu.Lock()
+	defer ss.mu.Unlock()
+
+	cutoff := time.Now().Add(-time.Duration(days) * 24 * time.Hour)
+
+	var records []TokenUsageHistory
+	err := ss.db.Where("hour_start >= ?", cutoff).
+		Order("hour_start ASC").
+		Find(&records).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return records, nil
+}
+
+// GetHistoryAggregated returns hourly aggregated history across all providers/models
+// If provider is not empty, filters by that provider
+func (ss *StatsStore) GetHistoryAggregated(days int, provider string) ([]map[string]interface{}, error) {
+	ss.mu.Lock()
+	defer ss.mu.Unlock()
+
+	cutoff := time.Now().Add(-time.Duration(days) * 24 * time.Hour)
+
+	var results []struct {
+		HourStart    time.Time
+		InputTokens  int64
+		OutputTokens int64
+		RequestCount int64
+	}
+
+	query := ss.db.Model(&TokenUsageHistory{}).
+		Select("hour_start, SUM(input_tokens) as input_tokens, SUM(output_tokens) as output_tokens, SUM(request_count) as request_count").
+		Where("hour_start >= ?", cutoff)
+
+	if provider != "" {
+		query = query.Where("provider = ?", provider)
+	}
+
+	err := query.Group("hour_start").
+		Order("hour_start ASC").
+		Scan(&results).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	history := make([]map[string]interface{}, len(results))
+	for i, r := range results {
+		history[i] = map[string]interface{}{
+			"hour":          r.HourStart.Format(time.RFC3339),
+			"input_tokens":  r.InputTokens,
+			"output_tokens": r.OutputTokens,
+			"request_count": r.RequestCount,
+		}
+	}
+
+	return history, nil
+}
+
+// GetTotalTokens returns the total token usage from history
+// If provider is not empty, filters by that provider
+func (ss *StatsStore) GetTotalTokens(provider string) (inputTokens, outputTokens int64, err error) {
+	ss.mu.Lock()
+	defer ss.mu.Unlock()
+
+	var result struct {
+		InputTokens  int64
+		OutputTokens int64
+	}
+
+	query := ss.db.Model(&TokenUsageHistory{}).
+		Select("COALESCE(SUM(input_tokens), 0) as input_tokens, COALESCE(SUM(output_tokens), 0) as output_tokens")
+
+	if provider != "" {
+		query = query.Where("provider = ?", provider)
+	}
+
+	err = query.Scan(&result).Error
+
+	return result.InputTokens, result.OutputTokens, err
 }
