@@ -32,13 +32,46 @@ import type { Provider } from '../types/provider';
 import { ApiStyleBadge } from "./ApiStyleBadge.tsx";
 import type { ConfigProvider, ConfigRecord } from './RuleGraphTypes.ts';
 
-// Unified node dimensions
-const NODE_DIMENSIONS = {
-    width: 320,
-    height: 120,
-    heightCompact: 60,
-    padding: 12, // theme.spacing(1.5)
+// Unified RuleGraph style configuration
+const RULE_GRAPH_STYLES = {
+    // Node dimensions
+    node: {
+        width: 320,
+        height: 120,
+        heightCompact: 60,
+        padding: 10,  // Container padding
+    },
+    // Spacing
+    spacing: {
+        xs: 4,   // 0.5
+        sm: 8,   // 1
+        md: 12,  // 1.5
+        lg: 16,  // 2
+        xl: 16,  // 3
+    },
+    // Header
+    header: {
+        paddingX: 16,  // spacing(2)
+        paddingY: 8,   // spacing(1)
+    },
+    // Graph container
+    graphContainer: {
+        paddingX: 16,  // spacing(2)
+        paddingY: 12,  // spacing(1.5)
+        marginX: 16,   // spacing(2)
+        marginY: 8,    // spacing(1)
+    },
+    // Provider node internal
+    providerNode: {
+        badgeHeight: 5,    // API Style badge
+        fieldHeight: 5,   // Provider/Model fields
+        fieldPadding: 2,      // Internal padding
+        elementMargin: 1,     // Margin between elements
+    },
 } as const;
+
+// Shorthand for common values
+const { node, spacing, header, graphContainer, providerNode } = RULE_GRAPH_STYLES;
 
 interface RuleGraphProps {
     record: ConfigRecord;
@@ -76,7 +109,7 @@ const SummarySection = styled(Box, {
     flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: theme.spacing(1, 2),
+    padding: `${header.paddingY}px ${header.paddingX}px`,
     cursor: collapsible ? 'pointer' : 'default',
     ...(collapsible && {
         '&:hover': {
@@ -87,10 +120,10 @@ const SummarySection = styled(Box, {
 
 // Graph Container for expanded view
 const GraphContainer = styled(Box)(({ theme }) => ({
-    padding: theme.spacing(2),
+    padding: `${graphContainer.paddingY}px ${graphContainer.paddingX}px`,
     backgroundColor: 'grey.50',
     borderRadius: theme.shape.borderRadius,
-    margin: theme.spacing(1, 2, 0, 2),
+    margin: `${graphContainer.marginY}px ${graphContainer.marginX}px 0`,
 }));
 
 const GraphRow = styled(Box)(({ theme }) => ({
@@ -112,13 +145,13 @@ const ProviderNode = styled(Box)(({ theme }) => ({
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    padding: theme.spacing(1.5),
+    padding: node.padding,
     borderRadius: theme.shape.borderRadius,
     border: '1px solid',
     borderColor: 'divider',
     backgroundColor: 'background.paper',
-    width: NODE_DIMENSIONS.width,
-    height: NODE_DIMENSIONS.height,
+    width: node.width,
+    height: node.height,
     boxShadow: theme.shadows[2],
     transition: 'all 0.2s ease-in-out',
     position: 'relative',
@@ -263,8 +296,8 @@ const StyledModelNode = styled(Box, {
     borderColor: 'divider',
     backgroundColor: 'background.paper',
     textAlign: 'center',
-    width: NODE_DIMENSIONS.width,
-    height: compact ? NODE_DIMENSIONS.heightCompact : NODE_DIMENSIONS.height,
+    width: node.width,
+    height: compact ? node.heightCompact : node.height,
     boxShadow: theme.shadows[2],
     transition: 'all 0.2s ease-in-out',
     position: 'relative',
@@ -327,32 +360,56 @@ const ProviderNodeComponent: React.FC<{
                 <ProviderNode onClick={onNodeClick} sx={{ cursor: active ? 'pointer' : 'default' }}>
                     {/* API Style Title */}
                     {provider.provider && (
-                        <Box sx={{ width: '100%', mb: 0.5 }}>
+                        <Box sx={{ width: '100%', mb: providerNode.elementMargin }}>
                             <ApiStyleBadge
                                 apiStyle={apiStyle}
                                 sx={{
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    p: 0.5,
+                                    p: providerNode.fieldPadding,
                                     borderRadius: 1,
                                     transition: 'all 0.2s',
                                     width: '100%',
-                                    minHeight: '22px'
+                                    maxHeight: providerNode.badgeHeight
                                 }}
                             />
                         </Box>
                     )}
 
                     {/* Provider and Model in same row */}
-                    <Box sx={{ width: '100%', display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                    <Box sx={{ width: '100%', display: 'flex', alignItems: 'center', gap: 1, mb: providerNode.elementMargin }}>
                         {/* Provider */}
-                        <Tooltip title={providerUuidToName[provider.provider] || t('rule.graph.selectProvider')} arrow>
+                        <Box
+                            sx={{
+                                flex: 1,
+                                p: providerNode.fieldPadding,
+                                border: '1px solid',
+                                borderColor: 'text.primary',
+                                borderRadius: 1,
+                                backgroundColor: 'background.paper',
+                                transition: 'all 0.2s',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                maxHeight: providerNode.fieldHeight,
+                                overflow: 'hidden',
+                            }}
+                        >
+                            <Tooltip title={providerUuidToName[provider.provider] || t('rule.graph.selectProvider')} arrow>
+                                <Typography variant="body2" color="text.primary" noWrap sx={{ fontSize: '0.8rem', width: '100%', textAlign: 'center' }}>
+                                    {providerUuidToName[provider.provider] || t('rule.graph.selectProvider')}
+                                </Typography>
+                            </Tooltip>
+                        </Box>
+
+                        {/* Model */}
+                        {provider.provider && (
                             <Box
                                 sx={{
                                     flex: 1,
-                                    p: 0.5,
-                                    border: '1px solid',
+                                    p: providerNode.fieldPadding,
+                                    border: '1px dashed',
                                     borderColor: 'text.primary',
                                     borderRadius: 1,
                                     backgroundColor: 'background.paper',
@@ -360,35 +417,11 @@ const ProviderNodeComponent: React.FC<{
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    minHeight: '32px',
+                                    maxHeight: providerNode.fieldHeight,
                                     overflow: 'hidden',
                                 }}
                             >
-                                <Typography variant="body2" color="text.primary" noWrap sx={{ fontSize: '0.8rem', width: '100%', textAlign: 'center' }}>
-                                    {providerUuidToName[provider.provider] || t('rule.graph.selectProvider')}
-                                </Typography>
-                            </Box>
-                        </Tooltip>
-
-                        {/* Model */}
-                        {provider.provider && (
-                            <Tooltip title={provider.model || t('rule.graph.selectModel')} arrow>
-                                <Box
-                                    sx={{
-                                        flex: 1,
-                                        p: 0.5,
-                                        border: '1px dashed',
-                                        borderColor: 'text.primary',
-                                        borderRadius: 1,
-                                        backgroundColor: 'background.paper',
-                                        transition: 'all 0.2s',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        minHeight: '32px',
-                                        overflow: 'hidden',
-                                    }}
-                                >
+                                <Tooltip title={provider.model || t('rule.graph.selectModel')} arrow>
                                     <Typography
                                         variant="body2"
                                         color="text.primary"
@@ -397,8 +430,8 @@ const ProviderNodeComponent: React.FC<{
                                     >
                                         {provider.model || t('rule.graph.selectModel')}
                                     </Typography>
-                                </Box>
-                            </Tooltip>
+                                </Tooltip>
+                            </Box>
                         )}
                     </Box>
 
@@ -586,8 +619,8 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
 
             {/* Expanded Content - Graph View */}
             <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                <CardContent sx={{ pt: 0 }}>
-                    <Stack spacing={2}>
+                <CardContent sx={{ pt: 0, pb: 1 }}>
+                    <Stack spacing={1.5}>
                         {/* Graph Visualization */}
                         <GraphContainer>
                             <GraphRow>
@@ -712,8 +745,8 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                                                     }}
                                                     disabled={!record.active || saving}
                                                     sx={{
-                                                        width: NODE_DIMENSIONS.width,
-                                                        height: NODE_DIMENSIONS.height,
+                                                        width: node.width,
+                                                        height: node.height,
                                                         border: '2px dashed',
                                                         borderColor: 'divider',
                                                         borderRadius: 2,
