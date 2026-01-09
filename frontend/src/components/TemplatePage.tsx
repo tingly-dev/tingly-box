@@ -65,6 +65,17 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
         try {
             const result = await api.getProviderModelsByUUID(providerUuid);
             if (result.success && result.data) {
+                // If GET returns empty list, auto-fetch from Provider API
+                if (!result.data.models || result.data.models.length === 0) {
+                    const refreshResult = await api.updateProviderModelsByUUID(providerUuid);
+                    if (refreshResult.success && refreshResult.data) {
+                        setProviderModelsByUuid((prev: any) => ({
+                            ...prev,
+                            [providerUuid]: refreshResult.data,
+                        }));
+                    }
+                    return;
+                }
                 setProviderModelsByUuid((prev: any) => ({
                     ...prev,
                     [providerUuid]: result.data,
@@ -125,7 +136,12 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
         setModelSelectMode(mode);
         setEditingProviderUuid(providerUuid || null);
         setModelSelectDialogOpen(true);
-    }, []);
+
+        // Auto-fetch models for the first provider when dialog opens
+        if (providers.length > 0) {
+            handleFetchModels(providers[0].uuid);
+        }
+    }, [providers, handleFetchModels]);
 
     const handleModelSelect = useCallback((option: ProviderSelectTabOption) => {
         if (!currentConfigRecord || !currentRuleUuid) return;
