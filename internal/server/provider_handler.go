@@ -20,6 +20,7 @@ func maskProviderForResponse(provider *typ.Provider) ProviderResponse {
 		APIStyle:      string(provider.APIStyle),
 		NoKeyRequired: provider.NoKeyRequired,
 		Enabled:       provider.Enabled,
+		ProxyURL:      provider.ProxyURL,
 		AuthType:      string(provider.AuthType),
 	}
 
@@ -140,6 +141,7 @@ func (s *Server) CreateProvider(c *gin.Context) {
 		Token:         req.Token,
 		NoKeyRequired: req.NoKeyRequired,
 		Enabled:       req.Enabled,
+		ProxyURL:      req.ProxyURL,
 	}
 
 	err = s.config.AddProvider(provider)
@@ -280,6 +282,9 @@ func (s *Server) UpdateProvider(c *gin.Context) {
 	}
 	if req.Enabled != nil {
 		provider.Enabled = *req.Enabled
+	}
+	if req.ProxyURL != nil {
+		provider.ProxyURL = *req.ProxyURL
 	}
 
 	err = s.config.UpdateProvider(uid, provider)

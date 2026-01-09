@@ -30,6 +30,7 @@ export const useProviderDialog = (
         token: '',
         enabled: true,
         noKeyRequired: false,
+        proxyUrl: '',
     });
 
     const handleAddProviderClick = () => {
@@ -40,6 +41,7 @@ export const useProviderDialog = (
             token: '',
             enabled: true,
             noKeyRequired: false,
+            proxyUrl: '',
         });
         setProviderDialogOpen(true);
     };
@@ -53,6 +55,7 @@ export const useProviderDialog = (
             api_style: providerFormData.apiStyle,
             token: providerFormData.token,
             no_key_required: providerFormData.noKeyRequired,
+            proxy_url: providerFormData.proxyUrl,
         };
 
         const result = await api.addProvider(providerData);
