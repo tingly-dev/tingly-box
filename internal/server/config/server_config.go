@@ -48,7 +48,7 @@ type Config struct {
 	ConfigFile string `yaml:"-" json:"-"` // Not serialized to YAML (exported to preserve field)
 	ConfigDir  string `yaml:"-" json:"-"`
 
-	modelManager    *ModelListManager
+	modelManager    *helper.ModelListManager
 	statsStore      *db.StatsStore
 	templateManager *template.TemplateManager
 
@@ -87,7 +87,7 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 	}
 
 	// Initialize stats store before loading config so load can hydrate runtime stats
-	statsStore, err := db.NewStatsStore(filepath.Join(configDir, constant.StateDirName))
+	statsStore, err := db.NewStatsStore(configDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize stats store: %w", err)
 	}
@@ -105,16 +105,11 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 			return nil, fmt.Errorf("failed to load global cfg: %w", err)
 		}
 	} else {
-		cfg.save()
+		cfg.Save()
 	}
 
 	cfg.InsertDefaultRule()
-	cfg.save()
-
-	// Hydrate stats from the store
-	if err := cfg.refreshStatsFromStore(); err != nil {
-		return nil, fmt.Errorf("failed to refresh stats store: %w", err)
-	}
+	cfg.Save()
 
 	// Ensure tokens exist even for existing configs
 	updated := false
@@ -154,21 +149,24 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 	// Default OpenBrowser to true (runtime-only setting, not persisted)
 	if !cfg.OpenBrowser {
 		cfg.OpenBrowser = true
-		// Don't mark as updated since we don't want to save this
+		// Don't mark as updated since we don't want to Save this
 	}
 	if updated {
-		if err := cfg.save(); err != nil {
+		if err := cfg.Save(); err != nil {
 			return nil, fmt.Errorf("failed to set default values: %w", err)
 		}
 	}
 
 	// Initialize provider model manager
-	providerModelManager, err := NewProviderModelManager(filepath.Join(configDir, constant.ModelsDirName))
+	providerModelManager, err := helper.NewProviderModelManager(configDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize provider model manager: %w", err)
 	}
 	cfg.modelManager = providerModelManager
 
+	if err := cfg.RefreshStatsFromStore(); err != nil {
+		return nil, err
+	}
 	return cfg, nil
 }
 
@@ -190,13 +188,13 @@ func (c *Config) load() error {
 	c.ConfigFile = configFile
 
 	// Migration: Ensure all rules have a tactic set
-	migrate(c)
+	Migrate(c)
 
-	return c.refreshStatsFromStore()
+	return c.RefreshStatsFromStore()
 }
 
-// save saves the global configuration to file
-func (c *Config) save() error {
+// Save saves the global configuration to file
+func (c *Config) Save() error {
 	if c.ConfigFile == "" {
 		return fmt.Errorf("ConfigFile is empty")
 	}
@@ -211,8 +209,8 @@ func (c *Config) save() error {
 	return nil
 }
 
-// refreshStatsFromStore hydrates service stats from the SQLite store.
-func (c *Config) refreshStatsFromStore() error {
+// RefreshStatsFromStore hydrates service stats from the SQLite store.
+func (c *Config) RefreshStatsFromStore() error {
 	if c.statsStore == nil {
 		return nil
 	}
@@ -243,7 +241,7 @@ func (c *Config) AddRule(rule typ.Rule) error {
 	// If not found, append new config
 	c.Rules = append(c.Rules, rule)
 	c.DefaultRequestID = len(c.Rules) - 1
-	return c.save()
+	return c.Save()
 }
 
 func (c *Config) UpdateRule(uid string, rule typ.Rule) error {
@@ -263,7 +261,7 @@ func (c *Config) UpdateRule(uid string, rule typ.Rule) error {
 	for i, rc := range c.Rules {
 		if rc.UUID == uid {
 			c.Rules[i] = rule
-			return c.save()
+			return c.Save()
 		}
 	}
 
@@ -276,7 +274,7 @@ func (c *Config) AddRequestConfig(reqConfig typ.Rule) error {
 	defer c.mu.Unlock()
 
 	c.Rules = append(c.Rules, reqConfig)
-	return c.save()
+	return c.Save()
 }
 
 // GetDefaultRequestConfig returns the default Rule
@@ -296,7 +294,7 @@ func (c *Config) SetDefaultRequestID(id int) error {
 	defer c.mu.Unlock()
 
 	c.DefaultRequestID = id
-	return c.save()
+	return c.Save()
 }
 
 // GetRequestConfigs returns all Rules
@@ -400,7 +398,7 @@ func (c *Config) SetRequestConfigs(requestConfigs []typ.Rule) error {
 
 	c.Rules = requestConfigs
 
-	return c.save()
+	return c.Save()
 }
 
 // UpdateRequestConfigAt updates the Rule at the given index
@@ -413,7 +411,7 @@ func (c *Config) UpdateRequestConfigAt(index int, reqConfig typ.Rule) error {
 	}
 
 	c.Rules[index] = reqConfig
-	return c.save()
+	return c.Save()
 }
 
 // UpdateRequestConfigByRequestModel updates a Rule by its request model name
@@ -424,7 +422,7 @@ func (c *Config) UpdateRequestConfigByRequestModel(requestModel string, reqConfi
 	for i, rule := range c.Rules {
 		if rule.RequestModel == requestModel {
 			c.Rules[i] = reqConfig
-			return c.save()
+			return c.Save()
 		}
 	}
 
@@ -439,7 +437,7 @@ func (c *Config) UpdateRequestConfigByUUID(uuid string, reqConfig typ.Rule) erro
 	for i, rule := range c.Rules {
 		if rule.UUID == uuid {
 			c.Rules[i] = reqConfig
-			return c.save()
+			return c.Save()
 		}
 	}
 
@@ -454,13 +452,13 @@ func (c *Config) AddOrUpdateRequestConfigByRequestModel(reqConfig typ.Rule) erro
 	for i, rule := range c.Rules {
 		if rule.RequestModel == reqConfig.RequestModel {
 			c.Rules[i] = reqConfig
-			return c.save()
+			return c.Save()
 		}
 	}
 
 	// Rule not found, add new one
 	c.Rules = append(c.Rules, reqConfig)
-	return c.save()
+	return c.Save()
 }
 
 // RemoveRequestConfig removes the Rule at the given index
@@ -481,7 +479,7 @@ func (c *Config) RemoveRequestConfig(index int) error {
 		c.DefaultRequestID = len(c.Rules) - 1
 	}
 
-	return c.save()
+	return c.Save()
 }
 
 // GetRequestModel returns the request model from the default Rule
@@ -524,7 +522,7 @@ func (c *Config) SetUserToken(token string) error {
 	defer c.mu.Unlock()
 
 	c.UserToken = token
-	return c.save()
+	return c.Save()
 }
 
 // GetUserToken returns the user token
@@ -549,7 +547,7 @@ func (c *Config) SetModelToken(token string) error {
 	defer c.mu.Unlock()
 
 	c.ModelToken = token
-	return c.save()
+	return c.Save()
 }
 
 // GetModelToken returns the model token
@@ -599,7 +597,7 @@ func (c *Config) SetEncryptProviders(encrypt bool) error {
 	defer c.mu.Unlock()
 
 	c.EncryptProviders = encrypt
-	return c.save()
+	return c.Save()
 }
 
 // GetEncryptProviders returns whether provider information should be encrypted
@@ -625,7 +623,7 @@ func (c *Config) AddProviderByName(name, apiBase, token string) error {
 	}
 
 	provider := &typ.Provider{
-		UUID:     generateUUID(), // Generate a new UUID for the provider
+		UUID:     GenerateUUID(), // Generate a new UUID for the provider
 		Name:     name,
 		APIBase:  apiBase,
 		APIStyle: typ.APIStyleOpenAI, // default to openai
@@ -635,7 +633,7 @@ func (c *Config) AddProviderByName(name, apiBase, token string) error {
 
 	c.Providers = append(c.Providers, provider)
 
-	return c.save()
+	return c.Save()
 }
 
 // GetProviderByUUID returns a provider
@@ -702,7 +700,7 @@ func (c *Config) AddProvider(provider *typ.Provider) error {
 
 	c.Providers = append(c.Providers, provider)
 
-	return c.save()
+	return c.Save()
 }
 
 // UpdateProvider updates an existing provider by UUID
@@ -715,7 +713,7 @@ func (c *Config) UpdateProvider(uuid string, provider *typ.Provider) error {
 			// Preserve the UUID
 			provider.UUID = uuid
 			c.Providers[i] = provider
-			return c.save()
+			return c.Save()
 		}
 	}
 
@@ -736,7 +734,7 @@ func (c *Config) DeleteProvider(uuid string) error {
 				_ = c.modelManager.RemoveProvider(uuid)
 			}
 
-			return c.save()
+			return c.Save()
 		}
 	}
 
@@ -767,7 +765,7 @@ func (c *Config) SetServerPort(port int) error {
 	defer c.mu.Unlock()
 
 	c.ServerPort = port
-	return c.save()
+	return c.Save()
 }
 
 // GetDefaultMaxTokens returns the configured default max_tokens
@@ -784,7 +782,7 @@ func (c *Config) SetDefaultMaxTokens(maxTokens int) error {
 	defer c.mu.Unlock()
 
 	c.DefaultMaxTokens = maxTokens
-	return c.save()
+	return c.Save()
 }
 
 // GetVerbose returns the verbose setting
@@ -799,7 +797,7 @@ func (c *Config) SetVerbose(verbose bool) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.Verbose = verbose
-	return c.save()
+	return c.Save()
 }
 
 // GetDebug returns the debug setting
@@ -814,7 +812,7 @@ func (c *Config) SetDebug(debug bool) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.Debug = debug
-	return c.save()
+	return c.Save()
 }
 
 // GetOpenBrowser returns the open browser setting
@@ -844,7 +842,7 @@ func (c *Config) SetErrorLogFilterExpression(expr string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.ErrorLogFilterExpression = expr
-	return c.save()
+	return c.Save()
 }
 
 // FetchAndSaveProviderModels fetches models from a provider with fallback hierarchy
@@ -885,7 +883,7 @@ func (c *Config) FetchAndSaveProviderModels(uid string) error {
 	return fmt.Errorf("failed to fetch models (API: %v, template fallback: not available)", err)
 }
 
-func (c *Config) GetModelManager() *ModelListManager {
+func (c *Config) GetModelManager() *helper.ModelListManager {
 	return c.modelManager
 }
 
@@ -903,8 +901,8 @@ func (c *Config) GetTemplateManager() *template.TemplateManager {
 	return c.templateManager
 }
 
-// isTacticValid checks if the tactic params are valid (not zero values)
-func isTacticValid(tactic *typ.Tactic) bool {
+// IsTacticValid checks if the tactic params are valid (not zero values)
+func IsTacticValid(tactic *typ.Tactic) bool {
 	if tactic.Params == nil {
 		return false
 	}
@@ -945,7 +943,7 @@ func (c *Config) DeleteRule(ruleUUID string) error {
 	}
 
 	c.Rules = append(c.Rules[:index], c.Rules[index+1:]...)
-	return c.save()
+	return c.Save()
 }
 
 // generateSecret generates a random secret for JWT
@@ -953,8 +951,8 @@ func generateSecret() string {
 	return fmt.Sprintf("%d", time.Now().UnixNano())
 }
 
-// generateUUID generates a new UUID string
-func generateUUID() string {
+// GenerateUUID generates a new UUID string
+func GenerateUUID() string {
 	id, err := uuid.NewUUID()
 	if err != nil {
 		// Fallback to timestamp-based UUID if generation fails
@@ -987,7 +985,7 @@ func (c *Config) CreateDefaultConfig() error {
 	if c.ErrorLogFilterExpression == "" {
 		c.ErrorLogFilterExpression = "StatusCode >= 400 && Path matches '^/api/'"
 	}
-	if err := c.save(); err != nil {
+	if err := c.Save(); err != nil {
 		return fmt.Errorf("failed to create default global cfg: %w", err)
 	}
 
