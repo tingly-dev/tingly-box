@@ -30,7 +30,8 @@ const (
 
 const StateDirName = "state"
 
-const StatsDBFileName = "stats.db" // SQLite database file
+const StatsDBFileName = "stats.db"   // SQLite database file
+const ModelsDBFileName = "models.db" // SQLite database file for provider models
 
 // Load balancing threshold defaults
 const DefaultRequestThreshold = int64(10)  // Default request threshold for round-robin and hybrid tactics
