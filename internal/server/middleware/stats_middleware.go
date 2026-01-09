@@ -224,8 +224,8 @@ func (sm *StatsMiddleware) RecordUsage(serviceID string, inputTokens, outputToke
 				// Found the service, record usage in its embedded stats
 				service.RecordUsage(inputTokens, outputTokens)
 
-				// Persist usage stats separately from config
-				sm.persistServiceStats(service)
+				// Persist usage stats and record hourly history
+				sm.persistServiceStatsWithTokens(service, inputTokens, outputTokens)
 				return
 			}
 		}
@@ -241,8 +241,8 @@ func (sm *StatsMiddleware) RecordUsageOnRule(rule *typ.Rule, provider, model str
 			// Found the service, record usage in its embedded stats
 			service.RecordUsage(inputTokens, outputTokens)
 
-			// Persist usage stats separately from config
-			sm.persistServiceStats(service)
+			// Persist usage stats and record hourly history
+			sm.persistServiceStatsWithTokens(service, inputTokens, outputTokens)
 			return
 		}
 	}
@@ -254,4 +254,13 @@ func (sm *StatsMiddleware) persistServiceStats(service *loadbalance.Service) {
 		return
 	}
 	_ = sm.statsStore.UpdateFromService(service)
+}
+
+// persistServiceStatsWithTokens writes updated stats and records hourly token usage
+func (sm *StatsMiddleware) persistServiceStatsWithTokens(service *loadbalance.Service, inputTokens, outputTokens int) {
+	if sm.statsStore == nil {
+		return
+	}
+	_ = sm.statsStore.UpdateFromService(service)
+	_ = sm.statsStore.RecordHourlyUsage(service.Provider, service.Model, int64(inputTokens), int64(outputTokens))
 }

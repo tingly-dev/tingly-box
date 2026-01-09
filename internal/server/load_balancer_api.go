@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"tingly-box/internal/config"
+	"tingly-box/internal/db"
 	"tingly-box/internal/loadbalance"
 	"tingly-box/internal/typ"
 )
@@ -15,6 +16,7 @@ import (
 type LoadBalancerAPI struct {
 	loadBalancer *LoadBalancer
 	config       *config.Config
+	statsStore   *db.StatsStore
 }
 
 // NewLoadBalancerAPI creates a new load balancer API
@@ -22,6 +24,7 @@ func NewLoadBalancerAPI(loadBalancer *LoadBalancer, cfg *config.Config) *LoadBal
 	return &LoadBalancerAPI{
 		loadBalancer: loadBalancer,
 		config:       cfg,
+		statsStore:   cfg.GetStatsStore(),
 	}
 }
 
@@ -42,6 +45,7 @@ func (api *LoadBalancerAPI) RegisterRoutes(loadBalancer *gin.RouterGroup) {
 		// Global statistics
 		loadBalancer.GET("/stats", api.GetAllStats)
 		loadBalancer.POST("/stats/clear", api.ClearAllStats)
+		loadBalancer.GET("/stats/history", api.GetStatsHistory)
 
 		// Current service information
 		loadBalancer.GET("/rules/:ruleId/current-service", api.GetCurrentService)
@@ -343,5 +347,45 @@ func (api *LoadBalancerAPI) GetMetrics(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"metrics":        metrics,
 		"total_services": len(allStats),
+	})
+}
+
+// GetStatsHistory returns historical token usage data
+func (api *LoadBalancerAPI) GetStatsHistory(c *gin.Context) {
+	daysStr := c.DefaultQuery("days", "7")
+	days, err := strconv.Atoi(daysStr)
+	if err != nil || days <= 0 {
+		days = 7
+	}
+	if days > 90 {
+		days = 90
+	}
+
+	// Optional provider filter (empty string means all providers)
+	provider := c.Query("provider")
+
+	if api.statsStore == nil {
+		c.JSON(http.StatusOK, gin.H{"history": []interface{}{}, "total_tokens": gin.H{"input": 0, "output": 0}})
+		return
+	}
+
+	history, err := api.statsStore.GetHistoryAggregated(days, provider)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get history: " + err.Error()})
+		return
+	}
+
+	inputTokens, outputTokens, err := api.statsStore.GetTotalTokens(provider)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get total tokens: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"history": history,
+		"total_tokens": gin.H{
+			"input":  inputTokens,
+			"output": outputTokens,
+		},
 	})
 }
