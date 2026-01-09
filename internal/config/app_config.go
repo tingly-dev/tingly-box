@@ -15,7 +15,7 @@ import (
 	"sync"
 
 	"tingly-box/internal/constant"
-	"tingly-box/internal/db"
+	"tingly-box/internal/server/config"
 	"tingly-box/internal/typ"
 )
 
@@ -23,7 +23,7 @@ import (
 type AppConfig struct {
 	configFile string
 	configDir  string
-	config     *Config
+	config     *config.Config
 	version    string
 	gcm        cipher.AEAD
 	mu         sync.RWMutex
@@ -55,14 +55,14 @@ func NewAppConfig(opts ...AppConfigOption) (*AppConfig, error) {
 		opt(options)
 	}
 
-	return NewAppConfigWithDir(options.configDir)
-}
-
-// NewAppConfigWithDir creates a new AppConfig with a custom config directory
-// Deprecated: Use NewAppConfig with functional options instead
-func NewAppConfigWithDir(configDir string) (*AppConfig, error) {
+	configDir := options.configDir
 	if err := os.MkdirAll(configDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create config directory: %w", err)
+	}
+
+	// Ensure all required directories exist
+	if err := ensureDirectories(configDir); err != nil {
+		return nil, fmt.Errorf("failed to ensure required directories: %w", err)
 	}
 
 	configFile := filepath.Join(configDir, "config.json")
@@ -71,32 +71,8 @@ func NewAppConfigWithDir(configDir string) (*AppConfig, error) {
 		configDir:  configDir,
 	}
 
-	// Initialize encryption
-	//if err := ac.initEncryption(); err != nil {
-	//	return nil, fmt.Errorf("failed to initialize encryption: %w", err)
-	//}
-	//
-	//// Load existing configuration if exists (check both encrypted and unencrypted)
-	//encryptedFile := filepath.Join(configDir, "config.enc")
-	//if _, err := os.Stat(encryptedFile); err == nil {
-	//	// Try to load from old encrypted file first and migrate to new format
-	//	if loadErr := ac.loadFromEncrypted(encryptedFile); loadErr != nil {
-	//		return nil, fmt.Errorf("failed to load existing encrypted config: %w", loadErr)
-	//	}
-	//	// Save in new format (plaintext by default)
-	//	if err := ac.Save(); err != nil {
-	//		return nil, fmt.Errorf("failed to migrate config to new format: %w", err)
-	//	}
-	//	// Remove old encrypted file after successful migration
-	//	os.Remove(encryptedFile)
-	//} else if _, err := os.Stat(configFile); err == nil {
-	//	if err := ac.Load(); err != nil {
-	//		return nil, fmt.Errorf("failed to load existing config: %w", err)
-	//	}
-	//}
-
 	// Initialize global config (use same directory as app config)
-	globalConfig, err := NewConfigWithDir(configDir)
+	globalConfig, err := config.NewConfigWithDir(configDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize global config: %w", err)
 	}
@@ -208,74 +184,23 @@ func (ac *AppConfig) Save() error {
 	return nil
 }
 
-// Load loads the configuration from file (supports both encrypted and plaintext formats)
-func (ac *AppConfig) Load() error {
-	data, err := os.ReadFile(ac.configFile)
-	if err != nil {
-		return fmt.Errorf("failed to read config file: %w", err)
+// ensureDirectories ensures all required directories exist, creating them if necessary.
+// Returns an error if any directory cannot be created.
+func ensureDirectories(baseDir string) error {
+	// Directories to ensure exist, with their desired permissions
+	dirs := map[string]os.FileMode{
+		constant.GetTinglyConfDir(): 0700, // Main config dir - private
+		constant.GetModelsDir():     0700, // Models dir - private
+		constant.GetStateDir():      0700, // State dir - private
+		constant.GetMemoryDir():     0700, // Memory dir - private
+		constant.GetLogDir():        0700, // Log dir - private
+		constant.GetDBDir(baseDir):  0700, // Log dir - private
 	}
 
-	// Check if encryption is enabled
-	shouldEncrypt := false
-	if ac.config != nil {
-		shouldEncrypt = ac.config.GetEncryptProviders()
-	}
-
-	var plaintext []byte
-	if shouldEncrypt {
-		// Try to decrypt the data
-		ciphertext, err := base64.StdEncoding.DecodeString(string(data))
-		if err != nil {
-			return fmt.Errorf("failed to decode config: %w", err)
+	for dir, perm := range dirs {
+		if err := os.MkdirAll(dir, perm); err != nil {
+			return fmt.Errorf("failed to create directory %s: %w", dir, err)
 		}
-
-		nonceSize := ac.gcm.NonceSize()
-		if len(ciphertext) < nonceSize {
-			return errors.New("ciphertext too short")
-		}
-
-		nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
-		plaintext, err = ac.gcm.Open(nil, nonce, ciphertext, nil)
-		if err != nil {
-			return fmt.Errorf("failed to decrypt config: %w", err)
-		}
-	} else {
-		// Load as plaintext JSON
-		plaintext = data
-	}
-
-	var config Config
-	if err := json.Unmarshal(plaintext, &config); err != nil {
-		return fmt.Errorf("failed to unmarshal config: %w", err)
-	}
-
-	statsStore, err := db.NewStatsStore(filepath.Join(ac.configDir, constant.StateDirName))
-	if err != nil {
-		return fmt.Errorf("failed to initialize stats store: %w", err)
-	}
-
-	ac.mu.Lock()
-	var existingModelManager *ModelListManager
-	if ac.config != nil {
-		existingModelManager = ac.config.modelManager
-	}
-	ac.config = &config
-	ac.config.ConfigFile = ac.configFile
-	ac.config.ConfigDir = ac.configDir
-	ac.config.modelManager = existingModelManager
-	ac.config.statsStore = statsStore
-	if ac.config.modelManager == nil {
-		modelManager, err := NewProviderModelManager(filepath.Join(ac.configDir, constant.ModelsDirName))
-		if err != nil {
-			ac.mu.Unlock()
-			return fmt.Errorf("failed to initialize model manager: %w", err)
-		}
-		ac.config.modelManager = modelManager
-	}
-	ac.mu.Unlock()
-
-	if err := ac.config.refreshStatsFromStore(); err != nil {
-		return err
 	}
 
 	return nil
@@ -304,7 +229,7 @@ func (ac *AppConfig) loadFromEncrypted(encryptedFile string) error {
 		return fmt.Errorf("failed to decrypt config: %w", err)
 	}
 
-	var config Config
+	var config config.Config
 	if err := json.Unmarshal(plaintext, &config); err != nil {
 		return fmt.Errorf("failed to unmarshal encrypted config: %w", err)
 	}
@@ -338,13 +263,8 @@ func (ac *AppConfig) SetServerPort(port int) error {
 }
 
 // GetGlobalConfig returns the global configuration manager
-func (ac *AppConfig) GetGlobalConfig() *Config {
+func (ac *AppConfig) GetGlobalConfig() *config.Config {
 	return ac.config
-}
-
-// GetProviderModelManager returns the provider model manager
-func (ac *AppConfig) GetProviderModelManager() *ModelListManager {
-	return ac.config.modelManager
 }
 
 // FetchAndSaveProviderModels fetches models from a provider and saves them
