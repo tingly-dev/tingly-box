@@ -55,7 +55,7 @@ func NewStatsStore(baseDir string) (*StatsStore, error) {
 		return nil, fmt.Errorf("failed to create stats store directory: %w", err)
 	}
 
-	dbPath := filepath.Join(baseDir, constant.StatsDBFileName)
+	dbPath := filepath.Join(baseDir, constant.DBFileName)
 	log.Printf("Opening SQLite database: %s", dbPath)
 	// Configure SQLite with busy timeout and other settings to prevent hangs
 	// Use pure Go driver by ensuring modernc.org/sqlite is used

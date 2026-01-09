@@ -46,7 +46,7 @@ func NewModelStore(baseDir string) (*ModelStore, error) {
 		return nil, fmt.Errorf("failed to create model store directory: %w", err)
 	}
 
-	dbPath := filepath.Join(baseDir, constant.ModelsDBFileName)
+	dbPath := filepath.Join(baseDir, constant.DBFileName)
 	// Configure SQLite with busy timeout and other settings
 	dsn := dbPath + "?_busy_timeout=5000&_journal_mode=WAL&_foreign_keys=1"
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
