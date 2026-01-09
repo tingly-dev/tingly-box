@@ -2,8 +2,8 @@ package server
 
 import (
 	"testing"
-	"tingly-box/internal/llmclient"
 
+	"tingly-box/internal/llmclient"
 	"tingly-box/internal/typ"
 )
 

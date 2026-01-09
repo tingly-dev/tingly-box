@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"tingly-box/internal/config"
 	"tingly-box/internal/loadbalance"
+	"tingly-box/internal/server/config"
 	"tingly-box/internal/server/middleware"
 	typ "tingly-box/internal/typ"
 )
