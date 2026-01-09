@@ -236,4 +236,12 @@ Or find us at: https://t.me/+V1sqeajw1pYwMzU1
 
 ------
 
+## Contributors
+
+<a href="https://github.com/tingly-dev/tingly-box/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=tingly-dev/tingly-box" />
+</a>
+
+------
+
 Mozilla Public License Version 2.0 · © Tingly Dev
