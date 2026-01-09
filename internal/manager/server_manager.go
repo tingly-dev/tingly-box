@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"tingly-box/internal/config"
+	"tingly-box/internal/constant"
 	"tingly-box/internal/server"
 )
 
@@ -96,6 +98,11 @@ func (sm *ServerManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // Setup creates and configures the server without starting it
 func (sm *ServerManager) Setup(port int) error {
+	// Ensure all required directories exist
+	if err := ensureDirectories(); err != nil {
+		return fmt.Errorf("failed to ensure required directories: %w", err)
+	}
+
 	// Check if already running
 	if sm.IsRunning() {
 		return fmt.Errorf("server is already running")
@@ -185,4 +192,25 @@ func (sm *ServerManager) Cleanup() {
 // IsRunning checks if the server is currently running
 func (sm *ServerManager) IsRunning() bool {
 	return sm.status == "Running"
+}
+
+// ensureDirectories ensures all required directories exist, creating them if necessary.
+// Returns an error if any directory cannot be created.
+func ensureDirectories() error {
+	// Directories to ensure exist, with their desired permissions
+	dirs := map[string]os.FileMode{
+		constant.GetTinglyConfDir(): 0700, // Main config dir - private
+		constant.GetModelsDir():     0700, // Models dir - private
+		constant.GetStateDir():      0700, // State dir - private
+		constant.GetMemoryDir():     0700, // Memory dir - private
+		constant.GetLogDir():        0700, // Log dir - private
+	}
+
+	for dir, perm := range dirs {
+		if err := os.MkdirAll(dir, perm); err != nil {
+			return fmt.Errorf("failed to create directory %s: %w", dir, err)
+		}
+	}
+
+	return nil
 }
