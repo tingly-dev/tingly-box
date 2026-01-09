@@ -877,13 +877,13 @@ func (c *Config) SetScenarioConfig(config typ.ScenarioConfig) error {
 	for i := range c.Scenarios {
 		if c.Scenarios[i].Scenario == config.Scenario {
 			c.Scenarios[i] = config
-			return c.save()
+			return c.Save()
 		}
 	}
 
 	// Add new scenario config
 	c.Scenarios = append(c.Scenarios, config)
-	return c.save()
+	return c.Save()
 }
 
 // GetScenarioFlag returns a specific flag value for a scenario
@@ -943,7 +943,7 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 		return fmt.Errorf("unknown flag name: %s", flagName)
 	}
 
-	return c.save()
+	return c.Save()
 }
 
 // FetchAndSaveProviderModels fetches models from a provider with fallback hierarchy
