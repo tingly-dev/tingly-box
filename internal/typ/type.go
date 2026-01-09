@@ -23,6 +23,29 @@ const (
 	ScenarioClaudeCode RuleScenario = "claude_code"
 )
 
+// ScenarioFlags represents configuration flags for a scenario
+type ScenarioFlags struct {
+	Unified  bool `json:"unified" yaml:"unified"`   // Single configuration for all models
+	Separate bool `json:"separate" yaml:"separate"` // Separate configuration for each model
+	Smart    bool `json:"smart" yaml:"smart"`       // Smart mode with automatic optimization
+}
+
+// ScenarioConfig represents configuration for a specific scenario
+type ScenarioConfig struct {
+	Scenario   RuleScenario           `json:"scenario" yaml:"scenario"`
+	Flags      ScenarioFlags          `json:"flags" yaml:"flags"`                               // Scenario configuration flags
+	Extensions map[string]interface{} `json:"extensions,omitempty" yaml:"extensions,omitempty"` // Reserved for future extensions
+}
+
+// GetDefaultFlags returns default flags for a scenario
+func (sc *ScenarioConfig) GetDefaultFlags() ScenarioFlags {
+	if sc.Flags.Unified || sc.Flags.Separate || sc.Flags.Smart {
+		return sc.Flags
+	}
+	// Default to unified if no flag is set
+	return ScenarioFlags{Unified: true}
+}
+
 // AuthType represents the authentication type for a provider
 type AuthType string
 
