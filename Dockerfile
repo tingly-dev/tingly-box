@@ -87,10 +87,10 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 CMD ["sh", "-c", "echo '======================================' && \
      echo '  Tingly Box is starting up...' && \
      echo '  Web UI will be available at:' && \
-     echo '  http://localhost:8080/dashboard?user_auth_token=tingly-box-user-token' && \
+     echo '  http://localhost:'${TINGLY_PORT}'/dashboard?user_auth_token=tingly-box-user-token' && \
      echo '======================================' && \
      rm -f /app/.tingly-box/tingly-server.pid && \
-     exec tingly start --host 0.0.0.0 --port 8080"]
+     exec tingly start --host ${TINGLY_HOST} --port ${TINGLY_PORT}"]
 
 # Volumes for persistent data
 VOLUME ["/app/.tingly-box", "/app/memory", "/app/logs"]
