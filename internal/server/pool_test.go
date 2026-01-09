@@ -2,8 +2,7 @@ package server
 
 import (
 	"testing"
-
-	"github.com/openai/openai-go/v3"
+	"tingly-box/internal/llmclient"
 
 	"tingly-box/internal/typ"
 )
@@ -77,7 +76,7 @@ func TestClientPool_ConcurrentAccess(t *testing.T) {
 
 	// Launch multiple goroutines to access the same provider
 	const numGoroutines = 10
-	clients := make([]*openai.Client, numGoroutines)
+	clients := make([]*llmclient.OpenAIClient, numGoroutines)
 
 	done := make(chan bool, numGoroutines)
 
