@@ -47,6 +47,7 @@ const ApiKeyPage = () => {
             token: '',
             enabled: true,
             noKeyRequired: false,
+            proxyUrl: '',
         } as any);
         setDialogOpen(true);
     };
@@ -72,6 +73,7 @@ const ApiKeyPage = () => {
             api_style: providerFormData.apiStyle,
             token: providerFormData.token,
             no_key_required: (providerFormData as any).noKeyRequired || false,
+            ...(dialogMode === 'add' && { proxy_url: (providerFormData as any).proxyUrl || '' }),
             ...(dialogMode === 'edit' && { enabled: providerFormData.enabled }),
         };
 
@@ -84,6 +86,7 @@ const ApiKeyPage = () => {
                 token: providerData.token || undefined,
                 no_key_required: providerData.no_key_required,
                 enabled: providerData.enabled,
+                proxy_url: (providerFormData as any).proxyUrl || undefined,
             });
 
         if (result.success) {
@@ -131,6 +134,7 @@ const ApiKeyPage = () => {
                 token: provider.token || "",
                 enabled: provider.enabled,
                 noKeyRequired: provider.no_key_required || false,
+                proxyUrl: provider.proxy_url || '',
             } as any);
             setDialogOpen(true);
         } else {

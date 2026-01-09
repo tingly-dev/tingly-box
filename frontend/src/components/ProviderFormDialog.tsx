@@ -1,4 +1,4 @@
-import { WarningAmber, Close } from '@mui/icons-material';
+import { WarningAmber, Close, Star } from '@mui/icons-material';
 import {
     Alert,
     Autocomplete,
@@ -33,6 +33,7 @@ export interface EnhancedProviderFormData {
     token: string;
     noKeyRequired?: boolean;
     enabled?: boolean;
+    proxyUrl?: string;
 }
 
 interface PresetProviderFormDialogProps {
@@ -372,6 +373,7 @@ const ProviderFormDialog = ({
                                         <TextField
                                             {...params}
                                             label={t('providerDialog.providerOrUrl.label')}
+                                            required
                                             placeholder={t('providerDialog.providerOrUrl.placeholder')}
                                         />
                                     )}
@@ -383,7 +385,7 @@ const ProviderFormDialog = ({
                                     }}
                                 />
 
-                                {/* API Key Field with No Key Required switch */}
+                                {/* API Key Field */}
                                 <TextField
                                     size="small"
                                     fullWidth
@@ -395,11 +397,24 @@ const ProviderFormDialog = ({
                                         // Clear verification result when token changes
                                         setVerificationResult(null);
                                     }}
-                                    required={mode === 'add' && !noApiKey}
+                                    required={!noApiKey}
                                     placeholder={mode === 'add' ? t('providerDialog.apiKey.placeholderAdd') : t('providerDialog.apiKey.placeholderEdit')}
                                     helperText={mode === 'edit' && t('providerDialog.apiKey.helperEdit')}
                                     disabled={noApiKey}
                                 />
+
+                                {/* Proxy URL Field */}
+                                <TextField
+                                    size="small"
+                                    fullWidth
+                                    label={t('providerDialog.advanced.proxyUrl.label')}
+                                    placeholder={t('providerDialog.advanced.proxyUrl.placeholder')}
+                                    value={data.proxyUrl || ''}
+                                    onChange={(e) => onChange('proxyUrl', e.target.value)}
+                                    helperText={t('providerDialog.advanced.proxyUrl.helper')}
+                                />
+
+                                {/* No Key Required switch */}
                                 {isCustomUrl && (
                                     <FormControlLabel
                                         control={

@@ -192,6 +192,7 @@ type ProviderResponse struct {
 	Token         string           `json:"token" example:"sk-***...***"` // Only populated for api_key auth type
 	NoKeyRequired bool             `json:"no_key_required" example:"false"`
 	Enabled       bool             `json:"enabled" example:"true"`
+	ProxyURL      string           `json:"proxy_url,omitempty" example:"http://127.0.0.1:7890"`
 	AuthType      string           `json:"auth_type,omitempty" example:"api_key"` // api_key or oauth
 	OAuthDetail   *typ.OAuthDetail `json:"oauth_detail,omitempty"`                // OAuth credentials (only for oauth auth type)
 }
@@ -267,6 +268,7 @@ type CreateProviderRequest struct {
 	Token         string `json:"token" description:"API token" example:"sk-..."`
 	NoKeyRequired bool   `json:"no_key_required" description:"Whether provider requires no API key" example:"false"`
 	Enabled       bool   `json:"enabled" description:"Whether provider is enabled" example:"true"`
+	ProxyURL      string `json:"proxy_url,omitempty" description:"HTTP or SOCKS proxy URL (e.g., http://127.0.0.1:7890 or socks5://127.0.0.1:1080)" example:"http://127.0.0.1:7890"`
 }
 
 // CreateProviderResponse represents the response for adding a provider
@@ -284,6 +286,7 @@ type UpdateProviderRequest struct {
 	Token         *string `json:"token,omitempty" description:"New API token"`
 	NoKeyRequired *bool   `json:"no_key_required,omitempty" description:"Whether provider requires no API key"`
 	Enabled       *bool   `json:"enabled,omitempty" description:"New enabled status"`
+	ProxyURL      *string `json:"proxy_url,omitempty" description:"HTTP or SOCKS proxy URL"`
 }
 
 // UpdateProviderResponse represents the response for updating a provider

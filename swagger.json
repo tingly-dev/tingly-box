@@ -1155,6 +1155,11 @@
           "description": "Whether provider requires no API key",
           "example": false
         },
+        "proxy_url": {
+          "type": "string",
+          "description": "HTTP or SOCKS proxy URL (e.g., http://127.0.0.1:7890 or socks5://127.0.0.1:1080)",
+          "example": "http://127.0.0.1:7890"
+        },
         "token": {
           "type": "string",
           "description": "API token",
@@ -2087,6 +2092,11 @@
           "description": "Field oauth_detail",
           "$ref": "#/definitions/OAuthDetail"
         },
+        "proxy_url": {
+          "type": "string",
+          "description": "Field proxy_url",
+          "example": "http://127.0.0.1:7890"
+        },
         "token": {
           "type": "string",
           "description": "Field token",
@@ -2634,6 +2644,10 @@
           "type": "boolean",
           "description": "Whether provider requires no API key"
         },
+        "proxy_url": {
+          "type": "string",
+          "description": "HTTP or SOCKS proxy URL"
+        },
         "token": {
           "type": "string",
           "description": "New API token"
@@ -2826,8 +2840,28 @@
   },
   "tags": [
     {
+      "name": "token",
+      "description": "Operations related to token"
+    },
+    {
+      "name": "oauth",
+      "description": "Operations related to oauth"
+    },
+    {
       "name": "server",
       "description": "Operations related to server"
+    },
+    {
+      "name": "providers",
+      "description": "Operations related to providers"
+    },
+    {
+      "name": "info",
+      "description": "Operations related to info"
+    },
+    {
+      "name": "logs",
+      "description": "Operations related to logs"
     },
     {
       "name": "rules",
@@ -2844,26 +2878,6 @@
     {
       "name": "testing",
       "description": "Operations related to testing"
-    },
-    {
-      "name": "info",
-      "description": "Operations related to info"
-    },
-    {
-      "name": "logs",
-      "description": "Operations related to logs"
-    },
-    {
-      "name": "token",
-      "description": "Operations related to token"
-    },
-    {
-      "name": "providers",
-      "description": "Operations related to providers"
-    },
-    {
-      "name": "oauth",
-      "description": "Operations related to oauth"
     }
   ]
 }

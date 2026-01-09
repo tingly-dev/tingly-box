@@ -129,6 +129,14 @@ export default {
       "helperEdit": "Leave empty to keep current token"
     },
     "enabled": "Enabled",
+    "advanced": {
+      "title": "Advanced",
+      "proxyUrl": {
+        "label": "Proxy URL",
+        "placeholder": "e.g., http://127.0.0.1:7890 or socks5://127.0.0.1:1080",
+        "helper": "Optional HTTP or SOCKS proxy for API requests"
+      }
+    },
     "verification": {
       "verifying": "Verifying...",
       "verifyButton": "Verify",
