@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -114,12 +113,6 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, bodyBytes []byte, rawReq ma
 		if isStreaming {
 			// Convert Anthropic request to OpenAI format for streaming
 			openaiReq := adaptor.ConvertAnthropicToOpenAIRequest(&req, true)
-
-			da, _ := json.MarshalIndent(req, "", "    ")
-			fmt.Printf("requst to openai: %s\n", da)
-
-			do, _ := json.MarshalIndent(openaiReq, "", "    ")
-			fmt.Printf("requst to openai: %s\n", do)
 
 			// Create streaming request
 			stream, err := s.forwardOpenAIStreamRequest(provider, openaiReq)
