@@ -168,15 +168,15 @@ const UseClaudeCodePage: React.FC = () => {
         if (configMode === 'unified') {
             return rules[0]?.request_model;
         }
-        const rule = rules.find(r => r?.id === `built-in-cc-${variant}`);
-        return rule?.request_model!;
+        const rule = rules.find(r => r?.uuid === `built-in-cc-${variant}`);
+        return rule?.request_model || '';
     };
 
     const generateSettingsConfig = () => {
         const claudeCodeBaseUrl = getClaudeCodeBaseUrl();
 
         if (configMode === 'unified') {
-            const model = getModelForVariant('unified');
+            const model = rules[0]?.request_model;
             return JSON.stringify({
                 env: {
                     ANTHROPIC_MODEL: model,
@@ -213,7 +213,7 @@ const UseClaudeCodePage: React.FC = () => {
         const claudeCodeBaseUrl = getClaudeCodeBaseUrl();
 
         if (configMode === 'unified') {
-            const model = getModelForVariant('unified');
+            const model = rules[0]?.request_model;
             return `# Configure Claude Code settings
 echo "Configuring Claude Code settings..."
 mkdir -p ~/.claude
