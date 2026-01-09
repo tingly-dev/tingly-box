@@ -14,10 +14,10 @@ import EmptyStateGuide from '../components/EmptyStateGuide';
 import ProviderFormDialog from '../components/ProviderFormDialog';
 import OAuthDialog from '../components/OAuthDialog';
 
-const ruleId = "built-in-cc";
-
 type ClaudeJsonMode = 'json' | 'script';
 type ConfigMode = 'unified' | 'separate';
+
+const MODEL_VARIANTS = ['default', 'haiku', 'sonnet', 'opus'] as const;
 
 const UseClaudeCodePage: React.FC = () => {
     const { t } = useTranslation();
@@ -30,7 +30,6 @@ const UseClaudeCodePage: React.FC = () => {
     } = useFunctionPanelData();
     const [baseUrl, setBaseUrl] = React.useState<string>('');
     const [rules, setRules] = React.useState<any[]>([]);
-    const [defaultModel, setDefaultModel] = React.useState("");
     const [loadingRule, setLoadingRule] = React.useState(true);
     const [isDockerMode, setIsDockerMode] = React.useState(false);
     const [claudeJsonMode, setClaudeJsonMode] = React.useState<ClaudeJsonMode>('json');
@@ -45,6 +44,49 @@ const UseClaudeCodePage: React.FC = () => {
     // OAuth dialog state
     const [oauthDialogOpen, setOAuthDialogOpen] = React.useState(false);
 
+    // Load scenario config to get config mode
+    const loadScenarioConfig = async () => {
+        try {
+            const result = await api.getScenarioConfig('claude_code');
+            if (result.success && result.data && result.data.flags) {
+                const { unified, separate, smart } = result.data.flags;
+                if (separate) {
+                    setConfigMode('separate');
+                } else {
+                    setConfigMode('unified');
+                }
+            }
+        } catch (error) {
+            console.error('Failed to load scenario config:', error);
+        }
+    };
+
+    // Handle config mode change
+    const handleConfigModeChange = async (newMode: ConfigMode) => {
+        // Don't update UI state yet - wait for API success first
+        try {
+            const config = {
+                scenario: 'claude_code',
+                flags: {
+                    unified: newMode === 'unified',
+                    separate: newMode === 'separate',
+                    smart: false,
+                },
+            };
+            const result = await api.setScenarioConfig('claude_code', config);
+
+            // Only update UI state if API call succeeded
+            if (result.success) {
+                setConfigMode(newMode);
+            } else {
+                showNotification('Failed to save configuration mode', 'error');
+            }
+        } catch (error) {
+            console.error('Failed to save scenario config:', error);
+            showNotification('Failed to save configuration mode', 'error');
+        }
+    };
+
     const copyToClipboard = async (text: string, label: string) => {
         try {
             await navigator.clipboard.writeText(text);
@@ -57,24 +99,17 @@ const UseClaudeCodePage: React.FC = () => {
     const loadData = async () => {
         const url = await getBaseUrl();
         setBaseUrl(url);
-
         setLoadingRule(true);
 
         if (configMode === 'unified') {
-            const result = await api.getRule(ruleId);
-            if (result.success) {
-                setRules([result.data]);
-            }
+            const result = await api.getRule("built-in-cc");
+            setRules(result.success ? [result.data] : []);
         } else {
-            // Load 4 separate rules for each model variant
-            const modelVariants = ['haiku', 'sonnet', 'opus', 'main'];
+            // Load separate rules for each model variant
             const loadedRules = await Promise.all(
-                modelVariants.map(async (variant) => {
+                MODEL_VARIANTS.map(async (variant) => {
                     const result = await api.getRule(`built-in-cc-${variant}`);
-                    if (result.success) {
-                        return result.data;
-                    }
-                    return null;
+                    return result.success ? result.data : null;
                 })
             );
             setRules(loadedRules.filter((r): r is any => r !== null));
@@ -84,15 +119,12 @@ const UseClaudeCodePage: React.FC = () => {
     };
 
     React.useEffect(() => {
+        loadScenarioConfig();
+    }, []);
+
+    React.useEffect(() => {
         loadData();
     }, [configMode]);
-
-    // Update defaultModel when rules change
-    React.useEffect(() => {
-        if (rules.length > 0 && rules[0]?.request_model) {
-            setDefaultModel(rules[0].request_model);
-        }
-    }, [rules]);
 
     const toDockerUrl = (url: string): string => {
         return url.replace(/\/\/([^/:]+)(?::(\d+))?/, '//host.docker.internal:$2');
@@ -103,47 +135,58 @@ const UseClaudeCodePage: React.FC = () => {
         return isDockerMode ? toDockerUrl(url) : url;
     };
 
-    // Get model name for each variant based on config mode
+    // Get model name for each variant
     const getModelForVariant = (variant: string): string => {
         if (configMode === 'unified') {
-            return defaultModel;
+            return rules[0]?.request_model;
         }
-        // In separate mode, find the corresponding rule
         const rule = rules.find(r => r?.id === `built-in-cc-${variant}`);
-        return rule?.request_model || defaultModel;
+        return rule?.request_model!;
     };
 
     const generateSettingsConfig = () => {
         const claudeCodeBaseUrl = getClaudeCodeBaseUrl();
-        const haikuModel = getModelForVariant('haiku');
-        const sonnetModel = getModelForVariant('sonnet');
-        const opusModel = getModelForVariant('opus');
-        const mainModel = getModelForVariant('main');
 
-        return JSON.stringify({
-            env: {
-                DISABLE_TELEMETRY: "1",
-                DISABLE_ERROR_REPORTING: "1",
-                CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
-                API_TIMEOUT_MS: "3000000",
-                ANTHROPIC_AUTH_TOKEN: token,
-                ANTHROPIC_BASE_URL: claudeCodeBaseUrl,
-                ANTHROPIC_DEFAULT_HAIKU_MODEL: haikuModel,
-                ANTHROPIC_DEFAULT_OPUS_MODEL: opusModel,
-                ANTHROPIC_DEFAULT_SONNET_MODEL: sonnetModel,
-                ANTHROPIC_MODEL: mainModel
-            },
-        }, null, 2);
+        if (configMode === 'unified') {
+            const model = getModelForVariant('unified');
+            return JSON.stringify({
+                env: {
+                    ANTHROPIC_MODEL: model,
+                    ANTHROPIC_DEFAULT_HAIKU_MODEL: model,
+                    ANTHROPIC_DEFAULT_OPUS_MODEL: model,
+                    ANTHROPIC_DEFAULT_SONNET_MODEL: model,
+                    DISABLE_TELEMETRY: "1",
+                    DISABLE_ERROR_REPORTING: "1",
+                    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
+                    API_TIMEOUT_MS: "3000000",
+                    ANTHROPIC_AUTH_TOKEN: token,
+                    ANTHROPIC_BASE_URL: claudeCodeBaseUrl,
+                },
+            }, null, 2);
+        } else {
+            return JSON.stringify({
+                env: {
+                    ANTHROPIC_MODEL: getModelForVariant('default'),
+                    ANTHROPIC_DEFAULT_HAIKU_MODEL: getModelForVariant('haiku'),
+                    ANTHROPIC_DEFAULT_OPUS_MODEL: getModelForVariant('opus'),
+                    ANTHROPIC_DEFAULT_SONNET_MODEL: getModelForVariant('sonnet'),
+                    DISABLE_TELEMETRY: "1",
+                    DISABLE_ERROR_REPORTING: "1",
+                    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
+                    API_TIMEOUT_MS: "3000000",
+                    ANTHROPIC_AUTH_TOKEN: token,
+                    ANTHROPIC_BASE_URL: claudeCodeBaseUrl,
+                },
+            }, null, 2);
+        }
     };
 
     const generateSettingsScript = () => {
         const claudeCodeBaseUrl = getClaudeCodeBaseUrl();
-        const haikuModel = getModelForVariant('haiku');
-        const sonnetModel = getModelForVariant('sonnet');
-        const opusModel = getModelForVariant('opus');
-        const mainModel = getModelForVariant('main');
 
-        return `# Configure Claude Code settings
+        if (configMode === 'unified') {
+            const model = getModelForVariant('unified');
+            return `# Configure Claude Code settings
 echo "Configuring Claude Code settings..."
 mkdir -p ~/.claude
 node --eval '
@@ -152,16 +195,16 @@ node --eval '
     const homeDir = os.homedir();
     const settingsPath = path.join(homeDir, ".claude", "settings.json");
     const env = {
+        ANTHROPIC_BASE_URL: "${claudeCodeBaseUrl}",
+        ANTHROPIC_MODEL: "${model}",
+        ANTHROPIC_DEFAULT_HAIKU_MODEL: "${model}",
+        ANTHROPIC_DEFAULT_OPUS_MODEL: "${model}",
+        ANTHROPIC_DEFAULT_SONNET_MODEL: "${model}",
         DISABLE_TELEMETRY: "1",
         DISABLE_ERROR_REPORTING: "1",
         CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
         API_TIMEOUT_MS: "3000000",
         ANTHROPIC_AUTH_TOKEN: "${token}",
-        ANTHROPIC_BASE_URL: "${claudeCodeBaseUrl}",
-        ANTHROPIC_DEFAULT_HAIKU_MODEL: "${haikuModel}",
-        ANTHROPIC_DEFAULT_OPUS_MODEL: "${opusModel}",
-        ANTHROPIC_DEFAULT_SONNET_MODEL: "${sonnetModel}",
-        ANTHROPIC_MODEL: "${mainModel}"
     };
     if (fs.existsSync(settingsPath)) {
         const content = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
@@ -170,6 +213,41 @@ node --eval '
         fs.writeFileSync(settingsPath, JSON.stringify({ env }, null, 2), "utf-8");
     }
 '`;
+        } else {
+            // Get model values before building the template string
+            const defaultModel = getModelForVariant('default');
+            const haikuModel = getModelForVariant('haiku');
+            const opusModel = getModelForVariant('opus');
+            const sonnetModel = getModelForVariant('sonnet');
+
+            return `# Configure Claude Code settings
+echo "Configuring Claude Code settings..."
+mkdir -p ~/.claude
+node --eval '
+    const fs = require("fs");
+    const path = require("path");
+    const homeDir = os.homedir();
+    const settingsPath = path.join(homeDir, ".claude", "settings.json");
+    const env = {
+        ANTHROPIC_BASE_URL: "${claudeCodeBaseUrl}",
+        ANTHROPIC_MODEL: "${defaultModel}",
+        ANTHROPIC_DEFAULT_HAIKU_MODEL: "${haikuModel}",
+        ANTHROPIC_DEFAULT_OPUS_MODEL: "${opusModel}",
+        ANTHROPIC_DEFAULT_SONNET_MODEL: "${sonnetModel}",
+        DISABLE_TELEMETRY: "1",
+        DISABLE_ERROR_REPORTING: "1",
+        CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
+        API_TIMEOUT_MS: "3000000",
+        ANTHROPIC_AUTH_TOKEN: "${token}",
+    };
+    if (fs.existsSync(settingsPath)) {
+        const content = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
+        fs.writeFileSync(settingsPath, JSON.stringify({ ...content, env }, null, 2), "utf-8");
+    } else {
+        fs.writeFileSync(settingsPath, JSON.stringify({ env }, null, 2), "utf-8");
+    }
+'`;
+        }
     };
 
     const generateClaudeJsonConfig = () => {
@@ -193,99 +271,79 @@ node --eval '
     };
 
     const header = (
-        <>
-            {/* Top bar with switch */}
-            <Box sx={{ px: 2, pt: 2, pb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="subtitle2" color="text.secondary">
-                    {configMode === 'unified' ? t('claudeCode.unifiedConfig') : t('claudeCode.separateConfig')}
-                </Typography>
-                <FormControlLabel
-                    control={
-                        <Switch
-                            checked={configMode === 'separate'}
-                            onChange={(e) => setConfigMode(e.target.checked ? 'separate' : 'unified')}
-                            size="small"
-                        />
-                    }
-                    label={configMode === 'unified' ? t('claudeCode.switchToSeparate') : t('claudeCode.switchToUnified')}
-                    sx={{ '& .MuiFormControlLabel-label': { fontSize: '0.875rem' } }}
-                />
-            </Box>
-            {/* Settings.json and .claude.json sections */}
-            <Box sx={{ p: 2, display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, alignItems: 'stretch' }}>
-                {/* Settings.json section */}
-                <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ p: 2, display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, alignItems: 'stretch' }}>
+            {/* Settings.json section */}
+            <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
                     <Box sx={{ mb: 1 }}>
                         <Typography variant="subtitle2" color="text.secondary">
                             {t('claudeCode.step1')}
                         </Typography>
                     </Box>
                     <Box sx={{ flex: 1, height: 400 }}>
-                    <CodeBlock
-                        code={claudeJsonMode === 'json' ? generateSettingsConfig() : generateSettingsScript()}
-                        language={claudeJsonMode === 'json' ? 'json' : 'js'}
-                        filename={claudeJsonMode === 'json' ? 'Add the env section into ~/.claude/setting.json' : 'Script to setup ~/.claude/settings.json'}
-                        wrap={true}
-                        onCopy={(code) => copyToClipboard(code, claudeJsonMode === 'json' ? 'settings.json' : 'script')}
-                        maxHeight={180}
-                        minHeight={180}
-                        headerActions={
-                            <ToggleButtonGroup
-                                value={claudeJsonMode}
-                                exclusive
-                                size="small"
-                                onChange={(_, value) => value && setClaudeJsonMode(value)}
-                                sx={{ bgcolor: 'grey.700', '& .MuiToggleButton-root': { color: 'grey.300', padding: '2px 8px', fontSize: '0.75rem' } }}
-                            >
-                                <ToggleButton value="json" sx={{ '&.Mui-selected': { bgcolor: 'primary.main', color: 'white' } }}>
-                                    JSON
-                                </ToggleButton>
-                                <ToggleButton value="script" sx={{ '&.Mui-selected': { bgcolor: 'primary.main', color: 'white' } }}>
-                                    Script
-                                </ToggleButton>
-                            </ToggleButtonGroup>
-                        }
-                    />
+                        <CodeBlock
+                            code={claudeJsonMode === 'json' ? generateSettingsConfig() : generateSettingsScript()}
+                            language={claudeJsonMode === 'json' ? 'json' : 'js'}
+                            filename={claudeJsonMode === 'json' ? 'Add the env section into ~/.claude/setting.json' : 'Script to setup ~/.claude/settings.json'}
+                            wrap={true}
+                            onCopy={(code) => copyToClipboard(code, claudeJsonMode === 'json' ? 'settings.json' : 'script')}
+                            maxHeight={180}
+                            minHeight={180}
+                            headerActions={
+                                <ToggleButtonGroup
+                                    value={claudeJsonMode}
+                                    exclusive
+                                    size="small"
+                                    onChange={(_, value) => value && setClaudeJsonMode(value)}
+                                    sx={{ bgcolor: 'grey.700', '& .MuiToggleButton-root': { color: 'grey.300', padding: '2px 8px', fontSize: '0.75rem' } }}
+                                >
+                                    <ToggleButton value="json" sx={{ '&.Mui-selected': { bgcolor: 'primary.main', color: 'white' } }}>
+                                        JSON
+                                    </ToggleButton>
+                                    <ToggleButton value="script" sx={{ '&.Mui-selected': { bgcolor: 'primary.main', color: 'white' } }}>
+                                        Script
+                                    </ToggleButton>
+                                </ToggleButtonGroup>
+                            }
+                        />
+                    </Box>
                 </Box>
-            </Box>
 
-            {/* .claude.json section */}
-            <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-                <Box sx={{ mb: 1 }}>
-                    <Typography variant="subtitle2" color="text.secondary">
-                        {t('claudeCode.step2')}
-                    </Typography>
-                </Box>
-                <Box sx={{ flex: 1, height: 400 }}>
-                    <CodeBlock
-                        code={claudeJsonMode === 'json' ? generateClaudeJsonConfig() : generateScript()}
-                        language={claudeJsonMode === 'json' ? 'json' : 'js'}
-                        filename={claudeJsonMode === 'json' ? 'Set hasCompletedOnboarding into ~/.claude.json' : 'Script to setup ~/.claude.json'}
-                        wrap={true}
-                        onCopy={(code) => copyToClipboard(code, claudeJsonMode === 'json' ? '.claude.json' : 'script')}
-                        maxHeight={180}
-                        minHeight={180}
-                        headerActions={
-                            <ToggleButtonGroup
-                                value={claudeJsonMode}
-                                exclusive
-                                size="small"
-                                onChange={(_, value) => value && setClaudeJsonMode(value)}
-                                sx={{ bgcolor: 'grey.700', '& .MuiToggleButton-root': { color: 'grey.300', padding: '2px 8px', fontSize: '0.75rem' } }}
-                            >
-                                <ToggleButton value="json" sx={{ '&.Mui-selected': { bgcolor: 'primary.main', color: 'white' } }}>
-                                    JSON
-                                </ToggleButton>
-                                <ToggleButton value="script" sx={{ '&.Mui-selected': { bgcolor: 'primary.main', color: 'white' } }}>
-                                    Script
-                                </ToggleButton>
-                            </ToggleButtonGroup>
-                        }
-                    />
+                {/* .claude.json section */}
+                <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                    <Box sx={{ mb: 1 }}>
+                        <Typography variant="subtitle2" color="text.secondary">
+                            {t('claudeCode.step2')}
+                        </Typography>
+                    </Box>
+                    <Box sx={{ flex: 1, height: 400 }}>
+                        <CodeBlock
+                            code={claudeJsonMode === 'json' ? generateClaudeJsonConfig() : generateScript()}
+                            language={claudeJsonMode === 'json' ? 'json' : 'js'}
+                            filename={claudeJsonMode === 'json' ? 'Set hasCompletedOnboarding into ~/.claude.json' : 'Script to setup ~/.claude.json'}
+                            wrap={true}
+                            onCopy={(code) => copyToClipboard(code, claudeJsonMode === 'json' ? '.claude.json' : 'script')}
+                            maxHeight={180}
+                            minHeight={180}
+                            headerActions={
+                                <ToggleButtonGroup
+                                    value={claudeJsonMode}
+                                    exclusive
+                                    size="small"
+                                    onChange={(_, value) => value && setClaudeJsonMode(value)}
+                                    sx={{ bgcolor: 'grey.700', '& .MuiToggleButton-root': { color: 'grey.300', padding: '2px 8px', fontSize: '0.75rem' } }}
+                                >
+                                    <ToggleButton value="json" sx={{ '&.Mui-selected': { bgcolor: 'primary.main', color: 'white' } }}>
+                                        JSON
+                                    </ToggleButton>
+                                    <ToggleButton value="script" sx={{ '&.Mui-selected': { bgcolor: 'primary.main', color: 'white' } }}>
+                                        Script
+                                    </ToggleButton>
+                                </ToggleButtonGroup>
+                            }
+                        />
+                    </Box>
                 </Box>
             </Box>
-            </Box>
-        </>
     );
 
     // Show empty state if no providers
@@ -328,6 +386,27 @@ node --eval '
                 >
                     {header}
                 </UnifiedCard>
+
+                {/* Mode switch between header and rules */}
+                <UnifiedCard size="full">
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 1 }}>
+                        <Typography variant="subtitle2" color="text.secondary">
+                            {configMode === 'unified' ? 'Unified Configuration' : 'Separate Configuration'}
+                        </Typography>
+                        <FormControlLabel
+                            control={
+                                <Switch
+                                    checked={configMode === 'separate'}
+                                    onChange={(e) => handleConfigModeChange(e.target.checked ? 'separate' : 'unified')}
+                                    size="small"
+                                />
+                            }
+                            label={configMode === 'unified' ? 'Switch to Separate' : 'Switch to Unified'}
+                            sx={{ '& .MuiFormControlLabel-label': { fontSize: '0.875rem' } }}
+                        />
+                    </Box>
+                </UnifiedCard>
+
                 <TemplatePage
                     rules={rules}
                     showTokenModal={showTokenModal}
@@ -337,7 +416,7 @@ node --eval '
                     providers={providers}
                     onRulesChange={setRules}
                     allowToggleRule={false}
-                    collapsible={true}
+                    collapsible={false}
                 />
                 <ProviderFormDialog
                     open={providerDialog.providerDialogOpen}
