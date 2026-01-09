@@ -5,7 +5,7 @@ import {
     Delete as DeleteIcon,
     ExpandMore as ExpandMoreIcon,
     Info as InfoIcon,
-    MoreVert as MoreVertIcon,
+    MoreHoriz as MoreHorizIcon,
     Refresh as RefreshIcon
 } from '@mui/icons-material';
 import {
@@ -31,6 +31,14 @@ import { useTranslation } from 'react-i18next';
 import type { Provider } from '../types/provider';
 import { ApiStyleBadge } from "./ApiStyleBadge.tsx";
 import type { ConfigProvider, ConfigRecord } from './RuleGraphTypes.ts';
+
+// Unified node dimensions
+const NODE_DIMENSIONS = {
+    width: 320,
+    height: 120,
+    heightCompact: 60,
+    padding: 12, // theme.spacing(1.5)
+} as const;
 
 interface RuleGraphProps {
     record: ConfigRecord;
@@ -68,7 +76,7 @@ const SummarySection = styled(Box, {
     flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: theme.spacing(2),
+    padding: theme.spacing(1, 2),
     cursor: collapsible ? 'pointer' : 'default',
     ...(collapsible && {
         '&:hover': {
@@ -79,18 +87,18 @@ const SummarySection = styled(Box, {
 
 // Graph Container for expanded view
 const GraphContainer = styled(Box)(({ theme }) => ({
-    padding: theme.spacing(3),
+    padding: theme.spacing(2),
     backgroundColor: 'grey.50',
     borderRadius: theme.shape.borderRadius,
-    margin: theme.spacing(2),
+    margin: theme.spacing(1, 2, 0, 2),
 }));
 
 const GraphRow = styled(Box)(({ theme }) => ({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: theme.spacing(3),
-    marginBottom: theme.spacing(2),
+    gap: theme.spacing(2),
+    marginBottom: theme.spacing(1),
 }));
 
 const NodeContainer = styled(Box)(({ theme }) => ({
@@ -104,13 +112,13 @@ const ProviderNode = styled(Box)(({ theme }) => ({
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    padding: theme.spacing(2.5),
+    padding: theme.spacing(1.5),
     borderRadius: theme.shape.borderRadius,
     border: '1px solid',
     borderColor: 'divider',
     backgroundColor: 'background.paper',
-    width: 180,  // Fixed width - same as model nodes
-    height: 200,  // Fixed height - same as model nodes
+    width: NODE_DIMENSIONS.width,
+    height: NODE_DIMENSIONS.height,
     boxShadow: theme.shadows[2],
     transition: 'all 0.2s ease-in-out',
     position: 'relative',
@@ -249,14 +257,14 @@ const StyledModelNode = styled(Box, {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing(compact ? 1.5 : 2.5),
+    padding: theme.spacing(1.5),
     borderRadius: theme.shape.borderRadius,
     border: '1px solid',
     borderColor: 'divider',
     backgroundColor: 'background.paper',
     textAlign: 'center',
-    width: 180,  // Fixed width
-    height: compact ? 100 : 200,  // Dynamic height - half when compact
+    width: NODE_DIMENSIONS.width,
+    height: compact ? NODE_DIMENSIONS.heightCompact : NODE_DIMENSIONS.height,
     boxShadow: theme.shadows[2],
     transition: 'all 0.2s ease-in-out',
     position: 'relative',
@@ -319,54 +327,32 @@ const ProviderNodeComponent: React.FC<{
                 <ProviderNode onClick={onNodeClick} sx={{ cursor: active ? 'pointer' : 'default' }}>
                     {/* API Style Title */}
                     {provider.provider && (
-                        <Box sx={{ width: '100%', mb: 2 }}>
+                        <Box sx={{ width: '100%', mb: 0.5 }}>
                             <ApiStyleBadge
                                 apiStyle={apiStyle}
                                 sx={{
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    p: 1,
+                                    p: 0.5,
                                     borderRadius: 1,
                                     transition: 'all 0.2s',
                                     width: '100%',
-                                    minHeight: '32px'
+                                    minHeight: '22px'
                                 }}
                             />
                         </Box>
                     )}
 
-                    {/* Provider Section */}
-                    <Box sx={{ width: '100%', mb: 2 }}>
-                        <Box
-                            sx={{
-                                p: 1,
-                                border: '1px solid',
-                                borderColor: 'text.primary',
-                                borderRadius: 1,
-                                backgroundColor: 'background.paper',
-                                transition: 'all 0.2s',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: 0.5,
-                                width: '100%',
-                                minHeight: '32px'
-                            }}
-                        >
-                            <Typography variant="body2" color="text.primary">
-                                {providerUuidToName[provider.provider] || t('rule.graph.selectProvider')}
-                            </Typography>
-                        </Box>
-                    </Box>
-
-                    {/* Model Section */}
-                    {provider.provider && (
-                        <Box sx={{ width: '100%', mb: 1.5 }}>
+                    {/* Provider and Model in same row */}
+                    <Box sx={{ width: '100%', display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                        {/* Provider */}
+                        <Tooltip title={providerUuidToName[provider.provider] || t('rule.graph.selectProvider')} arrow>
                             <Box
                                 sx={{
-                                    p: 1,
-                                    border: '1px dashed',
+                                    flex: 1,
+                                    p: 0.5,
+                                    border: '1px solid',
                                     borderColor: 'text.primary',
                                     borderRadius: 1,
                                     backgroundColor: 'background.paper',
@@ -374,20 +360,47 @@ const ProviderNodeComponent: React.FC<{
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    width: '100%',
-                                    minHeight: '32px'
+                                    minHeight: '32px',
+                                    overflow: 'hidden',
                                 }}
                             >
-                                <Typography
-                                    variant="body2"
-                                    color="text.primary"
-                                    sx={{ fontStyle: !provider.model ? 'italic' : 'normal' }}
-                                >
-                                    {provider.model || t('rule.graph.selectModel')}
+                                <Typography variant="body2" color="text.primary" noWrap sx={{ fontSize: '0.8rem', width: '100%', textAlign: 'center' }}>
+                                    {providerUuidToName[provider.provider] || t('rule.graph.selectProvider')}
                                 </Typography>
                             </Box>
-                        </Box>
-                    )}
+                        </Tooltip>
+
+                        {/* Model */}
+                        {provider.provider && (
+                            <Tooltip title={provider.model || t('rule.graph.selectModel')} arrow>
+                                <Box
+                                    sx={{
+                                        flex: 1,
+                                        p: 0.5,
+                                        border: '1px dashed',
+                                        borderColor: 'text.primary',
+                                        borderRadius: 1,
+                                        backgroundColor: 'background.paper',
+                                        transition: 'all 0.2s',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        minHeight: '32px',
+                                        overflow: 'hidden',
+                                    }}
+                                >
+                                    <Typography
+                                        variant="body2"
+                                        color="text.primary"
+                                        noWrap
+                                        sx={{ fontSize: '0.8rem', fontStyle: !provider.model ? 'italic' : 'normal', width: '100%', textAlign: 'center' }}
+                                    >
+                                        {provider.model || t('rule.graph.selectModel')}
+                                    </Typography>
+                                </Box>
+                            </Tooltip>
+                        )}
+                    </Box>
 
                     {/* More Options Button - Moved to bottom right */}
                     <IconButton
@@ -408,7 +421,7 @@ const ProviderNodeComponent: React.FC<{
                             }
                         }}
                     >
-                        <MoreVertIcon />
+                        <MoreHorizIcon />
                     </IconButton>
 
                     {/* Action Menu */}
@@ -552,8 +565,8 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                     sx={{
                         width: '100%',
                         flexBasis: '100%',
-                        mt: 1,
-                        minHeight: '20px',
+                        mt: 0.5,
+                        minHeight: '18px',
                     }}
                 >
                     {record.description && (
@@ -574,13 +587,9 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
             {/* Expanded Content - Graph View */}
             <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                 <CardContent sx={{ pt: 0 }}>
-                    <Stack spacing={3}>
+                    <Stack spacing={2}>
                         {/* Graph Visualization */}
                         <GraphContainer>
-                            <Typography variant="h6" sx={{ mb: 3, textAlign: 'center', color: 'text.primary' }}>
-                                Request Proxy Visualization
-                            </Typography>
-
                             <GraphRow>
                                 {/* Model Node(s) Container */}
                                 <NodeContainer>
@@ -703,8 +712,8 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                                                     }}
                                                     disabled={!record.active || saving}
                                                     sx={{
-                                                        width: 180,  // Same width as provider nodes
-                                                        height: 200, // Same height as provider nodes
+                                                        width: NODE_DIMENSIONS.width,
+                                                        height: NODE_DIMENSIONS.height,
                                                         border: '2px dashed',
                                                         borderColor: 'divider',
                                                         borderRadius: 2,
@@ -774,13 +783,6 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                                 )}
 
                             </GraphRow>
-
-                            {/* Legend */}
-                            <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3, mt: 3, pt: 2, borderTop: '1px solid', borderColor: 'divider', flexWrap: 'wrap' }}>
-                                <Typography variant="caption" color="text.secondary">
-                                    • Click provider node to select provider and model
-                                </Typography>
-                            </Box>
                         </GraphContainer>
                     </Stack>
                 </CardContent>
