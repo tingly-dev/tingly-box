@@ -163,9 +163,6 @@ func (r *Rule) GetServices() []loadbalance.Service {
 
 // GetScenario returns the scenario, defaulting to openai if empty
 func (r *Rule) GetScenario() RuleScenario {
-	if r.Scenario == "" {
-		return ScenarioOpenAI
-	}
 	return r.Scenario
 }
 
