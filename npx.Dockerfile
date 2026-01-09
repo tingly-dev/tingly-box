@@ -55,7 +55,7 @@ CMD ["sh", "-c", "echo '======================================' && \
      echo '  Web UI will be available at:' && \
      echo '  http://localhost:12580/dashboard?user_auth_token=tingly-box-user-token' && \
      echo '======================================' && \
-     exec tingly-box start --host 0.0.0.0 --port 12580"]
+     exec tingly-box start --host ${TINGLY_HOST} --port ${TINGLY_PORT}"]
 
 # Volumes for persistent data
 VOLUME ["/app/.tingly-box", "/app/memory", "/app/logs"]

@@ -90,7 +90,7 @@ CMD ["sh", "-c", "echo '======================================' && \
      echo '  http://localhost:8080/dashboard?user_auth_token=tingly-box-user-token' && \
      echo '======================================' && \
      rm -f /app/.tingly-box/tingly-server.pid && \
-     exec tingly start --host 0.0.0.0 --port 8080"]
+     exec tingly start --host ${TINGLY_HOST} --port ${TINGLY_PORT}"]
 
 # Volumes for persistent data
 VOLUME ["/app/.tingly-box", "/app/memory", "/app/logs"]
