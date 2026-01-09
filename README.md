@@ -226,4 +226,14 @@ We welcome contributions! Follow these steps, inspired by popular open-source re
 
 ------
 
+## Community Support
+
+Scan the following telegram QR-code to gain instant support from our developers:
+
+<img width="256" height="256" alt="image" src="https://github.com/user-attachments/assets/2dbbe7c5-8202-4541-95c2-2a7172ef30b6" />
+
+Or find us at: https://t.me/+V1sqeajw1pYwMzU1
+
+------
+
 Mozilla Public License Version 2.0 · © Tingly Dev
