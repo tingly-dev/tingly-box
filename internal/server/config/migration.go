@@ -138,11 +138,15 @@ func migrate20260103(c *Config) {
 
 	// Map of default rule UUIDs to their scenarios
 	scenarioMap := map[string]typ.RuleScenario{
-		"tingly":             typ.ScenarioOpenAI,
-		"built-in-openai":    typ.ScenarioOpenAI,
-		"built-in-anthropic": typ.ScenarioAnthropic,
-		"built-in-cc":        typ.ScenarioClaudeCode,
-		"claude-code":        typ.ScenarioClaudeCode,
+		"tingly":              typ.ScenarioOpenAI,
+		"built-in-openai":     typ.ScenarioOpenAI,
+		"built-in-anthropic":  typ.ScenarioAnthropic,
+		"built-in-cc":         typ.ScenarioClaudeCode,
+		"claude-code":         typ.ScenarioClaudeCode,
+		"built-in-cc-haiku":   typ.ScenarioClaudeCode,
+		"built-in-cc-sonnet":  typ.ScenarioClaudeCode,
+		"built-in-cc-opus":    typ.ScenarioClaudeCode,
+		"built-in-cc-default": typ.ScenarioClaudeCode,
 	}
 
 	for i := range c.Rules {
@@ -156,10 +160,6 @@ func migrate20260103(c *Config) {
 		// Check if this is a default rule and set its scenario
 		if scenario, ok := scenarioMap[rule.UUID]; ok {
 			rule.Scenario = scenario
-			needsSave = true
-		} else {
-			// For non-default rules, set to openai as default
-			rule.Scenario = typ.ScenarioOpenAI
 			needsSave = true
 		}
 	}
