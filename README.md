@@ -8,9 +8,8 @@
 
 > Think of Tingly Box as your personal *LLM gateway*—simplifying integration, boosting flexibility, and keeping your workflows future‑proof.
 
----
-
 ![Tingly Box Web UI Demo](./docs/images/output.gif)
+
 
 ## ✨ Key Features
 
@@ -22,7 +21,6 @@
 - **JWT Authentication** – Separate user tokens and model tokens
 - **Web Management UI** – Visual provider, routing, and model management
 
----
 
 ## 🚀 Quick Start
 
@@ -99,8 +97,6 @@ docker run -d \
 
 
 
----
-
 ## **🔌 Use with OpenAI SDK or Claude Code**
 
 **Python OpenAI SDK**
@@ -158,8 +154,6 @@ Requests route through your OAuth-authorized provider, using your existing Claud
 
 This works with any tool that supports OpenAI-compatible endpoints: Cherry Studio, VS Code extensions, or custom AI agents.
 
----
-
 
 
 ## 🖥 Web Management UI
@@ -168,20 +162,17 @@ This works with any tool that supports OpenAI-compatible endpoints: Cherry Studi
 npx tingly-box start
 ```
 
----
 
 ## 📚 Documentation
 
 **[User Manual](./docs/user-manual.md)** – Installation, configuration, and operational guide
 
-------
 
 ## **🧩 Philosophy**
 
 - **One endpoint, many providers** – Consolidates multiple providers behind a single API with minimal configuration.
 - **Seamless integration** – Works with SDKs and CLI tools with minimal setup.
 
-------
 
 ## **🤝 How to Contribute**
 
@@ -224,24 +215,32 @@ We welcome contributions! Follow these steps, inspired by popular open-source re
 
 8. **Open a Pull Request** – Go to the GitHub repository and open a PR against `main`.
 
-------
 
-## Community Support
+
+## 📞 Support
 
 Scan the following telegram QR-code to gain instant support from our developers:
 
-<img width="256" height="256" alt="image" src="https://github.com/user-attachments/assets/2dbbe7c5-8202-4541-95c2-2a7172ef30b6" />
+<img width="196" height="196" alt="image" src="https://github.com/user-attachments/assets/2dbbe7c5-8202-4541-95c2-2a7172ef30b6" />
 
 Or find us at: https://t.me/+V1sqeajw1pYwMzU1
 
-------
 
-## Contributors
+
+## 🤲 Contributors
 
 <a href="https://github.com/tingly-dev/tingly-box/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=tingly-dev/tingly-box" />
 </a>
 
-------
+<br />
+<br />
+Rare badges are given to following contributors:
+
+<br />
+
+<img width="196" height="196" alt="image" src="https://github.com/user-attachments/assets/18730cd4-5e04-4840-9ef7-eab5cb418032" />
+
+---
 
 Mozilla Public License Version 2.0 · © Tingly Dev
