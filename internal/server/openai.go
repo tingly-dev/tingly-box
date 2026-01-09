@@ -222,7 +222,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 		}
 
 		if isStreaming {
-			stream, err := s.forwardAnthropicStreamRequest(provider, anthropicReq)
+			stream, err := s.ForwardAnthropicStreamRequest(provider, anthropicReq)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, ErrorResponse{
 					Error: ErrorDetail{
@@ -233,7 +233,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 				return
 			}
 
-			err = adaptor.HandleAnthropicToOpenAIStreamResponse(c, stream, responseModel)
+			err = adaptor.HandleAnthropicToOpenAIStreamResponse(c, &anthropicReq, stream, responseModel)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, ErrorResponse{
 					Error: ErrorDetail{
@@ -244,22 +244,22 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 				return
 			}
 			return
-		}
+		} else {
+			anthropicResp, err := s.ForwardAnthropicRequest(provider, anthropicReq)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, ErrorResponse{
+					Error: ErrorDetail{
+						Message: "Failed to forward Anthropic request: " + err.Error(),
+						Type:    "api_error",
+					},
+				})
+				return
+			}
 
-		anthropicResp, err := s.forwardAnthropicRequest(provider, anthropicReq)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, ErrorResponse{
-				Error: ErrorDetail{
-					Message: "Failed to forward Anthropic request: " + err.Error(),
-					Type:    "api_error",
-				},
-			})
+			openaiResp := adaptor.ConvertAnthropicToOpenAIResponse(anthropicResp, responseModel)
+			c.JSON(http.StatusOK, openaiResp)
 			return
 		}
-
-		openaiResp := adaptor.ConvertAnthropicToOpenAIResponse(anthropicResp, responseModel)
-		c.JSON(http.StatusOK, openaiResp)
-		return
 	} else {
 		if isStreaming {
 			s.handleStreamingRequest(c, provider, &req, responseModel)
@@ -315,16 +315,12 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 
 // forwardOpenAIRequest forwards the request to the selected provider using OpenAI library
 func (s *Server) forwardOpenAIRequest(provider *typ.Provider, req *openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
-	// Get or create OpenAI client from pool
-	client := s.clientPool.GetOpenAIClient(provider)
-	logrus.Infof("provider: %s", provider.Name)
+	// Get or create OpenAI client wrapper from pool
+	wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
+	logrus.Infof("provider: %s, model: %s", provider.Name, req.Model)
 
-	// Since  openai.ChatCompletionNewParams is a type alias to openai.ChatCompletionNewParams,
-	// we can directly use it as the request parameters
-	chatReq := *req
-
-	// Make the request using OpenAI library
-	chatCompletion, err := client.Chat.Completions.New(context.Background(), chatReq)
+	// Make the request using wrapper method
+	chatCompletion, err := wrapper.ChatCompletionsNew(context.Background(), *req)
 	if err != nil {
 		logrus.Error(err)
 		return nil, fmt.Errorf("failed to create chat completion: %w", err)
@@ -335,16 +331,12 @@ func (s *Server) forwardOpenAIRequest(provider *typ.Provider, req *openai.ChatCo
 
 // forwardOpenAIStreamRequest forwards the streaming request to the selected provider using OpenAI library
 func (s *Server) forwardOpenAIStreamRequest(provider *typ.Provider, req *openai.ChatCompletionNewParams) (*ssestream.Stream[openai.ChatCompletionChunk], error) {
-	// Get or create OpenAI client from pool
-	client := s.clientPool.GetOpenAIClient(provider)
+	// Get or create OpenAI client wrapper from pool
+	wrapper := s.clientPool.GetOpenAIClient(provider, "")
 	logrus.Infof("provider: %s (streaming)", provider.Name)
 
-	// Since  openai.ChatCompletionNewParams is a type alias to openai.ChatCompletionNewParams,
-	// we can directly use it as the request parameters
-	chatReq := *req
-
-	// Make the streaming request using OpenAI library
-	stream := client.Chat.Completions.NewStreaming(context.Background(), chatReq)
+	// Make the streaming request using wrapper method
+	stream := wrapper.ChatCompletionsNewStreaming(context.Background(), *req)
 
 	return stream, nil
 }

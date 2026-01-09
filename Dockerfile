@@ -35,6 +35,11 @@ RUN if [ ! -f libs/openai-go/go.mod ]; then \
       git clone -b fork --depth 1 https://github.com/tingly-dev/openai-go.git libs/openai-go; \
     fi
 
+RUN if [ ! -f libs/anthropic-sdk-go/go.mod ]; then \
+      rm -rf libs/anthropic-sdk-go && \
+      git clone -b fork --depth 1 https://github.com/tingly-dev/anthropic-sdk-go.git libs/anthropic-sdk-go; \
+    fi
+
 # Download dependencies (must be after source copy due to local replace directive)
 RUN go mod download
 

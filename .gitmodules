@@ -2,3 +2,7 @@
 	path = libs/openai-go
 	url = git@github.com:tingly-dev/openai-go.git
 	branch = "fork"
+[submodule "libs/anthropic-sdk-go"]
+	path = libs/anthropic-sdk-go
+	url = git@github.com:tingly-dev/anthropic-sdk-go.git
+	branch = "fork"

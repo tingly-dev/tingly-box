@@ -16,7 +16,6 @@ import (
 
 	"tingly-box/internal/loadbalance"
 	"tingly-box/internal/typ"
-	"tingly-box/pkg/adaptor"
 )
 
 // Use official Anthropic SDK types directly
@@ -45,8 +44,13 @@ type (
 )
 
 // AnthropicMessages handles Anthropic v1 messages API requests
+// This is the entry point that delegates to the appropriate implementation (v1 or beta)
 func (s *Server) AnthropicMessages(c *gin.Context) {
 	scenario := c.Param("scenario")
+
+	// Check if beta parameter is set to true
+	beta := c.Query("beta") == "true"
+	logrus.Debugf("scenario: %s beta: %v", scenario, beta)
 
 	// Read the raw request body first for debugging purposes
 	bodyBytes, err := c.GetRawData()
@@ -70,30 +74,9 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		return
 	}
 
-	// Check if streaming is requested
-	isStreaming := false
-	if stream, ok := rawReq["stream"].(bool); ok {
-		isStreaming = stream
-	}
-	logrus.Debugf("Stream requested for AnthropicMessages: %v", isStreaming)
-
-	// Parse into MessageNewParams using SDK's JSON unmarshaling
-	var req anthropic.MessageNewParams
-	if err := c.ShouldBindJSON(&req); err != nil {
-		// Log the invalid request for debugging
-		logrus.Debugf("Invalid JSON request received: %v\nBody: %s", err, string(bodyBytes))
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Invalid request body: " + err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
-		return
-	}
-
 	// Get model from request
-	proxyModel := string(req.Model)
-	if proxyModel == "" {
+	model := rawReq["model"].(string)
+	if model == "" {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Model is required",
@@ -110,7 +93,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		rule            *typ.Rule
 	)
 	if scenario == "" {
-		provider, selectedService, rule, err = s.DetermineProviderAndModel(proxyModel)
+		provider, selectedService, rule, err = s.DetermineProviderAndModel(model)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{
@@ -132,7 +115,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 			})
 			return
 		}
-		provider, selectedService, rule, err = s.DetermineProviderAndModelWithScenario(scenarioType, proxyModel)
+		provider, selectedService, rule, err = s.DetermineProviderAndModelWithScenario(scenarioType, model)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{
@@ -144,130 +127,11 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		}
 	}
 
-	// Set the rule and provider in context so middleware can use the same rule
-	if rule != nil {
-		c.Set("rule", rule)
-	}
-	// Use the selected service's model
-	actualModel := selectedService.Model
-	req.Model = anthropic.Model(actualModel)
-
-	// Ensure max_tokens is set (Anthropic API requires this)
-	// and cap it at the model's maximum allowed value
-	if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil {
-
+	// Delegate to the appropriate implementation based on beta parameter
+	if beta {
+		s.anthropicMessagesV1Beta(c, bodyBytes, rawReq, model, provider, selectedService, rule)
 	} else {
-		if req.MaxTokens == 0 {
-			req.MaxTokens = int64(s.config.GetDefaultMaxTokens())
-		}
-		// Cap max_tokens at the model's maximum to prevent API errors
-		maxAllowed := s.templateManager.GetMaxTokensForModel(provider.Name, actualModel)
-		if req.MaxTokens > int64(maxAllowed) {
-			req.MaxTokens = int64(maxAllowed)
-		}
-	}
-
-	// Set provider UUID in context (Service.Provider uses UUID, not name)
-	c.Set("provider", provider.UUID)
-	c.Set("model", selectedService.Model)
-
-	// Check provider's API style to decide which path to take
-	apiStyle := string(provider.APIStyle)
-	if apiStyle == "" {
-		apiStyle = "openai" // default to openai
-	}
-
-	if apiStyle == "anthropic" {
-		// Use direct Anthropic SDK call
-		if isStreaming {
-			// Handle streaming request
-			stream, err := s.forwardAnthropicStreamRequest(provider, req)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, ErrorResponse{
-					Error: ErrorDetail{
-						Message: "Failed to create streaming request: " + err.Error(),
-						Type:    "api_error",
-					},
-				})
-				return
-			}
-			// Handle the streaming response
-			s.handleAnthropicStreamResponse(c, stream, proxyModel)
-		} else {
-			// Handle non-streaming request
-			anthropicResp, err := s.forwardAnthropicRequest(provider, req)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, ErrorResponse{
-					Error: ErrorDetail{
-						Message: "Failed to forward Anthropic request: " + err.Error(),
-						Type:    "api_error",
-					},
-				})
-				return
-			}
-			// FIXME: now we use req model as resp model
-			anthropicResp.Model = anthropic.Model(proxyModel)
-			c.JSON(http.StatusOK, anthropicResp)
-		}
-		return
-	} else {
-		// Check if adaptor is enabled
-		if !s.enableAdaptor {
-			c.JSON(http.StatusUnprocessableEntity, ErrorResponse{
-				Error: ErrorDetail{
-					Message: fmt.Sprintf("Request format adaptation is disabled. Cannot send Anthropic request to OpenAI-style provider '%s'. Use --adapter flag to enable format conversion.", provider.Name),
-					Type:    "adapter_disabled",
-				},
-			})
-			return
-		}
-
-		// Use OpenAI conversion path (default behavior)
-		if isStreaming {
-			// Convert Anthropic request to OpenAI format for streaming
-			openaiReq := adaptor.ConvertAnthropicToOpenAIRequest(&req)
-
-			// Create streaming request
-			stream, err := s.forwardOpenAIStreamRequest(provider, openaiReq)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, ErrorResponse{
-					Error: ErrorDetail{
-						Message: "Failed to create streaming request: " + err.Error(),
-						Type:    "api_error",
-					},
-				})
-				return
-			}
-
-			// Handle the streaming response
-			err = adaptor.HandleOpenAIToAnthropicStreamResponse(c, stream, proxyModel)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, ErrorResponse{
-					Error: ErrorDetail{
-						Message: err.Error(),
-						Type:    "api_error",
-						Code:    "streaming_unsupported",
-					},
-				})
-			}
-
-		} else {
-			// Handle non-streaming request
-			openaiReq := adaptor.ConvertAnthropicToOpenAIRequest(&req)
-			response, err := s.forwardOpenAIRequest(provider, openaiReq)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, ErrorResponse{
-					Error: ErrorDetail{
-						Message: "Failed to forward request: " + err.Error(),
-						Type:    "api_error",
-					},
-				})
-				return
-			}
-			// Convert OpenAI response back to Anthropic format
-			anthropicResp := adaptor.ConvertOpenAIToAnthropicResponse(response, proxyModel)
-			c.JSON(http.StatusOK, anthropicResp)
-		}
+		s.anthropicMessagesV1(c, bodyBytes, rawReq, model, provider, selectedService, rule)
 	}
 }
 
@@ -335,18 +199,11 @@ func (s *Server) AnthropicListModels(c *gin.Context) {
 }
 
 // AnthropicCountTokens handles Anthropic v1 count_tokens endpoint
+// This is the entry point that delegates to the appropriate implementation (v1 or beta)
 func (s *Server) AnthropicCountTokens(c *gin.Context) {
 	// Check if beta parameter is set to true
 	beta := c.Query("beta") == "true"
-	if !beta {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "The count_tokens endpoint requires beta=true parameter",
-				Type:    "invalid_request_error",
-			},
-		})
-		return
-	}
+	logrus.Debugf("scenario: %s beta: %v", c.Query("scenario"), beta)
 
 	// Read the raw request body first for debugging purposes
 	bodyBytes, err := c.GetRawData()
@@ -377,22 +234,8 @@ func (s *Server) AnthropicCountTokens(c *gin.Context) {
 	}
 	logrus.Debugf("Stream requested for AnthropicMessages: %v", isStreaming)
 
-	// Parse into MessageNewParams using SDK's JSON unmarshaling
-	var req anthropic.MessageCountTokensParams
-	if err := c.ShouldBindJSON(&req); err != nil {
-		// Log the invalid request for debugging
-		logrus.Debugf("Invalid JSON request received: %v\nBody: %s", err, string(bodyBytes))
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Invalid request body: " + err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
-		return
-	}
-
 	// Get model from request
-	model := string(req.Model)
+	model := rawReq["model"].(string)
 	if model == "" {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -415,62 +258,18 @@ func (s *Server) AnthropicCountTokens(c *gin.Context) {
 		return
 	}
 
-	// Use the selected service's model
-	actualModel := selectedService.Model
-	req.Model = anthropic.Model(actualModel)
-
-	// Set provider UUID in context (Service.Provider uses UUID, not name)
-	c.Set("provider", provider.UUID)
-	c.Set("model", selectedService.Model)
-
-	// Check provider's API style to decide which path to take
-	apiStyle := string(provider.APIStyle)
-	if apiStyle == "" {
-		apiStyle = "openai" // default to openai
-	}
-
-	// If the provider uses Anthropic API style, use the actual count_tokens endpoint
-	if apiStyle == "anthropic" {
-		// Get or create Anthropic client from pool
-		client := s.clientPool.GetAnthropicClient(provider)
-
-		// Make the request using Anthropic SDK with timeout (provider.Timeout is in seconds)
-		timeout := time.Duration(provider.Timeout) * time.Second
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		defer cancel()
-		message, err := client.Messages.CountTokens(ctx, req)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error: ErrorDetail{
-					Message: "Invalid request body: " + err.Error(),
-					Type:    "invalid_request_error",
-				},
-			})
-			return
-		}
-
-		c.JSON(http.StatusOK, message)
+	// Delegate to the appropriate implementation based on beta parameter
+	if beta {
+		s.anthropicCountTokensV1Beta(c, bodyBytes, rawReq, model, provider, selectedService)
 	} else {
-		count, err := countTokensWithTiktoken(string(req.Model), req.Messages, req.System.OfTextBlockArray)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error: ErrorDetail{
-					Message: "Invalid request body: " + err.Error(),
-					Type:    "invalid_request_error",
-				},
-			})
-			return
-		}
-		c.JSON(http.StatusOK, anthropic.MessageTokensCount{
-			InputTokens: int64(count),
-		})
+		s.anthropicCountTokensV1(c, bodyBytes, rawReq, model, provider, selectedService)
 	}
 }
 
 // forwardAnthropicRequestRaw forwards request from raw map using Anthropic SDK
 func (s *Server) forwardAnthropicRequestRaw(provider *typ.Provider, rawReq map[string]interface{}, model string) (*anthropic.Message, error) {
-	// Get or create Anthropic client from pool
-	client := s.clientPool.GetAnthropicClient(provider)
+	// Get or create Anthropic client wrapper from pool
+	wrapper := s.clientPool.GetAnthropicClient(provider, model)
 	logrus.Debugf("Anthropic API Token Length: %d", len(provider.Token))
 
 	// Extract and convert messages from raw request
@@ -544,7 +343,7 @@ func (s *Server) forwardAnthropicRequestRaw(provider *typ.Provider, rawReq map[s
 	timeout := time.Duration(provider.Timeout) * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	message, err := client.Messages.New(ctx, params)
+	message, err := wrapper.MessagesNew(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -552,140 +351,14 @@ func (s *Server) forwardAnthropicRequestRaw(provider *typ.Provider, rawReq map[s
 	return message, nil
 }
 
-// forwardAnthropicRequest forwards request using Anthropic SDK with proper types
-func (s *Server) forwardAnthropicRequest(provider *typ.Provider, req anthropic.MessageNewParams) (*anthropic.Message, error) {
-	// Get or create Anthropic client from pool
-	client := s.clientPool.GetAnthropicClient(provider)
-
-	// Make the request using Anthropic SDK with timeout (provider.Timeout is in seconds)
-	timeout := time.Duration(provider.Timeout) * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	message, err := client.Messages.New(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	return message, nil
+// ForwardAnthropicRequest forwards request using Anthropic SDK with proper types
+// This is a public utility function used by other handlers (e.g., openai.go)
+func (s *Server) ForwardAnthropicRequest(provider *typ.Provider, req anthropic.MessageNewParams) (*anthropic.Message, error) {
+	return s.forwardAnthropicRequestV1(provider, req)
 }
 
-// forwardAnthropicStreamRequest forwards streaming request using Anthropic SDK
-func (s *Server) forwardAnthropicStreamRequest(provider *typ.Provider, req anthropic.MessageNewParams) (*anthropicstream.Stream[anthropic.MessageStreamEventUnion], error) {
-	// Get or create Anthropic client from pool
-	client := s.clientPool.GetAnthropicClient(provider)
-
-	logrus.Debugln("Creating Anthropic streaming request")
-
-	// Use background context for streaming
-	// The stream will manage its own lifecycle and timeout
-	// We don't use a timeout here because streaming responses can take longer
-	ctx := context.Background()
-	stream := client.Messages.NewStreaming(ctx, req)
-
-	return stream, nil
-}
-
-// handleAnthropicStreamResponse processes the Anthropic streaming response and sends it to the client
-func (s *Server) handleAnthropicStreamResponse(c *gin.Context, stream *anthropicstream.Stream[anthropic.MessageStreamEventUnion], model string) {
-	defer func() {
-		if r := recover(); r != nil {
-			logrus.Debugf("Panic in Anthropic streaming handler: %v", r)
-			// Try to send an error event if possible
-			if c.Writer != nil {
-				c.Writer.WriteHeader(http.StatusInternalServerError)
-				c.Writer.Write([]byte("event: error\ndata: {\"error\":{\"message\":\"Internal streaming error\",\"type\":\"internal_error\"}}\n\n"))
-				if flusher, ok := c.Writer.(http.Flusher); ok {
-					flusher.Flush()
-				}
-			}
-		}
-		// Ensure stream is always closed
-		if stream != nil {
-			if err := stream.Close(); err != nil {
-				logrus.Debugf("Error closing Anthropic stream: %v", err)
-			}
-		}
-	}()
-
-	// Set SSE headers
-	c.Header("Content-Type", "text/event-stream")
-	c.Header("Cache-Control", "no-cache")
-	c.Header("Connection", "keep-alive")
-	c.Header("Access-Control-Allow-Origin", "*")
-	c.Header("Access-Control-Allow-Headers", "Cache-Control")
-
-	// Create a flusher to ensure immediate sending of data
-	flusher, ok := c.Writer.(http.Flusher)
-	if !ok {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Streaming not supported by this connection",
-				Type:    "api_error",
-				Code:    "streaming_unsupported",
-			},
-		})
-		return
-	}
-
-	// Process the stream
-	for stream.Next() {
-		event := stream.Current()
-
-		event.Message.Model = anthropic.Model(model)
-
-		// Convert the event to JSON
-		eventJSON, err := json.Marshal(event)
-		if err != nil {
-			logrus.Debugf("Failed to marshal Anthropic stream event: %v", err)
-			continue
-		}
-
-		// Send the event as SSE
-		// Anthropic streaming uses server-sent events format
-		// MENTION: keep the format
-		// event: xxx
-		// data: xxx
-		// (extra \n here)
-		c.Writer.Write(
-			[]byte(
-				fmt.Sprintf(
-					"event: %s\ndata: %s\n\n",
-					event.Type, string(eventJSON)),
-			),
-		)
-		flusher.Flush()
-	}
-
-	// Check for stream errors
-	if err := stream.Err(); err != nil {
-		logrus.Debugf("Anthropic stream error: %v", err)
-
-		// Send error event
-		errorEvent := map[string]interface{}{
-			"type": "error",
-			"error": map[string]interface{}{
-				"message": err.Error(),
-				"type":    "stream_error",
-				"code":    "stream_failed",
-			},
-		}
-
-		errorJSON, marshalErr := json.Marshal(errorEvent)
-		if marshalErr != nil {
-			logrus.Debugf("Failed to marshal Anthropic error event: %v", marshalErr)
-			c.Writer.Write([]byte("event: error\ndata: {\"error\":{\"message\":\"Failed to marshal error\",\"type\":\"internal_error\"}}\n\n"))
-		} else {
-			c.Writer.Write([]byte(fmt.Sprintf("event: error\ndata: %s\n\n", string(errorJSON))))
-		}
-		flusher.Flush()
-		return
-	}
-
-	// Send a final event to indicate completion (similar to OpenAI's [DONE])
-	finishEvent := map[string]interface{}{
-		"type": "message_stop",
-	}
-	finishJSON, _ := json.Marshal(finishEvent)
-	c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", string(finishJSON))))
-	flusher.Flush()
+// ForwardAnthropicStreamRequest forwards streaming request using Anthropic SDK
+// This is a public utility function used by other handlers (e.g., openai.go)
+func (s *Server) ForwardAnthropicStreamRequest(provider *typ.Provider, req anthropic.MessageNewParams) (*anthropicstream.Stream[anthropic.MessageStreamEventUnion], error) {
+	return s.forwardAnthropicStreamRequestV1(provider, req)
 }
