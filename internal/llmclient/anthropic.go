@@ -4,14 +4,15 @@ import (
 	"context"
 	"net/http"
 	"strings"
-	"tingly-box/internal/llmclient/httpclient"
-	"tingly-box/internal/typ"
-	"tingly-box/pkg/oauth"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/sirupsen/logrus"
+
+	"tingly-box/internal/llmclient/httpclient"
+	"tingly-box/internal/typ"
+	"tingly-box/pkg/oauth"
 )
 
 // AnthropicClient wraps the Anthropic SDK client

@@ -5,12 +5,14 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"tingly-box/internal/server/config"
 )
 
 // TestConfig_DebugVerbose_DefaultValues tests that Debug and Verbose default to false
 func TestConfig_DebugVerbose_DefaultValues(t *testing.T) {
 	configDir := t.TempDir()
-	cfg, err := NewConfigWithDir(configDir)
+	cfg, err := config.NewConfigWithDir(configDir)
 	if err != nil {
 		t.Fatalf("Failed to create config: %v", err)
 	}
@@ -27,7 +29,7 @@ func TestConfig_DebugVerbose_DefaultValues(t *testing.T) {
 // TestConfig_SetDebug tests setting and getting Debug field
 func TestConfig_SetDebug(t *testing.T) {
 	configDir := t.TempDir()
-	cfg, err := NewConfigWithDir(configDir)
+	cfg, err := config.NewConfigWithDir(configDir)
 	if err != nil {
 		t.Fatalf("Failed to create config: %v", err)
 	}
@@ -56,7 +58,7 @@ func TestConfig_SetDebug(t *testing.T) {
 // TestConfig_SetVerbose tests setting and getting Verbose field
 func TestConfig_SetVerbose(t *testing.T) {
 	configDir := t.TempDir()
-	cfg, err := NewConfigWithDir(configDir)
+	cfg, err := config.NewConfigWithDir(configDir)
 	if err != nil {
 		t.Fatalf("Failed to create config: %v", err)
 	}
@@ -87,7 +89,7 @@ func TestConfig_DebugVerbose_Persistence(t *testing.T) {
 	configDir := t.TempDir()
 
 	// Create initial config and set Debug/Verbose
-	cfg, err := NewConfigWithDir(configDir)
+	cfg, err := config.NewConfigWithDir(configDir)
 	if err != nil {
 		t.Fatalf("Failed to create config: %v", err)
 	}
@@ -162,7 +164,7 @@ func TestConfig_DebugVerbose_Load(t *testing.T) {
 	}
 
 	// Load the config
-	cfg, err := NewConfigWithDir(configDir)
+	cfg, err := config.NewConfigWithDir(configDir)
 	if err != nil {
 		t.Fatalf("Failed to load config: %v", err)
 	}
@@ -181,7 +183,7 @@ func TestConfig_DebugVerbose_FalseValuesInJSON(t *testing.T) {
 	configDir := t.TempDir()
 
 	// Create config with Debug and Verbose explicitly set to false
-	cfg, err := NewConfigWithDir(configDir)
+	cfg, err := config.NewConfigWithDir(configDir)
 	if err != nil {
 		t.Fatalf("Failed to create config: %v", err)
 	}
@@ -228,7 +230,7 @@ func TestConfig_DebugVerbose_FalseValuesInJSON(t *testing.T) {
 // TestAppConfig_DebugVerbose_Delegation tests that AppConfig properly delegates to Config
 func TestAppConfig_DebugVerbose_Delegation(t *testing.T) {
 	configDir := t.TempDir()
-	appCfg, err := NewAppConfigWithDir(configDir)
+	appCfg, err := NewAppConfig(WithConfigDir(configDir))
 	if err != nil {
 		t.Fatalf("Failed to create AppConfig: %v", err)
 	}
@@ -273,7 +275,7 @@ func TestAppConfig_DebugVerbose_Delegation(t *testing.T) {
 // TestConfig_OpenBrowser_DefaultValue tests that OpenBrowser defaults to false (zero value)
 func TestConfig_OpenBrowser_DefaultValue(t *testing.T) {
 	configDir := t.TempDir()
-	cfg, err := NewConfigWithDir(configDir)
+	cfg, err := config.NewConfigWithDir(configDir)
 	if err != nil {
 		t.Fatalf("Failed to create config: %v", err)
 	}
@@ -287,7 +289,7 @@ func TestConfig_OpenBrowser_DefaultValue(t *testing.T) {
 // TestConfig_SetOpenBrowser tests setting and getting OpenBrowser field
 func TestConfig_SetOpenBrowser(t *testing.T) {
 	configDir := t.TempDir()
-	cfg, err := NewConfigWithDir(configDir)
+	cfg, err := config.NewConfigWithDir(configDir)
 	if err != nil {
 		t.Fatalf("Failed to create config: %v", err)
 	}
@@ -318,7 +320,7 @@ func TestConfig_OpenBrowser_Persistence(t *testing.T) {
 	configDir := t.TempDir()
 
 	// Create initial config and set OpenBrowser to false
-	cfg, err := NewConfigWithDir(configDir)
+	cfg, err := config.NewConfigWithDir(configDir)
 	if err != nil {
 		t.Fatalf("Failed to create config: %v", err)
 	}
@@ -354,7 +356,7 @@ func TestConfig_OpenBrowser_Persistence(t *testing.T) {
 // TestAppConfig_OpenBrowser_Delegation tests that AppConfig properly delegates OpenBrowser
 func TestAppConfig_OpenBrowser_Delegation(t *testing.T) {
 	configDir := t.TempDir()
-	appCfg, err := NewAppConfigWithDir(configDir)
+	appCfg, err := NewAppConfig(WithConfigDir(configDir))
 	if err != nil {
 		t.Fatalf("Failed to create AppConfig: %v", err)
 	}

@@ -14,11 +14,11 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"tingly-box/internal/auth"
-	"tingly-box/internal/config"
 	"tingly-box/internal/config/template"
 	"tingly-box/internal/constant"
 	"tingly-box/internal/obs"
 	"tingly-box/internal/server/background"
+	"tingly-box/internal/server/config"
 	"tingly-box/internal/server/middleware"
 	"tingly-box/internal/util/network"
 	oauth2 "tingly-box/pkg/oauth"

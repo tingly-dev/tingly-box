@@ -28,10 +28,7 @@ const (
 
 )
 
-const StateDirName = "state"
-
-const StatsDBFileName = "stats.db"   // SQLite database file
-const ModelsDBFileName = "models.db" // SQLite database file for provider models
+const DBFileName = "tingly.db" // Unified SQLite database file
 
 // Load balancing threshold defaults
 const DefaultRequestThreshold = int64(10)  // Default request threshold for round-robin and hybrid tactics
@@ -39,14 +36,9 @@ const DefaultTokenThreshold = int64(10000) // Default token threshold for token-
 
 const ConfigDirName = ".tingly-box"
 
-const ModelsDirName = "models"
+const DBDirName = "db"
 
 const MemoryDirName = "memory"
-
-// GetStateDir returns the directory used for persisted runtime state
-func GetStateDir() string {
-	return filepath.Join(GetTinglyConfDir(), StateDirName)
-}
 
 // GetTinglyConfDir returns the config directory path (default: ~/.tingly-box)
 func GetTinglyConfDir() string {
@@ -58,17 +50,20 @@ func GetTinglyConfDir() string {
 	return filepath.Join(homeDir, ConfigDirName)
 }
 
-// GetModelsDir returns the models directory path
-func GetModelsDir() string {
-	return filepath.Join(GetTinglyConfDir(), ModelsDirName)
-}
-
 // GetMemoryDir returns the memory directory path
-func GetMemoryDir() string {
-	return filepath.Join(GetTinglyConfDir(), MemoryDirName)
+func GetMemoryDir(baseDir string) string {
+	return filepath.Join(baseDir, MemoryDirName)
 }
 
 // GetLogDir returns the log directory path
-func GetLogDir() string {
-	return filepath.Join(GetTinglyConfDir(), LogDirName)
+func GetLogDir(baseDir string) string {
+	return filepath.Join(baseDir, LogDirName)
+}
+
+func GetDBDir(baseDir string) string {
+	return filepath.Join(baseDir, DBDirName)
+}
+
+func GetDBFile(baseDir string) string {
+	return filepath.Join(baseDir, DBDirName, DBFileName)
 }

@@ -5,10 +5,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"sync"
-	llmclient "tingly-box/internal/llmclient"
 
 	"github.com/sirupsen/logrus"
 
+	"tingly-box/internal/llmclient"
 	"tingly-box/internal/typ"
 )
 

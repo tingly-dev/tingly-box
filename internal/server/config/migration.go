@@ -10,7 +10,7 @@ import (
 	typ "tingly-box/internal/typ"
 )
 
-func migrate(c *Config) error {
+func Migrate(c *Config) error {
 	migrate20251220(c)
 	migrate20251221(c)
 	migrate20251225(c)
@@ -34,7 +34,7 @@ func migrate20251220(c *Config) {
 
 		// Ensure LBTactic is properly initialized
 		// Check if params are nil or have invalid zero values
-		if !isTacticValid(&c.Rules[i].LBTactic) {
+		if !IsTacticValid(&c.Rules[i].LBTactic) {
 			// Set default tactic if params are invalid
 			c.Rules[i].LBTactic = typ.Tactic{
 				Type:   loadbalance.TacticRoundRobin,
@@ -46,7 +46,7 @@ func migrate20251220(c *Config) {
 
 	// Save if any rules were updated
 	if needsSave {
-		_ = c.save()
+		_ = c.Save()
 	}
 }
 
@@ -65,7 +65,7 @@ func migrate20251221(c *Config) {
 	// Skip migration if Providers is already populated
 	if len(c.Providers) > 0 {
 		if needsSave {
-			_ = c.save()
+			_ = c.Save()
 		}
 		return
 	}
@@ -96,7 +96,7 @@ func migrate20251221(c *Config) {
 
 		// Generate UUID if not present in v1
 		if providerV2.UUID == "" {
-			providerV2.UUID = generateUUID()
+			providerV2.UUID = GenerateUUID()
 		}
 
 		c.Providers = append(c.Providers, providerV2)
@@ -120,7 +120,7 @@ func migrate20251221(c *Config) {
 
 	// Save if migration occurred
 	if needsSave {
-		_ = c.save()
+		_ = c.Save()
 	}
 }
 
@@ -165,6 +165,6 @@ func migrate20260103(c *Config) {
 	}
 
 	if needsSave {
-		_ = c.save()
+		_ = c.Save()
 	}
 }

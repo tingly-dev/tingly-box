@@ -3,13 +3,14 @@ package llmclient
 import (
 	"context"
 	"net/http"
-	"tingly-box/internal/llmclient/httpclient"
-	"tingly-box/internal/typ"
 
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/sirupsen/logrus"
+
+	"tingly-box/internal/llmclient/httpclient"
+	"tingly-box/internal/typ"
 )
 
 // OpenAIClient wraps the OpenAI SDK client

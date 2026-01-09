@@ -14,6 +14,7 @@ import (
 	"tingly-box/internal/config"
 	"tingly-box/internal/manager"
 	"tingly-box/internal/server"
+	serverconfig "tingly-box/internal/server/config"
 	"tingly-box/internal/util/daemon"
 	"tingly-box/internal/util/lock"
 	"tingly-box/internal/util/network"
@@ -32,7 +33,7 @@ type BannerConfig struct {
 	Port         int
 	Host         string
 	EnableUI     bool
-	GlobalConfig *config.Config
+	GlobalConfig *serverconfig.Config
 	IsDaemon     bool
 }
 

@@ -6,8 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"tingly-box/internal/config"
 	"tingly-box/internal/loadbalance"
+	"tingly-box/internal/server/config"
 	"tingly-box/internal/typ"
 )
 
