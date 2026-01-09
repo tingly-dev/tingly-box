@@ -28,8 +28,6 @@ const (
 
 )
 
-const StateDirName = "state"
-
 const DBFileName = "tingly.db" // Unified SQLite database file
 
 // Load balancing threshold defaults
@@ -37,6 +35,10 @@ const DefaultRequestThreshold = int64(10)  // Default request threshold for roun
 const DefaultTokenThreshold = int64(10000) // Default token threshold for token-based and hybrid tactics
 
 const ConfigDirName = ".tingly-box"
+
+const DBDirName = "db"
+
+const StateDirName = "state"
 
 const ModelsDirName = "models"
 
@@ -70,4 +72,12 @@ func GetMemoryDir() string {
 // GetLogDir returns the log directory path
 func GetLogDir() string {
 	return filepath.Join(GetTinglyConfDir(), LogDirName)
+}
+
+func GetDBDir(baseDir string) string {
+	return filepath.Join(baseDir, DBDirName)
+}
+
+func GetDBFile(baseDir string) string {
+	return filepath.Join(baseDir, DBDirName, DBFileName)
 }
