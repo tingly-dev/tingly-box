@@ -134,12 +134,10 @@ func (ac *AppConfig) Save() error {
 func ensureDirectories(baseDir string) error {
 	// Directories to ensure exist, with their desired permissions
 	dirs := map[string]os.FileMode{
-		constant.GetTinglyConfDir(): 0700, // Main config dir - private
-		constant.GetModelsDir():     0700, // Models dir - private
-		constant.GetStateDir():      0700, // State dir - private
-		constant.GetMemoryDir():     0700, // Memory dir - private
-		constant.GetLogDir():        0700, // Log dir - private
-		constant.GetDBDir(baseDir):  0700, // Log dir - private
+		constant.GetTinglyConfDir():    0700, // Main config dir - private
+		constant.GetMemoryDir(baseDir): 0700, // Memory dir - private
+		constant.GetLogDir(baseDir):    0700, // Log dir - private
+		constant.GetDBDir(baseDir):     0700, // Log dir - private
 	}
 
 	for dir, perm := range dirs {

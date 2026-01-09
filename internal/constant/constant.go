@@ -38,16 +38,7 @@ const ConfigDirName = ".tingly-box"
 
 const DBDirName = "db"
 
-const StateDirName = "state"
-
-const ModelsDirName = "models"
-
 const MemoryDirName = "memory"
-
-// GetStateDir returns the directory used for persisted runtime state
-func GetStateDir() string {
-	return filepath.Join(GetTinglyConfDir(), StateDirName)
-}
 
 // GetTinglyConfDir returns the config directory path (default: ~/.tingly-box)
 func GetTinglyConfDir() string {
@@ -59,19 +50,14 @@ func GetTinglyConfDir() string {
 	return filepath.Join(homeDir, ConfigDirName)
 }
 
-// GetModelsDir returns the models directory path
-func GetModelsDir() string {
-	return filepath.Join(GetTinglyConfDir(), ModelsDirName)
-}
-
 // GetMemoryDir returns the memory directory path
-func GetMemoryDir() string {
-	return filepath.Join(GetTinglyConfDir(), MemoryDirName)
+func GetMemoryDir(baseDir string) string {
+	return filepath.Join(baseDir, MemoryDirName)
 }
 
 // GetLogDir returns the log directory path
-func GetLogDir() string {
-	return filepath.Join(GetTinglyConfDir(), LogDirName)
+func GetLogDir(baseDir string) string {
+	return filepath.Join(baseDir, LogDirName)
 }
 
 func GetDBDir(baseDir string) string {
