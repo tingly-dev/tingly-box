@@ -1,4 +1,4 @@
-import { Box, Typography, ToggleButton, ToggleButtonGroup, Switch, FormControlLabel } from '@mui/material';
+import { Box, Typography, ToggleButton, ToggleButtonGroup, Dialog, DialogTitle, DialogContent, DialogActions, Button } from '@mui/material';
 import React from 'react';
 import CodeBlock from '../components/CodeBlock';
 import TemplatePage from '../components/TemplatePage.tsx';
@@ -19,6 +19,12 @@ type ConfigMode = 'unified' | 'separate';
 
 const MODEL_VARIANTS = ['default', 'haiku', 'sonnet', 'opus'] as const;
 
+// Configuration mode options
+const CONFIG_MODES: { value: ConfigMode; label: string }[] = [
+    { value: 'unified', label: 'Unified' },
+    { value: 'separate', label: 'Separate' },
+];
+
 const UseClaudeCodePage: React.FC = () => {
     const { t } = useTranslation();
     const {
@@ -32,8 +38,10 @@ const UseClaudeCodePage: React.FC = () => {
     const [rules, setRules] = React.useState<any[]>([]);
     const [loadingRule, setLoadingRule] = React.useState(true);
     const [isDockerMode, setIsDockerMode] = React.useState(false);
-    const [claudeJsonMode, setClaudeJsonMode] = React.useState<ClaudeJsonMode>('json');
+    const [claudeJsonMode, setClaudeJsonMode] = React.useState<ClaudeJsonMode>('script');
     const [configMode, setConfigMode] = React.useState<ConfigMode>('unified');
+    const [pendingMode, setPendingMode] = React.useState<ConfigMode | null>(null);
+    const [confirmDialogOpen, setConfirmDialogOpen] = React.useState(false);
 
     // Provider dialog hook
     const providerDialog = useProviderDialog(showNotification, {
@@ -61,30 +69,50 @@ const UseClaudeCodePage: React.FC = () => {
         }
     };
 
-    // Handle config mode change
-    const handleConfigModeChange = async (newMode: ConfigMode) => {
-        // Don't update UI state yet - wait for API success first
+    // Handle config mode change - show confirmation dialog first
+    const handleConfigModeChange = (newMode: ConfigMode) => {
+        if (newMode === configMode) return;
+        setPendingMode(newMode);
+        setConfirmDialogOpen(true);
+    };
+
+    // Confirm mode change
+    const confirmModeChange = async () => {
+        if (!pendingMode) return;
+
+        setConfirmDialogOpen(false);
         try {
             const config = {
                 scenario: 'claude_code',
                 flags: {
-                    unified: newMode === 'unified',
-                    separate: newMode === 'separate',
+                    unified: pendingMode === 'unified',
+                    separate: pendingMode === 'separate',
                     smart: false,
                 },
             };
             const result = await api.setScenarioConfig('claude_code', config);
 
-            // Only update UI state if API call succeeded
             if (result.success) {
-                setConfigMode(newMode);
+                setConfigMode(pendingMode);
+                showNotification(
+                    `Configuration mode changed to ${pendingMode}. Please reapply the configuration to Claude Code.`,
+                    'success'
+                );
             } else {
                 showNotification('Failed to save configuration mode', 'error');
             }
         } catch (error) {
             console.error('Failed to save scenario config:', error);
             showNotification('Failed to save configuration mode', 'error');
+        } finally {
+            setPendingMode(null);
         }
+    };
+
+    // Cancel mode change
+    const cancelModeChange = () => {
+        setConfirmDialogOpen(false);
+        setPendingMode(null);
     };
 
     const copyToClipboard = async (text: string, label: string) => {
@@ -389,21 +417,45 @@ node --eval '
 
                 {/* Mode switch between header and rules */}
                 <UnifiedCard size="full">
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 1 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 2, py: 1 }}>
                         <Typography variant="subtitle2" color="text.secondary">
-                            {configMode === 'unified' ? 'Unified Configuration' : 'Separate Configuration'}
+                            Configuration Mode
                         </Typography>
-                        <FormControlLabel
-                            control={
-                                <Switch
-                                    checked={configMode === 'separate'}
-                                    onChange={(e) => handleConfigModeChange(e.target.checked ? 'separate' : 'unified')}
-                                    size="small"
-                                />
-                            }
-                            label={configMode === 'unified' ? 'Switch to Separate' : 'Switch to Unified'}
-                            sx={{ '& .MuiFormControlLabel-label': { fontSize: '0.875rem' } }}
-                        />
+                        <ToggleButtonGroup
+                            value={configMode}
+                            exclusive
+                            size="small"
+                            onChange={(_, value) => value && handleConfigModeChange(value)}
+                            sx={{
+                                bgcolor: 'action.hover',
+                                '& .MuiToggleButton-root': {
+                                    color: 'text.primary',
+                                    padding: '4px 12px',
+                                    fontSize: '0.875rem',
+                                    '&:hover': {
+                                        bgcolor: 'action.selected',
+                                    },
+                                },
+                            }}
+                        >
+                            {CONFIG_MODES.map((mode) => (
+                                <ToggleButton
+                                    key={mode.value}
+                                    value={mode.value}
+                                    sx={{
+                                        '&.Mui-selected': {
+                                            bgcolor: 'primary.main',
+                                            color: 'white',
+                                            '&:hover': {
+                                                bgcolor: 'primary.dark',
+                                            },
+                                        },
+                                    }}
+                                >
+                                    {mode.label}
+                                </ToggleButton>
+                            ))}
+                        </ToggleButtonGroup>
                     </Box>
                 </UnifiedCard>
 
@@ -418,6 +470,33 @@ node --eval '
                     allowToggleRule={false}
                     collapsible={false}
                 />
+
+                {/* Confirmation dialog for mode change */}
+                <Dialog
+                    open={confirmDialogOpen}
+                    onClose={cancelModeChange}
+                    maxWidth="sm"
+                    fullWidth
+                >
+                    <DialogTitle>Change Configuration Mode?</DialogTitle>
+                    <DialogContent>
+                        <Typography variant="body1" sx={{ mb: 1 }}>
+                            You are about to switch from <strong>{configMode}</strong> to <strong>{pendingMode}</strong> mode.
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                            After changing the mode, you will need to reapply the configuration to Claude Code for the changes to take effect.
+                        </Typography>
+                    </DialogContent>
+                    <DialogActions sx={{ px: 3, pb: 2 }}>
+                        <Button onClick={cancelModeChange} color="inherit">
+                            Cancel
+                        </Button>
+                        <Button onClick={confirmModeChange} variant="contained" color="primary">
+                            Confirm
+                        </Button>
+                    </DialogActions>
+                </Dialog>
+
                 <ProviderFormDialog
                     open={providerDialog.providerDialogOpen}
                     onClose={providerDialog.handleCloseDialog}
