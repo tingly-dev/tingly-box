@@ -1136,6 +1136,58 @@ func init() {
 			},
 			Active: true,
 		},
+		{
+			UUID:          "built-in-cc-haiku",
+			Scenario:      typ.ScenarioClaudeCode,
+			RequestModel:  "tingly/cc-haiku",
+			ResponseModel: "",
+			Description:   "Claude Code - Haiku model - small / cheap / for background task",
+			Services:      []loadbalance.Service{},
+			LBTactic: typ.Tactic{
+				Type:   loadbalance.TacticRoundRobin,
+				Params: typ.DefaultRoundRobinParams(),
+			},
+			Active: true,
+		},
+		{
+			UUID:          "built-in-cc-sonnet",
+			Scenario:      typ.ScenarioClaudeCode,
+			RequestModel:  "tingly/cc-sonnet",
+			ResponseModel: "",
+			Description:   "Claude Code - Sonnet model - medium / for general task",
+			Services:      []loadbalance.Service{},
+			LBTactic: typ.Tactic{
+				Type:   loadbalance.TacticRoundRobin,
+				Params: typ.DefaultRoundRobinParams(),
+			},
+			Active: true,
+		},
+		{
+			UUID:          "built-in-cc-opus",
+			Scenario:      typ.ScenarioClaudeCode,
+			RequestModel:  "tingly/cc-opus",
+			ResponseModel: "",
+			Description:   "Claude Code - Opus model - large / expensive / for high level task",
+			Services:      []loadbalance.Service{},
+			LBTactic: typ.Tactic{
+				Type:   loadbalance.TacticRoundRobin,
+				Params: typ.DefaultRoundRobinParams(),
+			},
+			Active: true,
+		},
+		{
+			UUID:          "built-in-cc-default",
+			Scenario:      typ.ScenarioClaudeCode,
+			RequestModel:  "tingly/cc-default",
+			ResponseModel: "",
+			Description:   "Claude Code - Default model - for general task",
+			Services:      []loadbalance.Service{},
+			LBTactic: typ.Tactic{
+				Type:   loadbalance.TacticRoundRobin,
+				Params: typ.DefaultRoundRobinParams(),
+			},
+			Active: true,
+		},
 	}
 }
 
