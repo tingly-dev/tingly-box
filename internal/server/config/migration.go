@@ -10,11 +10,25 @@ import (
 	typ "tingly-box/internal/typ"
 )
 
+// Built-in rule UUID constants
+const (
+	RuleUUIDTingly           = "tingly"
+	RuleUUIDBuiltinOpenAI    = "built-in-openai"
+	RuleUUIDBuiltinAnthropic = "built-in-anthropic"
+	RuleUUIDBuiltinCC        = "built-in-cc"
+	RuleUUIDClaudeCode       = "claude-code"
+	RuleUUIDBuiltinCCHaiku   = "built-in-cc-haiku"
+	RuleUUIDBuiltinCCSonnet  = "built-in-cc-sonnet"
+	RuleUUIDBuiltinCCOpus    = "built-in-cc-opus"
+	RuleUUIDBuiltinCCDefault = "built-in-cc-default"
+)
+
 func Migrate(c *Config) error {
 	migrate20251220(c)
 	migrate20251221(c)
 	migrate20251225(c)
 	migrate20260103(c)
+	migrate20260110(c)
 	return nil
 }
 
@@ -138,15 +152,15 @@ func migrate20260103(c *Config) {
 
 	// Map of default rule UUIDs to their scenarios
 	scenarioMap := map[string]typ.RuleScenario{
-		"tingly":              typ.ScenarioOpenAI,
-		"built-in-openai":     typ.ScenarioOpenAI,
-		"built-in-anthropic":  typ.ScenarioAnthropic,
-		"built-in-cc":         typ.ScenarioClaudeCode,
-		"claude-code":         typ.ScenarioClaudeCode,
-		"built-in-cc-haiku":   typ.ScenarioClaudeCode,
-		"built-in-cc-sonnet":  typ.ScenarioClaudeCode,
-		"built-in-cc-opus":    typ.ScenarioClaudeCode,
-		"built-in-cc-default": typ.ScenarioClaudeCode,
+		RuleUUIDTingly:           typ.ScenarioOpenAI,
+		RuleUUIDBuiltinOpenAI:    typ.ScenarioOpenAI,
+		RuleUUIDBuiltinAnthropic: typ.ScenarioAnthropic,
+		RuleUUIDBuiltinCC:        typ.ScenarioClaudeCode,
+		RuleUUIDClaudeCode:       typ.ScenarioClaudeCode,
+		RuleUUIDBuiltinCCHaiku:   typ.ScenarioClaudeCode,
+		RuleUUIDBuiltinCCSonnet:  typ.ScenarioClaudeCode,
+		RuleUUIDBuiltinCCOpus:    typ.ScenarioClaudeCode,
+		RuleUUIDBuiltinCCDefault: typ.ScenarioClaudeCode,
 	}
 
 	for i := range c.Rules {
@@ -162,6 +176,64 @@ func migrate20260103(c *Config) {
 			rule.Scenario = scenario
 			needsSave = true
 		}
+	}
+
+	if needsSave {
+		_ = c.Save()
+	}
+}
+
+// migrate20260110 copies services from built-in-cc to built-in-cc-* rules if they are empty
+func migrate20260110(c *Config) {
+	needsSave := false
+
+	// Find the source rule (built-in-cc)
+	var sourceRule *typ.Rule
+	for i := range c.Rules {
+		if c.Rules[i].UUID == RuleUUIDBuiltinCC {
+			sourceRule = &c.Rules[i]
+			break
+		}
+	}
+
+	// If source rule doesn't exist or has no services, skip migration
+	if sourceRule == nil || len(sourceRule.Services) == 0 {
+		return
+	}
+
+	// built-in-cc-* rule UUIDs that should inherit from built-in-cc
+	targetRules := []string{
+		RuleUUIDBuiltinCCHaiku,
+		RuleUUIDBuiltinCCSonnet,
+		RuleUUIDBuiltinCCOpus,
+		RuleUUIDBuiltinCCDefault,
+	}
+
+	for i := range c.Rules {
+		rule := &c.Rules[i]
+
+		// Check if this is a target rule
+		isTarget := false
+		for _, targetUUID := range targetRules {
+			if rule.UUID == targetUUID {
+				isTarget = true
+				break
+			}
+		}
+
+		if !isTarget {
+			continue
+		}
+
+		// If services is not empty, skip
+		if len(rule.Services) > 0 {
+			continue
+		}
+
+		// Copy services from source rule
+		rule.Services = make([]loadbalance.Service, len(sourceRule.Services))
+		copy(rule.Services, sourceRule.Services)
+		needsSave = true
 	}
 
 	if needsSave {
