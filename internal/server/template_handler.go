@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -87,7 +88,7 @@ func (s *Server) RefreshProviderTemplates(c *gin.Context) {
 		return
 	}
 
-	registry, err := s.templateManager.FetchFromGitHub()
+	registry, err := s.templateManager.FetchFromGitHub(context.Background())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, TemplateResponse{
 			Success: false,

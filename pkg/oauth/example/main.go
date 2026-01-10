@@ -322,7 +322,7 @@ func runAuthCodeFlow(config *ExampleConfig, registry *oauth2.Registry, providerC
 	default:
 	}
 
-	authURL, state, err := manager.GetAuthURL(context.Background(), config.UserID, config.ProviderType, "", "")
+	authURL, state, err := manager.GetAuthURL(config.UserID, config.ProviderType, "", "", "")
 	if err != nil {
 		return fmt.Errorf("failed to generate auth URL: %w", err)
 	}

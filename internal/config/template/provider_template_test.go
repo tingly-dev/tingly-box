@@ -1,6 +1,7 @@
 package template
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -47,7 +48,7 @@ func TestNewTemplateManager(t *testing.T) {
 // TestTemplateManagerInitialize tests initialization with embedded templates
 func TestTemplateManagerInitialize(t *testing.T) {
 	tm := NewTemplateManager("")
-	if err := tm.Initialize(); err != nil {
+	if err := tm.Initialize(context.Background()); err != nil {
 		t.Fatalf("Initialize failed: %v", err)
 	}
 
@@ -67,7 +68,7 @@ func TestTemplateManagerInitialize(t *testing.T) {
 // TestTemplateManagerGetTemplate tests retrieving individual templates
 func TestTemplateManagerGetTemplate(t *testing.T) {
 	tm := NewTemplateManager("")
-	if err := tm.Initialize(); err != nil {
+	if err := tm.Initialize(context.Background()); err != nil {
 		t.Fatalf("Initialize failed: %v", err)
 	}
 
@@ -170,9 +171,9 @@ func TestTemplateManagerFetchFromGitHub(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tm := NewTemplateManager(tt.githubURL)
 			// Initialize first to load embedded templates
-			_ = tm.Initialize()
+			_ = tm.Initialize(context.Background())
 
-			registry, err := tm.FetchFromGitHub()
+			registry, err := tm.FetchFromGitHub(context.Background())
 			if tt.expectError {
 				if err == nil {
 					t.Error("expected error, got nil")
@@ -197,39 +198,54 @@ func TestTemplateManagerGetModelsForProvider(t *testing.T) {
 	tests := []struct {
 		name           string
 		githubURL      string
-		providerName   string
+		provider       *typ.Provider
 		expectError    bool
 		expectModels   bool
 		expectedSource TemplateSource
 	}{
 		{
-			name:           "Provider with predefined models from embedded - minimax",
-			githubURL:      "",
-			providerName:   "minimax",
+			name:      "Provider with predefined models from embedded - minimax",
+			githubURL: "",
+			provider: &typ.Provider{
+				Name:     "my-minimax",
+				APIBase:  "https://api.minimaxi.com/v1",
+				APIStyle: typ.APIStyleOpenAI,
+			},
 			expectError:    false,
 			expectModels:   true,
 			expectedSource: TemplateSourceLocal,
 		},
 		{
-			name:           "Provider with predefined models from GitHub - minimax",
-			githubURL:      "https://raw.githubusercontent.com/tingly-dev/tingly-box/main/internal/config/provider_templates/provider_templates.json",
-			providerName:   "minimax",
+			name:      "Provider with predefined models from GitHub - minimax",
+			githubURL: "https://raw.githubusercontent.com/tingly-dev/tingly-box/main/internal/config/provider_templates/provider_templates.json",
+			provider: &typ.Provider{
+				Name:     "my-minimax",
+				APIBase:  "https://api.minimaxi.com/v1",
+				APIStyle: typ.APIStyleOpenAI,
+			},
 			expectError:    false,
 			expectModels:   true,
 			expectedSource: TemplateSourceGitHub,
 		},
 		{
-			name:           "Provider with empty models but supports endpoint - openai",
-			githubURL:      "",
-			providerName:   "openai",
+			name:      "Provider with empty models but supports endpoint - openai",
+			githubURL: "",
+			provider: &typ.Provider{
+				Name:     "my-openai",
+				APIBase:  "https://api.openai.com/v1",
+				APIStyle: typ.APIStyleOpenAI,
+			},
 			expectError:    false,
 			expectModels:   false, // Empty models list, but no error
 			expectedSource: TemplateSourceLocal,
 		},
 		{
-			name:           "Non-existent provider",
-			githubURL:      "",
-			providerName:   "nonexistent",
+			name:      "Non-existent provider",
+			githubURL: "",
+			provider: &typ.Provider{
+				Name:    "nonexistent",
+				APIBase: "https://nonexistent.example.com/v1",
+			},
 			expectError:    true,
 			expectModels:   false,
 			expectedSource: TemplateSourceLocal,
@@ -239,12 +255,11 @@ func TestTemplateManagerGetModelsForProvider(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tm := NewTemplateManager(tt.githubURL)
-			if err := tm.Initialize(); err != nil {
+			if err := tm.Initialize(context.Background()); err != nil {
 				t.Fatalf("Initialize failed: %v", err)
 			}
 
-			provider := &typ.Provider{Name: tt.providerName}
-			models, source, err := tm.GetModelsForProvider(provider)
+			models, source, err := tm.GetModelsForProvider(tt.provider)
 
 			if tt.expectError {
 				if err == nil {
@@ -300,7 +315,7 @@ func TestValidateTemplate(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name: "Missing both base URLs",
+			name: "Missing base_url for non-OAuth template",
 			template: &ProviderTemplate{
 				ID:   "test",
 				Name: "Test Provider",
@@ -313,6 +328,57 @@ func TestValidateTemplate(t *testing.T) {
 				ID:               "test",
 				Name:             "Test Provider",
 				BaseURLAnthropic: "https://api.test.com",
+			},
+			expectError: false,
+		},
+		{
+			name: "Valid OAuth template with auth_type and oauth_provider",
+			template: &ProviderTemplate{
+				ID:            "test_oauth",
+				Name:          "Test OAuth Provider",
+				AuthType:      "oauth",
+				OAuthProvider: "claude_code",
+			},
+			expectError: false,
+		},
+		{
+			name: "OAuth template without oauth_provider field",
+			template: &ProviderTemplate{
+				ID:       "test_oauth",
+				Name:     "Test OAuth Provider",
+				AuthType: "oauth",
+			},
+			expectError: true,
+		},
+		{
+			name: "OAuth template without base_url is valid",
+			template: &ProviderTemplate{
+				ID:            "test_oauth",
+				Name:          "Test OAuth Provider",
+				AuthType:      "oauth",
+				OAuthProvider: "claude_code",
+			},
+			expectError: false,
+		},
+		{
+			name: "OAuth template with both oauth_provider and base_url is also valid",
+			template: &ProviderTemplate{
+				ID:            "test_oauth",
+				Name:          "Test OAuth Provider",
+				AuthType:      "oauth",
+				OAuthProvider: "claude_code",
+				BaseURLOpenAI: "https://api.test.com/v1",
+			},
+			expectError: false,
+		},
+		{
+			name: "Template with auth_type=key and oauth_provider is unusual but not invalid",
+			template: &ProviderTemplate{
+				ID:            "test",
+				Name:          "Test Provider",
+				AuthType:      "key",
+				OAuthProvider: "some_provider",
+				BaseURLOpenAI: "https://api.test.com/v1",
 			},
 			expectError: false,
 		},
@@ -337,7 +403,7 @@ func TestValidateTemplate(t *testing.T) {
 // TestTemplateManagerConcurrentAccess tests concurrent access to templates
 func TestTemplateManagerConcurrentAccess(t *testing.T) {
 	tm := NewTemplateManager("")
-	if err := tm.Initialize(); err != nil {
+	if err := tm.Initialize(context.Background()); err != nil {
 		t.Fatalf("Initialize failed: %v", err)
 	}
 

@@ -187,7 +187,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 	}
 
 	actualModel := selectedService.Model
-	maxAllowed := s.templateManager.GetMaxTokensForModel(provider.Name, actualModel)
+	maxAllowed := s.templateManager.GetMaxTokensForModelByProvider(provider, actualModel)
 
 	// FIXME: response as proxy / request
 	responseModel := proxyModel
