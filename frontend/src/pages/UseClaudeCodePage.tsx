@@ -14,6 +14,7 @@ import EmptyStateGuide from '../components/EmptyStateGuide';
 import ProviderFormDialog from '../components/ProviderFormDialog';
 import OAuthDialog from '../components/OAuthDialog';
 import { isFeatureEnabled, FEATURE_FLAGS } from '../constants/featureFlags';
+import ClaudeCodeConfigModal from '../components/ClaudeCodeConfigModal';
 
 type ClaudeJsonMode = 'json' | 'script';
 type ConfigMode = 'unified' | 'separate';
@@ -43,6 +44,13 @@ const UseClaudeCodePage: React.FC = () => {
     const [configMode, setConfigMode] = React.useState<ConfigMode>('unified');
     const [pendingMode, setPendingMode] = React.useState<ConfigMode | null>(null);
     const [confirmDialogOpen, setConfirmDialogOpen] = React.useState(false);
+
+    // Claude Code config modal state
+    const [configModalOpen, setConfigModalOpen] = React.useState(false);
+    const [dontRemindAgain, setDontRemindAgain] = React.useState(false);
+
+    // localStorage key for "do not remind again"
+    const CLAUDE_CODE_DONT_REMIND_KEY = 'claudeCode_dontRemindAgain';
 
     // Provider dialog hook
     const providerDialog = useProviderDialog(showNotification, {
@@ -95,6 +103,12 @@ const UseClaudeCodePage: React.FC = () => {
 
             if (result.success) {
                 setConfigMode(pendingMode);
+
+                // Reset "do not remind again" and show modal with new configuration
+                localStorage.setItem(CLAUDE_CODE_DONT_REMIND_KEY, 'false');
+                setDontRemindAgain(false);
+                setConfigModalOpen(true);
+
                 showNotification(
                     `Configuration mode changed to ${pendingMode}. Please reapply the configuration to Claude Code.`,
                     'success'
@@ -115,6 +129,29 @@ const UseClaudeCodePage: React.FC = () => {
         setConfirmDialogOpen(false);
         setPendingMode(null);
     };
+
+    // Handle "do not remind again" checkbox change
+    const handleDontRemindChange = (checked: boolean) => {
+        setDontRemindAgain(checked);
+        localStorage.setItem(CLAUDE_CODE_DONT_REMIND_KEY, String(checked));
+    };
+
+    // Show config guide modal (manual trigger) - user wants to be reminded again
+    const handleShowConfigGuide = () => {
+        // Reset "do not remind again" since user is manually requesting the guide
+        setDontRemindAgain(false);
+        localStorage.setItem(CLAUDE_CODE_DONT_REMIND_KEY, 'false');
+        setConfigModalOpen(true);
+    };
+
+    // Show config guide modal on mount if not suppressed
+    React.useEffect(() => {
+        const savedDontRemind = localStorage.getItem(CLAUDE_CODE_DONT_REMIND_KEY);
+        const shouldShow = savedDontRemind !== 'true';
+        if (shouldShow) {
+            setConfigModalOpen(true);
+        }
+    }, []);
 
     const copyToClipboard = async (text: string, label: string) => {
         try {
@@ -299,82 +336,6 @@ node --eval '
     }'`;
     };
 
-    const header = (
-        <Box sx={{ p: 2, display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, alignItems: 'stretch' }}>
-            {/* Settings.json section */}
-            <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-                    <Box sx={{ mb: 1 }}>
-                        <Typography variant="subtitle2" color="text.secondary">
-                            {t('claudeCode.step1')}
-                        </Typography>
-                    </Box>
-                    <Box sx={{ flex: 1, height: 400 }}>
-                        <CodeBlock
-                            code={claudeJsonMode === 'json' ? generateSettingsConfig() : generateSettingsScript()}
-                            language={claudeJsonMode === 'json' ? 'json' : 'js'}
-                            filename={claudeJsonMode === 'json' ? 'Add the env section into ~/.claude/setting.json' : 'Script to setup ~/.claude/settings.json'}
-                            wrap={true}
-                            onCopy={(code) => copyToClipboard(code, claudeJsonMode === 'json' ? 'settings.json' : 'script')}
-                            maxHeight={180}
-                            minHeight={180}
-                            headerActions={
-                                <ToggleButtonGroup
-                                    value={claudeJsonMode}
-                                    exclusive
-                                    size="small"
-                                    onChange={(_, value) => value && setClaudeJsonMode(value)}
-                                    sx={{ bgcolor: 'grey.700', '& .MuiToggleButton-root': { color: 'grey.300', padding: '2px 8px', fontSize: '0.75rem' } }}
-                                >
-                                    <ToggleButton value="json" sx={{ '&.Mui-selected': { bgcolor: 'primary.main', color: 'white' } }}>
-                                        JSON
-                                    </ToggleButton>
-                                    <ToggleButton value="script" sx={{ '&.Mui-selected': { bgcolor: 'primary.main', color: 'white' } }}>
-                                        Script
-                                    </ToggleButton>
-                                </ToggleButtonGroup>
-                            }
-                        />
-                    </Box>
-                </Box>
-
-                {/* .claude.json section */}
-                <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-                    <Box sx={{ mb: 1 }}>
-                        <Typography variant="subtitle2" color="text.secondary">
-                            {t('claudeCode.step2')}
-                        </Typography>
-                    </Box>
-                    <Box sx={{ flex: 1, height: 400 }}>
-                        <CodeBlock
-                            code={claudeJsonMode === 'json' ? generateClaudeJsonConfig() : generateScript()}
-                            language={claudeJsonMode === 'json' ? 'json' : 'js'}
-                            filename={claudeJsonMode === 'json' ? 'Set hasCompletedOnboarding into ~/.claude.json' : 'Script to setup ~/.claude.json'}
-                            wrap={true}
-                            onCopy={(code) => copyToClipboard(code, claudeJsonMode === 'json' ? '.claude.json' : 'script')}
-                            maxHeight={180}
-                            minHeight={180}
-                            headerActions={
-                                <ToggleButtonGroup
-                                    value={claudeJsonMode}
-                                    exclusive
-                                    size="small"
-                                    onChange={(_, value) => value && setClaudeJsonMode(value)}
-                                    sx={{ bgcolor: 'grey.700', '& .MuiToggleButton-root': { color: 'grey.300', padding: '2px 8px', fontSize: '0.75rem' } }}
-                                >
-                                    <ToggleButton value="json" sx={{ '&.Mui-selected': { bgcolor: 'primary.main', color: 'white' } }}>
-                                        JSON
-                                    </ToggleButton>
-                                    <ToggleButton value="script" sx={{ '&.Mui-selected': { bgcolor: 'primary.main', color: 'white' } }}>
-                                        Script
-                                    </ToggleButton>
-                                </ToggleButtonGroup>
-                            }
-                        />
-                    </Box>
-                </Box>
-            </Box>
-    );
-
     // Show empty state if no providers
     if (!providers.length) {
         return (
@@ -412,8 +373,23 @@ node --eval '
                 <UnifiedCard
                     title="Use Claude Code"
                     size="full"
+                    rightAction={
+                        <Button
+                            onClick={handleShowConfigGuide}
+                            variant="contained"
+                            color="primary"
+                            size="small"
+                            sx={{ fontSize: '0.875rem' }}
+                        >
+                            {t('claudeCode.modal.showGuide')}
+                        </Button>
+                    }
                 >
-                    {header}
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 50 }}>
+                        <Typography variant="body2" color="text.secondary">
+                            Configure Claude Code to use Tingly Box as your AI model proxy
+                        </Typography>
+                    </Box>
                 </UnifiedCard>
 
                 {/* Mode switch between header and rules - controlled by feature flag */}
@@ -508,6 +484,22 @@ node --eval '
                     onChange={providerDialog.handleFieldChange}
                     mode="add"
                     isFirstProvider={providers.length === 0}
+                />
+
+                {/* Claude Code Config Modal */}
+                <ClaudeCodeConfigModal
+                    open={configModalOpen}
+                    onClose={() => setConfigModalOpen(false)}
+                    dontRemindAgain={dontRemindAgain}
+                    onDontRemindChange={handleDontRemindChange}
+                    claudeJsonMode={claudeJsonMode}
+                    onClaudeJsonModeChange={setClaudeJsonMode}
+                    configMode={configMode}
+                    generateSettingsConfig={generateSettingsConfig}
+                    generateSettingsScript={generateSettingsScript}
+                    generateClaudeJsonConfig={generateClaudeJsonConfig}
+                    generateScript={generateScript}
+                    copyToClipboard={copyToClipboard}
                 />
             </CardGrid>
         </PageLayout>

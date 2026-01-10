@@ -316,6 +316,12 @@ export default {
     "unifiedConfig": "Unified Configuration",
     "separateConfig": "Separate Configuration",
     "switchToSeparate": "Switch to Separate",
-    "switchToUnified": "Switch to Unified"
+    "switchToUnified": "Switch to Unified",
+    "modal": {
+      "title": "Claude Code Configuration Guide",
+      "subtitle": "Follow these steps to configure Claude Code to use Tingly Box as your AI proxy",
+      "dontRemindAgain": "Do not remind again",
+      "showGuide": "Config Claude Code"
+    }
   }
 };
