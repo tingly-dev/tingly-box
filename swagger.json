@@ -245,6 +245,38 @@
         }
       }
     },
+    "/api/v1/oauth/status": {
+      "get": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Get OAuth session status",
+        "description": "Get OAuth session status",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "query",
+            "description": "session id to check oauth status",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/OAuthSessionStatusResponse"
+            }
+          }
+        }
+      }
+    },
     "/api/v1/oauth/token": {
       "get": {
         "tags": [
@@ -1646,15 +1678,45 @@
               "type": "string",
               "description": "Field auth_url"
             },
+            "device_code": {
+              "type": "string",
+              "description": "Field device_code"
+            },
+            "expires_in": {
+              "type": "integer",
+              "format": "int64",
+              "description": "Field expires_in"
+            },
+            "interval": {
+              "type": "integer",
+              "format": "int64",
+              "description": "Field interval"
+            },
+            "provider": {
+              "type": "string",
+              "description": "Field provider"
+            },
+            "session_id": {
+              "type": "string",
+              "description": "Field session_id"
+            },
             "state": {
               "type": "string",
               "description": "Field state"
+            },
+            "user_code": {
+              "type": "string",
+              "description": "Field user_code"
+            },
+            "verification_uri": {
+              "type": "string",
+              "description": "Field verification_uri"
+            },
+            "verification_uri_complete": {
+              "type": "string",
+              "description": "Field verification_uri_complete"
             }
-          },
-          "required": [
-            "auth_url",
-            "state"
-          ]
+          }
         },
         "message": {
           "type": "string",
@@ -1787,6 +1849,46 @@
           "type": "string",
           "description": "Field message",
           "example": "Token refreshed successfully"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    },
+    "OAuthSessionStatusResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "description": "Field data",
+          "properties": {
+            "error": {
+              "type": "string",
+              "description": "Field error"
+            },
+            "provider_uuid": {
+              "type": "string",
+              "description": "Field provider_uuid"
+            },
+            "session_id": {
+              "type": "string",
+              "description": "Field session_id"
+            },
+            "status": {
+              "type": "string",
+              "description": "Field status"
+            }
+          },
+          "required": [
+            "session_id",
+            "status"
+          ]
         },
         "success": {
           "type": "boolean",
@@ -2295,6 +2397,10 @@
           "type": "string",
           "description": "Field api_doc"
         },
+        "auth_type": {
+          "type": "string",
+          "description": "Field auth_type"
+        },
         "base_url_anthropic": {
           "type": "string",
           "description": "Field base_url_anthropic"
@@ -2340,6 +2446,10 @@
         "name": {
           "type": "string",
           "description": "Field name"
+        },
+        "oauth_provider": {
+          "type": "string",
+          "description": "Field oauth_provider"
         },
         "pricing_doc": {
           "type": "string",
@@ -3174,36 +3284,8 @@
   },
   "tags": [
     {
-      "name": "server",
-      "description": "Operations related to server"
-    },
-    {
-      "name": "rules",
-      "description": "Operations related to rules"
-    },
-    {
-      "name": "history",
-      "description": "Operations related to history"
-    },
-    {
-      "name": "models",
-      "description": "Operations related to models"
-    },
-    {
-      "name": "token",
-      "description": "Operations related to token"
-    },
-    {
-      "name": "providers",
-      "description": "Operations related to providers"
-    },
-    {
       "name": "oauth",
       "description": "Operations related to oauth"
-    },
-    {
-      "name": "info",
-      "description": "Operations related to info"
     },
     {
       "name": "logs",
@@ -3214,8 +3296,36 @@
       "description": "Operations related to scenarios"
     },
     {
+      "name": "history",
+      "description": "Operations related to history"
+    },
+    {
+      "name": "info",
+      "description": "Operations related to info"
+    },
+    {
+      "name": "server",
+      "description": "Operations related to server"
+    },
+    {
+      "name": "rules",
+      "description": "Operations related to rules"
+    },
+    {
+      "name": "models",
+      "description": "Operations related to models"
+    },
+    {
       "name": "testing",
       "description": "Operations related to testing"
+    },
+    {
+      "name": "token",
+      "description": "Operations related to token"
+    },
+    {
+      "name": "providers",
+      "description": "Operations related to providers"
     }
   ]
 }
