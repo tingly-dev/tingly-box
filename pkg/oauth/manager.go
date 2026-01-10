@@ -707,7 +707,7 @@ func (m *Manager) PollForToken(ctx context.Context, data *DeviceCodeData, callba
 	// Default interval is 5 seconds if not specified
 	interval := time.Duration(data.Interval) * time.Second
 	if interval == 0 {
-		interval = 5 * time.Second
+		interval = 2 * time.Second
 	}
 
 	ticker := time.NewTicker(interval)
