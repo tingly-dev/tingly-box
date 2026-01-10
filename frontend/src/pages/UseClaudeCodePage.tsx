@@ -13,6 +13,7 @@ import { useProviderDialog } from '../hooks/useProviderDialog';
 import EmptyStateGuide from '../components/EmptyStateGuide';
 import ProviderFormDialog from '../components/ProviderFormDialog';
 import OAuthDialog from '../components/OAuthDialog';
+import { isFeatureEnabled, FEATURE_FLAGS } from '../constants/featureFlags';
 
 type ClaudeJsonMode = 'json' | 'script';
 type ConfigMode = 'unified' | 'separate';
@@ -415,7 +416,8 @@ node --eval '
                     {header}
                 </UnifiedCard>
 
-                {/* Mode switch between header and rules */}
+                {/* Mode switch between header and rules - controlled by feature flag */}
+                {isFeatureEnabled(FEATURE_FLAGS.CLAUDE_CODE_MODE_SWITCH) && (
                 <UnifiedCard size="full">
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 2, py: 1 }}>
                         <Typography variant="subtitle2" color="text.secondary">
@@ -458,6 +460,7 @@ node --eval '
                         </ToggleButtonGroup>
                     </Box>
                 </UnifiedCard>
+                )}
 
                 <TemplatePage
                     rules={rules}
