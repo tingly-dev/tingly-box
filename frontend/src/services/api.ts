@@ -529,6 +529,33 @@ export const api = {
         }
     },
 
+    // Scenario API
+    getScenarios: async (): Promise<any> => {
+        return fetchUIAPI('/scenarios');
+    },
+
+    getScenarioConfig: async (scenario: string): Promise<any> => {
+        return fetchUIAPI(`/scenario/${scenario}`);
+    },
+
+    setScenarioConfig: async (scenario: string, config: any): Promise<any> => {
+        return fetchUIAPI(`/scenario/${scenario}`, {
+            method: 'POST',
+            body: JSON.stringify(config),
+        });
+    },
+
+    getScenarioFlag: async (scenario: string, flag: string): Promise<any> => {
+        return fetchUIAPI(`/scenario/${scenario}/flag/${flag}`);
+    },
+
+    setScenarioFlag: async (scenario: string, flag: string, value: boolean): Promise<any> => {
+        return fetchUIAPI(`/scenario/${scenario}/flag/${flag}`, {
+            method: 'PUT',
+            body: JSON.stringify({value}),
+        });
+    },
+
     probeModel: async (provider: string, model: string): Promise<ProbeResponse> => {
         try {
             const apiInstances = await getApiInstances();

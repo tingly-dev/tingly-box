@@ -482,6 +482,38 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithResponseModel(DeleteRuleResponse{}),
 	)
 
+	// Scenario Management
+	apiV1.GET("/scenarios", s.GetScenarios,
+		swagger.WithDescription("Get all scenario configurations"),
+		swagger.WithTags("scenarios"),
+		swagger.WithResponseModel(ScenariosResponse{}),
+	)
+
+	apiV1.GET("/scenario/:scenario", s.GetScenarioConfig,
+		swagger.WithDescription("Get configuration for a specific scenario"),
+		swagger.WithTags("scenarios"),
+		swagger.WithResponseModel(ScenarioResponse{}),
+	)
+
+	apiV1.POST("/scenario/:scenario", s.SetScenarioConfig,
+		swagger.WithDescription("Create or update scenario configuration"),
+		swagger.WithTags("scenarios"),
+		swagger.WithRequestModel(ScenarioUpdateRequest{}),
+		swagger.WithResponseModel(ScenarioUpdateResponse{}),
+	)
+
+	apiV1.GET("/scenario/:scenario/flag/:flag", s.GetScenarioFlag,
+		swagger.WithDescription("Get a specific flag value for a scenario"),
+		swagger.WithTags("scenarios"),
+		swagger.WithResponseModel(ScenarioFlagResponse{}),
+	)
+
+	apiV1.PUT("/scenario/:scenario/flag/:flag", s.SetScenarioFlag,
+		swagger.WithDescription("Set a specific flag value for a scenario"),
+		swagger.WithTags("scenarios"),
+		swagger.WithResponseModel(ScenarioFlagResponse{}),
+	)
+
 	// History
 	apiV1.GET("/history", s.GetHistory,
 		swagger.WithDescription("Get request history"),

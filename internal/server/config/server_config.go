@@ -24,11 +24,12 @@ import (
 
 // Config represents the global configuration
 type Config struct {
-	Rules            []typ.Rule `yaml:"rules" json:"rules"`                           // List of request configurations
-	DefaultRequestID int        `yaml:"default_request_id" json:"default_request_id"` // Index of the default Rule
-	UserToken        string     `yaml:"user_token" json:"user_token"`                 // User token for UI and control API authentication
-	ModelToken       string     `yaml:"model_token" json:"model_token"`               // Model token for OpenAI and Anthropic API authentication
-	EncryptProviders bool       `yaml:"encrypt_providers" json:"encrypt_providers"`   // Whether to encrypt provider info (default false)
+	Rules            []typ.Rule           `yaml:"rules" json:"rules"`                           // List of request configurations
+	DefaultRequestID int                  `yaml:"default_request_id" json:"default_request_id"` // Index of the default Rule
+	UserToken        string               `yaml:"user_token" json:"user_token"`                 // User token for UI and control API authentication
+	ModelToken       string               `yaml:"model_token" json:"model_token"`               // Model token for OpenAI and Anthropic API authentication
+	EncryptProviders bool                 `yaml:"encrypt_providers" json:"encrypt_providers"`   // Whether to encrypt provider info (default false)
+	Scenarios        []typ.ScenarioConfig `yaml:"scenarios" json:"scenarios"`                   // Scenario-specific configurations
 
 	// Merged fields from Config struct
 	ProvidersV1 map[string]*typ.Provider `json:"providers"`
@@ -845,6 +846,106 @@ func (c *Config) SetErrorLogFilterExpression(expr string) error {
 	return c.Save()
 }
 
+// GetScenarios returns all scenario configurations
+func (c *Config) GetScenarios() []typ.ScenarioConfig {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.Scenarios == nil {
+		return []typ.ScenarioConfig{}
+	}
+	return c.Scenarios
+}
+
+// GetScenarioConfig returns the configuration for a specific scenario
+func (c *Config) GetScenarioConfig(scenario typ.RuleScenario) *typ.ScenarioConfig {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	for i := range c.Scenarios {
+		if c.Scenarios[i].Scenario == scenario {
+			return &c.Scenarios[i]
+		}
+	}
+	return nil
+}
+
+// SetScenarioConfig updates or creates a scenario configuration
+func (c *Config) SetScenarioConfig(config typ.ScenarioConfig) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Check if scenario already exists and update it
+	for i := range c.Scenarios {
+		if c.Scenarios[i].Scenario == config.Scenario {
+			c.Scenarios[i] = config
+			return c.Save()
+		}
+	}
+
+	// Add new scenario config
+	c.Scenarios = append(c.Scenarios, config)
+	return c.Save()
+}
+
+// GetScenarioFlag returns a specific flag value for a scenario
+func (c *Config) GetScenarioFlag(scenario typ.RuleScenario, flagName string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	config := c.GetScenarioConfig(scenario)
+	if config == nil {
+		return false
+	}
+	flags := config.GetDefaultFlags()
+	switch flagName {
+	case "unified":
+		return flags.Unified
+	case "separate":
+		return flags.Separate
+	case "smart":
+		return flags.Smart
+	default:
+		return false
+	}
+}
+
+// SetScenarioFlag sets a specific flag value for a scenario
+func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, value bool) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Find or create scenario config
+	var config *typ.ScenarioConfig
+	for i := range c.Scenarios {
+		if c.Scenarios[i].Scenario == scenario {
+			config = &c.Scenarios[i]
+			break
+		}
+	}
+
+	if config == nil {
+		// Create new scenario config
+		newConfig := typ.ScenarioConfig{
+			Scenario: scenario,
+			Flags:    typ.ScenarioFlags{},
+		}
+		c.Scenarios = append(c.Scenarios, newConfig)
+		config = &c.Scenarios[len(c.Scenarios)-1]
+	}
+
+	// Set the specific flag
+	switch flagName {
+	case "unified":
+		config.Flags.Unified = value
+	case "separate":
+		config.Flags.Separate = value
+	case "smart":
+		config.Flags.Smart = value
+	default:
+		return fmt.Errorf("unknown flag name: %s", flagName)
+	}
+
+	return c.Save()
+}
+
 // FetchAndSaveProviderModels fetches models from a provider with fallback hierarchy
 func (c *Config) FetchAndSaveProviderModels(uid string) error {
 	c.mu.RLock()
@@ -1030,6 +1131,58 @@ func init() {
 			Description:   "Default proxy rule for Claude Code",
 			Services:      []loadbalance.Service{}, // Empty services initially
 			LBTactic: typ.Tactic{ // Initialize with default round-robin tactic
+				Type:   loadbalance.TacticRoundRobin,
+				Params: typ.DefaultRoundRobinParams(),
+			},
+			Active: true,
+		},
+		{
+			UUID:          "built-in-cc-haiku",
+			Scenario:      typ.ScenarioClaudeCode,
+			RequestModel:  "tingly/cc-haiku",
+			ResponseModel: "",
+			Description:   "Claude Code - Haiku model - small / cheap / for background task",
+			Services:      []loadbalance.Service{},
+			LBTactic: typ.Tactic{
+				Type:   loadbalance.TacticRoundRobin,
+				Params: typ.DefaultRoundRobinParams(),
+			},
+			Active: true,
+		},
+		{
+			UUID:          "built-in-cc-sonnet",
+			Scenario:      typ.ScenarioClaudeCode,
+			RequestModel:  "tingly/cc-sonnet",
+			ResponseModel: "",
+			Description:   "Claude Code - Sonnet model - medium / for general task",
+			Services:      []loadbalance.Service{},
+			LBTactic: typ.Tactic{
+				Type:   loadbalance.TacticRoundRobin,
+				Params: typ.DefaultRoundRobinParams(),
+			},
+			Active: true,
+		},
+		{
+			UUID:          "built-in-cc-opus",
+			Scenario:      typ.ScenarioClaudeCode,
+			RequestModel:  "tingly/cc-opus",
+			ResponseModel: "",
+			Description:   "Claude Code - Opus model - large / expensive / for high level task",
+			Services:      []loadbalance.Service{},
+			LBTactic: typ.Tactic{
+				Type:   loadbalance.TacticRoundRobin,
+				Params: typ.DefaultRoundRobinParams(),
+			},
+			Active: true,
+		},
+		{
+			UUID:          "built-in-cc-default",
+			Scenario:      typ.ScenarioClaudeCode,
+			RequestModel:  "tingly/cc-default",
+			ResponseModel: "",
+			Description:   "Claude Code - Default model - for general task",
+			Services:      []loadbalance.Service{},
+			LBTactic: typ.Tactic{
 				Type:   loadbalance.TacticRoundRobin,
 				Params: typ.DefaultRoundRobinParams(),
 			},

@@ -2,11 +2,8 @@ import {
     Add as AddIcon,
     ArrowBack as ArrowBackIcon,
     ArrowForward as ArrowForwardIcon,
-    Delete as DeleteIcon,
     ExpandMore as ExpandMoreIcon,
     Info as InfoIcon,
-    MoreVert as MoreVertIcon,
-    Refresh as RefreshIcon
 } from '@mui/icons-material';
 import {
     Box,
@@ -15,22 +12,71 @@ import {
     Chip,
     Collapse,
     IconButton,
-    ListItemIcon,
-    ListItemText,
-    Menu,
-    MenuItem,
     Stack,
     Switch,
-    TextField,
     Tooltip,
     Typography
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
-import React, { useState } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Provider } from '../types/provider';
-import { ApiStyleBadge } from "./ApiStyleBadge.tsx";
+import { ConnectionLine, ModelNode, NodeContainer, ProviderNodeComponent, ProviderNodeContainer } from './RuleNode';
 import type { ConfigProvider, ConfigRecord } from './RuleGraphTypes.ts';
+
+// Unified RuleGraph style configuration
+const RULE_GRAPH_STYLES = {
+    // Node dimensions
+    node: {
+        width: 320,
+        height: 120,
+        heightCompact: 60,
+        padding: 10,  // Container padding
+    },
+    // Spacing
+    spacing: {
+        xs: 4,   // 0.5
+        sm: 8,   // 1
+        md: 12,  // 1.5
+        lg: 16,  // 2
+        xl: 16,  // 3
+    },
+    // Header
+    header: {
+        paddingX: 16,  // spacing(2)
+        paddingY: 8,   // spacing(1)
+    },
+    // Graph container
+    graphContainer: {
+        paddingX: 16,  // spacing(2)
+        paddingY: 10,  // Reduced from 12
+        marginX: 16,   // spacing(2)
+        marginY: 8,    // spacing(1)
+    },
+    // Graph content spacing
+    graph: {
+        stackSpacing: 0,      // Stack spacing between sections
+        modelGap: 8,          // Gap between model nodes
+        labelMargin: 4,       // Margin below labels
+        rowGap: 16,           // Gap between graph rows
+        iconGap: 4,           // Gap between icon and text
+        wrapperGap: 8,        // Gap in wrapper boxes
+    },
+    // Model node specific
+    modelNode: {
+        padding: 10,          // Internal padding - same as node.padding
+    },
+    // Provider node internal
+    providerNode: {
+        badgeHeight: 5,       // API Style badge
+        fieldHeight: 5,       // Provider/Model fields
+        fieldPadding: 2,      // Internal padding
+        elementMargin: 1,     // Margin between elements
+    },
+} as const;
+
+// Shorthand for common values
+const { node, spacing, header, graphContainer, graph, modelNode, providerNode } = RULE_GRAPH_STYLES;
 
 interface RuleGraphProps {
     record: ConfigRecord;
@@ -65,9 +111,10 @@ const SummarySection = styled(Box, {
     shouldForwardProp: (prop) => prop !== 'collapsible',
 })<{ collapsible?: boolean }>(({ theme, collapsible }) => ({
     display: 'flex',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: theme.spacing(2),
+    padding: `${header.paddingY}px ${header.paddingX}px`,
     cursor: collapsible ? 'pointer' : 'default',
     ...(collapsible && {
         '&:hover': {
@@ -78,369 +125,19 @@ const SummarySection = styled(Box, {
 
 // Graph Container for expanded view
 const GraphContainer = styled(Box)(({ theme }) => ({
-    padding: theme.spacing(3),
+    padding: `${graphContainer.paddingY}px ${graphContainer.paddingX}px`,
     backgroundColor: 'grey.50',
     borderRadius: theme.shape.borderRadius,
-    margin: theme.spacing(2),
+    margin: `${graphContainer.marginY}px ${graphContainer.marginX}px 0`,
 }));
 
 const GraphRow = styled(Box)(({ theme }) => ({
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'stretch',  // Changed from 'center' to 'stretch' for better alignment
     justifyContent: 'center',
-    gap: theme.spacing(3),
-    marginBottom: theme.spacing(2),
+    gap: graph.rowGap,
+    marginBottom: theme.spacing(1),
 }));
-
-const NodeContainer = styled(Box)(({ theme }) => ({
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: theme.spacing(1),
-}));
-
-const ProviderNode = styled(Box)(({ theme }) => ({
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    padding: theme.spacing(2.5),
-    borderRadius: theme.shape.borderRadius,
-    border: '1px solid',
-    borderColor: 'divider',
-    backgroundColor: 'background.paper',
-    width: 180,  // Fixed width - same as model nodes
-    height: 200,  // Fixed height - same as model nodes
-    boxShadow: theme.shadows[2],
-    transition: 'all 0.2s ease-in-out',
-    position: 'relative',
-    '&:hover': {
-        borderColor: 'primary.main',
-        boxShadow: theme.shadows[4],
-        transform: 'translateY(-2px)',
-    }
-}));
-
-const ConnectionLine = styled(Box)(({ }) => ({
-    display: 'flex',
-    alignItems: 'center',
-    color: 'text.secondary',
-    fontSize: '1.5rem',
-    '& svg': {
-        fontSize: '2rem',
-    }
-}));
-
-// Enhanced Model Node with editing support
-const ModelNode: React.FC<{
-    active: boolean;
-    label: string;
-    value: string;
-    editable?: boolean;
-    onUpdate?: (value: string) => void;
-    showStatusIcon?: boolean;
-    compact?: boolean;
-}> = ({ active, label, value, editable = false, onUpdate, showStatusIcon = true, compact = false }) => {
-    const { t } = useTranslation();
-    const [editMode, setEditMode] = useState(false);
-    const [tempValue, setTempValue] = useState(value);
-
-    React.useEffect(() => {
-        setTempValue(value);
-    }, [value]);
-
-    const handleSave = () => {
-        if (onUpdate && tempValue.trim()) {
-            onUpdate(tempValue.trim());
-        }
-        setEditMode(false);
-    };
-
-    const handleCancel = () => {
-        setTempValue(value);
-        setEditMode(false);
-    };
-
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter') {
-            handleSave();
-        } else if (e.key === 'Escape') {
-            handleCancel();
-        }
-    };
-
-    return (
-        <Box sx={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 1 }}>
-            <StyledModelNode compact={compact}>
-                {editMode && editable ? (
-                    <TextField
-                        value={tempValue}
-                        onChange={(e) => setTempValue(e.target.value)}
-                        onBlur={handleSave}
-                        onKeyDown={handleKeyDown}
-                        size="small"
-                        fullWidth
-                        autoFocus
-                        label={t('rule.card.unspecifiedModel')}
-                        sx={{
-                            '& .MuiInputBase-input': {
-                                color: 'text.primary',
-                                fontWeight: 'inherit',
-                                fontSize: 'inherit',
-                                backgroundColor: 'transparent',
-                            },
-                            '& .MuiOutlinedInput-notchedOutline': {
-                                borderColor: 'primary.main',
-                            },
-                            '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                                borderColor: 'primary.dark',
-                            },
-                        }}
-                    />
-                ) : (
-                    <Box
-                        onClick={() => editable && setEditMode(true)}
-                        sx={{
-                            cursor: editable ? 'pointer' : 'default',
-                            width: '100%',
-                            py: compact ? 0.5 : 1.5,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: 1,
-                            '&:hover': editable ? {
-                                '&::after': {
-                                    content: '""',
-                                    position: 'absolute',
-                                    bottom: -4,
-                                    left: '50%',
-                                    transform: 'translateX(-50%)',
-                                    width: 30,
-                                    height: 2,
-                                    backgroundColor: 'primary.main',
-                                    borderRadius: 1,
-                                }
-                            } : {}
-                        }}
-                    >
-                        {/*{showStatusIcon && (*/}
-                        {/*    active ? (*/}
-                        {/*        <CheckCircleIcon sx={{ fontSize: 16, color: 'success.main' }} />*/}
-                        {/*    ) : (*/}
-                        {/*        <RadioButtonUncheckedIcon sx={{ fontSize: 16, color: 'text.disabled' }} />*/}
-                        {/*    )*/}
-                        {/*)}*/}
-                        {/*<EditIcon sx={{ fontWeight: 600, fontSize: '0.9rem' }}></EditIcon>*/}
-                        <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', fontSize: '0.9rem' }}>
-                            {value || label}
-                        </Typography>
-                    </Box>
-                )}
-            </StyledModelNode>
-        </Box>
-    );
-};
-
-// Styled model node with unified fixed size
-const StyledModelNode = styled(Box, {
-    shouldForwardProp: (prop) => prop !== 'compact',
-})<{ compact?: boolean }>(({ compact, theme }) => ({
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: theme.spacing(compact ? 1.5 : 2.5),
-    borderRadius: theme.shape.borderRadius,
-    border: '1px solid',
-    borderColor: 'divider',
-    backgroundColor: 'background.paper',
-    textAlign: 'center',
-    width: 180,  // Fixed width
-    height: compact ? 100 : 200,  // Dynamic height - half when compact
-    boxShadow: theme.shadows[2],
-    transition: 'all 0.2s ease-in-out',
-    position: 'relative',
-    cursor: 'pointer',
-    '&:hover': {
-        borderColor: 'primary.main',
-        boxShadow: theme.shadows[4],
-        transform: 'translateY(-1px)',
-    }
-}));
-
-// Provider Node Component for Graph View
-const ProviderNodeComponent: React.FC<{
-    provider: ConfigProvider;
-    apiStyle: string;
-    providersData: Provider[];
-    active: boolean;
-    onDelete: () => void;
-    onRefreshModels: (provider: Provider) => void;
-    providerUuidToName: { [uuid: string]: string };
-    onNodeClick: () => void;
-}> = ({
-    provider,
-    apiStyle,
-    providersData,
-    active,
-    onDelete,
-    onRefreshModels,
-    providerUuidToName,
-    onNodeClick
-}) => {
-        const { t } = useTranslation();
-        const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
-        const menuOpen = Boolean(anchorEl);
-
-        const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
-            event.stopPropagation();
-            setAnchorEl(event.currentTarget);
-        };
-
-        const handleMenuClose = () => {
-            setAnchorEl(null);
-        };
-
-        const handleRefresh = (p: Provider) => {
-            handleMenuClose();
-            onRefreshModels(p);
-        };
-
-        const handleDelete = () => {
-            handleMenuClose();
-            onDelete();
-        };
-
-        // Get current provider object for display
-        const currentProvider = providersData.find(p => p.uuid === provider.provider);
-
-        return (
-            <>
-                <ProviderNode onClick={onNodeClick} sx={{ cursor: active ? 'pointer' : 'default' }}>
-                    {/* API Style Title */}
-                    {provider.provider && (
-                        <Box sx={{ width: '100%', mb: 2 }}>
-                            <ApiStyleBadge
-                                apiStyle={apiStyle}
-                                sx={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    p: 1,
-                                    borderRadius: 1,
-                                    transition: 'all 0.2s',
-                                    width: '100%',
-                                    minHeight: '32px'
-                                }}
-                            />
-                        </Box>
-                    )}
-
-                    {/* Provider Section */}
-                    <Box sx={{ width: '100%', mb: 2 }}>
-                        <Box
-                            sx={{
-                                p: 1,
-                                border: '1px solid',
-                                borderColor: 'text.primary',
-                                borderRadius: 1,
-                                backgroundColor: 'background.paper',
-                                transition: 'all 0.2s',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: 0.5,
-                                width: '100%',
-                                minHeight: '32px'
-                            }}
-                        >
-                            <Typography variant="body2" color="text.primary">
-                                {providerUuidToName[provider.provider] || t('rule.graph.selectProvider')}
-                            </Typography>
-                        </Box>
-                    </Box>
-
-                    {/* Model Section */}
-                    {provider.provider && (
-                        <Box sx={{ width: '100%', mb: 1.5 }}>
-                            <Box
-                                sx={{
-                                    p: 1,
-                                    border: '1px dashed',
-                                    borderColor: 'text.primary',
-                                    borderRadius: 1,
-                                    backgroundColor: 'background.paper',
-                                    transition: 'all 0.2s',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    width: '100%',
-                                    minHeight: '32px'
-                                }}
-                            >
-                                <Typography
-                                    variant="body2"
-                                    color="text.primary"
-                                    sx={{ fontStyle: !provider.model ? 'italic' : 'normal' }}
-                                >
-                                    {provider.model || t('rule.graph.selectModel')}
-                                </Typography>
-                            </Box>
-                        </Box>
-                    )}
-
-                    {/* More Options Button - Moved to bottom right */}
-                    <IconButton
-                        size="small"
-                        onClick={handleMenuClick}
-                        title={t('rule.menu.refreshModels')}
-                        sx={{
-                            position: 'absolute',
-                            bottom: 4,
-                            right: 4,
-                            zIndex: 10,
-                            p: 0.5,
-                            opacity: 0.6,
-                            color: 'text.primary',
-                            '&:hover': {
-                                opacity: 1,
-                                backgroundColor: 'primary.main'
-                            }
-                        }}
-                    >
-                        <MoreVertIcon />
-                    </IconButton>
-
-                    {/* Action Menu */}
-                    <Menu
-                        anchorEl={anchorEl}
-                        open={menuOpen}
-                        onClose={handleMenuClose}
-                        onClick={(e) => e.stopPropagation()}
-                        transformOrigin={{ horizontal: 'right', vertical: 'top' }}
-                        anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
-                    >
-                        {currentProvider && (
-                            <MenuItem onClick={() => {
-                                handleMenuClose();
-                                handleRefresh(currentProvider);
-                            }} disabled={!provider.provider || !active}>
-                                <ListItemIcon>
-                                    <RefreshIcon />
-                                </ListItemIcon>
-                                <ListItemText>{t('rule.menu.refreshModels')}</ListItemText>
-                            </MenuItem>
-                        )}
-                        <MenuItem onClick={handleDelete} disabled={!active}>
-                            <ListItemIcon>
-                                <DeleteIcon color="error" />
-                            </ListItemIcon>
-                            <ListItemText sx={{ color: 'error.main' }}>{t('rule.menu.deleteProvider')}</ListItemText>
-                        </MenuItem>
-                    </Menu>
-                </ProviderNode>
-            </>
-        );
-    };
 
 // Main RuleGraph Component
 const RuleGraph: React.FC<RuleGraphProps> = ({
@@ -546,28 +243,46 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                         </IconButton>
                     )}
                 </Box>
+                <Box
+                    onClick={(e) => e.stopPropagation()}
+                    sx={{
+                        width: '100%',
+                        flexBasis: '100%',
+                        mt: 0.5,
+                        minHeight: '18px',
+                    }}
+                >
+                    {record.description && (
+                        <Typography
+                            variant="body2"
+                            sx={{
+                                color: 'text.secondary',
+                                fontSize: '0.8rem',
+                                fontStyle: 'italic',
+                            }}
+                        >
+                            {record.description}
+                        </Typography>
+                    )}
+                </Box>
             </SummarySection>
 
             {/* Expanded Content - Graph View */}
             <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                <CardContent sx={{ pt: 0 }}>
-                    <Stack spacing={3}>
+                <CardContent sx={{ pt: 0, pb: 1 }}>
+                    <Stack spacing={graph.stackSpacing}>
                         {/* Graph Visualization */}
                         <GraphContainer>
-                            <Typography variant="h6" sx={{ mb: 3, textAlign: 'center', color: 'text.primary' }}>
-                                Request Proxy Visualization
-                            </Typography>
-
                             <GraphRow>
                                 {/* Model Node(s) Container */}
                                 <NodeContainer>
                                     {record.responseModel ? (
                                         // Split display when response model is configured
-                                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: graph.modelGap }}>
                                             {/* Request Model Card */}
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: graph.wrapperGap }}>
                                                 <Box sx={{ flex: 1 }}>
-                                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5, mb: 1 }}>
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: graph.iconGap, mb: graph.labelMargin }}>
                                                         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                                                             Request Local Model
                                                         </Typography>
@@ -587,9 +302,9 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                                             </Box>
 
                                             {/* Response Model Card */}
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: graph.wrapperGap }}>
                                                 <Box sx={{ flex: 1 }}>
-                                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5, mb: 1 }}>
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: graph.iconGap, mb: graph.labelMargin }}>
                                                         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                                                             Response Model
                                                         </Typography>
@@ -611,7 +326,7 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                                     ) : (
                                         // Single display when no response model
                                         <Box>
-                                            <Typography variant="caption" sx={{ color: 'text.secondary', mb: 1, textAlign: 'center', display: 'block' }}>
+                                            <Typography variant="caption" sx={{ color: 'text.secondary', mb: graph.labelMargin, textAlign: 'center', display: 'block' }}>
                                                 Request Local Model
                                             </Typography>
                                             <ModelNode
@@ -647,8 +362,8 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
 
                                 {/* Providers Container */}
                                 {record.providers.length > 0 ? (
-                                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                        <Typography variant="caption" sx={{ color: 'text.secondary', mb: graph.labelMargin }}>
                                             Forwarding to Providers
                                         </Typography>
                                         <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center' }}>
@@ -680,8 +395,8 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                                                     }}
                                                     disabled={!record.active || saving}
                                                     sx={{
-                                                        width: 180,  // Same width as provider nodes
-                                                        height: 200, // Same height as provider nodes
+                                                        width: node.width,
+                                                        height: node.height,
                                                         border: '2px dashed',
                                                         borderColor: 'divider',
                                                         borderRadius: 2,
@@ -712,8 +427,8 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                                                     </Typography>
                                                 </IconButton>
                                             </Tooltip>
-                                        </Box>
                                     </Box>
+                                </Box>
                                 ) : (
                                     <Box sx={{ textAlign: 'center', py: 2 }}>
                                         <Typography variant="body2" color="error" gutterBottom>
@@ -751,13 +466,6 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                                 )}
 
                             </GraphRow>
-
-                            {/* Legend */}
-                            <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3, mt: 3, pt: 2, borderTop: '1px solid', borderColor: 'divider', flexWrap: 'wrap' }}>
-                                <Typography variant="caption" color="text.secondary">
-                                    • Click provider node to select provider and model
-                                </Typography>
-                            </Box>
                         </GraphContainer>
                     </Stack>
                 </CardContent>

@@ -648,6 +648,176 @@
         }
       }
     },
+    "/api/v1/scenario/{scenario}": {
+      "get": {
+        "tags": [
+          "scenarios"
+        ],
+        "summary": "Get configuration for a specific scenario",
+        "description": "Get configuration for a specific scenario",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "scenario",
+            "in": "path",
+            "description": "Path parameter 'scenario'",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ScenarioResponse"
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "scenarios"
+        ],
+        "summary": "Create or update scenario configuration",
+        "description": "Create or update scenario configuration",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "scenario",
+            "in": "path",
+            "description": "Path parameter 'scenario'",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "request",
+            "in": "body",
+            "description": "Request body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ScenarioUpdateRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ScenarioUpdateResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/scenario/{scenario}/flag/{flag}": {
+      "get": {
+        "tags": [
+          "scenarios"
+        ],
+        "summary": "Get a specific flag value for a scenario",
+        "description": "Get a specific flag value for a scenario",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "scenario",
+            "in": "path",
+            "description": "Path parameter 'scenario'",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "flag",
+            "in": "path",
+            "description": "Path parameter 'flag'",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ScenarioFlagResponse"
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "scenarios"
+        ],
+        "summary": "Set a specific flag value for a scenario",
+        "description": "Set a specific flag value for a scenario",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "scenario",
+            "in": "path",
+            "description": "Path parameter 'scenario'",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "flag",
+            "in": "path",
+            "description": "Path parameter 'flag'",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ScenarioFlagResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/scenarios": {
+      "get": {
+        "tags": [
+          "scenarios"
+        ],
+        "summary": "Get all scenario configurations",
+        "description": "Get all scenario configurations",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ScenariosResponse"
+            }
+          }
+        }
+      }
+    },
     "/api/v1/server/restart": {
       "post": {
         "tags": [
@@ -2331,6 +2501,170 @@
         "data"
       ]
     },
+    "ScenarioConfig": {
+      "type": "object",
+      "properties": {
+        "extensions": {
+          "type": "object",
+          "description": "Field extensions",
+          "additionalProperties": {
+            "type": "object"
+          }
+        },
+        "flags": {
+          "description": "Field flags",
+          "$ref": "#/definitions/ScenarioFlags"
+        },
+        "scenario": {
+          "type": "string",
+          "description": "Field scenario"
+        }
+      },
+      "required": [
+        "scenario",
+        "flags"
+      ]
+    },
+    "ScenarioFlagResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "description": "Field data",
+          "properties": {
+            "flag": {
+              "type": "string",
+              "description": "Field flag"
+            },
+            "scenario": {
+              "type": "string",
+              "description": "Field scenario"
+            },
+            "value": {
+              "type": "boolean",
+              "description": "Field value"
+            }
+          },
+          "required": [
+            "scenario",
+            "flag",
+            "value"
+          ]
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    },
+    "ScenarioFlags": {
+      "type": "object",
+      "properties": {
+        "separate": {
+          "type": "boolean",
+          "description": "Field separate"
+        },
+        "smart": {
+          "type": "boolean",
+          "description": "Field smart"
+        },
+        "unified": {
+          "type": "boolean",
+          "description": "Field unified"
+        }
+      },
+      "required": [
+        "unified",
+        "separate",
+        "smart"
+      ]
+    },
+    "ScenarioResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "description": "Field data",
+          "$ref": "#/definitions/ScenarioConfig"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    },
+    "ScenarioUpdateRequest": {
+      "type": "object",
+      "properties": {
+        "flags": {
+          "description": "Field flags",
+          "$ref": "#/definitions/ScenarioFlags"
+        },
+        "scenario": {
+          "type": "string",
+          "description": "Field scenario",
+          "example": "claude_code"
+        }
+      },
+      "required": [
+        "scenario",
+        "flags"
+      ]
+    },
+    "ScenarioUpdateResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "description": "Field data",
+          "$ref": "#/definitions/ScenarioConfig"
+        },
+        "message": {
+          "type": "string",
+          "description": "Field message",
+          "example": "Scenario config saved successfully"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "message",
+        "data"
+      ]
+    },
+    "ScenariosResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "array",
+          "description": "Field data",
+          "items": {
+            "$ref": "#/definitions/ScenarioConfig"
+          }
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    },
     "ServerActionResponse": {
       "type": "object",
       "properties": {
@@ -2840,28 +3174,8 @@
   },
   "tags": [
     {
-      "name": "token",
-      "description": "Operations related to token"
-    },
-    {
-      "name": "oauth",
-      "description": "Operations related to oauth"
-    },
-    {
       "name": "server",
       "description": "Operations related to server"
-    },
-    {
-      "name": "providers",
-      "description": "Operations related to providers"
-    },
-    {
-      "name": "info",
-      "description": "Operations related to info"
-    },
-    {
-      "name": "logs",
-      "description": "Operations related to logs"
     },
     {
       "name": "rules",
@@ -2874,6 +3188,30 @@
     {
       "name": "models",
       "description": "Operations related to models"
+    },
+    {
+      "name": "token",
+      "description": "Operations related to token"
+    },
+    {
+      "name": "providers",
+      "description": "Operations related to providers"
+    },
+    {
+      "name": "oauth",
+      "description": "Operations related to oauth"
+    },
+    {
+      "name": "info",
+      "description": "Operations related to info"
+    },
+    {
+      "name": "logs",
+      "description": "Operations related to logs"
+    },
+    {
+      "name": "scenarios",
+      "description": "Operations related to scenarios"
     },
     {
       "name": "testing",
