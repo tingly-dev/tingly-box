@@ -136,8 +136,11 @@ const UseClaudeCodePage: React.FC = () => {
         localStorage.setItem(CLAUDE_CODE_DONT_REMIND_KEY, String(checked));
     };
 
-    // Show config guide modal (manual trigger)
+    // Show config guide modal (manual trigger) - user wants to be reminded again
     const handleShowConfigGuide = () => {
+        // Reset "do not remind again" since user is manually requesting the guide
+        setDontRemindAgain(false);
+        localStorage.setItem(CLAUDE_CODE_DONT_REMIND_KEY, 'false');
         setConfigModalOpen(true);
     };
 
@@ -373,7 +376,8 @@ node --eval '
                     rightAction={
                         <Button
                             onClick={handleShowConfigGuide}
-                            variant="outlined"
+                            variant="contained"
+                            color="primary"
                             size="small"
                             sx={{ fontSize: '0.875rem' }}
                         >
@@ -381,6 +385,11 @@ node --eval '
                         </Button>
                     }
                 >
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 50 }}>
+                        <Typography variant="body2" color="text.secondary">
+                            Configure Claude Code to use Tingly Box as your AI model proxy
+                        </Typography>
+                    </Box>
                 </UnifiedCard>
 
                 {/* Mode switch between header and rules - controlled by feature flag */}

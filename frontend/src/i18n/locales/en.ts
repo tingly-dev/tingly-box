@@ -321,7 +321,7 @@ export default {
       "title": "Claude Code Configuration Guide",
       "subtitle": "Follow these steps to configure Claude Code to use Tingly Box as your AI proxy",
       "dontRemindAgain": "Do not remind again",
-      "showGuide": "How to Config"
+      "showGuide": "Config Claude Code"
     }
   }
 };
