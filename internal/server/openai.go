@@ -262,18 +262,20 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 		}
 	} else {
 		if isStreaming {
-			s.handleStreamingRequest(c, provider, &req, responseModel)
+			s.handleStreamingRequest(c, provider, &req, responseModel, actualModel, rule)
 		} else {
-			s.handleNonStreamingRequest(c, provider, &req, responseModel)
+			s.handleNonStreamingRequest(c, provider, &req, responseModel, actualModel, rule)
 		}
 	}
 }
 
 // handleNonStreamingRequest handles non-streaming chat completion requests
-func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, req *openai.ChatCompletionNewParams, responseModel string) {
+func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, req *openai.ChatCompletionNewParams, responseModel, actualModel string, rule *typ.Rule) {
 	// Forward request to provider
 	response, err := s.forwardOpenAIRequest(provider, req)
 	if err != nil {
+		// Track error with no usage
+		s.trackUsage(c, rule, provider, actualModel, responseModel, 0, 0, false, "error", "forward_failed")
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Failed to forward request: " + err.Error(),
@@ -282,6 +284,13 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 		})
 		return
 	}
+
+	// Extract usage from response
+	inputTokens := int(response.Usage.PromptTokens)
+	outputTokens := int(response.Usage.CompletionTokens)
+
+	// Track usage
+	s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, false, "success", "")
 
 	// Convert response to JSON map for modification
 	responseJSON, err := json.Marshal(response)
@@ -342,10 +351,12 @@ func (s *Server) forwardOpenAIStreamRequest(provider *typ.Provider, req *openai.
 }
 
 // handleStreamingRequest handles streaming chat completion requests
-func (s *Server) handleStreamingRequest(c *gin.Context, provider *typ.Provider, req *openai.ChatCompletionNewParams, responseModel string) {
+func (s *Server) handleStreamingRequest(c *gin.Context, provider *typ.Provider, req *openai.ChatCompletionNewParams, responseModel, actualModel string, rule *typ.Rule) {
 	// Create streaming request
 	stream, err := s.forwardOpenAIStreamRequest(provider, req)
 	if err != nil {
+		// Track error with no usage
+		s.trackUsage(c, rule, provider, actualModel, responseModel, 0, 0, false, "error", "stream_creation_failed")
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Failed to create streaming request: " + err.Error(),
@@ -356,14 +367,22 @@ func (s *Server) handleStreamingRequest(c *gin.Context, provider *typ.Provider, 
 	}
 
 	// Handle the streaming response
-	s.handleOpenAIStreamResponse(c, stream, responseModel)
+	s.handleOpenAIStreamResponse(c, stream, responseModel, actualModel, rule, provider)
 }
 
 // handleOpenAIStreamResponse processes the streaming response and sends it to the client
-func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.Stream[openai.ChatCompletionChunk], responseModel string) {
+func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.Stream[openai.ChatCompletionChunk], responseModel, actualModel string, rule *typ.Rule, provider *typ.Provider) {
+	// Accumulate usage from stream chunks
+	var inputTokens, outputTokens int
+	var hasUsage bool
+
 	defer func() {
 		if r := recover(); r != nil {
 			logrus.Errorf("Panic in streaming handler: %v", r)
+			// Track panic as error with any usage we accumulated
+			if hasUsage {
+				s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, true, "error", "panic")
+			}
 			// Try to send an error event if possible
 			if c.Writer != nil {
 				c.Writer.WriteHeader(http.StatusInternalServerError)
@@ -404,6 +423,13 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 	// Process the stream
 	for stream.Next() {
 		chatChunk := stream.Current()
+
+		// Accumulate usage from chunks (if present)
+		if chatChunk.Usage.PromptTokens != 0 || chatChunk.Usage.CompletionTokens != 0 {
+			inputTokens = int(chatChunk.Usage.PromptTokens)
+			outputTokens = int(chatChunk.Usage.CompletionTokens)
+			hasUsage = true
+		}
 
 		// Check if we have choices and they're not empty
 		if len(chatChunk.Choices) == 0 {
@@ -463,6 +489,11 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 	if err := stream.Err(); err != nil {
 		logrus.Errorf("Stream error: %v", err)
 
+		// Track usage with error status
+		if hasUsage {
+			s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, true, "error", "stream_error")
+		}
+
 		// Send error event
 		errorChunk := map[string]interface{}{
 			"error": map[string]interface{}{
@@ -481,6 +512,11 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 		}
 		flusher.Flush()
 		return
+	}
+
+	// Track successful streaming completion
+	if hasUsage {
+		s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, true, "success", "")
 	}
 
 	// Send the final [DONE] message

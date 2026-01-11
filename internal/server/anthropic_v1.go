@@ -85,18 +85,26 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, bodyBytes []byte, rawReq ma
 			// Handle streaming request
 			stream, err := s.forwardAnthropicStreamRequestV1(provider, req)
 			if err != nil {
+				s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "stream_creation_failed")
 				SendStreamingError(c, err)
 				return
 			}
 			// Handle the streaming response
-			s.handleAnthropicStreamResponseV1(c, req, stream, proxyModel)
+			s.handleAnthropicStreamResponseV1(c, req, stream, proxyModel, actualModel, rule, provider)
 		} else {
 			// Handle non-streaming request
 			anthropicResp, err := s.forwardAnthropicRequestV1(provider, req)
 			if err != nil {
+				s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "forward_failed")
 				SendForwardingError(c, err)
 				return
 			}
+
+			// Track usage from response
+			inputTokens := int(anthropicResp.Usage.InputTokens)
+			outputTokens := int(anthropicResp.Usage.OutputTokens)
+			s.trackUsage(c, rule, provider, actualModel, proxyModel, inputTokens, outputTokens, false, "success", "")
+
 			// FIXME: now we use req model as resp model
 			anthropicResp.Model = anthropic.Model(proxyModel)
 			c.JSON(http.StatusOK, anthropicResp)
@@ -176,8 +184,25 @@ func (s *Server) forwardAnthropicStreamRequestV1(provider *typ.Provider, req ant
 }
 
 // handleAnthropicStreamResponseV1 processes the Anthropic streaming response and sends it to the client (v1)
-func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.MessageNewParams, stream *anthropicstream.Stream[anthropic.MessageStreamEventUnion], respModel string) {
-	defer StreamRecoveryHandler(c, stream)
+func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.MessageNewParams, stream *anthropicstream.Stream[anthropic.MessageStreamEventUnion], respModel, actualModel string, rule *typ.Rule, provider *typ.Provider) {
+	// Accumulate usage from stream
+	var inputTokens, outputTokens int
+	var hasUsage bool
+
+	defer func() {
+		if r := recover(); r != nil {
+			logrus.Errorf("Panic in Anthropic streaming handler: %v", r)
+			// Track panic as error with any usage we accumulated
+			if hasUsage {
+				s.trackUsage(c, rule, provider, actualModel, respModel, inputTokens, outputTokens, true, "error", "panic")
+			}
+		}
+		if stream != nil {
+			if err := stream.Close(); err != nil {
+				logrus.Errorf("Error closing stream: %v", err)
+			}
+		}
+	}()
 
 	// Set SSE headers
 	SetupSSEHeaders(c)
@@ -194,6 +219,16 @@ func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.M
 		event := stream.Current()
 		event.Message.Model = anthropic.Model(respModel)
 
+		// Accumulate usage from message_stop event
+		if event.Message.Usage.InputTokens > 0 {
+			inputTokens = int(event.Message.Usage.InputTokens)
+			hasUsage = true
+		}
+		if event.Message.Usage.OutputTokens > 0 {
+			outputTokens = int(event.Message.Usage.OutputTokens)
+			hasUsage = true
+		}
+
 		// Convert the event to JSON and send as SSE
 		if err := sendSSEvent(c, event.Type, event); err != nil {
 			logrus.Debugf("Failed to marshal Anthropic stream event: %v", err)
@@ -204,9 +239,18 @@ func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.M
 
 	// Check for stream errors
 	if err := stream.Err(); err != nil {
+		// Track usage with error status
+		if hasUsage {
+			s.trackUsage(c, rule, provider, actualModel, respModel, inputTokens, outputTokens, true, "error", "stream_error")
+		}
 		MarshalAndSendErrorEvent(c, err.Error(), "stream_error", "stream_failed")
 		flusher.Flush()
 		return
+	}
+
+	// Track successful streaming completion
+	if hasUsage {
+		s.trackUsage(c, rule, provider, actualModel, respModel, inputTokens, outputTokens, true, "success", "")
 	}
 
 	// Send completion event
@@ -266,4 +310,10 @@ func (s *Server) anthropicCountTokensV1(c *gin.Context, bodyBytes []byte, rawReq
 			InputTokens: int64(count),
 		})
 	}
+}
+
+// trackUsage records token usage using the UsageTracker
+func (s *Server) trackUsage(c *gin.Context, rule *typ.Rule, provider *typ.Provider, model, requestModel string, inputTokens, outputTokens int, streamed bool, status, errorCode string) {
+	tracker := s.NewUsageTracker()
+	tracker.RecordUsage(c, rule, provider, model, requestModel, inputTokens, outputTokens, streamed, status, errorCode)
 }
