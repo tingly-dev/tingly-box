@@ -28,24 +28,11 @@ func sendSSEvent(c *gin.Context, eventType string, data interface{}) error {
 }
 
 // anthropicMessagesV1 implements standard v1 messages API
-func (s *Server) anthropicMessagesV1(c *gin.Context, bodyBytes []byte, rawReq map[string]interface{}, proxyModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule) {
+func (s *Server) anthropicMessagesV1(c *gin.Context, req AnthropicMessagesRequest, proxyModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule) {
 	actualModel := selectedService.Model
 
 	// Check if streaming is requested
-	isStreaming := false
-	if stream, ok := rawReq["stream"].(bool); ok {
-		isStreaming = stream
-	}
-	logrus.Debugf("Stream requested for AnthropicMessages: %v", isStreaming)
-
-	// Parse into MessageNewParams using SDK's JSON unmarshaling
-	var req anthropic.MessageNewParams
-	if err := c.ShouldBindJSON(&req); err != nil {
-		// Log the invalid request for debugging
-		logrus.Debugf("Invalid JSON request received: %v\nBody: %s", err, string(bodyBytes))
-		SendInvalidRequestBodyError(c, err)
-		return
-	}
+	isStreaming := req.Stream
 
 	req.Model = anthropic.Model(actualModel)
 
@@ -83,17 +70,17 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, bodyBytes []byte, rawReq ma
 		// Use direct Anthropic SDK call
 		if isStreaming {
 			// Handle streaming request
-			stream, err := s.forwardAnthropicStreamRequestV1(provider, req)
+			stream, err := s.forwardAnthropicStreamRequestV1(provider, req.MessageNewParams)
 			if err != nil {
 				s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "stream_creation_failed")
 				SendStreamingError(c, err)
 				return
 			}
 			// Handle the streaming response
-			s.handleAnthropicStreamResponseV1(c, req, stream, proxyModel, actualModel, rule, provider)
+			s.handleAnthropicStreamResponseV1(c, req.MessageNewParams, stream, proxyModel, actualModel, rule, provider)
 		} else {
 			// Handle non-streaming request
-			anthropicResp, err := s.forwardAnthropicRequestV1(provider, req)
+			anthropicResp, err := s.forwardAnthropicRequestV1(provider, req.MessageNewParams)
 			if err != nil {
 				s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "forward_failed")
 				SendForwardingError(c, err)
@@ -120,7 +107,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, bodyBytes []byte, rawReq ma
 		// Use OpenAI conversion path (default behavior)
 		if isStreaming {
 			// Convert Anthropic request to OpenAI format for streaming
-			openaiReq := adaptor.ConvertAnthropicToOpenAIRequest(&req, true)
+			openaiReq := adaptor.ConvertAnthropicToOpenAIRequest(&req.MessageNewParams, true)
 
 			// Create streaming request
 			stream, err := s.forwardOpenAIStreamRequest(provider, openaiReq)
@@ -137,7 +124,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, bodyBytes []byte, rawReq ma
 
 		} else {
 			// Handle non-streaming request
-			openaiReq := adaptor.ConvertAnthropicToOpenAIRequest(&req, true)
+			openaiReq := adaptor.ConvertAnthropicToOpenAIRequest(&req.MessageNewParams, true)
 			response, err := s.forwardOpenAIRequest(provider, openaiReq)
 			if err != nil {
 				SendForwardingError(c, err)

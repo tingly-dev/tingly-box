@@ -16,24 +16,11 @@ import (
 )
 
 // anthropicMessagesV1Beta implements beta messages API
-func (s *Server) anthropicMessagesV1Beta(c *gin.Context, bodyBytes []byte, rawReq map[string]interface{}, proxyModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule) {
+func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req AnthropicBetaMessagesRequest, proxyModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule) {
 	actualModel := selectedService.Model
 
 	// Check if streaming is requested
-	isStreaming := false
-	if stream, ok := rawReq["stream"].(bool); ok {
-		isStreaming = stream
-	}
-	logrus.Debugf("Stream requested for AnthropicMessages (beta): %v", isStreaming)
-
-	// Parse into BetaMessageNewParams using SDK's JSON unmarshaling
-	var req anthropic.BetaMessageNewParams
-	if err := c.ShouldBindJSON(&req); err != nil {
-		// Log the invalid request for debugging
-		logrus.Debugf("Invalid JSON request received: %v\nBody: %s", err, string(bodyBytes))
-		SendInvalidRequestBodyError(c, err)
-		return
-	}
+	isStreaming := req.Stream
 
 	req.Model = anthropic.Model(actualModel)
 
@@ -71,17 +58,17 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, bodyBytes []byte, rawRe
 		// Use direct Anthropic SDK call
 		if isStreaming {
 			// Handle streaming request
-			stream, err := s.forwardAnthropicStreamRequestV1Beta(provider, req)
+			stream, err := s.forwardAnthropicStreamRequestV1Beta(provider, req.BetaMessageNewParams)
 			if err != nil {
 				s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "stream_creation_failed")
 				SendStreamingError(c, err)
 				return
 			}
 			// Handle the streaming response
-			s.handleAnthropicStreamResponseV1Beta(c, req, stream, proxyModel, actualModel, rule, provider)
+			s.handleAnthropicStreamResponseV1Beta(c, req.BetaMessageNewParams, stream, proxyModel, actualModel, rule, provider)
 		} else {
 			// Handle non-streaming request
-			anthropicResp, err := s.forwardAnthropicRequestV1Beta(provider, req)
+			anthropicResp, err := s.forwardAnthropicRequestV1Beta(provider, req.BetaMessageNewParams)
 			if err != nil {
 				s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "forward_failed")
 				SendForwardingError(c, err)
@@ -108,7 +95,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, bodyBytes []byte, rawRe
 		// Use OpenAI conversion path (default behavior)
 		if isStreaming {
 			// Convert Anthropic beta request to OpenAI format for streaming
-			openaiReq := adaptor.ConvertAnthropicBetaToOpenAIRequest(&req, true)
+			openaiReq := adaptor.ConvertAnthropicBetaToOpenAIRequest(&req.BetaMessageNewParams, true)
 
 			// Create streaming request
 			stream, err := s.forwardOpenAIStreamRequest(provider, openaiReq)
@@ -125,7 +112,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, bodyBytes []byte, rawRe
 
 		} else {
 			// Handle non-streaming request - convert beta response to OpenAI and back
-			openaiReq := adaptor.ConvertAnthropicBetaToOpenAIRequest(&req, true)
+			openaiReq := adaptor.ConvertAnthropicBetaToOpenAIRequest(&req.BetaMessageNewParams, true)
 			response, err := s.forwardOpenAIRequest(provider, openaiReq)
 			if err != nil {
 				SendForwardingError(c, err)

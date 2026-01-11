@@ -21,8 +21,14 @@ import (
 // Use official Anthropic SDK types directly
 type (
 	// Request types
-	AnthropicMessagesRequest = anthropic.MessageNewParams
-	AnthropicMessage         = anthropic.MessageParam
+	AnthropicMessagesRequest struct {
+		anthropic.MessageNewParams
+		Stream bool `json:"stream"`
+	}
+	AnthropicBetaMessagesRequest struct {
+		anthropic.BetaMessageNewParams
+		Stream bool `json:"stream"`
+	}
 
 	// Response types
 	AnthropicMessagesResponse = anthropic.Message
@@ -61,21 +67,35 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		c.Request.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
 	}
 
-	// Parse the request to check if streaming is requested
-	var rawReq map[string]interface{}
-	if err := json.Unmarshal(bodyBytes, &rawReq); err != nil {
-		logrus.Debugf("Invalid JSON in request body: %v", err)
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Invalid JSON: " + err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
-		return
+	var betaMessages AnthropicBetaMessagesRequest
+	var messages AnthropicMessagesRequest
+	var model string
+	if beta {
+		if err := json.Unmarshal(bodyBytes, &betaMessages); err != nil {
+			logrus.Debugf("Failed to unmarshal request body: %v", err)
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error: ErrorDetail{
+					Message: "Message error",
+					Type:    "invalid_request_error",
+				},
+			})
+			return
+		}
+		model = string(betaMessages.Model)
+	} else {
+		if err := json.Unmarshal(bodyBytes, &messages); err != nil {
+			logrus.Debugf("Failed to unmarshal request body: %v", err)
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error: ErrorDetail{
+					Message: "Message error",
+					Type:    "invalid_request_error",
+				},
+			})
+			return
+		}
+		model = string(messages.Model)
 	}
 
-	// Get model from request
-	model := rawReq["model"].(string)
 	if model == "" {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -129,9 +149,9 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 
 	// Delegate to the appropriate implementation based on beta parameter
 	if beta {
-		s.anthropicMessagesV1Beta(c, bodyBytes, rawReq, model, provider, selectedService, rule)
+		s.anthropicMessagesV1Beta(c, betaMessages, model, provider, selectedService, rule)
 	} else {
-		s.anthropicMessagesV1(c, bodyBytes, rawReq, model, provider, selectedService, rule)
+		s.anthropicMessagesV1(c, messages, model, provider, selectedService, rule)
 	}
 }
 
