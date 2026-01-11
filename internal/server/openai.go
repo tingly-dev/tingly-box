@@ -16,6 +16,12 @@ import (
 	"tingly-box/pkg/adaptor"
 )
 
+// OpenAIChatCompletionRequest is a type alias for OpenAI chat completion request with extra fields.
+type OpenAIChatCompletionRequest struct {
+	openai.ChatCompletionNewParams
+	Stream bool `json:"stream"`
+}
+
 // OpenAIListModels handles the /v1/models endpoint (OpenAI compatible)
 func (s *Server) OpenAIListModels(c *gin.Context) {
 	cfg := s.config
@@ -89,25 +95,8 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 		return
 	}
 
-	// Inspect stream flag
-	var rawReq map[string]interface{}
-	if err := json.Unmarshal(bodyBytes, &rawReq); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Invalid JSON: " + err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
-		return
-	}
-
-	isStreaming := false
-	if v, ok := rawReq["stream"].(bool); ok {
-		isStreaming = v
-	}
-
 	// Parse OpenAI-style request
-	var req openai.ChatCompletionNewParams
+	var req OpenAIChatCompletionRequest
 	if err := json.Unmarshal(bodyBytes, &req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -117,6 +106,8 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 		})
 		return
 	}
+
+	isStreaming := req.Stream
 
 	// Validate
 	proxyModel := req.Model
@@ -214,7 +205,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 			return
 		}
 
-		anthropicReq := adaptor.ConvertOpenAIToAnthropicRequest(&req, int64(maxAllowed))
+		anthropicReq := adaptor.ConvertOpenAIToAnthropicRequest(&req.ChatCompletionNewParams, int64(maxAllowed))
 
 		// 🔥 REQUIRED: forward tool_choice
 		if req.ToolChoice.OfAuto.Value != "" || req.ToolChoice.OfAllowedTools != nil || req.ToolChoice.OfFunctionToolChoice != nil || req.ToolChoice.OfCustomToolChoice != nil {
@@ -262,9 +253,9 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 		}
 	} else {
 		if isStreaming {
-			s.handleStreamingRequest(c, provider, &req, responseModel, actualModel, rule)
+			s.handleStreamingRequest(c, provider, &req.ChatCompletionNewParams, responseModel, actualModel, rule)
 		} else {
-			s.handleNonStreamingRequest(c, provider, &req, responseModel, actualModel, rule)
+			s.handleNonStreamingRequest(c, provider, &req.ChatCompletionNewParams, responseModel, actualModel, rule)
 		}
 	}
 }

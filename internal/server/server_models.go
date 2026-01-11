@@ -4,8 +4,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openai/openai-go/v3"
-
 	"tingly-box/internal/typ"
 )
 
@@ -41,9 +39,6 @@ type TokenResponse struct {
 // =============================================
 // OpenAI API Models
 // =============================================
-
-// OpenAIChatCompletionRequest is a type alias for OpenAI chat completion request
-type OpenAIChatCompletionRequest = openai.ChatCompletionNewParams
 
 // OpenAIChatCompletionResponse represents the OpenAI chat completion response
 type OpenAIChatCompletionResponse struct {
