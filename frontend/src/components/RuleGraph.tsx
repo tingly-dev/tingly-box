@@ -26,6 +26,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Provider } from '../types/provider';
 import { ConnectionLine, ModelNode, NodeContainer, ProviderNodeComponent, ProviderNodeContainer } from './RuleNode';
+import { AddProviderNode } from './AddProviderNode';
 import { SmartNode } from './SmartNode';
 import type { ConfigProvider, ConfigRecord, SmartRouting } from './RuleGraphTypes.ts';
 
@@ -361,8 +362,9 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                 <CardContent sx={{ pt: 0, pb: 1 }}>
                     <Stack spacing={graph.stackSpacing}>
                         {/* Graph Visualization */}
-                        <GraphContainer>
-                            <GraphRow>
+                        <Box sx={{ overflowX: 'auto' }}>
+                            <GraphContainer>
+                                <GraphRow>
                                 {/* Model Node(s) Container */}
                                 <NodeContainer>
                                     {record.responseModel ? (
@@ -464,7 +466,7 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                                                         <Typography variant="caption" sx={{ color: 'text.secondary', mb: graph.labelMargin }}>
                                                             Services
                                                         </Typography>
-                                                        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center' }}>
+                                                        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'nowrap', justifyContent: 'flex-start', alignItems: 'center' }}>
                                                             {rule.services.map((service) => (
                                                                 <ProviderNodeComponent
                                                                     key={service.uuid}
@@ -623,7 +625,7 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                                         <Typography variant="caption" sx={{ color: 'text.secondary', mb: graph.labelMargin }}>
                                             {smartEnabled && hasSmartRules ? 'Default Providers (Fallback)' : 'Forwarding to Providers'}
                                         </Typography>
-                                        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center' }}>
+                                        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'nowrap', justifyContent: 'flex-start', alignItems: 'center' }}>
                                             {record.providers.map((provider) => (
                                                 <ProviderNodeComponent
                                                     key={provider.uuid}
@@ -638,52 +640,17 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                                                 />
                                             ))}
                                             {/* Add Provider Button */}
-                                            <Tooltip title={
-                                                record.providers.length === 0
-                                                    ? "Add a provider to enable request forwarding"
-                                                    : record.providers.length === 1
-                                                        ? "Add another provider (with 2+ providers, load balancing will be enabled based on strategy)"
-                                                        : "Add another provider (requests will be load balanced across all providers)"
-                                            }>
-                                                <IconButton
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        onAddProviderButtonClick();
-                                                    }}
-                                                    disabled={!record.active || saving}
-                                                    sx={{
-                                                        width: node.width,
-                                                        height: node.height,
-                                                        border: '2px dashed',
-                                                        borderColor: 'divider',
-                                                        borderRadius: 2,
-                                                        backgroundColor: 'background.paper',
-                                                        boxShadow: theme => theme.shadows[2],
-                                                        transition: 'all 0.2s ease-in-out',
-                                                        display: 'flex',
-                                                        flexDirection: 'column',
-                                                        justifyContent: 'center',
-                                                        alignItems: 'center',
-                                                        gap: 1,
-                                                        '&:hover': {
-                                                            borderColor: 'primary.main',
-                                                            backgroundColor: 'action.hover',
-                                                            borderStyle: 'solid',
-                                                            boxShadow: theme => theme.shadows[4],
-                                                            transform: 'translateY(-2px)',
-                                                        },
-                                                        '&:disabled': {
-                                                            borderColor: 'action.disabled',
-                                                            backgroundColor: 'action.disabledBackground',
-                                                        }
-                                                    }}
-                                                >
-                                                    <AddIcon sx={{ fontSize: 40, color: 'text.secondary' }} />
-                                                    <Typography variant="body2" color="text.secondary" textAlign="center">
-                                                        Add Provider
-                                                    </Typography>
-                                                </IconButton>
-                                            </Tooltip>
+                                            <AddProviderNode
+                                                active={record.active && !saving}
+                                                onAdd={() => onAddProviderButtonClick()}
+                                                tooltip={
+                                                    record.providers.length === 0
+                                                        ? "Add a provider to enable request forwarding"
+                                                        : record.providers.length === 1
+                                                            ? "Add another provider (with 2+ providers, load balancing will be enabled based on strategy)"
+                                                            : "Add another provider (requests will be load balanced across all providers)"
+                                                }
+                                            />
                                     </Box>
                                 </Box>
                                 ) : (
@@ -724,6 +691,7 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
 
                             </GraphRow>
                         </GraphContainer>
+                        </Box>
                     </Stack>
                 </CardContent>
             </Collapse>

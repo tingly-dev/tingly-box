@@ -21,26 +21,30 @@ import type { Provider } from '../types/provider';
 import { ApiStyleBadge } from "./ApiStyleBadge.tsx";
 import type { ConfigProvider } from './RuleGraphTypes.ts';
 
-// Node dimensions - should match RULE_GRAPH_STYLES.node in RuleGraph
-const NODE_STYLES = {
+// Model Node dimensions
+const MODEL_NODE_STYLES = {
+    width: 220,
+    height: 90,
+    heightCompact: 60,
+    widthCompact: 220,
+    padding: 8,
+} as const;
+
+// Provider Node dimensions
+const PROVIDER_NODE_STYLES = {
     width: 320,
     height: 120,
     heightCompact: 60,
-    padding: 10,
-} as const;
-
-// Provider node internal dimensions
-const PROVIDER_NODE_STYLES = {
+    padding: 8,
+    widthCompact: 320,
+    // Internal dimensions
     badgeHeight: 5,
     fieldHeight: 5,
     fieldPadding: 2,
     elementMargin: 1,
 } as const;
 
-// Model node padding
-const MODEL_NODE_PADDING = 10;
-
-const { node, providerNode } = { node: NODE_STYLES, providerNode: PROVIDER_NODE_STYLES };
+const { modelNode, providerNode } = { modelNode: MODEL_NODE_STYLES, providerNode: PROVIDER_NODE_STYLES };
 
 // Container for graph nodes
 export const NodeContainer = styled(Box)(() => ({
@@ -66,13 +70,13 @@ export const ProviderNodeContainer = styled(Box)(({ theme }) => ({
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    padding: node.padding,
+    padding: providerNode.padding,
     borderRadius: theme.shape.borderRadius,
     border: '1px solid',
     borderColor: 'divider',
     backgroundColor: 'background.paper',
-    width: node.width,
-    height: node.height,
+    width: providerNode.width,
+    height: providerNode.height,
     boxShadow: theme.shadows[2],
     transition: 'all 0.2s ease-in-out',
     position: 'relative',
@@ -91,14 +95,14 @@ const StyledModelNode = styled(Box, {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: node.padding,
+    padding: modelNode.padding,
     borderRadius: theme.shape.borderRadius,
     border: '1px solid',
     borderColor: 'divider',
     backgroundColor: 'background.paper',
     textAlign: 'center',
-    width: node.width,
-    height: compact ? node.heightCompact : node.height,
+    width: compact?  modelNode.widthCompact: modelNode.width,
+    height: compact ? modelNode.heightCompact : modelNode.height,
     boxShadow: theme.shadows[2],
     transition: 'all 0.2s ease-in-out',
     position: 'relative',
