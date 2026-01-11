@@ -51,6 +51,7 @@ type Config struct {
 
 	modelManager    *helper.ModelListManager
 	statsStore      *db.StatsStore
+	usageStore      *db.UsageStore
 	templateManager *template.TemplateManager
 
 	mu sync.RWMutex
@@ -93,6 +94,13 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 		return nil, fmt.Errorf("failed to initialize stats store: %w", err)
 	}
 	cfg.statsStore = statsStore
+
+	// Initialize usage store
+	usageStore, err := db.NewUsageStore(configDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize usage store: %w", err)
+	}
+	cfg.usageStore = usageStore
 
 	// Load existing cfg if exists
 	if err := cfg.load(); err != nil {
@@ -565,6 +573,14 @@ func (c *Config) GetStatsStore() *db.StatsStore {
 	defer c.mu.RUnlock()
 
 	return c.statsStore
+}
+
+// GetUsageStore returns the usage store (may be nil in tests).
+func (c *Config) GetUsageStore() *db.UsageStore {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.usageStore
 }
 
 // HasModelToken checks if a model token is configured
