@@ -145,32 +145,8 @@ export const SmartNode: React.FC<SmartNodeProps> = ({
     return (
         <StyledSmartNodeWrapper>
             <StyledSmartNode active={active}>
-                {/* Smart Icon Badge */}
-                <Box
-                    sx={{
-                        position: 'absolute',
-                        top: 4,
-                        left: 4,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 0.5,
-                        backgroundColor: 'primary.main',
-                        color: 'primary.contrastText',
-                        px: 1,
-                        py: 0.25,
-                        borderRadius: 1,
-                        fontSize: '0.7rem',
-                        fontWeight: 600,
-                    }}
-                >
-                    <SmartToyIcon sx={{ fontSize: '0.9rem' }} />
-                    <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                        SMART
-                    </Typography>
-                </Box>
-
                 {/* Content */}
-                <Box sx={{ mt: 3, width: '100%' }}>
+                <Box sx={{ mt: 1, width: '100%' }}>
                     {/* Description */}
                     <Typography
                         variant="body2"
