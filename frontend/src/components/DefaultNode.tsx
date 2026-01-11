@@ -85,32 +85,8 @@ export const DefaultNode: React.FC<DefaultNodeProps> = ({
     return (
         <StyledDefaultNodeWrapper>
             <StyledDefaultNode active={active}>
-                {/* Default Icon Badge */}
-                <Box
-                    sx={{
-                        position: 'absolute',
-                        top: 4,
-                        left: 4,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 0.5,
-                        backgroundColor: 'warning.main',
-                        color: 'warning.contrastText',
-                        px: 1,
-                        py: 0.25,
-                        borderRadius: 1,
-                        fontSize: '0.7rem',
-                        fontWeight: 600,
-                    }}
-                >
-                    <DefaultIcon sx={{ fontSize: '0.9rem' }} />
-                    <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                        DEFAULT
-                    </Typography>
-                </Box>
-
                 {/* Content */}
-                <Box sx={{ mt: 3, width: '100%' }}>
+                <Box sx={{ mt: 1, width: '100%' }}>
                     {/* Description */}
                     <Typography
                         variant="body2"
