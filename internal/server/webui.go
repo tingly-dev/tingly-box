@@ -58,6 +58,9 @@ func (s *Server) UseUIEndpoints() {
 
 	s.useOAuthEndpoints(manager)
 
+	// Usage API routes
+	s.RegisterUsageRoutes(manager)
+
 	// Static files and templates - try embedded assets first, fallback to filesystem
 	s.useWebStaticEndpoints(s.engine)
 }
