@@ -338,6 +338,8 @@ export const RuleCard: React.FC<RuleCardProps> = ({
 
     if (!configRecord) return null;
 
+    const isSmartMode = rule.smart_enabled;
+
     return (
         <>
             <RuleGraphV2
