@@ -21,11 +21,11 @@ import { useTranslation } from 'react-i18next';
 import type { ConfigProvider } from './RuleGraphTypes';
 import type { SmartRouting } from './RuleGraphTypes';
 
-// Node dimensions - matches RULE_GRAPH_STYLES.node in RuleGraph
+// Node dimensions - smaller for better layout
 const NODE_STYLES = {
-    width: 320,
-    height: 120,
-    padding: 10,
+    width: 220,
+    height: 90,
+    padding: 8,
 } as const;
 
 // Smart node internal dimensions
@@ -129,8 +129,18 @@ export const SmartNode: React.FC<SmartNodeProps> = ({
         onDelete();
     };
 
-    const opsCount = smartRouting.ops?.length || 0;
     const servicesCount = smartRouting.services?.length || 0;
+    const firstOp = smartRouting.ops?.[0];
+
+    // Format op display: e.g., "model: contains" or "user: regex"
+    const getOpDisplay = () => {
+        if (!firstOp) return 'No Op';
+        const opLabel = firstOp.operation || 'unknown';
+        const valuePreview = firstOp.value?.length > 15
+            ? `${firstOp.value.slice(0, 15)}...`
+            : firstOp.value;
+        return `${firstOp.position}: ${opLabel}`;
+    };
 
     return (
         <StyledSmartNodeWrapper>
@@ -190,7 +200,7 @@ export const SmartNode: React.FC<SmartNodeProps> = ({
                         }}
                     >
                         <Chip
-                            label={`${opsCount} ${opsCount === 1 ? 'Op' : 'Ops'}`}
+                            label={getOpDisplay()}
                             size="small"
                             variant="outlined"
                             sx={{
