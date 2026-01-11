@@ -85,6 +85,8 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 active: rule.active !== undefined ? rule.active : true,
                 providers: providersList,
                 description: rule.description,
+                smartEnabled: rule.smart_enabled || false,
+                smartRouting: rule.smart_routing || [],
             };
 
             setConfigRecord(newConfigRecord);
@@ -181,6 +183,8 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                         active: provider.active !== undefined ? provider.active : true,
                         time_window: provider.time_window || 0,
                     })),
+                smart_enabled: newConfigRecord.smartEnabled || false,
+                smart_routing: newConfigRecord.smartRouting || [],
             };
 
             const result = await api.updateRule(rule.uuid, ruleData);
@@ -194,6 +198,8 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                     active: ruleData.active,
                     description: ruleData.description,
                     services: ruleData.services,
+                    smart_enabled: ruleData.smart_enabled,
+                    smart_routing: ruleData.smart_routing,
                 });
                 return true;
             } else {
@@ -250,6 +256,60 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         }
     }, [configRecord, rule.uuid, onModelSelectOpen]);
 
+    // Smart routing handlers
+    const handleAddSmartRule = useCallback(async () => {
+        if (!configRecord) return;
+
+        const newSmartRouting = {
+            uuid: crypto.randomUUID(),
+            description: 'New Smart Rule',
+            ops: [],
+            services: [],
+        };
+
+        const updated = {
+            ...configRecord,
+            smartRouting: [...(configRecord.smartRouting || []), newSmartRouting],
+        };
+
+        const previousRecord = { ...configRecord };
+        setConfigRecord(updated);
+
+        const success = await autoSave(updated);
+        if (!success) {
+            setConfigRecord(previousRecord);
+        }
+    }, [configRecord, autoSave]);
+
+    const handleEditSmartRule = useCallback(async (ruleUuid: string) => {
+        // TODO: Open smart rule edit dialog
+        showNotification('Smart rule editing not yet implemented', 'info');
+    }, [showNotification]);
+
+    const handleDeleteSmartRule = useCallback(async (ruleUuid: string) => {
+        if (!configRecord) return;
+
+        const updated = {
+            ...configRecord,
+            smartRouting: (configRecord.smartRouting || []).filter(r => r.uuid !== ruleUuid),
+        };
+
+        const previousRecord = { ...configRecord };
+        setConfigRecord(updated);
+
+        const success = await autoSave(updated);
+        if (!success) {
+            setConfigRecord(previousRecord);
+        } else {
+            showNotification('Smart rule deleted successfully', 'success');
+        }
+    }, [configRecord, autoSave, showNotification]);
+
+    const handleAddServiceToSmartRule = useCallback(async (ruleUuid: string) => {
+        // TODO: Open provider/service selection dialog
+        showNotification('Add service to smart rule not yet implemented', 'info');
+    }, [showNotification]);
+
     const handleDeleteButtonClick = useCallback(() => {
         setDeleteDialogOpen(true);
     }, []);
@@ -295,6 +355,10 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 onToggleExpanded={() => setExpanded(!expanded)}
                 onProviderNodeClick={handleProviderNodeClick}
                 onAddProviderButtonClick={handleAddProviderButtonClick}
+                onAddSmartRule={handleAddSmartRule}
+                onEditSmartRule={handleEditSmartRule}
+                onDeleteSmartRule={handleDeleteSmartRule}
+                onAddServiceToSmartRule={handleAddServiceToSmartRule}
                 extraActions={
                     <Box sx={{ display: 'flex', gap: 1 }}>
                         <Tooltip title="Test connection to provider">

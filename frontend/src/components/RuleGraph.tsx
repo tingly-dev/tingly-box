@@ -1,12 +1,14 @@
 import {
     Add as AddIcon,
     ArrowBack as ArrowBackIcon,
+    ArrowDownward as ArrowDownIcon,
     ArrowForward as ArrowForwardIcon,
     ExpandMore as ExpandMoreIcon,
     Info as InfoIcon,
 } from '@mui/icons-material';
 import {
     Box,
+    Button,
     Card,
     CardContent,
     Chip,
@@ -24,7 +26,8 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Provider } from '../types/provider';
 import { ConnectionLine, ModelNode, NodeContainer, ProviderNodeComponent, ProviderNodeContainer } from './RuleNode';
-import type { ConfigProvider, ConfigRecord } from './RuleGraphTypes.ts';
+import { SmartNode } from './SmartNode';
+import type { ConfigProvider, ConfigRecord, SmartRouting } from './RuleGraphTypes.ts';
 
 // Unified RuleGraph style configuration
 const RULE_GRAPH_STYLES = {
@@ -96,6 +99,11 @@ interface RuleGraphProps {
     onProviderNodeClick: (providerUuid: string) => void;
     onAddProviderButtonClick: () => void;
     extraActions?: React.ReactNode;
+    // Smart routing props
+    onAddSmartRule?: () => void;
+    onEditSmartRule?: (ruleUuid: string) => void;
+    onDeleteSmartRule?: (ruleUuid: string) => void;
+    onAddServiceToSmartRule?: (ruleUuid: string) => void;
 }
 
 const StyledCard = styled(Card, {
@@ -157,8 +165,15 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
     onToggleExpanded,
     onProviderNodeClick,
     onAddProviderButtonClick,
-    extraActions
+    extraActions,
+    // Smart routing props
+    onAddSmartRule,
+    onEditSmartRule,
+    onDeleteSmartRule,
+    onAddServiceToSmartRule,
 }) => {
+    const { t } = useTranslation();
+
     // When collapsible, parent controls expanded state (defaults to false when collapsible=true)
     // When not collapsible, always show expanded
     const isExpanded = !collapsible || expanded;
@@ -182,6 +197,10 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
             showNotification(`Model name "${record.requestModel}" copied to clipboard`);
         }
     };
+
+    const smartEnabled = record.smartEnabled || false;
+    const smartRouting = record.smartRouting || [];
+    const hasSmartRules = smartRouting.length > 0;
 
     return (
         <StyledCard active={record.active}>
@@ -214,6 +233,29 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                             }}
                         />
                     </Tooltip>
+                    <Typography variant="h6" sx={{
+                        fontWeight: 600,
+                        color: record.active ? 'text.primary' : 'text.disabled',
+                        minWidth: 150,
+                    }}>
+                        {record.requestModel || 'Specified model name'}
+                    </Typography>
+                    {smartEnabled && (
+                        <Chip
+                            label="Smart Routing"
+                            size="small"
+                            color="primary"
+                            variant="outlined"
+                            onClick={(e) => e.stopPropagation()}
+                            sx={{
+                                opacity: record.active ? 1 : 0.5,
+                            borderColor: record.active ? 'primary.main' : 'text.disabled',
+                            minWidth: 90,
+                            fontWeight: 600,
+                            fontSize: '0.75rem',
+                        }}
+                        />
+                    )}
                     <Chip
                         label={`Use ${record.providers.length} ${record.providers.length === 1 ? 'Key' : 'Keys'}`}
                         size="small"
@@ -245,6 +287,20 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                         color="success"
                         onClick={(e) => e.stopPropagation()}
                     />
+                    {/* Smart Routing Toggle */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="body2" sx={{ fontSize: '0.85rem', color: 'text.secondary' }}>
+                            Smart
+                        </Typography>
+                        <Switch
+                            checked={smartEnabled}
+                            onChange={(e) => onUpdateRecord('smartEnabled', e.target.checked)}
+                            disabled={saving || !record.active}
+                            size="small"
+                            color="primary"
+                            onClick={(e) => e.stopPropagation()}
+                        />
+                    </Box>
                 </Box>
                 {/* Right side */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -373,31 +429,199 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                                     )}
                                 </NodeContainer>
 
-                                {/* Arrow from model(s) to providers */}
-                                {record.providers.length > 0 && (
-                                    record.responseModel ? (
-                                        // When response model exists: show two rotated arrows to indicate connection
-                                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-                                            <ConnectionLine>
-                                                <ArrowForwardIcon sx={{ transform: 'rotate(45deg)' }} />
-                                            </ConnectionLine>
-                                            <ConnectionLine>
-                                                <ArrowBackIcon sx={{ transform: 'rotate(-45deg)' }} />
-                                            </ConnectionLine>
-                                        </Box>
-                                    ) : (
-                                        // When no response model: show only forward arrow
-                                        <ConnectionLine>
-                                            <ArrowForwardIcon />
-                                        </ConnectionLine>
-                                    )
-                                )}
+                            {/* Smart Rules Section - Vertical layout between model and providers */}
+                            {smartEnabled && hasSmartRules ? (
+                                // Smart routing layout: Model → Smart Rules (vertical) → Default Providers
+                                <>
+                                    {/* Arrow from model to first smart rule */}
+                                    <ConnectionLine>
+                                        <ArrowDownIcon />
+                                    </ConnectionLine>
 
-                                {/* Providers Container */}
+                                    {/* Smart Rules Stack - Each rule is a row with SmartNode and its services */}
+                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: graph.rowGap }}>
+                                        {smartRouting.map((rule) => (
+                                            <GraphRow key={rule.uuid} sx={{ mb: 0 }}>
+                                                {/* Smart Node */}
+                                                <NodeContainer>
+                                                    <SmartNode
+                                                        smartRouting={rule}
+                                                        active={record.active}
+                                                        onEdit={() => onEditSmartRule?.(rule.uuid)}
+                                                        onDelete={() => onDeleteSmartRule?.(rule.uuid)}
+                                                        onAddService={() => onAddServiceToSmartRule?.(rule.uuid)}
+                                                    />
+                                                </NodeContainer>
+
+                                                {/* Arrow to services */}
+                                                <ConnectionLine>
+                                                    <ArrowForwardIcon />
+                                                </ConnectionLine>
+
+                                                {/* Services for this smart rule */}
+                                                {rule.services && rule.services.length > 0 ? (
+                                                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                                        <Typography variant="caption" sx={{ color: 'text.secondary', mb: graph.labelMargin }}>
+                                                            Services
+                                                        </Typography>
+                                                        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center' }}>
+                                                            {rule.services.map((service) => (
+                                                                <ProviderNodeComponent
+                                                                    key={service.uuid}
+                                                                    provider={service}
+                                                                    apiStyle={getApiStyle(service.provider)}
+                                                                    providersData={providers as Provider[]}
+                                                                    active={record.active && service.active !== false}
+                                                                    onDelete={() => onDeleteProvider(recordUuid, service.uuid)}
+                                                                    onRefreshModels={(p) => onRefreshModels(p.uuid)}
+                                                                    providerUuidToName={providerUuidToName}
+                                                                    onNodeClick={() => onProviderNodeClick(service.uuid)}
+                                                                />
+                                                            ))}
+                                                            <Tooltip title="Add service to this smart rule">
+                                                                <IconButton
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        onAddServiceToSmartRule?.(rule.uuid);
+                                                                    }}
+                                                                    disabled={!record.active || saving}
+                                                                    sx={{
+                                                                        width: node.width,
+                                                                        height: node.height,
+                                                                        border: '2px dashed',
+                                                                        borderColor: 'divider',
+                                                                        borderRadius: 2,
+                                                                        backgroundColor: 'background.paper',
+                                                                        boxShadow: theme => theme.shadows[2],
+                                                                        transition: 'all 0.2s ease-in-out',
+                                                                        display: 'flex',
+                                                                        flexDirection: 'column',
+                                                                        justifyContent: 'center',
+                                                                        alignItems: 'center',
+                                                                        gap: 1,
+                                                                        '&:hover': {
+                                                                            borderColor: 'primary.main',
+                                                                            backgroundColor: 'action.hover',
+                                                                            borderStyle: 'solid',
+                                                                            boxShadow: theme => theme.shadows[4],
+                                                                            transform: 'translateY(-2px)',
+                                                                        },
+                                                                        '&:disabled': {
+                                                                            borderColor: 'action.disabled',
+                                                                            backgroundColor: 'action.disabledBackground',
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <AddIcon sx={{ fontSize: 40, color: 'text.secondary' }} />
+                                                                    <Typography variant="body2" color="text.secondary" textAlign="center">
+                                                                        Add Service
+                                                                    </Typography>
+                                                                </IconButton>
+                                                            </Tooltip>
+                                                        </Box>
+                                                    </Box>
+                                                ) : (
+                                                    <Box sx={{ textAlign: 'center', py: 2 }}>
+                                                        <Typography variant="body2" color="text.secondary" gutterBottom>
+                                                            No services for this rule
+                                                        </Typography>
+                                                        <Tooltip title="Add first service to this smart rule">
+                                                            <IconButton
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    onAddServiceToSmartRule?.(rule.uuid);
+                                                                }}
+                                                                disabled={!record.active || saving}
+                                                                sx={{
+                                                                    width: 48,
+                                                                    height: 48,
+                                                                    border: '2px dashed',
+                                                                    borderColor: 'divider',
+                                                                    borderRadius: 2,
+                                                                    backgroundColor: 'background.paper',
+                                                                    '&:hover': {
+                                                                        borderColor: 'primary.main',
+                                                                        backgroundColor: 'action.hover',
+                                                                        borderStyle: 'solid',
+                                                                    },
+                                                                    '&:disabled': {
+                                                                        borderColor: 'action.disabled',
+                                                                        backgroundColor: 'action.disabledBackground',
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <AddIcon sx={{ fontSize: 28, color: 'text.secondary' }} />
+                                                            </IconButton>
+                                                        </Tooltip>
+                                                    </Box>
+                                                )}
+                                            </GraphRow>
+                                        ))}
+
+                                        {/* Add Smart Rule Button */}
+                                        <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}>
+                                            <Button
+                                                variant="outlined"
+                                                startIcon={<AddIcon />}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onAddSmartRule?.();
+                                                }}
+                                                disabled={!record.active || saving}
+                                                sx={{
+                                                    borderColor: 'primary.main',
+                                                    color: 'primary.main',
+                                                    '&:hover': {
+                                                                                        borderColor: 'primary.dark',
+                                                                                        backgroundColor: 'primary.50',
+                                                                                    },
+                                                    '&:disabled': {
+                                                                                        borderColor: 'action.disabled',
+                                                                                        color: 'text.disabled',
+                                                                                    }
+                                                }}
+                                            >
+                                                Add Smart Rule
+                                            </Button>
+                                        </Box>
+                                    </Box>
+
+                                    {/* Arrow from smart rules to default providers */}
+                                    {record.providers.length > 0 && (
+                                        <ConnectionLine>
+                                            <ArrowDownIcon />
+                                        </ConnectionLine>
+                                    )}
+                                </>
+                            ) : (
+                                // Normal mode: Arrow from model(s) to providers
+                                <>
+                                    {record.providers.length > 0 && (
+                                        record.responseModel ? (
+                                            // When response model exists: show two rotated arrows to indicate connection
+                                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                                                <ConnectionLine>
+                                                    <ArrowForwardIcon sx={{ transform: 'rotate(45deg)' }} />
+                                                </ConnectionLine>
+                                                <ConnectionLine>
+                                                    <ArrowBackIcon sx={{ transform: 'rotate(-45deg)' }} />
+                                                </ConnectionLine>
+                                            </Box>
+                                        ) : (
+                                            // When no response model: show only forward arrow
+                                            <ConnectionLine>
+                                                <ArrowForwardIcon />
+                                            </ConnectionLine>
+                                        )
+                                    )}
+                                </>
+                            )}
+
+                                {/* Providers Container - Default providers for normal mode or fallback for smart routing */}
                                 {record.providers.length > 0 ? (
                                     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                                         <Typography variant="caption" sx={{ color: 'text.secondary', mb: graph.labelMargin }}>
-                                            Forwarding to Providers
+                                            {smartEnabled && hasSmartRules ? 'Default Providers (Fallback)' : 'Forwarding to Providers'}
                                         </Typography>
                                         <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center' }}>
                                             {record.providers.map((provider) => (

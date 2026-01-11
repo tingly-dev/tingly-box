@@ -189,6 +189,8 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
                         active: provider.active !== undefined ? provider.active : true,
                         time_window: provider.time_window || 0,
                     })),
+                smart_enabled: updated.smartEnabled || false,
+                smart_routing: updated.smartRouting || [],
             };
 
             api.updateRule(rule.uuid, ruleData).then((result) => {
@@ -202,6 +204,8 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
                         active: ruleData.active,
                         description: ruleData.description,
                         services: ruleData.services,
+                        smart_enabled: ruleData.smart_enabled,
+                        smart_routing: ruleData.smart_routing,
                     });
                 } else {
                     showNotification(`Failed to save: ${result.error || 'Unknown error'}`, 'error');
