@@ -149,10 +149,13 @@ func (r *Rule) ToJSON() interface{} {
 		"scenario":              r.GetScenario(),
 		"request_model":         r.RequestModel,
 		"response_model":        r.ResponseModel,
+		"description":           r.Description,
 		"services":              services,
 		"current_service_index": r.CurrentServiceIndex,
 		"lb_tactic":             r.LBTactic,
 		"active":                r.Active,
+		"smart_enabled":         r.SmartEnabled,
+		"smart_routing":         r.SmartRouting,
 	}
 
 	return jsonRule
