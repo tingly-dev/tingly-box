@@ -423,58 +423,21 @@ jobs:
           echo "Updated $PKG_NAME to version: $VERSION"
           cd ..
 
-      - name: Download binaries from GitHub Release
+      - name: Download release zip files
         env:
           RELEASE_TAG: ${{ needs.setup.outputs.release_tag }}
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
         run: |
-          # Create bin directories
-          mkdir -p "$PKG_DIR/bin"/{macos-arm64,macos-amd64,linux-amd64,linux-arm64,windows-amd64}
-
-          # Create temp directory for downloads
-          TMP_DIR=$(mktemp -d)
-          cd "$TMP_DIR"
+          # Create zip directory
+          mkdir -p "$PKG_DIR/zip"
 
           # Download release assets
-          echo "📥 Downloading binaries from release $RELEASE_TAG..."
-          gh release download "$RELEASE_TAG" --repo "$REPO" --pattern "tingly-box-*.zip" --dir .
+          echo "📥 Downloading zip files from release $RELEASE_TAG..."
+          gh release download "$RELEASE_TAG" --repo "$REPO" --pattern "tingly-box-*.zip" --dir "$PKG_DIR/zip"
 
-          # Extract and place binaries in correct locations
-          declare -A BIN_MAP=(
-            ["tingly-box-macos-arm64.zip"]="macos-arm64/tingly-box"
-            ["tingly-box-macos-amd64.zip"]="macos-amd64/tingly-box"
-            ["tingly-box-linux-amd64.zip"]="linux-amd64/tingly-box"
-            # ["tingly-box-linux-arm64.zip"]="linux-arm64/tingly-box"
-            ["tingly-box-windows-amd64.zip"]="windows-amd64/tingly-box.exe"
-          )
-
-          for zip in tingly-box-*.zip; do
-            if [ -f "$zip" ]; then
-              echo "Processing $zip..."
-              binary_name=$(unzip -Z1 "$zip" | head -n 1)
-              unzip -q "$zip" -d temp_extract
-
-              target="${BIN_MAP[$zip]}"
-              if [ -n "$target" ]; then
-                ls temp_extract
-                mv "temp_extract/$binary_name" "${GITHUB_WORKSPACE}/${PKG_DIR}/bin/$target"
-                echo "  ✅ Moved to $target"
-              else
-                echo "  ⚠️ Unknown mapping for $zip"
-              fi
-
-              rm -rf temp_extract
-            fi
-          done
-
-          chmod +x "${GITHUB_WORKSPACE}/${PKG_DIR}"/bin/*/tingly-box 2>/dev/null || true
-
-          cd "${GITHUB_WORKSPACE}"
-          rm -rf "$TMP_DIR"
-
-          echo "✅ All binaries downloaded and placed"
-          ls -lh "$PKG_DIR"/bin/*/
+          echo "✅ Downloaded zip files:"
+          ls -lh "$PKG_DIR/zip/"
 
       - name: Verify bundle structure
         run: |
@@ -490,18 +453,19 @@ jobs:
             exit 1
           fi
 
-          for platform in macos-arm64 macos-amd64 linux-amd64 windows-amd64; do
-            if [ "$platform" = "windows-amd64" ]; then
-              BINARY="$PKG_DIR/bin/$platform/tingly-box.exe"
-            else
-              BINARY="$PKG_DIR/bin/$platform/tingly-box"
-            fi
+          # Check for zip directory and files
+          if [ ! -d "$PKG_DIR/zip" ]; then
+            echo "❌ zip directory not found"
+            exit 1
+          fi
 
-            if [ ! -f "$BINARY" ]; then
-              echo "❌ Binary not found: $BINARY"
+          # Expected zip files
+          for zip in tingly-box-macos-arm64.zip tingly-box-macos-amd64.zip tingly-box-linux-amd64.zip tingly-box-windows-amd64.zip; do
+            if [ ! -f "$PKG_DIR/zip/$zip" ]; then
+              echo "❌ Zip file not found: $zip"
               exit 1
             fi
-            echo "✅ Found: $BINARY"
+            echo "✅ Found: $zip"
           done
 
           echo "✅ Bundle structure verified"
@@ -510,7 +474,7 @@ jobs:
         run: |
           echo "📦 Package size information:"
           du -sh "$PKG_DIR"
-          du -sh "$PKG_DIR"/bin/*/
+          du -sh "$PKG_DIR"/zip/*.zip
 
       - name: Publish to npm
         working-directory: ${{ env.PKG_DIR }}
