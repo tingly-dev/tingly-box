@@ -4,6 +4,49 @@ import (
 	"tingly-box/internal/loadbalance"
 )
 
+// AllOperations is a comprehensive list of all available operations for smart routing.
+// This registry defines all operations across all positions for documentation,
+// UI rendering, and future API integrations.
+var AllOperations = []SmartOpDefinition{
+	// Model operations
+	{Position: PositionModel, Operation: "contains", Description: "Model name contains the value", ValueType: ValueTypeString},
+	{Position: PositionModel, Operation: "glob", Description: "Model name matches glob pattern", ValueType: ValueTypeString},
+	{Position: PositionModel, Operation: "equals", Description: "Model name equals the value", ValueType: ValueTypeString},
+
+	// Thinking operations
+	{Position: PositionThinking, Operation: "enabled", Description: "Thinking mode is enabled", ValueType: ValueTypeBool},
+	{Position: PositionThinking, Operation: "disabled", Description: "Thinking mode is disabled", ValueType: ValueTypeBool},
+
+	// System message operations
+	{Position: PositionSystem, Operation: "contains", Description: "Combined system messages contain the value", ValueType: ValueTypeString},
+	{Position: PositionSystem, Operation: "latest_contains", Description: "Latest system message contains the value", ValueType: ValueTypeString},
+	{Position: PositionSystem, Operation: "regex", Description: "Combined system messages match regex pattern", ValueType: ValueTypeString},
+
+	// User message operations
+	{Position: PositionUser, Operation: "contains", Description: "Combined user messages contain the value", ValueType: ValueTypeString},
+	{Position: PositionUser, Operation: "latest_contains", Description: "Latest user message contains the value", ValueType: ValueTypeString},
+	{Position: PositionUser, Operation: "regex", Description: "Combined user messages match regex pattern", ValueType: ValueTypeString},
+	{Position: PositionUser, Operation: "latest_type", Description: "Latest user content type (e.g., 'image')", ValueType: ValueTypeString},
+
+	// Tool use operations
+	{Position: PositionToolUse, Operation: "is", Description: "Tool name exactly equals the value", ValueType: ValueTypeString},
+	{Position: PositionToolUse, Operation: "contains", Description: "Tool name contains the value", ValueType: ValueTypeString},
+
+	// Token operations
+	{Position: PositionToken, Operation: "ge", Description: "Token count greater than or equal to value", ValueType: ValueTypeInt},
+	{Position: PositionToken, Operation: "gt", Description: "Token count greater than value", ValueType: ValueTypeInt},
+	{Position: PositionToken, Operation: "le", Description: "Token count less than or equal to value", ValueType: ValueTypeInt},
+	{Position: PositionToken, Operation: "lt", Description: "Token count less than value", ValueType: ValueTypeInt},
+}
+
+// SmartOpDefinition defines a single operation with its metadata
+type SmartOpDefinition struct {
+	Position    SmartOpPosition  `json:"position"`    // Position this operation applies to
+	Operation   string           `json:"operation"`   // Operation name
+	Description string           `json:"description"` // Human-readable description
+	ValueType   SmartOpValueType `json:"value_type"`  // Expected value type
+}
+
 const (
 	PositionModel    SmartOpPosition = "model"    // Request model name
 	PositionThinking SmartOpPosition = "thinking" // Thinking mode enabled
