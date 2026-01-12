@@ -1,6 +1,6 @@
 import {
     Delete as DeleteIcon,
-    MoreHoriz as MoreHorizIcon,
+    MoreVert as MoreIcon,
     Refresh as RefreshIcon
 } from '@mui/icons-material';
 import {
@@ -96,7 +96,7 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                     {/* Provider */}
                     <Box
                         sx={{
-                            flex: 1,
+                            flex: 10,
                             p: providerNode.fieldPadding,
                             border: '1px solid',
                             borderColor: 'text.primary',
@@ -121,7 +121,7 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                     {provider.provider && (
                         <Box
                             sx={{
-                                flex: 1,
+                                flex: 10,
                                 p: providerNode.fieldPadding,
                                 border: '1px dashed',
                                 borderColor: 'text.primary',
@@ -147,29 +147,45 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                             </Tooltip>
                         </Box>
                     )}
+
+                    {/* More Options Button - Moved to bottom right */}
+                    <Box
+                        sx={{
+                            flex: 1,
+                            p: providerNode.fieldPadding,
+                            borderColor: 'text.primary',
+                            borderRadius: 1,
+                            backgroundColor: 'background.paper',
+                            transition: 'all 0.2s',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            maxHeight: providerNode.fieldHeight,
+                            overflow: 'hidden',
+                        }}
+                    >
+                    <IconButton
+                        size="small"
+                        onClick={handleMenuClick}
+                        title={t('rule.menu.refreshModels')}
+                        sx={{
+                            position: 'absolute',
+                            zIndex: 10,
+                            p: 0.5,
+                            opacity: 0.6,
+                            color: 'text.primary',
+                            '&:hover': {
+                                opacity: 1,
+                                backgroundColor: 'primary.main'
+                            }
+                        }}
+                    >
+                        <MoreIcon />
+                    </IconButton>
+                    </Box>
                 </Box>
 
-                {/* More Options Button - Moved to bottom right */}
-                <IconButton
-                    size="small"
-                    onClick={handleMenuClick}
-                    title={t('rule.menu.refreshModels')}
-                    sx={{
-                        position: 'absolute',
-                        bottom: 4,
-                        right: 4,
-                        zIndex: 10,
-                        p: 0.5,
-                        opacity: 0.6,
-                        color: 'text.primary',
-                        '&:hover': {
-                            opacity: 1,
-                            backgroundColor: 'primary.main'
-                        }
-                    }}
-                >
-                    <MoreHorizIcon />
-                </IconButton>
+
 
                 {/* Action Menu */}
                 <Menu
