@@ -24,7 +24,6 @@ import OAuthDialog from '../components/OAuthDialog';
 import {FEATURE_FLAGS, isFeatureEnabled} from '../constants/featureFlags';
 import ClaudeCodeConfigModal from '../components/ClaudeCodeConfigModal';
 
-type ClaudeJsonMode = 'json' | 'script';
 type ConfigMode = 'unified' | 'separate' | 'smart';
 
 const MODEL_VARIANTS = ['default', 'haiku', 'sonnet', 'opus'] as const;
@@ -49,7 +48,6 @@ const UseClaudeCodePage: React.FC = () => {
     const [rules, setRules] = React.useState<any[]>([]);
     const [loadingRule, setLoadingRule] = React.useState(true);
     const [isDockerMode, setIsDockerMode] = React.useState(false);
-    const [claudeJsonMode, setClaudeJsonMode] = React.useState<ClaudeJsonMode>('script');
     const [configMode, setConfigMode] = React.useState<ConfigMode>('unified');
     const [pendingMode, setPendingMode] = React.useState<ConfigMode | null>(null);
     const [confirmDialogOpen, setConfirmDialogOpen] = React.useState(false);
@@ -256,73 +254,116 @@ const UseClaudeCodePage: React.FC = () => {
         }
     };
 
-    const generateSettingsScript = () => {
+    const generateSettingsScriptWindows = () => {
         const claudeCodeBaseUrl = getClaudeCodeBaseUrl();
 
-        if (configMode === 'unified') {
-            const model = rules[0]?.request_model;
-            return `# Configure Claude Code settings
-echo "Configuring Claude Code settings..."
-mkdir -p ~/.claude
-node --eval '
-    const fs = require("fs");
-    const path = require("path");
-    const homeDir = os.homedir();
-    const settingsPath = path.join(homeDir, ".claude", "settings.json");
-    const env = {
-        ANTHROPIC_BASE_URL: "${claudeCodeBaseUrl}",
-        ANTHROPIC_MODEL: "${model}",
-        ANTHROPIC_DEFAULT_HAIKU_MODEL: "${model}",
-        ANTHROPIC_DEFAULT_OPUS_MODEL: "${model}",
-        ANTHROPIC_DEFAULT_SONNET_MODEL: "${model}",
-        DISABLE_TELEMETRY: "1",
-        DISABLE_ERROR_REPORTING: "1",
-        CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
-        API_TIMEOUT_MS: "3000000",
-        ANTHROPIC_AUTH_TOKEN: "${token}",
-    };
-    if (fs.existsSync(settingsPath)) {
-        const content = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
-        fs.writeFileSync(settingsPath, JSON.stringify({ ...content, env }, null, 2), "utf-8");
-    } else {
-        fs.writeFileSync(settingsPath, JSON.stringify({ env }, null, 2), "utf-8");
-    }
-'`;
-        } else {
-            // Get model values before building the template string
-            const defaultModel = getModelForVariant('default');
-            const haikuModel = getModelForVariant('haiku');
-            const opusModel = getModelForVariant('opus');
-            const sonnetModel = getModelForVariant('sonnet');
+        const commonEnv = configMode === 'unified'
+            ? {
+                ANTHROPIC_MODEL: rules[0]?.request_model,
+                ANTHROPIC_DEFAULT_HAIKU_MODEL: rules[0]?.request_model,
+                ANTHROPIC_DEFAULT_OPUS_MODEL: rules[0]?.request_model,
+                ANTHROPIC_DEFAULT_SONNET_MODEL: rules[0]?.request_model,
+            }
+            : {
+                ANTHROPIC_MODEL: getModelForVariant('default'),
+                ANTHROPIC_DEFAULT_HAIKU_MODEL: getModelForVariant('haiku'),
+                ANTHROPIC_DEFAULT_OPUS_MODEL: getModelForVariant('opus'),
+                ANTHROPIC_DEFAULT_SONNET_MODEL: getModelForVariant('sonnet'),
+            };
 
-            return `# Configure Claude Code settings
-echo "Configuring Claude Code settings..."
-mkdir -p ~/.claude
-node --eval '
-    const fs = require("fs");
-    const path = require("path");
-    const homeDir = os.homedir();
-    const settingsPath = path.join(homeDir, ".claude", "settings.json");
-    const env = {
-        ANTHROPIC_BASE_URL: "${claudeCodeBaseUrl}",
-        ANTHROPIC_MODEL: "${defaultModel}",
-        ANTHROPIC_DEFAULT_HAIKU_MODEL: "${haikuModel}",
-        ANTHROPIC_DEFAULT_OPUS_MODEL: "${opusModel}",
-        ANTHROPIC_DEFAULT_SONNET_MODEL: "${sonnetModel}",
-        DISABLE_TELEMETRY: "1",
-        DISABLE_ERROR_REPORTING: "1",
-        CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
-        API_TIMEOUT_MS: "3000000",
-        ANTHROPIC_AUTH_TOKEN: "${token}",
+        const nodeCode = `const fs = require("fs");
+const path = require("path");
+const os = require("os");
+
+const homeDir = os.homedir();
+const settingsPath = path.join(homeDir, ".claude", "settings.json");
+const claudeDir = path.join(homeDir, ".claude");
+if (!fs.existsSync(claudeDir)) {
+    fs.mkdirSync(claudeDir, { recursive: true });
+}
+
+const envConfig = {
+    ANTHROPIC_BASE_URL: "${claudeCodeBaseUrl}",
+    ANTHROPIC_MODEL: "${commonEnv.ANTHROPIC_MODEL}",
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: "${commonEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL}",
+    ANTHROPIC_DEFAULT_OPUS_MODEL: "${commonEnv.ANTHROPIC_DEFAULT_OPUS_MODEL}",
+    ANTHROPIC_DEFAULT_SONNET_MODEL: "${commonEnv.ANTHROPIC_DEFAULT_SONNET_MODEL}",
+    DISABLE_TELEMETRY: "1",
+    DISABLE_ERROR_REPORTING: "1",
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
+    API_TIMEOUT_MS: "3000000",
+    ANTHROPIC_AUTH_TOKEN: "${token}",
+};
+
+let existingSettings = {};
+if (fs.existsSync(settingsPath)) {
+    const content = fs.readFileSync(settingsPath, "utf-8");
+    existingSettings = JSON.parse(content);
+}
+
+const newSettings = { ...existingSettings, env: envConfig };
+fs.writeFileSync(settingsPath, JSON.stringify(newSettings, null, 2));
+console.log("Settings written to", settingsPath);`;
+
+        return `# PowerShell - Run in PowerShell
+node -e @"
+${nodeCode}
+"@`;
     };
-    if (fs.existsSync(settingsPath)) {
-        const content = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
-        fs.writeFileSync(settingsPath, JSON.stringify({ ...content, env }, null, 2), "utf-8");
-    } else {
-        fs.writeFileSync(settingsPath, JSON.stringify({ env }, null, 2), "utf-8");
-    }
-'`;
-        }
+
+    const generateSettingsScriptUnix = () => {
+        const claudeCodeBaseUrl = getClaudeCodeBaseUrl();
+
+        const commonEnv = configMode === 'unified'
+            ? {
+                ANTHROPIC_MODEL: rules[0]?.request_model,
+                ANTHROPIC_DEFAULT_HAIKU_MODEL: rules[0]?.request_model,
+                ANTHROPIC_DEFAULT_OPUS_MODEL: rules[0]?.request_model,
+                ANTHROPIC_DEFAULT_SONNET_MODEL: rules[0]?.request_model,
+            }
+            : {
+                ANTHROPIC_MODEL: getModelForVariant('default'),
+                ANTHROPIC_DEFAULT_HAIKU_MODEL: getModelForVariant('haiku'),
+                ANTHROPIC_DEFAULT_OPUS_MODEL: getModelForVariant('opus'),
+                ANTHROPIC_DEFAULT_SONNET_MODEL: getModelForVariant('sonnet'),
+            };
+
+        const nodeCode = `const fs = require("fs");
+const path = require("path");
+const os = require("os");
+
+const homeDir = os.homedir();
+const settingsPath = path.join(homeDir, ".claude", "settings.json");
+const claudeDir = path.join(homeDir, ".claude");
+if (!fs.existsSync(claudeDir)) {
+    fs.mkdirSync(claudeDir, { recursive: true });
+}
+
+const envConfig = {
+    ANTHROPIC_BASE_URL: "${claudeCodeBaseUrl}",
+    ANTHROPIC_MODEL: "${commonEnv.ANTHROPIC_MODEL}",
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: "${commonEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL}",
+    ANTHROPIC_DEFAULT_OPUS_MODEL: "${commonEnv.ANTHROPIC_DEFAULT_OPUS_MODEL}",
+    ANTHROPIC_DEFAULT_SONNET_MODEL: "${commonEnv.ANTHROPIC_DEFAULT_SONNET_MODEL}",
+    DISABLE_TELEMETRY: "1",
+    DISABLE_ERROR_REPORTING: "1",
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
+    API_TIMEOUT_MS: "3000000",
+    ANTHROPIC_AUTH_TOKEN: "${token}",
+};
+
+let existingSettings = {};
+if (fs.existsSync(settingsPath)) {
+    const content = fs.readFileSync(settingsPath, "utf-8");
+    existingSettings = JSON.parse(content);
+}
+
+const newSettings = { ...existingSettings, env: envConfig };
+fs.writeFileSync(settingsPath, JSON.stringify(newSettings, null, 2));
+console.log("Settings written to", settingsPath);`;
+
+        return `# Bash - Run in terminal
+node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
     };
 
     const generateClaudeJsonConfig = () => {
@@ -331,18 +372,58 @@ node --eval '
         }, null, 2);
     };
 
-    const generateScript = () => {
-        return `# Configure Claude Code to skip onboarding
-echo "Configuring Claude Code to skip onboarding..."
-node --eval '
-    const homeDir = os.homedir();
-    const filePath = path.join(homeDir, ".claude.json");
-    if (fs.existsSync(filePath)) {
-        const content = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-        fs.writeFileSync(filePath, JSON.stringify({ ...content, hasCompletedOnboarding: true }, null, 2), "utf-8");
-    } else {
-        fs.writeFileSync(filePath, JSON.stringify({ hasCompletedOnboarding: true }, null, 2), "utf-8");
-    }'`;
+    const generateScriptWindows = () => {
+        const nodeCode = `const fs = require("fs");
+const path = require("path");
+const os = require("os");
+
+const homeDir = os.homedir();
+const claudeJsonPath = path.join(homeDir, ".claude.json");
+
+const onboardingConfig = {
+    hasCompletedOnboarding: true
+};
+
+let existingConfig = {};
+if (fs.existsSync(claudeJsonPath)) {
+    const content = fs.readFileSync(claudeJsonPath, "utf-8");
+    existingConfig = JSON.parse(content);
+}
+
+const newConfig = { ...existingConfig, ...onboardingConfig };
+fs.writeFileSync(claudeJsonPath, JSON.stringify(newConfig, null, 2));
+console.log("Onboarding config written to", claudeJsonPath);`;
+
+        return `# PowerShell - Run in PowerShell
+node -e @"
+${nodeCode}
+"@`;
+    };
+
+    const generateScriptUnix = () => {
+        const nodeCode = `const fs = require("fs");
+const path = require("path");
+const os = require("os");
+
+const homeDir = os.homedir();
+const claudeJsonPath = path.join(homeDir, ".claude.json");
+
+const onboardingConfig = {
+    hasCompletedOnboarding: true
+};
+
+let existingConfig = {};
+if (fs.existsSync(claudeJsonPath)) {
+    const content = fs.readFileSync(claudeJsonPath, "utf-8");
+    existingConfig = JSON.parse(content);
+}
+
+const newConfig = { ...existingConfig, ...onboardingConfig };
+fs.writeFileSync(claudeJsonPath, JSON.stringify(newConfig, null, 2));
+console.log("Onboarding config written to", claudeJsonPath);`;
+
+        return `# Bash - Run in terminal
+node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
     };
 
     // Show empty state if no providers
@@ -398,7 +479,7 @@ node --eval '
                         <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                             Configure Claude Code to use Tingly Box as your AI model proxy
                         </Typography>
-                        {CONFIG_MODES.map((mode) => (
+                        {CONFIG_MODES.filter(m => m.enabled).map((mode) => (
                             <Box key={mode.value} sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                                 <Typography variant="body2" color="text.secondary">
                                     <Box component="span" sx={{ fontWeight: 600, color: 'primary.main' }}>
@@ -512,13 +593,13 @@ node --eval '
                     onClose={() => setConfigModalOpen(false)}
                     dontRemindAgain={dontRemindAgain}
                     onDontRemindChange={handleDontRemindChange}
-                    claudeJsonMode={claudeJsonMode}
-                    onClaudeJsonModeChange={setClaudeJsonMode}
                     configMode={configMode}
                     generateSettingsConfig={generateSettingsConfig}
-                    generateSettingsScript={generateSettingsScript}
+                    generateSettingsScriptWindows={generateSettingsScriptWindows}
+                    generateSettingsScriptUnix={generateSettingsScriptUnix}
                     generateClaudeJsonConfig={generateClaudeJsonConfig}
-                    generateScript={generateScript}
+                    generateScriptWindows={generateScriptWindows}
+                    generateScriptUnix={generateScriptUnix}
                     copyToClipboard={copyToClipboard}
                 />
             </CardGrid>
