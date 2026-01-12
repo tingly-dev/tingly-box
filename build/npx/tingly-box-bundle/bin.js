@@ -10,6 +10,10 @@ import { pipeline } from "stream/promises";
 import unzipper from "unzipper";
 import { homedir } from "os";
 
+// Default branch to use when not specified via transport version
+// This will be replaced during the NPX build process
+const BINARY_RELEASE_BRANCH = "latest";
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 function getPlatformInfo() {
@@ -32,7 +36,7 @@ function getPlatformInfo() {
 // Get cache directory for extracted binaries
 function getCacheDir() {
 	const baseDir = process.env.XDG_CACHE_HOME || join(homedir(), ".cache");
-	const cacheDir = join(baseDir, "tingly-box-bundle");
+	const cacheDir = join(baseDir, "tingly-box-bundle", BINARY_RELEASE_BRANCH);
 	return cacheDir;
 }
 
@@ -86,8 +90,7 @@ const zipFileName = `tingly-box-${platformDir}.zip`;
 const zipPath = join(__dirname, "zip", zipFileName);
 if (!existsSync(zipPath)) {
 	console.error(`❌ Zip file not found: ${zipPath}`);
-	console.error(`This should not happen with the bundled package.`);
-	console.error(`Please reinstall: npm install -g tingly-box-bundle`);
+	console.error(`This platform is not supported for current version.`);
 	process.exit(1);
 }
 
@@ -115,7 +118,6 @@ try {
 		switch (errorCode) {
 			case 'ENOENT':
 				console.error(`│  └─ Binary not found at: ${binaryPath}`);
-				console.error(`│     Please reinstall: npm install -g tingly-box-bundle`);
 				break;
 			case 'EACCES':
 				console.error(`│  └─ Permission denied. Try: chmod +x "${binaryPath}"`);
