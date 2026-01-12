@@ -453,3 +453,195 @@ func ConvertAnthropicToGoogleToolChoice(tc *anthropic.ToolChoiceUnionParam) *gen
 
 	return config
 }
+
+func ConvertAnthropicBetaToGoogleTools(tools []anthropic.BetaToolUnionParam) []*genai.FunctionDeclaration {
+	if len(tools) == 0 {
+		return nil
+	}
+
+	out := make([]*genai.FunctionDeclaration, 0, len(tools))
+
+	for _, t := range tools {
+		tool := t.OfTool
+		if tool == nil {
+			continue
+		}
+
+		// Convert Anthropic beta input schema to Google parameters
+		var parameters *genai.Schema
+		if tool.InputSchema.Properties != nil {
+			if schemaBytes, err := json.Marshal(tool.InputSchema); err == nil {
+				_ = json.Unmarshal(schemaBytes, &parameters)
+			}
+		}
+
+		funcDecl := &genai.FunctionDeclaration{
+			Name:        tool.Name,
+			Description: tool.Description.Value,
+			Parameters:  parameters,
+		}
+		out = append(out, funcDecl)
+	}
+
+	return out
+}
+
+func ConvertAnthropicBetaToGoogleToolChoice(tc *anthropic.BetaToolChoiceUnionParam) *genai.ToolConfig {
+	config := &genai.ToolConfig{
+		FunctionCallingConfig: &genai.FunctionCallingConfig{},
+	}
+
+	if tc.OfAuto != nil {
+		config.FunctionCallingConfig.Mode = genai.FunctionCallingConfigModeAuto
+	}
+
+	if tc.OfTool != nil {
+		config.FunctionCallingConfig.Mode = genai.FunctionCallingConfigModeAny
+		config.FunctionCallingConfig.AllowedFunctionNames = []string{tc.OfTool.Name}
+	}
+
+	if tc.OfAny != nil {
+		config.FunctionCallingConfig.Mode = genai.FunctionCallingConfigModeAny
+	}
+
+	// Default to auto
+	if config.FunctionCallingConfig.Mode == "" {
+		config.FunctionCallingConfig.Mode = genai.FunctionCallingConfigModeAuto
+	}
+
+	return config
+}
+
+// ConvertAnthropicToGoogleRequest converts Anthropic request to Google format
+func ConvertAnthropicBetaToGoogleRequest(anthropicReq *anthropic.BetaMessageNewParams, defaultMaxTokens int64) (string, []*genai.Content, *genai.GenerateContentConfig) {
+	model := string(anthropicReq.Model)
+	contents := make([]*genai.Content, 0, len(anthropicReq.Messages))
+	config := &genai.GenerateContentConfig{}
+
+	// Set max_tokens
+	config.MaxOutputTokens = int32(anthropicReq.MaxTokens)
+
+	// Convert system message
+	if len(anthropicReq.System) > 0 {
+		var systemText string
+		for _, sysBlock := range anthropicReq.System {
+			systemText += sysBlock.Text + "\n"
+		}
+		config.SystemInstruction = &genai.Content{
+			Role:  "system",
+			Parts: []*genai.Part{genai.NewPartFromText(systemText)},
+		}
+	}
+
+	// Convert messages
+	for _, msg := range anthropicReq.Messages {
+		switch string(msg.Role) {
+		case "user":
+			content := &genai.Content{
+				Role:  "user",
+				Parts: []*genai.Part{},
+			}
+
+			// Handle different content types
+			for _, block := range msg.Content {
+				switch {
+				case block.OfText != nil:
+					content.Parts = append(content.Parts, genai.NewPartFromText(block.OfText.Text))
+				case block.OfImage != nil:
+					// Convert image to inline data
+					// For Google API, images need to be passed as inline data with MIME type
+					if block.OfImage.Source.OfBase64 != nil {
+						content.Parts = append(content.Parts, &genai.Part{
+							InlineData: &genai.Blob{
+								MIMEType: string(block.OfImage.Source.OfBase64.MediaType),
+								Data:     []byte(block.OfImage.Source.OfBase64.Data),
+							},
+						})
+					} else if block.OfImage.Source.OfURL != nil {
+						// For URL images, we'd need to fetch them first
+						// For now, skip or handle as text reference
+						content.Parts = append(content.Parts, genai.NewPartFromText("[Image: "+block.OfImage.Source.OfURL.URL+"]"))
+					}
+				case block.OfToolResult != nil:
+					// Convert tool_result to function_response
+					resultText := ""
+					for _, c := range block.OfToolResult.Content {
+						if c.OfText != nil {
+							resultText += c.OfText.Text
+						}
+					}
+
+					content.Parts = append(content.Parts, &genai.Part{
+						FunctionResponse: &genai.FunctionResponse{
+							Name: block.OfToolResult.ToolUseID,
+							Parts: []*genai.FunctionResponsePart{
+								{
+									InlineData: &genai.FunctionResponseBlob{
+										Data: []byte(resultText),
+									},
+								},
+							},
+						},
+					})
+				case block.OfThinking != nil, block.OfRedactedThinking != nil:
+					// Skip thinking blocks - Google API doesn't support them
+				}
+			}
+
+			if len(content.Parts) > 0 {
+				contents = append(contents, content)
+			}
+
+		case "assistant":
+			content := &genai.Content{
+				Role:  "model",
+				Parts: []*genai.Part{},
+			}
+
+			// Handle different content types
+			for _, block := range msg.Content {
+				switch {
+				case block.OfText != nil:
+					content.Parts = append(content.Parts, genai.NewPartFromText(block.OfText.Text))
+				case block.OfToolUse != nil:
+					// Convert tool_use to function_call
+					var argsInput map[string]interface{}
+					if inputBytes, ok := block.OfToolUse.Input.([]byte); ok {
+						_ = json.Unmarshal(inputBytes, &argsInput)
+					}
+
+					content.Parts = append(content.Parts, &genai.Part{
+						FunctionCall: &genai.FunctionCall{
+							ID:   block.OfToolUse.ID,
+							Name: block.OfToolUse.Name,
+							Args: argsInput,
+						},
+					})
+				case block.OfThinking != nil, block.OfRedactedThinking != nil:
+					// Skip thinking blocks - Google API doesn't support them
+				}
+			}
+
+			if len(content.Parts) > 0 {
+				contents = append(contents, content)
+			}
+		}
+	}
+
+	// Convert tools from Anthropic format to Google format
+	if len(anthropicReq.Tools) > 0 {
+		config.Tools = []*genai.Tool{
+			{
+				FunctionDeclarations: ConvertAnthropicBetaToGoogleTools(anthropicReq.Tools),
+			},
+		}
+	}
+
+	// Convert tool choice
+	if anthropicReq.ToolChoice.OfAuto != nil || anthropicReq.ToolChoice.OfTool != nil ||
+		anthropicReq.ToolChoice.OfAny != nil {
+		config.ToolConfig = ConvertAnthropicBetaToGoogleToolChoice(&anthropicReq.ToolChoice)
+	}
+
+	return model, contents, config
+}
