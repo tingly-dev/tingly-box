@@ -18,8 +18,7 @@ import {
 import { styled } from '@mui/material/styles';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ConfigProvider } from './RuleGraphTypes';
-import type { SmartRouting } from './RuleGraphTypes';
+import type { SmartRouting } from '../RoutingGraphTypes.ts';
 
 // Node dimensions - smaller for better layout
 const NODE_STYLES = {
