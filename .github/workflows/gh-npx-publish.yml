@@ -17,13 +17,18 @@ on:
         required: false
         type: boolean
         default: false
-      publish_gui:
-        description: 'Also publish GUI package'
+      publish_cli:
+        description: 'Publish CLI package (tingly-box)'
         required: false
         type: boolean
         default: true
+      publish_gui:
+        description: 'Publish GUI package (tingly-box-gui)'
+        required: false
+        type: boolean
+        default: false
       publish_bundle:
-        description: 'Also publish bundle package (with pre-built binaries)'
+        description: 'Publish bundle package (tingly-box-bundle with pre-built binaries)'
         required: false
         type: boolean
         default: false
@@ -35,6 +40,7 @@ jobs:
   setup:
     runs-on: ubuntu-latest
     outputs:
+      publish_cli: ${{ steps.set_vars.outputs.publish_cli }}
       publish_gui: ${{ steps.set_vars.outputs.publish_gui }}
       publish_bundle: ${{ steps.set_vars.outputs.publish_bundle }}
       npx_version: ${{ steps.version.outputs.npx_version }}
@@ -48,6 +54,7 @@ jobs:
       - name: Set variables
         id: set_vars
         run: |
+          echo "publish_cli=${{ github.event.inputs.publish_cli }}" >> $GITHUB_OUTPUT
           echo "publish_gui=${{ github.event.inputs.publish_gui }}" >> $GITHUB_OUTPUT
           echo "publish_bundle=${{ github.event.inputs.publish_bundle }}" >> $GITHUB_OUTPUT
 
@@ -96,6 +103,7 @@ jobs:
     permissions:
       contents: write
       id-token: write
+    if: needs.setup.outputs.publish_cli == 'true'
     env:
       PKG_NAME: tingly-box
       PKG_DIR: build/npx/tingly-box
