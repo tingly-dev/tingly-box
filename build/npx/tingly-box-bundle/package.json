@@ -22,7 +22,7 @@
   "type": "module",
   "files": [
     "bin.js",
-    "bin/"
+    "zip/"
   ],
   "os": ["darwin", "linux", "win32"],
   "cpu": ["x64", "arm64"],

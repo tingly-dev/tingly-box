@@ -1,9 +1,14 @@
 #!/usr/bin/env node
 
-import { execFileSync, execSync } from "child_process";
+import { execFileSync } from "child_process";
 import { chmodSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
+import { createReadStream } from "fs";
+import { mkdir } from "fs/promises";
+import { pipeline } from "stream/promises";
+import unzipper from "unzipper";
+import { homedir } from "os";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -24,9 +29,46 @@ function getPlatformInfo() {
 	throw new Error(`Unsupported platform: ${platform}`);
 }
 
-const platformDir = getPlatformInfo();
-const binaryName = "tingly-box" + (process.platform === "win32" ? ".exe" : "");
-const binaryPath = join(__dirname, "bin", platformDir, binaryName);
+// Get cache directory for extracted binaries
+function getCacheDir() {
+	const baseDir = process.env.XDG_CACHE_HOME || join(homedir(), ".cache");
+	const cacheDir = join(baseDir, "tingly-box-bundle");
+	return cacheDir;
+}
+
+// Extract binary from zip to cache directory
+async function extractBinary(platformDir) {
+	const zipFileName = `tingly-box-${platformDir}.zip`;
+	const zipPath = join(__dirname, "zip", zipFileName);
+	const cacheDir = getCacheDir();
+	const targetPath = join(cacheDir, platformDir);
+
+	// Check if binary already exists in cache
+	const binaryName = "tingly-box" + (process.platform === "win32" ? ".exe" : "");
+	const cachedBinary = join(targetPath, binaryName);
+	if (existsSync(cachedBinary)) {
+		return cachedBinary;
+	}
+
+	// Create cache directory
+	await mkdir(targetPath, { recursive: true });
+
+	console.log(`📦 Extracting ${zipFileName}...`);
+
+	// Extract zip file - the zip contains the binary at root level
+	await pipeline(
+		createReadStream(zipPath),
+		unzipper.Extract({ path: targetPath })
+	);
+
+	// Set executable permission on Unix systems
+	if (process.platform !== "win32") {
+		chmodSync(cachedBinary, 0o755);
+	}
+
+	console.log(`✅ Extracted to: ${cachedBinary}`);
+	return cachedBinary;
+}
 
 // Default parameters to use when no arguments are provided
 const DEFAULT_ARGS = [
@@ -37,25 +79,20 @@ const DEFAULT_ARGS = [
 const args = process.argv.slice(2);
 const argsToUse = args.length > 0 ? args : DEFAULT_ARGS;
 
-// Verify binary exists
-if (!existsSync(binaryPath)) {
-	console.error(`❌ Binary not found: ${binaryPath}`);
+const platformDir = getPlatformInfo();
+
+// Verify zip exists
+const zipFileName = `tingly-box-${platformDir}.zip`;
+const zipPath = join(__dirname, "zip", zipFileName);
+if (!existsSync(zipPath)) {
+	console.error(`❌ Zip file not found: ${zipPath}`);
 	console.error(`This should not happen with the bundled package.`);
 	console.error(`Please reinstall: npm install -g tingly-box-bundle`);
 	process.exit(1);
 }
 
-// Make sure the binary is executable on Unix systems
-if (process.platform !== "win32") {
-	try {
-		chmodSync(binaryPath, 0o755);
-	} catch (error) {
-		console.error(`⚠️  Warning: Could not set executable permission: ${error.message}`);
-	}
-}
-
-// Print binary location for auditability
-console.log(`🔍 Binary: ${binaryPath}`);
+// Extract binary and get path
+const binaryPath = await extractBinary(platformDir);
 
 try {
 	execFileSync(binaryPath, argsToUse, {
