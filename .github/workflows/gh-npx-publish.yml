@@ -457,6 +457,7 @@ jobs:
 
               target="${BIN_MAP[$zip]}"
               if [ -n "$target" ]; then
+                ls temp_extract
                 mv "temp_extract/$binary_name" "${GITHUB_WORKSPACE}/${PKG_DIR}/bin/$target"
                 echo "  ✅ Moved to $target"
               else
