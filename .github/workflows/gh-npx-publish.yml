@@ -468,13 +468,13 @@ jobs:
             fi
           done
 
-          chmod +x "${GITHUB_WORKSPACE}/${PKG_DIR}"/bin/*/*/tingly-box 2>/dev/null || true
+          chmod +x "${GITHUB_WORKSPACE}/${PKG_DIR}"/bin/*/tingly-box 2>/dev/null || true
 
           cd "${GITHUB_WORKSPACE}"
           rm -rf "$TMP_DIR"
 
           echo "✅ All binaries downloaded and placed"
-          ls -lh "$PKG_DIR"/bin/*/*/
+          ls -lh "$PKG_DIR"/bin/*/
 
       - name: Verify bundle structure
         run: |
