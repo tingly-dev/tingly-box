@@ -12,8 +12,20 @@ import (
 //go:embed anthropic_test.txt
 var rawBody []byte
 
+func TestAnthropicBetaMessagesRequest_UnmarshalJSON(t *testing.T) {
+	jsonString := "{\"stream\":true}"
+
+	var req AnthropicBetaMessagesRequest
+	if err := json.Unmarshal([]byte(jsonString), &req); err != nil {
+		t.Fatalf("Failed to deserialize rawBody into BetaMessageNewParams: %v", err)
+	}
+
+	if req.Stream != true {
+		t.Fatal("Failed to deserialize rawBody into BetaMessageNewParams")
+	}
+}
+
 func TestBetaDecode(t *testing.T) {
-	// 2. 第一次解码：得到 JSON 字符串
 	var jsonString string
 	if err := json.Unmarshal(rawBody, &jsonString); err != nil {
 		panic(fmt.Sprintf("第一次解码失败: %v", err))
