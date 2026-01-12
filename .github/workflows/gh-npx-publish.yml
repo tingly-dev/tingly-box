@@ -449,6 +449,9 @@ jobs:
 
           echo "✅ Downloaded zip files:"
           ls -lh "$PKG_DIR/zip/"
+          
+          # No GUI
+          rm -rf "$PKG_DIR/zip/tingly-box-gui-*"
 
       - name: Verify bundle structure
         run: |
