@@ -25,14 +25,15 @@ import {FEATURE_FLAGS, isFeatureEnabled} from '../constants/featureFlags';
 import ClaudeCodeConfigModal from '../components/ClaudeCodeConfigModal';
 
 type ClaudeJsonMode = 'json' | 'script';
-type ConfigMode = 'unified' | 'separate';
+type ConfigMode = 'unified' | 'separate' | 'smart';
 
 const MODEL_VARIANTS = ['default', 'haiku', 'sonnet', 'opus'] as const;
 
 // Configuration mode options
-const CONFIG_MODES: { value: ConfigMode; label: string }[] = [
-    { value: 'unified', label: 'Unified' },
-    { value: 'separate', label: 'Separate' },
+const CONFIG_MODES: { value: ConfigMode; label: string; description: string; enabled: boolean }[] = [
+    { value: 'unified', label: 'Unified', description: 'Single model for all requests', enabled: true },
+    { value: 'separate', label: 'Separate', description: 'Distinct models for each variant', enabled: true },
+    { value: 'smart', label: 'Smart', description: '(WIP) Smart routing according to request field / content / model feature / user intent / ...', enabled: false },
 ];
 
 const UseClaudeCodePage: React.FC = () => {
@@ -398,11 +399,11 @@ node --eval '
                             Configure Claude Code to use Tingly Box as your AI model proxy
                         </Typography>
                         {CONFIG_MODES.map((mode) => (
-                            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                                <Typography key={mode.value} variant="body2" color="text.secondary">
+                            <Box key={mode.value} sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                                <Typography variant="body2" color="text.secondary">
                                     <Box component="span" sx={{ fontWeight: 600, color: 'primary.main' }}>
                                         {mode.label}:
-                                    </Box> {mode.value === 'unified' ? 'Single model for all requests' : 'Distinct models for each variant'}
+                                    </Box> {mode.description}
                                 </Typography>
                             </Box>
                         ))}
@@ -432,7 +433,7 @@ node --eval '
                                         },
                                     }}
                                 >
-                                    {CONFIG_MODES.map((mode) => (
+                                    {CONFIG_MODES.filter(m => m.enabled).map((mode) => (
                                         <ToggleButton
                                             key={mode.value}
                                             value={mode.value}
