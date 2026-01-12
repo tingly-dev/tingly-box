@@ -22,6 +22,22 @@ type OpenAIChatCompletionRequest struct {
 	Stream bool `json:"stream"`
 }
 
+func (r *OpenAIChatCompletionRequest) UnmarshalJSON(data []byte) error {
+	var inner openai.ChatCompletionNewParams
+	aux := &struct {
+		Stream bool `json:"stream"`
+	}{}
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(data, &inner); err != nil {
+		return err
+	}
+	r.Stream = aux.Stream
+	r.ChatCompletionNewParams = inner
+	return nil
+}
+
 // OpenAIListModels handles the /v1/models endpoint (OpenAI compatible)
 func (s *Server) OpenAIListModels(c *gin.Context) {
 	cfg := s.config
