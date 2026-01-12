@@ -40,6 +40,7 @@ type Server struct {
 	memoryLogMW     *middleware.MemoryLogMiddleware
 	loadBalancer    *LoadBalancer
 	loadBalancerAPI *LoadBalancerAPI
+	usageAPI        *UsageAPI
 
 	// client pool for caching
 	clientPool *ClientPool
@@ -205,6 +206,9 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize load balancer API
 	loadBalancerAPI := NewLoadBalancerAPI(loadBalancer, cfg)
 
+	// Initialize usage API
+	usageAPI := NewUsageAPI(cfg)
+
 	// Initialize OAuth manager and handler
 	registry := oauth2.DefaultRegistry()
 	oauthConfig := &oauth2.Config{
@@ -225,6 +229,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.memoryLogMW = memoryLogMW
 	server.loadBalancer = loadBalancer
 	server.loadBalancerAPI = loadBalancerAPI
+	server.usageAPI = usageAPI
 	server.oauthManager = oauthManager
 	server.oauthRefresher = tokenRefresher
 

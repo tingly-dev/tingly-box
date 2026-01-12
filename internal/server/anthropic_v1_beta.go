@@ -16,24 +16,11 @@ import (
 )
 
 // anthropicMessagesV1Beta implements beta messages API
-func (s *Server) anthropicMessagesV1Beta(c *gin.Context, bodyBytes []byte, rawReq map[string]interface{}, proxyModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule) {
+func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req AnthropicBetaMessagesRequest, proxyModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule) {
 	actualModel := selectedService.Model
 
 	// Check if streaming is requested
-	isStreaming := false
-	if stream, ok := rawReq["stream"].(bool); ok {
-		isStreaming = stream
-	}
-	logrus.Debugf("Stream requested for AnthropicMessages (beta): %v", isStreaming)
-
-	// Parse into BetaMessageNewParams using SDK's JSON unmarshaling
-	var req anthropic.BetaMessageNewParams
-	if err := c.ShouldBindJSON(&req); err != nil {
-		// Log the invalid request for debugging
-		logrus.Debugf("Invalid JSON request received: %v\nBody: %s", err, string(bodyBytes))
-		SendInvalidRequestBodyError(c, err)
-		return
-	}
+	isStreaming := req.Stream
 
 	req.Model = anthropic.Model(actualModel)
 
@@ -71,20 +58,28 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, bodyBytes []byte, rawRe
 		// Use direct Anthropic SDK call
 		if isStreaming {
 			// Handle streaming request
-			stream, err := s.forwardAnthropicStreamRequestV1Beta(provider, req)
+			stream, err := s.forwardAnthropicStreamRequestV1Beta(provider, req.BetaMessageNewParams)
 			if err != nil {
+				s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "stream_creation_failed")
 				SendStreamingError(c, err)
 				return
 			}
 			// Handle the streaming response
-			s.handleAnthropicStreamResponseV1Beta(c, req, stream, proxyModel)
+			s.handleAnthropicStreamResponseV1Beta(c, req.BetaMessageNewParams, stream, proxyModel, actualModel, rule, provider)
 		} else {
 			// Handle non-streaming request
-			anthropicResp, err := s.forwardAnthropicRequestV1Beta(provider, req)
+			anthropicResp, err := s.forwardAnthropicRequestV1Beta(provider, req.BetaMessageNewParams)
 			if err != nil {
+				s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "forward_failed")
 				SendForwardingError(c, err)
 				return
 			}
+
+			// Track usage from response
+			inputTokens := int(anthropicResp.Usage.InputTokens)
+			outputTokens := int(anthropicResp.Usage.OutputTokens)
+			s.trackUsage(c, rule, provider, actualModel, proxyModel, inputTokens, outputTokens, false, "success", "")
+
 			// FIXME: now we use req model as resp model
 			anthropicResp.Model = anthropic.Model(proxyModel)
 			c.JSON(http.StatusOK, anthropicResp)
@@ -100,7 +95,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, bodyBytes []byte, rawRe
 		// Use OpenAI conversion path (default behavior)
 		if isStreaming {
 			// Convert Anthropic beta request to OpenAI format for streaming
-			openaiReq := adaptor.ConvertAnthropicBetaToOpenAIRequest(&req, true)
+			openaiReq := adaptor.ConvertAnthropicBetaToOpenAIRequest(&req.BetaMessageNewParams, true)
 
 			// Create streaming request
 			stream, err := s.forwardOpenAIStreamRequest(provider, openaiReq)
@@ -117,7 +112,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, bodyBytes []byte, rawRe
 
 		} else {
 			// Handle non-streaming request - convert beta response to OpenAI and back
-			openaiReq := adaptor.ConvertAnthropicBetaToOpenAIRequest(&req, true)
+			openaiReq := adaptor.ConvertAnthropicBetaToOpenAIRequest(&req.BetaMessageNewParams, true)
 			response, err := s.forwardOpenAIRequest(provider, openaiReq)
 			if err != nil {
 				SendForwardingError(c, err)
@@ -164,8 +159,25 @@ func (s *Server) forwardAnthropicStreamRequestV1Beta(provider *typ.Provider, req
 }
 
 // handleAnthropicStreamResponseV1Beta processes the Anthropic beta streaming response and sends it to the client
-func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthropic.BetaMessageNewParams, stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], respModel string) {
-	defer StreamRecoveryHandler(c, stream)
+func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthropic.BetaMessageNewParams, stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], respModel, actualModel string, rule *typ.Rule, provider *typ.Provider) {
+	// Accumulate usage from stream
+	var inputTokens, outputTokens int
+	var hasUsage bool
+
+	defer func() {
+		if r := recover(); r != nil {
+			logrus.Errorf("Panic in Anthropic beta streaming handler: %v", r)
+			// Track panic as error with any usage we accumulated
+			if hasUsage {
+				s.trackUsage(c, rule, provider, actualModel, respModel, inputTokens, outputTokens, true, "error", "panic")
+			}
+		}
+		if stream != nil {
+			if err := stream.Close(); err != nil {
+				logrus.Errorf("Error closing stream: %v", err)
+			}
+		}
+	}()
 
 	// Set SSE headers
 	SetupSSEHeaders(c)
@@ -182,6 +194,16 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthrop
 		event := stream.Current()
 		event.Message.Model = anthropic.Model(respModel)
 
+		// Accumulate usage from message_stop event
+		if event.Message.Usage.InputTokens > 0 {
+			inputTokens = int(event.Message.Usage.InputTokens)
+			hasUsage = true
+		}
+		if event.Message.Usage.OutputTokens > 0 {
+			outputTokens = int(event.Message.Usage.OutputTokens)
+			hasUsage = true
+		}
+
 		// Convert the event to JSON and send as SSE
 		if err := sendSSEvent(c, event.Type, event); err != nil {
 			logrus.Debugf("Failed to marshal Anthropic beta stream event: %v", err)
@@ -192,9 +214,18 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthrop
 
 	// Check for stream errors
 	if err := stream.Err(); err != nil {
+		// Track usage with error status
+		if hasUsage {
+			s.trackUsage(c, rule, provider, actualModel, respModel, inputTokens, outputTokens, true, "error", "stream_error")
+		}
 		MarshalAndSendErrorEvent(c, err.Error(), "stream_error", "stream_failed")
 		flusher.Flush()
 		return
+	}
+
+	// Track successful streaming completion
+	if hasUsage {
+		s.trackUsage(c, rule, provider, actualModel, respModel, inputTokens, outputTokens, true, "success", "")
 	}
 
 	// Send completion event

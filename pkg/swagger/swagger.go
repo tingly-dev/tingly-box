@@ -1063,16 +1063,22 @@ func (rm *RouteManager) parseValidationRules(schema *Schema, bindingTag string, 
 			if minVal := rm.parseNumericValue(strings.TrimPrefix(rule, "min="), goType); minVal != nil {
 				if goType.Kind() == reflect.String {
 					schema.MinLength = minVal.(*int)
-				} else {
-					schema.Minimum = minVal.(*float64)
+				} else if fv, ok := minVal.(*float64); ok {
+					schema.Minimum = fv
+				} else if iv, ok := minVal.(*int64); ok {
+					minVal := float64(*iv)
+					schema.Minimum = &minVal
 				}
 			}
 		case strings.HasPrefix(rule, "max="):
 			if maxVal := rm.parseNumericValue(strings.TrimPrefix(rule, "max="), goType); maxVal != nil {
 				if goType.Kind() == reflect.String {
 					schema.MaxLength = maxVal.(*int)
-				} else {
-					schema.Maximum = maxVal.(*float64)
+				} else if fv, ok := maxVal.(*float64); ok {
+					schema.Maximum = fv
+				} else if iv, ok := maxVal.(*int64); ok {
+					maxVal := float64(*iv)
+					schema.Maximum = &maxVal
 				}
 			}
 		case strings.HasPrefix(rule, "len="):
