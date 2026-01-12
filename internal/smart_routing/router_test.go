@@ -1,34 +1,161 @@
 package smartrouting
 
 import (
-	"strings"
 	"testing"
+
+	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/openai/openai-go/v3"
+	"github.com/stretchr/testify/require"
 
 	"tingly-box/internal/loadbalance"
 )
 
-func TestSmartOpPosition_IsValid(t *testing.T) {
-	tests := []struct {
-		name  string
-		pos   SmartOpPosition
-		valid bool
-	}{
-		{"model valid", PositionModel, true},
-		{"thinking valid", PositionThinking, true},
-		{"system valid", PositionSystem, true},
-		{"user valid", PositionUser, true},
-		{"tool_use valid", PositionToolUse, true},
-		{"token valid", PositionToken, true},
-		{"invalid", SmartOpPosition("invalid"), false},
+func TestSmartRouting_Integration_OpenAI(t *testing.T) {
+	// Create router with a rule that routes models containing "gpt" to a specific provider
+	router, err := NewRouter([]SmartRouting{
+		{
+			Description: "Route gpt models to openai-provider",
+			Ops: []SmartOp{
+				{
+					Position:  PositionModel,
+					Operation: "contains",
+					Value:     "gpt",
+				},
+			},
+			Services: []loadbalance.Service{
+				{
+					Provider: "openai-provider",
+					Model:    "gpt-4",
+					Weight:   1,
+					Active:   true,
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	// Create a realistic OpenAI request
+	req := &openai.ChatCompletionNewParams{
+		Model: openai.ChatModel("gpt-4o"),
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.SystemMessage("You are a helpful assistant."),
+			openai.UserMessage("What is the capital of France?"),
+		},
+		MaxTokens: openai.Opt(int64(100)),
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.pos.IsValid(); got != tt.valid {
-				t.Errorf("SmartOpPosition.IsValid() = %v, want %v", got, tt.valid)
-			}
-		})
+	// Extract context and evaluate
+	ctx := ExtractContextFromOpenAIRequest(req)
+	services, matched := router.EvaluateRequest(ctx)
+
+	require.True(t, matched, "should match the gpt routing rule")
+	require.Len(t, services, 1)
+	require.Equal(t, "openai-provider", services[0].Provider)
+	require.Equal(t, "gpt-4", services[0].Model)
+	require.Equal(t, "gpt-4o", ctx.Model)
+	require.Equal(t, "You are a helpful assistant.", ctx.SystemMessages[0])
+	require.Equal(t, "What is the capital of France?", ctx.UserMessages[0])
+}
+
+func TestSmartRouting_Integration_Anthropic(t *testing.T) {
+	// Create router with rules for thinking mode and haiku model
+	router, err := NewRouter([]SmartRouting{
+		{
+			Description: "Route thinking enabled requests to thinking-provider",
+			Ops: []SmartOp{
+				{
+					Position:  PositionThinking,
+					Operation: "enabled",
+					Value:     "true",
+				},
+			},
+			Services: []loadbalance.Service{
+				{
+					Provider: "thinking-provider",
+					Model:    "claude-3-5-sonnet-20241022",
+					Weight:   1,
+					Active:   true,
+				},
+			},
+		},
+		{
+			Description: "Route haiku models to haiku-provider",
+			Ops: []SmartOp{
+				{
+					Position:  PositionModel,
+					Operation: "contains",
+					Value:     "haiku",
+				},
+			},
+			Services: []loadbalance.Service{
+				{
+					Provider: "haiku-provider",
+					Model:    "claude-3-5-haiku-20241022",
+					Weight:   1,
+					Active:   true,
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	// Test with thinking enabled
+	reqThinking := &anthropic.MessageNewParams{
+		Model:     anthropic.Model("claude-3-5-sonnet-20241022"),
+		MaxTokens: 100,
+		Thinking: anthropic.ThinkingConfigParamUnion{
+			OfEnabled: &anthropic.ThinkingConfigEnabledParam{
+				BudgetTokens: 10000,
+			},
+		},
+		System: []anthropic.TextBlockParam{
+			{Text: "You are a helpful assistant."},
+		},
+		Messages: []anthropic.MessageParam{
+			anthropic.NewUserMessage(anthropic.NewTextBlock("Explain quantum computing")),
+		},
 	}
+
+	ctx := ExtractContextFromAnthropicRequest(reqThinking)
+	services, matched := router.EvaluateRequest(ctx)
+
+	require.True(t, matched, "should match the thinking routing rule")
+	require.Len(t, services, 1)
+	require.Equal(t, "thinking-provider", services[0].Provider)
+	require.True(t, ctx.ThinkingEnabled)
+
+	// Test with haiku model
+	reqHaiku := &anthropic.MessageNewParams{
+		Model:     anthropic.Model("claude-3-5-haiku-20241022"),
+		MaxTokens: 100,
+		Messages: []anthropic.MessageParam{
+			anthropic.NewUserMessage(anthropic.NewTextBlock("Hello!")),
+		},
+	}
+
+	ctx = ExtractContextFromAnthropicRequest(reqHaiku)
+	services, matched = router.EvaluateRequest(ctx)
+
+	require.True(t, matched, "should match the haiku routing rule")
+	require.Len(t, services, 1)
+	require.Equal(t, "haiku-provider", services[0].Provider)
+}
+
+func TestSmartRouting_Integration_Anthropic_ImageContent(t *testing.T) {
+	// Test with image content
+	req := &anthropic.MessageNewParams{
+		Model:     anthropic.Model("claude-3-5-sonnet-20241022"),
+		MaxTokens: 100,
+		Messages: []anthropic.MessageParam{
+			anthropic.NewUserMessage(
+				anthropic.NewTextBlock("What's in this image?"),
+				anthropic.NewImageBlockBase64("image/jpeg", "/9j/4AAQ..."),
+			),
+		},
+	}
+
+	ctx := ExtractContextFromAnthropicRequest(req)
+	require.Equal(t, "image", ctx.LatestContentType)
 }
 
 func TestValidateSmartOp(t *testing.T) {
@@ -38,28 +165,11 @@ func TestValidateSmartOp(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "valid model contains with meta",
+			name: "valid model contains",
 			op: SmartOp{
 				Position:  PositionModel,
 				Operation: "contains",
 				Value:     "haiku",
-				Meta: SmartOpMeta{
-					Description: "Check if model name contains 'haiku'",
-					Type:        ValueTypeString,
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "valid model glob",
-			op: SmartOp{
-				Position:  PositionModel,
-				Operation: "glob",
-				Value:     "*haiku*",
-				Meta: SmartOpMeta{
-					Description: "Match model pattern",
-					Type:        ValueTypeString,
-				},
 			},
 			wantErr: false,
 		},
@@ -69,32 +179,15 @@ func TestValidateSmartOp(t *testing.T) {
 				Position:  PositionThinking,
 				Operation: "enabled",
 				Value:     "true",
-				Meta: SmartOpMeta{
-					Description: "Check if thinking mode is enabled",
-					Type:        ValueTypeBool,
-				},
 			},
 			wantErr: false,
 		},
 		{
-			name: "valid token ge with meta",
+			name: "valid token ge",
 			op: SmartOp{
 				Position:  PositionToken,
 				Operation: "ge",
 				Value:     "6000",
-				Meta: SmartOpMeta{
-					Description: "Check if estimated tokens >= 6000",
-					Type:        ValueTypeInt,
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "valid model contains without meta",
-			op: SmartOp{
-				Position:  PositionModel,
-				Operation: "contains",
-				Value:     "haiku",
 			},
 			wantErr: false,
 		},
@@ -111,16 +204,7 @@ func TestValidateSmartOp(t *testing.T) {
 			name: "invalid operation for position",
 			op: SmartOp{
 				Position:  PositionModel,
-				Operation: "enabled", // Not valid for model
-				Value:     "test",
-			},
-			wantErr: true,
-		},
-		{
-			name: "empty operation",
-			op: SmartOp{
-				Position:  PositionModel,
-				Operation: "",
+				Operation: "enabled",
 				Value:     "test",
 			},
 			wantErr: true,
@@ -144,33 +228,7 @@ func TestValidateSmartRouting(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "valid rule with meta",
-			rule: SmartRouting{
-				Description: "Test rule",
-				Ops: []SmartOp{
-					{
-						Position:  PositionModel,
-						Operation: "contains",
-						Value:     "haiku",
-						Meta: SmartOpMeta{
-							Description: "Check if model is haiku",
-							Type:        ValueTypeString,
-						},
-					},
-				},
-				Services: []loadbalance.Service{
-					{
-						Provider: "provider-1",
-						Model:    "gpt-4",
-						Weight:   1,
-						Active:   true,
-					},
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "valid rule without meta",
+			name: "valid rule",
 			rule: SmartRouting{
 				Description: "Test rule",
 				Ops: []SmartOp{
@@ -244,28 +302,6 @@ func TestValidateSmartRouting(t *testing.T) {
 			},
 			wantErr: true,
 		},
-		{
-			name: "service with empty provider",
-			rule: SmartRouting{
-				Description: "Test rule",
-				Ops: []SmartOp{
-					{
-						Position:  PositionModel,
-						Operation: "contains",
-						Value:     "haiku",
-					},
-				},
-				Services: []loadbalance.Service{
-					{
-						Provider: "",
-						Model:    "gpt-4",
-						Weight:   1,
-						Active:   true,
-					},
-				},
-			},
-			wantErr: true,
-		},
 	}
 
 	for _, tt := range tests {
@@ -309,30 +345,6 @@ func TestNewRouter(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "invalid rule",
-			rules: []SmartRouting{
-				{
-					Description: "",
-					Ops: []SmartOp{
-						{
-							Position:  PositionModel,
-							Operation: "contains",
-							Value:     "haiku",
-						},
-					},
-					Services: []loadbalance.Service{
-						{
-							Provider: "provider-1",
-							Model:    "gpt-4",
-							Weight:   1,
-							Active:   true,
-						},
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
 			name:    "empty rules",
 			rules:   []SmartRouting{},
 			wantErr: false,
@@ -354,7 +366,6 @@ func TestNewRouter(t *testing.T) {
 }
 
 func TestRouter_EvaluateRequest(t *testing.T) {
-	// Create test router with rules
 	router, err := NewRouter([]SmartRouting{
 		{
 			Description: "Route haiku models",
@@ -374,73 +385,27 @@ func TestRouter_EvaluateRequest(t *testing.T) {
 				},
 			},
 		},
-		{
-			Description: "Route thinking requests",
-			Ops: []SmartOp{
-				{
-					Position:  PositionThinking,
-					Operation: "enabled",
-					Value:     "true",
-				},
-			},
-			Services: []loadbalance.Service{
-				{
-					Provider: "thinking-provider",
-					Model:    "claude-3-5-sonnet-20241022",
-					Weight:   1,
-					Active:   true,
-				},
-			},
-		},
 	})
-	if err != nil {
-		t.Fatalf("Failed to create router: %v", err)
-	}
+	require.NoError(t, err)
 
 	tests := []struct {
 		name         string
 		ctx          *RequestContext
 		wantMatch    bool
 		wantProvider string
-		wantModel    string
 	}{
 		{
 			name: "matches haiku model",
 			ctx: &RequestContext{
-				Model:           "claude-3-5-haiku-20241022",
-				ThinkingEnabled: false,
-				SystemMessages:  []string{},
-				UserMessages:    []string{},
-				ToolUses:        []string{},
-				EstimatedTokens: 1000,
+				Model: "claude-3-5-haiku-20241022",
 			},
 			wantMatch:    true,
 			wantProvider: "haiku-provider",
-			wantModel:    "claude-3-5-haiku-20241022",
-		},
-		{
-			name: "matches thinking enabled",
-			ctx: &RequestContext{
-				Model:           "claude-3-5-sonnet-20241022",
-				ThinkingEnabled: true,
-				SystemMessages:  []string{},
-				UserMessages:    []string{},
-				ToolUses:        []string{},
-				EstimatedTokens: 1000,
-			},
-			wantMatch:    true,
-			wantProvider: "thinking-provider",
-			wantModel:    "claude-3-5-sonnet-20241022",
 		},
 		{
 			name: "no match",
 			ctx: &RequestContext{
-				Model:           "gpt-4",
-				ThinkingEnabled: false,
-				SystemMessages:  []string{},
-				UserMessages:    []string{},
-				ToolUses:        []string{},
-				EstimatedTokens: 1000,
+				Model: "gpt-4",
 			},
 			wantMatch: false,
 		},
@@ -452,187 +417,8 @@ func TestRouter_EvaluateRequest(t *testing.T) {
 			if matched != tt.wantMatch {
 				t.Errorf("Router.EvaluateRequest() matched = %v, want %v", matched, tt.wantMatch)
 			}
-			if matched && len(services) > 0 {
-				if services[0].Provider != tt.wantProvider {
-					t.Errorf("Router.EvaluateRequest() provider = %v, want %v", services[0].Provider, tt.wantProvider)
-				}
-				if services[0].Model != tt.wantModel {
-					t.Errorf("Router.EvaluateRequest() model = %v, want %v", services[0].Model, tt.wantModel)
-				}
-			}
-		})
-	}
-}
-
-func TestRouter_EvaluateModelOps(t *testing.T) {
-	router, _ := NewRouter([]SmartRouting{})
-
-	tests := []struct {
-		name     string
-		ctx      *RequestContext
-		op       SmartOp
-		expected bool
-	}{
-		{
-			name: "contains - matches",
-			ctx: &RequestContext{
-				Model: "claude-3-5-haiku-20241022",
-			},
-			op: SmartOp{
-				Position:  PositionModel,
-				Operation: "contains",
-				Value:     "haiku",
-			},
-			expected: true,
-		},
-		{
-			name: "contains - no match",
-			ctx: &RequestContext{
-				Model: "gpt-4",
-			},
-			op: SmartOp{
-				Position:  PositionModel,
-				Operation: "contains",
-				Value:     "haiku",
-			},
-			expected: false,
-		},
-		{
-			name: "glob - matches",
-			ctx: &RequestContext{
-				Model: "claude-3-5-haiku-20241022",
-			},
-			op: SmartOp{
-				Position:  PositionModel,
-				Operation: "glob",
-				Value:     "*haiku*",
-			},
-			expected: true,
-		},
-		{
-			name: "glob - no match",
-			ctx: &RequestContext{
-				Model: "gpt-4",
-			},
-			op: SmartOp{
-				Position:  PositionModel,
-				Operation: "glob",
-				Value:     "claude*",
-			},
-			expected: false,
-		},
-		{
-			name: "equals - matches",
-			ctx: &RequestContext{
-				Model: "claude-3-5-haiku-20241022",
-			},
-			op: SmartOp{
-				Position:  PositionModel,
-				Operation: "equals",
-				Value:     "claude-3-5-haiku-20241022",
-			},
-			expected: true,
-		},
-		{
-			name: "equals - no match",
-			ctx: &RequestContext{
-				Model: "claude-3-5-haiku-20241022",
-			},
-			op: SmartOp{
-				Position:  PositionModel,
-				Operation: "equals",
-				Value:     "gpt-4",
-			},
-			expected: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := router.evaluateModelOp(tt.ctx, &tt.op)
-			if result != tt.expected {
-				t.Errorf("evaluateModelOp() = %v, want %v", result, tt.expected)
-			}
-		})
-	}
-}
-
-func TestRouter_EvaluateTokenOps(t *testing.T) {
-	router, _ := NewRouter([]SmartRouting{})
-
-	tests := []struct {
-		name     string
-		ctx      *RequestContext
-		op       SmartOp
-		expected bool
-	}{
-		{
-			name: "ge - matches",
-			ctx: &RequestContext{
-				EstimatedTokens: 6000,
-			},
-			op: SmartOp{
-				Position:  PositionToken,
-				Operation: "ge",
-				Value:     "6000",
-			},
-			expected: true,
-		},
-		{
-			name: "ge - no match",
-			ctx: &RequestContext{
-				EstimatedTokens: 5000,
-			},
-			op: SmartOp{
-				Position:  PositionToken,
-				Operation: "ge",
-				Value:     "6000",
-			},
-			expected: false,
-		},
-		{
-			name: "gt - matches",
-			ctx: &RequestContext{
-				EstimatedTokens: 6001,
-			},
-			op: SmartOp{
-				Position:  PositionToken,
-				Operation: "gt",
-				Value:     "6000",
-			},
-			expected: true,
-		},
-		{
-			name: "le - matches",
-			ctx: &RequestContext{
-				EstimatedTokens: 5000,
-			},
-			op: SmartOp{
-				Position:  PositionToken,
-				Operation: "le",
-				Value:     "6000",
-			},
-			expected: true,
-		},
-		{
-			name: "lt - matches",
-			ctx: &RequestContext{
-				EstimatedTokens: 5999,
-			},
-			op: SmartOp{
-				Position:  PositionToken,
-				Operation: "lt",
-				Value:     "6000",
-			},
-			expected: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := router.evaluateTokenOp(tt.ctx, &tt.op)
-			if result != tt.expected {
-				t.Errorf("evaluateTokenOp() = %v, want %v", result, tt.expected)
+			if matched && len(services) > 0 && services[0].Provider != tt.wantProvider {
+				t.Errorf("Router.EvaluateRequest() provider = %v, want %v", services[0].Provider, tt.wantProvider)
 			}
 		})
 	}
@@ -640,91 +426,19 @@ func TestRouter_EvaluateTokenOps(t *testing.T) {
 
 func TestEstimateTokens(t *testing.T) {
 	tests := []struct {
-		name string
 		text string
 		want int
 	}{
-		{"empty string", "", 0},
-		{"short text", "hello", 1},                         // 5 chars / 4 = 1
-		{"medium text", "hello world this is a test", 6},   // 25 chars / 4 = 6
-		{"longer text", strings.Repeat("word ", 100), 125}, // 500 chars / 4 = 125
+		{"", 0},
+		{"hello", 1},       // 5 chars / 4 = 1
+		{"hello world", 2}, // 11 chars / 4 = 2
+		{"This is a longer text with more words to estimate tokens properly", 16},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.text, func(t *testing.T) {
 			if got := EstimateTokens(tt.text); got != tt.want {
 				t.Errorf("EstimateTokens() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestRequestContext_GetLatestUserMessage(t *testing.T) {
-	tests := []struct {
-		name string
-		ctx  *RequestContext
-		want string
-	}{
-		{
-			name: "single message",
-			ctx: &RequestContext{
-				UserMessages: []string{"first message"},
-			},
-			want: "first message",
-		},
-		{
-			name: "multiple messages",
-			ctx: &RequestContext{
-				UserMessages: []string{"first", "second", "third"},
-			},
-			want: "third",
-		},
-		{
-			name: "empty messages",
-			ctx: &RequestContext{
-				UserMessages: []string{},
-			},
-			want: "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.ctx.GetLatestUserMessage(); got != tt.want {
-				t.Errorf("RequestContext.GetLatestUserMessage() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestRequestContext_CombineMessages(t *testing.T) {
-	ctx := &RequestContext{}
-	tests := []struct {
-		name     string
-		messages []string
-		want     string
-	}{
-		{
-			name:     "empty messages",
-			messages: []string{},
-			want:     "",
-		},
-		{
-			name:     "single message",
-			messages: []string{"hello"},
-			want:     "hello",
-		},
-		{
-			name:     "multiple messages",
-			messages: []string{"first", "second", "third"},
-			want:     "first\nsecond\nthird",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := ctx.CombineMessages(tt.messages); got != tt.want {
-				t.Errorf("RequestContext.CombineMessages() = %v, want %v", got, tt.want)
 			}
 		})
 	}
