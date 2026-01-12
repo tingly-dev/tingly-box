@@ -1,11 +1,10 @@
 package smartrouting
 
 import (
-	"fmt"
 	"strings"
 
-	"github.com/valyala/fastjson"
-	"tingly-box/internal/loadbalance"
+	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/openai/openai-go/v3"
 )
 
 // RequestContext holds extracted request data for evaluation
@@ -33,150 +32,106 @@ func (rc *RequestContext) CombineMessages(messages []string) string {
 }
 
 // ExtractContextFromOpenAIRequest extracts RequestContext from an OpenAI chat completion request
-func ExtractContextFromOpenAIRequest(body []byte) (*RequestContext, error) {
-	ctx := &RequestContext{}
-
-	// Parse JSON
-	var parser fastjson.Parser
-	v, err := parser.ParseBytes(body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse JSON: %w", err)
+func ExtractContextFromOpenAIRequest(req *openai.ChatCompletionNewParams) *RequestContext {
+	ctx := &RequestContext{
+		Model: string(req.Model),
 	}
 
-	// Extract model
-	if modelBytes := v.GetStringBytes("model"); len(modelBytes) > 0 {
-		ctx.Model = string(modelBytes)
-	}
-
-	// Extract messages
-	messagesArray := v.GetArray("messages")
-	for _, msgVal := range messagesArray {
-		msgObj, err := msgVal.Object()
-		if err != nil {
-			continue
-		}
-
-		// Get role using Object.Get() then Value.StringBytes()
-		if roleVal := msgObj.Get("role"); roleVal != nil {
-			if roleBytes, err := roleVal.StringBytes(); err == nil {
-				role := string(roleBytes)
-
-				// Extract content (can be string or array)
-				contentVal := msgObj.Get("content")
-				if contentVal == nil {
-					continue
+	if req.Messages != nil {
+		for _, msgUnion := range req.Messages {
+			switch {
+			case msgUnion.OfSystem != nil:
+				contentStr := extractOpenAISystemContent(msgUnion.OfSystem.Content)
+				ctx.SystemMessages = append(ctx.SystemMessages, contentStr)
+			case msgUnion.OfUser != nil:
+				contentStr, hasImage := extractOpenAIUserContent(msgUnion.OfUser.Content)
+				ctx.UserMessages = append(ctx.UserMessages, contentStr)
+				if hasImage {
+					ctx.LatestContentType = "image"
 				}
-
-				contentStr := extractContentString(contentVal)
-
-				switch role {
-				case "system":
-					if contentStr != "" {
-						ctx.SystemMessages = append(ctx.SystemMessages, contentStr)
-					}
-				case "user":
-					if contentStr != "" {
-						ctx.UserMessages = append(ctx.UserMessages, contentStr)
-					}
-					// Check for image content type
-					if hasImageContent(contentVal) {
-						ctx.LatestContentType = "image"
-					}
-				}
+			case msgUnion.OfAssistant != nil, msgUnion.OfTool != nil, msgUnion.OfFunction != nil:
+				// Skip for now - we only care about system and user messages for context
 			}
 		}
 	}
-
-	// Extract tool uses if present (in tools array or tool_use in content)
-	ctx.ToolUses = extractToolUsesOpenAI(v)
 
 	// Estimate tokens from all content
 	allContent := strings.Join(append(ctx.SystemMessages, ctx.UserMessages...), "\n")
 	ctx.EstimatedTokens = EstimateTokens(allContent)
 
-	return ctx, nil
+	return ctx
+}
+
+// extractOpenAISystemContent extracts string content from system message
+func extractOpenAISystemContent(content openai.ChatCompletionSystemMessageParamContentUnion) string {
+	if content.OfString.Valid() {
+		return content.OfString.Value
+	}
+	// Array of text parts
+	var parts []string
+	for _, textPart := range content.OfArrayOfContentParts {
+		parts = append(parts, textPart.Text)
+	}
+	return strings.Join(parts, "\n")
+}
+
+// extractOpenAIUserContent extracts string content and checks for image from user message content
+func extractOpenAIUserContent(content openai.ChatCompletionUserMessageParamContentUnion) (string, bool) {
+	var parts []string
+	hasImage := false
+
+	// Check if it's a string
+	if content.OfString.Valid() {
+		return content.OfString.Value, false
+	}
+
+	// Check if it's an array of content parts
+	for _, partUnion := range content.OfArrayOfContentParts {
+		switch {
+		case partUnion.OfText != nil:
+			parts = append(parts, partUnion.OfText.Text)
+		case partUnion.OfImageURL != nil:
+			hasImage = true
+			parts = append(parts, "[image]")
+		}
+	}
+
+	return strings.Join(parts, "\n"), hasImage
 }
 
 // ExtractContextFromAnthropicRequest extracts RequestContext from an Anthropic messages request
-func ExtractContextFromAnthropicRequest(body []byte) (*RequestContext, error) {
-	ctx := &RequestContext{}
-
-	// Parse JSON
-	var parser fastjson.Parser
-	v, err := parser.ParseBytes(body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse JSON: %w", err)
+func ExtractContextFromAnthropicRequest(req *anthropic.MessageNewParams) *RequestContext {
+	ctx := &RequestContext{
+		Model:           string(req.Model),
+		ThinkingEnabled: req.Thinking.OfEnabled != nil,
 	}
 
-	// Extract model
-	if modelBytes := v.GetStringBytes("model"); len(modelBytes) > 0 {
-		ctx.Model = string(modelBytes)
-	}
-
-	// Extract system prompt
-	if systemBytes := v.GetStringBytes("system"); len(systemBytes) > 0 {
-		ctx.SystemMessages = append(ctx.SystemMessages, string(systemBytes))
-	}
-
-	// Check thinking enabled
-	if thinkingVal := v.Get("thinking"); thinkingVal != nil {
-		if thinkingVal.Type() == fastjson.TypeObject {
-			ctx.ThinkingEnabled = true
-		}
-	}
-
-	// Extract messages
-	messagesArray := v.GetArray("messages")
-	for _, msgVal := range messagesArray {
-		msgObj, err := msgVal.Object()
-		if err != nil {
-			continue
-		}
-
-		// Get role
-		if roleVal := msgObj.Get("role"); roleVal != nil {
-			if roleBytes, err := roleVal.StringBytes(); err == nil {
-				role := string(roleBytes)
-
-				// Extract content
-				contentVal := msgObj.Get("content")
-				if contentVal == nil {
-					continue
-				}
-
-				contentStr := extractContentString(contentVal)
-				toolUses := extractToolUsesAnthropicContent(contentVal)
-
-				switch role {
-				case "user":
-					if contentStr != "" {
-						ctx.UserMessages = append(ctx.UserMessages, contentStr)
-					}
-					// Check for image content type
-					if hasImageContent(contentVal) {
-						ctx.LatestContentType = "image"
-					}
-				}
-
-				// Collect tool uses
-				for _, toolUse := range toolUses {
-					ctx.ToolUses = append(ctx.ToolUses, toolUse)
-				}
+	if req.System != nil {
+		for _, s := range req.System {
+			if s.Text != "" {
+				ctx.SystemMessages = append(ctx.SystemMessages, s.Text)
 			}
 		}
 	}
 
-	// Also check for tools definition
-	toolsArray := v.GetArray("tools")
-	for _, toolVal := range toolsArray {
-		toolObj, err := toolVal.Object()
-		if err != nil {
-			continue
-		}
-		if nameVal := toolObj.Get("name"); nameVal != nil {
-			if nameBytes, err := nameVal.StringBytes(); err == nil {
-				ctx.ToolUses = append(ctx.ToolUses, string(nameBytes))
+	if req.Messages != nil {
+		for _, msg := range req.Messages {
+			// Only process user messages
+			if string(msg.Role) != "user" {
+				continue
 			}
+
+			contentStr, toolUses := extractAnthropicContent(msg.Content)
+			hasImage := hasImageInAnthropicContent(msg.Content)
+
+			if contentStr != "" {
+				ctx.UserMessages = append(ctx.UserMessages, contentStr)
+			}
+			if hasImage {
+				ctx.LatestContentType = "image"
+			}
+
+			ctx.ToolUses = append(ctx.ToolUses, toolUses...)
 		}
 	}
 
@@ -184,189 +139,34 @@ func ExtractContextFromAnthropicRequest(body []byte) (*RequestContext, error) {
 	allContent := strings.Join(append(ctx.SystemMessages, ctx.UserMessages...), "\n")
 	ctx.EstimatedTokens = EstimateTokens(allContent)
 
-	return ctx, nil
+	return ctx
 }
 
-// extractContentString extracts a string representation from content value
-func extractContentString(contentVal *fastjson.Value) string {
-	if contentVal == nil {
-		return ""
+// extractAnthropicContent extracts string content and tool uses from Anthropic content blocks
+func extractAnthropicContent(content []anthropic.ContentBlockParamUnion) (string, []string) {
+	var parts []string
+	var tools []string
+
+	for _, blockUnion := range content {
+		switch {
+		case blockUnion.OfText != nil:
+			parts = append(parts, blockUnion.OfText.Text)
+		case blockUnion.OfImage != nil:
+			parts = append(parts, "[image]")
+		case blockUnion.OfToolUse != nil:
+			tools = append(tools, blockUnion.OfToolUse.Name)
+		}
 	}
 
-	switch contentVal.Type() {
-	case fastjson.TypeString:
-		if bytes, err := contentVal.StringBytes(); err == nil {
-			return string(bytes)
-		}
-		return ""
-	case fastjson.TypeArray:
-		// Content is an array of blocks
-		array, _ := contentVal.Array()
-		var parts []string
-		for _, item := range array {
-			obj, err := item.Object()
-			if err != nil {
-				continue
-			}
-
-			if typeVal := obj.Get("type"); typeVal != nil {
-				if typeBytes, err := typeVal.StringBytes(); err == nil {
-					typeStr := string(typeBytes)
-
-					switch typeStr {
-					case "text":
-						if textVal := obj.Get("text"); textVal != nil {
-							if textBytes, err := textVal.StringBytes(); err == nil {
-								parts = append(parts, string(textBytes))
-							}
-						}
-					case "image":
-						// Skip image data, just note the type
-						parts = append(parts, "[image]")
-					}
-				}
-			}
-		}
-		return strings.Join(parts, "\n")
-	default:
-		return string(contentVal.MarshalTo(nil))
-	}
+	return strings.Join(parts, "\n"), tools
 }
 
-// hasImageContent checks if content contains image
-func hasImageContent(contentVal *fastjson.Value) bool {
-	if contentVal == nil {
-		return false
-	}
-
-	if contentVal.Type() == fastjson.TypeArray {
-		array, _ := contentVal.Array()
-		for _, item := range array {
-			obj, err := item.Object()
-			if err != nil {
-				continue
-			}
-			if typeVal := obj.Get("type"); typeVal != nil {
-				if typeBytes, err := typeVal.StringBytes(); err == nil {
-					if string(typeBytes) == "image" {
-						return true
-					}
-				}
-			}
+// hasImageInAnthropicContent checks if content contains image
+func hasImageInAnthropicContent(content []anthropic.ContentBlockParamUnion) bool {
+	for _, blockUnion := range content {
+		if blockUnion.OfImage != nil {
+			return true
 		}
 	}
-
 	return false
-}
-
-// extractToolUsesOpenAI extracts tool names from OpenAI request
-func extractToolUsesOpenAI(v *fastjson.Value) []string {
-	var tools []string
-
-	// Check for tool_calls in messages
-	messagesArray := v.GetArray("messages")
-	for _, msgVal := range messagesArray {
-		msgObj, err := msgVal.Object()
-		if err != nil {
-			continue
-		}
-
-		// Check for tool_calls array
-		if toolCallsVal := msgObj.Get("tool_calls"); toolCallsVal != nil {
-			if toolCallsArray, err := toolCallsVal.Array(); err == nil {
-				for _, toolCallVal := range toolCallsArray {
-					toolCallObj, err := toolCallVal.Object()
-					if err != nil {
-						continue
-					}
-					funcObj := toolCallObj.Get("function")
-					if funcObj != nil {
-						if nameVal := funcObj.Get("name"); nameVal != nil {
-							if nameBytes, err := nameVal.StringBytes(); err == nil {
-								tools = append(tools, string(nameBytes))
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// Check for tools definition array
-	toolsArray := v.GetArray("tools")
-	for _, toolVal := range toolsArray {
-		toolObj, err := toolVal.Object()
-		if err != nil {
-			continue
-		}
-		if functionVal := toolObj.Get("function"); functionVal != nil {
-			if nameVal := functionVal.Get("name"); nameVal != nil {
-				if nameBytes, err := nameVal.StringBytes(); err == nil {
-					tools = append(tools, string(nameBytes))
-				}
-			}
-		}
-	}
-
-	return tools
-}
-
-// extractToolUsesAnthropicContent extracts tool names from Anthropic content blocks
-func extractToolUsesAnthropicContent(contentVal *fastjson.Value) []string {
-	var tools []string
-
-	if contentVal.Type() != fastjson.TypeArray {
-		return tools
-	}
-
-	array, _ := contentVal.Array()
-	for _, item := range array {
-		obj, err := item.Object()
-		if err != nil {
-			continue
-		}
-
-		if typeVal := obj.Get("type"); typeVal != nil {
-			if typeBytes, err := typeVal.StringBytes(); err == nil {
-				if string(typeBytes) == "tool_use" {
-					if nameVal := obj.Get("name"); nameVal != nil {
-						if nameBytes, err := nameVal.StringBytes(); err == nil {
-							tools = append(tools, string(nameBytes))
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return tools
-}
-
-// EvaluateAndSelectServices evaluates a request and returns the appropriate services
-// This is the main entry point for smart routing
-func EvaluateAndSelectServices(router *Router, scenario string, body []byte) ([]loadbalance.Service, bool) {
-	if router == nil {
-		return nil, false
-	}
-
-	var ctx *RequestContext
-	var err error
-
-	// Extract context based on scenario
-	switch scenario {
-	case "openai":
-		ctx, err = ExtractContextFromOpenAIRequest(body)
-	case "anthropic", "claude_code":
-		ctx, err = ExtractContextFromAnthropicRequest(body)
-	default:
-		// Default to OpenAI format
-		ctx, err = ExtractContextFromOpenAIRequest(body)
-	}
-
-	if err != nil {
-		return nil, false
-	}
-
-	// Evaluate against smart routing rules
-	return router.EvaluateRequest(ctx)
 }
