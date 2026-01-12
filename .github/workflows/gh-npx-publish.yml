@@ -490,7 +490,7 @@ jobs:
             exit 1
           fi
 
-          for platform in macos-arm64 macos-amd64 linux-amd64 linux-arm64 windows-amd64; do
+          for platform in macos-arm64 macos-amd64 linux-amd64 windows-amd64; do
             if [ "$platform" = "windows-amd64" ]; then
               BINARY="$PKG_DIR/bin/$platform/tingly-box.exe"
             else
