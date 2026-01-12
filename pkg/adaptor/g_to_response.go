@@ -204,3 +204,91 @@ func mapGoogleFinishReasonToAnthropic(reason genai.FinishReason) string {
 		return "end_turn"
 	}
 }
+
+// ConvertGoogleToAnthropicBetaResponse converts Google GenerateContentResponse to Anthropic beta format
+func ConvertGoogleToAnthropicBetaResponse(googleResp *genai.GenerateContentResponse, responseModel string) anthropic.BetaMessage {
+	if googleResp == nil {
+		return anthropic.BetaMessage{}
+	}
+
+	// Build response JSON
+	responseJSON := map[string]interface{}{
+		"id":            fmt.Sprintf("msg_%d", time.Now().Unix()),
+		"type":          "message",
+		"role":          "assistant",
+		"content":       []map[string]interface{}{},
+		"model":         responseModel,
+		"stop_reason":   anthropic.BetaStopReasonEndTurn,
+		"stop_sequence": "",
+		"usage": map[string]interface{}{
+			"input_tokens":  0,
+			"output_tokens": 0,
+		},
+	}
+
+	var contentBlocks []map[string]interface{}
+
+	// Process first candidate
+	if len(googleResp.Candidates) > 0 {
+		candidate := googleResp.Candidates[0]
+
+		if candidate.Content != nil {
+			for _, part := range candidate.Content.Parts {
+				if part.Text != "" {
+					contentBlocks = append(contentBlocks, map[string]interface{}{
+						"type": "text",
+						"text": part.Text,
+					})
+				}
+
+				if part.FunctionCall != nil {
+					contentBlocks = append(contentBlocks, map[string]interface{}{
+						"type":  "tool_use",
+						"id":    part.FunctionCall.ID,
+						"name":  part.FunctionCall.Name,
+						"input": part.FunctionCall.Args,
+					})
+				}
+			}
+		}
+
+		// Map stop reason
+		responseJSON["stop_reason"] = mapGoogleFinishReasonToAnthropicBeta(candidate.FinishReason)
+	}
+
+	responseJSON["content"] = contentBlocks
+
+	// Add usage info if available
+	if googleResp.UsageMetadata != nil {
+		responseJSON["usage"] = map[string]interface{}{
+			"input_tokens":  googleResp.UsageMetadata.PromptTokenCount,
+			"output_tokens": googleResp.UsageMetadata.CandidatesTokenCount,
+		}
+	}
+
+	// Marshal and unmarshal to create proper BetaMessage struct
+	jsonBytes, _ := json.Marshal(responseJSON)
+	var msg anthropic.BetaMessage
+	json.Unmarshal(jsonBytes, &msg)
+
+	return msg
+}
+
+func mapGoogleFinishReasonToAnthropicBeta(reason genai.FinishReason) anthropic.BetaStopReason {
+	switch reason {
+	case genai.FinishReasonStop:
+		return anthropic.BetaStopReasonEndTurn
+	case genai.FinishReasonMaxTokens:
+		return anthropic.BetaStopReasonMaxTokens
+	case genai.FinishReasonSafety:
+		return anthropic.BetaStopReasonRefusal
+	case genai.FinishReasonRecitation, genai.FinishReasonLanguage, genai.FinishReasonOther,
+		genai.FinishReasonBlocklist, genai.FinishReasonProhibitedContent, genai.FinishReasonSPII,
+		genai.FinishReasonMalformedFunctionCall, genai.FinishReasonUnexpectedToolCall,
+		genai.FinishReasonImageSafety, genai.FinishReasonImageProhibitedContent,
+		genai.FinishReasonImageRecitation, genai.FinishReasonImageOther, genai.FinishReasonNoImage:
+		return anthropic.BetaStopReasonEndTurn
+	default:
+		return anthropic.BetaStopReasonEndTurn
+	}
+}

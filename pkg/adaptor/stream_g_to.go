@@ -379,3 +379,215 @@ func sendAnthropicStreamEventFromG(c *gin.Context, eventType string, eventData m
 	c.Writer.Write([]byte(fmt.Sprintf("event: %s\ndata: %s\n\n", eventType, string(eventJSON))))
 	flusher.Flush()
 }
+
+// HandleGoogleToAnthropicBetaStreamResponse processes Google streaming events and converts them to Anthropic beta format
+func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[*genai.GenerateContentResponse, error], responseModel string) error {
+	logrus.Info("Starting Google to Anthropic beta streaming response handler")
+	defer func() {
+		if r := recover(); r != nil {
+			logrus.Errorf("Panic in Google to Anthropic beta streaming handler: %v", r)
+			if c.Writer != nil {
+				c.Writer.WriteHeader(http.StatusInternalServerError)
+				c.Writer.Write([]byte("event: error\ndata: {\"error\":{\"message\":\"Internal streaming error\",\"type\":\"internal_error\"}}\n\n"))
+				if flusher, ok := c.Writer.(http.Flusher); ok {
+					flusher.Flush()
+				}
+			}
+		}
+		logrus.Info("Finished Google to Anthropic beta streaming response handler")
+	}()
+
+	// Set SSE headers
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("Access-Control-Allow-Origin", "*")
+
+	flusher, ok := c.Writer.(http.Flusher)
+	if !ok {
+		return errors.New("Streaming not supported by this connection")
+	}
+
+	// Generate message ID for Anthropic beta format
+	messageID := fmt.Sprintf("msg_%d", time.Now().Unix())
+
+	// Track streaming state
+	var (
+		textBlockIndex = -1
+		toolBlockIndex = -1
+		outputTokens   int64
+	)
+
+	// Send message_start event first
+	messageStartEvent := map[string]interface{}{
+		"type": eventTypeMessageStart,
+		"message": map[string]interface{}{
+			"id":            messageID,
+			"type":          "message",
+			"role":          "assistant",
+			"content":       []interface{}{},
+			"model":         responseModel,
+			"stop_reason":   nil,
+			"stop_sequence": nil,
+			"usage": map[string]interface{}{
+				"input_tokens":  0,
+				"output_tokens": 0,
+			},
+		},
+	}
+	sendAnthropicBetaStreamEventFromG(c, eventTypeMessageStart, messageStartEvent, flusher)
+
+	// Process the stream
+	for googleResp, err := range stream {
+		if err != nil {
+			logrus.Errorf("Google stream error: %v", err)
+			errorEvent := map[string]interface{}{
+				"type": "error",
+				"error": map[string]interface{}{
+					"message": err.Error(),
+					"type":    "stream_error",
+					"code":    "stream_failed",
+				},
+			}
+			sendAnthropicBetaStreamEventFromG(c, "error", errorEvent, flusher)
+			return nil
+		}
+
+		// Process candidates
+		if len(googleResp.Candidates) > 0 {
+			candidate := googleResp.Candidates[0]
+
+			// Extract content
+			if candidate.Content != nil {
+				for _, part := range candidate.Content.Parts {
+					// Handle text parts
+					if part.Text != "" {
+						// Send content_block_start for text on first occurrence
+						if textBlockIndex == -1 {
+							textBlockIndex = 0
+							contentBlockStartEvent := map[string]interface{}{
+								"type":  eventTypeContentBlockStart,
+								"index": textBlockIndex,
+								"content_block": map[string]interface{}{
+									"type": "text",
+									"text": "",
+								},
+							}
+							sendAnthropicBetaStreamEventFromG(c, eventTypeContentBlockStart, contentBlockStartEvent, flusher)
+						}
+
+						// Send content_block_delta with text
+						deltaEvent := map[string]interface{}{
+							"type":  eventTypeContentBlockDelta,
+							"index": textBlockIndex,
+							"delta": map[string]interface{}{
+								"type": "text_delta",
+								"text": part.Text,
+							},
+						}
+						sendAnthropicBetaStreamEventFromG(c, eventTypeContentBlockDelta, deltaEvent, flusher)
+					}
+
+					// Handle function calls
+					if part.FunctionCall != nil {
+						toolBlockIndex++
+						// Send content_block_start for tool_use
+						contentBlockStartEvent := map[string]interface{}{
+							"type":  eventTypeContentBlockStart,
+							"index": toolBlockIndex,
+							"content_block": map[string]interface{}{
+								"type":  "tool_use",
+								"id":    part.FunctionCall.ID,
+								"name":  part.FunctionCall.Name,
+								"input": part.FunctionCall.Args,
+							},
+						}
+						sendAnthropicBetaStreamEventFromG(c, eventTypeContentBlockStart, contentBlockStartEvent, flusher)
+
+						// Send content_block_stop for this tool block
+						contentBlockStopEvent := map[string]interface{}{
+							"type":  eventTypeContentBlockStop,
+							"index": toolBlockIndex,
+						}
+						sendAnthropicBetaStreamEventFromG(c, eventTypeContentBlockStop, contentBlockStopEvent, flusher)
+					}
+				}
+			}
+
+			// Check for finish reason
+			if candidate.FinishReason != "" {
+				stopReason := mapGoogleFinishReasonToAnthropicBeta(candidate.FinishReason)
+
+				// Send content_block_stop for text if applicable
+				if textBlockIndex != -1 {
+					contentBlockStopEvent := map[string]interface{}{
+						"type":  eventTypeContentBlockStop,
+						"index": textBlockIndex,
+					}
+					sendAnthropicBetaStreamEventFromG(c, eventTypeContentBlockStop, contentBlockStopEvent, flusher)
+				}
+
+				// Collect usage info
+				if googleResp.UsageMetadata != nil {
+					outputTokens = int64(googleResp.UsageMetadata.CandidatesTokenCount)
+				}
+
+				// Send message_delta with stop reason and usage
+				messageDeltaEvent := map[string]interface{}{
+					"type": eventTypeMessageDelta,
+					"delta": map[string]interface{}{
+						"stop_reason":   string(stopReason),
+						"stop_sequence": "",
+					},
+					"usage": map[string]interface{}{
+						"output_tokens": outputTokens,
+					},
+				}
+				sendAnthropicBetaStreamEventFromG(c, eventTypeMessageDelta, messageDeltaEvent, flusher)
+
+				// Send message_stop
+				messageStopEvent := map[string]interface{}{
+					"type": eventTypeMessageStop,
+					"message": map[string]interface{}{
+						"id":            messageID,
+						"type":          "message",
+						"role":          "assistant",
+						"content":       []interface{}{},
+						"model":         responseModel,
+						"stop_reason":   string(stopReason),
+						"stop_sequence": "",
+						"usage": map[string]interface{}{
+							"output_tokens": outputTokens,
+						},
+					},
+				}
+				sendAnthropicBetaStreamEventFromG(c, eventTypeMessageStop, messageStopEvent, flusher)
+
+				// Send final simple data with type (without event, aka empty)
+				c.SSEvent("", map[string]interface{}{"type": eventTypeMessageStop})
+				flusher.Flush()
+				return nil
+			}
+		}
+
+		// Track usage
+		if googleResp.UsageMetadata != nil {
+			outputTokens = int64(googleResp.UsageMetadata.CandidatesTokenCount)
+		}
+	}
+
+	return nil
+}
+
+// sendAnthropicBetaStreamEventFromG helper function for beta streaming
+func sendAnthropicBetaStreamEventFromG(c *gin.Context, eventType string, eventData map[string]interface{}, flusher http.Flusher) {
+	eventJSON, err := json.Marshal(eventData)
+	if err != nil {
+		logrus.Errorf("Failed to marshal Anthropic beta stream event: %v", err)
+		return
+	}
+
+	// Anthropic beta SSE format: event: <type>\ndata: <json>\n\n
+	c.SSEvent(eventType, string(eventJSON))
+	flusher.Flush()
+}
