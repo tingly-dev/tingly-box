@@ -427,6 +427,7 @@ jobs:
         env:
           RELEASE_TAG: ${{ needs.setup.outputs.release_tag }}
           GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
         run: |
           # Create bin directories
           mkdir -p "$PKG_DIR/bin"/{macos-arm64,macos-amd64,linux-amd64,linux-arm64,windows-amd64}
@@ -437,7 +438,7 @@ jobs:
 
           # Download release assets
           echo "📥 Downloading binaries from release $RELEASE_TAG..."
-          gh release download "$RELEASE_TAG" --pattern "tingly-box-*.zip" --dir .
+          gh release download "$RELEASE_TAG" --repo "$REPO" --pattern "tingly-box-*.zip" --dir .
 
           # Extract and place binaries in correct locations
           declare -A BIN_MAP=(
