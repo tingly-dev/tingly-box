@@ -69,9 +69,9 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
             </DialogTitle>
 
             <DialogContent sx={{ p: 3 }}>
-                <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                     {/* Settings.json section */}
-                    <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                         <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                             <Typography variant="subtitle2" color="text.secondary">
                                 {t('claudeCode.step1')}
@@ -87,7 +87,7 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
                                 <Tab label="Linux/macOS" value="unix" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
                             </Tabs>
                         </Box>
-                        <Box sx={{ flex: 1 }}>
+                        <Box>
                             {settingsTab === 'json' && (
                                 <CodeBlock
                                     code={generateSettingsConfig()}
@@ -127,7 +127,7 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
                     </Box>
 
                     {/* .claude.json section */}
-                    <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                         <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                             <Typography variant="subtitle2" color="text.secondary">
                                 {t('claudeCode.step2')}
@@ -143,7 +143,7 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
                                 <Tab label="Linux/macOS" value="unix" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
                             </Tabs>
                         </Box>
-                        <Box sx={{ flex: 1 }}>
+                        <Box>
                             {claudeJsonTab === 'json' && (
                                 <CodeBlock
                                     code={generateClaudeJsonConfig()}
