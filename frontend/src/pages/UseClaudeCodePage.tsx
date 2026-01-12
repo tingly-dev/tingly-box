@@ -385,10 +385,18 @@ node --eval '
                         </Button>
                     }
                 >
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 50 }}>
+                    <Box sx={{ minHeight: 50 }}>
                         <Typography variant="body2" color="text.secondary">
                             Configure Claude Code to use Tingly Box as your AI model proxy
                         </Typography>
+                        <Box sx={{ mt: 1.5, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                            <Typography variant="body2" color="text.secondary">
+                                <Box component="span" sx={{ fontWeight: 500, color: 'primary.main' }}>Unified:</Box> Use a single model for all Claude Code requests
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                <Box component="span" sx={{ fontWeight: 500, color: 'primary.main' }}>Separate:</Box> Configure distinct models for default, haiku, sonnet, and opus
+                            </Typography>
+                        </Box>
                     </Box>
                 </UnifiedCard>
 
