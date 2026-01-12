@@ -7,6 +7,7 @@ import { api } from '../services/api';
 import type { Provider, ProviderModelsDataByUuid } from '../types/provider';
 import ModelSelectTab, { type ProviderSelectTabOption } from './ModelSelectTab';
 import type { ConfigRecord, Rule } from './RuleGraphTypes';
+import { v4 as uuidv4 } from 'uuid';
 
 export interface TabTemplatePageProps {
     title?: string | React.ReactNode;
@@ -153,7 +154,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
                 ...currentConfigRecord,
                 providers: [
                     ...currentConfigRecord.providers,
-                    { uuid: crypto.randomUUID(), provider: option.provider.uuid, model: option.model || '', isManualInput: false },
+                    { uuid: uuidv4(), provider: option.provider.uuid, model: option.model || '', isManualInput: false },
                 ],
             };
         } else if (modelSelectMode === 'edit' && editingProviderUuid) {

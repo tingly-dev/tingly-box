@@ -7,6 +7,7 @@ import RuleGraphV2 from './RuleGraph.tsx';
 import { api } from '../services/api';
 import type { Provider, ProviderModelsDataByUuid } from '../types/provider';
 import type { ConfigRecord, Rule } from './RuleGraphTypes';
+import { v4 as uuidv4 } from 'uuid';
 
 export interface RuleCardProps {
     rule: Rule;
@@ -60,7 +61,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         if (rule && providers.length > 0) {
             const services = rule.services || [];
             const providersList = services.map((service: any) => ({
-                uuid: service.id || service.uuid || crypto.randomUUID(),
+                uuid: service.id || service.uuid || uuidv4(),
                 provider: service.provider || '',
                 model: service.model || '',
                 isManualInput: false,
@@ -71,14 +72,14 @@ export const RuleCard: React.FC<RuleCardProps> = ({
 
             if (providersList.length === 0) {
                 providersList.push({
-                    uuid: crypto.randomUUID(),
+                    uuid: uuidv4(),
                     provider: '',
                     model: '',
                 });
             }
 
             const newConfigRecord: ConfigRecord = {
-                uuid: rule.uuid || crypto.randomUUID(),
+                uuid: rule.uuid || uuidv4(),
                 requestModel: rule.request_model || '',
                 responseModel: rule.response_model || '',
                 active: rule.active !== undefined ? rule.active : true,

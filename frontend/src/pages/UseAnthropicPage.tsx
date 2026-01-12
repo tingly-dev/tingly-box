@@ -16,6 +16,7 @@ import { useProviderDialog } from '../hooks/useProviderDialog';
 import EmptyStateGuide from '../components/EmptyStateGuide';
 import ProviderFormDialog from '../components/ProviderFormDialog';
 import OAuthDialog from '../components/OAuthDialog';
+import { v4 as uuidv4 } from 'uuid';
 
 const ruleId = "built-in-anthropic";
 const scenario = "anthropic";
@@ -56,7 +57,7 @@ const UseAnthropicPage: React.FC = () => {
         try {
             const newRuleData = {
                 scenario: scenario,
-                request_model: `model-${crypto.randomUUID().slice(0, 8)}`,
+                request_model: `model-${uuidv4().slice(0, 8)}`,
                 response_model: '',
                 active: true,
                 services: []
