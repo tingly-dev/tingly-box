@@ -510,7 +510,7 @@ jobs:
         run: |
           echo "📦 Package size information:"
           du -sh "$PKG_DIR"
-          du -sh "$PKG_DIR"/bin/*/*/
+          du -sh "$PKG_DIR"/bin/*/
 
       - name: Publish to npm
         working-directory: ${{ env.PKG_DIR }}
