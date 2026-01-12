@@ -10,7 +10,7 @@ import {
 import { styled } from '@mui/material/styles';
 import React from 'react';
 
-// AddProviderNode dimensions
+// ActionAddNode dimensions
 const ADD_PROVIDER_NODE_STYLES = {
     width: 100,
     height: 90,
@@ -19,7 +19,7 @@ const ADD_PROVIDER_NODE_STYLES = {
 
 const { node } = { node: ADD_PROVIDER_NODE_STYLES };
 
-// AddProviderNode Container
+// ActionAddNode Container
 const StyledAddProviderNode = styled(Box, {
     shouldForwardProp: (prop) => prop !== 'active' && prop !== 'warning',
 })<{ active: boolean; warning?: boolean }>(({ active, warning, theme }) => ({
@@ -54,7 +54,7 @@ export interface AddProviderNodeProps {
     tooltip?: string;
 }
 
-export const AddProviderNode: React.FC<AddProviderNodeProps> = ({
+export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
     active,
     warning = false,
     onAdd,
@@ -76,4 +76,4 @@ export const AddProviderNode: React.FC<AddProviderNodeProps> = ({
     );
 };
 
-export default AddProviderNode;
+export default ActionAddNode;

@@ -16,10 +16,7 @@ import {
 import { styled } from '@mui/material/styles';
 import React from 'react';
 import type { Provider } from '../types/provider';
-import { AddProviderNode } from '@/components/nodes/AddProviderNode.tsx';
-import { DefaultNode } from '@/components/nodes/DefaultNode.tsx';
-import { ConnectionLine, ModelNode, NodeContainer, ProviderNodeComponent } from '@/components/nodes/RuleNode.tsx';
-import { SmartNode } from '@/components/nodes/SmartNode.tsx';
+import { SmartOpNode, ActionAddNode, SmartDefaultNode, ConnectionLine, ModelNode, NodeContainer, ProviderNode } from '@/components/nodes';
 import type { ConfigRecord } from './RoutingGraphTypes.ts';
 
 // Use same style constants as RuleGraph for consistency
@@ -213,7 +210,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                         <GraphRow>
                                             {/* Smart Node */}
                                             <NodeContainer>
-                                                <SmartNode
+                                                <SmartOpNode
                                                     smartRouting={rule}
                                                     active={active}
                                                     onEdit={() => onEditSmartRule(rule.uuid)}
@@ -231,7 +228,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                             {rule.services && rule.services.length > 0 ? (
                                                 <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'nowrap', justifyContent: 'flex-start', alignItems: 'center' }}>
                                                     {rule.services.map((service) => (
-                                                        <ProviderNodeComponent
+                                                        <ProviderNode
                                                             key={service.uuid}
                                                             provider={service}
                                                             apiStyle={getApiStyle(service.provider)}
@@ -250,14 +247,14 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                                         />
                                                     ))}
                                                     {/* Add Service Button */}
-                                                    <AddProviderNode
+                                                    <ActionAddNode
                                                         active={active}
                                                         onAdd={() => onAddServiceToSmartRule(rule.uuid)}
                                                         tooltip="Add service to this smart rule"
                                                     />
                                                 </Box>
                                             ) : (
-                                                <AddProviderNode
+                                                <ActionAddNode
                                                     active={active}
                                                     onAdd={() => onAddServiceToSmartRule(rule.uuid)}
                                                     tooltip="Add service to this smart rule"
@@ -299,7 +296,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                 <GraphRow>
                                     {/* Default Node */}
                                     <NodeContainer>
-                                        <DefaultNode
+                                        <SmartDefaultNode
                                             providersCount={record.providers.length}
                                             active={active}
                                             onAddProvider={() => onAddDefaultProvider?.()}
@@ -314,7 +311,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                     {/* Default Providers */}
                                     <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'nowrap', justifyContent: 'flex-start', alignItems: 'center' }}>
                                         {record.providers.map((provider) => (
-                                            <ProviderNodeComponent
+                                            <ProviderNode
                                                 key={provider.uuid}
                                                 provider={provider}
                                                 apiStyle={getApiStyle(provider.provider)}
@@ -333,7 +330,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                             />
                                         ))}
                                         {/* Add Provider Button */}
-                                        <AddProviderNode
+                                        <ActionAddNode
                                             active={active}
                                             warning
                                             onAdd={() => onAddDefaultProvider?.()}

@@ -35,7 +35,7 @@ const SMART_NODE_STYLES = {
 
 const { node } = { node: NODE_STYLES };
 
-// SmartNode Container - styled similar to ModelNode but with primary color
+// SmartOpNode Container - styled similar to ModelNode but with primary color
 const StyledSmartNode = styled(Box, {
     shouldForwardProp: (prop) => prop !== 'active',
 })<{ active: boolean }>(({ active, theme }) => ({
@@ -93,7 +93,7 @@ export interface SmartNodeProps {
     onAddService: () => void;
 }
 
-export const SmartNode: React.FC<SmartNodeProps> = ({
+export const SmartOpNode: React.FC<SmartNodeProps> = ({
     smartRouting,
     active,
     onEdit,
@@ -260,4 +260,4 @@ export const SmartNode: React.FC<SmartNodeProps> = ({
     );
 };
 
-export default SmartNode;
+export default SmartOpNode;

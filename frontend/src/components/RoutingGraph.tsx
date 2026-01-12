@@ -25,9 +25,7 @@ import { styled } from '@mui/material/styles';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Provider } from '../types/provider';
-import { ConnectionLine, ModelNode, NodeContainer, ProviderNodeComponent, ProviderNodeContainer } from '@/components/nodes/RuleNode.tsx';
-import { AddProviderNode } from '@/components/nodes/AddProviderNode.tsx';
-import { SmartNode } from '@/components/nodes/SmartNode.tsx';
+import { SmartOpNode, ActionAddNode, ConnectionLine, ModelNode, NodeContainer, ProviderNode, ProviderNodeContainer } from '@/components/nodes';
 import type { ConfigProvider, ConfigRecord, SmartRouting } from './RoutingGraphTypes.ts';
 
 // Unified RuleGraph style configuration
@@ -440,13 +438,13 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                                         <ArrowDownIcon />
                                     </ConnectionLine>
 
-                                    {/* Smart Rules Stack - Each rule is a row with SmartNode and its services */}
+                                    {/* Smart Rules Stack - Each rule is a row with SmartOpNode and its services */}
                                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: graph.rowGap }}>
                                         {smartRouting.map((rule) => (
                                             <GraphRow key={rule.uuid} sx={{ mb: 0 }}>
                                                 {/* Smart Node */}
                                                 <NodeContainer>
-                                                    <SmartNode
+                                                    <SmartOpNode
                                                         smartRouting={rule}
                                                         active={record.active}
                                                         onEdit={() => onEditSmartRule?.(rule.uuid)}
@@ -468,7 +466,7 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                                                         </Typography>
                                                         <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'nowrap', justifyContent: 'flex-start', alignItems: 'center' }}>
                                                             {rule.services.map((service) => (
-                                                                <ProviderNodeComponent
+                                                                <ProviderNode
                                                                     key={service.uuid}
                                                                     provider={service}
                                                                     apiStyle={getApiStyle(service.provider)}
@@ -627,7 +625,7 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                                         </Typography>
                                         <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'nowrap', justifyContent: 'flex-start', alignItems: 'center' }}>
                                             {record.providers.map((provider) => (
-                                                <ProviderNodeComponent
+                                                <ProviderNode
                                                     key={provider.uuid}
                                                     provider={provider}
                                                     apiStyle={getApiStyle(provider.provider)}
@@ -640,7 +638,7 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                                                 />
                                             ))}
                                             {/* Add Provider Button */}
-                                            <AddProviderNode
+                                            <ActionAddNode
                                                 active={record.active && !saving}
                                                 onAdd={() => onAddProviderButtonClick()}
                                                 tooltip={

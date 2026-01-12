@@ -21,7 +21,7 @@ const NODE_STYLES = {
 
 const { node } = { node: NODE_STYLES };
 
-// DefaultNode Container - styled similar to SmartNode but with neutral color
+// SmartDefaultNode Container - styled similar to SmartOpNode but with neutral color
 const StyledDefaultNode = styled(Box, {
     shouldForwardProp: (prop) => prop !== 'active',
 })<{ active: boolean }>(({ active, theme }) => ({
@@ -77,7 +77,7 @@ export interface DefaultNodeProps {
     onAddProvider: () => void;
 }
 
-export const DefaultNode: React.FC<DefaultNodeProps> = ({
+export const SmartDefaultNode: React.FC<DefaultNodeProps> = ({
     providersCount,
     active,
     onAddProvider,
@@ -153,4 +153,4 @@ export const DefaultNode: React.FC<DefaultNodeProps> = ({
     );
 };
 
-export default DefaultNode;
+export default SmartDefaultNode;
