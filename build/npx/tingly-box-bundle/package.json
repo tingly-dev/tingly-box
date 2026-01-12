@@ -1,8 +1,8 @@
 {
-  "name": "tingly-box",
+  "name": "tingly-box-bundle",
   "version": "1.6.1",
-  "description": "High-performance AI gateway CLI - connect to multiple AI providers through a single API",
-  "keywords": ["ai", "gateway", "openai", "anthropic", "claude", "cli", "tingly"],
+  "description": "Tingly-Box AI gateway CLI with bundled binaries (offline-ready) - connect to multiple AI providers through a single API",
+  "keywords": ["ai", "gateway", "openai", "anthropic", "claude", "cli", "tingly", "offline"],
   "homepage": "https://github.com/tingly-dev/tingly-box",
   "repository": {
     "type": "git",
@@ -20,8 +20,13 @@
     "tingly-box": "bin.js"
   },
   "type": "module",
+  "files": [
+    "bin.js",
+    "zip/"
+  ],
+  "os": ["darwin", "linux", "win32"],
+  "cpu": ["x64", "arm64"],
   "dependencies": {
-    "undici": "^7.0.0",
     "unzipper": "^0.12.3"
   }
 }
