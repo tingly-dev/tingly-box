@@ -997,6 +997,359 @@
         }
       }
     },
+    "/api/v1/usage/records": {
+      "get": {
+        "tags": [
+          "usage"
+        ],
+        "summary": "Returns individual usage records (for debugging/audit)",
+        "description": "Returns individual usage records (for debugging/audit)",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "start_time",
+            "in": "query",
+            "description": "ISO 8601 start time",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "end_time",
+            "in": "query",
+            "description": "ISO 8601 end time",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "provider",
+            "in": "query",
+            "description": "Filter by provider UUID",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "model",
+            "in": "query",
+            "description": "Filter by model name",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "scenario",
+            "in": "query",
+            "description": "Filter by scenario",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Filter by status",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Max results (max 1000)",
+            "required": false,
+            "type": "integer",
+            "default": 50,
+            "maximum": 1000,
+            "minimum": 1
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Pagination offset",
+            "required": false,
+            "type": "integer",
+            "default": 0,
+            "minimum": 0
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/UsageRecordsResponse"
+            }
+          },
+          "503": {
+            "description": "Usage store not available",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "usage"
+        ],
+        "summary": "Deletes usage records older than the specified number of days",
+        "description": "Deletes usage records older than the specified number of days",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "request",
+            "in": "body",
+            "description": "Request body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/DeleteOldRecordsRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/DeleteOldRecordsResponse"
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "schema": {
+              "type": "object"
+            }
+          },
+          "503": {
+            "description": "Usage store not available",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/usage/stats": {
+      "get": {
+        "tags": [
+          "usage"
+        ],
+        "summary": "Returns aggregated usage statistics with flexible grouping and filtering",
+        "description": "Returns aggregated usage statistics with flexible grouping and filtering",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "group_by",
+            "in": "query",
+            "description": "Aggregation level: model, provider, scenario, rule, daily, hourly",
+            "required": false,
+            "type": "string",
+            "default": "model",
+            "enum": [
+              "model",
+              "provider",
+              "scenario",
+              "rule",
+              "daily",
+              "hourly"
+            ]
+          },
+          {
+            "name": "start_time",
+            "in": "query",
+            "description": "ISO 8601 start time",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "end_time",
+            "in": "query",
+            "description": "ISO 8601 end time",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "provider",
+            "in": "query",
+            "description": "Filter by provider UUID",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "model",
+            "in": "query",
+            "description": "Filter by model name",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "scenario",
+            "in": "query",
+            "description": "Filter by scenario",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "rule_uuid",
+            "in": "query",
+            "description": "Filter by rule UUID",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Filter by status: success, error, partial",
+            "required": false,
+            "type": "string",
+            "default": "success",
+            "enum": [
+              "success",
+              "error",
+              "partial"
+            ]
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Max results to return",
+            "required": false,
+            "type": "integer",
+            "default": 100,
+            "maximum": 1000,
+            "minimum": 1
+          },
+          {
+            "name": "sort_by",
+            "in": "query",
+            "description": "Sort field: total_tokens, request_count, avg_latency",
+            "required": false,
+            "type": "string",
+            "default": "total_tokens",
+            "enum": [
+              "total_tokens",
+              "request_count",
+              "avg_latency"
+            ]
+          },
+          {
+            "name": "sort_order",
+            "in": "query",
+            "description": "asc or desc",
+            "required": false,
+            "type": "string",
+            "default": "desc",
+            "enum": [
+              "asc",
+              "desc"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/UsageStatsResponse"
+            }
+          },
+          "503": {
+            "description": "Usage store not available",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/usage/timeseries": {
+      "get": {
+        "tags": [
+          "usage"
+        ],
+        "summary": "Returns time-series data for usage with configurable intervals",
+        "description": "Returns time-series data for usage with configurable intervals",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "interval",
+            "in": "query",
+            "description": "Time bucket: minute, hour, day, week",
+            "required": false,
+            "type": "string",
+            "default": "hour",
+            "enum": [
+              "minute",
+              "hour",
+              "day",
+              "week"
+            ]
+          },
+          {
+            "name": "start_time",
+            "in": "query",
+            "description": "ISO 8601 start time",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "end_time",
+            "in": "query",
+            "description": "ISO 8601 end time",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "provider",
+            "in": "query",
+            "description": "Filter by provider UUID",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "model",
+            "in": "query",
+            "description": "Filter by model name",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "scenario",
+            "in": "query",
+            "description": "Filter by scenario",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/TimeSeriesResponse"
+            }
+          },
+          "503": {
+            "description": "Usage store not available",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
     "/api/v2/provider-templates": {
       "get": {
         "tags": [
@@ -1292,6 +1645,116 @@
     }
   },
   "definitions": {
+    "AggregatedStat": {
+      "type": "object",
+      "properties": {
+        "avg_input_tokens": {
+          "type": "number",
+          "format": "double",
+          "description": "Field avg_input_tokens",
+          "example": 230.6
+        },
+        "avg_latency_ms": {
+          "type": "number",
+          "format": "double",
+          "description": "Field avg_latency_ms",
+          "example": 1250
+        },
+        "avg_output_tokens": {
+          "type": "number",
+          "format": "double",
+          "description": "Field avg_output_tokens",
+          "example": 164.2
+        },
+        "error_count": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field error_count",
+          "example": 12
+        },
+        "error_rate": {
+          "type": "number",
+          "format": "double",
+          "description": "Field error_rate",
+          "example": 0.0022
+        },
+        "key": {
+          "type": "string",
+          "description": "Field key",
+          "example": "gpt-4"
+        },
+        "model": {
+          "type": "string",
+          "description": "Field model",
+          "example": "gpt-4"
+        },
+        "provider_name": {
+          "type": "string",
+          "description": "Field provider_name",
+          "example": "openai"
+        },
+        "provider_uuid": {
+          "type": "string",
+          "description": "Field provider_uuid",
+          "example": "uuid-123"
+        },
+        "request_count": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field request_count",
+          "example": 5420
+        },
+        "scenario": {
+          "type": "string",
+          "description": "Field scenario",
+          "example": "openai"
+        },
+        "streamed_count": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field streamed_count",
+          "example": 4800
+        },
+        "streamed_rate": {
+          "type": "number",
+          "format": "double",
+          "description": "Field streamed_rate",
+          "example": 0.885
+        },
+        "total_input_tokens": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field total_input_tokens",
+          "example": 1250000
+        },
+        "total_output_tokens": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field total_output_tokens",
+          "example": 890000
+        },
+        "total_tokens": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field total_tokens",
+          "example": 2140000
+        }
+      },
+      "required": [
+        "key",
+        "request_count",
+        "total_tokens",
+        "total_input_tokens",
+        "total_output_tokens",
+        "avg_input_tokens",
+        "avg_output_tokens",
+        "avg_latency_ms",
+        "error_count",
+        "error_rate",
+        "streamed_count",
+        "streamed_rate"
+      ]
+    },
     "ConfigInfo": {
       "type": "object",
       "properties": {
@@ -1455,6 +1918,47 @@
         "current_service_index",
         "lb_tactic",
         "active"
+      ]
+    },
+    "DeleteOldRecordsRequest": {
+      "type": "object",
+      "properties": {
+        "older_than_days": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Delete records older than this many days",
+          "minimum": 1,
+          "example": 90
+        }
+      },
+      "required": [
+        "older_than_days"
+      ]
+    },
+    "DeleteOldRecordsResponse": {
+      "type": "object",
+      "properties": {
+        "cutoff_date": {
+          "type": "string",
+          "description": "Field cutoff_date",
+          "example": "2024-10-13T00:00:00Z"
+        },
+        "deleted_count": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field deleted_count",
+          "example": 1500
+        },
+        "message": {
+          "type": "string",
+          "description": "Field message",
+          "example": "Records deleted successfully"
+        }
+      },
+      "required": [
+        "message",
+        "deleted_count",
+        "cutoff_date"
       ]
     },
     "DeleteProviderResponse": {
@@ -2989,6 +3493,106 @@
         "success"
       ]
     },
+    "TimeSeriesData": {
+      "type": "object",
+      "properties": {
+        "avg_latency_ms": {
+          "type": "number",
+          "format": "double",
+          "description": "Field avg_latency_ms",
+          "example": 1100
+        },
+        "error_count": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field error_count",
+          "example": 0
+        },
+        "input_tokens": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field input_tokens",
+          "example": 32000
+        },
+        "output_tokens": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field output_tokens",
+          "example": 20000
+        },
+        "request_count": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field request_count",
+          "example": 245
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "Field timestamp",
+          "example": "2025-01-10T00:00:00Z"
+        },
+        "total_tokens": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field total_tokens",
+          "example": 52000
+        }
+      },
+      "required": [
+        "timestamp",
+        "request_count",
+        "total_tokens",
+        "input_tokens",
+        "output_tokens",
+        "error_count",
+        "avg_latency_ms"
+      ]
+    },
+    "TimeSeriesMeta": {
+      "type": "object",
+      "properties": {
+        "end_time": {
+          "type": "string",
+          "description": "Field end_time",
+          "example": "2025-01-11T00:00:00Z"
+        },
+        "interval": {
+          "type": "string",
+          "description": "Field interval",
+          "example": "hour"
+        },
+        "start_time": {
+          "type": "string",
+          "description": "Field start_time",
+          "example": "2025-01-10T00:00:00Z"
+        }
+      },
+      "required": [
+        "interval",
+        "start_time",
+        "end_time"
+      ]
+    },
+    "TimeSeriesResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "array",
+          "description": "Field data",
+          "items": {
+            "$ref": "#/definitions/TimeSeriesData"
+          }
+        },
+        "meta": {
+          "description": "Field meta",
+          "$ref": "#/definitions/TimeSeriesMeta"
+        }
+      },
+      "required": [
+        "meta",
+        "data"
+      ]
+    },
     "ToggleProviderResponse": {
       "type": "object",
       "properties": {
@@ -3236,6 +3840,204 @@
         "data"
       ]
     },
+    "UsageRecordResponse": {
+      "type": "object",
+      "properties": {
+        "error_code": {
+          "type": "string",
+          "description": "Field error_code"
+        },
+        "id": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field id",
+          "example": 1
+        },
+        "input_tokens": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field input_tokens",
+          "example": 1000
+        },
+        "latency_ms": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field latency_ms",
+          "example": 1200
+        },
+        "model": {
+          "type": "string",
+          "description": "Field model",
+          "example": "gpt-4"
+        },
+        "output_tokens": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field output_tokens",
+          "example": 500
+        },
+        "provider_name": {
+          "type": "string",
+          "description": "Field provider_name",
+          "example": "openai"
+        },
+        "provider_uuid": {
+          "type": "string",
+          "description": "Field provider_uuid",
+          "example": "uuid-123"
+        },
+        "request_model": {
+          "type": "string",
+          "description": "Field request_model",
+          "example": "gpt-4"
+        },
+        "rule_uuid": {
+          "type": "string",
+          "description": "Field rule_uuid",
+          "example": "rule-uuid"
+        },
+        "scenario": {
+          "type": "string",
+          "description": "Field scenario",
+          "example": "openai"
+        },
+        "status": {
+          "type": "string",
+          "description": "Field status",
+          "example": "success"
+        },
+        "streamed": {
+          "type": "boolean",
+          "description": "Field streamed",
+          "example": true
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "Field timestamp",
+          "example": "2025-01-10T12:00:00Z"
+        },
+        "total_tokens": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field total_tokens",
+          "example": 1500
+        }
+      },
+      "required": [
+        "id",
+        "provider_uuid",
+        "provider_name",
+        "model",
+        "scenario",
+        "timestamp",
+        "input_tokens",
+        "output_tokens",
+        "total_tokens",
+        "status",
+        "latency_ms",
+        "streamed"
+      ]
+    },
+    "UsageRecordsMeta": {
+      "type": "object",
+      "properties": {
+        "limit": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field limit",
+          "example": 50
+        },
+        "offset": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field offset",
+          "example": 0
+        },
+        "total": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field total",
+          "example": 1000
+        }
+      },
+      "required": [
+        "total",
+        "limit",
+        "offset"
+      ]
+    },
+    "UsageRecordsResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "array",
+          "description": "Field data",
+          "items": {
+            "$ref": "#/definitions/UsageRecordResponse"
+          }
+        },
+        "meta": {
+          "description": "Field meta",
+          "$ref": "#/definitions/UsageRecordsMeta"
+        }
+      },
+      "required": [
+        "meta",
+        "data"
+      ]
+    },
+    "UsageStatsMeta": {
+      "type": "object",
+      "properties": {
+        "end_time": {
+          "type": "string",
+          "description": "Field end_time",
+          "example": "2025-01-11T00:00:00Z"
+        },
+        "group_by": {
+          "type": "string",
+          "description": "Field group_by",
+          "example": "model"
+        },
+        "start_time": {
+          "type": "string",
+          "description": "Field start_time",
+          "example": "2025-01-10T00:00:00Z"
+        },
+        "total_count": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field total_count",
+          "example": 10
+        }
+      },
+      "required": [
+        "start_time",
+        "end_time",
+        "group_by",
+        "total_count"
+      ]
+    },
+    "UsageStatsResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "array",
+          "description": "Field data",
+          "items": {
+            "$ref": "#/definitions/AggregatedStat"
+          }
+        },
+        "meta": {
+          "description": "Field meta",
+          "$ref": "#/definitions/UsageStatsMeta"
+        }
+      },
+      "required": [
+        "meta",
+        "data"
+      ]
+    },
     "VersionInfo": {
       "type": "object",
       "properties": {
@@ -3284,26 +4086,6 @@
   },
   "tags": [
     {
-      "name": "oauth",
-      "description": "Operations related to oauth"
-    },
-    {
-      "name": "logs",
-      "description": "Operations related to logs"
-    },
-    {
-      "name": "scenarios",
-      "description": "Operations related to scenarios"
-    },
-    {
-      "name": "history",
-      "description": "Operations related to history"
-    },
-    {
-      "name": "info",
-      "description": "Operations related to info"
-    },
-    {
       "name": "server",
       "description": "Operations related to server"
     },
@@ -3312,12 +4094,36 @@
       "description": "Operations related to rules"
     },
     {
+      "name": "history",
+      "description": "Operations related to history"
+    },
+    {
       "name": "models",
       "description": "Operations related to models"
     },
     {
       "name": "testing",
       "description": "Operations related to testing"
+    },
+    {
+      "name": "oauth",
+      "description": "Operations related to oauth"
+    },
+    {
+      "name": "usage",
+      "description": "Operations related to usage"
+    },
+    {
+      "name": "info",
+      "description": "Operations related to info"
+    },
+    {
+      "name": "logs",
+      "description": "Operations related to logs"
+    },
+    {
+      "name": "scenarios",
+      "description": "Operations related to scenarios"
     },
     {
       "name": "token",
