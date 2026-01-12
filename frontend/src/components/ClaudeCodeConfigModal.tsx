@@ -1,42 +1,46 @@
-import { Box, Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, ToggleButton, ToggleButtonGroup, Checkbox, FormControlLabel } from '@mui/material';
+import { Box, Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, Checkbox, FormControlLabel, Tab, Tabs } from '@mui/material';
 import React from 'react';
 import CodeBlock from './CodeBlock';
 import { useTranslation } from 'react-i18next';
 
-type ClaudeJsonMode = 'json' | 'script';
-type ConfigMode = 'unified' | 'separate';
+type ConfigMode = 'unified' | 'separate' | 'smart';
 
 interface ClaudeCodeConfigModalProps {
     open: boolean;
     onClose: () => void;
     dontRemindAgain: boolean;
     onDontRemindChange: (checked: boolean) => void;
-    // Content generation props
-    claudeJsonMode: ClaudeJsonMode;
-    onClaudeJsonModeChange: (mode: ClaudeJsonMode) => void;
     configMode: ConfigMode;
+    // Settings.json scripts
     generateSettingsConfig: () => string;
-    generateSettingsScript: () => string;
+    generateSettingsScriptWindows: () => string;
+    generateSettingsScriptUnix: () => string;
+    // .claude.json scripts
     generateClaudeJsonConfig: () => string;
-    generateScript: () => string;
+    generateScriptWindows: () => string;
+    generateScriptUnix: () => string;
     copyToClipboard: (text: string, label: string) => Promise<void>;
 }
+
+type ScriptTab = 'json' | 'windows' | 'unix';
 
 const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
     open,
     onClose,
     dontRemindAgain,
     onDontRemindChange,
-    claudeJsonMode,
-    onClaudeJsonModeChange,
     configMode,
     generateSettingsConfig,
-    generateSettingsScript,
+    generateSettingsScriptWindows,
+    generateSettingsScriptUnix,
     generateClaudeJsonConfig,
-    generateScript,
+    generateScriptWindows,
+    generateScriptUnix,
     copyToClipboard,
 }) => {
     const { t } = useTranslation();
+    const [settingsTab, setSettingsTab] = React.useState<ScriptTab>('json');
+    const [claudeJsonTab, setClaudeJsonTab] = React.useState<ScriptTab>('json');
 
     return (
         <Dialog
@@ -65,76 +69,116 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
             </DialogTitle>
 
             <DialogContent sx={{ p: 3 }}>
-                <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                     {/* Settings.json section */}
-                    <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-                        <Box sx={{ mb: 1 }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                        <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                             <Typography variant="subtitle2" color="text.secondary">
                                 {t('claudeCode.step1')}
                             </Typography>
+                            <Tabs
+                                value={settingsTab}
+                                onChange={(_, value) => setSettingsTab(value)}
+                                variant="standard"
+                                sx={{ minHeight: 32, '& .MuiTabs-indicator': { height: 3 } }}
+                            >
+                                <Tab label="JSON" value="json" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
+                                <Tab label="Windows" value="windows" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
+                                <Tab label="Linux/macOS" value="unix" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
+                            </Tabs>
                         </Box>
-                        <Box sx={{ flex: 1 }}>
-                            <CodeBlock
-                                code={claudeJsonMode === 'json' ? generateSettingsConfig() : generateSettingsScript()}
-                                language={claudeJsonMode === 'json' ? 'json' : 'js'}
-                                filename={claudeJsonMode === 'json' ? 'Add the env section into ~/.claude/setting.json' : 'Script to setup ~/.claude/settings.json'}
-                                wrap={true}
-                                onCopy={(code) => copyToClipboard(code, claudeJsonMode === 'json' ? 'settings.json' : 'script')}
-                                maxHeight={280}
-                                minHeight={280}
-                                headerActions={
-                                    <ToggleButtonGroup
-                                        value={claudeJsonMode}
-                                        exclusive
-                                        size="small"
-                                        onChange={(_, value) => value && onClaudeJsonModeChange(value)}
-                                        sx={{ bgcolor: 'grey.700', '& .MuiToggleButton-root': { color: 'grey.300', padding: '2px 8px', fontSize: '0.75rem' } }}
-                                    >
-                                        <ToggleButton value="json" sx={{ '&.Mui-selected': { bgcolor: 'primary.main', color: 'white' } }}>
-                                            JSON
-                                        </ToggleButton>
-                                        <ToggleButton value="script" sx={{ '&.Mui-selected': { bgcolor: 'primary.main', color: 'white' } }}>
-                                            Script
-                                        </ToggleButton>
-                                    </ToggleButtonGroup>
-                                }
-                            />
+                        <Box>
+                            {settingsTab === 'json' && (
+                                <CodeBlock
+                                    code={generateSettingsConfig()}
+                                    language="json"
+                                    filename="Add the env section into ~/.claude/settings.json"
+                                    wrap={true}
+                                    onCopy={(code) => copyToClipboard(code, 'settings.json')}
+                                    maxHeight={280}
+                                    minHeight={280}
+                                />
+                            )}
+                            {settingsTab === 'windows' && (
+                                <CodeBlock
+                                    code={generateSettingsScriptWindows()}
+                                    // bash, but use js for highlight
+                                    language="js"
+                                    filename="PowerShell script to setup ~/.claude/settings.json"
+                                    wrap={true}
+                                    onCopy={(code) => copyToClipboard(code, 'Windows script')}
+                                    maxHeight={280}
+                                    minHeight={280}
+                                />
+                            )}
+                            {settingsTab === 'unix' && (
+                                <CodeBlock
+                                    code={generateSettingsScriptUnix()}
+                                    // bash, but use js for highlight
+                                    language="js"
+                                    filename="Bash script to setup ~/.claude/settings.json"
+                                    wrap={true}
+                                    onCopy={(code) => copyToClipboard(code, 'Unix script')}
+                                    maxHeight={280}
+                                    minHeight={280}
+                                />
+                            )}
                         </Box>
                     </Box>
 
                     {/* .claude.json section */}
-                    <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-                        <Box sx={{ mb: 1 }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                        <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                             <Typography variant="subtitle2" color="text.secondary">
                                 {t('claudeCode.step2')}
                             </Typography>
+                            <Tabs
+                                value={claudeJsonTab}
+                                onChange={(_, value) => setClaudeJsonTab(value)}
+                                variant="standard"
+                                sx={{ minHeight: 32, '& .MuiTabs-indicator': { height: 3 } }}
+                            >
+                                <Tab label="JSON" value="json" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
+                                <Tab label="Windows" value="windows" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
+                                <Tab label="Linux/macOS" value="unix" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
+                            </Tabs>
                         </Box>
-                        <Box sx={{ flex: 1 }}>
-                            <CodeBlock
-                                code={claudeJsonMode === 'json' ? generateClaudeJsonConfig() : generateScript()}
-                                language={claudeJsonMode === 'json' ? 'json' : 'js'}
-                                filename={claudeJsonMode === 'json' ? 'Set hasCompletedOnboarding into ~/.claude.json' : 'Script to setup ~/.claude.json'}
-                                wrap={true}
-                                onCopy={(code) => copyToClipboard(code, claudeJsonMode === 'json' ? '.claude.json' : 'script')}
-                                maxHeight={280}
-                                minHeight={280}
-                                headerActions={
-                                    <ToggleButtonGroup
-                                        value={claudeJsonMode}
-                                        exclusive
-                                        size="small"
-                                        onChange={(_, value) => value && onClaudeJsonModeChange(value)}
-                                        sx={{ bgcolor: 'grey.700', '& .MuiToggleButton-root': { color: 'grey.300', padding: '2px 8px', fontSize: '0.75rem' } }}
-                                    >
-                                        <ToggleButton value="json" sx={{ '&.Mui-selected': { bgcolor: 'primary.main', color: 'white' } }}>
-                                            JSON
-                                        </ToggleButton>
-                                        <ToggleButton value="script" sx={{ '&.Mui-selected': { bgcolor: 'primary.main', color: 'white' } }}>
-                                            Script
-                                        </ToggleButton>
-                                    </ToggleButtonGroup>
-                                }
-                            />
+                        <Box>
+                            {claudeJsonTab === 'json' && (
+                                <CodeBlock
+                                    code={generateClaudeJsonConfig()}
+                                    language="json"
+                                    filename="Set hasCompletedOnboarding as true into ~/.claude.json"
+                                    wrap={true}
+                                    onCopy={(code) => copyToClipboard(code, '.claude.json')}
+                                    maxHeight={280}
+                                    minHeight={280}
+                                />
+                            )}
+                            {claudeJsonTab === 'windows' && (
+                                <CodeBlock
+                                    code={generateScriptWindows()}
+                                    // bash, but use js for highlight
+                                    language="js"
+                                    filename="PowerShell script to setup ~/.claude.json"
+                                    wrap={true}
+                                    onCopy={(code) => copyToClipboard(code, 'Windows script')}
+                                    maxHeight={280}
+                                    minHeight={280}
+                                />
+                            )}
+                            {claudeJsonTab === 'unix' && (
+                                <CodeBlock
+                                    code={generateScriptUnix()}
+                                    // bash, but use js for highlight
+                                    language="js"
+                                    filename="Bash script to setup ~/.claude.json"
+                                    wrap={true}
+                                    onCopy={(code) => copyToClipboard(code, 'Unix script')}
+                                    maxHeight={280}
+                                    minHeight={280}
+                                />
+                            )}
                         </Box>
                     </Box>
                 </Box>

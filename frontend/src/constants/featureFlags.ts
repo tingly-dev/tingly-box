@@ -16,7 +16,7 @@ export const FEATURE_FLAGS = {
  * Feature flag values and their enabled/disabled state
  */
 export const FLAGS = {
-  [FEATURE_FLAGS.CLAUDE_CODE_MODE_SWITCH]: false,
+  [FEATURE_FLAGS.CLAUDE_CODE_MODE_SWITCH]: true,
   // [FEATURE_FLAGS.EXAMPLE_NEW_FEATURE]: false,
 } as const;
 

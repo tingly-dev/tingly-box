@@ -225,6 +225,8 @@ func migrate20260110(c *Config) {
 			continue
 		}
 
+		rule.Description = sourceRule.Description
+
 		// If services is not empty, skip
 		if len(rule.Services) > 0 {
 			continue
