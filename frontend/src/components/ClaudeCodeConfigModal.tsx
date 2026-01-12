@@ -148,7 +148,7 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
                                 <CodeBlock
                                     code={generateClaudeJsonConfig()}
                                     language="json"
-                                    filename="Set hasCompletedOnboarding into ~/.claude.json"
+                                    filename="Set hasCompletedOnboarding as true into ~/.claude.json"
                                     wrap={true}
                                     onCopy={(code) => copyToClipboard(code, '.claude.json')}
                                     maxHeight={280}
