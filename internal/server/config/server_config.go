@@ -1157,7 +1157,7 @@ func init() {
 			Scenario:      typ.ScenarioClaudeCode,
 			RequestModel:  "tingly/cc-haiku",
 			ResponseModel: "",
-			Description:   "Claude Code - Haiku model - small / cheap / for background task",
+			Description:   "Claude Code - Haiku model - small / cheap / for background and summary task",
 			Services:      []loadbalance.Service{},
 			LBTactic: typ.Tactic{
 				Type:   loadbalance.TacticRoundRobin,
