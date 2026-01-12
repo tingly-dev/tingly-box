@@ -1,19 +1,27 @@
-import { Box, Typography, ToggleButton, ToggleButtonGroup, Dialog, DialogTitle, DialogContent, DialogActions, Button } from '@mui/material';
+import {
+    Box,
+    Button,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    ToggleButton,
+    ToggleButtonGroup,
+    Typography
+} from '@mui/material';
 import React from 'react';
-import CodeBlock from '../components/CodeBlock';
 import TemplatePage from '../components/TemplatePage.tsx';
 import PageLayout from '../components/PageLayout';
-import { api, getBaseUrl } from '../services/api';
-import type { Provider } from '../types/provider';
-import { useTranslation } from 'react-i18next';
+import {api, getBaseUrl} from '../services/api';
+import {useTranslation} from 'react-i18next';
 import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
-import { useFunctionPanelData } from '../hooks/useFunctionPanelData';
-import { useProviderDialog } from '../hooks/useProviderDialog';
+import {useFunctionPanelData} from '../hooks/useFunctionPanelData';
+import {useProviderDialog} from '../hooks/useProviderDialog';
 import EmptyStateGuide from '../components/EmptyStateGuide';
 import ProviderFormDialog from '../components/ProviderFormDialog';
 import OAuthDialog from '../components/OAuthDialog';
-import { isFeatureEnabled, FEATURE_FLAGS } from '../constants/featureFlags';
+import {FEATURE_FLAGS, isFeatureEnabled} from '../constants/featureFlags';
 import ClaudeCodeConfigModal from '../components/ClaudeCodeConfigModal';
 
 type ClaudeJsonMode = 'json' | 'script';
@@ -385,66 +393,69 @@ node --eval '
                         </Button>
                     }
                 >
-                    <Box sx={{ minHeight: 50 }}>
-                        <Typography variant="body2" color="text.secondary">
+                    <Box sx={{ mb: 2 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                             Configure Claude Code to use Tingly Box as your AI model proxy
                         </Typography>
-                        <Box sx={{ mt: 1.5, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                            <Typography variant="body2" color="text.secondary">
-                                <Box component="span" sx={{ fontWeight: 500, color: 'primary.main' }}>Unified:</Box> Use a single model for all Claude Code requests
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                                <Box component="span" sx={{ fontWeight: 500, color: 'primary.main' }}>Separate:</Box> Configure distinct models for default, haiku, sonnet, and opus
-                            </Typography>
-                        </Box>
+                        {CONFIG_MODES.map((mode) => (
+                            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                                <Typography key={mode.value} variant="body2" color="text.secondary">
+                                    <Box component="span" sx={{ fontWeight: 600, color: 'primary.main' }}>
+                                        {mode.label}:
+                                    </Box> {mode.value === 'unified' ? 'Single model for all requests' : 'Distinct models for each variant'}
+                                </Typography>
+                            </Box>
+                        ))}
                     </Box>
-                </UnifiedCard>
 
-                {/* Mode switch between header and rules - controlled by feature flag */}
-                {isFeatureEnabled(FEATURE_FLAGS.CLAUDE_CODE_MODE_SWITCH) && (
-                <UnifiedCard size="full">
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 2, py: 1 }}>
-                        <Typography variant="subtitle2" color="text.secondary">
-                            Configuration Mode
-                        </Typography>
-                        <ToggleButtonGroup
-                            value={configMode}
-                            exclusive
-                            size="small"
-                            onChange={(_, value) => value && handleConfigModeChange(value)}
-                            sx={{
-                                bgcolor: 'action.hover',
-                                '& .MuiToggleButton-root': {
-                                    color: 'text.primary',
-                                    padding: '4px 12px',
-                                    fontSize: '0.875rem',
-                                    '&:hover': {
-                                        bgcolor: 'action.selected',
-                                    },
-                                },
-                            }}
-                        >
-                            {CONFIG_MODES.map((mode) => (
-                                <ToggleButton
-                                    key={mode.value}
-                                    value={mode.value}
+                    {/* Mode switch - controlled by feature flag */}
+                    {isFeatureEnabled(FEATURE_FLAGS.CLAUDE_CODE_MODE_SWITCH) && (
+                        <>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 2 }}>
+                                {/*<Typography variant="h4" color="text.secondary">*/}
+                                {/*    Configuration Mode*/}
+                                {/*</Typography>*/}
+                                <ToggleButtonGroup
+                                    value={configMode}
+                                    exclusive
+                                    size="small"
+                                    onChange={(_, value) => value && handleConfigModeChange(value)}
                                     sx={{
-                                        '&.Mui-selected': {
-                                            bgcolor: 'primary.main',
-                                            color: 'white',
+                                        bgcolor: 'action.hover',
+                                        '& .MuiToggleButton-root': {
+                                            color: 'text.primary',
+                                            padding: '4px 12px',
+                                            fontSize: '0.875rem',
                                             '&:hover': {
-                                                bgcolor: 'primary.dark',
+                                                bgcolor: 'action.selected',
                                             },
                                         },
                                     }}
                                 >
-                                    {mode.label}
-                                </ToggleButton>
-                            ))}
-                        </ToggleButtonGroup>
-                    </Box>
+                                    {CONFIG_MODES.map((mode) => (
+                                        <ToggleButton
+                                            key={mode.value}
+                                            value={mode.value}
+                                            sx={{
+                                                '&.Mui-selected': {
+                                                    bgcolor: 'primary.main',
+                                                    color: 'white',
+                                                    '&:hover': {
+                                                        bgcolor: 'primary.dark',
+                                                    },
+                                                },
+                                            }}
+                                        >
+                                            {mode.label}
+                                        </ToggleButton>
+                                    ))}
+                                </ToggleButtonGroup>
+                            </Box>
+                        </>
+                    )}
                 </UnifiedCard>
-                )}
+
+
 
                 <TemplatePage
                     rules={rules}
