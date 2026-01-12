@@ -387,7 +387,7 @@ jobs:
     name: Publish Bundle Package
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       id-token: write
     if: needs.setup.outputs.publish_bundle == 'true'
     env:
