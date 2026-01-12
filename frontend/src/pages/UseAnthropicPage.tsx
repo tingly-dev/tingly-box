@@ -109,8 +109,8 @@ const UseAnthropicPage: React.FC = () => {
             <BaseUrlRow
                 label="Base URL"
                 path="/tingly/anthropic"
-                legacyPath ="/anthropic"
-                legacyLabel="(Legacy) Base URL "
+                // legacyPath ="/anthropic"
+                // legacyLabel="(Legacy) Base URL "
                 baseUrl={baseUrl}
                 urlLabel="Anthropic Base URL"
                 onCopy={(url) => copyToClipboard(url, 'Anthropic Base URL')}
