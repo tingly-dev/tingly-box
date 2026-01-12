@@ -17,9 +17,9 @@ import {
 import { styled } from '@mui/material/styles';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Provider } from '../types/provider';
-import { ApiStyleBadge } from "./ApiStyleBadge.tsx";
-import type { ConfigProvider } from './RuleGraphTypes.ts';
+import type { Provider } from '../../types/provider.ts';
+import { ApiStyleBadge } from "../ApiStyleBadge.tsx";
+import type { ConfigProvider } from '../RoutingGraphTypes.ts';
 
 // Model Node dimensions
 const MODEL_NODE_STYLES = {

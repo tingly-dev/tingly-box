@@ -16,11 +16,11 @@ import {
 import { styled } from '@mui/material/styles';
 import React from 'react';
 import type { Provider } from '../types/provider';
-import { AddProviderNode } from './AddProviderNode';
-import { DefaultNode } from './DefaultNode';
-import { ConnectionLine, ModelNode, NodeContainer, ProviderNodeComponent } from './RuleNode';
-import { SmartNode } from './SmartNode';
-import type { ConfigRecord } from './RuleGraphTypes';
+import { AddProviderNode } from '@/components/nodes/AddProviderNode.tsx';
+import { DefaultNode } from '@/components/nodes/DefaultNode.tsx';
+import { ConnectionLine, ModelNode, NodeContainer, ProviderNodeComponent } from '@/components/nodes/RuleNode.tsx';
+import { SmartNode } from '@/components/nodes/SmartNode.tsx';
+import type { ConfigRecord } from './RoutingGraphTypes.ts';
 
 // Use same style constants as RuleGraph for consistency
 const RULE_GRAPH_STYLES = {

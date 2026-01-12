@@ -25,10 +25,10 @@ import { styled } from '@mui/material/styles';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Provider } from '../types/provider';
-import { ConnectionLine, ModelNode, NodeContainer, ProviderNodeComponent, ProviderNodeContainer } from './RuleNode';
-import { AddProviderNode } from './AddProviderNode';
-import { SmartNode } from './SmartNode';
-import type { ConfigProvider, ConfigRecord, SmartRouting } from './RuleGraphTypes.ts';
+import { ConnectionLine, ModelNode, NodeContainer, ProviderNodeComponent, ProviderNodeContainer } from '@/components/nodes/RuleNode.tsx';
+import { AddProviderNode } from '@/components/nodes/AddProviderNode.tsx';
+import { SmartNode } from '@/components/nodes/SmartNode.tsx';
+import type { ConfigProvider, ConfigRecord, SmartRouting } from './RoutingGraphTypes.ts';
 
 // Unified RuleGraph style configuration
 const RULE_GRAPH_STYLES = {
@@ -151,7 +151,7 @@ const GraphRow = styled(Box)(({ theme }) => ({
 }));
 
 // Main RuleGraph Component
-const RuleGraph: React.FC<RuleGraphProps> = ({
+const RoutingGraph: React.FC<RuleGraphProps> = ({
     record,
     providers,
     providerUuidToName,
@@ -714,4 +714,4 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
     );
 };
 
-export default RuleGraph;
+export default RoutingGraph;

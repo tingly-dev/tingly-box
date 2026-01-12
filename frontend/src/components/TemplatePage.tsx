@@ -1,12 +1,12 @@
 import { Dialog, DialogContent, DialogTitle } from '@mui/material';
 import React, { useCallback, useState } from 'react';
 import ApiKeyModal from '../components/ApiKeyModal';
-import RuleCard from '../components/RuleCard';
+import RuleCard from './RuleCard.tsx';
 import UnifiedCard from '../components/UnifiedCard';
 import { api } from '../services/api';
 import type { Provider, ProviderModelsDataByUuid } from '../types/provider';
 import ModelSelectTab, { type ProviderSelectTabOption } from './ModelSelectTab';
-import type { ConfigRecord, Rule } from './RuleGraphTypes';
+import type { ConfigRecord, Rule } from './RoutingGraphTypes.ts';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface TabTemplatePageProps {

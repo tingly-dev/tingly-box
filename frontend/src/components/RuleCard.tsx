@@ -3,11 +3,11 @@ import { Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, D
 import React, { useCallback, useState } from 'react';
 import type { ProbeResponse } from '../client';
 import Probe from './ProbeModal.tsx';
-import RuleGraphV2 from './RuleGraph.tsx';
+import RoutingGraph from './RoutingGraph';
 import SmartRoutingGraph from './SmartRoutingGraph';
 import { api } from '../services/api';
 import type { Provider, ProviderModelsDataByUuid } from '../types/provider';
-import type { ConfigRecord, Rule } from './RuleGraphTypes';
+import type { ConfigRecord, Rule } from './RoutingGraphTypes.ts';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface RuleCardProps {
@@ -356,7 +356,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                         onAddServiceToSmartRule={handleAddServiceToSmartRule}
                     />
                 ) : (
-                    <RuleGraphV2
+                    <RoutingGraph
                         record={configRecord}
                         recordUuid={configRecord.uuid}
                         providers={providers}
