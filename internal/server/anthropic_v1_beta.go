@@ -164,21 +164,6 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthrop
 	var inputTokens, outputTokens int
 	var hasUsage bool
 
-	defer func() {
-		if r := recover(); r != nil {
-			logrus.Errorf("Panic in Anthropic beta streaming handler: %v", r)
-			// Track panic as error with any usage we accumulated
-			if hasUsage {
-				s.trackUsage(c, rule, provider, actualModel, respModel, inputTokens, outputTokens, true, "error", "panic")
-			}
-		}
-		if stream != nil {
-			if err := stream.Close(); err != nil {
-				logrus.Errorf("Error closing stream: %v", err)
-			}
-		}
-	}()
-
 	// Set SSE headers
 	SetupSSEHeaders(c)
 
