@@ -423,6 +423,17 @@ jobs:
           echo "Updated $PKG_NAME to version: $VERSION"
           cd ..
 
+      - name: Update bin.js to reference the correct release
+        run: |
+          RELEASE_TAG="${{ needs.setup.outputs.release_tag }}"
+          echo "Updating bin.js to reference release tag: $RELEASE_TAG"
+          cd $PKG_DIR
+          sed -i.bak "s|const BINARY_RELEASE_BRANCH = .*|const BINARY_RELEASE_BRANCH = '$RELEASE_TAG';|g" bin.js
+          echo "Updated bin.js content:"
+          head -20 bin.js
+          rm -f bin.js.bak
+          cd ..
+
       - name: Download release zip files
         env:
           RELEASE_TAG: ${{ needs.setup.outputs.release_tag }}
