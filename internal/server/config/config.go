@@ -33,6 +33,9 @@ type Config struct {
 	EncryptProviders bool                 `yaml:"encrypt_providers" json:"encrypt_providers"`   // Whether to encrypt provider info (default false)
 	Scenarios        []typ.ScenarioConfig `yaml:"scenarios" json:"scenarios"`                   // Scenario-specific configurations
 
+	// Tool interceptor configuration (global)
+	ToolInterceptor *typ.ToolInterceptorConfig `json:"tool_interceptor,omitempty"` // Global tool interceptor config
+
 	// Merged fields from Config struct
 	ProvidersV1 map[string]*typ.Provider `json:"providers"`
 	Providers   []*typ.Provider          `json:"providers_v2,omitempty"`
@@ -591,6 +594,23 @@ func (c *Config) HasModelToken() bool {
 	defer c.mu.RUnlock()
 
 	return c.ModelToken != ""
+}
+
+// GetToolInterceptor returns the global tool interceptor configuration
+func (c *Config) GetToolInterceptor() *typ.ToolInterceptorConfig {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.ToolInterceptor
+}
+
+// SetToolInterceptor sets the global tool interceptor configuration
+func (c *Config) SetToolInterceptor(config *typ.ToolInterceptorConfig) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.ToolInterceptor = config
+	return c.Save()
 }
 
 // Legacy compatibility methods for backward compatibility

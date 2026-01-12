@@ -29,6 +29,22 @@ const TemplateCacheFileName = "provider_template.json"
 
 const TemplateGitHubURL = "https://raw.githubusercontent.com/tingly-dev/tingly-box/main/internal/template/provider_templates.json"
 
+// CapabilitySchema defines the structure for capability schemas like web_search
+type CapabilitySchema struct {
+	BuiltIn      bool         `json:"built_in"`
+	ToolType     string       `json:"tool_type,omitempty"`
+	ToolName     string       `json:"tool_name,omitempty"`
+	DocURL       string       `json:"doc_url,omitempty"`
+	ResultFormat ResultFormat `json:"result_format,omitempty"`
+}
+
+// ResultFormat describes how to format tool results
+type ResultFormat struct {
+	Type        string                 `json:"type"`
+	Description string                 `json:"description,omitempty"`
+	Structure   map[string]interface{} `json:"structure,omitempty"`
+}
+
 // ProviderTemplate represents a predefined provider configuration template
 type ProviderTemplate struct {
 	ID                     string            `json:"id"`
@@ -48,15 +64,17 @@ type ProviderTemplate struct {
 	SupportsModelsEndpoint bool              `json:"supports_models_endpoint"`
 	Tags                   []string          `json:"tags,omitempty"`
 	Metadata               map[string]string `json:"metadata,omitempty"`
-	OAuthProvider          string            `json:"oauth_provider,omitempty"` // OAuth provider type for oauth type providers
-	AuthType               string            `json:"auth_type,omitempty"`      // "oauth", "key"
+	OAuthProvider          string            `json:"oauth_provider,omitempty"`    // OAuth provider type for oauth type providers
+	AuthType               string            `json:"auth_type,omitempty"`         // "oauth", "key"
+	WebSearchSchema        string            `json:"web_search_schema,omitempty"` // Reference to capability schema for web_search
 }
 
 // ProviderTemplateRegistry represents the provider template registry structure from GitHub
 type ProviderTemplateRegistry struct {
-	Providers   map[string]*ProviderTemplate `json:"providers"`
-	Version     string                       `json:"version"`
-	LastUpdated string                       `json:"last_updated"`
+	Providers         map[string]*ProviderTemplate `json:"providers"`
+	CapabilitySchemas map[string]*CapabilitySchema `json:"capability_schemas,omitempty"`
+	Version           string                       `json:"version"`
+	LastUpdated       string                       `json:"last_updated"`
 }
 
 // TemplateSource tracks where templates were loaded from
@@ -83,20 +101,22 @@ const (
 
 // TemplateManager manages provider templates with -tier fallback
 type TemplateManager struct {
-	templates        map[string]*ProviderTemplate // Current templates from GitHub or embedded
-	embedded         map[string]*ProviderTemplate // Embedded templates (immutable fallback)
-	mu               sync.RWMutex
-	lastUpdated      time.Time      // Last update timestamp
-	version          string         // Template version
-	source           TemplateSource // Current source: GitHub or Local
-	sourceMu         sync.RWMutex
-	etag             string // For conditional GitHub requests
-	etagMu           sync.RWMutex
-	githubURL        string                   // Empty means no GitHub sync, only embedded templates
-	sourcePreference TemplateSourcePreference // Priority order for loading templates
-	httpClient       *http.Client
-	cachePath        string        // Path to cache file
-	cacheTTL         time.Duration // Cache TTL (default 24h)
+	templates         map[string]*ProviderTemplate // Current templates from GitHub or embedded
+	embedded          map[string]*ProviderTemplate // Embedded templates (immutable fallback)
+	capabilitySchemas map[string]*CapabilitySchema // Current capability schemas
+	embeddedSchemas   map[string]*CapabilitySchema // Embedded capability schemas
+	mu                sync.RWMutex
+	lastUpdated       time.Time      // Last update timestamp
+	version           string         // Template version
+	source            TemplateSource // Current source: GitHub or Local
+	sourceMu          sync.RWMutex
+	etag              string // For conditional GitHub requests
+	etagMu            sync.RWMutex
+	githubURL         string                   // Empty means no GitHub sync, only embedded templates
+	sourcePreference  TemplateSourcePreference // Priority order for loading templates
+	httpClient        *http.Client
+	cachePath         string        // Path to cache file
+	cacheTTL          time.Duration // Cache TTL (default 24h)
 }
 
 func NewDefaultTemplateManager() *TemplateManager {
@@ -120,9 +140,10 @@ func NewTemplateManager(githubURL string) *TemplateManager {
 func NewTemplateManagerWithPreference(githubURL string, preference TemplateSourcePreference) *TemplateManager {
 	configDir := constant.GetTinglyConfDir()
 	return &TemplateManager{
-		githubURL:        githubURL,
-		sourcePreference: preference,
-		templates:        make(map[string]*ProviderTemplate),
+		githubURL:         githubURL,
+		sourcePreference:  preference,
+		templates:         make(map[string]*ProviderTemplate),
+		capabilitySchemas: make(map[string]*CapabilitySchema),
 		httpClient: &http.Client{
 			Timeout: DefaultTemplateHTTPTimeout,
 		},
@@ -228,6 +249,7 @@ func (tm *TemplateManager) FetchFromGitHub(ctx context.Context) (*ProviderTempla
 	// Update templates storage
 	tm.mu.Lock()
 	tm.templates = registry.Providers
+	tm.capabilitySchemas = registry.CapabilitySchemas
 	tm.lastUpdated = time.Now()
 	tm.version = registry.Version
 	tm.mu.Unlock()
@@ -389,9 +411,17 @@ func (tm *TemplateManager) loadEmbeddedTemplates() error {
 		embeddedCopy[k] = deepCopyTemplate(v)
 	}
 
+	// Also make a deep copy of capability schemas
+	embeddedSchemas := make(map[string]*CapabilitySchema, len(registry.CapabilitySchemas))
+	for k, v := range registry.CapabilitySchemas {
+		embeddedSchemas[k] = deepCopyCapabilitySchema(v)
+	}
+
 	tm.mu.Lock()
 	tm.embedded = embeddedCopy
+	tm.embeddedSchemas = embeddedSchemas
 	tm.templates = registry.Providers
+	tm.capabilitySchemas = registry.CapabilitySchemas
 	tm.lastUpdated = time.Now()
 	tm.version = registry.Version
 	tm.mu.Unlock()
@@ -509,6 +539,21 @@ func deepCopyTemplate(tmpl *ProviderTemplate) *ProviderTemplate {
 	return &result
 }
 
+// deepCopyCapabilitySchema creates a deep copy of a CapabilitySchema
+func deepCopyCapabilitySchema(schema *CapabilitySchema) *CapabilitySchema {
+	result := *schema
+
+	// Deep copy ResultFormat.Structure if it exists
+	if schema.ResultFormat.Structure != nil {
+		result.ResultFormat.Structure = make(map[string]interface{})
+		for k, v := range schema.ResultFormat.Structure {
+			result.ResultFormat.Structure[k] = v
+		}
+	}
+
+	return &result
+}
+
 // GetModelsForProvider returns models for a provider using template-only hierarchy:
 // 1. GitHub/embedded templates with models list
 // Note: API-based model fetching is now handled by the client layer (client.ModelLister)
@@ -580,4 +625,34 @@ func (tm *TemplateManager) GetMaxTokensForModelByProvider(provider *typ.Provider
 
 	// Fallback to global default
 	return constant.DefaultMaxTokens
+}
+
+// GetWebSearchSchemaForProvider returns the web search capability schema for a provider
+// Returns nil if the provider doesn't have web_search_schema defined or the schema doesn't exist
+func (tm *TemplateManager) GetWebSearchSchemaForProvider(provider *typ.Provider) *CapabilitySchema {
+	if tm == nil || provider == nil {
+		return nil
+	}
+
+	// Find matching template
+	tmpl := tm.findTemplateByProvider(provider)
+	if tmpl == nil || tmpl.WebSearchSchema == "" {
+		return nil
+	}
+
+	// Get the schema from the registry
+	tm.mu.RLock()
+	defer tm.mu.RUnlock()
+
+	// Check current capability schemas
+	if schema, ok := tm.capabilitySchemas[tmpl.WebSearchSchema]; ok {
+		return schema
+	}
+
+	// Fallback to embedded capability schemas
+	if schema, ok := tm.embeddedSchemas[tmpl.WebSearchSchema]; ok {
+		return schema
+	}
+
+	return nil
 }
