@@ -46,7 +46,7 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
         <Dialog
             open={open}
             onClose={onClose}
-            maxWidth="xl"
+            maxWidth="lg"
             fullWidth
             PaperProps={{
                 sx: {
@@ -69,7 +69,7 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
             </DialogTitle>
 
             <DialogContent sx={{ p: 3 }}>
-                <Box sx={{ display: 'flex', flexDirection: { xs: 'column', xl: 'row' }, gap: 3 }}>
+                <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3 }}>
                     {/* Settings.json section */}
                     <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
                         <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -102,7 +102,8 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
                             {settingsTab === 'windows' && (
                                 <CodeBlock
                                     code={generateSettingsScriptWindows()}
-                                    language="powershell"
+                                    // bash, but use js for highlight
+                                    language="js"
                                     filename="PowerShell script to setup ~/.claude/settings.json"
                                     wrap={true}
                                     onCopy={(code) => copyToClipboard(code, 'Windows script')}
@@ -113,7 +114,8 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
                             {settingsTab === 'unix' && (
                                 <CodeBlock
                                     code={generateSettingsScriptUnix()}
-                                    language="bash"
+                                    // bash, but use js for highlight
+                                    language="js"
                                     filename="Bash script to setup ~/.claude/settings.json"
                                     wrap={true}
                                     onCopy={(code) => copyToClipboard(code, 'Unix script')}
@@ -156,7 +158,8 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
                             {claudeJsonTab === 'windows' && (
                                 <CodeBlock
                                     code={generateScriptWindows()}
-                                    language="powershell"
+                                    // bash, but use js for highlight
+                                    language="js"
                                     filename="PowerShell script to setup ~/.claude.json"
                                     wrap={true}
                                     onCopy={(code) => copyToClipboard(code, 'Windows script')}
@@ -167,7 +170,8 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
                             {claudeJsonTab === 'unix' && (
                                 <CodeBlock
                                     code={generateScriptUnix()}
-                                    language="bash"
+                                    // bash, but use js for highlight
+                                    language="js"
                                     filename="Bash script to setup ~/.claude.json"
                                     wrap={true}
                                     onCopy={(code) => copyToClipboard(code, 'Unix script')}
