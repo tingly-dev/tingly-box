@@ -245,6 +245,11 @@ func (rr *RoundRobinTactic) SelectService(rule *Rule) *loadbalance.Service {
 		return nil
 	}
 
+	// If only one service, return it directly
+	if len(activeServices) == 1 {
+		return activeServices[0]
+	}
+
 	// Use rule UUID as key for global streaks (allows state sharing across tactic instances)
 	ruleKey := rule.UUID
 	if ruleKey == "" {
@@ -265,8 +270,17 @@ func (rr *RoundRobinTactic) SelectService(rule *Rule) *loadbalance.Service {
 		currentStreak = 0
 	}
 
-	// Get current service from the already filtered list
-	currentIndex := rule.CurrentServiceIndex % len(activeServices)
+	// Find current service by ID and get its index
+	var currentIndex int = 0
+	if rule.CurrentServiceID != "" {
+		for i, svc := range activeServices {
+			svcID := svc.Provider + ":" + svc.Model
+			if svcID == rule.CurrentServiceID {
+				currentIndex = i
+				break
+			}
+		}
+	}
 	currentService := activeServices[currentIndex]
 
 	// If current service hasn't exceeded threshold, keep using it and increment streak
@@ -276,8 +290,11 @@ func (rr *RoundRobinTactic) SelectService(rule *Rule) *loadbalance.Service {
 	}
 
 	// Current service exceeded threshold, move to next service AND reset streak
-	rule.CurrentServiceIndex = (rule.CurrentServiceIndex + 1) % len(activeServices)
-	nextService := activeServices[rule.CurrentServiceIndex]
+	nextIndex := (currentIndex + 1) % len(activeServices)
+	nextService := activeServices[nextIndex]
+
+	// Update the rule's current service ID
+	rule.CurrentServiceID = nextService.Provider + ":" + nextService.Model
 
 	// Reset streak for the new service (set to 1 because we're using it now)
 	globalRoundRobinStreaks.Store(ruleKey, int64(1))
@@ -314,9 +331,21 @@ func (tb *TokenBasedTactic) SelectService(rule *Rule) *loadbalance.Service {
 		return nil
 	}
 
-	// Get current service from the already filtered list
-	currentIndex := rule.CurrentServiceIndex % len(activeServices)
-	currentService := activeServices[currentIndex]
+	// Get current service by ID
+	var currentService *loadbalance.Service
+	if rule.CurrentServiceID != "" {
+		for _, svc := range activeServices {
+			svcID := svc.Provider + ":" + svc.Model
+			if svcID == rule.CurrentServiceID {
+				currentService = svc
+				break
+			}
+		}
+	}
+	// Default to first service if not found
+	if currentService == nil && len(activeServices) > 0 {
+		currentService = activeServices[0]
+	}
 	if currentService == nil {
 		return nil
 	}
@@ -379,9 +408,21 @@ func (ht *HybridTactic) SelectService(rule *Rule) *loadbalance.Service {
 		return nil
 	}
 
-	// Get current service from the already filtered list
-	currentIndex := rule.CurrentServiceIndex % len(activeServices)
-	currentService := activeServices[currentIndex]
+	// Get current service by ID
+	var currentService *loadbalance.Service
+	if rule.CurrentServiceID != "" {
+		for _, svc := range activeServices {
+			svcID := svc.Provider + ":" + svc.Model
+			if svcID == rule.CurrentServiceID {
+				currentService = svc
+				break
+			}
+		}
+	}
+	// Default to first service if not found
+	if currentService == nil && len(activeServices) > 0 {
+		currentService = activeServices[0]
+	}
 	if currentService == nil {
 		return nil
 	}

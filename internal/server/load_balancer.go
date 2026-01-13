@@ -101,19 +101,14 @@ func (lb *LoadBalancer) getTactic(tacticType loadbalance.TacticType) (typ.LoadBa
 	return tactic, exists
 }
 
-// UpdateServiceIndex updates the current service index for a rule
+// UpdateServiceIndex updates the current service ID for a rule
 func (lb *LoadBalancer) UpdateServiceIndex(rule *typ.Rule, selectedService *loadbalance.Service) {
 	if rule == nil || selectedService == nil {
 		return
 	}
 
-	services := rule.GetServices()
-	for i, service := range services {
-		if service.ServiceID() == selectedService.ServiceID() {
-			rule.CurrentServiceIndex = i
-			break
-		}
-	}
+	// Set the current service ID (provider:model format)
+	rule.CurrentServiceID = selectedService.Provider + ":" + selectedService.Model
 }
 
 // RecordUsage records usage for a service
@@ -220,9 +215,9 @@ func (lb *LoadBalancer) ClearAllStats() {
 					modified = true
 				}
 			}
-			// Reset current service index to 0
-			if rule.CurrentServiceIndex != 0 {
-				rule.CurrentServiceIndex = 0
+			// Reset current service ID to empty when services change
+			if rule.CurrentServiceID != "" {
+				rule.CurrentServiceID = ""
 				modified = true
 			}
 			if modified {
@@ -305,13 +300,13 @@ func (lb *LoadBalancer) GetRuleSummary(rule *typ.Rule) map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"request_model":         rule.RequestModel,
-		"response_model":        rule.ResponseModel,
-		"tactic":                rule.GetTacticType().String(),
-		"current_service_index": rule.CurrentServiceIndex,
-		"active":                rule.Active,
-		"is_legacy":             false,
-		"services":              serviceSummaries,
+		"request_model":      rule.RequestModel,
+		"response_model":     rule.ResponseModel,
+		"tactic":             rule.GetTacticType().String(),
+		"current_service_id": rule.CurrentServiceID,
+		"active":             rule.Active,
+		"is_legacy":          false,
+		"services":           serviceSummaries,
 	}
 }
 
