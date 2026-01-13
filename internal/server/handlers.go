@@ -167,11 +167,9 @@ func (s *Server) DetermineProviderAndModelWithScenario(scenario typ.RuleScenario
 		uuid := c.GetUUIDByRequestModelAndScenario(modelName, scenario)
 		rules := c.GetRequestConfigs()
 		var rule *typ.Rule
-		var ruleIdx int = -1
 		for i := range rules {
 			if rules[i].UUID == uuid && rules[i].Active {
 				rule = &rules[i] // Get pointer to actual rule in config
-				ruleIdx = i
 				break
 			}
 		}
@@ -204,13 +202,11 @@ func (s *Server) DetermineProviderAndModelWithScenario(scenario typ.RuleScenario
 			// Update the current service index for the rule
 			s.loadBalancer.UpdateServiceIndex(rule, selectedService)
 
-			// Persist the updated CurrentServiceIndex to config
+			// Persist the updated CurrentServiceID to SQLite (not config.json)
 			// This is critical for round-robin to work correctly across requests
-			if ruleIdx >= 0 {
-				if err := c.UpdateRequestConfigAt(ruleIdx, *rule); err != nil {
-					// Log error but don't fail the request
-					fmt.Printf("Warning: failed to persist CurrentServiceIndex: %v\n", err)
-				}
+			if err := c.SaveCurrentServiceID(rule.UUID, rule.CurrentServiceID); err != nil {
+				// Log error but don't fail the request
+				fmt.Printf("Warning: failed to persist CurrentServiceID: %v\n", err)
 			}
 
 			// Return provider, selected service, and rule
@@ -231,11 +227,9 @@ func (s *Server) DetermineProviderAndModel(modelName string) (*typ.Provider, *lo
 		uuid := c.GetUUIDByRequestModel(modelName)
 		rules := c.GetRequestConfigs()
 		var rule *typ.Rule
-		var ruleIdx int = -1
 		for i := range rules {
 			if rules[i].UUID == uuid && rules[i].Active {
 				rule = &rules[i] // Get pointer to actual rule in config
-				ruleIdx = i
 				break
 			}
 		}
@@ -268,13 +262,11 @@ func (s *Server) DetermineProviderAndModel(modelName string) (*typ.Provider, *lo
 			// Update the current service index for the rule
 			s.loadBalancer.UpdateServiceIndex(rule, selectedService)
 
-			// Persist the updated CurrentServiceIndex to config
+			// Persist the updated CurrentServiceID to SQLite (not config.json)
 			// This is critical for round-robin to work correctly across requests
-			if ruleIdx >= 0 {
-				if err := c.UpdateRequestConfigAt(ruleIdx, *rule); err != nil {
-					// Log error but don't fail the request
-					fmt.Printf("Warning: failed to persist CurrentServiceIndex: %v\n", err)
-				}
+			if err := c.SaveCurrentServiceID(rule.UUID, rule.CurrentServiceID); err != nil {
+				// Log error but don't fail the request
+				fmt.Printf("Warning: failed to persist CurrentServiceID: %v\n", err)
 			}
 
 			// Return provider, selected service, and rule

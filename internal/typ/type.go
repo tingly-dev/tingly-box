@@ -194,13 +194,15 @@ func (p *Provider) IsOAuthExpired() bool {
 
 // Rule represents a request/response configuration with load balancing support
 type Rule struct {
-	UUID                string                `json:"uuid"`
-	Scenario            RuleScenario          `json:"scenario,required" yaml:"scenario"` // openai, anthropic, claude_code; defaults to openai
-	RequestModel        string                `json:"request_model" yaml:"request_model"`
-	ResponseModel       string                `json:"response_model" yaml:"response_model"`
-	Description         string                `json:"description"`
-	Services            []loadbalance.Service `json:"services" yaml:"services"`
-	CurrentServiceIndex int                   `json:"current_service_index" yaml:"current_service_index"`
+	UUID          string                `json:"uuid"`
+	Scenario      RuleScenario          `json:"scenario,required" yaml:"scenario"` // openai, anthropic, claude_code; defaults to openai
+	RequestModel  string                `json:"request_model" yaml:"request_model"`
+	ResponseModel string                `json:"response_model" yaml:"response_model"`
+	Description   string                `json:"description"`
+	Services      []loadbalance.Service `json:"services" yaml:"services"`
+	// CurrentServiceID is persisted to SQLite, not JSON (provider:model format)
+	// This identifies the current service for round-robin load balancing
+	CurrentServiceID string `json:"-" yaml:"-"`
 	// Unified Tactic Configuration
 	LBTactic Tactic `json:"lb_tactic" yaml:"lb_tactic"`
 	Active   bool   `json:"active" yaml:"active"`
@@ -214,17 +216,16 @@ func (r *Rule) ToJSON() interface{} {
 	// Ensure Services is populated
 	services := r.GetServices()
 
-	// Create the JSON representation
+	// Create the JSON representation (note: current_service_index is persisted to SQLite, not JSON)
 	jsonRule := map[string]interface{}{
-		"uuid":                  r.UUID,
-		"scenario":              r.GetScenario(),
-		"request_model":         r.RequestModel,
-		"response_model":        r.ResponseModel,
+		"uuid":           r.UUID,
+		"scenario":       r.GetScenario(),
+		"request_model":  r.RequestModel,
+		"response_model": r.ResponseModel,
 		"description":           r.Description,
-		"services":              services,
-		"current_service_index": r.CurrentServiceIndex,
-		"lb_tactic":             r.LBTactic,
-		"active":                r.Active,
+		"services":       services,
+		"lb_tactic":      r.LBTactic,
+		"active":         r.Active,
 		"smart_enabled":         r.SmartEnabled,
 		"smart_routing":         r.SmartRouting,
 	}
@@ -275,17 +276,6 @@ func (r *Rule) GetActiveServices() []*loadbalance.Service {
 	return activeServices
 }
 
-// GetCurrentService returns the current active service based on CurrentServiceIndex
-func (r *Rule) GetCurrentService() *loadbalance.Service {
-	activeServices := r.GetActiveServices()
-	if len(activeServices) == 0 {
-		return nil
-	}
-
-	currentIndex := r.CurrentServiceIndex % len(activeServices)
-	return activeServices[currentIndex]
-}
-
 // GetTacticType returns the load balancing tactic type
 func (r *Rule) GetTacticType() loadbalance.TacticType {
 	if r.LBTactic.Type != 0 {
@@ -293,4 +283,40 @@ func (r *Rule) GetTacticType() loadbalance.TacticType {
 	}
 	// Default to round robin
 	return loadbalance.TacticRoundRobin
+}
+
+// GetUUID returns the rule UUID
+func (r *Rule) GetUUID() string {
+	return r.UUID
+}
+
+// SetCurrentServiceID sets the current service ID (used by RuleStateStore hydration)
+func (r *Rule) SetCurrentServiceID(serviceID string) {
+	r.CurrentServiceID = serviceID
+}
+
+// GetCurrentServiceID returns the current service ID
+func (r *Rule) GetCurrentServiceID() string {
+	return r.CurrentServiceID
+}
+
+// GetCurrentService returns the current active service based on CurrentServiceID
+func (r *Rule) GetCurrentService() *loadbalance.Service {
+	activeServices := r.GetActiveServices()
+	if len(activeServices) == 0 {
+		return nil
+	}
+
+	// If CurrentServiceID is set, find and return that service
+	if r.CurrentServiceID != "" {
+		for _, svc := range activeServices {
+			svcID := svc.Provider + ":" + svc.Model
+			if svcID == r.CurrentServiceID && svc.Active {
+				return svc
+			}
+		}
+	}
+
+	// Default to first service if CurrentServiceID not found or not set
+	return activeServices[0]
 }
