@@ -42,7 +42,6 @@ func NewSearchHandler(config *Config, cache *Cache) *SearchHandler {
 			client.Transport = &http.Transport{
 				Proxy: http.ProxyURL(proxyURL),
 			}
-			logrus.Infof("Tool interceptor using proxy: %s", config.ProxyURL)
 		}
 	}
 
