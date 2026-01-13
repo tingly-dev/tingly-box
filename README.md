@@ -221,8 +221,8 @@ We welcome contributions! Follow these steps, inspired by popular open-source re
 
 | Telegram    | Wechat |
 | :--------: | :-------: |
-| <img width="196" height="196" alt="image" src="https://github.com/user-attachments/assets/56022b70-97da-498f-bf83-822a11668fa7" /> | <img width="196" height="196" alt="image" src="https://github.com/user-attachments/assets/b4ffb511-9324-43d4-b4ce-46154a795ffb" /> |
-| https://t.me/+V1sqeajw1pYwMzU1 | https://h783604.guandan888.com/SzbmAH |
+| <img width="196" height="196" alt="image" src="https://github.com/user-attachments/assets/56022b70-97da-498f-bf83-822a11668fa7" /> | <img width="196" height="196" alt="image" src="https://github.com/user-attachments/assets/8a285ffa-bb2d-47db-8e5b-3645ce9eddd9" /> |
+| https://t.me/+V1sqeajw1pYwMzU1 | http://chv.ckcoa5.cn/t/OSFb |
 
 
 ## 🤲 Contributors
