@@ -410,11 +410,6 @@ func (s *Server) setupConfigWatcher() {
 		// Update tool interceptor with new config
 		globalToolConfig := s.config.GetToolInterceptor()
 		s.toolInterceptor = toolinterceptor.NewInterceptor(globalToolConfig)
-		if globalToolConfig != nil && globalToolConfig.Enabled {
-			logrus.Infof("Tool interceptor updated: enabled=%t, search_api=%s", globalToolConfig.Enabled, globalToolConfig.SearchAPI)
-		} else {
-			logrus.Info("Tool interceptor updated: disabled")
-		}
 
 		// Update error log filter expression if changed
 		if s.errorMW != nil {

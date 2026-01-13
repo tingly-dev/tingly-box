@@ -169,6 +169,16 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 		cfg.ErrorLogFilterExpression = "StatusCode >= 400 && Path matches '^/api/'"
 		updated = true
 	}
+	// Set default tool interceptor configuration
+	if cfg.ToolInterceptor == nil {
+		cfg.ToolInterceptor = &typ.ToolInterceptorConfig{
+			Enabled:    false,
+			SearchAPI:  "duckduckgo",
+			MaxResults: 10,
+			ProxyURL:   "http://127.0.0.1:7897",
+		}
+		updated = true
+	}
 	// Default OpenBrowser to true (runtime-only setting, not persisted)
 	if !cfg.OpenBrowser {
 		cfg.OpenBrowser = true
@@ -1201,6 +1211,17 @@ func (c *Config) CreateDefaultConfig() error {
 	if c.ErrorLogFilterExpression == "" {
 		c.ErrorLogFilterExpression = "StatusCode >= 400 && Path matches '^/api/'"
 	}
+
+	// Set default tool interceptor configuration
+	if c.ToolInterceptor == nil {
+		c.ToolInterceptor = &typ.ToolInterceptorConfig{
+			Enabled:    true,
+			SearchAPI:  "duckduckgo",
+			MaxResults: 10,
+			ProxyURL:   "http://127.0.0.1:7897",
+		}
+	}
+
 	if err := c.Save(); err != nil {
 		return fmt.Errorf("failed to create default global cfg: %w", err)
 	}
