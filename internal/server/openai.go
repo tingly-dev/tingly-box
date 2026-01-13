@@ -182,7 +182,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 
 	apiStyle := provider.APIStyle
 	// === Check if provider has built-in web_search ===
-	hasBuiltInWebSearch := s.providerHasBuiltInWebSearch(provider)
+	hasBuiltInWebSearch := s.templateManager.ProviderHasBuiltInWebSearch(provider)
 
 	// === Tool Interceptor: Check if enabled and should be used ===
 	// Only intercept if provider does NOT have built-in web_search
@@ -296,7 +296,14 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 }
 
 // handleNonStreamingRequest handles non-streaming chat completion requests
-func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, req *openai.ChatCompletionNewParams, responseModel, actualModel string, rule *typ.Rule, shouldIntercept bool) {
+func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel, actualModel string, rule *typ.Rule, shouldIntercept bool) {
+	// === PRE-REQUEST INTERCEPTION: Strip tools before sending to provider ===
+	req := originalReq
+	if shouldIntercept {
+		preparedReq, _ := s.toolInterceptor.PrepareOpenAIRequest(provider, originalReq)
+		req = preparedReq
+	}
+
 	// Forward request to provider and get response
 	response, err := s.forwardOpenAIRequest(provider, req)
 	if err != nil {
@@ -311,7 +318,7 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 		return
 	}
 
-	// === Tool Interception: Only intercept if provider doesn't have built-in web_search ===
+	// === POST-RESPONSE INTERCEPTION: Handle tool calls from provider ===
 	if shouldIntercept && len(response.Choices) > 0 {
 		choice := response.Choices[0]
 		if len(choice.Message.ToolCalls) > 0 {
@@ -478,8 +485,8 @@ func (s *Server) handleInterceptedToolCalls(provider *typ.Provider, originalReq 
 			continue
 		}
 
-		// Execute the tool locally
-		result := s.executeInterceptedTool(provider, fn.Name, fn.Arguments)
+		// Execute the tool using the interceptor
+		result := s.toolInterceptor.ExecuteTool(provider, fn.Name, fn.Arguments)
 
 		// Add tool result message
 		var toolResultMsg openai.ChatCompletionMessageParamUnion
@@ -511,137 +518,15 @@ func (s *Server) handleInterceptedToolCalls(provider *typ.Provider, originalReq 
 	return finalResponse, nil
 }
 
-// executeInterceptedTool executes a single intercepted tool call
-func (s *Server) executeInterceptedTool(provider *typ.Provider, toolName string, argumentsJSON string) toolinterceptor.ToolResult {
-	// Determine handler type based on tool name
-	handlerType, matched := toolinterceptor.MatchToolAlias(toolName)
-	if !matched {
-		return toolinterceptor.ToolResult{
-			Content: "",
-			Error:   fmt.Sprintf("Unknown tool: %s", toolName),
-			IsError: true,
-		}
-	}
-
-	switch handlerType {
-	case toolinterceptor.HandlerTypeSearch:
-		return s.executeSearchTool(provider, argumentsJSON)
-	case toolinterceptor.HandlerTypeFetch:
-		return s.executeFetchTool(provider, argumentsJSON)
-	default:
-		return toolinterceptor.ToolResult{
-			Content: "",
-			Error:   fmt.Sprintf("Unsupported handler type: %s", handlerType),
-			IsError: true,
-		}
-	}
-}
-
-// executeSearchTool executes a search tool call
-func (s *Server) executeSearchTool(provider *typ.Provider, argsJSON string) toolinterceptor.ToolResult {
-	// Parse search arguments
-	var searchReq toolinterceptor.SearchRequest
-	if err := json.Unmarshal([]byte(argsJSON), &searchReq); err != nil {
-		return toolinterceptor.ToolResult{
-			Content: "",
-			Error:   fmt.Sprintf("Invalid search arguments: %v", err),
-			IsError: true,
-		}
-	}
-
-	if searchReq.Query == "" {
-		return toolinterceptor.ToolResult{
-			Content: "",
-			Error:   "Search query is required",
-			IsError: true,
-		}
-	}
-
-	// Get provider-specific config
-	providerConfig := s.toolInterceptor.GetConfigForProvider(provider)
-	if providerConfig == nil || !providerConfig.Enabled {
-		return toolinterceptor.ToolResult{
-			Content: "",
-			Error:   "Search is not enabled for this provider",
-			IsError: true,
-		}
-	}
-
-	// Execute search
-	handlerConfig := &toolinterceptor.Config{
-		Enabled:      providerConfig.Enabled,
-		SearchAPI:    providerConfig.SearchAPI,
-		SearchKey:    providerConfig.SearchKey,
-		MaxResults:   providerConfig.MaxResults,
-		MaxFetchSize: providerConfig.MaxFetchSize,
-		FetchTimeout: providerConfig.FetchTimeout,
-		MaxURLLength: providerConfig.MaxURLLength,
-	}
-
-	// Get the search handler from interceptor and execute
-	results, err := s.toolInterceptor.SearchWithConfig(searchReq.Query, searchReq.Count, handlerConfig)
-	if err != nil {
-		return toolinterceptor.ToolResult{
-			Content: "",
-			Error:   fmt.Sprintf("Search failed: %v", err),
-			IsError: true,
-		}
-	}
-
-	// Log search results (debug level for details)
-	logrus.Debugf("Web search completed: query='%s', found %d results", searchReq.Query, len(results))
-	for i, result := range results {
-		logrus.Debugf("  Result %d: %s - %s", i+1, result.Title, result.URL)
-	}
-
-	// Format results
-	formattedResults := toolinterceptor.FormatSearchResults(results)
-	logrus.Debugf("Tool result for web_search (truncated to 500 chars): %.500s", formattedResults)
-
-	return toolinterceptor.ToolResult{
-		Content: formattedResults,
-		IsError: false,
-	}
-}
-
-// executeFetchTool executes a fetch tool call
-func (s *Server) executeFetchTool(provider *typ.Provider, argsJSON string) toolinterceptor.ToolResult {
-	// Parse fetch arguments
-	var fetchReq toolinterceptor.FetchRequest
-	if err := json.Unmarshal([]byte(argsJSON), &fetchReq); err != nil {
-		return toolinterceptor.ToolResult{
-			Content: "",
-			Error:   fmt.Sprintf("Invalid fetch arguments: %v", err),
-			IsError: true,
-		}
-	}
-
-	if fetchReq.URL == "" {
-		return toolinterceptor.ToolResult{
-			Content: "",
-			Error:   "URL is required",
-			IsError: true,
-		}
-	}
-
-	// Execute fetch using the interceptor's fetch handler
-	content, err := s.toolInterceptor.FetchAndExtract(fetchReq.URL)
-	if err != nil {
-		return toolinterceptor.ToolResult{
-			Content: "",
-			Error:   fmt.Sprintf("Fetch failed: %v", err),
-			IsError: true,
-		}
-	}
-
-	return toolinterceptor.ToolResult{
-		Content: content,
-		IsError: false,
-	}
-}
-
 // handleStreamingRequest handles streaming chat completion requests
-func (s *Server) handleStreamingRequest(c *gin.Context, provider *typ.Provider, req *openai.ChatCompletionNewParams, responseModel, actualModel string, rule *typ.Rule, shouldIntercept bool) {
+func (s *Server) handleStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel, actualModel string, rule *typ.Rule, shouldIntercept bool) {
+	// === PRE-REQUEST INTERCEPTION: Strip tools before sending to provider ===
+	req := originalReq
+	if shouldIntercept {
+		preparedReq, _ := s.toolInterceptor.PrepareOpenAIRequest(provider, originalReq)
+		req = preparedReq
+	}
+
 	// Create streaming request
 	stream, err := s.forwardOpenAIStreamRequest(provider, req)
 	if err != nil {
