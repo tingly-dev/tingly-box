@@ -656,3 +656,14 @@ func (tm *TemplateManager) GetWebSearchSchemaForProvider(provider *typ.Provider)
 
 	return nil
 }
+
+// ProviderHasBuiltInWebSearch checks if a provider has built-in web_search capability
+// Returns true if the provider has a web_search_schema with BuiltIn=true
+func (tm *TemplateManager) ProviderHasBuiltInWebSearch(provider *typ.Provider) bool {
+	if tm == nil || provider == nil {
+		return false
+	}
+
+	schema := tm.GetWebSearchSchemaForProvider(provider)
+	return schema != nil && schema.BuiltIn
+}

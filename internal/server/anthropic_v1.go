@@ -69,7 +69,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 	switch apiStyle {
 	case protocol.APIStyleAnthropic:
 		// === Check if provider has built-in web_search ===
-		hasBuiltInWebSearch := s.providerHasBuiltInWebSearch(provider)
+		hasBuiltInWebSearch := s.templateManager.ProviderHasBuiltInWebSearch(provider)
 
 		// === Tool Interceptor: Check if enabled and should be used ===
 		// Only intercept if provider does NOT have built-in web_search
@@ -469,8 +469,8 @@ func (s *Server) handleInterceptedAnthropicToolCalls(provider *typ.Provider, ori
 			continue
 		}
 
-		// Execute the tool locally
-		result := s.executeInterceptedAnthropicTool(provider, block.Name, block.Input)
+		// Execute the tool using the interceptor
+		result := s.toolInterceptor.ExecuteTool(provider, block.Name, string(block.Input))
 
 		// Add tool result block
 		var toolResultContent string
@@ -499,133 +499,4 @@ func (s *Server) handleInterceptedAnthropicToolCalls(provider *typ.Provider, ori
 	}
 
 	return finalResponse, nil
-}
-
-// executeInterceptedAnthropicTool executes a single intercepted Anthropic tool call
-func (s *Server) executeInterceptedAnthropicTool(provider *typ.Provider, toolName string, inputParams json.RawMessage) toolinterceptor.ToolResult {
-	// Determine handler type based on tool name
-	handlerType, matched := toolinterceptor.MatchToolAlias(toolName)
-	if !matched {
-		return toolinterceptor.ToolResult{
-			Content: "",
-			Error:   fmt.Sprintf("Unknown tool: %s", toolName),
-			IsError: true,
-		}
-	}
-
-	switch handlerType {
-	case toolinterceptor.HandlerTypeSearch:
-		return s.executeAnthropicSearchTool(provider, string(inputParams))
-	case toolinterceptor.HandlerTypeFetch:
-		return s.executeAnthropicFetchTool(provider, string(inputParams))
-	default:
-		return toolinterceptor.ToolResult{
-			Content: "",
-			Error:   fmt.Sprintf("Unsupported handler type: %s", handlerType),
-			IsError: true,
-		}
-	}
-}
-
-// executeAnthropicSearchTool executes a search tool call for Anthropic
-func (s *Server) executeAnthropicSearchTool(provider *typ.Provider, argsJSON string) toolinterceptor.ToolResult {
-	// Parse search arguments
-	var searchReq toolinterceptor.SearchRequest
-	if err := json.Unmarshal([]byte(argsJSON), &searchReq); err != nil {
-		return toolinterceptor.ToolResult{
-			Content: "",
-			Error:   fmt.Sprintf("Invalid search arguments: %v", err),
-			IsError: true,
-		}
-	}
-
-	if searchReq.Query == "" {
-		return toolinterceptor.ToolResult{
-			Content: "",
-			Error:   "Search query is required",
-			IsError: true,
-		}
-	}
-
-	// Get provider-specific config
-	providerConfig := s.toolInterceptor.GetConfigForProvider(provider)
-	if providerConfig == nil || !providerConfig.Enabled {
-		return toolinterceptor.ToolResult{
-			Content: "",
-			Error:   "Search is not enabled for this provider",
-			IsError: true,
-		}
-	}
-
-	// Execute search
-	handlerConfig := &toolinterceptor.Config{
-		Enabled:      providerConfig.Enabled,
-		SearchAPI:    providerConfig.SearchAPI,
-		SearchKey:    providerConfig.SearchKey,
-		MaxResults:   providerConfig.MaxResults,
-		MaxFetchSize: providerConfig.MaxFetchSize,
-		FetchTimeout: providerConfig.FetchTimeout,
-		MaxURLLength: providerConfig.MaxURLLength,
-	}
-
-	results, err := s.toolInterceptor.SearchWithConfig(searchReq.Query, searchReq.Count, handlerConfig)
-	if err != nil {
-		return toolinterceptor.ToolResult{
-			Content: "",
-			Error:   fmt.Sprintf("Search failed: %v", err),
-			IsError: true,
-		}
-	}
-
-	// Format results for Anthropic (plain text format is fine)
-	return toolinterceptor.ToolResult{
-		Content: toolinterceptor.FormatSearchResults(results),
-		IsError: false,
-	}
-}
-
-// executeAnthropicFetchTool executes a fetch tool call for Anthropic
-func (s *Server) executeAnthropicFetchTool(provider *typ.Provider, argsJSON string) toolinterceptor.ToolResult {
-	// Parse fetch arguments
-	var fetchReq toolinterceptor.FetchRequest
-	if err := json.Unmarshal([]byte(argsJSON), &fetchReq); err != nil {
-		return toolinterceptor.ToolResult{
-			Content: "",
-			Error:   fmt.Sprintf("Invalid fetch arguments: %v", err),
-			IsError: true,
-		}
-	}
-
-	if fetchReq.URL == "" {
-		return toolinterceptor.ToolResult{
-			Content: "",
-			Error:   "URL is required",
-			IsError: true,
-		}
-	}
-
-	// Execute fetch using the interceptor's fetch handler
-	content, err := s.toolInterceptor.FetchAndExtract(fetchReq.URL)
-	if err != nil {
-		return toolinterceptor.ToolResult{
-			Content: "",
-			Error:   fmt.Sprintf("Fetch failed: %v", err),
-			IsError: true,
-		}
-	}
-
-	return toolinterceptor.ToolResult{
-		Content: content,
-		IsError: false,
-	}
-}
-
-// providerHasBuiltInWebSearch checks if a provider has built-in web_search capability
-func (s *Server) providerHasBuiltInWebSearch(provider *typ.Provider) bool {
-	if s.templateManager == nil {
-		return false
-	}
-
-	schema := s.templateManager.GetWebSearchSchemaForProvider(provider)
-	return schema != nil && schema.BuiltIn
 }

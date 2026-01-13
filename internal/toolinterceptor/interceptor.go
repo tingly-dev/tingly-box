@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"tingly-box/internal/typ"
+
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
-	"tingly-box/internal/typ"
 )
 
 // Interceptor handles tool interception and execution
@@ -242,6 +243,93 @@ func (i *Interceptor) InterceptAnthropicRequest(provider *typ.Provider, req *ant
 	return intercepted, results, toolsToForward
 }
 
+// ExecuteTool executes a tool by name with JSON arguments (public method for server use)
+func (i *Interceptor) ExecuteTool(provider *typ.Provider, toolName string, argsJSON string) ToolResult {
+	return i.executeTool(provider, toolName, argsJSON)
+}
+
+// PrepareOpenAIRequest pre-processes an OpenAI request before sending to provider
+// Returns:
+// - modifiedReq: the request with tools stripped and pre-injected results
+// - hasPreInjectedResults: whether tool results were injected
+func (i *Interceptor) PrepareOpenAIRequest(provider *typ.Provider, originalReq *openai.ChatCompletionNewParams) (modifiedReq *openai.ChatCompletionNewParams, hasPreInjectedResults bool) {
+	// Create a mutable copy of the request
+	modifiedReq = originalReq
+
+	// Check if interception is enabled
+	if !i.IsEnabledForProvider(provider) || len(originalReq.Tools) == 0 {
+		return modifiedReq, false
+	}
+
+	// Intercept to strip tools and check for pre-existing tool calls
+	intercepted, results, modifiedTools := i.InterceptOpenAIRequest(provider, originalReq)
+	modifiedReq.Tools = modifiedTools
+
+	// If there were pre-existing tool calls that were executed, inject results
+	if intercepted && len(results) > 0 {
+		// Build new messages list with original messages
+		newMessages := make([]openai.ChatCompletionMessageParamUnion, len(originalReq.Messages))
+		copy(newMessages, originalReq.Messages)
+
+		// Inject tool result messages
+		for _, result := range results {
+			resultMsg := openai.ToolMessage(
+				result.Content,
+				result.ToolCallID,
+			)
+			newMessages = append(newMessages, resultMsg)
+		}
+		modifiedReq.Messages = newMessages
+		return modifiedReq, true
+	}
+
+	// Strip tool_choice if all tools were intercepted
+	if len(modifiedTools) == 0 && ShouldStripToolChoice(originalReq) {
+		// Reset tool_choice to default (empty/zero value)
+		// The empty ToolChoice will default to "auto" behavior
+		modifiedReq.ToolChoice = openai.ChatCompletionToolChoiceOptionUnionParam{}
+	}
+
+	return modifiedReq, false
+}
+
+// PrepareAnthropicRequest pre-processes an Anthropic request before sending to provider
+// Returns:
+// - modifiedReq: the request with tools stripped and pre-injected results
+// - hasPreInjectedResults: whether tool results were injected
+func (i *Interceptor) PrepareAnthropicRequest(provider *typ.Provider, originalReq *anthropic.MessageNewParams) (modifiedReq *anthropic.MessageNewParams, hasPreInjectedResults bool) {
+	// Create a mutable copy of the request
+	modifiedReq = originalReq
+
+	// Check if interception is enabled
+	if !i.IsEnabledForProvider(provider) || len(originalReq.Tools) == 0 {
+		return modifiedReq, false
+	}
+
+	// Intercept to strip tools and check for pre-existing tool calls
+	intercepted, results, modifiedTools := i.InterceptAnthropicRequest(provider, originalReq)
+	modifiedReq.Tools = modifiedTools
+
+	// If there were pre-existing tool calls that were executed, inject results
+	if intercepted && len(results) > 0 {
+		// Build new messages list with original messages
+		newMessages := make([]anthropic.MessageParam, len(originalReq.Messages))
+		copy(newMessages, originalReq.Messages)
+
+		// Inject tool result blocks
+		for _, result := range results {
+			resultBlock := CreateAnthropicToolResultBlock(result.ToolCallID, result.Content, result.IsError)
+			// Wrap in a message
+			resultMsg := anthropic.NewUserMessage(resultBlock)
+			newMessages = append(newMessages, resultMsg)
+		}
+		modifiedReq.Messages = newMessages
+		return modifiedReq, true
+	}
+
+	return modifiedReq, false
+}
+
 // executeTool executes a tool by name with JSON arguments
 func (i *Interceptor) executeTool(provider *typ.Provider, toolName string, argsJSON string) ToolResult {
 	// Determine handler type based on tool name
@@ -389,18 +477,6 @@ func parseAnthropicMessage(msg anthropic.MessageParam) (map[string]interface{}, 
 }
 
 // CreateOpenAIToolResultMessage creates an OpenAI tool result message as a map
-func CreateOpenAIToolResultMessage(toolCallID, content string, isError bool) map[string]interface{} {
-	resultContent := content
-	if isError {
-		resultContent = fmt.Sprintf("Error: %s", content)
-	}
-
-	return map[string]interface{}{
-		"role":         "tool",
-		"tool_call_id": toolCallID,
-		"content":      resultContent,
-	}
-}
 
 // CreateAnthropicToolResultBlock creates an Anthropic tool_result content block
 func CreateAnthropicToolResultBlock(toolUseID, content string, isError bool) anthropic.ContentBlockParamUnion {
@@ -411,28 +487,6 @@ func CreateAnthropicToolResultBlock(toolUseID, content string, isError bool) ant
 
 	// NewToolResultBlock returns ContentBlockParamUnion
 	return anthropic.NewToolResultBlock(toolUseID, resultContent, isError)
-}
-
-// StripSearchFetchTools removes search/fetch tool definitions from OpenAI tools array
-func StripSearchFetchTools(tools []openai.ChatCompletionToolUnionParam) []openai.ChatCompletionToolUnionParam {
-	if tools == nil {
-		return nil
-	}
-
-	filtered := make([]openai.ChatCompletionToolUnionParam, 0, len(tools))
-	for _, tool := range tools {
-		fn := tool.GetFunction()
-		if fn == nil {
-			filtered = append(filtered, tool)
-			continue
-		}
-
-		if !ShouldInterceptTool(fn.Name) {
-			filtered = append(filtered, tool)
-		}
-	}
-
-	return filtered
 }
 
 // StripSearchFetchToolsAnthropic removes search/fetch tool definitions from Anthropic tools array
