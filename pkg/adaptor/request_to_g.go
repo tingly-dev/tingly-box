@@ -283,6 +283,19 @@ func ConvertAnthropicToGoogleRequest(anthropicReq *anthropic.MessageNewParams, d
 		}
 	}
 
+	// Build a map of tool_use ID to function name for proper function_response conversion
+	// This is needed because tool_result only contains ToolUseID, not the function name
+	toolUseIDToFunctionName := make(map[string]string)
+	for _, msg := range anthropicReq.Messages {
+		if string(msg.Role) == "assistant" {
+			for _, block := range msg.Content {
+				if block.OfToolUse != nil {
+					toolUseIDToFunctionName[block.OfToolUse.ID] = block.OfToolUse.Name
+				}
+			}
+		}
+	}
+
 	// Convert messages
 	for _, msg := range anthropicReq.Messages {
 		switch string(msg.Role) {
@@ -314,6 +327,14 @@ func ConvertAnthropicToGoogleRequest(anthropicReq *anthropic.MessageNewParams, d
 					}
 				case block.OfToolResult != nil:
 					// Convert tool_result to function_response
+					// Get the function name from the tool_use ID mapping
+					functionName := toolUseIDToFunctionName[block.OfToolResult.ToolUseID]
+					if functionName == "" {
+						// Fallback: use ToolUseID if we couldn't find the function name
+						// This shouldn't happen in a well-formed conversation
+						functionName = block.OfToolResult.ToolUseID
+					}
+
 					resultText := ""
 					for _, c := range block.OfToolResult.Content {
 						if c.OfText != nil {
@@ -323,7 +344,7 @@ func ConvertAnthropicToGoogleRequest(anthropicReq *anthropic.MessageNewParams, d
 
 					content.Parts = append(content.Parts, &genai.Part{
 						FunctionResponse: &genai.FunctionResponse{
-							Name: block.OfToolResult.ToolUseID,
+							Name: functionName,
 							Parts: []*genai.FunctionResponsePart{
 								{
 									InlineData: &genai.FunctionResponseBlob{
@@ -454,65 +475,7 @@ func ConvertAnthropicToGoogleToolChoice(tc *anthropic.ToolChoiceUnionParam) *gen
 	return config
 }
 
-func ConvertAnthropicBetaToGoogleTools(tools []anthropic.BetaToolUnionParam) []*genai.FunctionDeclaration {
-	if len(tools) == 0 {
-		return nil
-	}
-
-	out := make([]*genai.FunctionDeclaration, 0, len(tools))
-
-	for _, t := range tools {
-		tool := t.OfTool
-		if tool == nil {
-			continue
-		}
-
-		// Convert Anthropic beta input schema to Google parameters
-		var parameters *genai.Schema
-		if tool.InputSchema.Properties != nil {
-			if schemaBytes, err := json.Marshal(tool.InputSchema); err == nil {
-				_ = json.Unmarshal(schemaBytes, &parameters)
-			}
-		}
-
-		funcDecl := &genai.FunctionDeclaration{
-			Name:        tool.Name,
-			Description: tool.Description.Value,
-			Parameters:  parameters,
-		}
-		out = append(out, funcDecl)
-	}
-
-	return out
-}
-
-func ConvertAnthropicBetaToGoogleToolChoice(tc *anthropic.BetaToolChoiceUnionParam) *genai.ToolConfig {
-	config := &genai.ToolConfig{
-		FunctionCallingConfig: &genai.FunctionCallingConfig{},
-	}
-
-	if tc.OfAuto != nil {
-		config.FunctionCallingConfig.Mode = genai.FunctionCallingConfigModeAuto
-	}
-
-	if tc.OfTool != nil {
-		config.FunctionCallingConfig.Mode = genai.FunctionCallingConfigModeAny
-		config.FunctionCallingConfig.AllowedFunctionNames = []string{tc.OfTool.Name}
-	}
-
-	if tc.OfAny != nil {
-		config.FunctionCallingConfig.Mode = genai.FunctionCallingConfigModeAny
-	}
-
-	// Default to auto
-	if config.FunctionCallingConfig.Mode == "" {
-		config.FunctionCallingConfig.Mode = genai.FunctionCallingConfigModeAuto
-	}
-
-	return config
-}
-
-// ConvertAnthropicToGoogleRequest converts Anthropic request to Google format
+// ConvertAnthropicBetaToGoogleRequest converts Anthropic request to Google format
 func ConvertAnthropicBetaToGoogleRequest(anthropicReq *anthropic.BetaMessageNewParams, defaultMaxTokens int64) (string, []*genai.Content, *genai.GenerateContentConfig) {
 	model := string(anthropicReq.Model)
 	contents := make([]*genai.Content, 0, len(anthropicReq.Messages))
@@ -530,6 +493,19 @@ func ConvertAnthropicBetaToGoogleRequest(anthropicReq *anthropic.BetaMessageNewP
 		config.SystemInstruction = &genai.Content{
 			Role:  "system",
 			Parts: []*genai.Part{genai.NewPartFromText(systemText)},
+		}
+	}
+
+	// Build a map of tool_use ID to function name for proper function_response conversion
+	// This is needed because tool_result only contains ToolUseID, not the function name
+	toolUseIDToFunctionName := make(map[string]string)
+	for _, msg := range anthropicReq.Messages {
+		if string(msg.Role) == "assistant" {
+			for _, block := range msg.Content {
+				if block.OfToolUse != nil {
+					toolUseIDToFunctionName[block.OfToolUse.ID] = block.OfToolUse.Name
+				}
+			}
 		}
 	}
 
@@ -564,6 +540,14 @@ func ConvertAnthropicBetaToGoogleRequest(anthropicReq *anthropic.BetaMessageNewP
 					}
 				case block.OfToolResult != nil:
 					// Convert tool_result to function_response
+					// Get the function name from the tool_use ID mapping
+					functionName := toolUseIDToFunctionName[block.OfToolResult.ToolUseID]
+					if functionName == "" {
+						// Fallback: use ToolUseID if we couldn't find the function name
+						// This shouldn't happen in a well-formed conversation
+						functionName = block.OfToolResult.ToolUseID
+					}
+
 					resultText := ""
 					for _, c := range block.OfToolResult.Content {
 						if c.OfText != nil {
@@ -573,7 +557,7 @@ func ConvertAnthropicBetaToGoogleRequest(anthropicReq *anthropic.BetaMessageNewP
 
 					content.Parts = append(content.Parts, &genai.Part{
 						FunctionResponse: &genai.FunctionResponse{
-							Name: block.OfToolResult.ToolUseID,
+							Name: functionName,
 							Parts: []*genai.FunctionResponsePart{
 								{
 									InlineData: &genai.FunctionResponseBlob{
@@ -644,4 +628,62 @@ func ConvertAnthropicBetaToGoogleRequest(anthropicReq *anthropic.BetaMessageNewP
 	}
 
 	return model, contents, config
+}
+
+func ConvertAnthropicBetaToGoogleTools(tools []anthropic.BetaToolUnionParam) []*genai.FunctionDeclaration {
+	if len(tools) == 0 {
+		return nil
+	}
+
+	out := make([]*genai.FunctionDeclaration, 0, len(tools))
+
+	for _, t := range tools {
+		tool := t.OfTool
+		if tool == nil {
+			continue
+		}
+
+		// Convert Anthropic beta input schema to Google parameters
+		var parameters *genai.Schema
+		if tool.InputSchema.Properties != nil {
+			if schemaBytes, err := json.Marshal(tool.InputSchema); err == nil {
+				_ = json.Unmarshal(schemaBytes, &parameters)
+			}
+		}
+
+		funcDecl := &genai.FunctionDeclaration{
+			Name:        tool.Name,
+			Description: tool.Description.Value,
+			Parameters:  parameters,
+		}
+		out = append(out, funcDecl)
+	}
+
+	return out
+}
+
+func ConvertAnthropicBetaToGoogleToolChoice(tc *anthropic.BetaToolChoiceUnionParam) *genai.ToolConfig {
+	config := &genai.ToolConfig{
+		FunctionCallingConfig: &genai.FunctionCallingConfig{},
+	}
+
+	if tc.OfAuto != nil {
+		config.FunctionCallingConfig.Mode = genai.FunctionCallingConfigModeAuto
+	}
+
+	if tc.OfTool != nil {
+		config.FunctionCallingConfig.Mode = genai.FunctionCallingConfigModeAny
+		config.FunctionCallingConfig.AllowedFunctionNames = []string{tc.OfTool.Name}
+	}
+
+	if tc.OfAny != nil {
+		config.FunctionCallingConfig.Mode = genai.FunctionCallingConfigModeAny
+	}
+
+	// Default to auto
+	if config.FunctionCallingConfig.Mode == "" {
+		config.FunctionCallingConfig.Mode = genai.FunctionCallingConfigModeAuto
+	}
+
+	return config
 }
