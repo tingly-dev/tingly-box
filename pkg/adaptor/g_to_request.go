@@ -102,13 +102,22 @@ func convertGoogleContentToOpenAI(content *genai.Content) openai.ChatCompletionM
 			// Convert to OpenAI role="tool" message
 			resultText := ""
 
-			// Google's FunctionResponse has a Parts field that contains the actual data
-			if len(part.FunctionResponse.Parts) > 0 {
-				for _, p := range part.FunctionResponse.Parts {
-					if p.InlineData != nil {
-						resultText += string(p.InlineData.Data)
-					} else if p.FileData != nil {
-						resultText += p.FileData.FileURI
+			// Google's FunctionResponse has a Response field with the actual data
+			if part.FunctionResponse.Response != nil {
+				// Check if it has "output" key, if so, use that directly
+				if output, exists := part.FunctionResponse.Response["output"]; exists {
+					if outputStr, ok := output.(string); ok {
+						resultText = outputStr
+					} else {
+						// Output is not a string, marshal the whole response
+						if responseBytes, err := json.Marshal(part.FunctionResponse.Response); err == nil {
+							resultText = string(responseBytes)
+						}
+					}
+				} else {
+					// No "output" key, use the whole response as JSON
+					if responseBytes, err := json.Marshal(part.FunctionResponse.Response); err == nil {
+						resultText = string(responseBytes)
 					}
 				}
 			}
@@ -290,13 +299,22 @@ func convertGoogleContentToAnthropic(content *genai.Content) anthropic.MessagePa
 			// Convert to tool_result block (in USER role)
 			resultText := ""
 
-			// Google's FunctionResponse has a Parts field that contains the actual data
-			if len(part.FunctionResponse.Parts) > 0 {
-				for _, p := range part.FunctionResponse.Parts {
-					if p.InlineData != nil {
-						resultText += string(p.InlineData.Data)
-					} else if p.FileData != nil {
-						resultText += p.FileData.FileURI
+			// Google's FunctionResponse has a Response field with the actual data
+			if part.FunctionResponse.Response != nil {
+				// Check if it has "output" key, if so, use that directly
+				if output, exists := part.FunctionResponse.Response["output"]; exists {
+					if outputStr, ok := output.(string); ok {
+						resultText = outputStr
+					} else {
+						// Output is not a string, marshal the whole response
+						if responseBytes, err := json.Marshal(part.FunctionResponse.Response); err == nil {
+							resultText = string(responseBytes)
+						}
+					}
+				} else {
+					// No "output" key, use the whole response as JSON
+					if responseBytes, err := json.Marshal(part.FunctionResponse.Response); err == nil {
+						resultText = string(responseBytes)
 					}
 				}
 			}

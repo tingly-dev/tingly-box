@@ -342,16 +342,18 @@ func ConvertAnthropicToGoogleRequest(anthropicReq *anthropic.MessageNewParams, d
 						}
 					}
 
+					// Build the response map for Google's FunctionResponse
+					// Try to parse as JSON first, if it fails, treat as plain text output
+					var response map[string]any
+					if err := json.Unmarshal([]byte(resultText), &response); err != nil {
+						// Not valid JSON, wrap in "output" key
+						response = map[string]any{"output": resultText}
+					}
+
 					content.Parts = append(content.Parts, &genai.Part{
 						FunctionResponse: &genai.FunctionResponse{
-							Name: functionName,
-							Parts: []*genai.FunctionResponsePart{
-								{
-									InlineData: &genai.FunctionResponseBlob{
-										Data: []byte(resultText),
-									},
-								},
-							},
+							Name:     functionName,
+							Response: response,
 						},
 					})
 				case block.OfThinking != nil, block.OfRedactedThinking != nil:
@@ -555,16 +557,18 @@ func ConvertAnthropicBetaToGoogleRequest(anthropicReq *anthropic.BetaMessageNewP
 						}
 					}
 
+					// Build the response map for Google's FunctionResponse
+					// Try to parse as JSON first, if it fails, treat as plain text output
+					var response map[string]any
+					if err := json.Unmarshal([]byte(resultText), &response); err != nil {
+						// Not valid JSON, wrap in "output" key
+						response = map[string]any{"output": resultText}
+					}
+
 					content.Parts = append(content.Parts, &genai.Part{
 						FunctionResponse: &genai.FunctionResponse{
-							Name: functionName,
-							Parts: []*genai.FunctionResponsePart{
-								{
-									InlineData: &genai.FunctionResponseBlob{
-										Data: []byte(resultText),
-									},
-								},
-							},
+							Name:     functionName,
+							Response: response,
 						},
 					})
 				case block.OfThinking != nil, block.OfRedactedThinking != nil:
