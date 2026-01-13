@@ -142,6 +142,7 @@ func TestParseTacticType(t *testing.T) {
 		{"round_robin", loadbalance.TacticRoundRobin},
 		{"token_based", loadbalance.TacticTokenBased},
 		{"hybrid", loadbalance.TacticHybrid},
+		{"random", loadbalance.TacticRandom},
 		{"invalid", loadbalance.TacticRoundRobin}, // Default fallback
 		{"", loadbalance.TacticRoundRobin},        // Empty string fallback
 	}
@@ -158,6 +159,7 @@ func TestTacticType_String(t *testing.T) {
 		loadbalance.TacticRoundRobin: "round_robin",
 		loadbalance.TacticTokenBased: "token_based",
 		loadbalance.TacticHybrid:     "hybrid",
+		loadbalance.TacticRandom:     "random",
 		loadbalance.TacticType(999):  "unknown", // Invalid type
 	}
 
