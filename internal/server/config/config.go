@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -212,12 +213,18 @@ func (c *Config) Save() error {
 	if c.ConfigFile == "" {
 		return fmt.Errorf("ConfigFile is empty")
 	}
-	data, err := json.MarshalIndent(c, "", "    ")
-	if err != nil {
+
+	// Use encoder with DisableHTMLEscape for human-readable output
+	var buf bytes.Buffer
+	encoder := json.NewEncoder(&buf)
+	encoder.SetEscapeHTML(false)
+	encoder.SetIndent("", "    ")
+
+	if err := encoder.Encode(c); err != nil {
 		return err
 	}
-	err = os.WriteFile(c.ConfigFile, data, 0644)
-	if err != nil {
+
+	if err := os.WriteFile(c.ConfigFile, buf.Bytes(), 0644); err != nil {
 		return err
 	}
 	return nil
