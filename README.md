@@ -219,12 +219,10 @@ We welcome contributions! Follow these steps, inspired by popular open-source re
 
 ## 📞 Support
 
-Scan the following telegram QR-code to gain instant support from our developers:
-
-<img width="196" height="196" alt="image" src="https://github.com/user-attachments/assets/2dbbe7c5-8202-4541-95c2-2a7172ef30b6" />
-
-Or find us at: https://t.me/+V1sqeajw1pYwMzU1
-
+| Telegram    | Wechat |
+| :--------: | :-------: |
+| <img width="196" height="196" alt="image" src="https://github.com/user-attachments/assets/56022b70-97da-498f-bf83-822a11668fa7" /> | <img width="196" height="196" alt="image" src="https://github.com/user-attachments/assets/b4ffb511-9324-43d4-b4ce-46154a795ffb" /> |
+| https://t.me/+V1sqeajw1pYwMzU1 | https://h783604.guandan888.com/SzbmAH |
 
 
 ## 🤲 Contributors
@@ -235,11 +233,11 @@ Or find us at: https://t.me/+V1sqeajw1pYwMzU1
 
 <br />
 <br />
-Rare badges are given to following contributors:
+Special badges are given to following contributors:
 
 <br />
 
-<img width="196" height="196" alt="image" src="https://github.com/user-attachments/assets/18730cd4-5e04-4840-9ef7-eab5cb418032" />
+<img width="128" height="128" alt="image" src="https://github.com/user-attachments/assets/18730cd4-5e04-4840-9ef7-eab5cb418032" />
 
 ---
 
