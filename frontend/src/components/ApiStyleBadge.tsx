@@ -4,11 +4,12 @@ import type {SxProps, Theme} from '@mui/material';
 
 interface ApiStyleBadgeProps {
     apiStyle: string;
+    compact?: boolean;
     sx?: SxProps<Theme>;
 }
 
 // Helper function to render API style badge with icon and colored background
-export const ApiStyleBadge = ({apiStyle, sx = {}}: ApiStyleBadgeProps) => {
+export const ApiStyleBadge = ({apiStyle, sx = {}, compact = false}: ApiStyleBadgeProps) => {
     const theme = useTheme();
     const isOpenAI = apiStyle === 'openai';
     const isAnthropic = apiStyle === 'anthropic';
@@ -70,7 +71,10 @@ export const ApiStyleBadge = ({apiStyle, sx = {}}: ApiStyleBadgeProps) => {
             }}
         >
             {/*<Icon size={10} />*/}
-            <span>{label} Style</span>
+            {
+                compact ? (<span>{label}</span>) : (<span>{label} Style</span>)
+            }
+
         </Box>
     );
 };
