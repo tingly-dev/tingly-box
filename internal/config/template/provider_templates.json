@@ -232,11 +232,11 @@
       "base_url_anthropic": "https://api.z.ai/api/anthropic",
       "models": [],
       "model_limits": {
-        "glm-4": 128000,
-        "glm-4.5": 128000,
-        "glm-4.5-air": 128000,
-        "glm-4.6": 128000,
-        "glm-4.7": 128000
+        "glm-4": 8000,
+        "glm-4.5": 8000,
+        "glm-4.5-air": 8000,
+        "glm-4.6": 8000,
+        "glm-4.7": 8000
       },
       "supports_models_endpoint": true,
       "web_search_schema": "web_search_glm"
@@ -256,11 +256,11 @@
       "base_url_anthropic": "https://api.z.ai/api/anthropic",
       "models": [],
       "model_limits": {
-        "glm-4": 128000,
-        "glm-4.5": 128000,
-        "glm-4.5-air": 128000,
-        "glm-4.6": 128000,
-        "glm-4.7": 128000
+        "glm-4": 8000,
+        "glm-4.5": 8000,
+        "glm-4.5-air": 8000,
+        "glm-4.6": 8000,
+        "glm-4.7": 8000
       },
       "supports_models_endpoint": true,
       "web_search_schema": "web_search_glm"
@@ -280,11 +280,11 @@
       "base_url_anthropic": "https://open.bigmodel.cn/api/anthropic",
       "models": [],
       "model_limits": {
-        "glm-4": 128000,
-        "glm-4.5": 128000,
-        "glm-4.5-air": 128000,
-        "glm-4.6": 128000,
-        "glm-4.7": 128000
+        "glm-4": 8000,
+        "glm-4.5": 8000,
+        "glm-4.5-air": 8000,
+        "glm-4.6": 8000,
+        "glm-4.7": 8000
       },
       "supports_models_endpoint": true,
       "web_search_schema": "web_search_glm"
@@ -304,11 +304,11 @@
       "base_url_anthropic": "https://open.bigmodel.cn/api/anthropic",
       "models": [],
       "model_limits": {
-        "glm-4": 128000,
-        "glm-4.5": 128000,
-        "glm-4.5-air": 128000,
-        "glm-4.6": 128000,
-        "glm-4.7": 128000
+        "glm-4": 8000,
+        "glm-4.5": 8000,
+        "glm-4.5-air": 8000,
+        "glm-4.6": 8000,
+        "glm-4.7": 8000
       },
       "supports_models_endpoint": true,
       "web_search_schema": "web_search_glm"
