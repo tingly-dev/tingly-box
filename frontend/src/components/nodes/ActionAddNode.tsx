@@ -29,7 +29,7 @@ const StyledAddProviderNode = styled(Box, {
     justifyContent: 'center',
     padding: node.padding,
     borderRadius: theme.shape.borderRadius,
-    border: '2px dashed',
+    border: 'dashed',
     borderColor: 'divider',
     backgroundColor: 'background.paper',
     width: node.width,
