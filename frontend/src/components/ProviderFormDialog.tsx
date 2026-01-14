@@ -21,7 +21,7 @@ import {
 } from '@mui/material';
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getProvidersByStyle } from '../services/serviceProviders';
+import { getProvidersByStyle, serviceProviders } from '../services/serviceProviders';
 import api from '../services/api';
 import { OpenAI } from '@lobehub/icons';
 import { Anthropic } from '@lobehub/icons';
@@ -104,9 +104,18 @@ const ProviderFormDialog = ({
 
     // Get current provider options based on apiStyle
     const getCurrentProviders = () => {
-        if (data.apiStyle === 'openai') return openaiProviders;
-        if (data.apiStyle === 'anthropic') return anthropicProviders;
-        return [];
+        const providers = data.apiStyle === 'openai' ? openaiProviders : anthropicProviders;
+
+        // Filter out OAuth providers
+        const oauthProviderIds = Object.values(serviceProviders as any)
+            .filter((p: any) => p.auth_type === 'api_key' || p.oauth_provider)
+            .map((p: any) => p.id);
+
+        return providers.filter(option => {
+            // Extract provider ID from value (format: "providerId:api_style")
+            const providerId = option.value.split(':')[0];
+            return !oauthProviderIds.includes(providerId);
+        });
     };
 
     // Handle provider/baseurl selection
