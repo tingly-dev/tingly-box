@@ -70,7 +70,7 @@ func (h *Handler) Authorize(c *gin.Context) {
 	name := c.Query("name") // Optional custom provider name
 
 	// Get auth URL
-	authURL, state, err := h.manager.GetAuthURL(c.Request.Context(), userID, providerType, redirectTo, name)
+	authURL, state, err := h.manager.GetAuthURL(userID, providerType, redirectTo, name, "")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),

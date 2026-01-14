@@ -408,11 +408,33 @@ func (s *Server) forwardAnthropicRequestRaw(provider *typ.Provider, rawReq map[s
 // ForwardAnthropicRequest forwards request using Anthropic SDK with proper types
 // This is a public utility function used by other handlers (e.g., openai.go)
 func (s *Server) ForwardAnthropicRequest(provider *typ.Provider, req anthropic.MessageNewParams) (*anthropic.Message, error) {
-	return s.forwardAnthropicRequestV1(provider, req)
+	// Check if tool interception should be applied
+	hasBuiltInWebSearch := s.templateManager.ProviderHasBuiltInWebSearch(provider)
+	shouldIntercept := !hasBuiltInWebSearch && s.toolInterceptor != nil && s.toolInterceptor.IsEnabledForProvider(provider)
+
+	// Apply pre-request interception
+	preparedReq := &req
+	if shouldIntercept {
+		prepared, _ := s.toolInterceptor.PrepareAnthropicRequest(provider, &req)
+		preparedReq = prepared
+	}
+
+	return s.forwardAnthropicRequestV1(provider, *preparedReq)
 }
 
 // ForwardAnthropicStreamRequest forwards streaming request using Anthropic SDK
 // This is a public utility function used by other handlers (e.g., openai.go)
 func (s *Server) ForwardAnthropicStreamRequest(provider *typ.Provider, req anthropic.MessageNewParams) (*anthropicstream.Stream[anthropic.MessageStreamEventUnion], error) {
-	return s.forwardAnthropicStreamRequestV1(provider, req)
+	// Check if tool interception should be applied
+	hasBuiltInWebSearch := s.templateManager.ProviderHasBuiltInWebSearch(provider)
+	shouldIntercept := !hasBuiltInWebSearch && s.toolInterceptor != nil && s.toolInterceptor.IsEnabledForProvider(provider)
+
+	// Apply pre-request interception
+	preparedReq := &req
+	if shouldIntercept {
+		prepared, _ := s.toolInterceptor.PrepareAnthropicRequest(provider, &req)
+		preparedReq = prepared
+	}
+
+	return s.forwardAnthropicStreamRequestV1(provider, *preparedReq)
 }

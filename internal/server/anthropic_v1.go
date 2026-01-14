@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"tingly-box/internal/loadbalance"
+	"tingly-box/internal/toolinterceptor"
 	"tingly-box/internal/typ"
 	"tingly-box/pkg/adaptor"
 )
@@ -67,6 +69,19 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req AnthropicMessagesReques
 	}
 
 	if apiStyle == "anthropic" {
+		// === Check if provider has built-in web_search ===
+		hasBuiltInWebSearch := s.templateManager.ProviderHasBuiltInWebSearch(provider)
+
+		// === Tool Interceptor: Check if enabled and should be used ===
+		// Only intercept if provider does NOT have built-in web_search
+		shouldIntercept := !hasBuiltInWebSearch && s.toolInterceptor != nil && s.toolInterceptor.IsEnabledForProvider(provider)
+
+		if shouldIntercept {
+			logrus.Infof("Tool interceptor active for provider %s (no built-in web_search)", provider.Name)
+		} else if hasBuiltInWebSearch {
+			logrus.Infof("Provider %s has built-in web_search, using native implementation", provider.Name)
+		}
+
 		// Use direct Anthropic SDK call
 		if isStreaming {
 			// Handle streaming request
@@ -79,7 +94,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req AnthropicMessagesReques
 			// Handle the streaming response
 			s.handleAnthropicStreamResponseV1(c, req.MessageNewParams, stream, proxyModel, actualModel, rule, provider)
 		} else {
-			// Handle non-streaming request
+			// Handle non-streaming request with tool interception (only if needed)
 			anthropicResp, err := s.forwardAnthropicRequestV1(provider, req.MessageNewParams)
 			if err != nil {
 				s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "forward_failed")
@@ -87,7 +102,38 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req AnthropicMessagesReques
 				return
 			}
 
-			// Track usage from response
+			// === Tool Interception: Only intercept if provider doesn't have built-in web_search ===
+			if shouldIntercept && len(anthropicResp.Content) > 0 {
+				hasInterceptedTools := false
+				for _, block := range anthropicResp.Content {
+					if block.Type == "tool_use" && toolinterceptor.ShouldInterceptTool(block.Name) {
+						hasInterceptedTools = true
+						break
+					}
+				}
+
+				if hasInterceptedTools {
+					// Execute intercepted tools locally and get final response
+					finalResponse, err := s.handleInterceptedAnthropicToolCalls(provider, &req.MessageNewParams, anthropicResp, actualModel)
+					if err != nil {
+						s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "tool_interception_failed")
+						SendForwardingError(c, fmt.Errorf("failed to handle tool calls: %w", err))
+						return
+					}
+
+					// Track usage from final response
+					inputTokens := int(finalResponse.Usage.InputTokens)
+					outputTokens := int(finalResponse.Usage.OutputTokens)
+					s.trackUsage(c, rule, provider, actualModel, proxyModel, inputTokens, outputTokens, false, "success", "")
+
+					// Return final response
+					finalResponse.Model = anthropic.Model(proxyModel)
+					c.JSON(http.StatusOK, finalResponse)
+					return
+				}
+			}
+
+			// Track usage from response (no tool interception occurred)
 			inputTokens := int(anthropicResp.Usage.InputTokens)
 			outputTokens := int(anthropicResp.Usage.OutputTokens)
 			s.trackUsage(c, rule, provider, actualModel, proxyModel, inputTokens, outputTokens, false, "success", "")
@@ -303,4 +349,72 @@ func (s *Server) anthropicCountTokensV1(c *gin.Context, bodyBytes []byte, rawReq
 func (s *Server) trackUsage(c *gin.Context, rule *typ.Rule, provider *typ.Provider, model, requestModel string, inputTokens, outputTokens int, streamed bool, status, errorCode string) {
 	tracker := s.NewUsageTracker()
 	tracker.RecordUsage(c, rule, provider, model, requestModel, inputTokens, outputTokens, streamed, status, errorCode)
+}
+
+// handleInterceptedAnthropicToolCalls executes intercepted Anthropic tool calls locally and returns final response
+func (s *Server) handleInterceptedAnthropicToolCalls(provider *typ.Provider, originalReq *anthropic.MessageNewParams, toolCallResponse *anthropic.Message, actualModel string) (*anthropic.Message, error) {
+	logrus.Infof("Handling %d intercepted Anthropic tool calls for provider %s", len(toolCallResponse.Content), provider.Name)
+
+	// Build new messages list with original messages
+	newMessages := make([]anthropic.MessageParam, len(originalReq.Messages))
+	copy(newMessages, originalReq.Messages)
+
+	// Add assistant message with tool_use blocks
+	asstContentBlocks := make([]anthropic.ContentBlockParamUnion, 0, len(toolCallResponse.Content))
+	for _, block := range toolCallResponse.Content {
+		if block.Type == "text" {
+			asstContentBlocks = append(asstContentBlocks, anthropic.NewTextBlock(block.Text))
+		} else if block.Type == "tool_use" {
+			toolUseParam := anthropic.ToolUseBlockParam{
+				ID:    block.ID,
+				Name:  block.Name,
+				Input: json.RawMessage(block.Input),
+			}
+			asstContentBlocks = append(asstContentBlocks, anthropic.ContentBlockParamUnion{OfToolUse: &toolUseParam})
+		}
+	}
+	newMessages = append(newMessages, anthropic.NewAssistantMessage(asstContentBlocks...))
+
+	// Execute each intercepted tool_use block
+	for _, block := range toolCallResponse.Content {
+		if block.Type != "tool_use" {
+			continue
+		}
+
+		// Check if this tool should be intercepted
+		if !toolinterceptor.ShouldInterceptTool(block.Name) {
+			// This shouldn't happen since we checked before calling this function
+			continue
+		}
+
+		// Execute the tool using the interceptor
+		result := s.toolInterceptor.ExecuteTool(provider, block.Name, string(block.Input))
+
+		// Add tool result block
+		var toolResultContent string
+		var isError bool
+		if result.IsError {
+			toolResultContent = fmt.Sprintf("Error: %s", result.Error)
+			isError = true
+		} else {
+			toolResultContent = result.Content
+			isError = false
+		}
+
+		toolResultBlock := anthropic.NewToolResultBlock(block.ID, toolResultContent, isError)
+		newMessages = append(newMessages, anthropic.NewUserMessage(toolResultBlock))
+		logrus.Infof("Executed Anthropic tool %s locally", block.Name)
+	}
+
+	// Create new request with updated messages
+	followUpReq := *originalReq
+	followUpReq.Messages = newMessages
+
+	// Forward to provider for final response
+	finalResponse, err := s.forwardAnthropicRequestV1(provider, followUpReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get final response after tool execution: %w", err)
+	}
+
+	return finalResponse, nil
 }

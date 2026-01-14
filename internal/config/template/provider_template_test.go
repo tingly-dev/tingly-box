@@ -152,7 +152,7 @@ func TestTemplateManagerFetchFromGitHub(t *testing.T) {
 	}{
 		{
 			name:        "Successful fetch from GitHub",
-			githubURL:   "https://raw.githubusercontent.com/tingly-dev/tingly-box/main/internal/config/provider_templates.json",
+			githubURL:   "https://raw.githubusercontent.com/tingly-dev/tingly-box/main/internal/config/template/provider_templates.json",
 			expectError: false,
 		},
 		{

@@ -20,6 +20,7 @@ import (
 	"tingly-box/internal/server/background"
 	"tingly-box/internal/server/config"
 	"tingly-box/internal/server/middleware"
+	"tingly-box/internal/toolinterceptor"
 	"tingly-box/internal/util/network"
 	oauth2 "tingly-box/pkg/oauth"
 )
@@ -53,6 +54,9 @@ type Server struct {
 
 	// template manager for provider templates
 	templateManager *template.TemplateManager
+
+	// tool interceptor for search & fetch
+	toolInterceptor *toolinterceptor.Interceptor
 
 	// options
 	enableUI      bool
@@ -245,6 +249,15 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Set template manager in config for model fetching fallback
 	server.config.SetTemplateManager(templateManager)
 
+	// Initialize tool interceptor with global config
+	globalToolConfig := cfg.GetToolInterceptor()
+	server.toolInterceptor = toolinterceptor.NewInterceptor(globalToolConfig)
+	if globalToolConfig != nil && globalToolConfig.Enabled {
+		log.Printf("Tool interceptor enabled (search API: %s)", globalToolConfig.SearchAPI)
+	} else {
+		log.Printf("Tool interceptor disabled")
+	}
+
 	// Setup middleware
 	server.setupMiddleware()
 
@@ -273,6 +286,10 @@ func (s *Server) setupConfigWatcher() {
 		// Update JWT manager with new secret if changed
 		s.jwtManager = auth.NewJWTManager(newConfig.JWTSecret)
 		logrus.Debugln("JWT manager reloaded with new secret")
+
+		// Update tool interceptor with new config
+		globalToolConfig := s.config.GetToolInterceptor()
+		s.toolInterceptor = toolinterceptor.NewInterceptor(globalToolConfig)
 
 		// Update error log filter expression if changed
 		if s.errorMW != nil {

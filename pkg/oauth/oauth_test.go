@@ -318,7 +318,7 @@ func TestManager(t *testing.T) {
 		config.BaseURL = "http://localhost:8080"
 		manager := NewManager(config, registry)
 
-		authURL, state, err := manager.GetAuthURL(context.Background(), "user123", ProviderClaudeCode, "", "")
+		authURL, state, err := manager.GetAuthURL("user123", ProviderClaudeCode, "", "", "")
 		if err != nil {
 			t.Fatalf("GetAuthURL failed: %v", err)
 		}
@@ -360,7 +360,7 @@ func TestManager(t *testing.T) {
 		config := DefaultConfig()
 		manager := NewManager(config, registry)
 
-		_, _, err := manager.GetAuthURL(context.Background(), "user123", ProviderClaudeCode, "", "")
+		_, _, err := manager.GetAuthURL("user123", ProviderClaudeCode, "", "", "")
 		if err == nil {
 			t.Error("Expected error for unconfigured provider")
 		}
@@ -375,7 +375,7 @@ func TestManager(t *testing.T) {
 		config := DefaultConfig()
 		manager := NewManager(config, registry)
 
-		_, _, err := manager.GetAuthURL(context.Background(), "user123", ProviderType("invalid"), "", "")
+		_, _, err := manager.GetAuthURL("user123", ProviderType("invalid"), "", "", "")
 		if err == nil {
 			t.Error("Expected error for invalid provider")
 		}
@@ -397,7 +397,7 @@ func TestManager(t *testing.T) {
 		config.StateExpiry = 10 * time.Millisecond
 		manager := NewManager(config, registry)
 
-		authURL, state, err := manager.GetAuthURL(context.Background(), "user123", ProviderClaudeCode, "", "")
+		authURL, state, err := manager.GetAuthURL("user123", ProviderClaudeCode, "", "", "")
 		if err != nil {
 			t.Fatalf("GetAuthURL failed: %v", err)
 		}
@@ -462,7 +462,7 @@ func TestHandleCallback(t *testing.T) {
 		manager := NewManager(config, registry)
 
 		// First, get auth URL to create a state
-		_, state, err := manager.GetAuthURL(context.Background(), "user123", ProviderClaudeCode, "", "")
+		_, state, err := manager.GetAuthURL("user123", ProviderClaudeCode, "", "", "")
 		if err != nil {
 			t.Fatalf("GetAuthURL failed: %v", err)
 		}
