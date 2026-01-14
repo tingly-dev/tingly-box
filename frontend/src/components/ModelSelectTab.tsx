@@ -110,7 +110,7 @@ export default function ModelSelectTab({
         const authTypeOrder = ['oauth', 'api_key', 'bearer_token', 'basic_auth'];
 
         enabledProviders.forEach(provider => {
-            const authType = provider.auth_type || 'unknown';
+            const authType = provider.auth_type || 'api key';
             if (!groups[authType]) {
                 groups[authType] = [];
             }
@@ -331,7 +331,7 @@ export default function ModelSelectTab({
         <Box sx={{ display: 'flex', flexDirection: 'row', height: '100%', width: '100%' }}>
             {/* Left Sidebar - Vertical Tabs */}
             <Box sx={{
-                width: 240,
+                width: 300,
                 borderRight: 1,
                 borderColor: 'divider',
                 display: 'flex',
@@ -426,7 +426,7 @@ export default function ModelSelectTab({
                                                     )}
                                                 </Stack>
                                                 {provider.api_style && (
-                                                    <ApiStyleBadge apiStyle={provider.api_style} sx={{ flexShrink: 0 }} />
+                                                    <ApiStyleBadge compact={true} apiStyle={provider.api_style} sx={{ flexShrink: 0, width: "100px" }} />
                                                 )}
                                             </Stack>
                                         </Box>
