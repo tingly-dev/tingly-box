@@ -23,6 +23,7 @@ export interface ConfigRecord {
 
 export interface Rule {
     uuid: string;
+    scenario: string;
     request_model: string;
     response_model?: string;
     active?: boolean;

@@ -100,7 +100,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
                 }));
                 showNotification(`Models refreshed successfully!`, 'success');
             } else {
-                showNotification(`Failed to refresh models: ${result.error}`, 'error');
+                showNotification(`Failed to refresh models: ${result.message}`, 'error');
             }
         } catch (error) {
             console.error('Error refreshing models:', error);
@@ -175,6 +175,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
         if (rule && updated) {
             const ruleData = {
                 uuid: rule.uuid,
+                scenario: rule.scenario,
                 request_model: updated.requestModel,
                 response_model: updated.responseModel,
                 active: updated.active,
@@ -195,6 +196,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
                     showNotification(`Configuration saved successfully`, 'success');
                     handleRuleChange({
                         ...rule,
+                        scenario: ruleData.scenario,
                         request_model: ruleData.request_model,
                         response_model: ruleData.response_model,
                         active: ruleData.active,
