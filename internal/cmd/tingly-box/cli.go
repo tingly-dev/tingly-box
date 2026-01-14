@@ -27,12 +27,7 @@ AI providers, with flexible configuration and secure credential management.`,
 			os.Exit(1)
 		}
 	},
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		// Skip PersistentPreRun for root command's default Run
-		// Root command has no parent, so check if Parent() is nil
-		if cmd.Parent() == nil {
-			return
-		}
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		verbose, _ := cmd.Flags().GetBool("verbose")
 		// Apply priority: CLI flag > Config > Default
 		if !cmd.Flags().Changed("verbose") && appConfig != nil {
@@ -41,6 +36,8 @@ AI providers, with flexible configuration and secure credential management.`,
 		if verbose {
 			logrus.SetLevel(logrus.TraceLevel)
 		}
+
+		return nil
 	},
 }
 
@@ -61,11 +58,30 @@ var (
 )
 
 func init() {
-	// Add global flags
+	// Add global flags FIRST before parsing
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "verbose output")
 	rootCmd.PersistentFlags().StringVar(&configDir, "config-dir", "", "configuration directory (default: ~/.tingly-box)")
 
-	// Add version command
+	// Parse flags early to get config-dir before adding subcommands
+	if err := rootCmd.ParseFlags(os.Args[1:]); err != nil {
+		// Flags will be parsed again later, so ignore errors here
+	}
+
+	// Initialize config based on parsed flags
+	if configDir != "" {
+		expandedDir, err := util.ExpandConfigDir(configDir)
+		if err == nil {
+			appConfig, _ = config.NewAppConfig(config.WithConfigDir(expandedDir))
+		}
+	}
+	if appConfig == nil {
+		appConfig, _ = config.NewAppConfig()
+	}
+	if appConfig != nil {
+		appConfig.SetVersion(version)
+	}
+
+	// Add version command (doesn't need config)
 	versionCmd := &cobra.Command{
 		Use:   "version",
 		Short: "Print version information",
@@ -80,30 +96,7 @@ func init() {
 	}
 	rootCmd.AddCommand(versionCmd)
 
-	// Initialize app config with optional custom config directory
-	var err error
-
-	if configDir != "" {
-		// Expand and use custom config directory
-		expandedDir, err := util.ExpandConfigDir(configDir)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error expanding config directory path: %v\n", err)
-			os.Exit(1)
-		}
-		appConfig, err = config.NewAppConfig(config.WithConfigDir(expandedDir))
-	} else {
-		// Use default config directory
-		appConfig, err = config.NewAppConfig()
-	}
-
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error initializing config: %v\n", err)
-		os.Exit(1)
-	}
-
-	appConfig.SetVersion(version)
-
-	// Add subcommands
+	// Add subcommands with initialized config
 	rootCmd.AddCommand(cli.AddCommand(appConfig))
 	rootCmd.AddCommand(cli.ListCommand(appConfig))
 	rootCmd.AddCommand(cli.DeleteCommand(appConfig))
@@ -111,8 +104,6 @@ func init() {
 	rootCmd.AddCommand(cli.StopCommand(appConfig))
 	rootCmd.AddCommand(cli.RestartCommand(appConfig))
 	rootCmd.AddCommand(cli.StatusCommand(appConfig))
-	//rootCmd.AddCommand(cli.TokenCommand(appConfig))
-	//rootCmd.AddCommand(cli.ShellCommand(appConfig))
 }
 
 func main() {
