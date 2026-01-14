@@ -68,14 +68,21 @@ func init() {
 	}
 
 	// Initialize config based on parsed flags
+	var err error
 	if configDir != "" {
-		expandedDir, err := util.ExpandConfigDir(configDir)
-		if err == nil {
-			appConfig, _ = config.NewAppConfig(config.WithConfigDir(expandedDir))
+		expandedDir, expandErr := util.ExpandConfigDir(configDir)
+		if expandErr == nil {
+			appConfig, err = config.NewAppConfig(config.WithConfigDir(expandedDir))
+		} else {
+			err = expandErr
 		}
 	}
-	if appConfig == nil {
-		appConfig, _ = config.NewAppConfig()
+	if appConfig == nil && err == nil {
+		appConfig, err = config.NewAppConfig()
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to initialize config: %v\n", err)
+		os.Exit(1)
 	}
 	if appConfig != nil {
 		appConfig.SetVersion(version)

@@ -78,6 +78,7 @@ const DEFAULT_ARGS = [
 	// Add your default parameters here, e.g.:
 	"start",
 	"--daemon",
+	"--prompt-restart",
 ];
 
 async function getPlatformArchAndBinary() {

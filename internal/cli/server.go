@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -108,6 +109,7 @@ type startFlags struct {
 	enableStyleTransform bool
 	daemon               bool
 	logFile              string
+	promptRestart        bool
 }
 
 // addStartFlags adds all start-related flags to a command
@@ -121,6 +123,7 @@ func addStartFlags(cmd *cobra.Command, flags *startFlags) {
 	cmd.Flags().BoolVar(&flags.enableStyleTransform, "adapter", true, "Enable API style transformation (default: true)")
 	cmd.Flags().BoolVar(&flags.daemon, "daemon", false, "Run as daemon in background (default: false)")
 	cmd.Flags().StringVar(&flags.logFile, "log-file", "", "Log file path for daemon mode (default: ~/.tingly-box/tingly-box.log)")
+	cmd.Flags().BoolVar(&flags.promptRestart, "prompt-restart", false, "Prompt to restart if server is already running (default: false)")
 }
 
 func resolveStartOptions(cmd *cobra.Command, flags startFlags, appConfig *config.AppConfig) startServerOptions {
@@ -151,6 +154,7 @@ func resolveStartOptions(cmd *cobra.Command, flags startFlags, appConfig *config
 		EnableOpenBrowser: resolvedOpenBrowser,
 		Daemon:            flags.daemon,
 		LogFile:           flags.logFile,
+		PromptRestart:     flags.promptRestart,
 	}
 }
 
@@ -182,6 +186,7 @@ type startServerOptions struct {
 	EnableOpenBrowser bool
 	Daemon            bool
 	LogFile           string
+	PromptRestart     bool
 }
 
 // startServer handles the server starting logic
@@ -268,9 +273,32 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 			GlobalConfig: appConfig.GetGlobalConfig(),
 			IsDaemon:     false,
 		})
-		fmt.Println("Tip: Use 'tingly-box restart' or 'npx tingly-box restart' to restart the server")
-		fmt.Println("     Use 'tingly-box stop' or 'npx tingly-box stop' to stop it")
-		return nil
+
+		// If prompt-restart is enabled, ask user if they want to restart
+		if opts.PromptRestart {
+			fmt.Print("\nDo you want to restart the server? [y/N]: ")
+			var response string
+			fmt.Scanln(&response)
+
+			// Check if user wants to restart
+			if strings.ToLower(strings.TrimSpace(response)) == "y" || strings.ToLower(strings.TrimSpace(response)) == "yes" {
+				fmt.Println("\nRestarting server...")
+				// Stop the existing server first
+				if err := stopServerWithFileLock(fileLock); err != nil {
+					return fmt.Errorf("failed to stop existing server: %w", err)
+				}
+				// Give a moment for cleanup
+				time.Sleep(1 * time.Second)
+				// Continue to start the server (fall through to the rest of the function)
+			} else {
+				fmt.Println("\nRestart cancelled.")
+				return nil
+			}
+		} else {
+			fmt.Println("Tip: Use 'tingly-box restart' or 'npx tingly-box restart' to restart the server")
+			fmt.Println("     Use 'tingly-box stop' or 'npx tingly-box stop' to stop it")
+			return nil
+		}
 	}
 
 	// Acquire lock before starting server
