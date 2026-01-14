@@ -317,7 +317,7 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                                                 <Box sx={{ flex: 1 }}>
                                                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: graph.iconGap, mb: graph.labelMargin }}>
                                                         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                                            Request Name Model
+                                                            Request Model
                                                         </Typography>
                                                         <Tooltip title="The model name that clients use to make requests. This will be matched against incoming API calls.">
                                                             <InfoIcon sx={{ fontSize: '0.9rem', color: 'text.secondary', cursor: 'help' }} />
@@ -360,7 +360,7 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                                         // Single display when no response model
                                         <Box>
                                             <Typography variant="caption" sx={{ color: 'text.secondary', mb: graph.labelMargin, textAlign: 'center', display: 'block' }}>
-                                                Request Name Model
+                                                Request Model
                                             </Typography>
                                             <ModelNode
                                                 active={record.active}
