@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -434,6 +435,8 @@ func (tm *TemplateManager) findTemplateByProvider(provider *typ.Provider) *Provi
 
 	// API key providers: match by APIBase based on APIStyle
 	apiBase := provider.APIBase
+	// BUGFIX: ignore all "/" in right to make it consistent
+	apiBase = strings.TrimRight(apiBase, "/")
 	if apiBase == "" {
 		return nil
 	}
