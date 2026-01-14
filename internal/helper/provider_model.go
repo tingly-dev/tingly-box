@@ -111,8 +111,16 @@ func GetProviderModelsFromAPI(provider *typ.Provider) ([]string, error) {
 	// Extract model IDs
 	var models []string
 	for _, model := range modelsResponse.Data {
+		// since some providers are special, we should process their model list
 		if model.ID != "" {
-			models = append(models, model.ID)
+			switch apiBase {
+			case "https://generativelanguage.googleapis.com/v1beta/openai":
+				modelID := strings.TrimPrefix(model.ID, "models/")
+				models = append(models, modelID)
+			default:
+				models = append(models, model.ID)
+
+			}
 		}
 	}
 
