@@ -167,6 +167,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         try {
             const ruleData = {
                 uuid: rule.uuid,
+                scenario: rule.scenario,
                 request_model: newConfigRecord.requestModel,
                 response_model: newConfigRecord.responseModel,
                 active: newConfigRecord.active,
@@ -187,6 +188,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
             if (result.success) {
                 onRuleChange?.({
                     ...rule,
+                    scenario: ruleData.scenario,
                     request_model: ruleData.request_model,
                     response_model: ruleData.response_model,
                     active: ruleData.active,
