@@ -2,11 +2,58 @@ package adaptor
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
 	"google.golang.org/genai"
 )
+
+// normalizeSchemaTypes converts lowercase JSON Schema types to Google's uppercase format
+// This recursively processes all schemas, including nested properties and array items
+func normalizeSchemaTypes(schema *genai.Schema) {
+	if schema == nil {
+		return
+	}
+
+	// Convert lowercase type string to Google's uppercase format
+	if schema.Type != "" {
+		upperType := strings.ToUpper(string(schema.Type))
+		switch upperType {
+		case "OBJECT":
+			schema.Type = genai.TypeObject
+		case "STRING":
+			schema.Type = genai.TypeString
+		case "NUMBER":
+			schema.Type = genai.TypeNumber
+		case "INTEGER":
+			schema.Type = genai.TypeInteger
+		case "BOOLEAN":
+			schema.Type = genai.TypeBoolean
+		case "ARRAY":
+			schema.Type = genai.TypeArray
+		case "NULL":
+			schema.Type = genai.TypeNULL
+		default:
+			// Keep original if unknown
+		}
+	}
+
+	// Recursively normalize nested property schemas
+	for _, propSchema := range schema.Properties {
+		normalizeSchemaTypes(propSchema)
+	}
+
+	// Normalize array item schema
+	if schema.Items != nil {
+		normalizeSchemaTypes(schema.Items)
+	}
+
+	// Normalize anyOf schemas
+	for _, anyOfSchema := range schema.AnyOf {
+		normalizeSchemaTypes(anyOfSchema)
+	}
+}
 
 // ConvertOpenAIToGoogleRequest converts OpenAI ChatCompletionNewParams to Google SDK format
 func ConvertOpenAIToGoogleRequest(req *openai.ChatCompletionNewParams, defaultMaxTokens int64) (string, []*genai.Content, *genai.GenerateContentConfig) {
@@ -210,6 +257,8 @@ func ConvertOpenAIToGoogleTools(tools []openai.ChatCompletionToolUnionParam) []*
 			// Convert map[string]interface{} to Google Schema
 			if schemaBytes, err := json.Marshal(fn.Parameters); err == nil {
 				_ = json.Unmarshal(schemaBytes, &parameters)
+				// Normalize schema types from lowercase (JSON Schema) to uppercase (Google format)
+				normalizeSchemaTypes(parameters)
 			}
 		}
 
@@ -437,6 +486,8 @@ func ConvertAnthropicToGoogleTools(tools []anthropic.ToolUnionParam) []*genai.Fu
 		if tool.InputSchema.Properties != nil {
 			if schemaBytes, err := json.Marshal(tool.InputSchema); err == nil {
 				_ = json.Unmarshal(schemaBytes, &parameters)
+				// Normalize schema types from lowercase (JSON Schema) to uppercase (Google format)
+				normalizeSchemaTypes(parameters)
 			}
 		}
 
@@ -652,6 +703,8 @@ func ConvertAnthropicBetaToGoogleTools(tools []anthropic.BetaToolUnionParam) []*
 		if tool.InputSchema.Properties != nil {
 			if schemaBytes, err := json.Marshal(tool.InputSchema); err == nil {
 				_ = json.Unmarshal(schemaBytes, &parameters)
+				// Normalize schema types from lowercase (JSON Schema) to uppercase (Google format)
+				normalizeSchemaTypes(parameters)
 			}
 		}
 
