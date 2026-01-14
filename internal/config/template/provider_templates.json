@@ -1,4 +1,51 @@
 {
+  "capability_schemas": {
+    "web_search_anthropic": {
+      "built_in": true,
+      "tool_type": "web_search_20250305",
+      "tool_name": "web_search",
+      "doc_url": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool",
+      "result_format": {
+        "type": "web_search_tool_result",
+        "description": "Anthropic returns results as a web_search_tool_result content block in the message",
+        "structure": {
+          "type": "web_search_tool_result",
+          "tool_use_id": "<id_from_server_tool_use>",
+          "content": [
+            {
+              "type": "web_search_result",
+              "url": "https://example.com",
+              "title": "Result Title",
+              "encrypted_content": "base64_encoded_content",
+              "page_age": "April 30, 2025"
+            }
+          ]
+        }
+      }
+    },
+    "web_search_glm": {
+      "built_in": true,
+      "tool_type": "web_search",
+      "doc_url": "https://open.bigmodel.cn/dev/api/search-tool/websearch-in-chat",
+      "result_format": {
+        "type": "top_level_array",
+        "description": "GLM returns results in a top-level 'web_search' array outside the choices",
+        "structure": {
+          "web_search": [
+            {
+              "title": "Search Result Title",
+              "link": "https://example.com",
+              "content": "Full content text...",
+              "media": "Source Name",
+              "icon": "https://icon.url",
+              "publish_date": "2025-04-23",
+              "refer": "ref_1"
+            }
+          ]
+        }
+      }
+    }
+  },
   "providers": {
     "openai": {
       "id": "openai",
@@ -23,7 +70,8 @@
         "gpt-4o": 8192,
         "gpt-4o-mini": 8192,
         "o1": 8192,
-        "o1-mini": 8192
+        "o1-mini": 8192,
+        "o3-mini": 200000
       },
       "supports_models_endpoint": true
     },
@@ -49,9 +97,11 @@
         "claude-3.5-sonnet": 8192,
         "claude-3-sonnet-20240229": 8192,
         "claude-3-opus": 4096,
-        "claude-3-opus-20240229": 4096
+        "claude-3-opus-20240229": 4096,
+        "claude-sonnet-4-20250514": 8192
       },
-      "supports_models_endpoint": true
+      "supports_models_endpoint": true,
+      "web_search_schema": "web_search_anthropic"
     },
     "dashscope": {
       "id": "dashscope",
@@ -188,7 +238,8 @@
         "glm-4.6": 128000,
         "glm-4.7": 128000
       },
-      "supports_models_endpoint": true
+      "supports_models_endpoint": true,
+      "web_search_schema": "web_search_glm"
     },
     "zai-intl-coding-plan": {
       "id": "zai-intl-coding",
@@ -211,7 +262,8 @@
         "glm-4.6": 128000,
         "glm-4.7": 128000
       },
-      "supports_models_endpoint": true
+      "supports_models_endpoint": true,
+      "web_search_schema": "web_search_glm"
     },
     "zai-cn": {
       "id": "zai",
@@ -234,7 +286,8 @@
         "glm-4.6": 128000,
         "glm-4.7": 128000
       },
-      "supports_models_endpoint": true
+      "supports_models_endpoint": true,
+      "web_search_schema": "web_search_glm"
     },
     "zai-cn-coding-plan": {
       "id": "zai-coding",
@@ -257,7 +310,8 @@
         "glm-4.6": 128000,
         "glm-4.7": 128000
       },
-      "supports_models_endpoint": true
+      "supports_models_endpoint": true,
+      "web_search_schema": "web_search_glm"
     },
     "xai": {
       "id": "xai",
@@ -265,16 +319,38 @@
       "status": "active",
       "valid": true,
       "website": "https://xai.com",
-      "description": "Xai API service via xai",
+      "description": "XAI API service via xAI",
       "type": "official",
       "api_doc": "https://docs.x.ai/docs/guides/responses-api",
       "model_doc": "https://docs.x.ai/docs/models",
       "pricing_doc": "https://docs.x.ai/docs/models?cluster=us-east-1#models-and-pricing",
-      "base_url_openai": "https://xai.com/api/v1",
-      "base_url_anthropic": null,
-      "models": [],
+      "base_url_openai": "https://api.x.ai/v1/",
+      "base_url_anthropic": "https://api.x.ai/v1",
+
+      "models": [
+        "grok-4-1-fast-reasoning",
+        "grok-4-1-fast-non-reasoning",
+        "grok-code-fast-1",
+        "grok-4-fast-reasoning",
+        "grok-4-fast-non-reasoning",
+        "grok-4-0709",
+        "grok-3-mini",
+        "grok-3",
+        "grok-2-vision-1212",
+        "grok-2-image-1212"
+      ],
+
       "model_limits": {
-        "grok-beta": 8192
+        "grok-4-1-fast-reasoning": 2000000,
+        "grok-4-1-fast-non-reasoning": 2000000,
+        "grok-code-fast-1": 256000,
+        "grok-4-fast-reasoning": 2000000,
+        "grok-4-fast-non-reasoning": 2000000,
+        "grok-4-0709": 256000,
+        "grok-3-mini": 131072,
+        "grok-3": 131072,
+        "grok-2-vision-1212": 32768,
+        "grok-2-image-1212": 256000
       },
       "supports_models_endpoint": true
     },
@@ -399,7 +475,8 @@
         "claude-3-haiku": 4096
       },
       "supports_models_endpoint": true,
-      "oauth_provider": "claude_code"
+      "oauth_provider": "claude_code",
+      "web_search_schema": "web_search_anthropic"
     },
     "qwen_code": {
       "id": "qwen_code",
@@ -468,6 +545,6 @@
       "oauth_provider": "antigravity"
     }
   },
-  "version": "1.1.0",
-  "last_updated": "2025-01-06T00:00:00Z"
+  "version": "1.2.0",
+  "last_updated": "2025-01-12T00:00:00Z"
 }
