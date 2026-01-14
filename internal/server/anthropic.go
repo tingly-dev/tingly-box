@@ -391,29 +391,29 @@ func (s *Server) ForwardAnthropicRequest(provider *typ.Provider, req anthropic.M
 	shouldIntercept := !hasBuiltInWebSearch && s.toolInterceptor != nil && s.toolInterceptor.IsEnabledForProvider(provider)
 
 	// Apply pre-request interception
-	preparedReq := &req
+	preparedReq := req
 	if shouldIntercept {
 		prepared, _ := s.toolInterceptor.PrepareAnthropicRequest(provider, &req)
-		preparedReq = prepared
+		preparedReq = *prepared
 	}
 
 	// Empty scenario for backward compatibility with callers that don't specify scenario
-	return s.forwardAnthropicRequestV1(provider, req, "")
+	return s.forwardAnthropicRequestV1(provider, preparedReq, "")
 }
 
 // ForwardAnthropicStreamRequest forwards streaming request using Anthropic SDK
 // This is a public utility function used by other handlers (e.g., openai.go)
 func (s *Server) ForwardAnthropicStreamRequest(provider *typ.Provider, req anthropic.MessageNewParams) (*anthropicstream.Stream[anthropic.MessageStreamEventUnion], error) {
-		// Check if tool interception should be applied
+	// Check if tool interception should be applied
 	hasBuiltInWebSearch := s.templateManager.ProviderHasBuiltInWebSearch(provider)
 	shouldIntercept := !hasBuiltInWebSearch && s.toolInterceptor != nil && s.toolInterceptor.IsEnabledForProvider(provider)
 
 	// Apply pre-request interception
-	preparedReq := &req
+	preparedReq := req
 	if shouldIntercept {
 		prepared, _ := s.toolInterceptor.PrepareAnthropicRequest(provider, &req)
-		preparedReq = prepared
+		preparedReq = *prepared
 	}
 	// Empty scenario for backward compatibility with callers that don't specify scenario
-	return s.forwardAnthropicStreamRequestV1(provider, req, "")
+	return s.forwardAnthropicStreamRequestV1(provider, preparedReq, "")
 }

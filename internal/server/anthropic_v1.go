@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
+	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -116,7 +118,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 
 				if hasInterceptedTools {
 					// Execute intercepted tools locally and get final response
-					finalResponse, err := s.handleInterceptedAnthropicToolCalls(provider, &req.MessageNewParams, anthropicResp, actualModel)
+					finalResponse, err := s.handleInterceptedAnthropicToolCalls(provider, &req.MessageNewParams, anthropicResp, actualModel, scenario)
 					if err != nil {
 						s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "tool_interception_failed")
 						SendForwardingError(c, fmt.Errorf("failed to handle tool calls: %w", err))
@@ -434,7 +436,7 @@ func (s *Server) trackUsage(c *gin.Context, rule *typ.Rule, provider *typ.Provid
 }
 
 // handleInterceptedAnthropicToolCalls executes intercepted Anthropic tool calls locally and returns final response
-func (s *Server) handleInterceptedAnthropicToolCalls(provider *typ.Provider, originalReq *anthropic.MessageNewParams, toolCallResponse *anthropic.Message, actualModel string) (*anthropic.Message, error) {
+func (s *Server) handleInterceptedAnthropicToolCalls(provider *typ.Provider, originalReq *anthropic.MessageNewParams, toolCallResponse *anthropic.Message, actualModel string, scenario string) (*anthropic.Message, error) {
 	logrus.Infof("Handling %d intercepted Anthropic tool calls for provider %s", len(toolCallResponse.Content), provider.Name)
 
 	// Build new messages list with original messages
@@ -493,7 +495,7 @@ func (s *Server) handleInterceptedAnthropicToolCalls(provider *typ.Provider, ori
 	followUpReq.Messages = newMessages
 
 	// Forward to provider for final response
-	finalResponse, err := s.forwardAnthropicRequestV1(provider, followUpReq)
+	finalResponse, err := s.forwardAnthropicRequestV1(provider, followUpReq, scenario)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get final response after tool execution: %w", err)
 	}
