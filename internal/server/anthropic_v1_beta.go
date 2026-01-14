@@ -53,9 +53,6 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req AnthropicBetaMessag
 
 	// Check provider's API style to decide which path to take
 	apiStyle := provider.APIStyle
-	if apiStyle == "" {
-		apiStyle = typ.APIStyleOpenAI // default to openai
-	}
 
 	switch apiStyle {
 	case typ.APIStyleAnthropic:
@@ -137,7 +134,6 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req AnthropicBetaMessag
 
 			c.JSON(http.StatusOK, anthropicResp)
 		}
-
 	case typ.APIStyleOpenAI:
 		// Check if adaptor is enabled
 		if !s.enableAdaptor {
@@ -173,6 +169,8 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req AnthropicBetaMessag
 			anthropicResp := adaptor.ConvertOpenAIToAnthropicBetaResponse(response, proxyModel)
 			c.JSON(http.StatusOK, anthropicResp)
 		}
+	default:
+		c.JSON(http.StatusBadRequest, "tingly-box: invalid api style")
 	}
 }
 
