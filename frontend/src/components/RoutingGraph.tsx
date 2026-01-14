@@ -287,19 +287,19 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                         onClick={(e) => e.stopPropagation()}
                     />
                     {/* Smart Routing Toggle */}
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography variant="body2" sx={{ fontSize: '0.85rem', color: 'text.secondary' }}>
-                            Smart
-                        </Typography>
-                        <Switch
-                            checked={smartEnabled}
-                            onChange={(e) => onUpdateRecord('smartEnabled', e.target.checked)}
-                            disabled={saving || !record.active}
-                            size="small"
-                            color="primary"
-                            onClick={(e) => e.stopPropagation()}
-                        />
-                    </Box>
+                    {/*<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>*/}
+                    {/*    <Typography variant="body2" sx={{ fontSize: '0.85rem', color: 'text.secondary' }}>*/}
+                    {/*        Smart*/}
+                    {/*    </Typography>*/}
+                    {/*    <Switch*/}
+                    {/*        checked={smartEnabled}*/}
+                    {/*        onChange={(e) => onUpdateRecord('smartEnabled', e.target.checked)}*/}
+                    {/*        disabled={saving || !record.active}*/}
+                    {/*        size="small"*/}
+                    {/*        color="primary"*/}
+                    {/*        onClick={(e) => e.stopPropagation()}*/}
+                    {/*    />*/}
+                    {/*</Box>*/}
                 </Box>
                 {/* Right side */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
