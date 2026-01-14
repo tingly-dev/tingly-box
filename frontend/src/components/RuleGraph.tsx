@@ -193,7 +193,7 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                 {/* Left side */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1 }}>
                     <Tooltip title={record.requestModel
-                        ? `Use "${record.requestModel}" as model name in your API requests`
+                        ? `Use "${record.requestModel}" as model name in your API requests. (click to copy)`
                         : 'No model specified'}>
                         <Chip
                             label={`model = ${record.requestModel || 'Unspecified'}`}
