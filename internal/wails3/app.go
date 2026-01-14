@@ -80,7 +80,7 @@ func newApp(port int, debug bool) *application.App {
 		},
 		Windows: application.WindowsOptions{},
 		SingleInstance: &application.SingleInstanceOptions{
-			UniqueID: "tingly-model-box.single-instance",
+			UniqueID: "tingly-box.single-instance",
 			OnSecondInstanceLaunch: func(data application.SecondInstanceData) {
 				if WindowMain != nil {
 					WindowMain.EmitEvent("secondInstanceLaunched", data)
