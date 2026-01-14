@@ -151,15 +151,6 @@ const UseClaudeCodePage: React.FC = () => {
         setConfigModalOpen(true);
     };
 
-    // Show config guide modal on mount if not suppressed
-    React.useEffect(() => {
-        const savedDontRemind = localStorage.getItem(CLAUDE_CODE_DONT_REMIND_KEY);
-        const shouldShow = savedDontRemind !== 'true';
-        if (shouldShow) {
-            setConfigModalOpen(true);
-        }
-    }, []);
-
     const copyToClipboard = async (text: string, label: string) => {
         try {
             await navigator.clipboard.writeText(text);

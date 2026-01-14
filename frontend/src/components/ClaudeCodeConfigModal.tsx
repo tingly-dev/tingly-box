@@ -45,9 +45,16 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
     return (
         <Dialog
             open={open}
-            onClose={onClose}
+            onClose={(event, reason) => {
+                // Only allow closing via the confirm button, not backdrop click or ESC
+                if (reason === 'backdropClick' || reason === 'escapeKeyDown') {
+                    return;
+                }
+                onClose();
+            }}
             maxWidth="lg"
             fullWidth
+            disableEscapeKeyDown
             PaperProps={{
                 sx: {
                     borderRadius: 3,
@@ -186,15 +193,22 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
 
             <DialogActions sx={{ px: 3, pb: 2, pt: 1, flexDirection: 'column', alignItems: 'stretch' }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    {/*<FormControlLabel*/}
+                    {/*    control={*/}
+                    {/*        <Checkbox*/}
+                    {/*            checked={dontRemindAgain}*/}
+                    {/*            onChange={(e) => onDontRemindChange(e.target.checked)}*/}
+                    {/*            size="small"*/}
+                    {/*        />*/}
+                    {/*    }*/}
+                    {/*    label={t('claudeCode.modal.dontRemindAgain')}*/}
+                    {/*    sx={{ mr: 0 }}*/}
+                    {/*/>*/}
                     <FormControlLabel
                         control={
-                            <Checkbox
-                                checked={dontRemindAgain}
-                                onChange={(e) => onDontRemindChange(e.target.checked)}
-                                size="small"
-                            />
+                            <></>
                         }
-                        label={t('claudeCode.modal.dontRemindAgain')}
+                        label={""}
                         sx={{ mr: 0 }}
                     />
                     <Button onClick={onClose} variant="contained" color="primary">
