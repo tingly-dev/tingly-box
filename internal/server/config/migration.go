@@ -29,6 +29,7 @@ func Migrate(c *Config) error {
 	migrate20251225(c)
 	migrate20260103(c)
 	migrate20260110(c)
+	migrate20260114(c)
 	return nil
 }
 
@@ -240,5 +241,21 @@ func migrate20260110(c *Config) {
 
 	if needsSave {
 		_ = c.Save()
+	}
+}
+
+// migrate20260114 for bugfix - bug which cause scenario empty
+func migrate20260114(c *Config) {
+	var valid []typ.Rule
+	for _, r := range c.Rules {
+		if r.Scenario == "" {
+			continue
+		}
+		valid = append(valid, r)
+	}
+
+	if len(valid) != len(c.Rules) {
+		c.Rules = valid
+		c.Save()
 	}
 }
