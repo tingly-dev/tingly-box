@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
@@ -23,7 +23,7 @@ func NewInterceptor(globalConfig *typ.ToolInterceptorConfig) *Interceptor {
 	if globalConfig == nil {
 		globalConfig = &typ.ToolInterceptorConfig{
 			Enabled:      false,
-			SearchAPI:    "brave",
+			SearchAPI:    "duckduckgo",
 			MaxResults:   10,
 			MaxFetchSize: 1 * 1024 * 1024, // 1MB
 			FetchTimeout: 30,              // 30 seconds

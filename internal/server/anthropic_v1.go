@@ -116,7 +116,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 
 				if hasInterceptedTools {
 					// Execute intercepted tools locally and get final response
-					finalResponse, err := s.handleInterceptedAnthropicToolCalls(provider, &req.MessageNewParams, anthropicResp, actualModel)
+					finalResponse, err := s.handleInterceptedAnthropicToolCalls(provider, &req.MessageNewParams, anthropicResp, actualModel, scenario)
 					if err != nil {
 						s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "tool_interception_failed")
 						SendForwardingError(c, fmt.Errorf("failed to handle tool calls: %w", err))
@@ -480,7 +480,7 @@ func (s *Server) handleAnthropicV1ViaResponsesAPIStreaming(c *gin.Context, req p
 }
 
 // handleInterceptedAnthropicToolCalls executes intercepted Anthropic tool calls locally and returns final response
-func (s *Server) handleInterceptedAnthropicToolCalls(provider *typ.Provider, originalReq *anthropic.MessageNewParams, toolCallResponse *anthropic.Message, actualModel string) (*anthropic.Message, error) {
+func (s *Server) handleInterceptedAnthropicToolCalls(provider *typ.Provider, originalReq *anthropic.MessageNewParams, toolCallResponse *anthropic.Message, actualModel string, scenario string) (*anthropic.Message, error) {
 	logrus.Infof("Handling %d intercepted Anthropic tool calls for provider %s", len(toolCallResponse.Content), provider.Name)
 
 	// Build new messages list with original messages

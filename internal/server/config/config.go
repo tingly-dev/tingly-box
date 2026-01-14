@@ -186,7 +186,7 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 			Enabled:    false,
 			SearchAPI:  "duckduckgo",
 			MaxResults: 10,
-			ProxyURL:   "http://127.0.0.1:7897",
+			ProxyURL:   "http://127.0.0.1:7890",
 		}
 		updated = true
 	}
@@ -1273,7 +1273,7 @@ func (c *Config) CreateDefaultConfig() error {
 			Enabled:    true,
 			SearchAPI:  "duckduckgo",
 			MaxResults: 10,
-			ProxyURL:   "http://127.0.0.1:7897",
+			ProxyURL:   "http://127.0.0.1:7890",
 		}
 	}
 
