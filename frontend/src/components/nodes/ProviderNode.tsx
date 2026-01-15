@@ -5,6 +5,7 @@ import {
 } from '@mui/icons-material';
 import {
     Box,
+    Divider,
     IconButton,
     ListItemIcon,
     ListItemText,
@@ -91,13 +92,13 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                     </Box>
                 )}
 
-                {/* Provider and Model in same row */}
-                <Box sx={{ width: '100%', display: 'flex', alignItems: 'center', gap: 1, mb: providerNode.elementMargin }}>
-                    {/* Provider */}
+                {/* Combined Provider/Model Field with menu button inside */}
+                <Box sx={{ width: '100%', mb: providerNode.elementMargin }}>
                     <Box
                         sx={{
-                            flex: 10,
+                            width: '100%',
                             p: providerNode.fieldPadding,
+                            pr: 0.5,
                             border: '1px solid',
                             borderColor: 'text.primary',
                             borderRadius: 1,
@@ -105,83 +106,65 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                             transition: 'all 0.2s',
                             display: 'flex',
                             alignItems: 'center',
-                            justifyContent: 'center',
                             maxHeight: providerNode.fieldHeight,
                             overflow: 'hidden',
                         }}
                     >
-                        <Tooltip title={providerUuidToName[provider.provider] || t('rule.graph.selectProvider')} arrow>
-                            <Typography variant="body2" color="text.primary" noWrap sx={{ fontSize: '0.8rem', width: '100%', textAlign: 'center' }}>
-                                {providerUuidToName[provider.provider] || t('rule.graph.selectProvider')}
-                            </Typography>
-                        </Tooltip>
-                    </Box>
-
-                    {/* Model */}
-                    {provider.provider && (
-                        <Box
-                            sx={{
-                                flex: 10,
-                                p: providerNode.fieldPadding,
-                                border: '1px dashed',
-                                borderColor: 'text.primary',
-                                borderRadius: 1,
-                                backgroundColor: 'background.paper',
-                                transition: 'all 0.2s',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                maxHeight: providerNode.fieldHeight,
-                                overflow: 'hidden',
-                            }}
-                        >
-                            <Tooltip title={provider.model || t('rule.graph.selectModel')} arrow>
+                        <Tooltip title={
+                            provider.provider && provider.model
+                                ? <>Credential: {providerUuidToName[provider.provider]}<br/>Model: {provider.model}</>
+                                : provider.provider
+                                    ? <>Credential: {providerUuidToName[provider.provider]}<br/>Model: (select model)</>
+                                    : t('rule.graph.selectProvider')
+                        } arrow>
+                            <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
                                 <Typography
                                     variant="body2"
                                     color="text.primary"
                                     noWrap
-                                    sx={{ fontSize: '0.8rem', fontStyle: !provider.model ? 'italic' : 'normal', width: '100%', textAlign: 'center' }}
+                                    sx={{
+                                        fontSize: '0.8rem',
+                                        fontStyle: !provider.provider ? 'italic' : 'normal',
+                                    }}
                                 >
-                                    {provider.model || t('rule.graph.selectModel')}
+                                    {providerUuidToName[provider.provider] || t('rule.graph.selectProvider')}
                                 </Typography>
-                            </Tooltip>
-                        </Box>
-                    )}
 
-                    {/* More Options Button - Moved to bottom right */}
-                    <Box
-                        sx={{
-                            flex: 1,
-                            p: providerNode.fieldPadding,
-                            borderColor: 'text.primary',
-                            borderRadius: 1,
-                            backgroundColor: 'background.paper',
-                            transition: 'all 0.2s',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            maxHeight: providerNode.fieldHeight,
-                            overflow: 'hidden',
-                        }}
-                    >
-                    <IconButton
-                        size="small"
-                        onClick={handleMenuClick}
-                        title={t('rule.menu.refreshModels')}
-                        sx={{
-                            position: 'absolute',
-                            zIndex: 10,
-                            p: 0.5,
-                            opacity: 0.6,
-                            color: 'text.primary',
-                            '&:hover': {
-                                opacity: 1,
-                                backgroundColor: 'primary.main'
-                            }
-                        }}
-                    >
-                        <MoreIcon />
-                    </IconButton>
+                                {provider.provider && (
+                                    <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+                                )}
+
+                                {provider.provider && (
+                                    <Typography
+                                        variant="body2"
+                                        color="text.primary"
+                                        noWrap
+                                        sx={{
+                                            fontSize: '0.8rem',
+                                            fontStyle: !provider.model ? 'italic' : 'normal',
+                                        }}
+                                    >
+                                        {provider.model || '?'}
+                                    </Typography>
+                                )}
+                            </Box>
+                        </Tooltip>
+
+                        <IconButton
+                            size="small"
+                            onClick={handleMenuClick}
+                            sx={{
+                                opacity: 0.6,
+                                color: 'text.primary',
+                                ml: 0.5,
+                                '&:hover': {
+                                    opacity: 1,
+                                    backgroundColor: 'primary.main'
+                                }
+                            }}
+                        >
+                            <MoreIcon />
+                        </IconButton>
                     </Box>
                 </Box>
 

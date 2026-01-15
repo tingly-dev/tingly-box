@@ -21,7 +21,7 @@ export const PROVIDER_NODE_STYLES = {
     badgeHeight: 5,
     fieldHeight: 5,
     fieldPadding: 2,
-    elementMargin: 1,
+    elementMargin: 0.5,
 } as const;
 
 export const { modelNode, providerNode } = { modelNode: MODEL_NODE_STYLES, providerNode: PROVIDER_NODE_STYLES };
