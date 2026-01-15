@@ -21,6 +21,12 @@ import { ApiStyleBadge } from '../ApiStyleBadge.tsx';
 import type { ConfigProvider } from '../RoutingGraphTypes.ts';
 import { ProviderNodeContainer, providerNode } from './styles.tsx';
 
+// Helper function to get provider name from providersData
+const getProviderName = (providerUuid: string, providersData: Provider[]): string => {
+    const provider = providersData.find(p => p.uuid === providerUuid);
+    return provider?.name || 'Unknown Provider';
+};
+
 // Provider Node Component Props
 export interface ProviderNodeComponentProps {
     provider: ConfigProvider;
@@ -29,7 +35,6 @@ export interface ProviderNodeComponentProps {
     active: boolean;
     onDelete: () => void;
     onRefreshModels: (provider: Provider) => void;
-    providerUuidToName: { [uuid: string]: string };
     onNodeClick: () => void;
 }
 
@@ -41,7 +46,6 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
     active,
     onDelete,
     onRefreshModels,
-    providerUuidToName,
     onNodeClick
 }) => {
     const { t } = useTranslation();
@@ -69,6 +73,7 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
 
     // Get current provider object for display
     const currentProvider = providersData.find(p => p.uuid === provider.provider);
+    const providerName = getProviderName(provider.provider, providersData);
 
     return (
         <>
@@ -112,9 +117,9 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                     >
                         <Tooltip title={
                             provider.provider && provider.model
-                                ? <>Credential: {providerUuidToName[provider.provider]}<br/>Model: {provider.model}</>
+                                ? <>Credential: {providerName}<br/>Model: {provider.model}</>
                                 : provider.provider
-                                    ? <>Credential: {providerUuidToName[provider.provider]}<br/>Model: (select model)</>
+                                    ? <>Credential: {providerName}<br/>Model: (select model)</>
                                     : t('rule.graph.selectProvider')
                         } arrow>
                             <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
@@ -127,7 +132,7 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                                         fontStyle: !provider.provider ? 'italic' : 'normal',
                                     }}
                                 >
-                                    {providerUuidToName[provider.provider] || t('rule.graph.selectProvider')}
+                                    {providerName || t('rule.graph.selectProvider')}
                                 </Typography>
 
                                 {provider.provider && (

@@ -25,7 +25,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { dispatchCustomModelUpdate, listenForCustomModelUpdates, useCustomModels } from '../hooks/useCustomModels';
 import { useGridLayout } from '../hooks/useGridLayout';
 import { usePagination } from '../hooks/usePagination';
-import type { Provider, ProviderModelsData } from '../types/provider';
+import type { Provider, ProviderModelsDataByUuid } from '../types/provider';
 import { api } from '../services/api';
 import { getModelTypeInfo, navigateToModelPage } from '../utils/modelUtils';
 import { ApiStyleBadge } from "./ApiStyleBadge";
@@ -41,7 +41,7 @@ export interface ProviderSelectTabOption {
 
 interface ProviderSelectTabProps {
     providers: Provider[];
-    providerModels?: ProviderModelsData;
+    providerModels?: ProviderModelsDataByUuid;
     selectedProvider?: string; // This is now UUID
     selectedModel?: string;
     activeTab?: number;
@@ -174,8 +174,8 @@ export default function ModelSelectTab({
         const customModel = customModelDialog.value?.trim();
         if (customModel && customModelDialog.provider) {
             // Save to local storage using hook
-            if (saveCustomModel(customModelDialog.provider.name, customModel)) {
-                dispatchCustomModelUpdate(customModelDialog.provider.name, customModel);
+            if (saveCustomModel(customModelDialog.provider.uuid, customModel)) {
+                dispatchCustomModelUpdate(customModelDialog.provider.uuid, customModel);
             }
 
             // Then save to persistence through parent component
@@ -276,8 +276,8 @@ export default function ModelSelectTab({
     }, [probingModels, onSelected]);
 
     const handleDeleteCustomModel = (provider: Provider, customModel: string) => {
-        removeCustomModel(provider.name, customModel);
-        dispatchCustomModelUpdate(provider.name, customModel);
+        removeCustomModel(provider.uuid, customModel);
+        dispatchCustomModelUpdate(provider.uuid, customModel);
     };
 
     const handleCustomModelEdit = (provider: Provider, currentValue?: string) => {
@@ -445,10 +445,10 @@ export default function ModelSelectTab({
                 const { standardModelsForDisplay, isCustomModel } = modelTypeInfo;
 
                 const isProviderSelected = selectedProvider === provider.uuid; // Compare UUIDs
-                const pagination = getPaginatedData(standardModelsForDisplay, provider.name);
+                const pagination = getPaginatedData(standardModelsForDisplay, provider.uuid);
                 const isRefreshing = refreshingProviders.includes(provider.uuid); // Use UUID
 
-                const backendCustomModel = providerModels?.[provider.name]?.custom_model;
+                const backendCustomModel = providerModels?.[provider.uuid]?.custom_model;
 
                 return (
                     <TabPanel key={provider.uuid} value={currentTab} index={index}> {/* Use UUID as key */}
@@ -457,7 +457,7 @@ export default function ModelSelectTab({
                         {/* Models Display */}
                         <Stack spacing={2}>
                             {/* Star Models Section */}
-                            {providerModels?.[provider.name]?.star_models && providerModels[provider.name].star_models!.length > 0 && (
+                            {providerModels?.[provider.uuid]?.star_models && providerModels[provider.uuid].star_models!.length > 0 && (
                                 <Box>
                                     <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
                                         Starred Models
@@ -469,7 +469,7 @@ export default function ModelSelectTab({
                                             gap: 0.8,
                                         }}
                                     >
-                                        {providerModels[provider.name].star_models!.map((starModel) => (
+                                        {providerModels[provider.uuid].star_models!.map((starModel) => (
                                             <ModelCard
                                                 key={starModel}
                                                 model={starModel}
@@ -494,8 +494,8 @@ export default function ModelSelectTab({
                                         <TextField
                                             size="small"
                                             placeholder="Search models..."
-                                            value={searchTerms[provider.name] || ''}
-                                            onChange={(e) => handleSearchChange(provider.name, e.target.value)}
+                                            value={searchTerms[provider.uuid] || ''}
+                                            onChange={(e) => handleSearchChange(provider.uuid, e.target.value)}
                                             slotProps={{
                                                 input: {
                                                     startAdornment: (
@@ -644,12 +644,12 @@ export default function ModelSelectTab({
                                     })}
                                 </Box>
                                 {pagination.totalItems === 0 &&
-                                    (!customModels[provider.name] || customModels[provider.name].length === 0) &&
+                                    (!customModels[provider.uuid] || customModels[provider.uuid].length === 0) &&
                                     !backendCustomModel &&
                                     !(isProviderSelected && selectedModel && isCustomModel(selectedModel)) && (
                                         <Box sx={{ textAlign: 'center', py: 4 }}>
                                             <Typography variant="body2" color="text.secondary">
-                                                No models found matching "{searchTerms[provider.name] || ''}"
+                                                No models found matching "{searchTerms[provider.uuid] || ''}"
                                             </Typography>
                                         </Box>
                                     )}
@@ -662,7 +662,7 @@ export default function ModelSelectTab({
                                         <IconButton
                                             size="small"
                                             disabled={pagination.currentPage === 1}
-                                            onClick={() => handlePageChange(provider.name, pagination.currentPage - 1)}
+                                            onClick={() => handlePageChange(provider.uuid, pagination.currentPage - 1)}
                                         >
                                             <NavigateBeforeIcon />
                                         </IconButton>
@@ -672,7 +672,7 @@ export default function ModelSelectTab({
                                         <IconButton
                                             size="small"
                                             disabled={pagination.currentPage === pagination.totalPages}
-                                            onClick={() => handlePageChange(provider.name, pagination.currentPage + 1)}
+                                            onClick={() => handlePageChange(provider.uuid, pagination.currentPage + 1)}
                                         >
                                             <NavigateNextIcon />
                                         </IconButton>
