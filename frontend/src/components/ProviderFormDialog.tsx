@@ -11,13 +11,10 @@ import {
     DialogTitle,
     FormControlLabel,
     IconButton,
-    MenuItem,
     Stack,
     Switch,
     TextField,
     Typography,
-    Checkbox,
-    Grid,
 } from '@mui/material';
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -242,69 +239,96 @@ const ProviderFormDialog = ({
                                 </Typography>
                             </Alert>
                         )}
-                        {/* API Style Selection - Form Field Style */}
-                        <TextField
-                            select
-                            fullWidth
-                            size="small"
-                            label={t('providerDialog.apiStyle.label')}
-                            value={data.apiStyle || ''}
-                            onChange={(e) => {
-                                const newStyle = e.target.value as 'openai' | 'anthropic' | '';
-                                const oldStyle = data.apiStyle;
-
-                                onChange('apiStyle', newStyle);
-                                setVerificationResult(null);
-
-                                // Reset apiBase and name when switching styles
-                                if (oldStyle && newStyle && oldStyle !== newStyle) {
-                                    onChange('apiBase', '');
-                                    onChange('name', '');
-                                    setIsCustomUrl(false);
-                                    // Show warning only in edit mode
-                                    if (mode === 'edit') {
-                                        setStyleChangedWarning(true);
-                                        setTimeout(() => setStyleChangedWarning(false), 4000);
+                        {/* API Style Selection - Big Box Cards */}
+                        <Box sx={{ display: 'flex', gap: 2 }}>
+                            {/* OpenAI Style Card */}
+                            <Box
+                                onClick={() => {
+                                    if (data.apiStyle !== 'openai') {
+                                        const oldStyle = data.apiStyle;
+                                        onChange('apiStyle', 'openai');
+                                        setVerificationResult(null);
+                                        if (oldStyle && oldStyle !== 'openai' as any) {
+                                            onChange('apiBase', '');
+                                            onChange('name', '');
+                                            setIsCustomUrl(false);
+                                            if (mode === 'edit') {
+                                                setStyleChangedWarning(true);
+                                                setTimeout(() => setStyleChangedWarning(false), 4000);
+                                            }
+                                        }
                                     }
-                                }
-                            }}
-                            sx={{
-                                '& .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: 'divider',
-                                },
-                                '&:hover .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: 'primary.main',
-                                },
-                                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: 'primary.main',
-                                    borderWidth: 2,
-                                },
-                            }}
-                            helperText={
-                                data.apiStyle === 'openai'
-                                    ? t('providerDialog.apiStyle.helperOpenAI')
-                                    : data.apiStyle === 'anthropic'
-                                        ? t('providerDialog.apiStyle.helperAnthropic')
-                                        : t('providerDialog.apiStyle.placeholder')
-                            }
-                            required={mode === 'add'}
-                        >
-                            <MenuItem value="">
-                                <em>{t('providerDialog.apiStyle.placeholder')}</em>
-                            </MenuItem>
-                            <MenuItem value="openai">
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <OpenAI size={16} />
-                                    {t('providerDialog.apiStyle.openAI')}
-                                </Box>
-                            </MenuItem>
-                            <MenuItem value="anthropic">
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <Anthropic size={16} />
-                                    {t('providerDialog.apiStyle.anthropic')}
-                                </Box>
-                            </MenuItem>
-                        </TextField>
+                                }}
+                                sx={{
+                                    flex: 1,
+                                    border: 2,
+                                    borderColor: data.apiStyle === 'openai' ? 'primary.main' : 'divider',
+                                    borderRadius: 2,
+                                    p: 2,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    bgcolor: data.apiStyle === 'openai' ? 'primary.50' : 'background.paper',
+                                    '&:hover': {
+                                        borderColor: data.apiStyle === 'openai' ? 'primary.main' : 'primary.light',
+                                        bgcolor: data.apiStyle === 'openai' ? 'primary.100' : 'action.hover',
+                                    },
+                                }}
+                            >
+                                <Stack spacing={1} alignItems="center">
+                                    <OpenAI size={28} />
+                                    <Typography variant="subtitle1" fontWeight={600}>
+                                        OpenAI Compatible
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary" textAlign="center">
+                                        {t('providerDialog.apiStyle.helperOpenAI')}
+                                    </Typography>
+                                </Stack>
+                            </Box>
+
+                            {/* Anthropic Style Card */}
+                            <Box
+                                onClick={() => {
+                                    if (data.apiStyle !== 'anthropic') {
+                                        const oldStyle = data.apiStyle;
+                                        onChange('apiStyle', 'anthropic');
+                                        setVerificationResult(null);
+                                        if (oldStyle && oldStyle !== 'anthropic' as any) {
+                                            onChange('apiBase', '');
+                                            onChange('name', '');
+                                            setIsCustomUrl(false);
+                                            if (mode === 'edit') {
+                                                setStyleChangedWarning(true);
+                                                setTimeout(() => setStyleChangedWarning(false), 4000);
+                                            }
+                                        }
+                                    }
+                                }}
+                                sx={{
+                                    flex: 1,
+                                    border: 2,
+                                    borderColor: data.apiStyle === 'anthropic' ? 'primary.main' : 'divider',
+                                    borderRadius: 2,
+                                    p: 2,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    bgcolor: data.apiStyle === 'anthropic' ? 'primary.50' : 'background.paper',
+                                    '&:hover': {
+                                        borderColor: data.apiStyle === 'anthropic' ? 'primary.main' : 'primary.light',
+                                        bgcolor: data.apiStyle === 'anthropic' ? 'primary.100' : 'action.hover',
+                                    },
+                                }}
+                            >
+                                <Stack spacing={1} alignItems="center">
+                                    <Anthropic size={28} />
+                                    <Typography variant="subtitle1" fontWeight={600}>
+                                        Anthropic Compatible
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary" textAlign="center">
+                                        {t('providerDialog.apiStyle.helperAnthropic')}
+                                    </Typography>
+                                </Stack>
+                            </Box>
+                        </Box>
 
                         {/* Style change warning alert */}
                         {styleChangedWarning && (

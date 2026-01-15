@@ -108,8 +108,8 @@ export default {
     "apiStyle": {
       "label": "API Style",
       "placeholder": "Select API style...",
-      "helperOpenAI": "Supports models from OpenAI, Azure OpenAI, and many other providers",
-      "helperAnthropic": "For Claude API and Claude-compatible AI providers",
+      "helperOpenAI": "Supports models from OpenAI, Google and many other OpenAI-compatible providers",
+      "helperAnthropic": "For Anthropic-compatible AI providers, commonly used with Claude Code.",
       "openAI": "OpenAI Compatible",
       "anthropic": "Anthropic Compatible"
     },
