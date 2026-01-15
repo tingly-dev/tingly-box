@@ -40,7 +40,7 @@ type Config struct {
 	// Server settings
 	DefaultMaxTokens int  `json:"default_max_tokens"` // Default max_tokens for anthropic API requests
 	Verbose          bool `json:"verbose"`            // Verbose mode for detailed logging
-	Debug            bool `json:"debug"`              // Debug mode for Gin debug level logging
+	Debug            bool `json:"-"`                  // Debug mode for Gin debug level logging
 	OpenBrowser      bool `yaml:"-" json:"-"`         // Auto-open browser in web UI mode (default: true)
 
 	// Error log settings
