@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "child_process";
-import { chmodSync, existsSync } from "fs";
+import { chmodSync, existsSync, readdirSync, statSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { createReadStream } from "fs";
@@ -40,6 +40,27 @@ function getCacheDir() {
 	return cacheDir;
 }
 
+// Recursively find binary in directory (handles nested directory structures in zip)
+function findBinary(dir, binaryName) {
+	const entries = readdirSync(dir);
+	for (const entry of entries) {
+		const fullPath = join(dir, entry);
+		try {
+			const stat = statSync(fullPath);
+			if (stat.isFile() && entry === binaryName) {
+				return fullPath;
+			}
+			if (stat.isDirectory()) {
+				const found = findBinary(fullPath, binaryName);
+				if (found) return found;
+			}
+		} catch {
+			continue;
+		}
+	}
+	return null;
+}
+
 // Extract binary from zip to cache directory
 async function extractBinary(platformDir) {
 	const zipFileName = `tingly-box-${platformDir}.zip`;
@@ -47,9 +68,10 @@ async function extractBinary(platformDir) {
 	const cacheDir = getCacheDir();
 	const targetPath = join(cacheDir, platformDir);
 
-	// Check if binary already exists in cache
-	const binaryName =  "tingly-box-" + platformDir + (process.platform === "win32" ? ".exe" : "");
+	const binaryName = "tingly-box-" + platformDir + (process.platform === "win32" ? ".exe" : "");
 	const cachedBinary = join(targetPath, binaryName);
+
+	// Check if binary already exists in cache and has executable permission
 	if (existsSync(cachedBinary)) {
 		return cachedBinary;
 	}
@@ -65,13 +87,28 @@ async function extractBinary(platformDir) {
 		unzipper.Extract({ path: targetPath })
 	);
 
-	// Set executable permission on Unix systems
-	if (process.platform !== "win32") {
-		chmodSync(cachedBinary, 0o755);
+	// Find the actual binary (handles cases where zip has nested structure)
+	let actualBinaryPath = cachedBinary;
+	if (!existsSync(cachedBinary)) {
+		const found = findBinary(targetPath, binaryName);
+		if (found) {
+			actualBinaryPath = found;
+		} else {
+			throw new Error(`Binary "${binaryName}" not found after extraction`);
+		}
 	}
 
-	console.log(`✅ Extracted to: ${cachedBinary}`);
-	return cachedBinary;
+	// Set executable permission on Unix systems
+	if (process.platform !== "win32") {
+		try {
+			chmodSync(actualBinaryPath, 0o755);
+		} catch (e) {
+			console.warn(`⚠️  Failed to set executable permission: ${e.message}`);
+		}
+	}
+
+	console.log(`✅ Extracted to: ${actualBinaryPath}`);
+	return actualBinaryPath;
 }
 
 // Default parameters to use when no arguments are provided
