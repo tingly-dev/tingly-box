@@ -419,38 +419,45 @@ const ProviderFormDialog = ({
                                 />
 
                                 {/* API Key Field */}
-                                <TextField
-                                    size="small"
-                                    fullWidth
-                                    label={t('providerDialog.apiKey.label')}
-                                    type="password"
-                                    value={data.token}
-                                    onChange={(e) => {
-                                        onChange('token', e.target.value);
-                                        // Clear verification result when token changes
-                                        setVerificationResult(null);
-                                    }}
-                                    required={!noApiKey}
-                                    placeholder={mode === 'add' ? t('providerDialog.apiKey.placeholderAdd') : t('providerDialog.apiKey.placeholderEdit')}
-                                    helperText={mode === 'edit' && t('providerDialog.apiKey.helperEdit')}
-                                    disabled={noApiKey}
-                                />
-
-                                {/* Proxy URL Field */}
-                                <TextField
-                                    size="small"
-                                    fullWidth
-                                    label={t('providerDialog.advanced.proxyUrl.label')}
-                                    placeholder={t('providerDialog.advanced.proxyUrl.placeholder')}
-                                    value={data.proxyUrl || ''}
-                                    onChange={(e) => onChange('proxyUrl', e.target.value)}
-                                    helperText={t('providerDialog.advanced.proxyUrl.helper')}
-                                />
-
-                                {/* No Key Required switch */}
-                                {isCustomUrl && (
-                                    <FormControlLabel
-                                        control={
+                                <Box sx={{ position: 'relative' }}>
+                                    <TextField
+                                        size="small"
+                                        fullWidth
+                                        label={noApiKey ? 'API Key (Not Required)' : t('providerDialog.apiKey.label')}
+                                        type="password"
+                                        value={data.token}
+                                        onChange={(e) => {
+                                            onChange('token', e.target.value);
+                                            // Clear verification result when token changes
+                                            setVerificationResult(null);
+                                        }}
+                                        required={!noApiKey}
+                                        placeholder={mode === 'add' ? t('providerDialog.apiKey.placeholderAdd') : t('providerDialog.apiKey.placeholderEdit')}
+                                        helperText={mode === 'edit' && t('providerDialog.apiKey.helperEdit')}
+                                        disabled={noApiKey}
+                                        slotProps={{
+                                            input: {
+                                                sx: { pr: isCustomUrl ? 12 : 0 },
+                                            },
+                                        }}
+                                    />
+                                    {isCustomUrl && (
+                                        <Stack
+                                            direction="row"
+                                            alignItems="center"
+                                            spacing={0.5}
+                                            sx={{
+                                                position: 'absolute',
+                                                right: 12,
+                                                top: '50%',
+                                                transform: 'translateY(-50%)',
+                                                pointerEvents: 'auto',
+                                            }}
+                                            onClick={(e) => e.stopPropagation()}
+                                        >
+                                            <Typography variant="subtitle2" color="text.secondary">
+                                                No Key
+                                            </Typography>
                                             <Switch
                                                 size="small"
                                                 checked={noApiKey}
@@ -463,10 +470,20 @@ const ProviderFormDialog = ({
                                                     }
                                                 }}
                                             />
-                                        }
-                                        label="No Key Required"
-                                    />
-                                )}
+                                        </Stack>
+                                    )}
+                                </Box>
+
+                                {/* Proxy URL Field */}
+                                <TextField
+                                    size="small"
+                                    fullWidth
+                                    label={t('providerDialog.advanced.proxyUrl.label')}
+                                    placeholder={t('providerDialog.advanced.proxyUrl.placeholder')}
+                                    value={data.proxyUrl || ''}
+                                    onChange={(e) => onChange('proxyUrl', e.target.value)}
+                                    helperText={t('providerDialog.advanced.proxyUrl.helper')}
+                                />
 
                                 {/* Verification Result */}
                                 {verificationResult && (
