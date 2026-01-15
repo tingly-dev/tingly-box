@@ -16,6 +16,7 @@ import (
 // It also stores the current process PID for signal-based shutdown.
 type FileLock struct {
 	lockFile string
+	pidFile  string // Separate PID file for Windows (can be read while lock is held)
 	file     *os.File
 	pid      int
 }
@@ -25,13 +26,14 @@ type FileLock struct {
 func NewFileLock(configDir string) *FileLock {
 	return &FileLock{
 		lockFile: filepath.Join(configDir, "tingly-server.lock"),
+		pidFile:  filepath.Join(configDir, "tingly-server.pid"), // Separate PID file
 	}
 }
 
 // TryLock attempts to acquire the file lock.
 // Returns an error if the lock is already held by another process.
 // The lock file remains on disk but is unlocked when this process dies.
-// On success, stores the current process PID in the lock file for shutdown signals.
+// On success, stores the current process PID in a separate PID file for shutdown signals.
 func (fl *FileLock) TryLock() error {
 	var err error
 	fl.file, err = os.OpenFile(fl.lockFile, os.O_CREATE|os.O_WRONLY, 0644)
@@ -56,13 +58,11 @@ func (fl *FileLock) TryLock() error {
 		return fmt.Errorf("lock already held: server may already be running")
 	}
 
-	// Store current PID for stop command
+	// Store current PID in a separate PID file (not the lock file)
+	// This allows other processes to read the PID even while lock is held
 	fl.pid = os.Getpid()
-	if _, err := fl.file.Seek(0, 0); err != nil {
-		return fmt.Errorf("failed to seek lock file: %w", err)
-	}
-	if _, err := fl.file.WriteString(strconv.Itoa(fl.pid) + "\n"); err != nil {
-		return fmt.Errorf("failed to write PID to lock file: %w", err)
+	if err := os.WriteFile(fl.pidFile, []byte(strconv.Itoa(fl.pid)+"\n"), 0644); err != nil {
+		return fmt.Errorf("failed to write PID file: %w", err)
 	}
 
 	return nil
@@ -89,8 +89,9 @@ func (fl *FileLock) Unlock() error {
 	closeErr := fl.file.Close()
 	fl.file = nil
 
-	// Remove the lock file (optional, keeps directory clean)
+	// Remove the lock file and PID file (optional, keeps directory clean)
 	_ = os.Remove(fl.lockFile)
+	_ = os.Remove(fl.pidFile)
 
 	if closeErr != nil {
 		return fmt.Errorf("failed to close lock file: %w", closeErr)
@@ -132,16 +133,18 @@ func (fl *FileLock) GetLockFilePath() string {
 	return fl.lockFile
 }
 
-// GetPID returns the PID stored in the lock file.
-// Returns error if the lock file doesn't exist or contains invalid data.
+// GetPID returns the PID stored in the PID file.
+// Returns error if the PID file doesn't exist or contains invalid data.
+// On Windows, we use a separate PID file because the lock file cannot be read
+// while it's exclusively locked by another process.
 func (fl *FileLock) GetPID() (int, error) {
-	data, err := os.ReadFile(fl.lockFile)
+	data, err := os.ReadFile(fl.pidFile)
 	if err != nil {
-		return 0, fmt.Errorf("failed to read lock file: %w", err)
+		return 0, fmt.Errorf("failed to read PID file: %w", err)
 	}
 
 	if len(data) == 0 {
-		return 0, fmt.Errorf("lock file is empty")
+		return 0, fmt.Errorf("PID file is empty")
 	}
 
 	// Find newline and take first line only
@@ -155,7 +158,7 @@ func (fl *FileLock) GetPID() (int, error) {
 
 	pid, err := strconv.Atoi(pidStr)
 	if err != nil {
-		return 0, fmt.Errorf("invalid PID in lock file: %w", err)
+		return 0, fmt.Errorf("invalid PID in PID file: %w", err)
 	}
 
 	return pid, nil
