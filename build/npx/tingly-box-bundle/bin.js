@@ -48,7 +48,7 @@ async function extractBinary(platformDir) {
 	const targetPath = join(cacheDir, platformDir);
 
 	// Check if binary already exists in cache
-	const binaryName = "tingly-box" + (process.platform === "win32" ? ".exe" : "");
+	const binaryName =  "tingly-box-" + platformDir + (process.platform === "win32" ? ".exe" : "");
 	const cachedBinary = join(targetPath, binaryName);
 	if (existsSync(cachedBinary)) {
 		return cachedBinary;
