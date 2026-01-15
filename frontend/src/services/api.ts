@@ -652,6 +652,47 @@ export const api = {
     // Direct access to raw API instances for advanced usage
     // Usage: const { providersApi, modelsApi } = await api.instances();
     instances: getApiInstances,
+
+    // Usage Dashboard API calls
+    getUsageStats: async (params: {
+        group_by?: string;
+        start_time?: string;
+        end_time?: string;
+        provider?: string;
+        model?: string;
+        scenario?: string;
+        limit?: number;
+    } = {}): Promise<any> => {
+        const queryParams = new URLSearchParams();
+        if (params.group_by) queryParams.append('group_by', params.group_by);
+        if (params.start_time) queryParams.append('start_time', params.start_time);
+        if (params.end_time) queryParams.append('end_time', params.end_time);
+        if (params.provider) queryParams.append('provider', params.provider);
+        if (params.model) queryParams.append('model', params.model);
+        if (params.scenario) queryParams.append('scenario', params.scenario);
+        if (params.limit) queryParams.append('limit', params.limit.toString());
+        const query = queryParams.toString();
+        return fetchUIAPI(`/usage/stats${query ? `?${query}` : ''}`);
+    },
+
+    getUsageTimeSeries: async (params: {
+        interval?: string;
+        start_time?: string;
+        end_time?: string;
+        provider?: string;
+        model?: string;
+        scenario?: string;
+    } = {}): Promise<any> => {
+        const queryParams = new URLSearchParams();
+        if (params.interval) queryParams.append('interval', params.interval);
+        if (params.start_time) queryParams.append('start_time', params.start_time);
+        if (params.end_time) queryParams.append('end_time', params.end_time);
+        if (params.provider) queryParams.append('provider', params.provider);
+        if (params.model) queryParams.append('model', params.model);
+        if (params.scenario) queryParams.append('scenario', params.scenario);
+        const query = queryParams.toString();
+        return fetchUIAPI(`/usage/timeseries${query ? `?${query}` : ''}`);
+    },
 };
 
 export default api;
