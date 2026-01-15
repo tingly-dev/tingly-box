@@ -9,7 +9,7 @@ import {
     Tooltip,
     Typography,
 } from '@mui/material';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../services/api';
 import ModelSelectTab from './ModelSelectTab';
 import ProbeModal from '@/components/ProbeModal';
@@ -119,12 +119,18 @@ const ModelListDialog = ({ open, onClose, provider }: ModelListDialogProps) => {
     const [resultDialogOpen, setResultDialogOpen] = useState(false);
     const [viewResultModel, setViewResultModel] = useState<string | null>(null);
 
+    // Ref to track if dialog is still open (to avoid showing results after closing)
+    const isDialogOpenRef = useRef(true);
+
     // Fetch models when dialog opens
     useEffect(() => {
         if (open && provider) {
+            isDialogOpenRef.current = true;
             fetchProviderModels(provider);
         } else if (!open) {
             // Reset when closed
+            isDialogOpenRef.current = false;
+            setTesting(false);
             setProviderModels({});
             setSelectedModel('');
             setTestResults(new Map());
@@ -141,7 +147,7 @@ const ModelListDialog = ({ open, onClose, provider }: ModelListDialogProps) => {
                 : await api.getProviderModelsByUUID(prov.uuid);
 
             if (response.success && response.data) {
-                setProviderModels({ [prov.name]: response.data });
+                setProviderModels({ [prov.uuid]: response.data });
             }
         } catch (err) {
             console.error('Failed to fetch models:', err);
@@ -165,19 +171,29 @@ const ModelListDialog = ({ open, onClose, provider }: ModelListDialogProps) => {
         setTesting(true);
         try {
             const result = await api.probeModel(provider.uuid, model);
-            setTestResults(prev => new Map(prev).set(model, result));
-            setViewResultModel(model);
-            setResultDialogOpen(true);
+            // Only show results if dialog is still open
+            if (isDialogOpenRef.current) {
+                setTestResults(prev => new Map(prev).set(model, result));
+                setViewResultModel(model);
+                setResultDialogOpen(true);
+            }
         } catch (err: any) {
-            const errorResult: ProbeResponse = {
-                success: false,
-                error: { message: err?.message || 'Test failed' },
-            };
-            setTestResults(prev => new Map(prev).set(model, errorResult));
-            setViewResultModel(model);
-            setResultDialogOpen(true);
+            // Only show error if dialog is still open
+            if (isDialogOpenRef.current) {
+                const errorResult: ProbeResponse = {
+                    success: false,
+                    error: { message: err?.message || 'Test failed' },
+                };
+                setTestResults(prev => new Map(prev).set(model, errorResult));
+                setViewResultModel(model);
+                setResultDialogOpen(true);
+            }
         } finally {
-            setTesting(false);
+            // Only reset testing state if dialog is still open
+            // (if dialog was closed, useEffect already reset it)
+            if (isDialogOpenRef.current) {
+                setTesting(false);
+            }
         }
     };
 
@@ -202,7 +218,7 @@ const ModelListDialog = ({ open, onClose, provider }: ModelListDialogProps) => {
                 }}
             >
                 <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="h6">Choose Model</Typography>
+                    <Typography variant="h6">Model List</Typography>
                     <IconButton onClick={handleClose} size="small">
                         <CloseIcon />
                     </IconButton>

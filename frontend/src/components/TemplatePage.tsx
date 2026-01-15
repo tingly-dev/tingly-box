@@ -50,14 +50,6 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
     const [currentRuleUuid, setCurrentRuleUuid] = useState<string | null>(null);
     const [currentConfigRecord, setCurrentConfigRecord] = useState<ConfigRecord | null>(null);
 
-    const providerUuidToName = React.useMemo(() => {
-        const map: { [uuid: string]: string } = {};
-        providers.forEach(provider => {
-            map[provider.uuid] = provider.name;
-        });
-        return map;
-    }, [providers]);
-
     const handleFetchModels = useCallback(async (providerUuid: string) => {
         if (!providerUuid || providerModelsByUuid[providerUuid]) {
             return;
@@ -222,17 +214,6 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
         }
     }, [currentConfigRecord, currentRuleUuid, modelSelectMode, editingProviderUuid, rules, handleRuleChange, showNotification, handleFetchModels]);
 
-    const nameBasedProviderModels = React.useMemo(() => {
-        const converted: any = {};
-        Object.entries(providerModelsByUuid || {}).forEach(([uuid, data]: [string, any]) => {
-            const providerName = providerUuidToName[uuid];
-            if (providerName) {
-                converted[providerName] = data;
-            }
-        });
-        return converted;
-    }, [providerModelsByUuid, providerUuidToName]);
-
     if (!providers.length || !rules?.length) {
         return null;
     }
@@ -249,7 +230,6 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
                         rule={rule}
                         providers={providers}
                         providerModelsByUuid={providerModelsByUuid}
-                        providerUuidToName={providerUuidToName}
                         saving={refreshingProviders.length > 0}
                         showNotification={showNotification}
                         onRuleChange={handleRuleChange}
@@ -284,7 +264,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
                 <DialogContent>
                     <ModelSelectTab
                         providers={providers}
-                        providerModels={nameBasedProviderModels}
+                        providerModels={providerModelsByUuid}
                         selectedProvider={modelSelectMode === 'edit' && editingProviderUuid
                             ? currentConfigRecord?.providers.find(p => p.uuid === editingProviderUuid)?.provider
                             : undefined}

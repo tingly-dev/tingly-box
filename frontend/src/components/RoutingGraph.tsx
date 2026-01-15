@@ -84,7 +84,6 @@ const { node, spacing, header, graphContainer, graph, modelNode, providerNode } 
 interface RuleGraphProps {
     record: ConfigRecord;
     providers: any[];
-    providerUuidToName: { [uuid: string]: string };
     saving: boolean;
     expanded: boolean;
     collapsible?: boolean;
@@ -151,7 +150,6 @@ const GraphRow = styled(Box)(({ theme }) => ({
 const RoutingGraph: React.FC<RuleGraphProps> = ({
     record,
     providers,
-    providerUuidToName,
     saving,
     expanded,
     collapsible = false,
@@ -463,7 +461,6 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                                                                     active={record.active && service.active !== false}
                                                                     onDelete={() => onDeleteProvider(recordUuid, service.uuid)}
                                                                     onRefreshModels={(p) => onRefreshModels(p.uuid)}
-                                                                    providerUuidToName={providerUuidToName}
                                                                     onNodeClick={() => onProviderNodeClick(service.uuid)}
                                                                 />
                                                             ))}
@@ -622,7 +619,6 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                                                     active={record.active && provider.active !== false}
                                                     onDelete={() => onDeleteProvider(recordUuid, provider.uuid)}
                                                     onRefreshModels={(p) => onRefreshModels(p.uuid)}
-                                                    providerUuidToName={providerUuidToName}
                                                     onNodeClick={() => onProviderNodeClick(provider.uuid)}
                                                 />
                                             ))}

@@ -1,15 +1,8 @@
+import type { ProviderModelsDataByUuid } from '../types/provider';
 import type { Provider } from '../types/provider';
 
 export interface CustomModelsData {
-    [providerName: string]: string[];
-}
-
-export interface ProviderModelsData {
-    [providerName: string]: {
-        models?: string[];
-        star_models?: string[];
-        custom_model?: string;
-    };
+    [providerUuid: string]: string[];
 }
 
 export interface ModelData {
@@ -27,13 +20,13 @@ export interface ModelTypeInfo {
 
 export function getModelTypeInfo(
     provider: Provider,
-    providerModels: ProviderModelsData | undefined,
+    providerModels: ProviderModelsDataByUuid | undefined,
     customModels: CustomModelsData
 ): ModelTypeInfo {
-    const models = providerModels?.[provider.name]?.models || [];
-    const starModels = providerModels?.[provider.name]?.star_models || [];
-    const backendCustomModel = providerModels?.[provider.name]?.custom_model;
-    const localStorageCustomModels = customModels[provider.name] || [];
+    const models = providerModels?.[provider.uuid]?.models || [];
+    const starModels = providerModels?.[provider.uuid]?.star_models || [];
+    const backendCustomModel = providerModels?.[provider.uuid]?.custom_model;
+    const localStorageCustomModels = customModels[provider.uuid] || [];
 
     // Calculate total unique models count
     const uniqueModels = new Set(models);
@@ -100,6 +93,6 @@ export function navigateToModelPage(
 
     if (modelIndex !== -1) {
         const targetPage = Math.floor(modelIndex / modelsPerPage) + 1;
-        setCurrentPage(prev => ({ ...prev, [provider.name]: targetPage }));
+        setCurrentPage(prev => ({ ...prev, [provider.uuid]: targetPage }));
     }
 }
