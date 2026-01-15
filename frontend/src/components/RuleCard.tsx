@@ -3,10 +3,11 @@ import { Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, D
 import React, { useCallback, useState } from 'react';
 import type { ProbeResponse } from '../client';
 import Probe from './ProbeModal.tsx';
-import RuleGraphV2 from './RuleGraph.tsx';
+import RoutingGraph from './RoutingGraph';
+import SmartRoutingGraph from './SmartRoutingGraph';
 import { api } from '../services/api';
 import type { Provider, ProviderModelsDataByUuid } from '../types/provider';
-import type { ConfigRecord, Rule } from './RuleGraphTypes';
+import type { ConfigRecord, Rule } from './RoutingGraphTypes.ts';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface RuleCardProps {
@@ -85,6 +86,8 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 active: rule.active !== undefined ? rule.active : true,
                 providers: providersList,
                 description: rule.description,
+                smartEnabled: rule.smart_enabled || false,
+                smartRouting: rule.smart_routing || [],
             };
 
             setConfigRecord(newConfigRecord);
@@ -181,6 +184,8 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                         active: provider.active !== undefined ? provider.active : true,
                         time_window: provider.time_window || 0,
                     })),
+                smart_enabled: newConfigRecord.smartEnabled || false,
+                smart_routing: newConfigRecord.smartRouting || [],
             };
 
             const result = await api.updateRule(rule.uuid, ruleData);
@@ -194,6 +199,8 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                     active: ruleData.active,
                     description: ruleData.description,
                     services: ruleData.services,
+                    smart_enabled: ruleData.smart_enabled,
+                    smart_routing: ruleData.smart_routing,
                 });
                 return true;
             } else {
@@ -250,6 +257,60 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         }
     }, [configRecord, rule.uuid, onModelSelectOpen]);
 
+    // Smart routing handlers
+    const handleAddSmartRule = useCallback(async () => {
+        if (!configRecord) return;
+
+        const newSmartRouting = {
+            uuid: crypto.randomUUID(),
+            description: 'New Smart Rule',
+            ops: [],
+            services: [],
+        };
+
+        const updated = {
+            ...configRecord,
+            smartRouting: [...(configRecord.smartRouting || []), newSmartRouting],
+        };
+
+        const previousRecord = { ...configRecord };
+        setConfigRecord(updated);
+
+        const success = await autoSave(updated);
+        if (!success) {
+            setConfigRecord(previousRecord);
+        }
+    }, [configRecord, autoSave]);
+
+    const handleEditSmartRule = useCallback(async (ruleUuid: string) => {
+        // TODO: Open smart rule edit dialog
+        showNotification('Smart rule editing not yet implemented', 'info');
+    }, [showNotification]);
+
+    const handleDeleteSmartRule = useCallback(async (ruleUuid: string) => {
+        if (!configRecord) return;
+
+        const updated = {
+            ...configRecord,
+            smartRouting: (configRecord.smartRouting || []).filter(r => r.uuid !== ruleUuid),
+        };
+
+        const previousRecord = { ...configRecord };
+        setConfigRecord(updated);
+
+        const success = await autoSave(updated);
+        if (!success) {
+            setConfigRecord(previousRecord);
+        } else {
+            showNotification('Smart rule deleted successfully', 'success');
+        }
+    }, [configRecord, autoSave, showNotification]);
+
+    const handleAddServiceToSmartRule = useCallback(async (ruleUuid: string) => {
+        // TODO: Open provider/service selection dialog
+        showNotification('Add service to smart rule not yet implemented', 'info');
+    }, [showNotification]);
+
     const handleDeleteButtonClick = useCallback(() => {
         setDeleteDialogOpen(true);
     }, []);
@@ -278,68 +339,84 @@ export const RuleCard: React.FC<RuleCardProps> = ({
 
     if (!configRecord) return null;
 
+    const isSmartMode = rule.smart_enabled;
+
     return (
         <>
-            <RuleGraphV2
-                record={configRecord}
-                recordUuid={configRecord.uuid}
-                providers={providers}
-                providerUuidToName={providerUuidToName}
-                saving={saving}
-                expanded={expanded}
-                collapsible={collapsible}
-                allowToggleRule={allowToggleRule}
-                onUpdateRecord={handleUpdateRecord}
-                onDeleteProvider={handleDeleteProvider}
-                onRefreshModels={handleRefreshModels}
-                onToggleExpanded={() => setExpanded(!expanded)}
-                onProviderNodeClick={handleProviderNodeClick}
-                onAddProviderButtonClick={handleAddProviderButtonClick}
-                extraActions={
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                        <Tooltip title="Test connection to provider">
-                            <Button
-                                size="small"
-                                onClick={handleProbe}
-                                disabled={!configRecord.providers[0]?.provider || !configRecord.providers[0]?.model || isProbing}
-                                startIcon={<ProbeIcon fontSize="small" />}
-                                sx={{
-                                    minWidth: 'auto',
-                                    color: isProbing ? 'primary.main' : 'text.secondary',
-                                    '&:hover': {
-                                        backgroundColor: 'primary.main',
-                                        color: 'primary.contrastText',
-                                    },
-                                    '&:disabled': {
-                                        color: 'text.disabled',
-                                    }
-                                }}
-                            >
-                                Test
-                            </Button>
-                        </Tooltip>
-                        {allowDeleteRule && (
-                            <Tooltip title="Delete routing rule">
+            {isSmartMode ? (
+                    <SmartRoutingGraph
+                        record={configRecord}
+                        providers={providers}
+                        providerUuidToName={providerUuidToName}
+                        active={configRecord.active}
+                        onToggleSmartEnabled={(enabled) => handleUpdateRecord('smartEnabled', enabled)}
+                        onAddSmartRule={handleAddSmartRule}
+                        onEditSmartRule={handleEditSmartRule}
+                        onDeleteSmartRule={handleDeleteSmartRule}
+                        onAddServiceToSmartRule={handleAddServiceToSmartRule}
+                    />
+                ) : (
+                    <RoutingGraph
+                        record={configRecord}
+                        recordUuid={configRecord.uuid}
+                        providers={providers}
+                        providerUuidToName={providerUuidToName}
+                        saving={saving}
+                        expanded={expanded}
+                        collapsible={collapsible}
+                        allowToggleRule={allowToggleRule}
+                        onUpdateRecord={handleUpdateRecord}
+                        onDeleteProvider={handleDeleteProvider}
+                        onRefreshModels={handleRefreshModels}
+                        onToggleExpanded={() => setExpanded(!expanded)}
+                        onProviderNodeClick={handleProviderNodeClick}
+                        onAddProviderButtonClick={handleAddProviderButtonClick}
+                        extraActions={
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                            <Tooltip title="Test connection to provider">
                                 <Button
                                     size="small"
-                                    onClick={handleDeleteButtonClick}
-                                    startIcon={<DeleteIcon fontSize="small" />}
+                                    onClick={handleProbe}
+                                    disabled={!configRecord.providers[0]?.provider || !configRecord.providers[0]?.model || isProbing}
+                                    startIcon={<ProbeIcon fontSize="small" />}
                                     sx={{
                                         minWidth: 'auto',
-                                        color: 'error.main',
+                                        color: isProbing ? 'primary.main' : 'text.secondary',
                                         '&:hover': {
-                                            backgroundColor: 'error.main',
-                                            color: 'error.contrastText',
+                                            backgroundColor: 'primary.main',
+                                            color: 'primary.contrastText',
                                         },
+                                        '&:disabled': {
+                                            color: 'text.disabled',
+                                        }
                                     }}
                                 >
-                                    Delete
+                                    Test
                                 </Button>
                             </Tooltip>
-                        )}
-                    </Box>
-                }
-            />
+                            {allowDeleteRule && (
+                                <Tooltip title="Delete routing rule">
+                                    <Button
+                                        size="small"
+                                        onClick={handleDeleteButtonClick}
+                                        startIcon={<DeleteIcon fontSize="small" />}
+                                        sx={{
+                                            minWidth: 'auto',
+                                            color: 'error.main',
+                                            '&:hover': {
+                                                backgroundColor: 'error.main',
+                                                color: 'error.contrastText',
+                                            },
+                                        }}
+                                    >
+                                        Delete
+                                    </Button>
+                                </Tooltip>
+                            )}
+                        </Box>
+                    }
+                />
+            )}
 
             {/* Probe Result Dialog */}
             <Dialog

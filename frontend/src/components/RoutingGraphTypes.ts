@@ -12,6 +12,23 @@ export interface ConfigProvider {
     time_window?: number;
 }
 
+export interface SmartOp {
+    position: 'model' | 'thinking' | 'system' | 'user' | 'tool_use' | 'token';
+    operation: string;
+    value: string;
+    meta?: {
+        description?: string;
+        type?: 'string' | 'int' | 'bool' | 'float';
+    };
+}
+
+export interface SmartRouting {
+    uuid: string;
+    description: string;
+    ops: SmartOp[];
+    services: ConfigProvider[];
+}
+
 export interface ConfigRecord {
     uuid: string;
     requestModel: string;
@@ -19,6 +36,9 @@ export interface ConfigRecord {
     active: boolean;
     providers: ConfigProvider[];
     description?: string;
+    // Smart routing fields
+    smartEnabled?: boolean;
+    smartRouting?: SmartRouting[];
 }
 
 export interface Rule {
@@ -37,4 +57,7 @@ export interface Rule {
         active?: boolean;
         time_window?: number;
     }>;
+    // Smart routing fields
+    smart_enabled?: boolean;
+    smart_routing?: SmartRouting[];
 }

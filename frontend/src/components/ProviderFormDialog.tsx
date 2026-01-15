@@ -11,17 +11,14 @@ import {
     DialogTitle,
     FormControlLabel,
     IconButton,
-    MenuItem,
     Stack,
     Switch,
     TextField,
     Typography,
-    Checkbox,
-    Grid,
 } from '@mui/material';
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getProvidersByStyle } from '../services/serviceProviders';
+import { getProvidersByStyle, serviceProviders } from '../services/serviceProviders';
 import api from '../services/api';
 import { OpenAI } from '@lobehub/icons';
 import { Anthropic } from '@lobehub/icons';
@@ -104,9 +101,18 @@ const ProviderFormDialog = ({
 
     // Get current provider options based on apiStyle
     const getCurrentProviders = () => {
-        if (data.apiStyle === 'openai') return openaiProviders;
-        if (data.apiStyle === 'anthropic') return anthropicProviders;
-        return [];
+        const providers = data.apiStyle === 'openai' ? openaiProviders : anthropicProviders;
+
+        // Filter out OAuth providers
+        const oauthProviderIds = Object.values(serviceProviders as any)
+            .filter((p: any) => p.auth_type === 'api_key' || p.oauth_provider)
+            .map((p: any) => p.id);
+
+        return providers.filter(option => {
+            // Extract provider ID from value (format: "providerId:api_style")
+            const providerId = option.value.split(':')[0];
+            return !oauthProviderIds.includes(providerId);
+        });
     };
 
     // Handle provider/baseurl selection
@@ -207,7 +213,7 @@ const ProviderFormDialog = ({
     };
 
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth PaperProps={{ sx: { minHeight: 200 } }}>
             <DialogTitle>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     {title || defaultTitle}
@@ -222,7 +228,7 @@ const ProviderFormDialog = ({
                 </Box>
             </DialogTitle>
             <form onSubmit={handleSubmit}>
-                <DialogContent sx={{ pb: 1 }}>
+                <DialogContent sx={{ pb: 1, minHeight: 280 }}>
                     <Stack spacing={2.5}>
                         {/* First Provider Welcome Message */}
                         {isFirstProvider && mode === 'add' && (
@@ -233,69 +239,96 @@ const ProviderFormDialog = ({
                                 </Typography>
                             </Alert>
                         )}
-                        {/* API Style Selection - Form Field Style */}
-                        <TextField
-                            select
-                            fullWidth
-                            size="small"
-                            label={t('providerDialog.apiStyle.label')}
-                            value={data.apiStyle || ''}
-                            onChange={(e) => {
-                                const newStyle = e.target.value as 'openai' | 'anthropic' | '';
-                                const oldStyle = data.apiStyle;
-
-                                onChange('apiStyle', newStyle);
-                                setVerificationResult(null);
-
-                                // Reset apiBase and name when switching styles
-                                if (oldStyle && newStyle && oldStyle !== newStyle) {
-                                    onChange('apiBase', '');
-                                    onChange('name', '');
-                                    setIsCustomUrl(false);
-                                    // Show warning only in edit mode
-                                    if (mode === 'edit') {
-                                        setStyleChangedWarning(true);
-                                        setTimeout(() => setStyleChangedWarning(false), 4000);
+                        {/* API Style Selection - Big Box Cards */}
+                        <Box sx={{ display: 'flex', gap: 2 }}>
+                            {/* OpenAI Style Card */}
+                            <Box
+                                onClick={() => {
+                                    if (data.apiStyle !== 'openai') {
+                                        const oldStyle = data.apiStyle;
+                                        onChange('apiStyle', 'openai');
+                                        setVerificationResult(null);
+                                        if (oldStyle && oldStyle !== 'openai' as any) {
+                                            onChange('apiBase', '');
+                                            onChange('name', '');
+                                            setIsCustomUrl(false);
+                                            if (mode === 'edit') {
+                                                setStyleChangedWarning(true);
+                                                setTimeout(() => setStyleChangedWarning(false), 4000);
+                                            }
+                                        }
                                     }
-                                }
-                            }}
-                            sx={{
-                                '& .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: 'divider',
-                                },
-                                '&:hover .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: 'primary.main',
-                                },
-                                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: 'primary.main',
-                                    borderWidth: 2,
-                                },
-                            }}
-                            helperText={
-                                data.apiStyle === 'openai'
-                                    ? t('providerDialog.apiStyle.helperOpenAI')
-                                    : data.apiStyle === 'anthropic'
-                                        ? t('providerDialog.apiStyle.helperAnthropic')
-                                        : t('providerDialog.apiStyle.placeholder')
-                            }
-                            required={mode === 'add'}
-                        >
-                            <MenuItem value="">
-                                <em>{t('providerDialog.apiStyle.placeholder')}</em>
-                            </MenuItem>
-                            <MenuItem value="openai">
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <OpenAI size={16} />
-                                    {t('providerDialog.apiStyle.openAI')}
-                                </Box>
-                            </MenuItem>
-                            <MenuItem value="anthropic">
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <Anthropic size={16} />
-                                    {t('providerDialog.apiStyle.anthropic')}
-                                </Box>
-                            </MenuItem>
-                        </TextField>
+                                }}
+                                sx={{
+                                    flex: 1,
+                                    border: 2,
+                                    borderColor: data.apiStyle === 'openai' ? 'primary.main' : 'divider',
+                                    borderRadius: 2,
+                                    p: 2,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    bgcolor: data.apiStyle === 'openai' ? 'primary.50' : 'background.paper',
+                                    '&:hover': {
+                                        borderColor: data.apiStyle === 'openai' ? 'primary.main' : 'primary.light',
+                                        bgcolor: data.apiStyle === 'openai' ? 'primary.100' : 'action.hover',
+                                    },
+                                }}
+                            >
+                                <Stack spacing={1} alignItems="center">
+                                    <OpenAI size={28} />
+                                    <Typography variant="subtitle1" fontWeight={600}>
+                                        OpenAI Compatible
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary" textAlign="center">
+                                        {t('providerDialog.apiStyle.helperOpenAI')}
+                                    </Typography>
+                                </Stack>
+                            </Box>
+
+                            {/* Anthropic Style Card */}
+                            <Box
+                                onClick={() => {
+                                    if (data.apiStyle !== 'anthropic') {
+                                        const oldStyle = data.apiStyle;
+                                        onChange('apiStyle', 'anthropic');
+                                        setVerificationResult(null);
+                                        if (oldStyle && oldStyle !== 'anthropic' as any) {
+                                            onChange('apiBase', '');
+                                            onChange('name', '');
+                                            setIsCustomUrl(false);
+                                            if (mode === 'edit') {
+                                                setStyleChangedWarning(true);
+                                                setTimeout(() => setStyleChangedWarning(false), 4000);
+                                            }
+                                        }
+                                    }
+                                }}
+                                sx={{
+                                    flex: 1,
+                                    border: 2,
+                                    borderColor: data.apiStyle === 'anthropic' ? 'primary.main' : 'divider',
+                                    borderRadius: 2,
+                                    p: 2,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    bgcolor: data.apiStyle === 'anthropic' ? 'primary.50' : 'background.paper',
+                                    '&:hover': {
+                                        borderColor: data.apiStyle === 'anthropic' ? 'primary.main' : 'primary.light',
+                                        bgcolor: data.apiStyle === 'anthropic' ? 'primary.100' : 'action.hover',
+                                    },
+                                }}
+                            >
+                                <Stack spacing={1} alignItems="center">
+                                    <Anthropic size={28} />
+                                    <Typography variant="subtitle1" fontWeight={600}>
+                                        Anthropic Compatible
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary" textAlign="center">
+                                        {t('providerDialog.apiStyle.helperAnthropic')}
+                                    </Typography>
+                                </Stack>
+                            </Box>
+                        </Box>
 
                         {/* Style change warning alert */}
                         {styleChangedWarning && (
@@ -386,38 +419,45 @@ const ProviderFormDialog = ({
                                 />
 
                                 {/* API Key Field */}
-                                <TextField
-                                    size="small"
-                                    fullWidth
-                                    label={t('providerDialog.apiKey.label')}
-                                    type="password"
-                                    value={data.token}
-                                    onChange={(e) => {
-                                        onChange('token', e.target.value);
-                                        // Clear verification result when token changes
-                                        setVerificationResult(null);
-                                    }}
-                                    required={!noApiKey}
-                                    placeholder={mode === 'add' ? t('providerDialog.apiKey.placeholderAdd') : t('providerDialog.apiKey.placeholderEdit')}
-                                    helperText={mode === 'edit' && t('providerDialog.apiKey.helperEdit')}
-                                    disabled={noApiKey}
-                                />
-
-                                {/* Proxy URL Field */}
-                                <TextField
-                                    size="small"
-                                    fullWidth
-                                    label={t('providerDialog.advanced.proxyUrl.label')}
-                                    placeholder={t('providerDialog.advanced.proxyUrl.placeholder')}
-                                    value={data.proxyUrl || ''}
-                                    onChange={(e) => onChange('proxyUrl', e.target.value)}
-                                    helperText={t('providerDialog.advanced.proxyUrl.helper')}
-                                />
-
-                                {/* No Key Required switch */}
-                                {isCustomUrl && (
-                                    <FormControlLabel
-                                        control={
+                                <Box sx={{ position: 'relative' }}>
+                                    <TextField
+                                        size="small"
+                                        fullWidth
+                                        label={noApiKey ? 'API Key (Not Required)' : t('providerDialog.apiKey.label')}
+                                        type="password"
+                                        value={data.token}
+                                        onChange={(e) => {
+                                            onChange('token', e.target.value);
+                                            // Clear verification result when token changes
+                                            setVerificationResult(null);
+                                        }}
+                                        required={!noApiKey}
+                                        placeholder={mode === 'add' ? t('providerDialog.apiKey.placeholderAdd') : t('providerDialog.apiKey.placeholderEdit')}
+                                        helperText={mode === 'edit' && t('providerDialog.apiKey.helperEdit')}
+                                        disabled={noApiKey}
+                                        slotProps={{
+                                            input: {
+                                                sx: { pr: isCustomUrl ? 12 : 0 },
+                                            },
+                                        }}
+                                    />
+                                    {isCustomUrl && (
+                                        <Stack
+                                            direction="row"
+                                            alignItems="center"
+                                            spacing={0.5}
+                                            sx={{
+                                                position: 'absolute',
+                                                right: 12,
+                                                top: '50%',
+                                                transform: 'translateY(-50%)',
+                                                pointerEvents: 'auto',
+                                            }}
+                                            onClick={(e) => e.stopPropagation()}
+                                        >
+                                            <Typography variant="subtitle2" color="text.secondary">
+                                                No Key
+                                            </Typography>
                                             <Switch
                                                 size="small"
                                                 checked={noApiKey}
@@ -430,10 +470,20 @@ const ProviderFormDialog = ({
                                                     }
                                                 }}
                                             />
-                                        }
-                                        label="No Key Required"
-                                    />
-                                )}
+                                        </Stack>
+                                    )}
+                                </Box>
+
+                                {/* Proxy URL Field */}
+                                <TextField
+                                    size="small"
+                                    fullWidth
+                                    label={t('providerDialog.advanced.proxyUrl.label')}
+                                    placeholder={t('providerDialog.advanced.proxyUrl.placeholder')}
+                                    value={data.proxyUrl || ''}
+                                    onChange={(e) => onChange('proxyUrl', e.target.value)}
+                                    helperText={t('providerDialog.advanced.proxyUrl.helper')}
+                                />
 
                                 {/* Verification Result */}
                                 {verificationResult && (
@@ -487,18 +537,20 @@ const ProviderFormDialog = ({
                         )}
                     </Stack>
                 </DialogContent>
-                <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Button type="submit" variant="contained" size="small" disabled={verifying}>
-                        {verifying ? (
-                            <>
-                                <CircularProgress size={16} sx={{ mr: 1 }} />
-                                {mode === 'add' ? 'Adding...' : 'Saving...'}
-                            </>
-                        ) : (
-                            submitText || defaultSubmitText
-                        )}
-                    </Button>
-                </DialogActions>
+                {data.apiStyle && (
+                    <DialogActions sx={{ px: 3, pb: 2 }}>
+                        <Button type="submit" variant="contained" size="small" disabled={verifying}>
+                            {verifying ? (
+                                <>
+                                    <CircularProgress size={16} sx={{ mr: 1 }} />
+                                    {mode === 'add' ? 'Adding...' : 'Saving...'}
+                                </>
+                            ) : (
+                                submitText || defaultSubmitText
+                            )}
+                        </Button>
+                    </DialogActions>
+                )}
             </form>
         </Dialog>
     );

@@ -1,4 +1,4 @@
-import { Cancel, CheckCircle, Delete, Edit, Refresh as RefreshIcon, Schedule, VpnKey } from '@mui/icons-material';
+import { Cancel, CheckCircle, Delete, Edit, ListAlt, Refresh as RefreshIcon, Schedule, VpnKey } from '@mui/icons-material';
 import {
     Box,
     Button,
@@ -22,6 +22,7 @@ import {
 import { useState } from 'react';
 import type { Provider } from '../types/provider';
 import { ApiStyleBadge } from '@/components/ApiStyleBadge.tsx';
+import ModelListDialog from '@/components/ModelListDialog';
 
 interface OAuthTableProps {
     providers: Provider[];
@@ -44,6 +45,11 @@ interface RefreshModalState {
     providerName: string;
 }
 
+interface ModelListDialogState {
+    open: boolean;
+    provider: Provider | null;
+}
+
 const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRefreshToken }: OAuthTableProps) => {
     const [deleteModal, setDeleteModal] = useState<DeleteModalState>({
         open: false,
@@ -58,6 +64,11 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
     });
 
     const [refreshing, setRefreshing] = useState<string | null>(null);
+
+    const [modelListDialog, setModelListDialog] = useState<ModelListDialogState>({
+        open: false,
+        provider: null,
+    });
 
     const handleDeleteClick = (providerUuid: string) => {
         const provider = providers.find((p) => p.uuid === providerUuid);
@@ -102,6 +113,17 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
             setRefreshing(null);
         }
         handleCloseRefreshModal();
+    };
+
+    const handleModelListClick = (providerUuid: string) => {
+        const provider = providers.find((p) => p.uuid === providerUuid);
+        if (provider) {
+            setModelListDialog({ open: true, provider });
+        }
+    };
+
+    const handleCloseModelListDialog = () => {
+        setModelListDialog({ open: false, provider: null });
     };
 
     const formatExpiresAt = (expiresAt?: string) => {
@@ -153,6 +175,7 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
                         <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Expires At</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>API Style</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 140 }}>Actions</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Model List</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Status</TableCell>
                     </TableRow>
                 </TableHead>
@@ -248,6 +271,22 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
                                     </Stack>
                                 </TableCell>
                                 <TableCell>
+                                    <Button
+                                        variant="outlined"
+                                        size="small"
+                                        startIcon={<ListAlt />}
+                                        onClick={() => handleModelListClick(provider.uuid)}
+                                        disabled={!provider.enabled}
+                                        sx={{
+                                            textTransform: 'none',
+                                            borderRadius: 1.5,
+                                            fontSize: '0.8rem',
+                                        }}
+                                    >
+                                        Models
+                                    </Button>
+                                </TableCell>
+                                <TableCell>
                                     <Stack direction="row" alignItems="center" spacing={1}>
                                         <FormControlLabel
                                             control={
@@ -338,6 +377,13 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
                     </Stack>
                 </Box>
             </Modal>
+
+            {/* Model List Dialog */}
+            <ModelListDialog
+                open={modelListDialog.open}
+                onClose={handleCloseModelListDialog}
+                provider={modelListDialog.provider}
+            />
         </TableContainer>
     );
 };

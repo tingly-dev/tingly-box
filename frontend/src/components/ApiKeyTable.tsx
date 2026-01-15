@@ -158,7 +158,7 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete }: ApiKeyTableProps
                     <TableRow>
                         <TableCell sx={{ fontWeight: 600, minWidth: 150 }}>Name</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 150 }}>API Key</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 200 }}>API Base</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 200 }}>API Base URL</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>API Style</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Actions</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Model List</TableCell>

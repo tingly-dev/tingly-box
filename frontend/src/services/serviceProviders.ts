@@ -13,6 +13,8 @@ export interface ServiceProvider {
     pricing_doc: string;
     base_url_openai?: string;
     base_url_anthropic?: string;
+    auth_type?: string;
+    oauth_provider?: string;
 }
 
 export interface ServiceProviderOption {

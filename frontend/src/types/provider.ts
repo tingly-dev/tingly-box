@@ -19,6 +19,7 @@ export interface OAuthDetail {
 }
 
 export interface ProviderModelData {
+    uuid: string;
     models: string[];
     star_models?: string[];
     last_updated?: string;

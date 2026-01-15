@@ -16,8 +16,6 @@ import {
     TokenApi,
     OauthApi, LogsApi, type ProbeResponse, type RuleResponse,
 } from '../client';
-import type {Rule} from "@/components/RuleGraphTypes.ts";
-
 
 const API_BASE_URL = window.location.origin || '';
 
