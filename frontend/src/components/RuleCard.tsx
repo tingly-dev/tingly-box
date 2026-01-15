@@ -14,7 +14,6 @@ export interface RuleCardProps {
     rule: Rule;
     providers: Provider[];
     providerModelsByUuid: ProviderModelsDataByUuid;
-    providerUuidToName: { [uuid: string]: string };
     saving: boolean;
     showNotification: (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
     onRuleChange?: (updatedRule: Rule) => void;
@@ -32,7 +31,6 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     rule,
     providers,
     providerModelsByUuid,
-    providerUuidToName,
     saving,
     showNotification,
     onRuleChange,
@@ -347,7 +345,6 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                     <SmartRoutingGraph
                         record={configRecord}
                         providers={providers}
-                        providerUuidToName={providerUuidToName}
                         active={configRecord.active}
                         onToggleSmartEnabled={(enabled) => handleUpdateRecord('smartEnabled', enabled)}
                         onAddSmartRule={handleAddSmartRule}
@@ -360,7 +357,6 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                         record={configRecord}
                         recordUuid={configRecord.uuid}
                         providers={providers}
-                        providerUuidToName={providerUuidToName}
                         saving={saving}
                         expanded={expanded}
                         collapsible={collapsible}
@@ -431,7 +427,11 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Typography variant="h6">Connection Test Result</Typography>
                     <Typography variant="body2" color="text.secondary">
-                        {providerUuidToName[configRecord?.providers[0]?.provider || '']} / {configRecord?.providers[0]?.model}
+                        {(async () => {
+                            const providerUuid = configRecord?.providers[0]?.provider;
+                            const provider = await api.getProvider(providerUuid)
+                            return `${provider?.name || 'Unknown Provider'} / ${configRecord?.providers[0]?.model || ''}`;
+                        })()}
                     </Typography>
                 </DialogTitle>
                 <DialogContent>

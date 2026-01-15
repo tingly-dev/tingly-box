@@ -59,7 +59,6 @@ const { header, graphContainer, graph } = RULE_GRAPH_STYLES;
 interface SmartRoutingGraphProps {
     record: ConfigRecord;
     providers: Provider[];
-    providerUuidToName: { [uuid: string]: string };
     active: boolean;
     onAddSmartRule: () => void;
     onEditSmartRule: (ruleUuid: string) => void;
@@ -108,7 +107,6 @@ const GraphRow = styled(Box)(({ theme }) => ({
 const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
     record,
     providers,
-    providerUuidToName,
     active,
     onAddSmartRule,
     onEditSmartRule,
@@ -230,7 +228,6 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                                             onRefreshModels={(p) => {
                                                                 console.log('Refresh models:', p.uuid);
                                                             }}
-                                                            providerUuidToName={providerUuidToName}
                                                             onNodeClick={() => {
                                                                 console.log('Provider node click:', service.uuid);
                                                             }}
@@ -313,7 +310,6 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                                 onRefreshModels={(p) => {
                                                     console.log('Refresh models:', p.uuid);
                                                 }}
-                                                providerUuidToName={providerUuidToName}
                                                 onNodeClick={() => {
                                                     console.log('Provider node click:', provider.uuid);
                                                 }}

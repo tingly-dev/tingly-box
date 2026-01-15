@@ -320,10 +320,10 @@ export const api = {
         }
     },
 
-    getProvider: async (name: string): Promise<ProviderResponse> => {
+    getProvider: async (uuid: string): Promise<ProviderResponse> => {
         // Note: The generated client has an issue with path parameters
         const apiInstances = await getApiInstances();
-        const response = await apiInstances.providersApi.apiV2ProvidersUuidGet(name);
+        const response = await apiInstances.providersApi.apiV2ProvidersUuidGet(uuid);
         return response.data;
     },
 
