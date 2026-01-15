@@ -60,9 +60,9 @@ const RULE_GRAPH_STYLES = {
     graph: {
         stackSpacing: 0,      // Stack spacing between sections
         modelGap: 8,          // Gap between model nodes
-        labelMargin: 4,       // Margin below labels
+        labelMargin: 2,       // Margin below labels
         rowGap: 16,           // Gap between graph rows
-        iconGap: 4,           // Gap between icon and text
+        iconGap: 2,           // Gap between icon and text
         wrapperGap: 8,        // Gap in wrapper boxes
     },
     // Model node specific
