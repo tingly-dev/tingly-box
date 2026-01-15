@@ -213,7 +213,7 @@ const ProviderFormDialog = ({
     };
 
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth PaperProps={{ sx: { minHeight: 200 } }}>
             <DialogTitle>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     {title || defaultTitle}
@@ -228,7 +228,7 @@ const ProviderFormDialog = ({
                 </Box>
             </DialogTitle>
             <form onSubmit={handleSubmit}>
-                <DialogContent sx={{ pb: 1 }}>
+                <DialogContent sx={{ pb: 1, minHeight: 280 }}>
                     <Stack spacing={2.5}>
                         {/* First Provider Welcome Message */}
                         {isFirstProvider && mode === 'add' && (
@@ -537,18 +537,20 @@ const ProviderFormDialog = ({
                         )}
                     </Stack>
                 </DialogContent>
-                <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Button type="submit" variant="contained" size="small" disabled={verifying}>
-                        {verifying ? (
-                            <>
-                                <CircularProgress size={16} sx={{ mr: 1 }} />
-                                {mode === 'add' ? 'Adding...' : 'Saving...'}
-                            </>
-                        ) : (
-                            submitText || defaultSubmitText
-                        )}
-                    </Button>
-                </DialogActions>
+                {data.apiStyle && (
+                    <DialogActions sx={{ px: 3, pb: 2 }}>
+                        <Button type="submit" variant="contained" size="small" disabled={verifying}>
+                            {verifying ? (
+                                <>
+                                    <CircularProgress size={16} sx={{ mr: 1 }} />
+                                    {mode === 'add' ? 'Adding...' : 'Saving...'}
+                                </>
+                            ) : (
+                                submitText || defaultSubmitText
+                            )}
+                        </Button>
+                    </DialogActions>
+                )}
             </form>
         </Dialog>
     );
