@@ -247,26 +247,34 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                         }}
                         />
                     )}
-                    <Chip
-                        label={record.active ? "Active" : "Inactive"}
-                        size="small"
-                        color={record.active ? "success" : "default"}
-                        variant={record.active ? "filled" : "outlined"}
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            if (!saving && allowToggleRule) {
-                                onUpdateRecord('active', !record.active);
-                            }
-                        }}
-                        sx={{
-                            opacity: record.active ? 1 : 0.7,
-                            minWidth: 75,
-                            cursor: (saving || !allowToggleRule) ? 'default' : 'pointer',
-                            '&:hover': (saving || !allowToggleRule) ? {} : {
-                                opacity: 0.8,
-                            },
-                        }}
-                    />
+                    <Tooltip title={
+                        saving || !allowToggleRule
+                            ? t('rule.status.cannotToggle')
+                            : record.active
+                                ? t('rule.status.clickToDeactivate')
+                                : t('rule.status.clickToActivate')
+                    }>
+                        <Chip
+                            label={record.active ? "Active" : "Inactive"}
+                            size="small"
+                            color={record.active ? "success" : "default"}
+                            variant={record.active ? "filled" : "outlined"}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (!saving && allowToggleRule) {
+                                    onUpdateRecord('active', !record.active);
+                                }
+                            }}
+                            sx={{
+                                opacity: record.active ? 1 : 0.7,
+                                minWidth: 75,
+                                cursor: (saving || !allowToggleRule) ? 'default' : 'pointer',
+                                '&:hover': (saving || !allowToggleRule) ? {} : {
+                                    opacity: 0.8,
+                                },
+                            }}
+                        />
+                    </Tooltip>
                     {/* Smart Routing Toggle */}
                     {/*<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>*/}
                     {/*    <Typography variant="body2" sx={{ fontSize: '0.85rem', color: 'text.secondary' }}>*/}

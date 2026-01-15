@@ -236,6 +236,11 @@ export default {
       "description": "Are you sure you want to delete this rule? This action cannot be undone.",
       "cancelButton": "Cancel",
       "confirmButton": "Delete"
+    },
+    "status": {
+      "clickToActivate": "Click to activate",
+      "clickToDeactivate": "Click to deactivate",
+      "cannotToggle": "Cannot toggle"
     }
   },
   "system": {
