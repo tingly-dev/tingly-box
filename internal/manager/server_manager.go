@@ -25,6 +25,9 @@ type ServerManager struct {
 	enableAdaptor     bool
 	enableDebug       bool
 	enableOpenBrowser bool
+	httpsEnabled      bool
+	httpsCertDir      string
+	httpsRegenerate   bool
 	status            string
 	sync.Mutex
 }
@@ -63,6 +66,27 @@ func WithOpenBrowser(enabled bool) ServerManagerOption {
 func WithHost(host string) ServerManagerOption {
 	return func(sm *ServerManager) {
 		sm.host = host
+	}
+}
+
+// WithHTTPSEnabled sets HTTPS enabled flag
+func WithHTTPSEnabled(enabled bool) ServerManagerOption {
+	return func(sm *ServerManager) {
+		sm.httpsEnabled = enabled
+	}
+}
+
+// WithHTTPSCertDir sets HTTPS certificate directory
+func WithHTTPSCertDir(certDir string) ServerManagerOption {
+	return func(sm *ServerManager) {
+		sm.httpsCertDir = certDir
+	}
+}
+
+// WithHTTPSRegenerate sets HTTPS certificate regenerate flag
+func WithHTTPSRegenerate(regenerate bool) ServerManagerOption {
+	return func(sm *ServerManager) {
+		sm.httpsRegenerate = regenerate
 	}
 }
 
@@ -122,6 +146,9 @@ func (sm *ServerManager) Setup(port int) error {
 		server.WithAdaptor(sm.enableAdaptor),
 		server.WithOpenBrowser(sm.enableOpenBrowser),
 		server.WithHost(sm.host),
+		server.WithHTTPSEnabled(sm.httpsEnabled),
+		server.WithHTTPSCertDir(sm.httpsCertDir),
+		server.WithHTTPSRegenerate(sm.httpsRegenerate),
 		server.WithVersion(sm.appConfig.GetVersion()),
 	)
 

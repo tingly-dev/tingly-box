@@ -23,10 +23,10 @@ import (
 
 const (
 	// URL templates for displaying to users
-	webUITpl             = "http://localhost:%d/home"
-	webUITokenTpl        = "http://localhost:%d/home?token=%s"
-	openAIEndpointTpl    = "http://localhost:%d/tingly/openai/v1/chat/completions"
-	anthropicEndpointTpl = "http://localhost:%d/tingly/anthropic/v1/messages"
+	webUITpl             = "%s://localhost:%d/home"
+	webUITokenTpl        = "%s://localhost:%d/home?token=%s"
+	openAIEndpointTpl    = "%s://localhost:%d/tingly/openai/v1/chat/completions"
+	anthropicEndpointTpl = "%s://localhost:%d/tingly/anthropic/v1/messages"
 )
 
 // BannerConfig holds configuration for banner display
@@ -36,26 +36,32 @@ type BannerConfig struct {
 	EnableUI     bool
 	GlobalConfig *serverconfig.Config
 	IsDaemon     bool
+	HTTPEnabled  bool
 }
 
 // printBanner prints the server access banner
 func printBanner(cfg BannerConfig) {
+	scheme := "http"
+	if cfg.HTTPEnabled {
+		scheme = "https"
+	}
+
 	if !cfg.EnableUI {
 		// Resolve host for display
 		resolvedHost := network.ResolveHost(cfg.Host)
-		fmt.Printf("API endpoint: http://%s:%d/v1/chat/completions\n", resolvedHost, cfg.Port)
+		fmt.Printf("API endpoint: %s://%s:%d/v1/chat/completions\n", scheme, resolvedHost, cfg.Port)
 		return
 	}
 
 	// Show all access URLs when UI is enabled
 	fmt.Println("\nYou can access the service at:")
 	if cfg.GlobalConfig.HasUserToken() {
-		fmt.Printf("  Web UI:       "+webUITokenTpl+"\n", cfg.Port, cfg.GlobalConfig.GetUserToken())
+		fmt.Printf("  Web UI:       "+webUITokenTpl+"\n", scheme, cfg.Port, cfg.GlobalConfig.GetUserToken())
 	} else {
-		fmt.Printf("  Web UI:       "+webUITpl+"\n", cfg.Port)
+		fmt.Printf("  Web UI:       "+webUITpl+"\n", scheme, cfg.Port)
 	}
-	fmt.Printf("  OpenAI API:   "+openAIEndpointTpl+"\n", cfg.Port)
-	fmt.Printf("  Anthropic API: "+anthropicEndpointTpl+"\n", cfg.Port)
+	fmt.Printf("  OpenAI API:   "+openAIEndpointTpl+"\n", scheme, cfg.Port)
+	fmt.Printf("  Anthropic API: "+anthropicEndpointTpl+"\n", scheme, cfg.Port)
 
 	if cfg.IsDaemon {
 		fmt.Println("\nServer is running in background. Use 'tingly-box stop' to stop.")
@@ -78,6 +84,9 @@ type startFlags struct {
 	daemon               bool
 	logFile              string
 	promptRestart        bool
+	https                bool
+	httpsCertDir         string
+	httpsRegen           bool
 }
 
 // addStartFlags adds all start-related flags to a command
@@ -92,6 +101,9 @@ func addStartFlags(cmd *cobra.Command, flags *startFlags) {
 	cmd.Flags().BoolVar(&flags.daemon, "daemon", false, "Run as daemon in background (default: false)")
 	cmd.Flags().StringVar(&flags.logFile, "log-file", "", "Log file path for daemon mode (default: ~/.tingly-box/tingly-box.log)")
 	cmd.Flags().BoolVar(&flags.promptRestart, "prompt-restart", false, "Prompt to restart if server is already running (default: false)")
+	cmd.Flags().BoolVar(&flags.https, "https", false, "Enable HTTPS mode with self-signed certificate (default: false)")
+	cmd.Flags().StringVar(&flags.httpsCertDir, "https-cert-dir", "", "Certificate directory for HTTPS (default: ~/.tingly-box/certs/)")
+	cmd.Flags().BoolVar(&flags.httpsRegen, "https-regen", false, "Regenerate HTTPS certificate (default: false)")
 }
 
 func resolveStartOptions(cmd *cobra.Command, flags startFlags, appConfig *config.AppConfig) startServerOptions {
@@ -123,6 +135,15 @@ func resolveStartOptions(cmd *cobra.Command, flags startFlags, appConfig *config
 		Daemon:            flags.daemon,
 		LogFile:           flags.logFile,
 		PromptRestart:     flags.promptRestart,
+		HTTPS: struct {
+			Enabled    bool
+			CertDir    string
+			Regenerate bool
+		}{
+			Enabled:    flags.https,
+			CertDir:    flags.httpsCertDir,
+			Regenerate: flags.httpsRegen,
+		},
 	}
 }
 
@@ -155,6 +176,11 @@ type startServerOptions struct {
 	Daemon            bool
 	LogFile           string
 	PromptRestart     bool
+	HTTPS             struct {
+		Enabled    bool
+		CertDir    string
+		Regenerate bool
+	}
 }
 
 // startServer handles the server starting logic
@@ -211,6 +237,7 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 				EnableUI:     opts.EnableUI,
 				GlobalConfig: appConfig.GetGlobalConfig(),
 				IsDaemon:     true,
+				HTTPEnabled:  opts.HTTPS.Enabled,
 			})
 
 			// Fork and detach
@@ -240,6 +267,7 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 			EnableUI:     opts.EnableUI,
 			GlobalConfig: appConfig.GetGlobalConfig(),
 			IsDaemon:     false,
+			HTTPEnabled:  opts.HTTPS.Enabled,
 		})
 
 		// If prompt-restart is enabled, ask user if they want to restart
@@ -282,6 +310,9 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 		manager.WithDebug(opts.EnableDebug),
 		manager.WithOpenBrowser(opts.EnableOpenBrowser),
 		manager.WithHost(opts.Host),
+		manager.WithHTTPSEnabled(opts.HTTPS.Enabled),
+		manager.WithHTTPSCertDir(opts.HTTPS.CertDir),
+		manager.WithHTTPSRegenerate(opts.HTTPS.Regenerate),
 	)
 
 	// Setup signal handling for graceful shutdown
@@ -302,6 +333,7 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 		EnableUI:     opts.EnableUI,
 		GlobalConfig: appConfig.GetGlobalConfig(),
 		IsDaemon:     false,
+		HTTPEnabled:  opts.HTTPS.Enabled,
 	})
 
 	// Wait for either server error, shutdown signal, or web UI stop request
