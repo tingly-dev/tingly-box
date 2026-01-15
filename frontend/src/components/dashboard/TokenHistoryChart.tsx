@@ -1,7 +1,8 @@
 import { Paper, Typography, Box } from '@mui/material';
 import {
-    AreaChart,
+    ComposedChart,
     Area,
+    Line,
     XAxis,
     YAxis,
     CartesianGrid,
@@ -16,6 +17,8 @@ interface TimeSeriesData {
     total_tokens: number;
     input_tokens: number;
     output_tokens: number;
+    error_count?: number;
+    avg_latency_ms?: number;
 }
 
 interface TokenHistoryChartProps {
@@ -32,7 +35,12 @@ export default function TokenHistoryChart({ data }: TokenHistoryChartProps) {
         }),
         inputTokens: item.input_tokens,
         outputTokens: item.output_tokens,
+        requests: item.request_count,
+        errors: item.error_count || 0,
     }));
+
+    // Check if there are any errors in the data
+    const hasErrors = chartData.some((d) => d.errors > 0);
 
     const formatYAxis = (value: number) => {
         if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
@@ -68,7 +76,7 @@ export default function TokenHistoryChart({ data }: TokenHistoryChartProps) {
                 </Box>
             ) : (
                 <ResponsiveContainer width="100%" height={300}>
-                    <AreaChart data={chartData}>
+                    <ComposedChart data={chartData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                         <XAxis
                             dataKey="time"
@@ -77,13 +85,26 @@ export default function TokenHistoryChart({ data }: TokenHistoryChartProps) {
                             axisLine={{ stroke: '#e0e0e0' }}
                         />
                         <YAxis
+                            yAxisId="left"
                             tickFormatter={formatYAxis}
                             tick={{ fontSize: 12 }}
                             tickLine={false}
                             axisLine={{ stroke: '#e0e0e0' }}
                         />
+                        {hasErrors && (
+                            <YAxis
+                                yAxisId="right"
+                                orientation="right"
+                                tick={{ fontSize: 12 }}
+                                tickLine={false}
+                                axisLine={{ stroke: '#e0e0e0' }}
+                            />
+                        )}
                         <Tooltip
-                            formatter={(value: number) => [value.toLocaleString(), '']}
+                            formatter={(value: number, name: string) => [
+                                value.toLocaleString(),
+                                name,
+                            ]}
                             contentStyle={{
                                 borderRadius: 8,
                                 border: '1px solid #e0e0e0',
@@ -92,6 +113,7 @@ export default function TokenHistoryChart({ data }: TokenHistoryChartProps) {
                         />
                         <Legend />
                         <Area
+                            yAxisId="left"
                             type="monotone"
                             dataKey="inputTokens"
                             name="Input Tokens"
@@ -100,6 +122,7 @@ export default function TokenHistoryChart({ data }: TokenHistoryChartProps) {
                             fill="#bbdefb"
                         />
                         <Area
+                            yAxisId="left"
                             type="monotone"
                             dataKey="outputTokens"
                             name="Output Tokens"
@@ -107,7 +130,28 @@ export default function TokenHistoryChart({ data }: TokenHistoryChartProps) {
                             stroke="#2e7d32"
                             fill="#c8e6c9"
                         />
-                    </AreaChart>
+                        <Line
+                            yAxisId="left"
+                            type="monotone"
+                            dataKey="requests"
+                            name="Requests"
+                            stroke="#ff9800"
+                            strokeWidth={2}
+                            dot={false}
+                        />
+                        {hasErrors && (
+                            <Line
+                                yAxisId="right"
+                                type="monotone"
+                                dataKey="errors"
+                                name="Errors"
+                                stroke="#d32f2f"
+                                strokeWidth={2}
+                                strokeDasharray="5 5"
+                                dot={false}
+                            />
+                        )}
+                    </ComposedChart>
                 </ResponsiveContainer>
             )}
         </Paper>

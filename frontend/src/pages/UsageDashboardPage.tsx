@@ -12,47 +12,67 @@ import {
     InputLabel,
     Select,
     MenuItem,
+    ToggleButton,
+    ToggleButtonGroup,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CallMadeIcon from '@mui/icons-material/CallMade';
 import PaidIcon from '@mui/icons-material/Paid';
 import BoltIcon from '@mui/icons-material/Bolt';
+import SpeedIcon from '@mui/icons-material/Speed';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import StreamIcon from '@mui/icons-material/Stream';
 import { StatCard, TokenUsageChart, TokenHistoryChart, ServiceStatsTable } from '../components/dashboard';
 import api from '../services/api';
 
 interface AggregatedStat {
     key: string;
-    provider_uuid?: string;
     provider_name?: string;
     model?: string;
-    scenario?: string;
     request_count: number;
-    total_tokens: number;
     total_input_tokens: number;
     total_output_tokens: number;
-    avg_input_tokens: number;
-    avg_output_tokens: number;
     avg_latency_ms: number;
     error_count: number;
     error_rate: number;
     streamed_count: number;
-    streamed_rate: number;
 }
 
 interface TimeSeriesData {
     timestamp: string;
     request_count: number;
-    total_tokens: number;
     input_tokens: number;
     output_tokens: number;
-    error_count: number;
-    avg_latency_ms: number;
+    error_count?: number;
 }
 
 interface Provider {
     uuid: string;
     name: string;
 }
+
+type TimeRange = 'today' | '7d' | '30d' | '90d';
+
+const TIME_RANGE_CONFIG: Record<TimeRange, { label: string; days: number; interval: string }> = {
+    today: { label: 'Today', days: 1, interval: 'hour' },
+    '7d': { label: '7 Days', days: 7, interval: 'hour' },
+    '30d': { label: '30 Days', days: 30, interval: 'day' },
+    '90d': { label: '90 Days', days: 90, interval: 'day' },
+};
+
+// Format date to local ISO string (with timezone offset instead of Z)
+const toLocalISOString = (date: Date): string => {
+    const tzOffset = -date.getTimezoneOffset();
+    const sign = tzOffset >= 0 ? '+' : '-';
+    const pad = (n: number) => String(Math.floor(Math.abs(n))).padStart(2, '0');
+    return date.getFullYear() +
+        '-' + pad(date.getMonth() + 1) +
+        '-' + pad(date.getDate()) +
+        'T' + pad(date.getHours()) +
+        ':' + pad(date.getMinutes()) +
+        ':' + pad(date.getSeconds()) +
+        sign + pad(tzOffset / 60) + ':' + pad(tzOffset % 60);
+};
 
 export default function UsageDashboardPage() {
     const [loading, setLoading] = useState(true);
@@ -62,15 +82,17 @@ export default function UsageDashboardPage() {
     const [timeSeries, setTimeSeries] = useState<TimeSeriesData[]>([]);
     const [providers, setProviders] = useState<Provider[]>([]);
     const [selectedProvider, setSelectedProvider] = useState<string>('all');
+    const [timeRange, setTimeRange] = useState<TimeRange>('7d');
 
-    const loadData = useCallback(async (provider: string) => {
+    const loadData = useCallback(async (provider: string, range: TimeRange) => {
         try {
-            // Build query params
+            // Build query params based on time range
             const now = new Date();
-            const startTime = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); // 7 days ago
+            const config = TIME_RANGE_CONFIG[range];
+            const startTime = new Date(now.getTime() - config.days * 24 * 60 * 60 * 1000);
             const params: Record<string, string> = {
-                start_time: startTime.toISOString(),
-                end_time: now.toISOString(),
+                start_time: toLocalISOString(startTime),
+                end_time: toLocalISOString(now),
             };
             if (provider && provider !== 'all') {
                 params.provider = provider;
@@ -78,7 +100,7 @@ export default function UsageDashboardPage() {
 
             const [statsResult, timeSeriesResult, providersResult] = await Promise.all([
                 api.getUsageStats({ ...params, group_by: 'model', limit: 100 }),
-                api.getUsageTimeSeries({ ...params, interval: 'hour' }),
+                api.getUsageTimeSeries({ ...params, interval: config.interval }),
                 api.getProviders(),
             ]);
 
@@ -100,21 +122,21 @@ export default function UsageDashboardPage() {
     }, []);
 
     useEffect(() => {
-        loadData(selectedProvider);
-    }, [loadData, selectedProvider]);
+        loadData(selectedProvider, timeRange);
+    }, [loadData, selectedProvider, timeRange]);
 
     useEffect(() => {
         if (autoRefresh) {
             const interval = setInterval(() => {
-                loadData(selectedProvider);
+                loadData(selectedProvider, timeRange);
             }, 60000);
             return () => clearInterval(interval);
         }
-    }, [autoRefresh, loadData, selectedProvider]);
+    }, [autoRefresh, loadData, selectedProvider, timeRange]);
 
     const handleRefresh = () => {
         setRefreshing(true);
-        loadData(selectedProvider);
+        loadData(selectedProvider, timeRange);
     };
 
     // Calculate totals from stats
@@ -129,14 +151,27 @@ export default function UsageDashboardPage() {
         .filter((d) => new Date(d.timestamp).toDateString() === today)
         .reduce((sum, d) => sum + d.input_tokens + d.output_tokens, 0);
 
+    // Calculate average latency (weighted by request count)
+    const totalLatencyWeight = stats.reduce((sum, s) => sum + (s.avg_latency_ms || 0) * (s.request_count || 0), 0);
+    const avgLatency = totalRequests > 0 ? totalLatencyWeight / totalRequests : 0;
+
+    // Calculate error rate
+    const totalErrors = stats.reduce((sum, s) => sum + (s.error_count || 0), 0);
+    const errorRate = totalRequests > 0 ? (totalErrors / totalRequests) * 100 : 0;
+
+    // Calculate streamed rate
+    const totalStreamed = stats.reduce((sum, s) => sum + (s.streamed_count || 0), 0);
+    const streamedRate = totalRequests > 0 ? (totalStreamed / totalRequests) * 100 : 0;
+
     // Prepare chart data
-    const tokenChartData = stats.slice(0, 10).map((stat) => ({
-        name: stat.model?.length && stat.model.length > 25
-            ? stat.model.substring(0, 25) + '...'
-            : (stat.model || stat.key),
-        inputTokens: stat.total_input_tokens || 0,
-        outputTokens: stat.total_output_tokens || 0,
-    }));
+    const tokenChartData = stats.slice(0, 10).map((stat) => {
+        const label = stat.model || stat.key;
+        return {
+            name: label.length > 25 ? label.substring(0, 25) + '...' : label,
+            inputTokens: stat.total_input_tokens || 0,
+            outputTokens: stat.total_output_tokens || 0,
+        };
+    });
 
     // Format large numbers
     const formatNumber = (num: number): string => {
@@ -156,26 +191,11 @@ export default function UsageDashboardPage() {
     return (
         <Box sx={{ p: 3 }}>
             {/* Header */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                 <Typography variant="h5" sx={{ fontWeight: 600 }}>
                     Usage Dashboard
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <FormControl size="small" sx={{ minWidth: 150 }}>
-                        <InputLabel>Provider</InputLabel>
-                        <Select
-                            value={selectedProvider}
-                            label="Provider"
-                            onChange={(e) => setSelectedProvider(e.target.value)}
-                        >
-                            <MenuItem value="all">All Providers</MenuItem>
-                            {providers.map((p) => (
-                                <MenuItem key={p.uuid} value={p.uuid}>
-                                    {p.name}
-                                </MenuItem>
-                            ))}
-                        </Select>
-                    </FormControl>
                     <FormControlLabel
                         control={
                             <Switch
@@ -194,18 +214,52 @@ export default function UsageDashboardPage() {
                 </Box>
             </Box>
 
-            {/* Stats Cards */}
-            <Grid container spacing={3} sx={{ mb: 3 }}>
-                <Grid size={{ xs: 12, sm: 4 }}>
+            {/* Filters Row */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3, flexWrap: 'wrap' }}>
+                {/* Time Range Selector */}
+                <ToggleButtonGroup
+                    value={timeRange}
+                    exclusive
+                    onChange={(_, value) => value && setTimeRange(value)}
+                    size="small"
+                >
+                    {Object.entries(TIME_RANGE_CONFIG).map(([key, config]) => (
+                        <ToggleButton key={key} value={key} sx={{ px: 2 }}>
+                            {config.label}
+                        </ToggleButton>
+                    ))}
+                </ToggleButtonGroup>
+
+                {/* Provider Selector */}
+                <FormControl size="small" sx={{ minWidth: 150 }}>
+                    <InputLabel>Provider</InputLabel>
+                    <Select
+                        value={selectedProvider}
+                        label="Provider"
+                        onChange={(e) => setSelectedProvider(e.target.value)}
+                    >
+                        <MenuItem value="all">All Providers</MenuItem>
+                        {providers.map((p) => (
+                            <MenuItem key={p.uuid} value={p.uuid}>
+                                {p.name}
+                            </MenuItem>
+                        ))}
+                    </Select>
+                </FormControl>
+            </Box>
+
+            {/* Stats Cards - Row 1 */}
+            <Grid container spacing={2} sx={{ mb: 2 }}>
+                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                     <StatCard
                         title="Total Requests"
                         value={totalRequests.toLocaleString()}
-                        subtitle="Last 7 days"
+                        subtitle={TIME_RANGE_CONFIG[timeRange].label}
                         icon={<CallMadeIcon />}
                         color="primary"
                     />
                 </Grid>
-                <Grid size={{ xs: 12, sm: 4 }}>
+                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                     <StatCard
                         title="Total Tokens"
                         value={formatNumber(totalTokens)}
@@ -214,13 +268,44 @@ export default function UsageDashboardPage() {
                         color="success"
                     />
                 </Grid>
-                <Grid size={{ xs: 12, sm: 4 }}>
+                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                     <StatCard
                         title="Today's Tokens"
                         value={formatNumber(todayTokens)}
                         subtitle="Since midnight"
                         icon={<BoltIcon />}
                         color="info"
+                    />
+                </Grid>
+            </Grid>
+
+            {/* Stats Cards - Row 2 */}
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                    <StatCard
+                        title="Avg Latency"
+                        value={avgLatency > 0 ? `${avgLatency.toFixed(0)}ms` : '-'}
+                        subtitle="Response time"
+                        icon={<SpeedIcon />}
+                        color="warning"
+                    />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                    <StatCard
+                        title="Error Rate"
+                        value={`${errorRate.toFixed(2)}%`}
+                        subtitle={`${totalErrors} errors`}
+                        icon={<ErrorOutlineIcon />}
+                        color={errorRate > 5 ? 'error' : 'success'}
+                    />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                    <StatCard
+                        title="Streamed Rate"
+                        value={`${streamedRate.toFixed(1)}%`}
+                        subtitle={`${totalStreamed} streamed`}
+                        icon={<StreamIcon />}
+                        color="secondary"
                     />
                 </Grid>
             </Grid>

@@ -6,7 +6,7 @@ interface StatCardProps {
     value: string | number;
     subtitle?: string;
     icon?: ReactNode;
-    color?: 'primary' | 'success' | 'info' | 'warning' | 'error';
+    color?: 'primary' | 'success' | 'info' | 'warning' | 'error' | 'secondary';
 }
 
 export default function StatCard({ title, value, subtitle, icon, color = 'primary' }: StatCardProps) {
@@ -16,6 +16,7 @@ export default function StatCard({ title, value, subtitle, icon, color = 'primar
         info: { bg: '#e1f5fe', text: '#0288d1' },
         warning: { bg: '#fff3e0', text: '#f57c00' },
         error: { bg: '#ffebee', text: '#d32f2f' },
+        secondary: { bg: '#f3e5f5', text: '#7b1fa2' },
     };
 
     const colors = colorMap[color];
