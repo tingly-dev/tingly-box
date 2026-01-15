@@ -176,4 +176,56 @@ tasks:
     summary: Cross-compiles for Windows ARM64 with CGO (requires manual setup, see task output)
     cmds:
       - task: windows:build:cross:arm64
+
+  # CLI build tasks for Windows (uses zig for cross-compilation with CGO)
+  windows:cli:build:amd64:
+    summary: Cross-compiles CLI for Windows AMD64 (requires zig)
+    cmds:
+      - task: windows:cli:build:cross:amd64
+
+  windows:cli:build:arm64:
+    summary: Cross-compiles CLI for Windows ARM64 (requires zig)
+    cmds:
+      - task: windows:cli:build:cross:arm64
+
+  windows:cli:build:cross:amd64:
+    summary: Cross-compiles CLI for Windows AMD64 with zig
+    deps:
+      - task: check:zig
+    cmds:
+      - |
+        mkdir -p {{.BIN_DIR}}
+        # Use zig as cross-compiler for Windows AMD64
+        CC="zig cc -target x86_64-windows-gnu" \
+        CXX="zig c++ -target x86_64-windows-gnu" \
+        GOOS=windows GOARCH=amd64 CGO_ENABLED=1 \
+        go build -buildvcs=false -ldflags="-w -s" -o {{.BIN_DIR}}/{{.BIN_NAME}}-amd64.exe ./internal/cmd/tingly-box
+
+  windows:cli:build:cross:arm64:
+    summary: Cross-compiles CLI for Windows ARM64 with zig
+    deps:
+      - task: check:zig
+    cmds:
+      - |
+        mkdir -p {{.BIN_DIR}}
+        # Use zig as cross-compiler for Windows ARM64
+        CC="zig cc -target aarch64-windows-gnu" \
+        CXX="zig c++ -target aarch64-windows-gnu" \
+        GOOS=windows GOARCH=arm64 CGO_ENABLED=1 \
+        go build -buildvcs=false -ldflags="-w -s" -o {{.BIN_DIR}}/{{.BIN_NAME}}-arm64.exe ./internal/cmd/tingly-box
+
+  check:zig:
+    summary: Check if zig is installed
+    cmds:
+      - |
+        if ! command -v zig &> /dev/null; then
+          echo "Error: zig not found!"
+          echo ""
+          echo "To install zig:"
+          echo "  macOS:   brew install zig"
+          echo "  Or download from: https://ziglang.org/download/"
+          echo ""
+          exit 1
+        fi
+        echo "Found: $(zig version)"
   
