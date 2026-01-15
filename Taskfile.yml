@@ -166,4 +166,14 @@ tasks:
     cmds:
       - |
         go build -buildvcs=false -gcflags=all="-l" -o bin/{{.BIN_NAME}} ./wails3
+
+  windows:build:amd64:
+    summary: Cross-compiles for Windows AMD64 with CGO enabled (requires mingw-w64)
+    cmds:
+      - task: windows:build:cross:amd64
+#  brew install zig
+  windows:build:arm64:
+    summary: Cross-compiles for Windows ARM64 with CGO (requires manual setup, see task output)
+    cmds:
+      - task: windows:build:cross:arm64
   
