@@ -99,3 +99,98 @@ tasks:
   run:
     cmds:
       - '{{.BIN_DIR}}/{{.APP_NAME}}.exe'
+
+  build:cross:amd64:
+    summary: Cross-compiles for Windows AMD64 with CGO enabled (requires mingw-w64)
+    deps:
+      - task: common:go:mod:tidy
+      - task: common:build:frontend
+        vars:
+          BUILD_FLAGS:
+            ref: .BUILD_FLAGS
+          PRODUCTION:
+            ref: .PRODUCTION
+      - task: common:generate:icons
+      - task: check:mingw:amd64
+    cmds:
+      - task: generate:syso
+        vars:
+          ARCH: amd64
+      - |
+        mkdir -p {{.BIN_DIR}}
+        CC=x86_64-w64-mingw32-gcc CXX=x86_64-w64-mingw32-g++ \
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=1 \
+          go build {{.BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}}-amd64.exe {{.PACKAGE_PATH}}
+      - cmd: powershell Remove-item *.syso
+        platforms: [windows]
+      - cmd: rm -f *.syso
+        platforms: [linux, darwin]
+    vars:
+      BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production -trimpath -buildvcs=false -ldflags="-w -s -H windowsgui"{{else}}-buildvcs=false -gcflags=all="-l"{{end}}'
+      PRODUCTION: '{{.PRODUCTION | default "false"}}'
+
+  build:cross:arm64:
+    summary: Cross-compiles for Windows ARM64 with CGO (requires zig)
+    deps:
+      - task: common:go:mod:tidy
+      - task: common:build:frontend
+        vars:
+          BUILD_FLAGS:
+            ref: .BUILD_FLAGS
+          PRODUCTION:
+            ref: .PRODUCTION
+      - task: common:generate:icons
+      - task: check:zig
+    cmds:
+      - task: generate:syso
+        vars:
+          ARCH: arm64
+      - |
+        mkdir -p {{.BIN_DIR}}
+        # Use zig as cross-compiler for Windows ARM64
+        # zig cc provides a unified interface for cross-compilation
+        CC="zig cc -target aarch64-windows-gnu" \
+        CXX="zig c++ -target aarch64-windows-gnu" \
+        GOOS=windows GOARCH=arm64 CGO_ENABLED=1 \
+        go build {{.BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}}-arm64.exe {{.PACKAGE_PATH}}
+      - cmd: powershell Remove-item *.syso
+        platforms: [windows]
+      - cmd: rm -f *.syso
+        platforms: [linux, darwin]
+    vars:
+      BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production -trimpath -buildvcs=false -ldflags="-w -s -H windowsgui"{{else}}-buildvcs=false -gcflags=all="-l"{{end}}'
+      PRODUCTION: '{{.PRODUCTION | default "false"}}'
+
+  check:zig:
+    summary: Check if zig is installed
+    internal: true
+    cmds:
+      - |
+        if ! command -v zig &> /dev/null; then
+          echo "Error: zig not found!"
+          echo ""
+          echo "To install zig for cross-compilation:"
+          echo "  macOS:   brew install zig"
+          echo "  Or download from: https://ziglang.org/download/"
+          echo ""
+          exit 1
+        fi
+        echo "Found: $(zig version)"
+
+  check:mingw:amd64:
+    summary: Check if mingw-w64 AMD64 toolchain is installed
+    internal: true
+    cmds:
+      - |
+        if ! command -v x86_64-w64-mingw32-gcc &> /dev/null; then
+          echo "Error: x86_64-w64-mingw32-gcc not found!"
+          echo ""
+          echo "To install mingw-w64 for cross-compilation:"
+          echo "  macOS:   brew install mingw-w64"
+          echo "  Ubuntu/Debian: sudo apt-get install mingw-w64"
+          echo "  Fedora:  sudo dnf install mingw64-gcc"
+          echo "  Arch:    sudo pacman -S mingw-w64-gcc"
+          echo ""
+          exit 1
+        fi
+        echo "Found: $(x86_64-w64-mingw32-gcc --version | head -n1)"

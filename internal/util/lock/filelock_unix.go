@@ -11,6 +11,11 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// globalLockRegistry keeps FileLock references from being garbage collected.
+// On Unix, if the FileLock struct is GC'd, the file descriptor is closed
+// and the flock() lock is released even though the process is still running.
+var globalLockRegistry = make(map[*FileLock]bool)
+
 // FileLock manages exclusive file locking for single-instance enforcement.
 // The lock is automatically released when the process dies, even if it crashes.
 // It also stores the current process PID for signal-based shutdown.
@@ -56,6 +61,10 @@ func (fl *FileLock) TryLock() error {
 		return fmt.Errorf("failed to write PID to lock file: %w", err)
 	}
 
+	// Register this lock globally to prevent garbage collection
+	// On Unix, if the FileLock is GC'd, the file is closed and lock is released
+	globalLockRegistry[fl] = true
+
 	return nil
 }
 
@@ -65,6 +74,9 @@ func (fl *FileLock) Unlock() error {
 	if fl.file == nil {
 		return nil
 	}
+
+	// Unregister from global registry
+	delete(globalLockRegistry, fl)
 
 	// Release the flock
 	_ = unix.Flock(int(fl.file.Fd()), unix.LOCK_UN)

@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -61,42 +62,10 @@ func printBanner(cfg BannerConfig) {
 	}
 }
 
-// stopServer stops the running server using the file lock
-func stopServerWithFileLock(fileLock *lock.FileLock) error {
-	// Get PID from lock file
-	pid, err := fileLock.GetPID()
-	if err != nil {
-		return fmt.Errorf("lock file does not exist or is invalid: %w", err)
-	}
-
-	// Find and signal the process
-	process, err := os.FindProcess(pid)
-	if err != nil {
-		return fmt.Errorf("failed to find process: %w", err)
-	}
-
-	// Send SIGTERM for graceful shutdown
-	if err := process.Signal(syscall.SIGTERM); err != nil {
-		return fmt.Errorf("failed to send shutdown signal: %w", err)
-	}
-
-	// Wait for process to exit
-	for i := 0; i < 30; i++ { // Wait up to 30 seconds
-		if !fileLock.IsLocked() {
-			return nil
-		}
-		time.Sleep(1 * time.Second)
-	}
-
-	// If still running, force kill
-	fmt.Println("Server didn't stop gracefully, force killing...")
-	if err := process.Signal(syscall.SIGKILL); err != nil {
-		return fmt.Errorf("failed to force kill process: %w", err)
-	}
-
-	return nil
-}
-
+// stopServerWithFileLock is implemented in platform-specific files:
+// - server_windows.go for Windows (uses process.Kill())
+// - server_unix.go for Unix-like systems (uses SIGTERM/SIGKILL)
+//
 // resolveStartOptions resolves start options from CLI flags and config
 // This is shared between start and restart commands
 type startFlags struct {
@@ -108,6 +77,7 @@ type startFlags struct {
 	enableStyleTransform bool
 	daemon               bool
 	logFile              string
+	promptRestart        bool
 }
 
 // addStartFlags adds all start-related flags to a command
@@ -121,6 +91,7 @@ func addStartFlags(cmd *cobra.Command, flags *startFlags) {
 	cmd.Flags().BoolVar(&flags.enableStyleTransform, "adapter", true, "Enable API style transformation (default: true)")
 	cmd.Flags().BoolVar(&flags.daemon, "daemon", false, "Run as daemon in background (default: false)")
 	cmd.Flags().StringVar(&flags.logFile, "log-file", "", "Log file path for daemon mode (default: ~/.tingly-box/tingly-box.log)")
+	cmd.Flags().BoolVar(&flags.promptRestart, "prompt-restart", false, "Prompt to restart if server is already running (default: false)")
 }
 
 func resolveStartOptions(cmd *cobra.Command, flags startFlags, appConfig *config.AppConfig) startServerOptions {
@@ -151,6 +122,7 @@ func resolveStartOptions(cmd *cobra.Command, flags startFlags, appConfig *config
 		EnableOpenBrowser: resolvedOpenBrowser,
 		Daemon:            flags.daemon,
 		LogFile:           flags.logFile,
+		PromptRestart:     flags.promptRestart,
 	}
 }
 
@@ -182,6 +154,7 @@ type startServerOptions struct {
 	EnableOpenBrowser bool
 	Daemon            bool
 	LogFile           string
+	PromptRestart     bool
 }
 
 // startServer handles the server starting logic
@@ -268,9 +241,32 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 			GlobalConfig: appConfig.GetGlobalConfig(),
 			IsDaemon:     false,
 		})
-		fmt.Println("Tip: Use 'tingly-box restart' or 'npx tingly-box restart' to restart the server")
-		fmt.Println("     Use 'tingly-box stop' or 'npx tingly-box stop' to stop it")
-		return nil
+
+		// If prompt-restart is enabled, ask user if they want to restart
+		if opts.PromptRestart {
+			fmt.Print("\nDo you want to restart the server? [y/N]: ")
+			var response string
+			fmt.Scanln(&response)
+
+			// Check if user wants to restart
+			if strings.ToLower(strings.TrimSpace(response)) == "y" || strings.ToLower(strings.TrimSpace(response)) == "yes" {
+				fmt.Println("\nRestarting server...")
+				// Stop the existing server first
+				if err := stopServerWithFileLock(fileLock); err != nil {
+					return fmt.Errorf("failed to stop existing server: %w", err)
+				}
+				// Give a moment for cleanup
+				time.Sleep(1 * time.Second)
+				// Continue to start the server (fall through to the rest of the function)
+			} else {
+				fmt.Println("\nRestart cancelled.")
+				return nil
+			}
+		} else {
+			fmt.Println("Tip: Use 'tingly-box restart' or 'npx tingly-box restart' to restart the server")
+			fmt.Println("     Use 'tingly-box stop' or 'npx tingly-box stop' to stop it")
+			return nil
+		}
 	}
 
 	// Acquire lock before starting server
