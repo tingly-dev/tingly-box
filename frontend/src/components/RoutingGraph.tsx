@@ -15,7 +15,6 @@ import {
     Collapse,
     IconButton,
     Stack,
-    Switch,
     Tooltip,
     Typography,
     Alert,
@@ -232,13 +231,6 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                             }}
                         />
                     </Tooltip>
-                    <Typography variant="h6" sx={{
-                        fontWeight: 600,
-                        color: record.active ? 'text.primary' : 'text.disabled',
-                        minWidth: 150,
-                    }}>
-                        {record.requestModel || 'Specified model name'}
-                    </Typography>
                     {smartEnabled && (
                         <Chip
                             label="Smart Routing"
@@ -256,35 +248,24 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                         />
                     )}
                     <Chip
-                        label={`Use ${record.providers.length} ${record.providers.length === 1 ? 'Key' : 'Keys'}`}
-                        size="small"
-                        variant="outlined"
-                        onClick={(e) => e.stopPropagation()}
-                        sx={{
-                            opacity: record.active ? 1 : 0.5,
-                            borderColor: record.active ? 'inherit' : 'text.disabled',
-                            color: record.active ? 'inherit' : 'text.disabled',
-                            minWidth: 90,
-                        }}
-                    />
-                    <Chip
                         label={record.active ? "Active" : "Inactive"}
                         size="small"
                         color={record.active ? "success" : "default"}
                         variant={record.active ? "filled" : "outlined"}
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if (!saving && allowToggleRule) {
+                                onUpdateRecord('active', !record.active);
+                            }
+                        }}
                         sx={{
                             opacity: record.active ? 1 : 0.7,
                             minWidth: 75,
+                            cursor: (saving || !allowToggleRule) ? 'default' : 'pointer',
+                            '&:hover': (saving || !allowToggleRule) ? {} : {
+                                opacity: 0.8,
+                            },
                         }}
-                    />
-                    <Switch
-                        checked={record.active}
-                        onChange={(e) => onUpdateRecord('active', e.target.checked)}
-                        disabled={saving || !allowToggleRule}
-                        size="small"
-                        color="success"
-                        onClick={(e) => e.stopPropagation()}
                     />
                     {/* Smart Routing Toggle */}
                     {/*<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>*/}

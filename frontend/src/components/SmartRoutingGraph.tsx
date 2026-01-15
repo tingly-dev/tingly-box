@@ -154,16 +154,6 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                             color: active ? 'inherit' : 'text.disabled',
                         }}
                     />
-                    <Chip
-                        label={`${record.providers.length} ${record.providers.length === 1 ? 'Provider' : 'Providers'}`}
-                        size="small"
-                        variant="outlined"
-                        sx={{
-                            opacity: active ? 1 : 0.5,
-                            borderColor: active ? 'inherit' : 'text.disabled',
-                            color: active ? 'inherit' : 'text.disabled',
-                        }}
-                    />
                     {record.description && (
                         <Typography variant="body2" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
                             {record.description}
