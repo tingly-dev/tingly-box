@@ -15,10 +15,12 @@ import {
     Stack,
     Switch,
     Tooltip,
-    Typography
+    Typography,
+    Alert,
+    Snackbar,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Provider } from '../types/provider';
 import { ConnectionLine, ModelNode, NodeContainer, ProviderNodeComponent, ProviderNodeContainer } from './RuleNode';
@@ -160,9 +162,25 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
     // When collapsible, parent controls expanded state (defaults to false when collapsible=true)
     // When not collapsible, always show expanded
     const isExpanded = !collapsible || expanded;
+    const [snackbar, setSnackbar] = useState<{
+        open: boolean;
+        message: string;
+    }>({ open: false, message: '' });
     const getApiStyle = (providerUuid: string) => {
         const provider = providers.find(p => p.uuid === providerUuid);
         return provider?.api_style || 'openai';
+    };
+
+    const showNotification = (message: string) => {
+        setSnackbar({ open: true, message });
+    };
+
+    const handleCopyModel = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (record.requestModel) {
+            void navigator.clipboard.writeText(record.requestModel);
+            showNotification(`Model name "${record.requestModel}" copied to clipboard`);
+        }
     };
 
     return (
@@ -174,13 +192,28 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
             >
                 {/* Left side */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1 }}>
-                    <Typography variant="h6" sx={{
-                        fontWeight: 600,
-                        color: record.active ? 'text.primary' : 'text.disabled',
-                        minWidth: 150,
-                    }}>
-                        {record.requestModel || 'Specified model name'}
-                    </Typography>
+                    <Tooltip title={record.requestModel
+                        ? `Use "${record.requestModel}" as model name in your API requests. (click to copy)`
+                        : 'No model specified'}>
+                        <Chip
+                            label={`model = ${record.requestModel || 'Unspecified'}`}
+                            size="small"
+                            variant="outlined"
+                            onClick={handleCopyModel}
+                            sx={{
+                                opacity: record.active ? 1 : 0.5,
+                                borderColor: record.active ? 'primary.main' : 'text.disabled',
+                                color: record.active ? 'primary.main' : 'text.disabled',
+                                minWidth: 150,
+                                fontWeight: 600,
+                                alignContent:"start",
+                                cursor: record.requestModel ? 'pointer' : 'default',
+                                '& .MuiChip-label': {
+                                    fontWeight: 600,
+                                },
+                            }}
+                        />
+                    </Tooltip>
                     <Chip
                         label={`Use ${record.providers.length} ${record.providers.length === 1 ? 'Key' : 'Keys'}`}
                         size="small"
@@ -284,7 +317,7 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                                                 <Box sx={{ flex: 1 }}>
                                                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: graph.iconGap, mb: graph.labelMargin }}>
                                                         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                                            Request Local Model
+                                                            Request Model
                                                         </Typography>
                                                         <Tooltip title="The model name that clients use to make requests. This will be matched against incoming API calls.">
                                                             <InfoIcon sx={{ fontSize: '0.9rem', color: 'text.secondary', cursor: 'help' }} />
@@ -327,7 +360,7 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                                         // Single display when no response model
                                         <Box>
                                             <Typography variant="caption" sx={{ color: 'text.secondary', mb: graph.labelMargin, textAlign: 'center', display: 'block' }}>
-                                                Request Local Model
+                                                Request Model
                                             </Typography>
                                             <ModelNode
                                                 active={record.active}
@@ -470,6 +503,21 @@ const RuleGraph: React.FC<RuleGraphProps> = ({
                     </Stack>
                 </CardContent>
             </Collapse>
+            <Snackbar
+                open={snackbar.open}
+                autoHideDuration={3000}
+                onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            >
+                <Alert
+                    onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+                    severity="success"
+                    variant="filled"
+                    sx={{ width: '100%' }}
+                >
+                    {snackbar.message}
+                </Alert>
+            </Snackbar>
         </StyledCard>
     );
 };

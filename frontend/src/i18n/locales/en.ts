@@ -198,7 +198,7 @@ export default {
     },
     "graph": {
       "title": "Request Proxy Visualization",
-      "requestLocalModel": "Request Local Model",
+      "requestLocalModel": "Request Model Name",
       "responseModel": "Response Model",
       "requestLocalTooltip": "The model name that clients use to make requests. This will be matched against incoming API calls.",
       "responseTooltip": "The model name returned to clients. Responses from upstream providers will be transformed to show this model name instead.",

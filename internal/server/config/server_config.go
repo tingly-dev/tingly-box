@@ -1116,7 +1116,7 @@ func init() {
 		{
 			UUID:          "built-in-anthropic",
 			Scenario:      typ.ScenarioAnthropic,
-			RequestModel:  "tingly/anthropic",
+			RequestModel:  "tingly-claude",
 			ResponseModel: "",
 			Description:   "Default proxy rule in tingly-box for general use with Anthropic",
 			Services:      []loadbalance.Service{}, // Empty services initially
@@ -1129,7 +1129,7 @@ func init() {
 		{
 			UUID:          "built-in-openai",
 			Scenario:      typ.ScenarioOpenAI,
-			RequestModel:  "tingly/openai",
+			RequestModel:  "tingly-gpt",
 			ResponseModel: "",
 			Description:   "Default proxy rule in tingly-box for general use with OpenAI",
 			Services:      []loadbalance.Service{}, // Empty services initially

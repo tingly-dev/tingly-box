@@ -18,8 +18,6 @@ import {
     InputAdornment,
     Snackbar,
     Stack,
-    Tab,
-    Tabs,
     TextField,
     Typography,
 } from '@mui/material';
@@ -31,9 +29,10 @@ import type { Provider, ProviderModelsData } from '../types/provider';
 import { api } from '../services/api';
 import { getModelTypeInfo, navigateToModelPage } from '../utils/modelUtils';
 import { ApiStyleBadge } from "./ApiStyleBadge";
+import { AuthTypeBadge } from "./AuthTypeBadge";
 import CustomModelCard from './CustomModelCard';
 import ModelCard from './ModelCard';
-import { a11yProps, TabPanel } from './TabPanel';
+import { TabPanel } from './TabPanel';
 
 export interface ProviderSelectTabOption {
     provider: Provider;
@@ -105,10 +104,51 @@ export default function ModelSelectTab({
         [displayProviders]
     );
 
+    // Group and sort providers by auth_type
+    const groupedProviders = React.useMemo(() => {
+        const groups: { [key: string]: Provider[] } = {};
+        const authTypeOrder = ['oauth', 'api_key', 'bearer_token', 'basic_auth'];
+
+        enabledProviders.forEach(provider => {
+            const authType = provider.auth_type || 'api key';
+            if (!groups[authType]) {
+                groups[authType] = [];
+            }
+            groups[authType].push(provider);
+        });
+
+        // Sort providers within each group by name
+        Object.keys(groups).forEach(authType => {
+            groups[authType].sort((a, b) => a.name.localeCompare(b.name));
+        });
+
+        // Sort groups by predefined order, then by auth_type name for unknown types
+        const sortedGroups: Array<{ authType: string; providers: Provider[] }> = [];
+        authTypeOrder.forEach(authType => {
+            if (groups[authType]) {
+                sortedGroups.push({ authType, providers: groups[authType] });
+                delete groups[authType];
+            }
+        });
+
+        // Add remaining groups
+        Object.keys(groups).sort().forEach(authType => {
+            sortedGroups.push({ authType, providers: groups[authType] });
+        });
+
+        return sortedGroups;
+    }, [enabledProviders]);
+
+    // Flatten grouped providers for tab indexing
+    const flattenedProviders = React.useMemo(
+        () => groupedProviders.flatMap(group => group.providers),
+        [groupedProviders]
+    );
+
     // Pagination and search
     const { searchTerms, setCurrentPage, handleSearchChange, handlePageChange, getPaginatedData } =
         usePagination(
-            enabledProviders.map(p => p.name),
+            flattenedProviders.map(p => p.name),
             gridLayout.modelsPerPage
         );
 
@@ -151,8 +191,8 @@ export default function ModelSelectTab({
             setInternalCurrentTab(newValue);
         }
 
-        // Get the target provider
-        const targetProvider = enabledProviders[newValue];
+        // Get the target provider from flattened list
+        const targetProvider = flattenedProviders[newValue];
         if (!targetProvider) return;
 
         // Notify parent component about provider change
@@ -255,7 +295,7 @@ export default function ModelSelectTab({
     // Auto-switch to selected provider tab and navigate to selected model on component mount (only once)
     React.useEffect(() => {
         if (!isInitialized && selectedProvider) {
-            const targetProviderIndex = enabledProviders.findIndex(provider => provider.uuid === selectedProvider);
+            const targetProviderIndex = flattenedProviders.findIndex(provider => provider.uuid === selectedProvider);
 
             // Auto-switch to the selected provider's tab
             if (targetProviderIndex !== -1) {
@@ -264,7 +304,7 @@ export default function ModelSelectTab({
                 }
 
                 // Fetch models for the selected provider on initial load
-                const targetProvider = enabledProviders[targetProviderIndex];
+                const targetProvider = flattenedProviders[targetProviderIndex];
                 if (onProviderChange) {
                     onProviderChange(targetProvider);
                 }
@@ -285,61 +325,122 @@ export default function ModelSelectTab({
             // Mark as initialized to prevent further automatic switching
             setIsInitialized(true);
         }
-    }, [isInitialized, selectedProvider, selectedModel, enabledProviders, providerModels, externalActiveTab, customModels, gridLayout.modelsPerPage, onProviderChange]);
+    }, [isInitialized, selectedProvider, selectedModel, flattenedProviders, providerModels, externalActiveTab, customModels, gridLayout.modelsPerPage, onProviderChange]);
 
     return (
-        <Box sx={{ width: '100%' }}>
-            <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+        <Box sx={{ display: 'flex', flexDirection: 'row', height: '100%', width: '100%' }}>
+            {/* Left Sidebar - Vertical Tabs */}
+            <Box sx={{
+                width: 300,
+                borderRight: 1,
+                borderColor: 'divider',
+                display: 'flex',
+                flexDirection: 'column',
+                bgcolor: 'background.paper',
+            }}>
+                {/* Header */}
+                <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                        Credentials ({displayProviders.length})
+                    </Typography>
+                </Box>
 
-                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-                    Credentials ({displayProviders.length})
-                </Typography>
-                <Tabs
-                    value={currentTab}
-                    onChange={handleTabChange}
-                    aria-label="Provider selection tabs"
-                    variant="scrollable"
-                    scrollButtons="auto"
-                    allowScrollButtonsMobile
+                {/* Vertical Navigation with Auth Type Grouping */}
+                <Box
+                    sx={{
+                        flex: 1,
+                        overflowY: 'auto',
+                        '&::-webkit-scrollbar': {
+                            width: 6,
+                        },
+                        '&::-webkit-scrollbar-thumb': {
+                            bgcolor: 'divider',
+                            borderRadius: 3,
+                        },
+                    }}
                 >
-                    {enabledProviders.map((provider, index) => {
-                        const modelTypeInfo = getModelTypeInfo(provider, providerModels, customModels);
-                        const isProviderSelected = selectedProvider === provider.uuid; // Compare UUIDs
+                    {groupedProviders.map((group, groupIndex) => {
+                        // Calculate starting index for this group
+                        const groupStartIndex = groupedProviders
+                            .slice(0, groupIndex)
+                            .reduce((sum, g) => sum + g.providers.length, 0);
 
                         return (
-                            <Tab
-                                key={provider.uuid} // Use UUID as key
-                                label={
-                                    <Stack direction="column" alignItems="center" spacing={0.5}>
-                                        <Stack direction="row" alignItems="center" spacing={1}>
-                                            <Typography variant="body1" fontWeight={600}>
-                                                {provider.name}
-                                            </Typography>
-                                            {isProviderSelected && (
-                                                <CheckCircle color="primary" sx={{ fontSize: 16 }} />
-                                            )}
-                                        </Stack>
-                                        <Stack direction="row" alignItems="center" spacing={1}>
-                                            {provider.api_style && <ApiStyleBadge apiStyle={provider.api_style} />}
-                                        </Stack>
+                            <Box key={`group-${group.authType}`}>
+                                {/* Auth Type Header */}
+                                <Box
+                                    sx={{
+                                        px: 2,
+                                        py: 1,
+                                        borderBottom: 1,
+                                        borderColor: 'divider',
+                                        bgcolor: 'action.hover',
+                                        position: 'sticky',
+                                        top: 0,
+                                        zIndex: 1,
+                                    }}
+                                >
+                                    <Stack direction="row" alignItems="center" spacing={1}>
+                                        <AuthTypeBadge authType={group.authType} />
+                                        <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                                            ({group.providers.length})
+                                        </Typography>
                                     </Stack>
-                                }
-                                {...a11yProps(index)}
-                                sx={{
-                                    textTransform: 'none',
-                                    minWidth: 120,
-                                    '&.Mui-selected': {
-                                        color: 'primary.main',
-                                        fontWeight: 600,
-                                    },
-                                }}
-                            />
+                                </Box>
+
+                                {/* Provider Items */}
+                                {group.providers.map((provider, providerIndex) => {
+                                    const globalIndex = groupStartIndex + providerIndex;
+                                    const isProviderSelected = selectedProvider === provider.uuid;
+                                    const isSelectedTab = currentTab === globalIndex;
+
+                                    return (
+                                        <Box
+                                            key={provider.uuid}
+                                            onClick={() => handleTabChange(null as unknown as React.SyntheticEvent, globalIndex)}
+                                            sx={{
+                                                px: 2,
+                                                py: 1.5,
+                                                cursor: 'pointer',
+                                                bgcolor: isSelectedTab ? 'action.selected' : 'transparent',
+                                                borderLeft: 3,
+                                                borderLeftColor: isSelectedTab ? 'primary.main' : 'transparent',
+                                                '&:hover': {
+                                                    bgcolor: isSelectedTab ? 'action.selected' : 'action.hover',
+                                                },
+                                                transition: 'all 0.2s',
+                                            }}
+                                        >
+                                            <Stack direction="row" alignItems="center" spacing={1} sx={{ width: '100%', justifyContent: 'space-between' }}>
+                                                <Stack direction="row" alignItems="center" spacing={1} sx={{ flex: 1, minWidth: 0 }}>
+                                                    <Typography
+                                                        variant="body2"
+                                                        fontWeight={isSelectedTab ? 600 : 400}
+                                                        color={isSelectedTab ? 'primary.main' : 'text.primary'}
+                                                        noWrap
+                                                    >
+                                                        {provider.name}
+                                                    </Typography>
+                                                    {isProviderSelected && (
+                                                        <CheckCircle color="primary" sx={{ fontSize: 14, flexShrink: 0 }} />
+                                                    )}
+                                                </Stack>
+                                                {provider.api_style && (
+                                                    <ApiStyleBadge compact={true} apiStyle={provider.api_style} sx={{ flexShrink: 0, width: "100px" }} />
+                                                )}
+                                            </Stack>
+                                        </Box>
+                                    );
+                                })}
+                            </Box>
                         );
                     })}
-                </Tabs>
+                </Box>
             </Box>
 
-            {enabledProviders.map((provider, index) => {
+            {/* Right Panel - Tab Content */}
+            <Box sx={{ flex: 1, overflowY: 'auto', p: 2 }}>
+                {flattenedProviders.map((provider, index) => {
                 const modelTypeInfo = getModelTypeInfo(provider, providerModels, customModels);
                 const { standardModelsForDisplay, isCustomModel } = modelTypeInfo;
 
@@ -348,7 +449,6 @@ export default function ModelSelectTab({
                 const isRefreshing = refreshingProviders.includes(provider.uuid); // Use UUID
 
                 const backendCustomModel = providerModels?.[provider.name]?.custom_model;
-                const localStorageCustomModels = customModels[provider.name] || [];
 
                 return (
                     <TabPanel key={provider.uuid} value={currentTab} index={index}> {/* Use UUID as key */}
@@ -583,6 +683,7 @@ export default function ModelSelectTab({
                     </TabPanel>
                 );
             })}
+            </Box>
 
             {/* Custom Model Dialog */}
             <Dialog
