@@ -10,19 +10,20 @@ import {
     Box,
 } from '@mui/material';
 
-interface AggregatedStat {
+export interface AggregatedStat {
     key: string;
     provider_uuid?: string;
     provider_name?: string;
     model?: string;
     scenario?: string;
     request_count: number;
-    total_tokens: number;
+    total_tokens?: number;
     total_input_tokens: number;
     total_output_tokens: number;
     avg_latency_ms: number;
     error_count: number;
     error_rate: number;
+    streamed_count?: number;
 }
 
 interface ServiceStatsTableProps {
@@ -30,9 +31,13 @@ interface ServiceStatsTableProps {
 }
 
 export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
-    const formatNumber = (num: number): string => {
+    const formatTokens = (num: number): string => {
         if (num >= 1000000) return `${(num / 1000000).toFixed(2)}M`;
         if (num >= 1000) return `${(num / 1000).toFixed(2)}K`;
+        return num.toLocaleString();
+    };
+
+    const formatRequests = (num: number): string => {
         return num.toLocaleString();
     };
 
@@ -60,14 +65,14 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
                             <TableCell align="right" sx={{ fontWeight: 600 }}>Requests</TableCell>
                             <TableCell align="right" sx={{ fontWeight: 600 }}>Input Tokens</TableCell>
                             <TableCell align="right" sx={{ fontWeight: 600 }}>Output Tokens</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 600 }}>Avg Latency</TableCell>
+                            {/* <TableCell align="right" sx={{ fontWeight: 600 }}>Avg Latency</TableCell> */}
                             <TableCell align="right" sx={{ fontWeight: 600 }}>Error Rate</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
                         {stats.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={7} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                                <TableCell colSpan={6} align="center" sx={{ py: 4, color: 'text.secondary' }}>
                                     No usage data available
                                 </TableCell>
                             </TableRow>
@@ -89,12 +94,12 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
                                             {stat.model || stat.key}
                                         </Typography>
                                     </TableCell>
-                                    <TableCell align="right">{formatNumber(stat.request_count)}</TableCell>
-                                    <TableCell align="right">{formatNumber(stat.total_input_tokens)}</TableCell>
-                                    <TableCell align="right">{formatNumber(stat.total_output_tokens)}</TableCell>
-                                    <TableCell align="right">
+                                    <TableCell align="right">{formatRequests(stat.request_count)}</TableCell>
+                                    <TableCell align="right">{formatTokens(stat.total_input_tokens)}</TableCell>
+                                    <TableCell align="right">{formatTokens(stat.total_output_tokens)}</TableCell>
+                                    {/* <TableCell align="right">
                                         {stat.avg_latency_ms > 0 ? `${stat.avg_latency_ms.toFixed(0)}ms` : '-'}
-                                    </TableCell>
+                                    </TableCell> */}
                                     <TableCell align="right">
                                         <Typography
                                             variant="body2"
