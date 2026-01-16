@@ -41,7 +41,7 @@ function App() {
                                             <Route path="/api-keys" element={<ApiKeyPage />} />
                                             <Route path="/oauth" element={<OAuthPage />} />
                                             <Route path="/system" element={<System />} />
-                                            <Route path="/usage" element={<UsageDashboardPage />} />
+                                            <Route path="/dashboard" element={<UsageDashboardPage />} />
                                             <Route path="/model-test/:providerUuid" element={<ModelTestPage />} />
                                         </Routes>
                                     </Layout>

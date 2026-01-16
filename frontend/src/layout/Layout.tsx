@@ -100,13 +100,13 @@ const Layout = ({ children }: LayoutProps) => {
 
     const menuGroups: MenuGroup[] = [
         {
-            key: 'analytics',
-            label: 'Analytics',
+            key: 'dashboard',
+            label: 'Dashboard',
             icon: <BarChartIcon sx={{ fontSize: 20 }} />,
             standalone: true,
             items: [
                 {
-                    path: '/usage',
+                    path: '/dashboard',
                     label: 'Usage Dashboard',
                     icon: <BarChartIcon sx={{ fontSize: 18 }} />,
                 },
