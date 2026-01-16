@@ -67,8 +67,8 @@ func TestConvertGoogleToOpenAIRequestComplex(t *testing.T) {
 		temp := float32(0.7)
 		topP := float32(0.9)
 		config := &genai.GenerateContentConfig{
-			Temperature: &temp,
-			TopP:        &topP,
+			Temperature:     &temp,
+			TopP:            &topP,
 			MaxOutputTokens: 1000,
 		}
 
@@ -415,7 +415,7 @@ func TestConvertGoogleToolsToOpenAIComplex(t *testing.T) {
 							Items: &genai.Schema{
 								Type: genai.TypeObject,
 								Properties: map[string]*genai.Schema{
-									"id":   {Type: genai.TypeString},
+									"id":    {Type: genai.TypeString},
 									"value": {Type: genai.TypeNumber},
 								},
 							},
@@ -503,8 +503,8 @@ func TestConvertGoogleToolChoice(t *testing.T) {
 
 	t.Run("any mode with specific function", func(t *testing.T) {
 		config := &genai.FunctionCallingConfig{
-			Mode:                  genai.FunctionCallingConfigModeAny,
-			AllowedFunctionNames:  []string{"get_weather"},
+			Mode:                 genai.FunctionCallingConfigModeAny,
+			AllowedFunctionNames: []string{"get_weather"},
 		}
 
 		openaiChoice := ConvertGoogleToolChoiceToOpenAI(config)
@@ -553,5 +553,144 @@ func TestConvertGooglePartsToStringComplex(t *testing.T) {
 
 		result := ConvertGooglePartsToString(parts)
 		assert.Equal(t, "", result)
+	})
+}
+
+// TestConvertGoogleToOpenAIRequest tests converting Google request to OpenAI format
+func TestConvertGoogleToOpenAIRequest(t *testing.T) {
+	t.Run("simple user content", func(t *testing.T) {
+		contents := []*genai.Content{
+			{
+				Role: "user",
+				Parts: []*genai.Part{
+					genai.NewPartFromText("Hello, world!"),
+				},
+			},
+		}
+
+		openaiReq := ConvertGoogleToOpenAIRequest("gemini-pro", contents, &genai.GenerateContentConfig{})
+
+		if string(openaiReq.Model) != "gemini-pro" {
+			t.Errorf("expected model 'gemini-pro', got '%s'", openaiReq.Model)
+		}
+		if len(openaiReq.Messages) != 1 {
+			t.Errorf("expected 1 message, got %d", len(openaiReq.Messages))
+		}
+	})
+
+	t.Run("with model role", func(t *testing.T) {
+		contents := []*genai.Content{
+			{
+				Role: "model",
+				Parts: []*genai.Part{
+					genai.NewPartFromText("Hi there!"),
+				},
+			},
+		}
+
+		openaiReq := ConvertGoogleToOpenAIRequest("gemini-pro", contents, &genai.GenerateContentConfig{})
+
+		if len(openaiReq.Messages) != 1 {
+			t.Errorf("expected 1 message, got %d", len(openaiReq.Messages))
+		}
+	})
+
+	t.Run("with temperature", func(t *testing.T) {
+		temp := float32(0.7)
+		config := &genai.GenerateContentConfig{
+			Temperature: &temp,
+		}
+
+		openaiReq := ConvertGoogleToOpenAIRequest("gemini-pro", nil, config)
+
+		if openaiReq.Temperature.Value < 0.69 || openaiReq.Temperature.Value > 0.71 {
+			t.Errorf("expected temperature ~0.7, got %f", openaiReq.Temperature.Value)
+		}
+	})
+
+	t.Run("with function calls", func(t *testing.T) {
+		contents := []*genai.Content{
+			{
+				Role: "model",
+				Parts: []*genai.Part{
+					{
+						FunctionCall: &genai.FunctionCall{
+							ID:   "call_123",
+							Name: "get_weather",
+							Args: map[string]interface{}{"loc": "NYC"},
+						},
+					},
+				},
+			},
+		}
+
+		openaiReq := ConvertGoogleToOpenAIRequest("gemini-pro", contents, &genai.GenerateContentConfig{})
+
+		if len(openaiReq.Messages) != 1 {
+			t.Errorf("expected 1 message, got %d", len(openaiReq.Messages))
+		}
+	})
+}
+
+// TestConvertGoogleToAnthropicRequest tests converting Google request to Anthropic format
+func TestConvertGoogleToAnthropicRequest(t *testing.T) {
+	t.Run("simple user content", func(t *testing.T) {
+		contents := []*genai.Content{
+			{
+				Role: "user",
+				Parts: []*genai.Part{
+					genai.NewPartFromText("Hello, world!"),
+				},
+			},
+		}
+
+		params := ConvertGoogleToAnthropicRequest("gemini-pro", contents, &genai.GenerateContentConfig{})
+
+		if string(params.Model) != "gemini-pro" {
+			t.Errorf("expected model 'gemini-pro', got '%s'", params.Model)
+		}
+		if len(params.Messages) != 1 {
+			t.Errorf("expected 1 message, got %d", len(params.Messages))
+		}
+	})
+
+	t.Run("with system instruction", func(t *testing.T) {
+		contents := []*genai.Content{
+			{
+				Role: "system",
+				Parts: []*genai.Part{
+					genai.NewPartFromText("You are helpful"),
+				},
+			},
+		}
+
+		params := ConvertGoogleToAnthropicRequest("gemini-pro", contents, &genai.GenerateContentConfig{})
+
+		if len(params.System) != 1 {
+			t.Errorf("expected 1 system block, got %d", len(params.System))
+		}
+	})
+
+	t.Run("with function call", func(t *testing.T) {
+		contents := []*genai.Content{
+			{
+				Role: "model",
+				Parts: []*genai.Part{
+					{
+						FunctionCall: &genai.FunctionCall{
+							ID:   "call_123",
+							Name: "get_weather",
+							Args: map[string]interface{}{"loc": "NYC"},
+						},
+					},
+				},
+			},
+		}
+
+		params := ConvertGoogleToAnthropicRequest("gemini-pro", contents, &genai.GenerateContentConfig{})
+
+		if len(params.Messages) != 1 {
+			t.Errorf("expected 1 message, got %d", len(params.Messages))
+		}
 	})
 }

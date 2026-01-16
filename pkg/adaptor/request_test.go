@@ -627,9 +627,9 @@ func TestConvertOpenAIToGoogleRequestComplex(t *testing.T) {
 				}(),
 				openai.ToolMessage("call_1", "Sunny, 22°C"),
 			},
-			MaxTokens: openai.Opt(int64(1000)),
+			MaxTokens:   openai.Opt(int64(1000)),
 			Temperature: openai.Opt(float64(0.7)),
-			TopP: openai.Opt(float64(0.9)),
+			TopP:        openai.Opt(float64(0.9)),
 		}
 
 		model, contents, config := ConvertOpenAIToGoogleRequest(req, 4096)
@@ -697,7 +697,7 @@ func TestConvertOpenAIToGoogleRequestComplex(t *testing.T) {
 			Messages: []openai.ChatCompletionMessageParamUnion{
 				openai.UserMessage("Search for AI news"),
 			},
-			Tools:    []openai.ChatCompletionToolUnionParam{tool},
+			Tools:     []openai.ChatCompletionToolUnionParam{tool},
 			MaxTokens: openai.Opt(int64(100)),
 		}
 
@@ -953,11 +953,11 @@ func TestNormalizeSchemaTypes(t *testing.T) {
 		schema := &genai.Schema{
 			Type: "object",
 			Properties: map[string]*genai.Schema{
-				"name": {Type: "string"},
-				"age":  {Type: "integer"},
-				"score": {Type: "number"},
+				"name":   {Type: "string"},
+				"age":    {Type: "integer"},
+				"score":  {Type: "number"},
 				"active": {Type: "boolean"},
-				"items": {Type: "array"},
+				"items":  {Type: "array"},
 			},
 		}
 

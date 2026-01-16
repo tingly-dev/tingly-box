@@ -559,3 +559,204 @@ func TestGoogleFinishReasonMapping(t *testing.T) {
 		}
 	})
 }
+
+// TestConvertGoogleToOpenAIResponse tests converting Google response to OpenAI format
+func TestConvertGoogleToOpenAIResponse(t *testing.T) {
+	t.Run("text only response", func(t *testing.T) {
+		resp := &genai.GenerateContentResponse{
+			Candidates: []*genai.Candidate{
+				{
+					Content: &genai.Content{
+						Role: "model",
+						Parts: []*genai.Part{
+							genai.NewPartFromText("Hello!"),
+						},
+					},
+					FinishReason: genai.FinishReasonStop,
+				},
+			},
+			UsageMetadata: &genai.GenerateContentResponseUsageMetadata{
+				PromptTokenCount:     10,
+				CandidatesTokenCount: 5,
+				TotalTokenCount:      15,
+			},
+		}
+
+		openaiResp := ConvertGoogleToOpenAIResponse(resp, "gemini-pro")
+
+		if openaiResp["model"] != "gemini-pro" {
+			t.Errorf("expected model 'gemini-pro', got '%v'", openaiResp["model"])
+		}
+		choices := openaiResp["choices"].([]map[string]interface{})
+		if len(choices) != 1 {
+			t.Errorf("expected 1 choice, got %d", len(choices))
+		}
+		if choices[0]["message"].(map[string]interface{})["content"] != "Hello!" {
+			t.Errorf("expected content 'Hello!', got '%v'", choices[0]["message"].(map[string]interface{})["content"])
+		}
+	})
+
+	t.Run("with function call", func(t *testing.T) {
+		resp := &genai.GenerateContentResponse{
+			Candidates: []*genai.Candidate{
+				{
+					Content: &genai.Content{
+						Role: "model",
+						Parts: []*genai.Part{
+							{
+								FunctionCall: &genai.FunctionCall{
+									ID:   "call_123",
+									Name: "get_weather",
+									Args: map[string]interface{}{"loc": "NYC"},
+								},
+							},
+						},
+					},
+					FinishReason: genai.FinishReasonStop,
+				},
+			},
+		}
+
+		openaiResp := ConvertGoogleToOpenAIResponse(resp, "gemini-pro")
+
+		choices := openaiResp["choices"].([]map[string]interface{})
+		toolCalls := choices[0]["message"].(map[string]interface{})["tool_calls"].([]map[string]interface{})
+		if len(toolCalls) != 1 {
+			t.Errorf("expected 1 tool call, got %d", len(toolCalls))
+		}
+		if toolCalls[0]["function"].(map[string]interface{})["name"] != "get_weather" {
+			t.Errorf("expected function name 'get_weather', got '%v'", toolCalls[0]["function"].(map[string]interface{})["name"])
+		}
+	})
+}
+
+// TestConvertGoogleToAnthropicResponse tests converting Google response to Anthropic format
+func TestConvertGoogleToAnthropicResponse(t *testing.T) {
+	t.Run("text only response", func(t *testing.T) {
+		resp := &genai.GenerateContentResponse{
+			Candidates: []*genai.Candidate{
+				{
+					Content: &genai.Content{
+						Role: "model",
+						Parts: []*genai.Part{
+							genai.NewPartFromText("Hello!"),
+						},
+					},
+					FinishReason: genai.FinishReasonStop,
+				},
+			},
+			UsageMetadata: &genai.GenerateContentResponseUsageMetadata{
+				PromptTokenCount:     10,
+				CandidatesTokenCount: 5,
+			},
+		}
+
+		anthropicResp := ConvertGoogleToAnthropicResponse(resp, "gemini-pro")
+
+		if anthropicResp.Role != "assistant" {
+			t.Errorf("expected role 'assistant', got '%s'", anthropicResp.Role)
+		}
+		if len(anthropicResp.Content) != 1 {
+			t.Errorf("expected 1 content block, got %d", len(anthropicResp.Content))
+		}
+		if anthropicResp.Content[0].Type != "text" {
+			t.Errorf("expected type 'text', got '%s'", anthropicResp.Content[0].Type)
+		}
+		if anthropicResp.Content[0].Text != "Hello!" {
+			t.Errorf("expected text 'Hello!', got '%s'", anthropicResp.Content[0].Text)
+		}
+		if anthropicResp.StopReason != "end_turn" {
+			t.Errorf("expected stop reason 'end_turn', got '%s'", anthropicResp.StopReason)
+		}
+	})
+
+	t.Run("with function call", func(t *testing.T) {
+		resp := &genai.GenerateContentResponse{
+			Candidates: []*genai.Candidate{
+				{
+					Content: &genai.Content{
+						Role: "model",
+						Parts: []*genai.Part{
+							{
+								FunctionCall: &genai.FunctionCall{
+									ID:   "call_123",
+									Name: "get_weather",
+									Args: map[string]interface{}{"loc": "NYC"},
+								},
+							},
+						},
+					},
+					FinishReason: genai.FinishReasonStop,
+				},
+			},
+		}
+
+		anthropicResp := ConvertGoogleToAnthropicResponse(resp, "gemini-pro")
+
+		if len(anthropicResp.Content) != 1 {
+			t.Errorf("expected 1 content block, got %d", len(anthropicResp.Content))
+		}
+		if anthropicResp.Content[0].Type != "tool_use" {
+			t.Errorf("expected type 'tool_use', got '%s'", anthropicResp.Content[0].Type)
+		}
+		if anthropicResp.Content[0].Name != "get_weather" {
+			t.Errorf("expected name 'get_weather', got '%s'", anthropicResp.Content[0].Name)
+		}
+	})
+}
+
+// TestConvertGoogleToolsToOpenAI tests converting Google tools to OpenAI format
+func TestConvertGoogleToolsToOpenAI(t *testing.T) {
+	t.Run("single tool", func(t *testing.T) {
+		funcs := []*genai.FunctionDeclaration{
+			{
+				Name:        "get_weather",
+				Description: "Get weather info",
+				Parameters: &genai.Schema{
+					Type: "object",
+				},
+			},
+		}
+
+		tools := ConvertGoogleToolsToOpenAI(funcs)
+
+		if len(tools) != 1 {
+			t.Errorf("expected 1 tool, got %d", len(tools))
+		}
+	})
+
+	t.Run("nil tools", func(t *testing.T) {
+		tools := ConvertGoogleToolsToOpenAI(nil)
+		if tools != nil {
+			t.Errorf("expected nil, got %v", tools)
+		}
+	})
+}
+
+// TestConvertGoogleToolsToAnthropic tests converting Google tools to Anthropic format
+func TestConvertGoogleToolsToAnthropic(t *testing.T) {
+	t.Run("single tool", func(t *testing.T) {
+		funcs := []*genai.FunctionDeclaration{
+			{
+				Name:        "get_weather",
+				Description: "Get weather info",
+				Parameters: &genai.Schema{
+					Type: "object",
+				},
+			},
+		}
+
+		tools := ConvertGoogleToolsToAnthropic(funcs)
+
+		if len(tools) != 1 {
+			t.Errorf("expected 1 tool, got %d", len(tools))
+		}
+	})
+
+	t.Run("nil tools", func(t *testing.T) {
+		tools := ConvertGoogleToolsToAnthropic(nil)
+		if tools != nil {
+			t.Errorf("expected nil, got %v", tools)
+		}
+	})
+}
