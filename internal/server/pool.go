@@ -16,6 +16,7 @@ import (
 type ClientPool struct {
 	openaiClients    map[string]*llmclient.OpenAIClient
 	anthropicClients map[string]*llmclient.AnthropicClient
+	googleClients    map[string]*llmclient.GoogleClient
 	mutex            sync.RWMutex
 	debugMode        bool
 }
@@ -25,6 +26,7 @@ func NewClientPool() *ClientPool {
 	return &ClientPool{
 		openaiClients:    make(map[string]*llmclient.OpenAIClient),
 		anthropicClients: make(map[string]*llmclient.AnthropicClient),
+		googleClients:    make(map[string]*llmclient.GoogleClient),
 	}
 }
 
@@ -114,6 +116,49 @@ func (p *ClientPool) GetAnthropicClient(provider *typ.Provider, model string) *l
 	return client
 }
 
+// GetGoogleClient returns a Google client wrapper for the specified provider
+func (p *ClientPool) GetGoogleClient(provider *typ.Provider, model string) *llmclient.GoogleClient {
+	// Generate unique key for provider
+	key := p.generateProviderKey(provider, model)
+
+	// Try to get existing client with read lock first
+	p.mutex.RLock()
+	if client, exists := p.googleClients[key]; exists {
+		p.mutex.RUnlock()
+		logrus.Debugf("Using cached Google client for provider: %s model: %s", provider.Name, model)
+		return client
+	}
+	p.mutex.RUnlock()
+
+	// Need to create new client, acquire write lock
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	// Double-check after acquiring write lock to avoid race conditions
+	if client, exists := p.googleClients[key]; exists {
+		logrus.Debugf("Using cached Google client for provider: %s (double-check)", provider.Name)
+		return client
+	}
+
+	// Create new client using factory
+	logrus.Infof("Creating new Google client for provider: %s (API: %s)", provider.Name, provider.APIBase)
+
+	client, err := llmclient.NewGoogleClient(provider)
+	if err != nil {
+		logrus.Errorf("Failed to create Google client for provider %s: %v", provider.Name, err)
+		return nil
+	}
+
+	// Apply debug mode if enabled
+	if p.debugMode {
+		client.SetMode(true)
+	}
+
+	// Store in pool
+	p.googleClients[key] = client
+	return client
+}
+
 // generateProviderKey creates a unique key for a provider
 func (p *ClientPool) generateProviderKey(provider *typ.Provider, model string) string {
 	return fmt.Sprintf("%s:%s:%s", provider.UUID, model, hashToken(provider.ProxyURL))
@@ -137,6 +182,7 @@ func (p *ClientPool) Clear() {
 
 	p.openaiClients = make(map[string]*llmclient.OpenAIClient)
 	p.anthropicClients = make(map[string]*llmclient.AnthropicClient)
+	p.googleClients = make(map[string]*llmclient.GoogleClient)
 	logrus.Info("Client pools cleared")
 }
 
@@ -156,6 +202,10 @@ func (p *ClientPool) RemoveProvider(provider *typ.Provider, model string) {
 		delete(p.anthropicClients, key)
 		removed = true
 	}
+	if _, exists := p.googleClients[key]; exists {
+		delete(p.googleClients, key)
+		removed = true
+	}
 
 	if removed {
 		logrus.Infof("Removed client for provider: %s", provider.Name)
@@ -166,7 +216,7 @@ func (p *ClientPool) RemoveProvider(provider *typ.Provider, model string) {
 func (p *ClientPool) Size() int {
 	p.mutex.RLock()
 	defer p.mutex.RUnlock()
-	return len(p.openaiClients) + len(p.anthropicClients)
+	return len(p.openaiClients) + len(p.anthropicClients) + len(p.googleClients)
 }
 
 // GetProviderKeys returns all provider keys currently in the pool
@@ -174,7 +224,7 @@ func (p *ClientPool) GetProviderKeys() []string {
 	p.mutex.RLock()
 	defer p.mutex.RUnlock()
 
-	keys := make([]string, 0, len(p.openaiClients)+len(p.anthropicClients))
+	keys := make([]string, 0, len(p.openaiClients)+len(p.anthropicClients)+len(p.googleClients))
 
 	// Add OpenAI client keys
 	for key := range p.openaiClients {
@@ -184,6 +234,11 @@ func (p *ClientPool) GetProviderKeys() []string {
 	// Add Anthropic client keys
 	for key := range p.anthropicClients {
 		keys = append(keys, "anthropic:"+key)
+	}
+
+	// Add Google client keys
+	for key := range p.googleClients {
+		keys = append(keys, "google:"+key)
 	}
 
 	return keys
@@ -197,7 +252,8 @@ func (p *ClientPool) Stats() map[string]interface{} {
 	return map[string]interface{}{
 		"openai_clients_count":    len(p.openaiClients),
 		"anthropic_clients_count": len(p.anthropicClients),
-		"total_clients":           len(p.openaiClients) + len(p.anthropicClients),
+		"google_clients_count":    len(p.googleClients),
+		"total_clients":           len(p.openaiClients) + len(p.anthropicClients) + len(p.googleClients),
 		"provider_keys":           p.GetProviderKeys(),
 		"debug_mode":              p.debugMode,
 	}
@@ -222,6 +278,9 @@ func (p *ClientPool) SetMode(debug bool) {
 		client.SetMode(debug)
 	}
 	for _, client := range p.anthropicClients {
+		client.SetMode(debug)
+	}
+	for _, client := range p.googleClients {
 		client.SetMode(debug)
 	}
 	p.mutex.Unlock()

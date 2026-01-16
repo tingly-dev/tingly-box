@@ -61,12 +61,10 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req AnthropicMessagesReques
 	c.Set("model", selectedService.Model)
 
 	// Check provider's API style to decide which path to take
-	apiStyle := string(provider.APIStyle)
-	if apiStyle == "" {
-		apiStyle = "openai" // default to openai
-	}
+	apiStyle := provider.APIStyle
 
-	if apiStyle == "anthropic" {
+	switch apiStyle {
+	case typ.APIStyleAnthropic:
 		// Use direct Anthropic SDK call
 		if isStreaming {
 			// Handle streaming request
@@ -97,7 +95,58 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req AnthropicMessagesReques
 			c.JSON(http.StatusOK, anthropicResp)
 		}
 		return
-	} else {
+
+	case typ.APIStyleGoogle:
+		// Check if adaptor is enabled
+		if !s.enableAdaptor {
+			SendAdapterDisabledError(c, provider.Name)
+			return
+		}
+
+		// Convert Anthropic request to Google format
+		model, googleReq, cfg := adaptor.ConvertAnthropicToGoogleRequest(&req.MessageNewParams, 0)
+
+		if isStreaming {
+			// Create streaming request
+			stream, err := s.forwardGoogleStreamRequest(provider, model, googleReq, cfg)
+			if err != nil {
+				SendStreamingError(c, err)
+				return
+			}
+
+			// Handle the streaming response
+			err = adaptor.HandleGoogleToAnthropicStreamResponse(c, stream, proxyModel)
+			if err != nil {
+				SendInternalError(c, err.Error())
+			}
+
+			// Track usage from stream (would be accumulated in handler)
+			// For Google, usage is tracked in the stream handler
+
+		} else {
+			// Handle non-streaming request
+			response, err := s.forwardGoogleRequest(provider, model, googleReq, cfg)
+			if err != nil {
+				SendForwardingError(c, err)
+				return
+			}
+
+			// Convert Google response to Anthropic format
+			anthropicResp := adaptor.ConvertGoogleToAnthropicResponse(response, proxyModel)
+
+			// Track usage from response
+			inputTokens := 0
+			outputTokens := 0
+			if response.UsageMetadata != nil {
+				inputTokens = int(response.UsageMetadata.PromptTokenCount)
+				outputTokens = int(response.UsageMetadata.CandidatesTokenCount)
+			}
+			s.trackUsage(c, rule, provider, actualModel, proxyModel, inputTokens, outputTokens, false, "success", "")
+
+			c.JSON(http.StatusOK, anthropicResp)
+		}
+
+	case typ.APIStyleOpenAI:
 		// Check if adaptor is enabled
 		if !s.enableAdaptor {
 			SendAdapterDisabledError(c, provider.Name)
@@ -134,6 +183,8 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req AnthropicMessagesReques
 			anthropicResp := adaptor.ConvertOpenAIToAnthropicResponse(response, proxyModel)
 			c.JSON(http.StatusOK, anthropicResp)
 		}
+	default:
+		c.JSON(http.StatusBadRequest, "tingly-box: invalid api style")
 	}
 }
 
@@ -175,21 +226,6 @@ func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.M
 	// Accumulate usage from stream
 	var inputTokens, outputTokens int
 	var hasUsage bool
-
-	defer func() {
-		if r := recover(); r != nil {
-			logrus.Errorf("Panic in Anthropic streaming handler: %v", r)
-			// Track panic as error with any usage we accumulated
-			if hasUsage {
-				s.trackUsage(c, rule, provider, actualModel, respModel, inputTokens, outputTokens, true, "error", "panic")
-			}
-		}
-		if stream != nil {
-			if err := stream.Close(); err != nil {
-				logrus.Errorf("Error closing stream: %v", err)
-			}
-		}
-	}()
 
 	// Set SSE headers
 	SetupSSEHeaders(c)
