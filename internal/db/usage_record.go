@@ -31,7 +31,7 @@ type UsageRecord struct {
 	Status       string    `gorm:"column:status;index;not null"` // success, error, partial
 	ErrorCode    string    `gorm:"column:error_code"`
 	LatencyMs    int       `gorm:"column:latency_ms"`
-	Streamed     bool      `gorm:"column:streamed;default:0"`
+	Streamed     bool      `gorm:"column:streamed;type:integer"`
 }
 
 // TableName specifies the table name for GORM
@@ -256,7 +256,7 @@ func (us *UsageStore) GetAggregatedStats(query UsageStatsQuery) ([]AggregatedSta
 		COALESCE(SUM(input_tokens), 0) as input_tokens,
 		COALESCE(SUM(output_tokens), 0) as output_tokens,
 		COALESCE(SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END), 0) as error_count,
-		COALESCE(SUM(CASE WHEN streamed = 1 THEN 1 ELSE 0 END), 0) as streamed_count,
+		COALESCE(SUM(CASE WHEN streamed = true THEN 1 ELSE 0 END), 0) as streamed_count,
 		COALESCE(AVG(latency_ms), 0) as avg_latency
 	`, keyField)
 
@@ -350,8 +350,9 @@ func (us *UsageStore) GetTimeSeries(interval string, startTime, endTime time.Tim
 	}
 
 	var results []result
+	// Select the Unix timestamp of the time bucket (the grouped time), not the original timestamp
 	selectClause := fmt.Sprintf(`
-		strftime('%s', timestamp) as timestamp,
+		strftime('%%s', strftime('%s', timestamp)) as timestamp,
 		COUNT(*) as request_count,
 		COALESCE(SUM(total_tokens), 0) as total_tokens,
 		COALESCE(SUM(input_tokens), 0) as input_tokens,
@@ -362,7 +363,7 @@ func (us *UsageStore) GetTimeSeries(interval string, startTime, endTime time.Tim
 
 	if err := db.
 		Select(selectClause).
-		Group("timestamp").
+		Group(fmt.Sprintf("strftime('%s', timestamp)", timeFormat)).
 		Order("timestamp ASC").
 		Scan(&results).Error; err != nil {
 		return nil, err

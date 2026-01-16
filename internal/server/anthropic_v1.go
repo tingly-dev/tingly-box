@@ -207,12 +207,12 @@ func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.M
 		event.Message.Model = anthropic.Model(respModel)
 
 		// Accumulate usage from message_stop event
-		if event.Message.Usage.InputTokens > 0 {
-			inputTokens = int(event.Message.Usage.InputTokens)
+		if event.Usage.InputTokens > 0 {
+			inputTokens = int(event.Usage.InputTokens)
 			hasUsage = true
 		}
-		if event.Message.Usage.OutputTokens > 0 {
-			outputTokens = int(event.Message.Usage.OutputTokens)
+		if event.Usage.OutputTokens > 0 {
+			outputTokens = int(event.Usage.OutputTokens)
 			hasUsage = true
 		}
 

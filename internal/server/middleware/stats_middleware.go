@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -42,6 +43,9 @@ func (sm *StatsMiddleware) Middleware() gin.HandlerFunc {
 			c.Next()
 			return
 		}
+
+		// Set start time for latency calculation
+		c.Set("start_time", float64(time.Now().UnixNano()))
 
 		// Capture response body
 		responseWriter := &responseBodyWriter{

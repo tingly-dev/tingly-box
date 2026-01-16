@@ -330,7 +330,15 @@ func (api *UsageAPI) GetTimeSeries(c *gin.Context) {
 	// Convert db.TimeSeriesData to server.TimeSeriesData
 	result := make([]TimeSeriesData, len(data))
 	for i, d := range data {
-		result[i] = TimeSeriesData(d)
+		result[i] = TimeSeriesData{
+			Timestamp:    d.Timestamp,
+			RequestCount: d.RequestCount,
+			TotalTokens:  d.TotalTokens,
+			InputTokens:  d.InputTokens,
+			OutputTokens: d.OutputTokens,
+			ErrorCount:   d.ErrorCount,
+			AvgLatencyMs: d.AvgLatencyMs,
+		}
 	}
 
 	response := TimeSeriesResponse{
