@@ -27,6 +27,12 @@ export default function TokenUsageChart({ data }: TokenUsageChartProps) {
         return value.toString();
     };
 
+    const formatTooltipValue = (value: number) => {
+        if (value >= 1000000) return `${(value / 1000000).toFixed(2)}M`;
+        if (value >= 1000) return `${(value / 1000).toFixed(2)}K`;
+        return value.toLocaleString();
+    };
+
     return (
         <Paper
             elevation={0}
@@ -67,13 +73,13 @@ export default function TokenUsageChart({ data }: TokenUsageChartProps) {
                         <YAxis
                             dataKey="name"
                             type="category"
-                            tick={{ fontSize: 12 }}
+                            tick={{ fontSize: 11 }}
                             tickLine={false}
                             axisLine={{ stroke: '#e0e0e0' }}
-                            width={120}
+                            width={160}
                         />
                         <Tooltip
-                            formatter={(value: number) => [value.toLocaleString(), '']}
+                            formatter={(value: number, name: string) => [formatTooltipValue(value), name]}
                             contentStyle={{
                                 borderRadius: 8,
                                 border: '1px solid #e0e0e0',
