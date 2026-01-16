@@ -451,7 +451,7 @@ jobs:
           ls -lh "$PKG_DIR/zip/"
           
           # No GUI
-          rm -rf "$PKG_DIR/zip/tingly-box-gui-*"
+          rm -rf "$PKG_DIR"/zip/tingly-box-gui-*.zip
 
       - name: Verify bundle structure
         run: |
