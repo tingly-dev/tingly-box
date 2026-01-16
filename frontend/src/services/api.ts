@@ -54,24 +54,32 @@ export const getBaseUrl = async (): Promise<string> => {
             console.log(svc)
             try {
                 const port = await svc.GetPort();
-                basePath = `http://localhost:${port}`;
+
+                const protocol = window.location.protocol;
+                basePath = `${protocol}//localhost:${port}`;
                 console.log("Using GUI mode base path:", basePath);
             } catch (err) {
                 console.error('Failed to get port from TinglyService:', err);
             }
         }
     } else {
+        const protocol = window.location.protocol;
         const host = window.location.host.replace(/\/$/, "")
-        basePath = `http://${host}`
+        basePath = `${protocol}//${host}`
     }
 
     return basePath
 }
 
+const DEFAULT_PROTOCOL = window.location.protocol
+const DEFAULT_BASE_PATH = (window.location.origin || `${DEFAULT_PROTOCOL}://localhost:12580`).replace(/\/+$/, "");
+
 // Create API configuration
 const createApiConfig = async () => {
     let token = getUserAuthToken();
-    let basePath = API_BASE_URL || "";
+
+    let basePath = API_BASE_URL || DEFAULT_BASE_PATH;
+    console.log("api config", basePath)
 
     // Check if we're in GUI mode
     if (import.meta.env.VITE_PKG_MODE === "gui") {
@@ -87,15 +95,17 @@ const createApiConfig = async () => {
 
                 // Get port and construct base path
                 const port = await svc.GetPort();
-                basePath = `http://localhost:${port}`;
+                const protocol = window.location.protocol;
+                basePath = `${protocol}//localhost:${port}`;
                 console.log("Using GUI mode base path:", basePath);
             } catch (err) {
                 console.error('Failed to get configuration from TinglyService:', err);
             }
         }
     } else {
+        const protocol = window.location.protocol;
         const host = window.location.host.replace(/\/$/, "")
-        basePath = `http://${host}`
+        basePath = `${protocol}//${host}`
     }
 
     return new Configuration({

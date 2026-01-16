@@ -88,10 +88,17 @@ tasks:
       - |
         curl -s http://localhost:{{.PORT}}/swagger.json > swagger.json
   
-  start:
+  http:
+    aliases:
+      - start
     cmds:
       - task: go:build
       - ./build/{{.BIN_NAME}} --verbose start --debug
+    
+  https:
+    cmds:
+      - task: go:build
+      - ./build/{{.BIN_NAME}} --verbose start --https
   
   cli:build:
     cmds:

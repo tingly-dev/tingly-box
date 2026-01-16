@@ -20,6 +20,7 @@ import (
 	"tingly-box/internal/server/background"
 	"tingly-box/internal/server/config"
 	"tingly-box/internal/server/middleware"
+	servertls "tingly-box/internal/server/tls"
 	"tingly-box/internal/util/network"
 	oauth2 "tingly-box/pkg/oauth"
 )
@@ -59,6 +60,11 @@ type Server struct {
 	enableAdaptor bool
 	openBrowser   bool
 	host          string
+
+	// https options
+	httpsEnabled    bool
+	httpsCertDir    string
+	httpsRegenerate bool
 
 	version string
 }
@@ -106,6 +112,27 @@ func WithAdaptor(enabled bool) ServerOption {
 func WithOpenBrowser(enabled bool) ServerOption {
 	return func(s *Server) {
 		s.openBrowser = enabled
+	}
+}
+
+// WithHTTPSEnabled enables or disables HTTPS
+func WithHTTPSEnabled(enabled bool) ServerOption {
+	return func(s *Server) {
+		s.httpsEnabled = enabled
+	}
+}
+
+// WithHTTPSCertDir sets the HTTPS certificate directory
+func WithHTTPSCertDir(certDir string) ServerOption {
+	return func(s *Server) {
+		s.httpsCertDir = certDir
+	}
+}
+
+// WithHTTPSRegenerate sets the HTTPS certificate regenerate flag
+func WithHTTPSRegenerate(regenerate bool) ServerOption {
+	return func(s *Server) {
+		s.httpsRegenerate = regenerate
 	}
 }
 
@@ -209,10 +236,16 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize usage API
 	usageAPI := NewUsageAPI(cfg)
 
+	// Determine protocol for OAuth BaseURL
+	protocol := "http"
+	if server.httpsEnabled {
+		protocol = "https"
+	}
+
 	// Initialize OAuth manager and handler
 	registry := oauth2.DefaultRegistry()
 	oauthConfig := &oauth2.Config{
-		BaseURL:           fmt.Sprintf("http://localhost:%d", cfg.GetServerPort()),
+		BaseURL:           fmt.Sprintf("%s://localhost:%d", protocol, cfg.GetServerPort()),
 		ProviderConfigs:   make(map[oauth2.ProviderType]*oauth2.ProviderConfig),
 		TokenStorage:      oauth2.NewMemoryTokenStorage(),
 		StateExpiry:       10 * time.Minute,
@@ -399,6 +432,27 @@ func (s *Server) Start(port int) error {
 			log.Println("Configuration hot-reload enabled")
 		}
 	}
+
+	// Determine scheme and handle HTTPS setup
+	scheme := "http"
+	if s.httpsEnabled {
+		scheme = "https"
+
+		// Determine certificate directory
+		certDir := s.httpsCertDir
+		if certDir == "" {
+			certDir = servertls.GetDefaultCertDir(s.config.ConfigDir)
+		}
+
+		// Ensure certificates exist
+		certGen := servertls.NewCertificateGenerator(certDir)
+		if err := certGen.EnsureCertificates(s.httpsRegenerate); err != nil {
+			return fmt.Errorf("failed to setup HTTPS certificates: %w", err)
+		}
+
+		log.Printf("HTTPS enabled, using certificates from: %s", certDir)
+	}
+
 	addr := fmt.Sprintf("%s:%d", s.host, port)
 	s.httpServer = &http.Server{
 		Addr:    addr,
@@ -406,17 +460,28 @@ func (s *Server) Start(port int) error {
 	}
 
 	resolvedHost := network.ResolveHost(s.host)
+
+	// CASE 1: Non-UI Mode ---
 	if !s.enableUI {
-		fmt.Printf("OpenAI v1 Chat API endpoint: http://%s:%d/openai/v1/chat/completions\n", resolvedHost, port)
-		fmt.Printf("Anthropic v1 Message API endpoint: http://%s:%d/anthropic/v1/messages\n", resolvedHost, port)
+		fmt.Printf("OpenAI v1 Chat API endpoint: %s://%s:%d/openai/v1/chat/completions\n", scheme, resolvedHost, port)
+		fmt.Printf("Anthropic v1 Message API endpoint: %s://%s:%d/anthropic/v1/messages\n", scheme, resolvedHost, port)
 		//Fixme:: we should not hardcode it here
 		fmt.Printf("Mode name: %s\n", "tingly")
 		fmt.Printf("Model API key: %s\n", s.config.GetModelToken())
+
+		if s.httpsEnabled {
+			certDir := s.httpsCertDir
+			if certDir == "" {
+				certDir = servertls.GetDefaultCertDir(s.config.ConfigDir)
+			}
+			certGen := servertls.NewCertificateGenerator(certDir)
+			return s.engine.RunTLS(addr, certGen.GetCertFile(), certGen.GetKeyFile())
+		}
 		return s.httpServer.ListenAndServe()
 	}
 
 	// CASE 2: Web UI Mode ---
-	webUIURL := fmt.Sprintf("http://%s:%d", resolvedHost, port)
+	webUIURL := fmt.Sprintf("%s://%s:%d", scheme, resolvedHost, port)
 	if s.config.HasUserToken() {
 		webUIURL = fmt.Sprintf("%s/?user_auth_token=%s", webUIURL, s.config.GetUserToken())
 	}
@@ -431,7 +496,16 @@ func (s *Server) Start(port int) error {
 	// Use a channel to capture the immediate error if ListenAndServe fails
 	serverError := make(chan error, 1)
 	go func() {
-		serverError <- s.httpServer.ListenAndServe()
+		if s.httpsEnabled {
+			certDir := s.httpsCertDir
+			if certDir == "" {
+				certDir = servertls.GetDefaultCertDir(s.config.ConfigDir)
+			}
+			certGen := servertls.NewCertificateGenerator(certDir)
+			serverError <- s.engine.RunTLS(addr, certGen.GetCertFile(), certGen.GetKeyFile())
+		} else {
+			serverError <- s.httpServer.ListenAndServe()
+		}
 	}()
 
 	// Instead of a fixed 100ms sleep, we poll the port
