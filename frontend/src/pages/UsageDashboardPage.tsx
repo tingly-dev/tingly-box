@@ -18,33 +18,12 @@ import {
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CallMadeIcon from '@mui/icons-material/CallMade';
 import PaidIcon from '@mui/icons-material/Paid';
-import BoltIcon from '@mui/icons-material/Bolt';
-import SpeedIcon from '@mui/icons-material/Speed';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import StreamIcon from '@mui/icons-material/Stream';
-import { StatCard, TokenUsageChart, TokenHistoryChart, ServiceStatsTable } from '../components/dashboard';
+import SpeedIcon from '@mui/icons-material/Speed';
+import { StatCard, TokenUsageChart, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable } from '../components/dashboard';
+import type { TimeSeriesData, AggregatedStat } from '../components/dashboard';
 import api from '../services/api';
-
-interface AggregatedStat {
-    key: string;
-    provider_name?: string;
-    model?: string;
-    request_count: number;
-    total_input_tokens: number;
-    total_output_tokens: number;
-    avg_latency_ms: number;
-    error_count: number;
-    error_rate: number;
-    streamed_count: number;
-}
-
-interface TimeSeriesData {
-    timestamp: string;
-    request_count: number;
-    input_tokens: number;
-    output_tokens: number;
-    error_count?: number;
-}
 
 interface Provider {
     uuid: string;
@@ -55,7 +34,7 @@ type TimeRange = 'today' | '7d' | '30d' | '90d';
 
 const TIME_RANGE_CONFIG: Record<TimeRange, { label: string; days: number; interval: string }> = {
     today: { label: 'Today', days: 1, interval: 'hour' },
-    '7d': { label: '7 Days', days: 7, interval: 'hour' },
+    '7d': { label: '7 Days', days: 7, interval: 'day' },
     '30d': { label: '30 Days', days: 30, interval: 'day' },
     '90d': { label: '90 Days', days: 90, interval: 'day' },
 };
@@ -145,12 +124,6 @@ export default function UsageDashboardPage() {
     const totalOutputTokens = stats.reduce((sum, s) => sum + (s.total_output_tokens || 0), 0);
     const totalTokens = totalInputTokens + totalOutputTokens;
 
-    // Calculate today's tokens from time series
-    const today = new Date().toDateString();
-    const todayTokens = timeSeries
-        .filter((d) => new Date(d.timestamp).toDateString() === today)
-        .reduce((sum, d) => sum + d.input_tokens + d.output_tokens, 0);
-
     // Calculate average latency (weighted by request count)
     const totalLatencyWeight = stats.reduce((sum, s) => sum + (s.avg_latency_ms || 0) * (s.request_count || 0), 0);
     const avgLatency = totalRequests > 0 ? totalLatencyWeight / totalRequests : 0;
@@ -163,11 +136,13 @@ export default function UsageDashboardPage() {
     const totalStreamed = stats.reduce((sum, s) => sum + (s.streamed_count || 0), 0);
     const streamedRate = totalRequests > 0 ? (totalStreamed / totalRequests) * 100 : 0;
 
-    // Prepare chart data
+    // Prepare chart data - include provider name to distinguish same model from different providers
     const tokenChartData = stats.slice(0, 10).map((stat) => {
-        const label = stat.model || stat.key;
+        const provider = stat.provider_name || 'Unknown';
+        const model = stat.model || stat.key || 'Unknown';
+        const label = `${provider} - ${model}`;
         return {
-            name: label.length > 25 ? label.substring(0, 25) + '...' : label,
+            name: label.length > 30 ? label.substring(0, 30) + '...' : label,
             inputTokens: stat.total_input_tokens || 0,
             outputTokens: stat.total_output_tokens || 0,
         };
@@ -250,7 +225,7 @@ export default function UsageDashboardPage() {
 
             {/* Stats Cards - Row 1 */}
             <Grid container spacing={2} sx={{ mb: 2 }}>
-                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                     <StatCard
                         title="Total Requests"
                         value={totalRequests.toLocaleString()}
@@ -259,7 +234,7 @@ export default function UsageDashboardPage() {
                         color="primary"
                     />
                 </Grid>
-                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                     <StatCard
                         title="Total Tokens"
                         value={formatNumber(totalTokens)}
@@ -268,29 +243,7 @@ export default function UsageDashboardPage() {
                         color="success"
                     />
                 </Grid>
-                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                    <StatCard
-                        title="Today's Tokens"
-                        value={formatNumber(todayTokens)}
-                        subtitle="Since midnight"
-                        icon={<BoltIcon />}
-                        color="info"
-                    />
-                </Grid>
-            </Grid>
-
-            {/* Stats Cards - Row 2 */}
-            <Grid container spacing={2} sx={{ mb: 3 }}>
-                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                    <StatCard
-                        title="Avg Latency"
-                        value={avgLatency > 0 ? `${avgLatency.toFixed(0)}ms` : '-'}
-                        subtitle="Response time"
-                        icon={<SpeedIcon />}
-                        color="warning"
-                    />
-                </Grid>
-                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                     <StatCard
                         title="Error Rate"
                         value={`${errorRate.toFixed(2)}%`}
@@ -299,7 +252,7 @@ export default function UsageDashboardPage() {
                         color={errorRate > 5 ? 'error' : 'success'}
                     />
                 </Grid>
-                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                     <StatCard
                         title="Streamed Rate"
                         value={`${streamedRate.toFixed(1)}%`}
@@ -313,7 +266,11 @@ export default function UsageDashboardPage() {
             {/* Charts */}
             <Grid container spacing={3} sx={{ mb: 3 }}>
                 <Grid size={{ xs: 12, md: 6 }}>
-                    <TokenHistoryChart data={timeSeries} />
+                    {timeRange === 'today' ? (
+                        <HourlyTokenHistoryChart data={timeSeries} />
+                    ) : (
+                        <DailyTokenHistoryChart data={timeSeries} />
+                    )}
                 </Grid>
                 <Grid size={{ xs: 12, md: 6 }}>
                     <TokenUsageChart data={tokenChartData} />
