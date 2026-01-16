@@ -6,6 +6,7 @@ import {
     Settings as SystemIcon,
     ExpandLess,
     ExpandMore,
+    BarChart as BarChartIcon,
 } from '@mui/icons-material';
 import LockIcon from '@mui/icons-material/Lock';
 import {
@@ -98,6 +99,19 @@ const Layout = ({ children }: LayoutProps) => {
     };
 
     const menuGroups: MenuGroup[] = [
+        {
+            key: 'dashboard',
+            label: 'Dashboard',
+            icon: <BarChartIcon sx={{ fontSize: 20 }} />,
+            standalone: true,
+            items: [
+                {
+                    path: '/dashboard',
+                    label: 'Usage Dashboard',
+                    icon: <BarChartIcon sx={{ fontSize: 18 }} />,
+                },
+            ],
+        },
         {
             key: 'scenario',
             label: t('layout.nav.home'),
