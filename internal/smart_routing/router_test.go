@@ -443,3 +443,178 @@ func TestEstimateTokens(t *testing.T) {
 		})
 	}
 }
+
+func TestSmartOpTypeSafeGetters(t *testing.T) {
+	tests := []struct {
+		name    string
+		op      SmartOp
+		wantErr bool
+	}{
+		{
+			name: "valid string op",
+			op: SmartOp{
+				Position:  PositionModel,
+				Operation: OpModelContains,
+				Value:     "gpt",
+				Meta: SmartOpMeta{
+					Type: ValueTypeString,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid int op",
+			op: SmartOp{
+				Position:  PositionToken,
+				Operation: OpTokenGe,
+				Value:     "6000",
+				Meta: SmartOpMeta{
+					Type: ValueTypeInt,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid bool op with true",
+			op: SmartOp{
+				Position:  PositionThinking,
+				Operation: OpThinkingEnabled,
+				Value:     "true",
+				Meta: SmartOpMeta{
+					Type: ValueTypeBool,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid bool op with false",
+			op: SmartOp{
+				Position:  PositionThinking,
+				Operation: OpThinkingEnabled,
+				Value:     "false",
+				Meta: SmartOpMeta{
+					Type: ValueTypeBool,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid bool op empty",
+			op: SmartOp{
+				Position:  PositionThinking,
+				Operation: OpThinkingEnabled,
+				Value:     "",
+				Meta: SmartOpMeta{
+					Type: ValueTypeBool,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid int value",
+			op: SmartOp{
+				Position:  PositionToken,
+				Operation: OpTokenGe,
+				Value:     "not_a_number",
+				Meta: SmartOpMeta{
+					Type: ValueTypeInt,
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid bool value",
+			op: SmartOp{
+				Position:  PositionThinking,
+				Operation: OpThinkingEnabled,
+				Value:     "invalid",
+				Meta: SmartOpMeta{
+					Type: ValueTypeBool,
+				},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Test appropriate getter based on type
+			var err error
+			{
+				switch tt.op.Meta.Type {
+				case ValueTypeString:
+					_, err = tt.op.String()
+				case ValueTypeInt:
+					_, err = tt.op.Int()
+				case ValueTypeBool:
+					_, err = tt.op.Bool()
+				default:
+					// No type specified, use String()
+					_, err = tt.op.String()
+				}
+			}
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("getter error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateOpValueType(t *testing.T) {
+	tests := []struct {
+		name    string
+		op      SmartOp
+		wantErr bool
+	}{
+		{
+			name: "valid int token op",
+			op: SmartOp{
+				Position:  PositionToken,
+				Operation: OpTokenGe,
+				Value:     "6000",
+				Meta:      SmartOpMeta{Type: ValueTypeInt},
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid int token op",
+			op: SmartOp{
+				Position:  PositionToken,
+				Operation: OpTokenGe,
+				Value:     "abc",
+				Meta:      SmartOpMeta{Type: ValueTypeInt},
+			},
+			wantErr: true,
+		},
+		{
+			name: "valid bool thinking op",
+			op: SmartOp{
+				Position:  PositionThinking,
+				Operation: OpThinkingEnabled,
+				Value:     "true",
+				Meta:      SmartOpMeta{Type: ValueTypeBool},
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid bool thinking op",
+			op: SmartOp{
+				Position:  PositionThinking,
+				Operation: OpThinkingEnabled,
+				Value:     "not_bool",
+				Meta:      SmartOpMeta{Type: ValueTypeBool},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateOpValueType(&tt.op)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateOpValueType() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
