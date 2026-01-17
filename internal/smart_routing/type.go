@@ -60,48 +60,6 @@ const (
 	ValueTypeFloat  SmartOpValueType = "float"  // Float value
 )
 
-// SmartOpDefinition defines a single operation with its metadata
-type SmartOpDefinition struct {
-	Position    SmartOpPosition  `json:"position"`    // Position this operation applies to
-	Operation   SmartOpOperation `json:"operation"`   // Operation name
-	Description string           `json:"description"` // Human-readable description
-	ValueType   SmartOpValueType `json:"value_type"`  // Expected value type
-}
-
-// AllOperations is a comprehensive list of all available operations for smart routing.
-// This registry defines all operations across all positions for documentation,
-// UI rendering, and future API integrations.
-var AllOperations = []SmartOpDefinition{
-	// Model operations
-	{Position: PositionModel, Operation: OpModelContains, Description: "Model name contains the value", ValueType: ValueTypeString},
-	{Position: PositionModel, Operation: OpModelGlob, Description: "Model name matches glob pattern", ValueType: ValueTypeString},
-	{Position: PositionModel, Operation: OpModelEquals, Description: "Model name equals the value", ValueType: ValueTypeString},
-
-	// Thinking operations
-	{Position: PositionThinking, Operation: OpThinkingEnabled, Description: "Thinking mode is enabled", ValueType: ValueTypeBool},
-	{Position: PositionThinking, Operation: OpThinkingDisabled, Description: "Thinking mode is disabled", ValueType: ValueTypeBool},
-
-	// System message operations
-	{Position: PositionSystem, Operation: OpSystemAnyContains, Description: "Any system messages contain the value", ValueType: ValueTypeString},
-	{Position: PositionSystem, Operation: OpSystemRegex, Description: "Any system messages match regex pattern", ValueType: ValueTypeString},
-
-	// User message operations
-	{Position: PositionUser, Operation: OpUserAnyContains, Description: "Any user messages contain the value", ValueType: ValueTypeString},
-	{Position: PositionUser, Operation: OpUserContains, Description: "Lastest message is `user` role and it contains the value", ValueType: ValueTypeString},
-	{Position: PositionUser, Operation: OpUserRegex, Description: "Combined user messages match regex pattern", ValueType: ValueTypeString},
-	{Position: PositionUser, Operation: OpUserRequestType, Description: "Lastest message is `user` role and check its content type (e.g., 'image')", ValueType: ValueTypeString},
-
-	// Tool use operations
-	{Position: PositionToolUse, Operation: OpToolUseIs, Description: "Latest message is `tool use` and it is name is the value", ValueType: ValueTypeString},
-	{Position: PositionToolUse, Operation: OpToolUseContains, Description: "Latest message is `tool use` and its name or arguments contains the value", ValueType: ValueTypeString},
-
-	// Token operations
-	{Position: PositionToken, Operation: OpTokenGe, Description: "Token count greater than or equal to value", ValueType: ValueTypeInt},
-	{Position: PositionToken, Operation: OpTokenGt, Description: "Token count greater than value", ValueType: ValueTypeInt},
-	{Position: PositionToken, Operation: OpTokenLe, Description: "Token count less than or equal to value", ValueType: ValueTypeInt},
-	{Position: PositionToken, Operation: OpTokenLt, Description: "Token count less than value", ValueType: ValueTypeInt},
-}
-
 // SmartOpMeta contains metadata for a smart routing operation
 type SmartOpMeta struct {
 	Description string           `json:"description,omitempty" yaml:"description,omitempty"` // Human-readable description of the operation
