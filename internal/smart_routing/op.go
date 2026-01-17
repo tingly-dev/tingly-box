@@ -109,6 +109,7 @@ var Operations = []SmartOp{
 			Type:        ValueTypeString,
 		},
 	},
+	// Keep it
 	// {
 	// 	Position:  PositionToolUse,
 	// 	Operation: OpToolUseContains,

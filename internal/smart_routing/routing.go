@@ -123,23 +123,10 @@ func ValidateSmartOp(op *SmartOp) error {
 }
 
 // isValidOperationForPosition checks if an operation is valid for a given position
+// by looking it up in the global Operations registry
 func isValidOperationForPosition(pos SmartOpPosition, op SmartOpOperation) bool {
-	validOps := map[SmartOpPosition][]SmartOpOperation{
-		PositionModel:    {OpModelContains, OpModelGlob, OpModelEquals},
-		PositionThinking: {OpThinkingEnabled, OpThinkingDisabled},
-		PositionSystem:   {OpSystemAnyContains, OpSystemRegex},
-		PositionUser:     {OpUserAnyContains, OpUserContains, OpUserRegex, OpUserRequestType},
-		PositionToolUse:  {OpToolUseIs, OpToolUseContains},
-		PositionToken:    {OpTokenGe, OpTokenGt, OpTokenLe, OpTokenLt},
-	}
-
-	ops, ok := validOps[pos]
-	if !ok {
-		return false
-	}
-
-	for _, validOp := range ops {
-		if op == validOp {
+	for _, validOp := range Operations {
+		if validOp.Position == pos && validOp.Operation == op {
 			return true
 		}
 	}
