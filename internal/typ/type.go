@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"tingly-box/internal/loadbalance"
+	"tingly-box/internal/smart_routing"
 )
 
 // APIStyle represents the API style/version for a provider
@@ -132,6 +133,9 @@ type Rule struct {
 	// Unified Tactic Configuration
 	LBTactic Tactic `json:"lb_tactic" yaml:"lb_tactic"`
 	Active   bool   `json:"active" yaml:"active"`
+	// Smart Routing Configuration
+	SmartEnabled bool                        `json:"smart_enabled" yaml:"smart_enabled"`
+	SmartRouting []smartrouting.SmartRouting `json:"smart_routing,omitempty" yaml:"smart_routing,omitempty"`
 }
 
 // ToJSON implementation
@@ -145,10 +149,13 @@ func (r *Rule) ToJSON() interface{} {
 		"scenario":              r.GetScenario(),
 		"request_model":         r.RequestModel,
 		"response_model":        r.ResponseModel,
+		"description":           r.Description,
 		"services":              services,
 		"current_service_index": r.CurrentServiceIndex,
 		"lb_tactic":             r.LBTactic,
 		"active":                r.Active,
+		"smart_enabled":         r.SmartEnabled,
+		"smart_routing":         r.SmartRouting,
 	}
 
 	return jsonRule
