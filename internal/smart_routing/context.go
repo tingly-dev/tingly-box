@@ -54,6 +54,14 @@ func ExtractContextFromOpenAIRequest(req *openai.ChatCompletionNewParams) *Reque
 				}
 			case msgUnion.OfAssistant != nil:
 				ctx.LatestRole = "assistant"
+				// Extract tool calls from assistant messages
+				if len(msgUnion.OfAssistant.ToolCalls) > 0 {
+					for _, toolCallUnion := range msgUnion.OfAssistant.ToolCalls {
+						if toolCallUnion.OfFunction != nil {
+							ctx.ToolUses = append(ctx.ToolUses, toolCallUnion.OfFunction.Function.Name)
+						}
+					}
+				}
 			case msgUnion.OfTool != nil:
 				ctx.LatestRole = "tool"
 			case msgUnion.OfFunction != nil:
