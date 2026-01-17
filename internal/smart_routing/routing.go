@@ -2,6 +2,7 @@ package smartrouting
 
 import (
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 
@@ -155,6 +156,7 @@ func (r *Router) evaluateModelOp(ctx *RequestContext, op *SmartOp) bool {
 	case OpModelGlob:
 		g, err := glob.Compile(op.Value)
 		if err != nil {
+			log.Printf("[smart_routing] invalid glob pattern '%s' in model operation: %v", op.Value, err)
 			return false
 		}
 		return g.Match(model)
@@ -292,6 +294,7 @@ func stringsMatch(text, pattern string, useRegex bool) (bool, error) {
 	// This is a simplified implementation
 	g, err := glob.Compile(pattern)
 	if err != nil {
+		log.Printf("[smart_routing] invalid glob/regex pattern '%s', falling back to contains: %v", pattern, err)
 		// Try as simple contains
 		return strings.Contains(text, pattern), nil
 	}
