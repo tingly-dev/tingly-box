@@ -18,19 +18,18 @@ var AllOperations = []SmartOpDefinition{
 	{Position: PositionThinking, Operation: "disabled", Description: "Thinking mode is disabled", ValueType: ValueTypeBool},
 
 	// System message operations
-	{Position: PositionSystem, Operation: "contains", Description: "Combined system messages contain the value", ValueType: ValueTypeString},
-	{Position: PositionSystem, Operation: "latest_contains", Description: "Latest system message contains the value", ValueType: ValueTypeString},
-	{Position: PositionSystem, Operation: "regex", Description: "Combined system messages match regex pattern", ValueType: ValueTypeString},
+	{Position: PositionSystem, Operation: "any_contains", Description: "Any system messages contain the value", ValueType: ValueTypeString},
+	{Position: PositionSystem, Operation: "regex", Description: "Any system messages match regex pattern", ValueType: ValueTypeString},
 
 	// User message operations
-	{Position: PositionUser, Operation: "contains", Description: "Combined user messages contain the value", ValueType: ValueTypeString},
-	{Position: PositionUser, Operation: "latest_contains", Description: "Latest user message contains the value", ValueType: ValueTypeString},
+	{Position: PositionUser, Operation: "any_contains", Description: "Any user messages contain the value", ValueType: ValueTypeString},
+	{Position: PositionUser, Operation: "contains", Description: "Lastest message is `user` role and it contains the value", ValueType: ValueTypeString},
 	{Position: PositionUser, Operation: "regex", Description: "Combined user messages match regex pattern", ValueType: ValueTypeString},
-	{Position: PositionUser, Operation: "latest_type", Description: "Latest user content type (e.g., 'image')", ValueType: ValueTypeString},
+	{Position: PositionUser, Operation: "request_type", Description: "Lastest message is `user` role and check its content type (e.g., 'image')", ValueType: ValueTypeString},
 
 	// Tool use operations
-	{Position: PositionToolUse, Operation: "is", Description: "Tool name exactly equals the value", ValueType: ValueTypeString},
-	{Position: PositionToolUse, Operation: "contains", Description: "Tool name contains the value", ValueType: ValueTypeString},
+	{Position: PositionToolUse, Operation: "is", Description: "Latest message is `tool use` and it is name is the value", ValueType: ValueTypeString},
+	{Position: PositionToolUse, Operation: "contains", Description: "Latest message is `tool use` and its name or arguments contains the value", ValueType: ValueTypeString},
 
 	// Token operations
 	{Position: PositionToken, Operation: "ge", Description: "Token count greater than or equal to value", ValueType: ValueTypeInt},
