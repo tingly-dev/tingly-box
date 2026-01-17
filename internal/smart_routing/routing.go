@@ -3,7 +3,6 @@ package smartrouting
 import (
 	"fmt"
 	"log"
-	"strconv"
 	"strings"
 
 	"tingly-box/internal/loadbalance"
@@ -119,7 +118,46 @@ func ValidateSmartOp(op *SmartOp) error {
 		return fmt.Errorf("operation '%s' is not valid for position '%s'", op.Operation, op.Position)
 	}
 
+	// Validate value matches the expected type
+	if err := validateOpValueType(op); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+// validateOpValueType checks if the value can be parsed as the expected type
+func validateOpValueType(op *SmartOp) error {
+	// Get the expected type from Operations registry
+	expectedType := ValueTypeString // Default to string for backward compatibility
+	for _, validOp := range Operations {
+		if validOp.Position == op.Position && validOp.Operation == op.Operation {
+			if validOp.Meta.Type != "" {
+				expectedType = validOp.Meta.Type
+			}
+			break
+		}
+	}
+
+	// Skip validation if no type specified (backward compatibility)
+	if expectedType == ValueTypeString && op.Meta.Type == "" {
+		return nil
+	}
+
+	// Validate the value can be parsed as expected type
+	switch expectedType {
+	case ValueTypeString:
+		// Any string is valid
+		return nil
+	case ValueTypeInt:
+		_, err := op.Int()
+		return err
+	case ValueTypeBool:
+		_, err := op.Bool()
+		return err
+	default:
+		return fmt.Errorf("unknown type: %s", expectedType)
+	}
 }
 
 // isValidOperationForPosition checks if an operation is valid for a given position
@@ -136,19 +174,24 @@ func isValidOperationForPosition(pos SmartOpPosition, op SmartOpOperation) bool 
 // evaluateModelOp evaluates operations on the model field
 func (r *Router) evaluateModelOp(ctx *RequestContext, op *SmartOp) bool {
 	model := ctx.Model
+	value, err := op.String()
+	if err != nil {
+		log.Printf("[smart_routing] invalid model value '%s': %v", op.Value, err)
+		return false
+	}
 
 	switch op.Operation {
 	case OpModelContains:
-		return strings.Contains(model, op.Value)
+		return strings.Contains(model, value)
 	case OpModelGlob:
-		g, err := glob.Compile(op.Value)
+		g, err := glob.Compile(value)
 		if err != nil {
-			log.Printf("[smart_routing] invalid glob pattern '%s' in model operation: %v", op.Value, err)
+			log.Printf("[smart_routing] invalid glob pattern '%s' in model operation: %v", value, err)
 			return false
 		}
 		return g.Match(model)
 	case OpModelEquals:
-		return model == op.Value
+		return model == value
 	default:
 		return false
 	}
@@ -160,13 +203,25 @@ func (r *Router) evaluateThinkingOp(ctx *RequestContext, op *SmartOp) bool {
 
 	switch op.Operation {
 	case OpThinkingEnabled:
-		// Value can be "true", "yes", "1" or empty (just checking enabled state)
-		if op.Value == "" || strings.ToLower(op.Value) == "true" || strings.ToLower(op.Value) == "yes" || op.Value == "1" {
+		// Parse value as bool; empty string defaults to true (just checking enabled state)
+		val, err := op.Bool()
+		if err != nil && op.Value != "" {
+			log.Printf("[smart_routing] invalid thinking value '%s': %v", op.Value, err)
+			return false
+		}
+		// If value parsed successfully and is true, check if enabled
+		// If value is empty, just check if enabled
+		if op.Value == "" || val {
 			return enabled
 		}
 		return false
 	case OpThinkingDisabled:
-		if op.Value == "" || strings.ToLower(op.Value) == "true" || strings.ToLower(op.Value) == "yes" || op.Value == "1" {
+		val, err := op.Bool()
+		if err != nil && op.Value != "" {
+			log.Printf("[smart_routing] invalid thinking value '%s': %v", op.Value, err)
+			return false
+		}
+		if op.Value == "" || val {
 			return !enabled
 		}
 		return false
@@ -178,13 +233,18 @@ func (r *Router) evaluateThinkingOp(ctx *RequestContext, op *SmartOp) bool {
 // evaluateSystemOp evaluates operations on the system message field
 func (r *Router) evaluateSystemOp(ctx *RequestContext, op *SmartOp) bool {
 	combined := ctx.CombineMessages(ctx.SystemMessages)
+	value, err := op.String()
+	if err != nil {
+		log.Printf("[smart_routing] invalid system value '%s': %v", op.Value, err)
+		return false
+	}
 
 	switch op.Operation {
 	case OpSystemAnyContains:
-		return strings.Contains(combined, op.Value)
+		return strings.Contains(combined, value)
 	case OpSystemRegex:
 		// Basic regex support - can be extended with regexp package
-		matched, err := stringsMatch(combined, op.Value, true)
+		matched, err := stringsMatch(combined, value, true)
 		if err != nil {
 			return false
 		}
@@ -197,25 +257,30 @@ func (r *Router) evaluateSystemOp(ctx *RequestContext, op *SmartOp) bool {
 // evaluateUserOp evaluates operations on the user message field
 func (r *Router) evaluateUserOp(ctx *RequestContext, op *SmartOp) bool {
 	combined := ctx.CombineMessages(ctx.UserMessages)
+	value, err := op.String()
+	if err != nil {
+		log.Printf("[smart_routing] invalid user value '%s': %v", op.Value, err)
+		return false
+	}
 
 	switch op.Operation {
 	case OpUserAnyContains:
-		return strings.Contains(combined, op.Value)
+		return strings.Contains(combined, value)
 	case OpUserContains:
 		// Check if latest role is user
 		if ctx.LatestRole != "user" {
 			return false
 		}
 		latest := ctx.GetLatestUserMessage()
-		return strings.Contains(latest, op.Value)
+		return strings.Contains(latest, value)
 	case OpUserRegex:
-		matched, err := stringsMatch(combined, op.Value, true)
+		matched, err := stringsMatch(combined, value, true)
 		if err != nil {
 			return false
 		}
 		return matched
 	case OpUserRequestType:
-		return ctx.LatestContentType == op.Value
+		return ctx.LatestContentType == value
 	default:
 		return false
 	}
@@ -223,22 +288,16 @@ func (r *Router) evaluateUserOp(ctx *RequestContext, op *SmartOp) bool {
 
 // evaluateToolUseOp evaluates operations on the tool_use field
 func (r *Router) evaluateToolUseOp(ctx *RequestContext, op *SmartOp) bool {
-	// For contains operation, check if latest role is assistant (tool use is from assistant)
-	if op.Operation == OpToolUseContains && ctx.LatestRole != "assistant" {
+	value, err := op.String()
+	if err != nil {
+		log.Printf("[smart_routing] invalid tool_use value '%s': %v", op.Value, err)
 		return false
 	}
 
 	// Check if any tool use matches
 	for _, toolUse := range ctx.ToolUses {
-		switch op.Operation {
-		case OpToolUseIs:
-			if toolUse == op.Value {
-				return true
-			}
-		case OpToolUseContains:
-			if strings.Contains(toolUse, op.Value) {
-				return true
-			}
+		if op.Operation == OpToolUseIs && toolUse == value {
+			return true
 		}
 	}
 	return false
@@ -247,8 +306,9 @@ func (r *Router) evaluateToolUseOp(ctx *RequestContext, op *SmartOp) bool {
 // evaluateTokenOp evaluates operations on the token count field
 func (r *Router) evaluateTokenOp(ctx *RequestContext, op *SmartOp) bool {
 	tokens := ctx.EstimatedTokens
-	target, err := strconv.Atoi(op.Value)
+	target, err := op.Int()
 	if err != nil {
+		log.Printf("[smart_routing] invalid token value '%s': %v", op.Value, err)
 		return false
 	}
 
