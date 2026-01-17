@@ -122,14 +122,14 @@ func ValidateSmartOp(op *SmartOp) error {
 }
 
 // isValidOperationForPosition checks if an operation is valid for a given position
-func isValidOperationForPosition(pos SmartOpPosition, op string) bool {
-	validOps := map[SmartOpPosition][]string{
-		PositionModel:    {"contains", "glob", "equals"},
-		PositionThinking: {"enabled", "disabled"},
-		PositionSystem:   {"contains", "latest_contains", "regex"},
-		PositionUser:     {"contains", "latest_contains", "regex", "latest_type"},
-		PositionToolUse:  {"is", "contains"},
-		PositionToken:    {"ge", "gt", "le", "lt"},
+func isValidOperationForPosition(pos SmartOpPosition, op SmartOpOperation) bool {
+	validOps := map[SmartOpPosition][]SmartOpOperation{
+		PositionModel:    {OpModelContains, OpModelGlob, OpModelEquals},
+		PositionThinking: {OpThinkingEnabled, OpThinkingDisabled},
+		PositionSystem:   {OpSystemAnyContains, OpSystemRegex},
+		PositionUser:     {OpUserAnyContains, OpUserContains, OpUserRegex, OpUserRequestType},
+		PositionToolUse:  {OpToolUseIs, OpToolUseContains},
+		PositionToken:    {OpTokenGe, OpTokenGt, OpTokenLe, OpTokenLt},
 	}
 
 	ops, ok := validOps[pos]
@@ -150,15 +150,15 @@ func (r *Router) evaluateModelOp(ctx *RequestContext, op *SmartOp) bool {
 	model := ctx.Model
 
 	switch op.Operation {
-	case "contains":
+	case OpModelContains:
 		return strings.Contains(model, op.Value)
-	case "glob":
+	case OpModelGlob:
 		g, err := glob.Compile(op.Value)
 		if err != nil {
 			return false
 		}
 		return g.Match(model)
-	case "equals":
+	case OpModelEquals:
 		return model == op.Value
 	default:
 		return false
@@ -170,13 +170,13 @@ func (r *Router) evaluateThinkingOp(ctx *RequestContext, op *SmartOp) bool {
 	enabled := ctx.ThinkingEnabled
 
 	switch op.Operation {
-	case "enabled":
+	case OpThinkingEnabled:
 		// Value can be "true", "yes", "1" or empty (just checking enabled state)
 		if op.Value == "" || strings.ToLower(op.Value) == "true" || strings.ToLower(op.Value) == "yes" || op.Value == "1" {
 			return enabled
 		}
 		return false
-	case "disabled":
+	case OpThinkingDisabled:
 		if op.Value == "" || strings.ToLower(op.Value) == "true" || strings.ToLower(op.Value) == "yes" || op.Value == "1" {
 			return !enabled
 		}
@@ -191,15 +191,9 @@ func (r *Router) evaluateSystemOp(ctx *RequestContext, op *SmartOp) bool {
 	combined := ctx.CombineMessages(ctx.SystemMessages)
 
 	switch op.Operation {
-	case "contains":
+	case OpSystemAnyContains:
 		return strings.Contains(combined, op.Value)
-	case "latest_contains":
-		if len(ctx.SystemMessages) == 0 {
-			return false
-		}
-		latest := ctx.SystemMessages[len(ctx.SystemMessages)-1]
-		return strings.Contains(latest, op.Value)
-	case "regex":
+	case OpSystemRegex:
 		// Basic regex support - can be extended with regexp package
 		matched, err := stringsMatch(combined, op.Value, true)
 		if err != nil {
@@ -216,18 +210,18 @@ func (r *Router) evaluateUserOp(ctx *RequestContext, op *SmartOp) bool {
 	combined := ctx.CombineMessages(ctx.UserMessages)
 
 	switch op.Operation {
-	case "contains":
+	case OpUserAnyContains:
 		return strings.Contains(combined, op.Value)
-	case "latest_contains":
+	case OpUserContains:
 		latest := ctx.GetLatestUserMessage()
 		return strings.Contains(latest, op.Value)
-	case "regex":
+	case OpUserRegex:
 		matched, err := stringsMatch(combined, op.Value, true)
 		if err != nil {
 			return false
 		}
 		return matched
-	case "latest_type":
+	case OpUserRequestType:
 		return ctx.LatestContentType == op.Value
 	default:
 		return false
@@ -239,11 +233,11 @@ func (r *Router) evaluateToolUseOp(ctx *RequestContext, op *SmartOp) bool {
 	// Check if any tool use matches
 	for _, toolUse := range ctx.ToolUses {
 		switch op.Operation {
-		case "is":
+		case OpToolUseIs:
 			if toolUse == op.Value {
 				return true
 			}
-		case "contains":
+		case OpToolUseContains:
 			if strings.Contains(toolUse, op.Value) {
 				return true
 			}
@@ -261,13 +255,13 @@ func (r *Router) evaluateTokenOp(ctx *RequestContext, op *SmartOp) bool {
 	}
 
 	switch op.Operation {
-	case "ge":
+	case OpTokenGe:
 		return tokens >= target
-	case "gt":
+	case OpTokenGt:
 		return tokens > target
-	case "le":
+	case OpTokenLe:
 		return tokens <= target
-	case "lt":
+	case OpTokenLt:
 		return tokens < target
 	default:
 		return false

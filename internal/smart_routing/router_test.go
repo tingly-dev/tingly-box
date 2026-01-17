@@ -18,7 +18,7 @@ func TestSmartRouting_Integration_OpenAI(t *testing.T) {
 			Ops: []SmartOp{
 				{
 					Position:  PositionModel,
-					Operation: "contains",
+					Operation: OpModelContains,
 					Value:     "gpt",
 				},
 			},
@@ -65,7 +65,7 @@ func TestSmartRouting_Integration_Anthropic(t *testing.T) {
 			Ops: []SmartOp{
 				{
 					Position:  PositionThinking,
-					Operation: "enabled",
+					Operation: OpThinkingEnabled,
 					Value:     "true",
 				},
 			},
@@ -83,7 +83,7 @@ func TestSmartRouting_Integration_Anthropic(t *testing.T) {
 			Ops: []SmartOp{
 				{
 					Position:  PositionModel,
-					Operation: "contains",
+					Operation: OpModelContains,
 					Value:     "haiku",
 				},
 			},
@@ -168,7 +168,7 @@ func TestValidateSmartOp(t *testing.T) {
 			name: "valid model contains",
 			op: SmartOp{
 				Position:  PositionModel,
-				Operation: "contains",
+				Operation: OpModelContains,
 				Value:     "haiku",
 			},
 			wantErr: false,
@@ -177,7 +177,7 @@ func TestValidateSmartOp(t *testing.T) {
 			name: "valid thinking enabled",
 			op: SmartOp{
 				Position:  PositionThinking,
-				Operation: "enabled",
+				Operation: OpThinkingEnabled,
 				Value:     "true",
 			},
 			wantErr: false,
@@ -186,7 +186,7 @@ func TestValidateSmartOp(t *testing.T) {
 			name: "valid token ge",
 			op: SmartOp{
 				Position:  PositionToken,
-				Operation: "ge",
+				Operation: OpTokenGe,
 				Value:     "6000",
 			},
 			wantErr: false,
@@ -195,7 +195,7 @@ func TestValidateSmartOp(t *testing.T) {
 			name: "invalid position",
 			op: SmartOp{
 				Position:  SmartOpPosition("invalid"),
-				Operation: "contains",
+				Operation: "any_contains",
 				Value:     "test",
 			},
 			wantErr: true,
@@ -204,7 +204,7 @@ func TestValidateSmartOp(t *testing.T) {
 			name: "invalid operation for position",
 			op: SmartOp{
 				Position:  PositionModel,
-				Operation: "enabled",
+				Operation: "any_contains",
 				Value:     "test",
 			},
 			wantErr: true,
@@ -234,7 +234,7 @@ func TestValidateSmartRouting(t *testing.T) {
 				Ops: []SmartOp{
 					{
 						Position:  PositionModel,
-						Operation: "contains",
+						Operation: OpModelContains,
 						Value:     "haiku",
 					},
 				},
@@ -256,7 +256,7 @@ func TestValidateSmartRouting(t *testing.T) {
 				Ops: []SmartOp{
 					{
 						Position:  PositionModel,
-						Operation: "contains",
+						Operation: OpModelContains,
 						Value:     "haiku",
 					},
 				},
@@ -294,7 +294,7 @@ func TestValidateSmartRouting(t *testing.T) {
 				Ops: []SmartOp{
 					{
 						Position:  PositionModel,
-						Operation: "contains",
+						Operation: OpModelContains,
 						Value:     "haiku",
 					},
 				},
@@ -328,7 +328,7 @@ func TestNewRouter(t *testing.T) {
 					Ops: []SmartOp{
 						{
 							Position:  PositionModel,
-							Operation: "contains",
+							Operation: OpModelContains,
 							Value:     "haiku",
 						},
 					},
@@ -372,7 +372,7 @@ func TestRouter_EvaluateRequest(t *testing.T) {
 			Ops: []SmartOp{
 				{
 					Position:  PositionModel,
-					Operation: "contains",
+					Operation: OpModelContains,
 					Value:     "haiku",
 				},
 			},
