@@ -213,6 +213,10 @@ func (r *Router) evaluateUserOp(ctx *RequestContext, op *SmartOp) bool {
 	case OpUserAnyContains:
 		return strings.Contains(combined, op.Value)
 	case OpUserContains:
+		// Check if latest role is user
+		if ctx.LatestRole != "user" {
+			return false
+		}
 		latest := ctx.GetLatestUserMessage()
 		return strings.Contains(latest, op.Value)
 	case OpUserRegex:
@@ -230,6 +234,11 @@ func (r *Router) evaluateUserOp(ctx *RequestContext, op *SmartOp) bool {
 
 // evaluateToolUseOp evaluates operations on the tool_use field
 func (r *Router) evaluateToolUseOp(ctx *RequestContext, op *SmartOp) bool {
+	// For contains operation, check if latest role is assistant (tool use is from assistant)
+	if op.Operation == OpToolUseContains && ctx.LatestRole != "assistant" {
+		return false
+	}
+
 	// Check if any tool use matches
 	for _, toolUse := range ctx.ToolUses {
 		switch op.Operation {

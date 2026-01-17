@@ -14,6 +14,7 @@ type RequestContext struct {
 	SystemMessages    []string
 	UserMessages      []string
 	ToolUses          []string
+	LatestRole        string // Latest message role (user, assistant, tool, function, etc.)
 	LatestContentType string
 	EstimatedTokens   int
 }
@@ -43,14 +44,20 @@ func ExtractContextFromOpenAIRequest(req *openai.ChatCompletionNewParams) *Reque
 			case msgUnion.OfSystem != nil:
 				contentStr := extractOpenAISystemContent(msgUnion.OfSystem.Content)
 				ctx.SystemMessages = append(ctx.SystemMessages, contentStr)
+				ctx.LatestRole = "system"
 			case msgUnion.OfUser != nil:
 				contentStr, hasImage := extractOpenAIUserContent(msgUnion.OfUser.Content)
 				ctx.UserMessages = append(ctx.UserMessages, contentStr)
+				ctx.LatestRole = "user"
 				if hasImage {
 					ctx.LatestContentType = "image"
 				}
-			case msgUnion.OfAssistant != nil, msgUnion.OfTool != nil, msgUnion.OfFunction != nil:
-				// Skip for now - we only care about system and user messages for context
+			case msgUnion.OfAssistant != nil:
+				ctx.LatestRole = "assistant"
+			case msgUnion.OfTool != nil:
+				ctx.LatestRole = "tool"
+			case msgUnion.OfFunction != nil:
+				ctx.LatestRole = "function"
 			}
 		}
 	}
@@ -116,6 +123,8 @@ func ExtractContextFromAnthropicRequest(req *anthropic.MessageNewParams) *Reques
 
 	if req.Messages != nil {
 		for _, msg := range req.Messages {
+			ctx.LatestRole = string(msg.Role)
+
 			// Only process user messages
 			if string(msg.Role) != "user" {
 				continue
