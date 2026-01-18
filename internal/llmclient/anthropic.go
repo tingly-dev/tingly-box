@@ -3,6 +3,7 @@ package llmclient
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -23,13 +24,71 @@ type AnthropicClient struct {
 	httpClient *http.Client
 }
 
+type pathPrefixRoundTripper struct {
+	prefix string
+	http.RoundTripper
+}
+
+func (t *pathPrefixRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	if req != nil && req.URL != nil && t.prefix != "" {
+		prefix := t.prefix
+		if !strings.HasPrefix(prefix, "/") {
+			prefix = "/" + prefix
+		}
+		if req.URL.Path == "" {
+			req.URL.Path = prefix
+		} else if !strings.HasPrefix(req.URL.Path, prefix+"/") && req.URL.Path != prefix {
+			req.URL.Path = prefix + req.URL.Path
+		}
+	}
+	return t.RoundTripper.RoundTrip(req)
+}
+
+func normalizeAnthropicBase(apiBase string) (string, string) {
+	trimmed := strings.TrimRight(apiBase, "/")
+	parsed, err := url.Parse(trimmed)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		if strings.HasSuffix(trimmed, "/v1") {
+			trimmed = trimmed[:len(trimmed)-3]
+		}
+		return trimmed, ""
+	}
+
+	path := strings.TrimRight(parsed.Path, "/")
+	if strings.HasSuffix(path, "/v1") {
+		path = strings.TrimSuffix(path, "/v1")
+	}
+	path = strings.TrimRight(path, "/")
+	if path == "/" {
+		path = ""
+	}
+
+	parsed.Path = ""
+	parsed.RawPath = ""
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+
+	return parsed.String(), path
+}
+
+func applyPathPrefix(client *http.Client, prefix string) {
+	if client == nil || prefix == "" {
+		return
+	}
+	transport := client.Transport
+	if transport == nil {
+		transport = http.DefaultTransport
+	}
+	client.Transport = &pathPrefixRoundTripper{
+		prefix:       prefix,
+		RoundTripper: transport,
+	}
+}
+
 // defaultNewAnthropicClient creates a new Anthropic client wrapper
 func defaultNewAnthropicClient(provider *typ.Provider) (*AnthropicClient, error) {
-	// Handle API base URL - Anthropic SDK expects base without /v1
-	apiBase := provider.APIBase
-	if strings.HasSuffix(apiBase, "/v1") {
-		apiBase = apiBase[:len(apiBase)-3]
-	}
+	// Handle API base URL - Anthropic SDK expects base without /v1 and without extra path prefixes
+	apiBase, pathPrefix := normalizeAnthropicBase(provider.APIBase)
 
 	options := []anthropicOption.RequestOption{
 		anthropicOption.WithAPIKey(provider.GetAccessToken()),
@@ -52,10 +111,18 @@ func defaultNewAnthropicClient(provider *typ.Provider) (*AnthropicClient, error)
 		if provider.ProxyURL != "" {
 			logrus.Infof("Using proxy for Anthropic client: %s", provider.ProxyURL)
 		}
-
-		options = append(options, anthropicOption.WithHTTPClient(httpClient))
 	} else {
 		httpClient = http.DefaultClient
+	}
+
+	if pathPrefix != "" {
+		if httpClient == http.DefaultClient {
+			httpClient = &http.Client{Transport: http.DefaultTransport}
+		}
+		applyPathPrefix(httpClient, pathPrefix)
+		options = append(options, anthropicOption.WithHTTPClient(httpClient))
+	} else if provider.ProxyURL != "" || provider.AuthType == typ.AuthTypeOAuth {
+		options = append(options, anthropicOption.WithHTTPClient(httpClient))
 	}
 
 	anthropicClient := anthropic.NewClient(options...)

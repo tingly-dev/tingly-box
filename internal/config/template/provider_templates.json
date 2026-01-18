@@ -543,6 +543,25 @@
       "model_limits": {},
       "supports_models_endpoint": false,
       "oauth_provider": "antigravity"
+    },
+    "xiaomimimo": {
+      "id": "xiaomimimo",
+      "name": "Xiaomi Mimo",
+      "status": "active",
+      "valid": true,
+      "website": "https://platform.xiaomimimo.com",
+      "description": "Xiaomi MiMo API Open Platform",
+      "type": "official",
+      "api_doc": "https://platform.xiaomimimo.com/#/docs/api/text-generation/openai-api",
+      "model_doc": "https://platform.xiaomimimo.com/#/docs/pricing",
+      "pricing_doc": "https://platform.xiaomimimo.com/#/docs/pricing",
+      "base_url_openai": "https://api.xiaomimimo.com/v1",
+      "base_url_anthropic": "https://api.xiaomimimo.com/anthropic",
+      "models": [
+        "mimo-v2-flash"
+      ],
+      "model_limits": {},
+      "supports_models_endpoint": true
     }
   },
   "version": "1.2.0",
