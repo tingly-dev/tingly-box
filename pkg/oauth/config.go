@@ -17,6 +17,7 @@ const (
 	ProviderQwenCode    ProviderType = "qwen_code"
 	ProviderAntigravity ProviderType = "antigravity"
 	ProviderIFlow       ProviderType = "iflow"
+	ProviderCodex       ProviderType = "codex"
 	ProviderMock        ProviderType = "mock"
 )
 
@@ -25,7 +26,7 @@ func ParseProviderType(s string) (ProviderType, error) {
 	p := ProviderType(s)
 	// Validate by checking against known providers
 	switch p {
-	case ProviderClaudeCode, ProviderOpenAI, ProviderGoogle, ProviderGemini, ProviderGitHub, ProviderQwenCode, ProviderAntigravity, ProviderIFlow, ProviderMock:
+	case ProviderClaudeCode, ProviderOpenAI, ProviderGoogle, ProviderGemini, ProviderGitHub, ProviderQwenCode, ProviderAntigravity, ProviderIFlow, ProviderCodex, ProviderMock:
 		return p, nil
 	default:
 		return "", fmt.Errorf("unknown provider type: %s", s)
