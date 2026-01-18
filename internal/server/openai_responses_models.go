@@ -2,118 +2,82 @@ package server
 
 import (
 	"encoding/json"
+
+	"github.com/openai/openai-go/v3/packages/param"
+	"github.com/openai/openai-go/v3/responses"
 )
 
 // =============================================
 // Responses API Custom Types
 // =============================================
-// These are custom types for our internal use.
-// Most types are imported from github.com/openai/openai-go/v3/responses
+// These types wrap the native OpenAI SDK types to add
+// additional fields that are needed for our proxy but not
+// part of the native SDK types.
+//
+// Following the same pattern as anthropic.go
 
-// ResponseInput represents the input for a response (can be string or array of items)
-// We need this wrapper because the OpenAI SDK uses a union type
-type ResponseInput struct {
-	value any
-}
-
-// UnmarshalJSON implements custom JSON unmarshaling for ResponseInput
-func (r *ResponseInput) UnmarshalJSON(data []byte) error {
-	// Try to unmarshal as string first
-	var str string
-	if err := json.Unmarshal(data, &str); err == nil {
-		r.value = str
-		return nil
-	}
-	// Try to unmarshal as array
-	var arr []json.RawMessage
-	if err := json.Unmarshal(data, &arr); err == nil {
-		r.value = arr
-		return nil
-	}
-	// Try to unmarshal as single object
-	var obj json.RawMessage
-	if err := json.Unmarshal(data, &obj); err == nil {
-		r.value = []json.RawMessage{obj}
-		return nil
-	}
-	return nil
-}
-
-// MarshalJSON implements custom JSON marshaling for ResponseInput
-func (r *ResponseInput) MarshalJSON() ([]byte, error) {
-	return json.Marshal(r.value)
-}
-
-// GetValue returns the underlying value
-func (r *ResponseInput) GetValue() any {
-	return r.value
-}
-
-// IsString checks if the input is a string
-func (r *ResponseInput) IsString() bool {
-	_, ok := r.value.(string)
-	return ok
-}
-
-// String returns the string value if applicable
-func (r *ResponseInput) String() (string, bool) {
-	if s, ok := r.value.(string); ok {
-		return s, true
-	}
-	return "", false
-}
-
-// IsArray checks if the input is an array
-func (r *ResponseInput) IsArray() bool {
-	_, ok := r.value.([]json.RawMessage)
-	return ok
-}
-
-// =============================================
-// Request Wrapper
-// =============================================
-
-// ResponseCreateRequest wraps the OpenAI SDK's ResponseNewParams
-// We use this for custom JSON unmarshaling if needed
+// ResponseCreateRequest wraps the native ResponseNewParams with additional fields
+// for proxy-specific handling like the `stream` parameter.
 type ResponseCreateRequest struct {
-	Model   string         `json:"model" binding:"required"`
-	Input   ResponseInput  `json:"input" binding:"required"`
-	Stream  bool           `json:"stream,omitempty"`
-	// Additional fields can be added as raw JSON to pass through
-	Extras map[string]any `json:"-"`
+	// Stream indicates whether to stream the response
+	// This is not part of ResponseNewParams as streaming is controlled
+	// by using NewStreaming() method on the SDK client
+	Stream bool `json:"stream"`
+
+	// Embed the native SDK type for all other fields
+	responses.ResponseNewParams
 }
 
-// UnmarshalJSON implements custom JSON unmarshaling
+// UnmarshalJSON implements custom JSON unmarshaling for ResponseCreateRequest
+// It handles both the custom Stream field and the embedded ResponseNewParams
 func (r *ResponseCreateRequest) UnmarshalJSON(data []byte) error {
-	// Use a temporary map to extract known fields and keep extras
-	var raw map[string]any
-	if err := json.Unmarshal(data, &raw); err != nil {
+	// First, extract the Stream field
+	aux := &struct {
+		Stream bool `json:"stream"`
+	}{}
+	if err := json.Unmarshal(data, aux); err != nil {
 		return err
 	}
 
-	// Extract known fields
-	if model, ok := raw["model"].(string); ok {
-		r.Model = model
-	}
-	if stream, ok := raw["stream"].(bool); ok {
-		r.Stream = stream
+	// Then, unmarshal into the embedded ResponseNewParams
+	var inner responses.ResponseNewParams
+	if err := json.Unmarshal(data, &inner); err != nil {
+		return err
 	}
 
-	// Handle input separately
-	if inputData, ok := raw["input"]; ok {
-		inputJSON, _ := json.Marshal(inputData)
-		if err := json.Unmarshal(inputJSON, &r.Input); err != nil {
-			return err
-		}
-	}
+	r.Stream = aux.Stream
+	r.ResponseNewParams = inner
+	return nil
+}
 
-	// Store extras (instructions, temperature, tools, etc.)
-	delete(raw, "model")
-	delete(raw, "input")
-	delete(raw, "stream")
-	if len(raw) > 0 {
-		r.Extras = raw
-	}
+// =============================================
+// Type Aliases for Native SDK Types
+// =============================================
+// These aliases provide convenient access to the native OpenAI SDK types
 
+// ResponseNewParams is an alias to the native OpenAI SDK type
+type ResponseNewParams = responses.ResponseNewParams
+
+// Response is an alias to the native OpenAI SDK type
+type Response = responses.Response
+
+// ResponseInputItemUnionParam is an alias to the native OpenAI SDK type
+type ResponseInputItemUnionParam = responses.ResponseInputItemUnionParam
+
+// ResponseNewParamsInputUnion is an alias to the native OpenAI SDK type
+type ResponseNewParamsInputUnion = responses.ResponseNewParamsInputUnion
+
+// =============================================
+// Helper Functions for Native Types
+// =============================================
+
+// GetInputValue extracts the raw input value from ResponseNewParamsInputUnion.
+// Returns the underlying string, array, or nil.
+func GetInputValue(input responses.ResponseNewParamsInputUnion) any {
+	if !param.IsOmitted(input.OfString) {
+		return input.OfString.Value
+	} else if !param.IsOmitted(input.OfInputItemList) {
+		return input.OfInputItemList
+	}
 	return nil
 }

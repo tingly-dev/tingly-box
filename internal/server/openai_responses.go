@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
@@ -44,7 +45,7 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 	}
 
 	// Validate required fields
-	if req.Model == "" {
+	if param.IsOmitted(req.Model) || string(req.Model) == "" {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Model is required",
@@ -54,7 +55,9 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 		return
 	}
 
-	if req.Input.GetValue() == nil {
+	// Check if input is provided (either string or array)
+	inputValue := GetInputValue(req.Input)
+	if inputValue == nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Input is required",
@@ -64,6 +67,8 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 		return
 	}
 
+	responseModel := string(req.Model)
+
 	// Determine provider & model
 	var (
 		provider        *typ.Provider
@@ -72,7 +77,7 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 	)
 
 	if scenario == "" {
-		provider, selectedService, rule, err = s.DetermineProviderAndModel(req.Model)
+		provider, selectedService, rule, err = s.DetermineProviderAndModel(responseModel)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{
@@ -93,7 +98,7 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 			})
 			return
 		}
-		provider, selectedService, rule, err = s.DetermineProviderAndModelWithScenario(scenarioType, req.Model)
+		provider, selectedService, rule, err = s.DetermineProviderAndModelWithScenario(scenarioType, responseModel)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{
@@ -111,7 +116,6 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 	}
 
 	actualModel := selectedService.Model
-	responseModel := req.Model
 
 	// Set provider UUID and model in context
 	c.Set("provider", provider.UUID)
