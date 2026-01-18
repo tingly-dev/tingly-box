@@ -371,6 +371,10 @@ func (s *Server) UseAIEndpoints() {
 	s.SetupAnthropicEndpoints(anthropicV1)
 
 	// scenario
+	scenario := s.engine.Group("/tingly/:scenario")
+	s.SetupMixinEndpoints(scenario)
+
+	// scenario
 	scenarioV1 := s.engine.Group("/tingly/:scenario/v1")
 	s.SetupMixinEndpoints(scenarioV1)
 }
@@ -378,6 +382,10 @@ func (s *Server) UseAIEndpoints() {
 func (s *Server) SetupMixinEndpoints(group *gin.RouterGroup) {
 	// Chat completions endpoint (OpenAI compatible)
 	group.POST("/chat/completions", s.authMW.ModelAuthMiddleware(), s.OpenAIChatCompletions)
+
+	// Responses API endpoints (OpenAI compatible)
+	group.POST("/responses", s.authMW.ModelAuthMiddleware(), s.ResponsesCreate)
+	group.GET("/responses/:id", s.authMW.ModelAuthMiddleware(), s.ResponsesGet)
 
 	// Chat completions endpoint (Anthropic compatible)
 	group.POST("/messages", s.authMW.ModelAuthMiddleware(), s.AnthropicMessages)
@@ -393,6 +401,10 @@ func (s *Server) SetupOpenAIEndpoints(group *gin.RouterGroup) {
 	group.POST("/chat/completions", s.authMW.ModelAuthMiddleware(), s.OpenAIChatCompletions)
 	// Models endpoint (OpenAI compatible)
 	group.GET("/models", s.authMW.ModelAuthMiddleware(), s.OpenAIListModels)
+
+	// Responses API endpoints (OpenAI compatible)
+	group.POST("/responses", s.authMW.ModelAuthMiddleware(), s.ResponsesCreate)
+	group.GET("/responses/:id", s.authMW.ModelAuthMiddleware(), s.ResponsesGet)
 }
 
 func (s *Server) SetupAnthropicEndpoints(group *gin.RouterGroup) {
