@@ -399,7 +399,7 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 		"client_id":    config.ClientID,
 		"redirect_uri": redirectURI,
 		"code":         code,
-		"state":        state,
+		// "state":        state,
 	}
 
 	// Add client_secret if possible
