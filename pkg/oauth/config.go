@@ -115,6 +115,10 @@ type ProviderConfig struct {
 	// Default is TokenRequestFormatForm (standard OAuth)
 	TokenRequestFormat TokenRequestFormat
 
+	// StateEncoding specifies the encoding format for OAuth state parameter
+	// Default is StateEncodingHex (standard)
+	StateEncoding StateEncoding
+
 	// Hook is the request preprocessing hook for provider-specific behavior
 	Hook RequestHook
 }
@@ -162,6 +166,21 @@ const (
 
 	// OAuthMethodDeviceCodePKCE uses Device Code flow with PKCE (RFC 8628 + RFC 7636)
 	OAuthMethodDeviceCodePKCE
+)
+
+// StateEncoding represents the encoding format for OAuth state parameter
+type StateEncoding int
+
+const (
+	// StateEncodingHex uses hexadecimal encoding (default, 32 chars for 16 bytes)
+	StateEncodingHex StateEncoding = iota
+
+	// StateEncodingBase64URL uses base64url encoding without padding (22 chars for 16 bytes)
+	StateEncodingBase64URL
+
+	// StateEncodingBase64URL32 uses base64url encoding with 32 bytes (43 chars without padding)
+	// Used by OpenAI Codex to match their state format
+	StateEncodingBase64URL32
 )
 
 // Token represents an OAuth token

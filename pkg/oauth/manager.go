@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/sirupsen/logrus"
 )
 
@@ -93,13 +94,27 @@ func NewManager(config *Config, registry *Registry) *Manager {
 	return m
 }
 
-// generateState generates a secure random state parameter using UUID
-func (m *Manager) generateState() (string, error) {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		return "", fmt.Errorf("failed to generate state: %w", err)
+// generateState generates a secure random state parameter
+func (m *Manager) generateState(encoding StateEncoding) (string, error) {
+	var size int
+	switch encoding {
+	case StateEncodingBase64URL32:
+		size = 32 // 32 bytes -> 43 chars in base64url (matches OpenAI Codex)
+	case StateEncodingBase64URL:
+		size = 16 // 16 bytes -> 22 chars in base64url
+	default:
+		size = 16 // 16 bytes -> 32 chars in hex
 	}
-	return hex.EncodeToString(b), nil
+	b := make([]byte, size)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("failed to generate random bytes: %w", err)
+	}
+	switch encoding {
+	case StateEncodingBase64URL, StateEncodingBase64URL32:
+		return base64.RawURLEncoding.EncodeToString(b), nil
+	default:
+		return hex.EncodeToString(b), nil
+	}
 }
 
 // generateCodeVerifier generates a PKCE code verifier (43-128 characters)
@@ -193,7 +208,7 @@ func (m *Manager) GetAuthURL(userID string, providerType ProviderType, redirectT
 	}
 
 	// Generate state
-	state, err := m.generateState()
+	state, err := m.generateState(config.StateEncoding)
 	if err != nil {
 		return "", "", err
 	}
@@ -241,7 +256,11 @@ func (m *Manager) buildAuthURL(config *ProviderConfig, state string, codeVerifie
 
 	//redirectURL := config.RedirectURL
 	//if redirectURL == "" {
-	redirectURL := fmt.Sprintf("%s/callback", m.config.BaseURL)
+	callbackPath := config.Callback
+	if callbackPath == "" {
+		callbackPath = "/callback"
+	}
+	redirectURL := fmt.Sprintf("%s%s", m.config.BaseURL, callbackPath)
 	//}
 
 	query := u.Query()
@@ -425,6 +444,24 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 		token.Expiry = time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)
 	}
 
+	// For Codex provider, parse ID token to extract user info
+	if config.Type == ProviderCodex && token.IDToken != "" {
+		if claims := parseIDToken(token.IDToken); claims != nil {
+			if token.Metadata == nil {
+				token.Metadata = make(map[string]any)
+			}
+			if claims.Email != "" {
+				token.Metadata["email"] = claims.Email
+			}
+			if claims.AccountID != "" {
+				token.Metadata["account_id"] = claims.AccountID
+			}
+			if claims.Name != "" {
+				token.Metadata["name"] = claims.Name
+			}
+		}
+	}
+
 	// Call provider's after-token hook to fetch additional metadata
 	if config.Hook != nil && token.AccessToken != "" {
 		metadata, err := config.Hook.AfterToken(ctx, token.AccessToken, client)
@@ -433,7 +470,14 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 			// Continue even if AfterToken fails, as we already have the token
 		}
 		if metadata != nil {
-			token.Metadata = metadata
+			if token.Metadata == nil {
+				token.Metadata = metadata
+			} else {
+				// Merge metadata
+				for k, v := range metadata {
+					token.Metadata[k] = v
+				}
+			}
 		}
 	}
 
@@ -548,6 +592,24 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 	// Convert ExpiresIn to Expiry
 	if token.ExpiresIn > 0 {
 		token.Expiry = time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)
+	}
+
+	// For Codex provider, parse ID token to extract user info
+	if providerType == ProviderCodex && token.IDToken != "" {
+		if claims := parseIDToken(token.IDToken); claims != nil {
+			if token.Metadata == nil {
+				token.Metadata = make(map[string]any)
+			}
+			if claims.Email != "" {
+				token.Metadata["email"] = claims.Email
+			}
+			if claims.AccountID != "" {
+				token.Metadata["account_id"] = claims.AccountID
+			}
+			if claims.Name != "" {
+				token.Metadata["name"] = claims.Name
+			}
+		}
 	}
 
 	return token, nil
@@ -914,6 +976,43 @@ func (m *Manager) debugRequest(req *http.Request, isJSON bool) {
 		}
 	}
 	logrus.Debug("================================")
+}
+
+// =============================================
+// JWT ID Token Parsing
+// =============================================
+
+// jwtClaims represents the standard JWT claims for OpenID Connect
+type jwtClaims struct {
+	Email     string `json:"email"`
+	AccountID string `json:"account_id,omitempty"` // OpenAI specific
+	Name      string `json:"name,omitempty"`
+	jwt.RegisteredClaims
+}
+
+// parseIDToken parses a JWT ID token and returns the claims
+// For security, tokens should be validated, but this implementation
+// extracts claims without signature verification for simplicity.
+// The token comes directly from the OAuth server, so basic extraction is acceptable.
+func parseIDToken(idToken string) *jwtClaims {
+	if idToken == "" {
+		return nil
+	}
+
+	// Parse the JWT without verification (we trust the token from the OAuth server)
+	token, _, err := jwt.NewParser().ParseUnverified(idToken, &jwtClaims{})
+	if err != nil {
+		logrus.Debugf("Failed to parse ID token: %v", err)
+		return nil
+	}
+
+	claims, ok := token.Claims.(*jwtClaims)
+	if !ok {
+		logrus.Debugf("Invalid ID token claims type")
+		return nil
+	}
+
+	return claims
 }
 
 // =============================================
