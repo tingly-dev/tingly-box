@@ -104,6 +104,10 @@ type ProviderConfig struct {
 	// RedirectURL is the OAuth redirect URI (optional, uses default if empty)
 	RedirectURL string
 
+	// Callback is the callback route path (optional, defaults to "/callback")
+	// Some providers require specific callback paths, e.g., codex requires "/auth/callback"
+	Callback string
+
 	// ConsoleURL is the URL to the provider's console for creating OAuth apps
 	ConsoleURL string
 

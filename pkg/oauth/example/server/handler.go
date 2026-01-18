@@ -39,6 +39,16 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 		oauth.DELETE("/token", h.RevokeToken)
 		oauth.GET("/tokens", h.ListTokens)
 	}
+
+	// Register custom callback paths for providers that require specific routes
+	// e.g., codex requires /auth/callback
+	for _, providerType := range h.manager.GetRegistry().List() {
+		if config, ok := h.manager.GetRegistry().Get(providerType); ok {
+			if config.Callback != "" && config.Callback != "/callback" {
+				r.GET(config.Callback, h.Callback)
+			}
+		}
+	}
 }
 
 // ListProviders returns all available OAuth providers
@@ -70,7 +80,8 @@ func (h *Handler) Authorize(c *gin.Context) {
 	name := c.Query("name") // Optional custom provider name
 
 	// Get auth URL
-	authURL, state, err := h.manager.GetAuthURL(c.Request.Context(), userID, providerType, redirectTo, name)
+	sessionID := c.Query("session_id") // Optional session ID for tracking
+	authURL, state, err := h.manager.GetAuthURL(userID, providerType, redirectTo, name, sessionID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
@@ -335,6 +346,7 @@ func (h *ConfigHandler) UpdateProvider(c *gin.Context) {
 		OAuthMethod:        config.OAuthMethod,
 		TokenRequestFormat: config.TokenRequestFormat,
 		RedirectURL:        req.RedirectURL,
+		Callback:           config.Callback, // Preserve original callback
 		ConsoleURL:         config.ConsoleURL,
 		DeviceCodeURL:      config.DeviceCodeURL,
 		GrantType:          config.GrantType,
@@ -374,6 +386,7 @@ func (h *ConfigHandler) DeleteProvider(c *gin.Context) {
 		AuthStyle:          config.AuthStyle,
 		OAuthMethod:        config.OAuthMethod,
 		TokenRequestFormat: config.TokenRequestFormat,
+		Callback:           config.Callback, // Preserve original callback
 		ConsoleURL:         config.ConsoleURL,
 		DeviceCodeURL:      config.DeviceCodeURL,
 		GrantType:          config.GrantType,
@@ -412,6 +425,7 @@ func LoadProviderConfigs(registry *oauth.Registry, configs []ProviderConfigInput
 				OAuthMethod:        existing.OAuthMethod,
 				TokenRequestFormat: existing.TokenRequestFormat,
 				RedirectURL:        cfg.RedirectURL,
+				Callback:           existing.Callback, // Preserve original callback
 				ConsoleURL:         existing.ConsoleURL,
 				DeviceCodeURL:      existing.DeviceCodeURL,
 				GrantType:          existing.GrantType,

@@ -7,12 +7,15 @@
 //	go run main.go -provider=mock
 //
 //	# Run with Anthropic (built-in credentials)
-//	go run main.go -provider=anthropic
+//	go run main.go -provider=claude_code
 //
 //	# Run with Gemini CLI (built-in credentials)
 //	go run main.go -provider=gemini
 //
-// Available providers: mock, anthropic, openai, google, gemini, github
+//	# Run with Codex (requires OAUTH_CLIENT_ID environment variable)
+//	go run main.go -provider=codex
+//
+// Available providers: mock, claude_code, openai, google, gemini, github, codex
 package main
 
 import (
@@ -80,7 +83,7 @@ Provider: %s
 )
 
 func main() {
-	provider := flag.String("provider", "mock", "OAuth provider (mock, claude_code, openai, gemini, github)")
+	provider := flag.String("provider", "mock", "OAuth provider (mock, claude_code, openai, gemini, github, codex)")
 	port := flag.Int("port", 54545, "Local server port for callback (default 54545)")
 	userID := flag.String("user", "example-user", "User ID for the OAuth flow")
 	demo := flag.Bool("demo", false, "Demo mode: show auth URL without real credentials")
@@ -255,6 +258,7 @@ func setupProvider(config *ExampleConfig) (*oauth2.Registry, *oauth2.ProviderCon
 		OAuthMethod:        defaultConfig.OAuthMethod,
 		TokenRequestFormat: defaultConfig.TokenRequestFormat,
 		RedirectURL:        fmt.Sprintf("%s/callback", config.BaseURL),
+		Callback:           defaultConfig.Callback, // Preserve original callback
 		ConsoleURL:         defaultConfig.ConsoleURL,
 		GrantType:          defaultConfig.GrantType,
 		Hook:               defaultConfig.Hook,
@@ -287,8 +291,16 @@ func runAuthCodeFlow(config *ExampleConfig, registry *oauth2.Registry, providerC
 	resultChan := make(chan *CallbackResult, 1)
 	errorChan := make(chan error, 1)
 
+	// Determine callback path for this provider
+	callbackPath := providerConfig.Callback
+	if callbackPath == "" {
+		callbackPath = "/callback"
+	}
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
+
+	// Register the callback handler
+	mux.HandleFunc(callbackPath, func(w http.ResponseWriter, r *http.Request) {
 		token, err := manager.HandleCallback(context.Background(), r)
 		if err != nil {
 			errorChan <- fmt.Errorf("callback failed: %w", err)
@@ -331,10 +343,10 @@ func runAuthCodeFlow(config *ExampleConfig, registry *oauth2.Registry, providerC
 	fmt.Println("MANUAL OAUTH TEST - Authorization Code Flow")
 	fmt.Println(strings.Repeat("=", 80))
 	fmt.Printf("\nProvider: %s\n", providerConfig.DisplayName)
-	fmt.Printf("Callback URL: %s/callback\n", config.BaseURL)
+	fmt.Printf("Callback URL: %s%s\n", config.BaseURL, callbackPath)
 	fmt.Printf("\n1. Open the following URL in your browser:\n\n   %s\n\n", authURL)
 	fmt.Printf("2. Authorize the application\n")
-	fmt.Printf("3. The callback will be received at %s/callback\n", config.BaseURL)
+	fmt.Printf("3. The callback will be received at %s%s\n", config.BaseURL, callbackPath)
 	fmt.Printf("4. Check the terminal for results\n\nState: %s\n", state)
 	fmt.Println("\n" + strings.Repeat("-", 80))
 
@@ -375,7 +387,7 @@ func runDeviceCodeFlow(config *ExampleConfig, registry *oauth2.Registry, provide
 
 	fmt.Println("\n" + strings.Repeat("-", 80))
 	fmt.Println("\nDEVICE CODE FLOW INITIATED")
-	fmt.Println("\nPlease follow these steps to complete authentication:\n")
+	fmt.Println("\nPlease follow these steps to complete authentication:")
 	fmt.Printf("1. Visit this URL in your browser:\n\n   %s\n\n", data.VerificationURI)
 	fmt.Printf("2. Enter the following code when prompted:\n\n   %s\n\n", strings.ToUpper(data.UserCode))
 
