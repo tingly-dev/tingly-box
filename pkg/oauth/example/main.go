@@ -24,6 +24,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -257,8 +258,10 @@ func setupProvider(config *ExampleConfig) (*oauth2.Registry, *oauth2.ProviderCon
 		AuthStyle:          defaultConfig.AuthStyle,
 		OAuthMethod:        defaultConfig.OAuthMethod,
 		TokenRequestFormat: defaultConfig.TokenRequestFormat,
+		StateEncoding:      defaultConfig.StateEncoding,
 		RedirectURL:        fmt.Sprintf("%s/callback", config.BaseURL),
-		Callback:           defaultConfig.Callback, // Preserve original callback
+		Callback:           defaultConfig.Callback,          // Preserve original callback
+		CallbackPorts:      defaultConfig.CallbackPorts,     // Preserve callback ports
 		ConsoleURL:         defaultConfig.ConsoleURL,
 		GrantType:          defaultConfig.GrantType,
 		Hook:               defaultConfig.Hook,
@@ -318,11 +321,37 @@ func runAuthCodeFlow(config *ExampleConfig, registry *oauth2.Registry, providerC
 		fmt.Fprintf(w, homeHTML, providerConfig.DisplayName, config.UserID)
 	})
 
-	server := &http.Server{Addr: fmt.Sprintf(":%d", config.ServerPort), Handler: mux}
+	// Try ports from CallbackPorts if specified, otherwise use configured port
+	portsToTry := providerConfig.CallbackPorts
+	if len(portsToTry) == 0 {
+		portsToTry = []int{config.ServerPort}
+	}
+
+	var listener net.Listener
+	var actualPort int
+	var lastErr error
+
+	for _, port := range portsToTry {
+		listener, lastErr = net.Listen("tcp", fmt.Sprintf(":%d", port))
+		if lastErr == nil {
+			actualPort = port
+			break
+		}
+	}
+
+	if listener == nil {
+		return fmt.Errorf("failed to bind to any of the ports %v: %w (last error)", portsToTry, lastErr)
+	}
+
+	// Update BaseURL with actual port
+	config.BaseURL = fmt.Sprintf("http://localhost:%d", actualPort)
+	oauthConfig.BaseURL = config.BaseURL
+
+	server := &http.Server{Handler: mux}
 	serverErr := make(chan error, 1)
 	go func() {
 		log.Printf("OAuth test server listening on %s", config.BaseURL)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := server.Serve(listener); err != nil && err != http.ErrServerClosed {
 			serverErr <- err
 		}
 	}()

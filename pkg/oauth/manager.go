@@ -254,6 +254,39 @@ func (m *Manager) buildAuthURL(config *ProviderConfig, state string, codeVerifie
 		return "", "", err
 	}
 
+	// Validate port constraint if specified
+	if len(config.CallbackPorts) > 0 {
+		baseURL, err := url.Parse(m.config.BaseURL)
+		if err == nil {
+			port := baseURL.Port()
+			if port == "" {
+				// Default to port 80 for http, 443 for https
+				if baseURL.Scheme == "https" {
+					port = "443"
+				} else {
+					port = "80"
+				}
+			}
+			portInt := 0
+			if port != "" {
+				_, err := fmt.Sscanf(port, "%d", &portInt)
+				if err != nil {
+					return "", "", fmt.Errorf("invalid port in BaseURL: %w", err)
+				}
+			}
+			allowed := false
+			for _, allowedPort := range config.CallbackPorts {
+				if portInt == allowedPort {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				return "", "", fmt.Errorf("port %d is not allowed for provider %s (allowed ports: %v)", portInt, config.Type, config.CallbackPorts)
+			}
+		}
+	}
+
 	//redirectURL := config.RedirectURL
 	//if redirectURL == "" {
 	callbackPath := config.Callback

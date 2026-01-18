@@ -121,6 +121,11 @@ type ProviderConfig struct {
 
 	// Hook is the request preprocessing hook for provider-specific behavior
 	Hook RequestHook
+
+	// CallbackPorts specifies allowed ports for the callback URL
+	// Empty = no constraint (any port is allowed)
+	// Some providers require specific ports, e.g., codex allows [1455]
+	CallbackPorts []int
 }
 
 // TokenRequestFormat represents the format of token request body
