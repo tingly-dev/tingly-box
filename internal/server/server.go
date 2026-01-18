@@ -393,6 +393,10 @@ func (s *Server) SetupOpenAIEndpoints(group *gin.RouterGroup) {
 	group.POST("/chat/completions", s.authMW.ModelAuthMiddleware(), s.OpenAIChatCompletions)
 	// Models endpoint (OpenAI compatible)
 	group.GET("/models", s.authMW.ModelAuthMiddleware(), s.OpenAIListModels)
+
+	// Responses API endpoints (OpenAI compatible)
+	group.POST("/responses", s.authMW.ModelAuthMiddleware(), s.ResponsesCreate)
+	group.GET("/responses/:id", s.authMW.ModelAuthMiddleware(), s.ResponsesGet)
 }
 
 func (s *Server) SetupAnthropicEndpoints(group *gin.RouterGroup) {
