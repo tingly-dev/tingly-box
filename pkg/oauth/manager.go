@@ -463,7 +463,14 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("token exchange failed: status %d, body: %d", resp.StatusCode, len(string(body)))
+		bodyStr := string(body)
+		// Log the body for debugging (truncate if too long)
+		if len(bodyStr) > 500 {
+			logrus.Debugf("token exchange failed: status %d, body: %s...", resp.StatusCode, bodyStr[:500])
+		} else {
+			logrus.Debugf("token exchange failed: status %d, body: %s", resp.StatusCode, bodyStr)
+		}
+		return nil, fmt.Errorf("token exchange failed: status %d, body: %s", resp.StatusCode, bodyStr)
 	}
 
 	// Parse response directly into Token
