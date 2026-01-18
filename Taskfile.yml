@@ -92,13 +92,11 @@ tasks:
     aliases:
       - start
     cmds:
-      - task: go:build
-      - ./build/{{.BIN_NAME}} --verbose start --debug
+      - go run ./internal/cmd/tingly-box --verbose start --debug
     
   https:
     cmds:
-      - task: go:build
-      - ./build/{{.BIN_NAME}} --verbose start --https
+      - go run ./internal/cmd/tingly-box --verbose start --https
   
   cli:build:
     cmds:
