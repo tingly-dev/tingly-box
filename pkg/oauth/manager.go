@@ -287,14 +287,12 @@ func (m *Manager) buildAuthURL(config *ProviderConfig, state string, codeVerifie
 		}
 	}
 
-	//redirectURL := config.RedirectURL
-	//if redirectURL == "" {
+	// Use hardcoded RedirectURL if provided (for providers requiring specific redirect URIs)
 	callbackPath := config.Callback
 	if callbackPath == "" {
 		callbackPath = "/callback"
 	}
 	redirectURL := fmt.Sprintf("%s%s", m.config.BaseURL, callbackPath)
-	//}
 
 	query := u.Query()
 	query.Set("client_id", config.ClientID)
