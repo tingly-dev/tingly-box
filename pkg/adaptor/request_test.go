@@ -137,7 +137,7 @@ func TestConvertOpenAIToAnthropicRequest(t *testing.T) {
 				},
 				MaxTokens: openai.Opt(int64(100)),
 				Tools: []openai.ChatCompletionToolUnionParam{
-					newExampleTool(),
+					NewExampleTool(),
 				},
 			},
 			expectedModel:      "gpt-4",
@@ -197,7 +197,7 @@ func TestConvertOpenAIToAnthropicTools(t *testing.T) {
 		{
 			name: "simple tool",
 			tools: func() []openai.ChatCompletionToolUnionParam {
-				tool := newExampleTool()
+				tool := NewExampleTool()
 				return []openai.ChatCompletionToolUnionParam{tool}
 			}(),
 			expected: 1,

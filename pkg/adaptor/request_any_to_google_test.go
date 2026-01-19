@@ -1,6 +1,14 @@
 package adaptor
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/packages/param"
+	"github.com/openai/openai-go/v3/shared"
+	"google.golang.org/genai"
+)
 
 // TestConvertOpenAIToGoogleRequest tests converting OpenAI request to Google format
 func TestConvertOpenAIToGoogleRequest(t *testing.T) {

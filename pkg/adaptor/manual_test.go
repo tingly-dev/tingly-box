@@ -4,12 +4,9 @@ import (
 	"context"
 	"os"
 	"testing"
-	client2 "tingly-box/pkg/client"
+	"tingly-box/internal/llmclient/httpclient"
 
-	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
-	"github.com/openai/openai-go/v3/packages/param"
-	"github.com/openai/openai-go/v3/shared"
 	"google.golang.org/genai"
 )
 
@@ -30,7 +27,7 @@ func TestGoogleGenerateContent(t *testing.T) {
 		ctx,
 		&genai.ClientConfig{
 			APIKey:     apiKey,
-			HTTPClient: client2.CreateHTTPClientWithProxy(os.Getenv("HTTPS_PROXY")),
+			HTTPClient: httpclient.CreateHTTPClientWithProxy(os.Getenv("HTTPS_PROXY")),
 			HTTPOptions: genai.HTTPOptions{
 				BaseURL:    os.Getenv("GOOGLE_API_URL"),
 				APIVersion: os.Getenv("GOOGLE_API_VERSION"),
