@@ -45,7 +45,7 @@ func TestHandleOpenAIToAnthropicStreamResponse(t *testing.T) {
 			openai.UserMessage("What's the weather like in London?"),
 		},
 		Tools: []openai.ChatCompletionToolUnionParam{
-			newExampleTool(),
+			NewExampleTool(),
 		},
 	})
 
