@@ -401,7 +401,12 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 
 	// Add client_secret if possible
 	if config.ClientSecret != "" {
-		params["client_secret"] = config.ClientSecret
+		switch config.Type {
+		case ProviderCodex:
+			// ignore client secret for codex
+		default:
+			params["client_secret"] = config.ClientSecret
+		}
 	}
 
 	// Add code_verifier for PKCE
