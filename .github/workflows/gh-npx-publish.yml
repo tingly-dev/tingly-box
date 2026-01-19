@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'GitHub release tag (e.g., v1.0.0)'
-        required: true
+        description: 'Release tag (auto-detected from ref, optional for override)'
+        required: false
         type: string
       version_override:
         description: 'NPX Package version (leave empty to use tag version)'
@@ -53,10 +53,45 @@ jobs:
           echo "publish_gui=${{ github.event.inputs.publish_gui }}" >> $GITHUB_OUTPUT
           echo "publish_bundle=${{ github.event.inputs.publish_bundle }}" >> $GITHUB_OUTPUT
 
+      - name: Validate trigger source and extract tag
+        id: validate_trigger
+        run: |
+          CURRENT_REF="${{ github.ref }}"
+          CURRENT_REF_TYPE="${{ github.ref_type }}"
+          INPUT_RELEASE_TAG="${{ github.event.inputs.release_tag }}"
+
+          echo "🔍 Validating workflow trigger..."
+          echo "   Current ref: $CURRENT_REF"
+          echo "   Current ref type: $CURRENT_REF_TYPE"
+          [ -n "$INPUT_RELEASE_TAG" ] && echo "   Input release_tag: $INPUT_RELEASE_TAG"
+
+          # Check if triggered from a tag
+          if [ "$CURRENT_REF_TYPE" != "tag" ]; then
+            echo "❌ Error: This workflow can only be triggered from a git tag, not from a branch."
+            echo "   Please select a tag in 'Use workflow from' dropdown, or use:"
+            echo "   gh workflow run gh-npx-publish.yml --ref <tag-name>"
+            exit 1
+          fi
+
+          # Extract current tag name from ref
+          REF_TAG="${CURRENT_REF#refs/tags/}"
+
+          # Determine which tag to use
+          if [ -n "$INPUT_RELEASE_TAG" ] && [ "$INPUT_RELEASE_TAG" != "$REF_TAG" ]; then
+            echo "⚠️  Warning: Input release_tag ($INPUT_RELEASE_TAG) differs from ref tag ($REF_TAG)."
+            echo "   Using input release_tag: $INPUT_RELEASE_TAG"
+            RELEASE_TAG="$INPUT_RELEASE_TAG"
+          else
+            RELEASE_TAG="$REF_TAG"
+            echo "✅ Using tag from ref: $RELEASE_TAG"
+          fi
+
+          echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
+
       - name: Validate and extract version
         id: version
         run: |
-          RELEASE_TAG="${{ github.event.inputs.release_tag }}"
+          RELEASE_TAG="${{ steps.validate_trigger.outputs.release_tag }}"
           VERSION_OVERRIDE="${{ github.event.inputs.version_override }}"
 
           # Validate tag format
