@@ -54,6 +54,8 @@ type Manager struct {
 	// Session management for OAuth authorization tracking
 	sessions   map[string]*SessionState
 	sessionsMu sync.RWMutex
+
+	Debug bool
 }
 
 // StateData holds information about an OAuth state
@@ -996,6 +998,9 @@ func isTransientDeviceCodeError(err error) bool {
 
 // debugRequest prints HTTP request details for debugging
 func (m *Manager) debugRequest(req *http.Request, isJSON bool) {
+	if !m.Debug {
+		return
+	}
 	logrus.Debug("=== OAuth Debug: HTTP Request ===")
 	logrus.Debugf("Method: %s", req.Method)
 	logrus.Debugf("URL: %s", req.URL.String())
@@ -1027,8 +1032,6 @@ func (m *Manager) debugRequest(req *http.Request, isJSON bool) {
 				} else {
 					logrus.Debugf("%s", string(bodyBytes))
 				}
-			} else {
-				logrus.Debugf("%s", string(bodyBytes))
 			}
 			// Restore body for actual request
 			req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
