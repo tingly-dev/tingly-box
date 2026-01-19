@@ -597,12 +597,17 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 			return nil, err
 		}
 		// Rebuild body in case hook modified params
-		reqBody, contentType, err = buildRequestBody(params, useJSON)
+		// Determine if we should use JSON based on the Content-Type set by the hook
+		// This allows hooks to control both the body format and Content-Type header
+		actualUseJSON := useJSON
+		if ct := req.Header.Get("Content-Type"); ct != "" {
+			actualUseJSON = (ct == "application/json")
+		}
+		reqBody, _, err = buildRequestBody(params, actualUseJSON)
 		if err != nil {
 			return nil, fmt.Errorf("failed to rebuild request body: %w", err)
 		}
 		req.Body = io.NopCloser(reqBody)
-		req.Header.Set("Content-Type", contentType)
 	}
 
 	// Debug: print request details
@@ -910,12 +915,17 @@ func (m *Manager) pollTokenRequest(ctx context.Context, config *ProviderConfig, 
 			return nil, err
 		}
 		// Rebuild body in case hook modified params
-		reqBody, contentType, err = buildRequestBody(params, useJSON)
+		// Determine if we should use JSON based on the Content-Type set by the hook
+		// This allows hooks to control both the body format and Content-Type header
+		actualUseJSON := useJSON
+		if ct := req.Header.Get("Content-Type"); ct != "" {
+			actualUseJSON = (ct == "application/json")
+		}
+		reqBody, _, err = buildRequestBody(params, actualUseJSON)
 		if err != nil {
 			return nil, fmt.Errorf("failed to rebuild request body: %w", err)
 		}
 		req.Body = io.NopCloser(reqBody)
-		req.Header.Set("Content-Type", contentType)
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
