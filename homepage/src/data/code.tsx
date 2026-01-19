@@ -10,8 +10,10 @@ import SyntaxHighlighter from 'react-syntax-highlighter/dist/esm/prism-light';
 import {oneDark} from 'react-syntax-highlighter/dist/esm/styles/prism';
 import {Info, Sparkles, Settings2, MousePointerClick, RefreshCw} from 'lucide-react';
 
-import screenshotProviderAdd from "@/assets/ProviderAdd.png";
-import screenshotChooseProvider from "@/assets/ChooseProvider.png";
+// External image URLs from GitHub repository
+const screenshotBaseUrl = "https://raw.githubusercontent.com/tingly-dev/tingly-box/refs/heads/main/docs/images";
+const screenshotProviderAdd = `${screenshotBaseUrl}/2-openai.png`;
+const screenshotChooseProvider = `${screenshotBaseUrl}/4-select.png`;
 
 import {componentStyles} from "@/theme";
 
