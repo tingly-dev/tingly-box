@@ -12,11 +12,6 @@ on:
         required: false
         type: string
         default: ''
-      force_publish:
-        description: 'Force publish even if version exists'
-        required: false
-        type: boolean
-        default: false
       publish_cli:
         description: 'Publish CLI package (tingly-box)'
         required: false
@@ -31,7 +26,7 @@ on:
         description: 'Publish bundle package (tingly-box-bundle with pre-built binaries)'
         required: false
         type: boolean
-        default: false
+        default: true
 
 env:
   NODE_VERSION: '20'
@@ -168,17 +163,11 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           VERSION="${{ needs.setup.outputs.npx_version }}"
-          FORCE_PUBLISH="${{ github.event.inputs.force_publish || 'false' }}"
 
           echo "📦 Publishing $PKG_NAME@${VERSION} to npm..."
 
           if npm view $PKG_NAME@"${VERSION}" version >/dev/null 2>&1; then
-            if [ "$FORCE_PUBLISH" = "true" ]; then
-              echo "⚠️ Version exists but force publishing is enabled"
-              npm publish --force --provenance --access public
-            else
-              echo "ℹ️ $PKG_NAME@${VERSION} already exists on npm. Skipping publish."
-            fi
+            echo "ℹ️ $PKG_NAME@${VERSION} already exists on npm. Skipping publish."
           else
             npm publish --provenance --access public
           fi
@@ -327,17 +316,11 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           VERSION="${{ needs.setup.outputs.npx_version }}"
-          FORCE_PUBLISH="${{ github.event.inputs.force_publish || 'false' }}"
 
           echo "📦 Publishing $PKG_NAME@${VERSION} to npm..."
 
           if npm view $PKG_NAME@"${VERSION}" version >/dev/null 2>&1; then
-            if [ "$FORCE_PUBLISH" = "true" ]; then
-              echo "⚠️ Version exists but force publishing is enabled"
-              npm publish --force --provenance --access public
-            else
-              echo "ℹ️ $PKG_NAME@${VERSION} already exists on npm. Skipping publish."
-            fi
+            echo "ℹ️ $PKG_NAME@${VERSION} already exists on npm. Skipping publish."
           else
             npm publish --provenance --access public
           fi
@@ -512,17 +495,11 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           VERSION="${{ needs.setup.outputs.npx_version }}"
-          FORCE_PUBLISH="${{ github.event.inputs.force_publish || 'false' }}"
 
           echo "📦 Publishing $PKG_NAME@${VERSION} to npm..."
 
           if npm view "$PKG_NAME@${VERSION}" version >/dev/null 2>&1; then
-            if [ "$FORCE_PUBLISH" = "true" ]; then
-              echo "⚠️ Version exists but force publishing is enabled"
-              npm publish --force --provenance --access public
-            else
-              echo "ℹ️ $PKG_NAME@${VERSION} already exists on npm. Skipping publish."
-            fi
+            echo "ℹ️ $PKG_NAME@${VERSION} already exists on npm. Skipping publish."
           else
             npm publish --provenance --access public
           fi
