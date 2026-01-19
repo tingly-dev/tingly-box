@@ -117,24 +117,24 @@ func (m *Manager) generateState(encoding StateEncoding) (string, error) {
 	}
 }
 
-// generateCodeVerifier generates a PKCE code verifier (43-128 characters)
-// Uses cryptographically secure random bytes encoded as base64url
+// generateCodeVerifier generates a PKCE code verifier
+// 96 random bytes → 128 base64url chars
 func (m *Manager) generateCodeVerifier() (string, error) {
-	// Generate 32 random bytes (256 bits), which when base64url-encoded
-	// gives us 43 characters (minimum required by PKCE spec)
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
+	// Generate 96 random bytes (matches OpenAI Codex implementation)
+	bytes := make([]byte, 96)
+	if _, err := rand.Read(bytes); err != nil {
 		return "", fmt.Errorf("failed to generate code verifier: %w", err)
 	}
-	return base64.RawURLEncoding.EncodeToString(b), nil
+	verifier := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(bytes)
+	return verifier, nil
 }
 
 // generateCodeChallenge creates a PKCE code challenge from the verifier
-// Uses SHA256 and base64url encoding (S256 method)
+// Uses SHA256 hash + base64url encoding
 func (m *Manager) generateCodeChallenge(verifier string) string {
-	h := sha256.New()
-	h.Write([]byte(verifier))
-	return base64.RawURLEncoding.EncodeToString(h.Sum(nil))
+	hash := sha256.Sum256([]byte(verifier))
+	challenge := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(hash[:])
+	return challenge
 }
 
 // generateStateKey generates a key for storing state data
