@@ -389,11 +389,6 @@ func (m *Manager) HandleCallback(ctx context.Context, r *http.Request) (*Token, 
 
 // exchangeCodeForToken exchanges the authorization code for an access token
 func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConfig, state string, code string, codeVerifier string, redirectURI string) (*Token, error) {
-	useJSON := config.TokenRequestFormat == TokenRequestFormatJSON
-
-	var reqBody io.Reader
-	var contentType string
-
 	// Build common parameters
 	params := map[string]string{
 		"grant_type":   "authorization_code",
@@ -426,10 +421,10 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 		"grant_type":           params["grant_type"],
 		"has_client_secret":    config.ClientSecret != "",
 		"token_url":            config.TokenURL,
-		"request_format":       map[bool]string{true: "JSON", false: "Form"}[useJSON],
+		"request_format":       map[TokenRequestFormat]string{TokenRequestFormatJSON: "JSON", TokenRequestFormatForm: "Form"}[config.TokenRequestFormat],
 	}).Info("[OAuth] PKCE code_verifier added to token request")
 
-	reqBody, contentType, err := buildRequestBody(params, useJSON)
+	reqBody, contentType, err := buildRequestBody(params, config.TokenRequestFormat)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build request body: %w", err)
 	}
@@ -451,7 +446,7 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 	}
 
 	// Debug: print request details
-	m.debugRequest(req, useJSON)
+	m.debugRequest(req, config.TokenRequestFormat)
 
 	// Send request with optional proxy support
 	// Proxy is read from HTTP_PROXY/HTTPS_PROXY environment variables
@@ -570,8 +565,6 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 		return nil, fmt.Errorf("%w: %s", ErrInvalidProvider, providerType)
 	}
 
-	useJSON := config.TokenRequestFormat == TokenRequestFormatJSON
-
 	// Build common parameters
 	params := map[string]string{
 		"grant_type":    "refresh_token",
@@ -580,7 +573,7 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 		"client_secret": config.ClientSecret,
 	}
 
-	reqBody, contentType, err := buildRequestBody(params, useJSON)
+	reqBody, contentType, err := buildRequestBody(params, config.TokenRequestFormat)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build request body: %w", err)
 	}
@@ -598,14 +591,7 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 		if err := config.Hook.BeforeToken(params, req.Header); err != nil {
 			return nil, err
 		}
-		// Rebuild body in case hook modified params
-		// Determine if we should use JSON based on the Content-Type set by the hook
-		// This allows hooks to control both the body format and Content-Type header
-		actualUseJSON := useJSON
-		if ct := req.Header.Get("Content-Type"); ct != "" {
-			actualUseJSON = (ct == "application/json")
-		}
-		reqBody, _, err = buildRequestBody(params, actualUseJSON)
+		reqBody, _, err = buildRequestBody(params, config.TokenRequestFormat)
 		if err != nil {
 			return nil, fmt.Errorf("failed to rebuild request body: %w", err)
 		}
@@ -613,7 +599,7 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 	}
 
 	// Debug: print request details
-	m.debugRequest(req, useJSON)
+	m.debugRequest(req, config.TokenRequestFormat)
 
 	// Send request with optional proxy support
 	// Proxy is read from HTTP_PROXY/HTTPS_PROXY environment variables
@@ -739,8 +725,6 @@ func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, pro
 	}
 
 	// Build device authorization request
-	useJSON := config.TokenRequestFormat == TokenRequestFormatJSON
-
 	// Build common parameters
 	params := map[string]string{
 		"client_id": config.ClientID,
@@ -752,7 +736,7 @@ func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, pro
 		params["code_challenge_method"] = "S256"
 	}
 
-	reqBody, contentType, err := buildRequestBody(params, useJSON)
+	reqBody, contentType, err := buildRequestBody(params, config.TokenRequestFormat)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build request body: %w", err)
 	}
@@ -771,7 +755,7 @@ func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, pro
 			return nil, err
 		}
 		// Rebuild body in case hook modified params
-		reqBody, contentType, err = buildRequestBody(params, useJSON)
+		reqBody, contentType, err = buildRequestBody(params, config.TokenRequestFormat)
 		if err != nil {
 			return nil, fmt.Errorf("failed to rebuild request body: %w", err)
 		}
@@ -882,8 +866,6 @@ func (m *Manager) PollForToken(ctx context.Context, data *DeviceCodeData, callba
 
 // pollTokenRequest makes a single token polling request
 func (m *Manager) pollTokenRequest(ctx context.Context, config *ProviderConfig, deviceCode string, codeVerifier string) (*Token, error) {
-	useJSON := config.TokenRequestFormat == TokenRequestFormatJSON
-
 	// Build common parameters
 	params := map[string]string{
 		"grant_type":  config.GrantType,
@@ -898,7 +880,7 @@ func (m *Manager) pollTokenRequest(ctx context.Context, config *ProviderConfig, 
 		params["code_verifier"] = codeVerifier
 	}
 
-	reqBody, contentType, err := buildRequestBody(params, useJSON)
+	reqBody, contentType, err := buildRequestBody(params, config.TokenRequestFormat)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build request body: %w", err)
 	}
@@ -916,14 +898,7 @@ func (m *Manager) pollTokenRequest(ctx context.Context, config *ProviderConfig, 
 		if err := config.Hook.BeforeToken(params, req.Header); err != nil {
 			return nil, err
 		}
-		// Rebuild body in case hook modified params
-		// Determine if we should use JSON based on the Content-Type set by the hook
-		// This allows hooks to control both the body format and Content-Type header
-		actualUseJSON := useJSON
-		if ct := req.Header.Get("Content-Type"); ct != "" {
-			actualUseJSON = (ct == "application/json")
-		}
-		reqBody, _, err = buildRequestBody(params, actualUseJSON)
+		reqBody, _, err = buildRequestBody(params, config.TokenRequestFormat)
 		if err != nil {
 			return nil, fmt.Errorf("failed to rebuild request body: %w", err)
 		}
@@ -997,7 +972,7 @@ func isTransientDeviceCodeError(err error) bool {
 }
 
 // debugRequest prints HTTP request details for debugging
-func (m *Manager) debugRequest(req *http.Request, isJSON bool) {
+func (m *Manager) debugRequest(req *http.Request, format TokenRequestFormat) {
 	if !m.Debug {
 		return
 	}
@@ -1021,7 +996,8 @@ func (m *Manager) debugRequest(req *http.Request, isJSON bool) {
 		bodyBytes, err := io.ReadAll(req.Body)
 		if err == nil {
 			// Try to format JSON for readability
-			if isJSON {
+			switch format {
+			case TokenRequestFormatJSON:
 				var formatted any
 				if json.Unmarshal(bodyBytes, &formatted) == nil {
 					if pretty, err := json.MarshalIndent(formatted, "", "  "); err == nil {
@@ -1032,6 +1008,8 @@ func (m *Manager) debugRequest(req *http.Request, isJSON bool) {
 				} else {
 					logrus.Debugf("%s", string(bodyBytes))
 				}
+			default:
+				logrus.Debugf("%s", string(bodyBytes))
 			}
 			// Restore body for actual request
 			req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
