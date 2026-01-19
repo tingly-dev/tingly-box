@@ -305,7 +305,8 @@ func (m *Manager) buildAuthURL(config *ProviderConfig, state string, codeVerifie
 
 	// Add PKCE parameters if provider uses PKCE
 	if config.OAuthMethod == OAuthMethodPKCE && codeVerifier != "" {
-		query.Set("code_challenge", m.generateCodeChallenge(codeVerifier))
+		challenge := m.generateCodeChallenge(codeVerifier)
+		query.Set("code_challenge", challenge)
 		query.Set("code_challenge_method", "S256")
 	}
 
@@ -414,6 +415,18 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 		params["code_verifier"] = codeVerifier
 	}
 
+	logrus.WithFields(logrus.Fields{
+		"state":                state,
+		"provider":             config.Type,
+		"code_verifier_length": len(codeVerifier),
+		"code_verifier":        codeVerifier,
+		"redirect_uri":         redirectURI,
+		"grant_type":           params["grant_type"],
+		"has_client_secret":    config.ClientSecret != "",
+		"token_url":            config.TokenURL,
+		"request_format":       map[bool]string{true: "JSON", false: "Form"}[useJSON],
+	}).Info("[OAuth] PKCE code_verifier added to token request")
+
 	reqBody, contentType, err := buildRequestBody(params, useJSON)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build request body: %w", err)
@@ -432,13 +445,7 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 		if err := config.Hook.BeforeToken(params, req.Header); err != nil {
 			return nil, err
 		}
-		// Rebuild body in case hook modified params
-		reqBody, contentType, err = buildRequestBody(params, useJSON)
-		if err != nil {
-			return nil, fmt.Errorf("failed to rebuild request body: %w", err)
-		}
 		req.Body = io.NopCloser(reqBody)
-		req.Header.Set("Content-Type", contentType)
 	}
 
 	// Debug: print request details
@@ -495,8 +502,8 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 			if claims.Email != "" {
 				token.Metadata["email"] = claims.Email
 			}
-			if claims.AccountID != "" {
-				token.Metadata["account_id"] = claims.AccountID
+			if accountID := claims.GetAccountID(); accountID != "" {
+				token.Metadata["account_id"] = accountID
 			}
 			if claims.Name != "" {
 				token.Metadata["name"] = claims.Name
@@ -645,8 +652,8 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 			if claims.Email != "" {
 				token.Metadata["email"] = claims.Email
 			}
-			if claims.AccountID != "" {
-				token.Metadata["account_id"] = claims.AccountID
+			if accountID := claims.GetAccountID(); accountID != "" {
+				token.Metadata["account_id"] = accountID
 			}
 			if claims.Name != "" {
 				token.Metadata["name"] = claims.Name
