@@ -474,7 +474,7 @@ jobs:
           fi
 
           # Expected zip files
-          for zip in tingly-box-macos-arm64.zip tingly-box-macos-amd64.zip tingly-box-linux-amd64.zip tingly-box-windows-amd64.zip; do
+          for zip in tingly-box-macos-arm64.zip tingly-box-macos-amd64.zip tingly-box-linux-amd64.zip tingly-box-linux-arm64.zip tingly-box-windows-amd64.zip; do
             if [ ! -f "$PKG_DIR/zip/$zip" ]; then
               echo "❌ Zip file not found: $zip"
               exit 1

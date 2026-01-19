@@ -63,6 +63,11 @@ jobs:
             goarch: amd64
             suffix: linux-amd64
             runs-on: ubuntu-latest
+          - goos: linux
+            goarch: arm64
+            suffix: linux-arm64
+            runs-on: ubuntu-latest
+            cross_compile: true
           - goos: darwin
             goarch: amd64
             suffix: macos-amd64
@@ -140,6 +145,13 @@ jobs:
       - name: Install openapi-generator-cli
         run: npm install -g @openapitools/openapi-generator-cli
 
+      - name: Install zig (for cross-compilation)
+        if: matrix.cross_compile == true
+        run: |
+          wget -q https://ziglang.org/download/0.13.0/zig-linux-x86_64-0.13.0.tar.xz
+          tar -xf zig-linux-x86_64-0.13.0.tar.xz
+          echo "$PWD/zig-linux-x86_64-0.13.0" >> $GITHUB_PATH
+
       - name: Run codegen Build frontend
         shell: bash
         run: |
@@ -162,6 +174,13 @@ jobs:
 
           # Build with ldflags
           LDFLAGS="-s -w -X main.version=${VERSION} -X main.gitCommit=${GIT_COMMIT} -X main.buildTime=${BUILD_TIME} -X main.goVersion=${GO_VERSION} -X main.platform=${PLATFORM}"
+
+          # Use zig for cross-compilation if needed
+          if [ "${{ matrix.cross_compile }}" == "true" ]; then
+            CC="zig cc -target aarch64-linux-gnu"
+            CXX="zig c++ -target aarch64-linux-gnu"
+            export CC CXX
+          fi
 
           CGO_ENABLED=1 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build \
             -ldflags="${LDFLAGS}" \
