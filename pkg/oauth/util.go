@@ -47,12 +47,12 @@ func buildRequestBody(params map[string]string, useJSON bool) (io.Reader, string
 			return nil, "", err
 		}
 		return bytes.NewReader(bodyBytes), "application/json", nil
+	} else {
+		// Convert to url.Values for form encoding
+		data := url.Values{}
+		for k, v := range params {
+			data.Set(k, v)
+		}
+		return strings.NewReader(data.Encode()), "application/x-www-form-urlencoded", nil
 	}
-
-	// Convert to url.Values for form encoding
-	data := url.Values{}
-	for k, v := range params {
-		data.Set(k, v)
-	}
-	return strings.NewReader(data.Encode()), "application/x-www-form-urlencoded", nil
 }
