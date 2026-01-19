@@ -4,19 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'GitHub release tag (e.g., v1.0.0)'
-        required: true
+        description: 'Release tag (auto-detected from ref, optional for override)'
+        required: false
         type: string
       version_override:
         description: 'NPX Package version (leave empty to use tag version)'
         required: false
         type: string
         default: ''
-      force_publish:
-        description: 'Force publish even if version exists'
-        required: false
-        type: boolean
-        default: false
       publish_cli:
         description: 'Publish CLI package (tingly-box)'
         required: false
@@ -31,7 +26,7 @@ on:
         description: 'Publish bundle package (tingly-box-bundle with pre-built binaries)'
         required: false
         type: boolean
-        default: false
+        default: true
 
 env:
   NODE_VERSION: '20'
@@ -58,10 +53,45 @@ jobs:
           echo "publish_gui=${{ github.event.inputs.publish_gui }}" >> $GITHUB_OUTPUT
           echo "publish_bundle=${{ github.event.inputs.publish_bundle }}" >> $GITHUB_OUTPUT
 
+      - name: Validate trigger source and extract tag
+        id: validate_trigger
+        run: |
+          CURRENT_REF="${{ github.ref }}"
+          CURRENT_REF_TYPE="${{ github.ref_type }}"
+          INPUT_RELEASE_TAG="${{ github.event.inputs.release_tag }}"
+
+          echo "🔍 Validating workflow trigger..."
+          echo "   Current ref: $CURRENT_REF"
+          echo "   Current ref type: $CURRENT_REF_TYPE"
+          [ -n "$INPUT_RELEASE_TAG" ] && echo "   Input release_tag: $INPUT_RELEASE_TAG"
+
+          # Check if triggered from a tag
+          if [ "$CURRENT_REF_TYPE" != "tag" ]; then
+            echo "❌ Error: This workflow can only be triggered from a git tag, not from a branch."
+            echo "   Please select a tag in 'Use workflow from' dropdown, or use:"
+            echo "   gh workflow run gh-npx-publish.yml --ref <tag-name>"
+            exit 1
+          fi
+
+          # Extract current tag name from ref
+          REF_TAG="${CURRENT_REF#refs/tags/}"
+
+          # Determine which tag to use
+          if [ -n "$INPUT_RELEASE_TAG" ] && [ "$INPUT_RELEASE_TAG" != "$REF_TAG" ]; then
+            echo "⚠️  Warning: Input release_tag ($INPUT_RELEASE_TAG) differs from ref tag ($REF_TAG)."
+            echo "   Using input release_tag: $INPUT_RELEASE_TAG"
+            RELEASE_TAG="$INPUT_RELEASE_TAG"
+          else
+            RELEASE_TAG="$REF_TAG"
+            echo "✅ Using tag from ref: $RELEASE_TAG"
+          fi
+
+          echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
+
       - name: Validate and extract version
         id: version
         run: |
-          RELEASE_TAG="${{ github.event.inputs.release_tag }}"
+          RELEASE_TAG="${{ steps.validate_trigger.outputs.release_tag }}"
           VERSION_OVERRIDE="${{ github.event.inputs.version_override }}"
 
           # Validate tag format
@@ -168,17 +198,11 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           VERSION="${{ needs.setup.outputs.npx_version }}"
-          FORCE_PUBLISH="${{ github.event.inputs.force_publish || 'false' }}"
 
           echo "📦 Publishing $PKG_NAME@${VERSION} to npm..."
 
           if npm view $PKG_NAME@"${VERSION}" version >/dev/null 2>&1; then
-            if [ "$FORCE_PUBLISH" = "true" ]; then
-              echo "⚠️ Version exists but force publishing is enabled"
-              npm publish --force --provenance --access public
-            else
-              echo "ℹ️ $PKG_NAME@${VERSION} already exists on npm. Skipping publish."
-            fi
+            echo "ℹ️ $PKG_NAME@${VERSION} already exists on npm. Skipping publish."
           else
             npm publish --provenance --access public
           fi
@@ -237,6 +261,17 @@ jobs:
               --notes-file npx_release_notes.md \
               ${PRERELEASE_FLAG}
           fi
+
+      - name: Trigger Docker NPX build
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.TRIGGER_PAT_TOKEN }}
+        run: |
+          gh workflow run docker-npx.yml \
+            --repo tingly-dev/tingly-box \
+            --ref "${{ needs.setup.outputs.release_tag }}" \
+            -f release_tag="${{ needs.setup.outputs.release_tag }}"
+          echo "Triggered docker-npx.yml workflow"
 
   # Publish GUI NPX package
   publish-gui:
@@ -311,17 +346,11 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           VERSION="${{ needs.setup.outputs.npx_version }}"
-          FORCE_PUBLISH="${{ github.event.inputs.force_publish || 'false' }}"
 
           echo "📦 Publishing $PKG_NAME@${VERSION} to npm..."
 
           if npm view $PKG_NAME@"${VERSION}" version >/dev/null 2>&1; then
-            if [ "$FORCE_PUBLISH" = "true" ]; then
-              echo "⚠️ Version exists but force publishing is enabled"
-              npm publish --force --provenance --access public
-            else
-              echo "ℹ️ $PKG_NAME@${VERSION} already exists on npm. Skipping publish."
-            fi
+            echo "ℹ️ $PKG_NAME@${VERSION} already exists on npm. Skipping publish."
           else
             npm publish --provenance --access public
           fi
@@ -496,17 +525,11 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           VERSION="${{ needs.setup.outputs.npx_version }}"
-          FORCE_PUBLISH="${{ github.event.inputs.force_publish || 'false' }}"
 
           echo "📦 Publishing $PKG_NAME@${VERSION} to npm..."
 
           if npm view "$PKG_NAME@${VERSION}" version >/dev/null 2>&1; then
-            if [ "$FORCE_PUBLISH" = "true" ]; then
-              echo "⚠️ Version exists but force publishing is enabled"
-              npm publish --force --provenance --access public
-            else
-              echo "ℹ️ $PKG_NAME@${VERSION} already exists on npm. Skipping publish."
-            fi
+            echo "ℹ️ $PKG_NAME@${VERSION} already exists on npm. Skipping publish."
           else
             npm publish --provenance --access public
           fi
