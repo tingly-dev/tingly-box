@@ -323,3 +323,69 @@ func (h *IFlowHook) AfterToken(ctx context.Context, accessToken string, httpClie
 	}
 	return metadata, nil
 }
+
+// CodexHook implements Codex (OpenAI) OAuth specific behavior.
+type CodexHook struct{}
+
+func (h *CodexHook) BeforeAuth(params map[string]string) error {
+	// Add OpenAI Codex CLI specific parameters
+	params["id_token_add_organizations"] = "true"
+	params["codex_cli_simplified_flow"] = "true"
+	params["originator"] = "codex_cli_rs"
+	return nil
+}
+
+func (h *CodexHook) BeforeToken(body map[string]string, header http.Header) error {
+	header.Set("Content-Type", "application/x-www-form-urlencoded")
+	header.Set("Accept", "application/json")
+	return nil
+}
+
+func (h *CodexHook) AfterToken(ctx context.Context, accessToken string, httpClient *http.Client) (map[string]any, error) {
+	// For OpenAI Codex, user information is in the ID token (JWT)
+	// Since we only receive the access token here, we'll try to fetch user info
+	// from OpenAI's userinfo endpoint if available
+	//
+	// Note: The ID token parsing for email/account_id should be done
+	// at the token handling level since the ID token contains the claims
+	//
+	// For now, we return nil metadata - the token manager should handle
+	// ID token parsing separately
+
+	// Try calling OpenAI userinfo endpoint (may not be publicly available)
+	type userInfo struct {
+		Email string `json:"email"`
+		Name  string `json:"name"`
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.openai.com/v1/user", nil)
+	if err != nil {
+		return nil, nil // Return nil metadata on error, don't fail the auth flow
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return nil, nil
+	}
+
+	var info userInfo
+	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
+		return nil, nil
+	}
+
+	metadata := make(map[string]any)
+	if info.Email != "" {
+		metadata["email"] = info.Email
+	}
+	if info.Name != "" {
+		metadata["name"] = info.Name
+	}
+	return metadata, nil
+}

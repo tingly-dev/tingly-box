@@ -7,12 +7,15 @@
 //	go run main.go -provider=mock
 //
 //	# Run with Anthropic (built-in credentials)
-//	go run main.go -provider=anthropic
+//	go run main.go -provider=claude_code
 //
 //	# Run with Gemini CLI (built-in credentials)
 //	go run main.go -provider=gemini
 //
-// Available providers: mock, anthropic, openai, google, gemini, github
+//	# Run with Codex (requires OAUTH_CLIENT_ID environment variable)
+//	go run main.go -provider=codex
+//
+// Available providers: mock, claude_code, openai, google, gemini, github, codex
 package main
 
 import (
@@ -21,6 +24,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -30,6 +34,7 @@ import (
 	oauth2 "tingly-box/pkg/oauth"
 
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -80,7 +85,9 @@ Provider: %s
 )
 
 func main() {
-	provider := flag.String("provider", "mock", "OAuth provider (mock, claude_code, openai, gemini, github)")
+	logrus.SetLevel(logrus.DebugLevel)
+
+	provider := flag.String("provider", "mock", "OAuth provider (mock, claude_code, openai, gemini, github, codex)")
 	port := flag.Int("port", 54545, "Local server port for callback (default 54545)")
 	userID := flag.String("user", "example-user", "User ID for the OAuth flow")
 	demo := flag.Bool("demo", false, "Demo mode: show auth URL without real credentials")
@@ -236,10 +243,15 @@ func setupProvider(config *ExampleConfig) (*oauth2.Registry, *oauth2.ProviderCon
 		return nil, nil, fmt.Errorf("client ID not provided")
 	}
 
+	// Determine client_secret handling
+	// For PKCE public clients and clients with AuthStyleInNone, client_secret should be empty
 	clientSecret := config.ClientSecret
-	if clientSecret == "" {
+	if clientSecret == "" && !shouldSkipClientSecret(defaultConfig) {
 		clientSecret = uuid.New().String()
 		log.Printf("No CLIENT_SECRET provided, using generated test secret: %s", clientSecret)
+	} else if clientSecret == "" && shouldSkipClientSecret(defaultConfig) {
+		// For PKCE/public clients, keep client_secret empty
+		log.Printf("[OAuth] PKCE/public client detected, using empty client_secret")
 	}
 
 	providerConfig := &oauth2.ProviderConfig{
@@ -254,7 +266,10 @@ func setupProvider(config *ExampleConfig) (*oauth2.Registry, *oauth2.ProviderCon
 		AuthStyle:          defaultConfig.AuthStyle,
 		OAuthMethod:        defaultConfig.OAuthMethod,
 		TokenRequestFormat: defaultConfig.TokenRequestFormat,
+		StateEncoding:      defaultConfig.StateEncoding,
 		RedirectURL:        fmt.Sprintf("%s/callback", config.BaseURL),
+		Callback:           defaultConfig.Callback,      // Preserve original callback
+		CallbackPorts:      defaultConfig.CallbackPorts, // Preserve callback ports
 		ConsoleURL:         defaultConfig.ConsoleURL,
 		GrantType:          defaultConfig.GrantType,
 		Hook:               defaultConfig.Hook,
@@ -262,6 +277,22 @@ func setupProvider(config *ExampleConfig) (*oauth2.Registry, *oauth2.ProviderCon
 	registry.Register(providerConfig)
 
 	return registry, providerConfig, nil
+}
+
+// shouldSkipClientSecret determines if a provider should skip client_secret generation
+// Returns true for PKCE public clients and AuthStyleInNone clients
+func shouldSkipClientSecret(config *oauth2.ProviderConfig) bool {
+	// PKCE clients (standard and device code) don't need client_secret
+	if config.OAuthMethod == oauth2.OAuthMethodPKCE ||
+		config.OAuthMethod == oauth2.OAuthMethodDeviceCode ||
+		config.OAuthMethod == oauth2.OAuthMethodDeviceCodePKCE {
+		return true
+	}
+	// Public clients with AuthStyleInNone don't need client_secret
+	if config.AuthStyle == oauth2.AuthStyleInNone {
+		return true
+	}
+	return false
 }
 
 func newOAuthConfig(baseURL string) *oauth2.Config {
@@ -283,12 +314,21 @@ func newSignalChan() chan os.Signal {
 func runAuthCodeFlow(config *ExampleConfig, registry *oauth2.Registry, providerConfig *oauth2.ProviderConfig) error {
 	oauthConfig := newOAuthConfig(config.BaseURL)
 	manager := oauth2.NewManager(oauthConfig, registry)
+    manager.Debug = true
 
 	resultChan := make(chan *CallbackResult, 1)
 	errorChan := make(chan error, 1)
 
+	// Determine callback path for this provider
+	callbackPath := providerConfig.Callback
+	if callbackPath == "" {
+		callbackPath = "/callback"
+	}
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
+
+	// Register the callback handler
+	mux.HandleFunc(callbackPath, func(w http.ResponseWriter, r *http.Request) {
 		token, err := manager.HandleCallback(context.Background(), r)
 		if err != nil {
 			errorChan <- fmt.Errorf("callback failed: %w", err)
@@ -306,11 +346,37 @@ func runAuthCodeFlow(config *ExampleConfig, registry *oauth2.Registry, providerC
 		fmt.Fprintf(w, homeHTML, providerConfig.DisplayName, config.UserID)
 	})
 
-	server := &http.Server{Addr: fmt.Sprintf(":%d", config.ServerPort), Handler: mux}
+	// Try ports from CallbackPorts if specified, otherwise use configured port
+	portsToTry := providerConfig.CallbackPorts
+	if len(portsToTry) == 0 {
+		portsToTry = []int{config.ServerPort}
+	}
+
+	var listener net.Listener
+	var actualPort int
+	var lastErr error
+
+	for _, port := range portsToTry {
+		listener, lastErr = net.Listen("tcp", fmt.Sprintf(":%d", port))
+		if lastErr == nil {
+			actualPort = port
+			break
+		}
+	}
+
+	if listener == nil {
+		return fmt.Errorf("failed to bind to any of the ports %v: %w (last error)", portsToTry, lastErr)
+	}
+
+	// Update BaseURL with actual port
+	config.BaseURL = fmt.Sprintf("http://localhost:%d", actualPort)
+	oauthConfig.BaseURL = config.BaseURL
+
+	server := &http.Server{Handler: mux}
 	serverErr := make(chan error, 1)
 	go func() {
 		log.Printf("OAuth test server listening on %s", config.BaseURL)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := server.Serve(listener); err != nil && err != http.ErrServerClosed {
 			serverErr <- err
 		}
 	}()
@@ -331,10 +397,10 @@ func runAuthCodeFlow(config *ExampleConfig, registry *oauth2.Registry, providerC
 	fmt.Println("MANUAL OAUTH TEST - Authorization Code Flow")
 	fmt.Println(strings.Repeat("=", 80))
 	fmt.Printf("\nProvider: %s\n", providerConfig.DisplayName)
-	fmt.Printf("Callback URL: %s/callback\n", config.BaseURL)
+	fmt.Printf("Callback URL: %s%s\n", config.BaseURL, callbackPath)
 	fmt.Printf("\n1. Open the following URL in your browser:\n\n   %s\n\n", authURL)
 	fmt.Printf("2. Authorize the application\n")
-	fmt.Printf("3. The callback will be received at %s/callback\n", config.BaseURL)
+	fmt.Printf("3. The callback will be received at %s%s\n", config.BaseURL, callbackPath)
 	fmt.Printf("4. Check the terminal for results\n\nState: %s\n", state)
 	fmt.Println("\n" + strings.Repeat("-", 80))
 
@@ -362,6 +428,7 @@ func runAuthCodeFlow(config *ExampleConfig, registry *oauth2.Registry, providerC
 func runDeviceCodeFlow(config *ExampleConfig, registry *oauth2.Registry, providerConfig *oauth2.ProviderConfig) error {
 	oauthConfig := newOAuthConfig(config.BaseURL)
 	manager := oauth2.NewManager(oauthConfig, registry)
+    manager.Debug = true
 
 	fmt.Println("\n" + strings.Repeat("=", 80))
 	fmt.Println("MANUAL OAUTH TEST - Device Code Flow")
@@ -375,7 +442,7 @@ func runDeviceCodeFlow(config *ExampleConfig, registry *oauth2.Registry, provide
 
 	fmt.Println("\n" + strings.Repeat("-", 80))
 	fmt.Println("\nDEVICE CODE FLOW INITIATED")
-	fmt.Println("\nPlease follow these steps to complete authentication:\n")
+	fmt.Println("\nPlease follow these steps to complete authentication:")
 	fmt.Printf("1. Visit this URL in your browser:\n\n   %s\n\n", data.VerificationURI)
 	fmt.Printf("2. Enter the following code when prompted:\n\n   %s\n\n", strings.ToUpper(data.UserCode))
 
