@@ -395,9 +395,8 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 	params := map[string]string{
 		"grant_type":   "authorization_code",
 		"client_id":    config.ClientID,
-		"redirect_uri": redirectURI,
 		"code":         code,
-		// "state":        state,
+		"redirect_uri": redirectURI,
 	}
 
 	// Add client_secret if possible
