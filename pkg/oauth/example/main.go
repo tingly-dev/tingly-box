@@ -34,6 +34,7 @@ import (
 	oauth2 "tingly-box/pkg/oauth"
 
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -84,6 +85,8 @@ Provider: %s
 )
 
 func main() {
+	logrus.SetLevel(logrus.DebugLevel)
+
 	provider := flag.String("provider", "mock", "OAuth provider (mock, claude_code, openai, gemini, github, codex)")
 	port := flag.Int("port", 54545, "Local server port for callback (default 54545)")
 	userID := flag.String("user", "example-user", "User ID for the OAuth flow")
@@ -240,10 +243,15 @@ func setupProvider(config *ExampleConfig) (*oauth2.Registry, *oauth2.ProviderCon
 		return nil, nil, fmt.Errorf("client ID not provided")
 	}
 
+	// Determine client_secret handling
+	// For PKCE public clients and clients with AuthStyleInNone, client_secret should be empty
 	clientSecret := config.ClientSecret
-	if clientSecret == "" {
+	if clientSecret == "" && !shouldSkipClientSecret(defaultConfig) {
 		clientSecret = uuid.New().String()
 		log.Printf("No CLIENT_SECRET provided, using generated test secret: %s", clientSecret)
+	} else if clientSecret == "" && shouldSkipClientSecret(defaultConfig) {
+		// For PKCE/public clients, keep client_secret empty
+		log.Printf("[OAuth] PKCE/public client detected, using empty client_secret")
 	}
 
 	providerConfig := &oauth2.ProviderConfig{
@@ -260,8 +268,8 @@ func setupProvider(config *ExampleConfig) (*oauth2.Registry, *oauth2.ProviderCon
 		TokenRequestFormat: defaultConfig.TokenRequestFormat,
 		StateEncoding:      defaultConfig.StateEncoding,
 		RedirectURL:        fmt.Sprintf("%s/callback", config.BaseURL),
-		Callback:           defaultConfig.Callback,          // Preserve original callback
-		CallbackPorts:      defaultConfig.CallbackPorts,     // Preserve callback ports
+		Callback:           defaultConfig.Callback,      // Preserve original callback
+		CallbackPorts:      defaultConfig.CallbackPorts, // Preserve callback ports
 		ConsoleURL:         defaultConfig.ConsoleURL,
 		GrantType:          defaultConfig.GrantType,
 		Hook:               defaultConfig.Hook,
@@ -269,6 +277,22 @@ func setupProvider(config *ExampleConfig) (*oauth2.Registry, *oauth2.ProviderCon
 	registry.Register(providerConfig)
 
 	return registry, providerConfig, nil
+}
+
+// shouldSkipClientSecret determines if a provider should skip client_secret generation
+// Returns true for PKCE public clients and AuthStyleInNone clients
+func shouldSkipClientSecret(config *oauth2.ProviderConfig) bool {
+	// PKCE clients (standard and device code) don't need client_secret
+	if config.OAuthMethod == oauth2.OAuthMethodPKCE ||
+		config.OAuthMethod == oauth2.OAuthMethodDeviceCode ||
+		config.OAuthMethod == oauth2.OAuthMethodDeviceCodePKCE {
+		return true
+	}
+	// Public clients with AuthStyleInNone don't need client_secret
+	if config.AuthStyle == oauth2.AuthStyleInNone {
+		return true
+	}
+	return false
 }
 
 func newOAuthConfig(baseURL string) *oauth2.Config {
@@ -290,6 +314,7 @@ func newSignalChan() chan os.Signal {
 func runAuthCodeFlow(config *ExampleConfig, registry *oauth2.Registry, providerConfig *oauth2.ProviderConfig) error {
 	oauthConfig := newOAuthConfig(config.BaseURL)
 	manager := oauth2.NewManager(oauthConfig, registry)
+    manager.Debug = true
 
 	resultChan := make(chan *CallbackResult, 1)
 	errorChan := make(chan error, 1)
@@ -403,6 +428,7 @@ func runAuthCodeFlow(config *ExampleConfig, registry *oauth2.Registry, providerC
 func runDeviceCodeFlow(config *ExampleConfig, registry *oauth2.Registry, providerConfig *oauth2.ProviderConfig) error {
 	oauthConfig := newOAuthConfig(config.BaseURL)
 	manager := oauth2.NewManager(oauthConfig, registry)
+    manager.Debug = true
 
 	fmt.Println("\n" + strings.Repeat("=", 80))
 	fmt.Println("MANUAL OAUTH TEST - Device Code Flow")
