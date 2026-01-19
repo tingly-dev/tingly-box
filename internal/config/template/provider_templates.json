@@ -543,6 +543,23 @@
       "model_limits": {},
       "supports_models_endpoint": false,
       "oauth_provider": "antigravity"
+    },
+    "open_code": {
+      "id": "open_code",
+      "name": "OpenCode Zen",
+      "status": "active",
+      "valid": true,
+      "website": "https://opencode.ai",
+      "description": "OpenCode Zen - tested and verified models provided by the OpenCode team",
+      "type": "reseller",
+      "api_doc": "https://opencode.ai/docs/providers/",
+      "model_doc": "https://opencode.ai/docs/providers/",
+      "pricing_doc": "https://opencode.ai/docs/providers/",
+      "base_url_openai": "https://opencode.ai/zen/v1",
+      "base_url_anthropic": null,
+      "models": [],
+      "model_limits": {},
+      "supports_models_endpoint": true
     }
   },
   "version": "1.2.0",
