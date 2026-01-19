@@ -38,7 +38,7 @@ func ConvertOpenAIToAnthropicResponse(openaiResp *openai.ChatCompletion, model s
 		if extra := choice.Message.JSON.ExtraFields; extra != nil {
 			if thinking, ok := extra["reasoning_content"]; ok {
 				// a fake signature
-				contentBlocks = append(contentBlocks, anthropic.NewThinkingBlock("thinking-"+uuid.New().String()[0:6], fmt.Sprintf("%s", thinking)))
+				contentBlocks = append(contentBlocks, anthropic.NewThinkingBlock("thinking-"+uuid.New().String()[0:6], fmt.Sprintf("%s", thinking.Raw())))
 			}
 		}
 
@@ -95,7 +95,7 @@ func ConvertOpenAIToAnthropicBetaResponse(openaiResp *openai.ChatCompletion, mod
 		if extra := choice.Message.JSON.ExtraFields; extra != nil {
 			if thinking, ok := extra["reasoning_content"]; ok {
 				// a fake signature for thinking block
-				contentBlocks = append(contentBlocks, anthropic.NewBetaThinkingBlock("thinking-"+uuid.New().String()[0:6], fmt.Sprintf("%s", thinking)))
+				contentBlocks = append(contentBlocks, anthropic.NewBetaThinkingBlock("thinking-"+uuid.New().String()[0:6], fmt.Sprintf("%s", thinking.Raw())))
 			}
 		}
 

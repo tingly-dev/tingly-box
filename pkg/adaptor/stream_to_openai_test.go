@@ -114,7 +114,7 @@ func TestSendOpenAIStreamChunk(t *testing.T) {
 		},
 	}
 
-	sendOpenAIStreamChunk(c, chunk, w)
+	sendOpenAIStreamChunk(c, chunk)
 
 	body := w.Body.String()
 	assert.Contains(t, body, "data: ")

@@ -175,3 +175,131 @@ func TestConvertOpenAIToAnthropicResponse(t *testing.T) {
 		})
 	}
 }
+
+// TestConvertOpenAIToGoogleResponse tests converting OpenAI response to Google format
+func TestConvertOpenAIToGoogleResponse(t *testing.T) {
+	t.Run("text only response", func(t *testing.T) {
+		resp := &openai.ChatCompletion{
+			Choices: []openai.ChatCompletionChoice{
+				{
+					Message: openai.ChatCompletionMessage{
+						Role:    "assistant",
+						Content: "Hello!",
+					},
+					FinishReason: "stop",
+				},
+			},
+			Usage: openai.CompletionUsage{
+				PromptTokens:     10,
+				CompletionTokens: 5,
+				TotalTokens:      15,
+			},
+		}
+
+		googleResp := ConvertOpenAIToGoogleResponse(resp)
+
+		if len(googleResp.Candidates) != 1 {
+			t.Errorf("expected 1 candidate, got %d", len(googleResp.Candidates))
+		}
+		if googleResp.Candidates[0].Content.Role != "model" {
+			t.Errorf("expected role 'model', got '%s'", googleResp.Candidates[0].Content.Role)
+		}
+		if len(googleResp.Candidates[0].Content.Parts) != 1 {
+			t.Errorf("expected 1 part, got %d", len(googleResp.Candidates[0].Content.Parts))
+		}
+		if googleResp.Candidates[0].Content.Parts[0].Text != "Hello!" {
+			t.Errorf("expected text 'Hello!', got '%s'", googleResp.Candidates[0].Content.Parts[0].Text)
+		}
+		if googleResp.UsageMetadata.PromptTokenCount != 10 {
+			t.Errorf("expected prompt tokens 10, got %d", googleResp.UsageMetadata.PromptTokenCount)
+		}
+	})
+
+	t.Run("with tool calls", func(t *testing.T) {
+		resp := &openai.ChatCompletion{
+			Choices: []openai.ChatCompletionChoice{
+				{
+					Message: openai.ChatCompletionMessage{
+						Role:    "assistant",
+						Content: "Calling tool",
+					},
+					FinishReason: "tool_calls",
+				},
+			},
+			Usage: openai.CompletionUsage{
+				PromptTokens:     10,
+				CompletionTokens: 5,
+				TotalTokens:      15,
+			},
+		}
+
+		googleResp := ConvertOpenAIToGoogleResponse(resp)
+
+		if len(googleResp.Candidates) != 1 {
+			t.Errorf("expected 1 candidate, got %d", len(googleResp.Candidates))
+		}
+		if googleResp.Candidates[0].Content.Parts[0].Text != "Calling tool" {
+			t.Errorf("expected text 'Calling tool', got '%s'", googleResp.Candidates[0].Content.Parts[0].Text)
+		}
+	})
+}
+
+// TestConvertAnthropicToGoogleResponse tests converting Anthropic response to Google format
+func TestConvertAnthropicToGoogleResponse(t *testing.T) {
+	t.Run("text only response", func(t *testing.T) {
+		resp := &anthropic.Message{
+			ID:   "msg_123",
+			Type: "message",
+			Role: "assistant",
+			Content: []anthropic.ContentBlockUnion{
+				{Type: "text", Text: "Hello!"},
+			},
+			StopReason: "end_turn",
+			Usage: anthropic.Usage{
+				InputTokens:  10,
+				OutputTokens: 5,
+			},
+		}
+
+		googleResp := ConvertAnthropicToGoogleResponse(resp)
+
+		if len(googleResp.Candidates) != 1 {
+			t.Errorf("expected 1 candidate, got %d", len(googleResp.Candidates))
+		}
+		if googleResp.Candidates[0].Content.Parts[0].Text != "Hello!" {
+			t.Errorf("expected text 'Hello!', got '%s'", googleResp.Candidates[0].Content.Parts[0].Text)
+		}
+		if googleResp.Candidates[0].FinishReason != genai.FinishReasonStop {
+			t.Errorf("expected finish reason STOP, got %v", googleResp.Candidates[0].FinishReason)
+		}
+	})
+
+	t.Run("with tool use", func(t *testing.T) {
+		resp := &anthropic.Message{
+			ID:   "msg_123",
+			Type: "message",
+			Role: "assistant",
+			Content: []anthropic.ContentBlockUnion{
+				{
+					Type:  "tool_use",
+					ID:    "toolu_123",
+					Name:  "get_weather",
+					Input: []byte(`{"loc":"NYC"}`),
+				},
+			},
+			StopReason: "tool_use",
+			Usage: anthropic.Usage{
+				InputTokens:  10,
+				OutputTokens: 5,
+			},
+		}
+
+		googleResp := ConvertAnthropicToGoogleResponse(resp)
+
+		if googleResp.Candidates[0].Content.Parts[0].FunctionCall == nil {
+			t.Error("expected function call")
+		} else if googleResp.Candidates[0].Content.Parts[0].FunctionCall.Name != "get_weather" {
+			t.Errorf("expected function name 'get_weather', got '%s'", googleResp.Candidates[0].Content.Parts[0].FunctionCall.Name)
+		}
+	})
+}

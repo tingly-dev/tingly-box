@@ -17,7 +17,20 @@ type HookFunc func(req *http.Request) error
 // oauthHookFunctions defines custom hooks for OAuth providers based on provider type
 // Each hook handles custom headers, query params, and any special request modifications
 var oauthHookFunctions = map[oauth2.ProviderType]HookFunc{
-	oauth2.ProviderClaudeCode: claudeCodeHook,
+	oauth2.ProviderClaudeCode:  claudeCodeHook,
+	oauth2.ProviderAntigravity: antigravityHook,
+}
+
+func antigravityHook(req *http.Request) error {
+	key := req.Header.Get("X-Goog-Api-Key")
+
+	req.Header = http.Header{}
+	req.Header.Set("User-Agent", "antigravity/1.11.3 Darwin/arm64")
+	req.Header.Set("Content-Type", "application/json")
+	if key != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
+	}
+	return nil
 }
 
 // claudeCodeHook applies Claude Code OAuth specific request modifications:
