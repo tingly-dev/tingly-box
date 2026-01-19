@@ -238,6 +238,22 @@ jobs:
               ${PRERELEASE_FLAG}
           fi
 
+      - name: Trigger Docker NPX build
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.TRIGGER_PAT_TOKEN }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: 'tingly-dev',
+              repo: 'tingly-box',
+              workflow_id: 'docker-npx.yml',
+              ref: 'main',
+              inputs: {
+                release_tag: '${{ needs.setup.outputs.release_tag }}'
+              }
+            });
+
   # Publish GUI NPX package
   publish-gui:
     needs: setup
