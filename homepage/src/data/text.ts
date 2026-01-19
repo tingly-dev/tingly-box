@@ -1,16 +1,14 @@
-
-
-import screenshotHome from "@/assets/Home.png";
-import screenshotCredentials from "@/assets/Credential.png";
-import screenshotRules from "@/assets/Routing.png";
 import { ArrowLeftRight, Gauge, Globe, Layers } from "lucide-react";
 
+// External image URLs from GitHub repository
+const screenshotBaseUrl = "https://raw.githubusercontent.com/tingly-dev/tingly-box/refs/heads/main/docs/images";
+
 export const screenshots = [
-    { src: screenshotHome, alt: "Tingly Box Home - Model Proxy Config" },
-    { src: screenshotCredentials, alt: "Tingly Box Credentials Management" },
-    { src: screenshotRules, alt: "Tingly Box Proxy Rules Configuration" },
-    // { src: screenshotSystem, alt: "Tingly Box Server Status & Control" },
-    // { src: screenshotHistory, alt: "Tingly Box Activity Log & History" },
+    { src: `${screenshotBaseUrl}/1-home.png`, alt: "Tingly Box Home - Model Proxy Config" },
+    { src: `${screenshotBaseUrl}/2-openai.png`, alt: "Tingly Box Credentials Management" },
+    { src: `${screenshotBaseUrl}/4-select.png`, alt: "Tingly Box Proxy Rules Configuration" },
+    // { src: `${screenshotBaseUrl}/xxx.png`, alt: "Tingly Box Server Status & Control" },
+    // { src: `${screenshotBaseUrl}/xxx.png`, alt: "Tingly Box Activity Log & History" },
 ];
 
 export const features = [
