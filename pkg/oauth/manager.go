@@ -397,11 +397,18 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 	}
 
 	// Add client_secret if possible
-	if config.ClientSecret != "" {
-		switch config.Type {
-		case ProviderCodex:
-			// ignore client secret for codex
-		default:
+
+	switch config.Type {
+	case ProviderCodex:
+		// ignore client secret for codex
+	case ProviderClaudeCode:
+		// require state for claude code
+		params["state"] = state
+		if config.ClientSecret != "" {
+			params["client_secret"] = config.ClientSecret
+		}
+	default:
+		if config.ClientSecret != "" {
 			params["client_secret"] = config.ClientSecret
 		}
 	}
