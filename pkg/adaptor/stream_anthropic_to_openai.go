@@ -15,7 +15,8 @@ import (
 )
 
 // HandleAnthropicToOpenAIStreamResponse processes Anthropic streaming events and converts them to OpenAI format
-func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.MessageNewParams, stream *anthropicstream.Stream[anthropic.MessageStreamEventUnion], responseModel string) error {
+// Returns inputTokens, outputTokens, and error for usage tracking
+func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.MessageNewParams, stream *anthropicstream.Stream[anthropic.MessageStreamEventUnion], responseModel string) (int, int, error) {
 	logrus.Info("Starting Anthropic to OpenAI streaming response handler")
 	defer func() {
 		if r := recover(); r != nil {
@@ -53,6 +54,8 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 		created     = time.Now().Unix()
 		contentText = strings.Builder{}
 		usage       *anthropic.MessageDeltaUsage
+		inputTokens int
+		outputTokens int
 	)
 
 	// Process the stream
@@ -114,6 +117,8 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 			// Message delta (includes usage info)
 			if event.Usage.InputTokens != 0 || event.Usage.OutputTokens != 0 {
 				usage = &event.Usage
+				inputTokens = int(event.Usage.InputTokens)
+				outputTokens = int(event.Usage.OutputTokens)
 			}
 
 		case "message_stop":
@@ -144,7 +149,7 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 			sendOpenAIStreamChunk(c, chunk)
 			// Send final [DONE] message
 			c.SSEvent("", "[DONE]")
-			return nil
+			return inputTokens, outputTokens, nil
 		}
 	}
 
@@ -153,7 +158,7 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 		// EOF is expected when stream ends normally
 		if errors.Is(err, io.EOF) {
 			logrus.Info("Anthropic stream ended normally (EOF)")
-			return nil
+			return inputTokens, outputTokens, nil
 		}
 		logrus.Errorf("Anthropic stream error: %v", err)
 		// Send error event
@@ -164,10 +169,10 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 				"code":    "stream_failed",
 			},
 		})
-		return nil
+		return inputTokens, outputTokens, nil
 	}
 
-	return nil
+	return inputTokens, outputTokens, nil
 }
 
 // sendOpenAIStreamChunk helper function to send a chunk in OpenAI format

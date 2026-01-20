@@ -231,6 +231,8 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 		if isStreaming {
 			stream, err := s.ForwardAnthropicStreamRequest(provider, anthropicReq)
 			if err != nil {
+				// Track error with no usage
+				s.trackUsage(c, rule, provider, actualModel, responseModel, 0, 0, true, "error", "stream_creation_failed")
 				c.JSON(http.StatusInternalServerError, ErrorResponse{
 					Error: ErrorDetail{
 						Message: "Failed to create streaming request: " + err.Error(),
@@ -240,8 +242,12 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 				return
 			}
 
-			err = adaptor.HandleAnthropicToOpenAIStreamResponse(c, &anthropicReq, stream, responseModel)
+			inputTokens, outputTokens, err := adaptor.HandleAnthropicToOpenAIStreamResponse(c, &anthropicReq, stream, responseModel)
 			if err != nil {
+				// Track usage with error status
+				if inputTokens > 0 || outputTokens > 0 {
+					s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, true, "error", "stream_handler_failed")
+				}
 				c.JSON(http.StatusInternalServerError, ErrorResponse{
 					Error: ErrorDetail{
 						Message: "Failed to create streaming request: " + err.Error(),
@@ -250,10 +256,17 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 				})
 				return
 			}
+
+			// Track successful streaming completion
+			if inputTokens > 0 || outputTokens > 0 {
+				s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, true, "success", "")
+			}
 			return
 		} else {
 			anthropicResp, err := s.ForwardAnthropicRequest(provider, anthropicReq)
 			if err != nil {
+				// Track error with no usage
+				s.trackUsage(c, rule, provider, actualModel, responseModel, 0, 0, false, "error", "forward_failed")
 				c.JSON(http.StatusInternalServerError, ErrorResponse{
 					Error: ErrorDetail{
 						Message: "Failed to forward Anthropic request: " + err.Error(),
@@ -262,6 +275,11 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 				})
 				return
 			}
+
+			// Track usage from response
+			inputTokens := int(anthropicResp.Usage.InputTokens)
+			outputTokens := int(anthropicResp.Usage.OutputTokens)
+			s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, false, "success", "")
 
 			openaiResp := adaptor.ConvertAnthropicToOpenAIResponse(anthropicResp, responseModel)
 			c.JSON(http.StatusOK, openaiResp)
@@ -432,8 +450,12 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 		chatChunk := stream.Current()
 
 		// Accumulate usage from chunks (if present)
-		if chatChunk.Usage.PromptTokens != 0 || chatChunk.Usage.CompletionTokens != 0 {
+		if chatChunk.Usage.PromptTokens != 0 {
 			inputTokens = int(chatChunk.Usage.PromptTokens)
+			hasUsage = true
+		}
+
+		if chatChunk.Usage.CompletionTokens != 0 {
 			outputTokens = int(chatChunk.Usage.CompletionTokens)
 			hasUsage = true
 		}
