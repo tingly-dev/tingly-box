@@ -98,6 +98,39 @@ const ApiKeyPage = () => {
         }
     };
 
+    // Handle force-add: skip probe and submit directly
+    const handleProviderForceAdd = async () => {
+        const providerData = {
+            name: providerFormData.name,
+            api_base: providerFormData.apiBase,
+            api_style: providerFormData.apiStyle,
+            token: providerFormData.token,
+            no_key_required: (providerFormData as any).noKeyRequired || false,
+            ...(dialogMode === 'add' && { proxy_url: (providerFormData as any).proxyUrl || '' }),
+            ...(dialogMode === 'edit' && { enabled: providerFormData.enabled }),
+        };
+
+        const result = dialogMode === 'add'
+            ? await api.addProvider(providerData, true)
+            : await api.updateProvider(providerFormData.uuid!, {
+                name: providerData.name,
+                api_base: providerData.api_base,
+                api_style: providerData.api_style,
+                token: providerData.token || undefined,
+                no_key_required: providerData.no_key_required,
+                enabled: providerData.enabled,
+                proxy_url: (providerFormData as any).proxyUrl || undefined,
+            });
+
+        if (result.success) {
+            showNotification(`Provider ${dialogMode === 'add' ? 'added' : 'updated'} successfully!`, 'success');
+            setDialogOpen(false);
+            loadProviders();
+        } else {
+            showNotification(`Failed to ${dialogMode === 'add' ? 'add' : 'update'} provider: ${result.error}`, 'error');
+        }
+    };
+
     const handleDeleteProvider = async (uuid: string) => {
         const result = await api.deleteProvider(uuid);
 
@@ -196,6 +229,7 @@ const ApiKeyPage = () => {
                 open={dialogOpen}
                 onClose={() => setDialogOpen(false)}
                 onSubmit={handleProviderSubmit}
+                onForceAdd={handleProviderForceAdd}
                 data={providerFormData}
                 onChange={(field, value) => setProviderFormData(prev => ({ ...prev, [field]: value }))}
                 mode={dialogMode}

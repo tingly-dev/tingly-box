@@ -321,10 +321,10 @@ export const api = {
     },
 
     // Provider management
-    addProvider: async (data: any): Promise<any> => {
+    addProvider: async (data: any, force: boolean = false): Promise<any> => {
         try {
             const apiInstances = await getApiInstances();
-            const response = await apiInstances.providersApi.apiV2ProvidersPost(data);
+            const response = await apiInstances.providersApi.apiV2ProvidersPost(data, force);
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {

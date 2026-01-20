@@ -146,6 +146,14 @@ export default {
       "responseTime": "Response time: {{time}}ms",
       "modelsAvailable": "{{count}} models available",
       "testResult": "Test result: {{result}}"
+    },
+    "forceAdd": {
+      "title": "Connection Check Failed",
+      "message": "Unable to verify the connection to this provider.",
+      "explanation": "Some providers may not pass standard checks but still work correctly. You can add this provider anyway.",
+      "errorDetails": "Error details",
+      "cancel": "Cancel",
+      "confirm": "Add Anyway"
     }
   },
   "providerTable": {

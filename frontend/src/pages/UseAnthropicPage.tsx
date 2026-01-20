@@ -168,6 +168,7 @@ const UseAnthropicPage: React.FC = () => {
                         open={providerDialog.providerDialogOpen}
                         onClose={providerDialog.handleCloseDialog}
                         onSubmit={providerDialog.handleProviderSubmit}
+                        onForceAdd={providerDialog.handleProviderForceAdd}
                         data={providerDialog.providerFormData}
                         onChange={providerDialog.handleFieldChange}
                         mode="add"
