@@ -67,6 +67,9 @@ func (s *Server) GetProviders(c *gin.Context) {
 
 // CreateProvider adds a new provider
 func (s *Server) CreateProvider(c *gin.Context) {
+	forceParam := c.Query("force")
+	force := forceParam == "true"
+
 	var req CreateProviderRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -95,13 +98,16 @@ func (s *Server) CreateProvider(c *gin.Context) {
 			APIStyle: req.APIStyle,
 			Token:    req.Token,
 		}
-		success, message, _, err := s.testProviderConnectivity(probeReq)
-		if err != nil || !success {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"error":   fmt.Sprintf("Provider verification failed: %s", message),
-			})
-			return
+
+		if !force {
+			success, message, _, err := s.testProviderConnectivity(probeReq)
+			if err != nil || !success {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"success": false,
+					"error":   fmt.Sprintf("Provider verification failed: %s", message),
+				})
+				return
+			}
 		}
 	}
 

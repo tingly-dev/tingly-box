@@ -594,6 +594,7 @@ func useV2Provider(s *Server, api *swagger.RouteGroup) {
 	api.POST("/providers", s.CreateProvider,
 		swagger.WithDescription("Create a new provider configuration"),
 		swagger.WithTags("providers"),
+		swagger.WithQuery("force", "bool", "Force to add without checking"),
 		swagger.WithRequestModel(CreateProviderRequest{}),
 		swagger.WithResponseModel(CreateProviderResponse{}),
 	)
