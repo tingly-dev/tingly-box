@@ -146,6 +146,19 @@ export default {
       "responseTime": "Response time: {{time}}ms",
       "modelsAvailable": "{{count}} models available",
       "testResult": "Test result: {{result}}"
+    },
+    "forceAdd": {
+      "title": "Add Provider Anyway?",
+      "providerInfo": "Please confirm your provider configuration:",
+      "message": "The connection check failed. This could be due to network issues, incorrect API key, or the provider not supporting standard verification methods.",
+      "explanation": "Some providers may not pass standard checks but still work correctly.",
+      "whyFailed": "Connection check failed:",
+      "errorDetails": "Error details",
+      "noKey": "No API key",
+      "confirmNoteTitle": "Are you sure you want to continue?",
+      "confirmNote": "Please verify that your Base URL and API Key are correct before adding. You can still add this provider, but it may not work properly if the configuration is incorrect.",
+      "cancel": "Go Back",
+      "confirm": "Confirm to Add"
     }
   },
   "providerTable": {

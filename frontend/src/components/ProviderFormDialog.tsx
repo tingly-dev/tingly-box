@@ -22,6 +22,7 @@ import { getProvidersByStyle, serviceProviders } from '../services/serviceProvid
 import api from '../services/api';
 import { OpenAI } from '@lobehub/icons';
 import { Anthropic } from '@lobehub/icons';
+import ForceAddConfirmDialog from './ForceAddConfirmDialog';
 
 export interface EnhancedProviderFormData {
     name: string;
@@ -37,6 +38,7 @@ interface PresetProviderFormDialogProps {
     open: boolean;
     onClose: () => void;
     onSubmit: (e: React.FormEvent) => void;
+    onForceAdd?: () => void;  // Optional: handler for force-add without probe
     data: EnhancedProviderFormData;
     onChange: (field: keyof EnhancedProviderFormData, value: any) => void;
     mode: 'add' | 'edit';
@@ -49,6 +51,7 @@ const ProviderFormDialog = ({
     open,
     onClose,
     onSubmit,
+    onForceAdd,
     data,
     onChange,
     mode,
@@ -71,6 +74,11 @@ const ProviderFormDialog = ({
         modelsCount?: number;
     } | null>(null);
     const [styleChangedWarning, setStyleChangedWarning] = useState(false);
+    const [showForceAddDialog, setShowForceAddDialog] = useState(false);
+    const [forceAddError, setForceAddError] = useState<{
+        message: string;
+        details?: string;
+    } | null>(null);
 
     // Sync noApiKey state with data.noKeyRequired prop
     useEffect(() => {
@@ -203,13 +211,38 @@ const ProviderFormDialog = ({
         if (shouldVerify) {
             const verified = await handleVerify();
             if (!verified) {
-                // Verification failed, don't submit
+                // Verification failed, show force-add dialog
+                setForceAddError({
+                    message: verificationResult?.message || t('providerDialog.verification.failed'),
+                    details: verificationResult?.details,
+                });
+                setShowForceAddDialog(true);
                 return;
             }
         }
 
         // Call the original onSubmit
         onSubmit(e);
+    };
+
+    // Handle force add confirmation - skip verification and submit directly
+    const handleForceAdd = () => {
+        console.log('handleForceAdd called, onForceAdd:', !!onForceAdd);
+        setShowForceAddDialog(false);
+        // Call the force-add handler if provided, otherwise fallback to onSubmit
+        if (onForceAdd) {
+            console.log('Calling onForceAdd handler');
+            onForceAdd();
+        } else {
+            console.log('No onForceAdd handler, calling onSubmit with fake event');
+            onSubmit(new Event('submit') as any);
+        }
+    };
+
+    // Handle force add cancellation
+    const handleForceAddCancel = () => {
+        setShowForceAddDialog(false);
+        setForceAddError(null);
     };
 
     return (
@@ -552,6 +585,18 @@ const ProviderFormDialog = ({
                     </DialogActions>
                 )}
             </form>
+            <ForceAddConfirmDialog
+                open={showForceAddDialog}
+                error={forceAddError}
+                providerInfo={{
+                    name: data.name,
+                    apiBase: data.apiBase,
+                    apiStyle: data.apiStyle,
+                    hasToken: !!data.token && !noApiKey,
+                }}
+                onConfirm={handleForceAdd}
+                onCancel={handleForceAddCancel}
+            />
         </Dialog>
     );
 };

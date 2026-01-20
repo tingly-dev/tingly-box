@@ -1,22 +1,18 @@
-import React, { useCallback } from 'react';
-import {Add as AddIcon, ContentCopy as CopyIcon, Edit as EditIcon, Key as KeyIcon} from '@mui/icons-material';
-import VisibilityIcon from '@mui/icons-material/Visibility';
-import {Box, Button, IconButton, Stack, Tooltip, Typography} from '@mui/material';
-import {useNavigate} from 'react-router-dom';
-import {ApiConfigRow} from '../components/ApiConfigRow';
-import {BaseUrlRow} from '../components/BaseUrlRow';
-import TemplatePage from '../components/TemplatePage.tsx';
-import PageLayout from '../components/PageLayout';
-import {api, getBaseUrl} from '../services/api';
-import type { Provider } from '../types/provider';
 import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
-import { useFunctionPanelData } from '../hooks/useFunctionPanelData';
-import { useProviderDialog } from '../hooks/useProviderDialog';
-import EmptyStateGuide from '../components/EmptyStateGuide';
-import ProviderFormDialog from '../components/ProviderFormDialog';
-import OAuthDialog from '../components/OAuthDialog';
+import { Add as AddIcon, ContentCopy as CopyIcon, Key as KeyIcon } from '@mui/icons-material';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import { Box, Button, IconButton, Stack, Tooltip } from '@mui/material';
+import React, { useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
+import { ApiConfigRow } from '../components/ApiConfigRow';
+import { BaseUrlRow } from '../components/BaseUrlRow';
+import EmptyStateGuide from '../components/EmptyStateGuide';
+import PageLayout from '../components/PageLayout';
+import TemplatePage from '../components/TemplatePage.tsx';
+import { useFunctionPanelData } from '../hooks/useFunctionPanelData';
+import { api, getBaseUrl } from '../services/api';
 
 const ruleId = "built-in-anthropic";
 const scenario = "anthropic";
@@ -35,14 +31,13 @@ const UseAnthropicPage: React.FC = () => {
     const [newlyCreatedRuleUuids, setNewlyCreatedRuleUuids] = React.useState<Set<string>>(new Set());
     const navigate = useNavigate();
 
-    // Provider dialog hook
-    const providerDialog = useProviderDialog(showNotification, {
-        defaultApiStyle: 'anthropic',
-        onProviderAdded: () => window.location.reload(),
-    });
+    const handleAddApiKeyClick = () => {
+        navigate('/api-keys?dialog=add');
+    };
 
-    // OAuth dialog state
-    const [oauthDialogOpen, setOAuthDialogOpen] = React.useState(false);
+    const handleAddOAuthClick = () => {
+        navigate('/oauth?dialog=add');
+    };
 
     const copyToClipboard = async (text: string, label: string) => {
         try {
@@ -105,7 +100,7 @@ const UseAnthropicPage: React.FC = () => {
     // const modelName = rules?.request_model;
 
     const header = (
-        <Box sx={{p: 2}}>
+        <Box sx={{ p: 2 }}>
             <BaseUrlRow
                 label="Base URL"
                 path="/tingly/anthropic"
@@ -116,15 +111,15 @@ const UseAnthropicPage: React.FC = () => {
                 onCopy={(url) => copyToClipboard(url, 'Anthropic Base URL')}
             />
             <ApiConfigRow label="API Key" showEllipsis={true}>
-                <Box sx={{display: 'flex', gap: 0.5, ml: 'auto'}}>
+                <Box sx={{ display: 'flex', gap: 0.5, ml: 'auto' }}>
                     <Tooltip title="View Token">
                         <IconButton onClick={() => setShowTokenModal(true)} size="small">
-                            <VisibilityIcon/>
+                            <VisibilityIcon />
                         </IconButton>
                     </Tooltip>
                     <Tooltip title="Copy Token">
                         <IconButton onClick={() => copyToClipboard(token, 'API Key')} size="small">
-                            <CopyIcon fontSize="small"/>
+                            <CopyIcon fontSize="small" />
                         </IconButton>
                     </Tooltip>
                 </Box>
@@ -151,98 +146,77 @@ const UseAnthropicPage: React.FC = () => {
         </Box>
     );
 
-    // Show empty state if no providers
-    if (!providers.length) {
-        return (
-            <PageLayout>
-                <CardGrid>
-                    <UnifiedCard title="Anthropic SDK Configuration" size="full">
-                        <EmptyStateGuide
-                            title="No Providers Configured"
-                            description="Add an API key or OAuth provider to get started"
-                            onAddApiKeyClick={providerDialog.handleAddProviderClick}
-                            onAddOAuthClick={() => setOAuthDialogOpen(true)}
-                        />
-                    </UnifiedCard>
-                    <ProviderFormDialog
-                        open={providerDialog.providerDialogOpen}
-                        onClose={providerDialog.handleCloseDialog}
-                        onSubmit={providerDialog.handleProviderSubmit}
-                        data={providerDialog.providerFormData}
-                        onChange={providerDialog.handleFieldChange}
-                        mode="add"
-                        isFirstProvider={providers.length === 0}
-                    />
-                    <OAuthDialog
-                        open={oauthDialogOpen}
-                        onClose={() => setOAuthDialogOpen(false)}
-                    />
-                </CardGrid>
-            </PageLayout>
-        );
-    }
+
 
     return (
-        <PageLayout>
-            <CardGrid>
-                <UnifiedCard
-                    title="Anthropic SDK Configuration"
-                    size="full"
-                    rightAction={
-                        <Stack direction="row" spacing={1}>
-                            <Tooltip title="Add new API Key">
-                                <Button
-                                    variant="outlined"
-                                    startIcon={<KeyIcon />}
-                                    onClick={providerDialog.handleAddProviderClick}
-                                    size="small"
-                                >
-                                    Add API Key
-                                </Button>
-                            </Tooltip>
-                            <Tooltip title="Create new routing rule">
-                                <Button
-                                    variant="contained"
-                                    startIcon={<AddIcon />}
-                                    onClick={handleCreateRule}
-                                    size="small"
-                                >
-                                    New Rule
-                                </Button>
-                            </Tooltip>
-                        </Stack>
-                    }
-                >
-                    {header}
-                </UnifiedCard>
-                <TemplatePage
-                    title={
-                        <Tooltip title="Use as model name in your API requests to forward">
-                            Models and Forwarding Rules
-                        </Tooltip>
-                    }
-                    rules={rules}
-                    collapsible={true}
-                    showTokenModal={showTokenModal}
-                    setShowTokenModal={setShowTokenModal}
-                    token={token}
-                    showNotification={showNotification}
-                    providers={providers}
-                    onRulesChange={(rules) => setRules(rules)}
-                    newlyCreatedRuleUuids={newlyCreatedRuleUuids}
-                    allowDeleteRule={true}
-                    onRuleDelete={handleRuleDelete}
-                />
-                <ProviderFormDialog
-                    open={providerDialog.providerDialogOpen}
-                    onClose={providerDialog.handleCloseDialog}
-                    onSubmit={providerDialog.handleProviderSubmit}
-                    data={providerDialog.providerFormData}
-                    onChange={providerDialog.handleFieldChange}
-                    mode="add"
-                    isFirstProvider={providers.length === 0}
-                />
-            </CardGrid>
+        <PageLayout loading={false}>
+            {
+                // Show empty state if no providers
+                !providers.length ?
+                    <PageLayout loading={false}>
+                        <CardGrid>
+                            <UnifiedCard title="Anthropic SDK Configuration" size="full">
+                                <EmptyStateGuide
+                                    title="No Providers Configured"
+                                    description="Add an API key or OAuth provider to get started"
+                                    onAddApiKeyClick={handleAddApiKeyClick}
+                                    onAddOAuthClick={handleAddOAuthClick}
+                                />
+                            </UnifiedCard>
+                        </CardGrid>
+                    </PageLayout>
+                    :
+                    <CardGrid>
+                        <UnifiedCard
+                            title="Anthropic SDK Configuration"
+                            size="full"
+                            rightAction={
+                                <Stack direction="row" spacing={1}>
+                                    <Tooltip title="Add new API Key">
+                                        <Button
+                                            variant="outlined"
+                                            startIcon={<KeyIcon />}
+                                            onClick={handleAddApiKeyClick}
+                                            size="small"
+                                        >
+                                            Add API Key
+                                        </Button>
+                                    </Tooltip>
+                                    <Tooltip title="Create new routing rule">
+                                        <Button
+                                            variant="contained"
+                                            startIcon={<AddIcon />}
+                                            onClick={handleCreateRule}
+                                            size="small"
+                                        >
+                                            New Rule
+                                        </Button>
+                                    </Tooltip>
+                                </Stack>
+                            }
+                        >
+                            {header}
+                        </UnifiedCard>
+                        <TemplatePage
+                            title={
+                                <Tooltip title="Use as model name in your API requests to forward">
+                                    Models and Forwarding Rules
+                                </Tooltip>
+                            }
+                            rules={rules}
+                            collapsible={true}
+                            showTokenModal={showTokenModal}
+                            setShowTokenModal={setShowTokenModal}
+                            token={token}
+                            showNotification={showNotification}
+                            providers={providers}
+                            onRulesChange={(rules) => setRules(rules)}
+                            newlyCreatedRuleUuids={newlyCreatedRuleUuids}
+                            allowDeleteRule={true}
+                            onRuleDelete={handleRuleDelete}
+                        />
+                    </CardGrid>
+            }
         </PageLayout>
     );
 };

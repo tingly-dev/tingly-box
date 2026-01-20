@@ -51,6 +51,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     const [probeResult, setProbeResult] = useState<ProbeResponse | null>(null);
     const [detailsExpanded, setDetailsExpanded] = useState(false);
     const [probeDialogOpen, setProbeDialogOpen] = useState(false);
+    const [providerName, setProviderName] = useState<string>('');
 
     // Delete confirmation state
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -91,6 +92,27 @@ export const RuleCard: React.FC<RuleCardProps> = ({
             setConfigRecord(newConfigRecord);
         }
     }, [rule, providers]);
+
+    // Fetch provider name when probe dialog opens
+    React.useEffect(() => {
+        if (probeDialogOpen && configRecord?.providers[0]?.provider) {
+            const fetchProviderName = async () => {
+                try {
+                    const providerUuid = configRecord.providers[0].provider;
+                    const result = await api.getProvider(providerUuid);
+                    if (result.success && result.data) {
+                        setProviderName(result.data.name || 'Unknown Provider');
+                    } else {
+                        setProviderName('Unknown Provider');
+                    }
+                } catch (error) {
+                    console.error('Failed to fetch provider name:', error);
+                    setProviderName('Unknown Provider');
+                }
+            };
+            fetchProviderName();
+        }
+    }, [probeDialogOpen, configRecord]);
 
     const handleProbe = useCallback(async () => {
         if (!configRecord?.providers.length || !configRecord.providers[0].provider || !configRecord.providers[0].model) {
@@ -427,11 +449,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Typography variant="h6">Connection Test Result</Typography>
                     <Typography variant="body2" color="text.secondary">
-                        {(async () => {
-                            const providerUuid = configRecord?.providers[0]?.provider;
-                            const provider = await api.getProvider(providerUuid)
-                            return `${provider?.name || 'Unknown Provider'} / ${configRecord?.providers[0]?.model || ''}`;
-                        })()}
+                        {providerName} / {configRecord?.providers[0]?.model || ''}
                     </Typography>
                 </DialogTitle>
                 <DialogContent>

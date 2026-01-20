@@ -1487,6 +1487,13 @@
         ],
         "parameters": [
           {
+            "name": "force",
+            "in": "query",
+            "description": "Force to add without checking",
+            "required": false,
+            "type": "bool"
+          },
+          {
             "name": "request",
             "in": "body",
             "description": "Request body",
@@ -4086,24 +4093,32 @@
   },
   "tags": [
     {
-      "name": "server",
-      "description": "Operations related to server"
-    },
-    {
-      "name": "rules",
-      "description": "Operations related to rules"
-    },
-    {
-      "name": "history",
-      "description": "Operations related to history"
-    },
-    {
       "name": "models",
       "description": "Operations related to models"
     },
     {
       "name": "testing",
       "description": "Operations related to testing"
+    },
+    {
+      "name": "info",
+      "description": "Operations related to info"
+    },
+    {
+      "name": "server",
+      "description": "Operations related to server"
+    },
+    {
+      "name": "history",
+      "description": "Operations related to history"
+    },
+    {
+      "name": "token",
+      "description": "Operations related to token"
+    },
+    {
+      "name": "providers",
+      "description": "Operations related to providers"
     },
     {
       "name": "oauth",
@@ -4114,24 +4129,16 @@
       "description": "Operations related to usage"
     },
     {
-      "name": "info",
-      "description": "Operations related to info"
-    },
-    {
       "name": "logs",
       "description": "Operations related to logs"
     },
     {
+      "name": "rules",
+      "description": "Operations related to rules"
+    },
+    {
       "name": "scenarios",
       "description": "Operations related to scenarios"
-    },
-    {
-      "name": "token",
-      "description": "Operations related to token"
-    },
-    {
-      "name": "providers",
-      "description": "Operations related to providers"
     }
   ]
 }

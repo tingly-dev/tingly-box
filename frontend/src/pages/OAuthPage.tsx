@@ -1,6 +1,7 @@
 import { VpnKey } from '@mui/icons-material';
 import { Alert, Box, Button, Snackbar, Stack, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { PageLayout } from '../components/PageLayout';
 import OAuthDialog from '../components/OAuthDialog.tsx';
 import OAuthDetailDialog from '../components/OAuthDetailDialog.tsx';
@@ -16,6 +17,7 @@ interface OAuthEditFormData {
 }
 
 const OAuthPage = () => {
+    const [searchParams, setSearchParams] = useSearchParams();
     const [providers, setProviders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [snackbar, setSnackbar] = useState<{
@@ -28,6 +30,17 @@ const OAuthPage = () => {
     const [oauthDialogOpen, setOAuthDialogOpen] = useState(false);
     const [oauthDetailProvider, setOAuthDetailProvider] = useState<any | null>(null);
     const [oauthDetailDialogOpen, setOAuthDetailDialogOpen] = useState(false);
+
+    // Check URL params on mount to auto-open dialog
+    useEffect(() => {
+        const dialog = searchParams.get('dialog');
+
+        if (dialog === 'add') {
+            // Clear URL params
+            setSearchParams({});
+            setOAuthDialogOpen(true);
+        }
+    }, [searchParams, setSearchParams]);
 
     useEffect(() => {
         loadProviders();
