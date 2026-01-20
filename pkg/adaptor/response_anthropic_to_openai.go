@@ -7,6 +7,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 
 	"tingly-box/internal/typ"
+	"tingly-box/pkg/adaptor/extension"
 )
 
 // ConvertAnthropicToOpenAIResponse converts an Anthropic response to OpenAI format
@@ -112,5 +113,5 @@ func ConvertAnthropicToOpenAIResponseWithProvider(
 	openaiResp := ConvertAnthropicToOpenAIResponse(anthropicResp, responseModel)
 
 	// Apply provider-specific transformations using the transform system
-	return ApplyResponseTransforms(openaiResp, provider, model)
+	return extension.ApplyResponseTransforms(openaiResp, provider, model)
 }
