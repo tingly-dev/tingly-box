@@ -26,9 +26,9 @@ type AnthropicClient struct {
 // defaultNewAnthropicClient creates a new Anthropic client wrapper
 func defaultNewAnthropicClient(provider *typ.Provider) (*AnthropicClient, error) {
 	// Handle API base URL - Anthropic SDK expects base without /v1
-	apiBase := provider.APIBase
+	apiBase := strings.TrimRight(provider.APIBase, "/")
 	if strings.HasSuffix(apiBase, "/v1") {
-		apiBase = apiBase[:len(apiBase)-3]
+		apiBase = strings.TrimSuffix(apiBase, "/v1")
 	}
 
 	options := []anthropicOption.RequestOption{
@@ -52,10 +52,12 @@ func defaultNewAnthropicClient(provider *typ.Provider) (*AnthropicClient, error)
 		if provider.ProxyURL != "" {
 			logrus.Infof("Using proxy for Anthropic client: %s", provider.ProxyURL)
 		}
-
-		options = append(options, anthropicOption.WithHTTPClient(httpClient))
 	} else {
 		httpClient = http.DefaultClient
+	}
+
+	if provider.ProxyURL != "" || provider.AuthType == typ.AuthTypeOAuth {
+		options = append(options, anthropicOption.WithHTTPClient(httpClient))
 	}
 
 	anthropicClient := anthropic.NewClient(options...)
