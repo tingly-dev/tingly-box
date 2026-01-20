@@ -189,53 +189,57 @@ func migrate20260110(c *Config) {
 	needsSave := false
 
 	// Find the source rule (built-in-cc)
-	var sourceRule *typ.Rule
+	var fallbackRule *typ.Rule
 	for i := range c.Rules {
 		if c.Rules[i].UUID == RuleUUIDBuiltinCC {
-			sourceRule = &c.Rules[i]
+			fallbackRule = &c.Rules[i]
 			break
 		}
 	}
 
 	// If source rule doesn't exist or has no services, skip migration
-	if sourceRule == nil || len(sourceRule.Services) == 0 {
+	if fallbackRule == nil || len(fallbackRule.Services) == 0 {
 		return
 	}
 
 	// built-in-cc-* rule UUIDs that should inherit from built-in-cc
-	targetRules := []string{
+	targetUUIDs := []string{
 		RuleUUIDBuiltinCCHaiku,
 		RuleUUIDBuiltinCCSonnet,
 		RuleUUIDBuiltinCCOpus,
 		RuleUUIDBuiltinCCDefault,
 	}
 
+	defaultMap := map[string]typ.Rule{}
+
+	for _, targetUUID := range targetUUIDs {
+		for _, defaultRule := range DefaultRules {
+			if targetUUID == defaultRule.UUID {
+				defaultMap[targetUUID] = defaultRule
+			}
+		}
+	}
+
 	for i := range c.Rules {
 		rule := &c.Rules[i]
 
 		// Check if this is a target rule
-		isTarget := false
-		for _, targetUUID := range targetRules {
-			if rule.UUID == targetUUID {
-				isTarget = true
-				break
-			}
-		}
-
-		if !isTarget {
+		var defaultRule typ.Rule
+		var ok bool
+		if defaultRule, ok = defaultMap[rule.UUID]; !ok {
 			continue
 		}
 
-		rule.Description = sourceRule.Description
+		rule.Description = defaultRule.Description
 
 		// If services is not empty, skip
 		if len(rule.Services) > 0 {
 			continue
 		}
 
-		// Copy services from source rule
-		rule.Services = make([]loadbalance.Service, len(sourceRule.Services))
-		copy(rule.Services, sourceRule.Services)
+		// Copy services from fallback rule
+		rule.Services = make([]loadbalance.Service, len(fallbackRule.Services))
+		copy(rule.Services, fallbackRule.Services)
 		needsSave = true
 	}
 
