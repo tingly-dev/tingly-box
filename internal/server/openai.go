@@ -413,7 +413,12 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 			// Try to send an error event if possible
 			if c.Writer != nil {
 				c.Writer.WriteHeader(http.StatusInternalServerError)
-				c.Writer.Write([]byte("data: {\"error\":{\"message\":\"Internal streaming error\",\"type\":\"internal_error\"}}\n\n"))
+				c.SSEvent("", map[string]interface{}{
+					"error": map[string]interface{}{
+						"message": "Internal streaming error",
+						"type":    "internal_error",
+					},
+				})
 				if flusher, ok := c.Writer.(http.Flusher); ok {
 					flusher.Flush()
 				}
@@ -517,7 +522,7 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 		}
 
 		// Send the chunk
-		c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", string(chunkJSON))))
+		c.SSEvent("", string(chunkJSON))
 		flusher.Flush()
 	}
 
@@ -544,11 +549,15 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 		}
 
 		errorJSON, marshalErr := json.Marshal(errorChunk)
-		if marshalErr != nil {
-			logrus.Errorf("Failed to marshal error chunk: %v", marshalErr)
-			c.Writer.Write([]byte(fmt.Sprintf("data: {\"error\":{\"message\":\"Failed to marshal error\",\"type\":\"internal_error\"}}\n\n")))
+		if marshalErr == nil {
+			c.SSEvent("", string(errorJSON))
 		} else {
-			c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", string(errorJSON))))
+			c.SSEvent("", map[string]interface{}{
+				"error": map[string]interface{}{
+					"message": "Failed to marshal error",
+					"type":    "internal_error",
+				},
+			})
 		}
 		flusher.Flush()
 		return
@@ -590,7 +599,7 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 	s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, true, "success", "")
 
 	// Send the final [DONE] message
-	c.Writer.Write([]byte("data: [DONE]\n\n"))
+	c.SSEvent("", "[DONE]")
 	flusher.Flush()
 }
 
