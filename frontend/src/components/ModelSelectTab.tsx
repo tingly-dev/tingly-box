@@ -73,7 +73,7 @@ export default function ModelSelectTab({
 }: ProviderSelectTabProps) {
     const [internalCurrentTab, setInternalCurrentTab] = useState(0);
     const [isInitialized, setIsInitialized] = useState(false);
-    const { customModels, saveCustomModel, removeCustomModel } = useCustomModels();
+    const { customModels, saveCustomModel, removeCustomModel, updateCustomModel } = useCustomModels();
     const gridLayout = useGridLayout();
 
     // In single provider mode, use only that provider
@@ -155,7 +155,12 @@ export default function ModelSelectTab({
     // Use external activeTab if provided, otherwise use internal state
     const currentTab = externalActiveTab !== undefined ? externalActiveTab : internalCurrentTab;
 
-    const [customModelDialog, setCustomModelDialog] = useState<{ open: boolean; provider: Provider | null; value: string }>({
+    const [customModelDialog, setCustomModelDialog] = useState<{
+        open: boolean;
+        provider: Provider | null;
+        value: string;
+        originalValue?: string; // Track original value when editing
+    }>({
         open: false,
         provider: null,
         value: ''
@@ -173,9 +178,15 @@ export default function ModelSelectTab({
     const handleCustomModelSave = () => {
         const customModel = customModelDialog.value?.trim();
         if (customModel && customModelDialog.provider) {
-            // Save to local storage using hook
-            if (saveCustomModel(customModelDialog.provider.uuid, customModel)) {
+            if (customModelDialog.originalValue) {
+                // Editing: use updateCustomModel to atomically replace old value with new value
+                updateCustomModel(customModelDialog.provider.uuid, customModelDialog.originalValue, customModel);
                 dispatchCustomModelUpdate(customModelDialog.provider.uuid, customModel);
+            } else {
+                // Adding new: use saveCustomModel
+                if (saveCustomModel(customModelDialog.provider.uuid, customModel)) {
+                    dispatchCustomModelUpdate(customModelDialog.provider.uuid, customModel);
+                }
             }
 
             // Then save to persistence through parent component
@@ -183,7 +194,7 @@ export default function ModelSelectTab({
                 onCustomModelSave(customModelDialog.provider, customModel);
             }
         }
-        setCustomModelDialog({ open: false, provider: null, value: '' });
+        setCustomModelDialog({ open: false, provider: null, value: '', originalValue: undefined });
     };
 
     const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
@@ -284,12 +295,13 @@ export default function ModelSelectTab({
         setCustomModelDialog({
             open: true,
             provider,
-            value: currentValue || ''
+            value: currentValue || '',
+            originalValue: currentValue // Set originalValue to track if we're editing
         });
     };
 
     const handleCustomModelCancel = () => {
-        setCustomModelDialog({ open: false, provider: null, value: '' });
+        setCustomModelDialog({ open: false, provider: null, value: '', originalValue: undefined });
     };
 
     // Auto-switch to selected provider tab and navigate to selected model on component mount (only once)
@@ -581,7 +593,7 @@ export default function ModelSelectTab({
                                     }}
                                 >
                                     {/* Custom models from local storage */}
-                                    {customModels[provider.name]?.map((customModel, index) => (
+                                    {customModels[provider.uuid]?.map((customModel, index) => (
                                         <CustomModelCard
                                             key={`localStorage-custom-model-${index}`}
                                             model={customModel}
@@ -597,7 +609,7 @@ export default function ModelSelectTab({
 
                                     {/* Persisted custom model card (from backend) */}
                                     {backendCustomModel &&
-                                        (!customModels[provider.name] || customModels[provider.name].length === 0) && (
+                                        (!customModels[provider.uuid] || customModels[provider.uuid].length === 0) && (
                                             <CustomModelCard
                                                 key="persisted-custom-model"
                                                 model={backendCustomModel}
@@ -613,7 +625,7 @@ export default function ModelSelectTab({
 
                                     {/* Currently selected custom model card (not persisted) */}
                                     {isProviderSelected && selectedModel && isCustomModel(selectedModel) &&
-                                        (!customModels[provider.name] || !customModels[provider.name].includes(selectedModel)) &&
+                                        (!customModels[provider.uuid] || !customModels[provider.uuid].includes(selectedModel)) &&
                                         selectedModel !== backendCustomModel && (
                                             <CustomModelCard
                                                 key="selected-custom-model"
@@ -693,7 +705,7 @@ export default function ModelSelectTab({
                 fullWidth
             >
                 <DialogTitle>
-                    {customModelDialog.value ? 'Edit Custom Model' : 'Add Custom Model'}
+                    {customModelDialog.originalValue ? 'Edit Custom Model' : 'Add Custom Model'}
                 </DialogTitle>
                 <DialogContent>
                     <TextField
@@ -722,7 +734,7 @@ export default function ModelSelectTab({
                         variant="contained"
                         disabled={!customModelDialog.value?.trim()}
                     >
-                        {customModelDialog.value ? 'Update' : 'Add'}
+                        {customModelDialog.originalValue ? 'Update' : 'Add'}
                     </Button>
                 </DialogActions>
             </Dialog>
