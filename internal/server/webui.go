@@ -42,7 +42,6 @@ func GetGlobalServer() *Server {
 // Init sets up Server routes and templates on the main server engine
 func (s *Server) UseUIEndpoints() {
 	// UI page routes
-	s.engine.GET("/home", s.UseIndexHTML)
 	s.engine.GET("/provider", s.UseIndexHTML)
 	s.engine.GET("/api-keys", s.UseIndexHTML)
 	s.engine.GET("/oauth", s.UseIndexHTML)

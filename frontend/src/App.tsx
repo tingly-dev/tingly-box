@@ -4,17 +4,16 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider } from './contexts/AuthContext';
 import Layout from './layout/Layout';
-import Dashboard from './pages/Dashboard';
-import Home from './pages/Home';
-import Login from './pages/Login';
 import ApiKeyPage from './pages/ApiKeyPage';
+import Dashboard from './pages/Dashboard';
+import Login from './pages/Login';
+import ModelTestPage from './pages/ModelTestPage';
 import OAuthPage from './pages/OAuthPage';
 import System from './pages/System';
-import UseOpenAIPage from './pages/UseOpenAIPage';
+import UsageDashboardPage from './pages/UsageDashboardPage';
 import UseAnthropicPage from './pages/UseAnthropicPage';
 import UseClaudeCodePage from './pages/UseClaudeCodePage';
-import ModelTestPage from './pages/ModelTestPage';
-import UsageDashboardPage from './pages/UsageDashboardPage';
+import UseOpenAIPage from './pages/UseOpenAIPage';
 import theme from './theme';
 
 function App() {
@@ -32,7 +31,6 @@ function App() {
                                     <Layout>
                                         <Routes>
                                             <Route path="/" element={<Dashboard />} />
-                                            <Route path="/home" element={<Home />} />
                                             {/* Function panel routes */}
                                             <Route path="/use-openai" element={<UseOpenAIPage />} />
                                             <Route path="/use-anthropic" element={<UseAnthropicPage />} />
