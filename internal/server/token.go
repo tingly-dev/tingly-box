@@ -4,8 +4,91 @@ import (
 	"fmt"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/openai/openai-go/v3"
 	"github.com/tiktoken-go/tokenizer"
 )
+
+// estimateInputTokens estimates input tokens from OpenAI request using tiktoken
+func estimateInputTokens(req *openai.ChatCompletionNewParams) (int, error) {
+	// Get the encoding for the model (default to O200kBase which is used by GPT-4o and above)
+	enc, err := tokenizer.Get(tokenizer.O200kBase)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get tokenizer: %w", err)
+	}
+
+	totalTokens := 0
+
+	// Count tokens in messages
+	for _, msg := range req.Messages {
+		// Count role
+		role := msg.GetRole()
+		if role != nil {
+			count, err := enc.Count(*role)
+			if err != nil {
+				count = len(*role) / 4
+			}
+			totalTokens += count
+		}
+
+		// Count content
+		content := msg.GetContent()
+		switch content.AsAny().(type) {
+		case *string:
+			if s := content.AsAny().(*string); s != nil {
+				count, err := enc.Count(*s)
+				if err != nil {
+					count = len(*s) / 4
+				}
+				totalTokens += count
+			}
+		case *[]openai.ChatCompletionContentPartTextParam:
+			if parts := content.AsAny().(*[]openai.ChatCompletionContentPartTextParam); parts != nil {
+				for _, part := range *parts {
+					count, err := enc.Count(part.Text)
+					if err != nil {
+						count = len(part.Text) / 4
+					}
+					totalTokens += count
+				}
+			}
+		case *[]openai.ChatCompletionContentPartUnionParam:
+			if parts := content.AsAny().(*[]openai.ChatCompletionContentPartUnionParam); parts != nil {
+				for _, part := range *parts {
+					if part.OfText != nil {
+						count, err := enc.Count(part.OfText.Text)
+						if err != nil {
+							count = len(part.OfText.Text) / 4
+						}
+						totalTokens += count
+					}
+				}
+			}
+		}
+	}
+
+	// Add some overhead for the request format
+	totalTokens += 3
+
+	return totalTokens, nil
+}
+
+// estimateOutputTokens estimates output tokens from accumulated content
+func estimateOutputTokens(content string) int {
+	// Get the encoding
+	enc, err := tokenizer.Get(tokenizer.O200kBase)
+	if err != nil {
+		// Fallback to character count / 4
+		return len(content) / 4
+	}
+
+	count, err := enc.Count(content)
+	if err != nil {
+		// Fallback to character count / 4
+		return len(content) / 4
+	}
+
+	return count
+}
 
 // countTokensWithTiktoken approximates token count for OpenAI-style providers using tiktoken
 func countTokensWithTiktoken(model string, messages []anthropic.MessageParam, system []anthropic.TextBlockParam) (int, error) {

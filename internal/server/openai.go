@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
@@ -392,14 +393,15 @@ func (s *Server) handleStreamingRequest(c *gin.Context, provider *typ.Provider, 
 	}
 
 	// Handle the streaming response
-	s.handleOpenAIStreamResponse(c, stream, responseModel, actualModel, rule, provider)
+	s.handleOpenAIStreamResponse(c, stream, req, responseModel, actualModel, rule, provider)
 }
 
 // handleOpenAIStreamResponse processes the streaming response and sends it to the client
-func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.Stream[openai.ChatCompletionChunk], responseModel, actualModel string, rule *typ.Rule, provider *typ.Provider) {
+func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.Stream[openai.ChatCompletionChunk], req *openai.ChatCompletionNewParams, responseModel, actualModel string, rule *typ.Rule, provider *typ.Provider) {
 	// Accumulate usage from stream chunks
 	var inputTokens, outputTokens int
 	var hasUsage bool
+	var contentBuilder strings.Builder
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -467,6 +469,11 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 
 		choice := chatChunk.Choices[0]
 
+		// Accumulate content for estimation
+		if choice.Delta.Content != "" {
+			contentBuilder.WriteString(choice.Delta.Content)
+		}
+
 		// Build delta map - include all fields, JSON marshaling will handle empty values
 		delta := map[string]interface{}{
 			"role":          choice.Delta.Role,
@@ -518,10 +525,14 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 	if err := stream.Err(); err != nil {
 		logrus.Errorf("Stream error: %v", err)
 
-		// Track usage with error status
-		if hasUsage {
-			s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, true, "error", "stream_error")
+		// If no usage from stream, estimate it
+		if !hasUsage {
+			inputTokens, _ = estimateInputTokens(req)
+			outputTokens = estimateOutputTokens(contentBuilder.String())
 		}
+
+		// Track usage with error status
+		s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, true, "error", "stream_error")
 
 		// Send error event
 		errorChunk := map[string]interface{}{
@@ -544,9 +555,13 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 	}
 
 	// Track successful streaming completion
-	if hasUsage {
-		s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, true, "success", "")
+	// If no usage from stream, estimate it
+	if !hasUsage {
+		inputTokens, _ = estimateInputTokens(req)
+		outputTokens = estimateOutputTokens(contentBuilder.String())
 	}
+
+	s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, true, "success", "")
 
 	// Send the final [DONE] message
 	c.Writer.Write([]byte("data: [DONE]\n\n"))
