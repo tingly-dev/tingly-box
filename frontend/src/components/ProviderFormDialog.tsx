@@ -585,6 +585,12 @@ const ProviderFormDialog = ({
             <ForceAddConfirmDialog
                 open={showForceAddDialog}
                 error={forceAddError}
+                providerInfo={{
+                    name: data.name,
+                    apiBase: data.apiBase,
+                    apiStyle: data.apiStyle,
+                    hasToken: !!data.token && !noApiKey,
+                }}
                 onConfirm={handleForceAdd}
                 onCancel={handleForceAddCancel}
             />
