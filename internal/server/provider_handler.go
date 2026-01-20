@@ -111,16 +111,6 @@ func (s *Server) CreateProvider(c *gin.Context) {
 		}
 	}
 
-	// check existing
-	_, err := s.config.GetProviderByName(req.Name)
-	if err == nil {
-		c.JSON(http.StatusConflict, gin.H{
-			"success": false,
-			"error":   fmt.Sprintf("provider with name '%s' already exists", req.Name),
-		})
-		return
-	}
-
 	// Set default enabled status if not provided
 	if !req.Enabled {
 		req.Enabled = true
