@@ -173,7 +173,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req AnthropicMessagesReques
 
 		} else {
 			// Handle non-streaming request
-			openaiReq := adaptor.ConvertAnthropicToOpenAIRequest(&req.MessageNewParams, true)
+			openaiReq, _ := adaptor.ConvertAnthropicToOpenAIRequest(&req.MessageNewParams, true)
 			response, err := s.forwardOpenAIRequest(provider, openaiReq)
 			if err != nil {
 				SendForwardingError(c, err)

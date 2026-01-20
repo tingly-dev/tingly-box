@@ -8,8 +8,17 @@ import (
 	"github.com/openai/openai-go/v3"
 )
 
+// OpenAIConfig contains additional metadata that may be used by provider transforms
+type OpenAIConfig struct {
+	// HasThinking indicates whether the request contains thinking content
+	// This can be used by providers like DeepSeek to handle reasoning_content
+	HasThinking bool
+
+	// Future fields can be added here as needed for provider-specific transformations
+}
+
 // ProviderTransform applies provider-specific transformations to OpenAI requests
-type ProviderTransform func(*openai.ChatCompletionNewParams, *typ.Provider, string) *openai.ChatCompletionNewParams
+type ProviderTransform func(*openai.ChatCompletionNewParams, *typ.Provider, string, *OpenAIConfig) *openai.ChatCompletionNewParams
 
 // providerConfig maps APIBase patterns to their transforms
 type providerConfig struct {
@@ -52,9 +61,9 @@ func GetProviderTransform(provider *typ.Provider) ProviderTransform {
 
 // ApplyProviderTransforms applies provider-specific transformations
 // Falls back to default handling if no specific transform found
-func ApplyProviderTransforms(req *openai.ChatCompletionNewParams, provider *typ.Provider, model string) *openai.ChatCompletionNewParams {
+func ApplyProviderTransforms(req *openai.ChatCompletionNewParams, provider *typ.Provider, model string, config *OpenAIConfig) *openai.ChatCompletionNewParams {
 	if transform := GetProviderTransform(provider); transform != nil {
-		return transform(req, provider, model)
+		return transform(req, provider, model, config)
 	}
 	// Default: no transformation needed
 	return req

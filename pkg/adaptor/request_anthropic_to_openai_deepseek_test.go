@@ -154,7 +154,7 @@ func TestDeepSeekRequestConversion(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			openaiReq := ConvertAnthropicToOpenAIRequest(&tt.anthropicReq, false)
+			openaiReq, _ := ConvertAnthropicToOpenAIRequest(&tt.anthropicReq, false)
 
 			// Check all assistant messages have reasoning_content
 			for i, msg := range openaiReq.Messages {

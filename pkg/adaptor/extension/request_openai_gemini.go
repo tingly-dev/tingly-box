@@ -10,19 +10,19 @@ import (
 // This includes:
 // - Subset conversion for content blocks
 // - Extra thinking period handling
-func applyGeminiTransform(req *openai.ChatCompletionNewParams, provider *typ.Provider, model string) *openai.ChatCompletionNewParams {
+func applyGeminiTransform(req *openai.ChatCompletionNewParams, provider *typ.Provider, model string, config *OpenAIConfig) *openai.ChatCompletionNewParams {
 	return applyGeminiSubsetTransform(req, model)
 }
 
 // applyGeminiOpenRouterTransform handles Gemini via OpenRouter
 // This applies OpenRouter-specific subset conversion
-func applyGeminiOpenRouterTransform(req *openai.ChatCompletionNewParams, provider *typ.Provider, model string) *openai.ChatCompletionNewParams {
+func applyGeminiOpenRouterTransform(req *openai.ChatCompletionNewParams, provider *typ.Provider, model string, config *OpenAIConfig) *openai.ChatCompletionNewParams {
 	return applyGeminiSubsetTransform(req, model)
 }
 
 // applyGeminiPoeTransform handles Gemini via Poe
 // This applies Poe-specific subset conversion
-func applyGeminiPoeTransform(req *openai.ChatCompletionNewParams, provider *typ.Provider, model string) *openai.ChatCompletionNewParams {
+func applyGeminiPoeTransform(req *openai.ChatCompletionNewParams, provider *typ.Provider, model string, config *OpenAIConfig) *openai.ChatCompletionNewParams {
 	return applyGeminiSubsetTransform(req, model)
 }
 
