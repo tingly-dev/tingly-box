@@ -1,8 +1,9 @@
-package adaptor
+package extension
 
 import (
-	"github.com/openai/openai-go/v3"
 	"tingly-box/internal/typ"
+
+	"github.com/openai/openai-go/v3"
 )
 
 // applyGeminiTransform handles official Google Gemini API transformations

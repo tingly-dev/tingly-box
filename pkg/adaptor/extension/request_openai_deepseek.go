@@ -1,10 +1,11 @@
-package adaptor
+package extension
 
 import (
 	"encoding/json"
 
-	"github.com/openai/openai-go/v3"
 	"tingly-box/internal/typ"
+
+	"github.com/openai/openai-go/v3"
 )
 
 // applyDeepSeekTransform converts x_thinking field to reasoning_content for DeepSeek
@@ -14,7 +15,7 @@ func applyDeepSeekTransform(req *openai.ChatCompletionNewParams, provider *typ.P
 	for i := range req.Messages {
 		if req.Messages[i].OfAssistant != nil {
 			// Convert the message to map to check/modify fields
-			msgMap, err := messageToMap(req.Messages[i])
+			msgMap, err := MessageToMap(req.Messages[i])
 			if err != nil {
 				continue
 			}
@@ -42,8 +43,8 @@ func applyDeepSeekTransform(req *openai.ChatCompletionNewParams, provider *typ.P
 	return req
 }
 
-// messageToMap converts a ChatCompletionMessageParamUnion to a map for modification
-func messageToMap(msg openai.ChatCompletionMessageParamUnion) (map[string]interface{}, error) {
+// MessageToMap converts a ChatCompletionMessageParamUnion to a map for modification
+func MessageToMap(msg openai.ChatCompletionMessageParamUnion) (map[string]interface{}, error) {
 	msgBytes, err := json.Marshal(msg)
 	if err != nil {
 		return nil, err

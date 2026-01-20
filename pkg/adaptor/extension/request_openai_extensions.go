@@ -1,10 +1,11 @@
-package adaptor
+package extension
 
 import (
 	"strings"
 
-	"github.com/openai/openai-go/v3"
 	"tingly-box/internal/typ"
+
+	"github.com/openai/openai-go/v3"
 )
 
 // ProviderTransform applies provider-specific transformations to OpenAI requests

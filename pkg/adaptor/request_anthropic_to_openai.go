@@ -8,8 +8,9 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/shared"
-	
+
 	"tingly-box/internal/typ"
+	"tingly-box/pkg/adaptor/extension"
 )
 
 type handler func(map[string]interface{}) map[string]interface{}
@@ -327,9 +328,9 @@ func convertAnthropicAssistantMessageToOpenAI(msg anthropic.MessageParam) openai
 	if len(toolCalls) > 0 {
 		// Use JSON marshaling to create a message with tool_calls
 		msgMap := map[string]interface{}{
-			"role":        "assistant",
-			"content":     textContent,
-			"x_thinking":  thinking, // Preserved for provider transforms (e.g., DeepSeek)
+			"role":       "assistant",
+			"content":    textContent,
+			"x_thinking": thinking, // Preserved for provider transforms (e.g., DeepSeek)
 		}
 		msgMap["tool_calls"] = toolCalls
 
@@ -341,9 +342,9 @@ func convertAnthropicAssistantMessageToOpenAI(msg anthropic.MessageParam) openai
 
 	// Simple text message
 	msgMap := map[string]interface{}{
-		"role":        "assistant",
-		"content":     textContent,
-		"x_thinking":  thinking, // Preserved for provider transforms
+		"role":       "assistant",
+		"content":    textContent,
+		"x_thinking": thinking, // Preserved for provider transforms
 	}
 	msgBytes, _ := json.Marshal(msgMap)
 	var result openai.ChatCompletionMessageParamUnion
@@ -676,9 +677,9 @@ func convertAnthropicBetaAssistantMessageToOpenAI(msg anthropic.BetaMessageParam
 	if len(toolCalls) > 0 {
 		// Use JSON marshaling to create a message with tool_calls
 		msgMap := map[string]interface{}{
-			"role":        "assistant",
-			"content":     textContent,
-			"x_thinking":  thinking, // Preserved for provider transforms (e.g., DeepSeek)
+			"role":       "assistant",
+			"content":    textContent,
+			"x_thinking": thinking, // Preserved for provider transforms (e.g., DeepSeek)
 		}
 		msgMap["tool_calls"] = toolCalls
 
@@ -690,9 +691,9 @@ func convertAnthropicBetaAssistantMessageToOpenAI(msg anthropic.BetaMessageParam
 
 	// Simple text message
 	msgMap := map[string]interface{}{
-		"role":        "assistant",
-		"content":     textContent,
-		"x_thinking":  thinking, // Preserved for provider transforms
+		"role":       "assistant",
+		"content":    textContent,
+		"x_thinking": thinking, // Preserved for provider transforms
 	}
 	msgBytes, _ := json.Marshal(msgMap)
 	var result openai.ChatCompletionMessageParamUnion
@@ -772,7 +773,7 @@ func ConvertAnthropicToOpenAIRequestWithProvider(
 	openaiReq := ConvertAnthropicToOpenAIRequest(anthropicReq, compatible)
 
 	// Apply provider-specific transforms
-	openaiReq = ApplyProviderTransforms(openaiReq, provider, model)
+	openaiReq = extension.ApplyProviderTransforms(openaiReq, provider, model)
 
 	// Clean up temporary fields (e.g., x_thinking)
 	cleanupTempFields(openaiReq)
@@ -792,7 +793,7 @@ func ConvertAnthropicBetaToOpenAIRequestWithProvider(
 	openaiReq := ConvertAnthropicBetaToOpenAIRequest(anthropicReq, compatible)
 
 	// Apply provider-specific transforms
-	openaiReq = ApplyProviderTransforms(openaiReq, provider, model)
+	openaiReq = extension.ApplyProviderTransforms(openaiReq, provider, model)
 
 	// Clean up temporary fields (e.g., x_thinking)
 	cleanupTempFields(openaiReq)
@@ -805,7 +806,7 @@ func cleanupTempFields(req *openai.ChatCompletionNewParams) {
 	for i := range req.Messages {
 		if req.Messages[i].OfAssistant != nil {
 			// Convert to map to remove temporary fields
-			msgMap, err := messageToMap(req.Messages[i])
+			msgMap, err := extension.MessageToMap(req.Messages[i])
 			if err != nil {
 				continue
 			}
