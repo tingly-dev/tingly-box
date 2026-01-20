@@ -555,10 +555,36 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 	}
 
 	// Track successful streaming completion
-	// If no usage from stream, estimate it
+	// If no usage from stream, estimate it and send to client
 	if !hasUsage {
 		inputTokens, _ = estimateInputTokens(req)
 		outputTokens = estimateOutputTokens(contentBuilder.String())
+
+		// Send estimated usage as final chunk
+		usageChunk := map[string]interface{}{
+			"id":      "chatcmpl-estimated",
+			"object":  "chat.completion.chunk",
+			"created": 0,
+			"model":   responseModel,
+			"choices": []map[string]interface{}{
+				{
+					"index":         0,
+					"delta":         map[string]interface{}{},
+					"finish_reason": nil,
+				},
+			},
+			"usage": map[string]interface{}{
+				"prompt_tokens":     inputTokens,
+				"completion_tokens": outputTokens,
+				"total_tokens":      inputTokens + outputTokens,
+			},
+		}
+
+		usageChunkJSON, err := json.Marshal(usageChunk)
+		if err == nil {
+			c.SSEvent("", usageChunkJSON)
+			flusher.Flush()
+		}
 	}
 
 	s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, true, "success", "")
