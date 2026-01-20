@@ -237,9 +237,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
                         onRefreshProvider={handleRefreshModels}
                         collapsible={collapsible}
                         initiallyExpanded={
-                            newlyCreatedRuleUuids?.has(rule.uuid) ||
-                            !collapsible ||
-                            rules.length === 1
+                            collapsible
                         }
                         onModelSelectOpen={openModelSelectDialog}
                         allowDeleteRule={allowDeleteRule}
