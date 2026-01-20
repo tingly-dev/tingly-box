@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
@@ -402,6 +403,7 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 	var inputTokens, outputTokens int
 	var hasUsage bool
 	var contentBuilder strings.Builder
+	var firstChunkID string // Store the first chunk ID for usage estimation
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -455,6 +457,11 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 	// Process the stream
 	for stream.Next() {
 		chatChunk := stream.Current()
+
+		// Store the first chunk ID for usage estimation
+		if firstChunkID == "" && chatChunk.ID != "" {
+			firstChunkID = chatChunk.ID
+		}
 
 		// Accumulate usage from chunks (if present)
 		if chatChunk.Usage.PromptTokens != 0 {
@@ -569,9 +576,15 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 		inputTokens, _ = estimateInputTokens(req)
 		outputTokens = estimateOutputTokens(contentBuilder.String())
 
+		// Use the first chunk ID, or generate one if not available
+		chunkID := firstChunkID
+		if chunkID == "" {
+			chunkID = fmt.Sprintf("chatcmpl-%d", time.Now().Unix())
+		}
+
 		// Send estimated usage as final chunk
 		usageChunk := map[string]interface{}{
-			"id":      "chatcmpl-estimated",
+			"id":      chunkID,
 			"object":  "chat.completion.chunk",
 			"created": 0,
 			"model":   responseModel,
