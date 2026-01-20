@@ -72,6 +72,8 @@ export const useProviderDialog = (
 
     // Handle force-add: skip probe and submit directly
     const handleProviderForceAdd = async () => {
+        console.log('Force add called with data:', providerFormData);
+
         const providerData = {
             name: providerFormData.name,
             api_base: providerFormData.apiBase,
@@ -81,13 +83,16 @@ export const useProviderDialog = (
             proxy_url: providerFormData.proxyUrl,
         };
 
+        console.log('Calling api.addProvider with force=true:', providerData);
         const result = await api.addProvider(providerData, true);
+        console.log('addProvider result:', result);
 
         if (result.success) {
             showNotification('API Key added successfully!', 'success');
             setProviderDialogOpen(false);
             onProviderAdded?.();
         } else {
+            console.error('Force add failed:', result);
             showNotification(`Failed to add API Key: ${result.error}`, 'error');
         }
     };

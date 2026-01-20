@@ -1,4 +1,4 @@
-import { WarningAmber, CheckCircle, Info } from '@mui/icons-material';
+import { WarningAmber, Info } from '@mui/icons-material';
 import {
     Alert,
     Box,
@@ -39,10 +39,9 @@ const ForceAddConfirmDialog: React.FC<ForceAddConfirmDialogProps> = ({
 }) => {
     const { t } = useTranslation();
 
-    // Mask token for display (show first 8 chars only)
-    const maskToken = (token: string) => {
-        if (!token) return '';
-        return token.length > 8 ? `${token.slice(0, 8)}...` : token;
+    const handleConfirm = () => {
+        console.log('ForceAddConfirmDialog onConfirm called');
+        onConfirm();
     };
 
     return (
@@ -152,7 +151,7 @@ const ForceAddConfirmDialog: React.FC<ForceAddConfirmDialogProps> = ({
                     {t('providerDialog.forceAdd.cancel')}
                 </Button>
                 <Button
-                    onClick={onConfirm}
+                    onClick={handleConfirm}
                     variant="contained"
                     color="warning"
                     autoFocus

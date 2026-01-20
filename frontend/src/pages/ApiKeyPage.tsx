@@ -1,6 +1,7 @@
 import { Add } from '@mui/icons-material';
 import { Alert, Box, Button, Snackbar, Stack, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { PageLayout } from '../components/PageLayout';
 import ProviderFormDialog from '../components/ProviderFormDialog.tsx';
 import { type ProviderFormData } from '../components/ProviderFormDialog.tsx';
@@ -9,6 +10,7 @@ import { api } from '../services/api';
 import ApiKeyTable from '../components/ApiKeyTable.tsx';
 
 const ApiKeyPage = () => {
+    const [searchParams, setSearchParams] = useSearchParams();
     const [providers, setProviders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [snackbar, setSnackbar] = useState<{
@@ -28,6 +30,33 @@ const ApiKeyPage = () => {
         token: '',
         enabled: true,
     });
+
+    // Check URL params on mount to auto-open dialog
+    useEffect(() => {
+        const dialog = searchParams.get('dialog');
+        const style = searchParams.get('style') as 'openai' | 'anthropic' | null;
+
+        if (dialog === 'add') {
+            // Clear URL params
+            setSearchParams({});
+
+            // Set default API style from URL
+            const apiStyle = style === 'openai' || style === 'anthropic' ? style : undefined;
+
+            setDialogMode('add');
+            setProviderFormData({
+                uuid: undefined,
+                name: '',
+                apiBase: '',
+                apiStyle: apiStyle,
+                token: '',
+                enabled: true,
+                noKeyRequired: false,
+                proxyUrl: '',
+            } as any);
+            setDialogOpen(true);
+        }
+    }, [searchParams, setSearchParams]);
 
     useEffect(() => {
         loadProviders();
