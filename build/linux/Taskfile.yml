@@ -117,3 +117,24 @@ tasks:
   run:
     cmds:
       - '{{.BIN_DIR}}/{{.APP_NAME}}'
+
+  build:arm64:
+    summary: Builds the application for Linux ARM64
+    deps:
+      - task: common:go:mod:tidy
+      - task: common:build:frontend
+        vars:
+          BUILD_FLAGS:
+            ref: .BUILD_FLAGS
+          PRODUCTION:
+            ref: .PRODUCTION
+      - task: common:generate:icons
+    cmds:
+      - go build {{.BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}}-arm64
+    vars:
+      BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production -trimpath -buildvcs=false -ldflags="-w -s"{{else}}-buildvcs=false -gcflags=all="-l"{{end}}'
+    env:
+      GOOS: linux
+      CGO_ENABLED: 1
+      GOARCH: arm64
+      PRODUCTION: '{{.PRODUCTION | default "false"}}'

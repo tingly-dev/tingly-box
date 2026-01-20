@@ -160,10 +160,13 @@
       "pricing_doc": "https://api-docs.deepseek.com/quick_start/pricing",
       "base_url_openai": "https://api.deepseek.com/v1",
       "base_url_anthropic": "https://api.deepseek.com/anthropic",
-      "models": [],
+      "models": [
+        "deepseek-chat",
+        "deepseek-reasoner"
+      ],
       "model_limits": {
-        "deepseek-chat": 8192,
-        "deepseek-coder": 8192
+        "deepseek-chat": 4000,
+        "deepseek-reasoner": 32000
       },
       "supports_models_endpoint": true
     },
@@ -559,7 +562,22 @@
       "base_url_anthropic": "https://api.xiaomimimo.com/anthropic",
       "models": [
         "mimo-v2-flash"
-      ],
+      ]
+    },
+    "open_code": {
+      "id": "open_code",
+      "name": "OpenCode Zen",
+      "status": "active",
+      "valid": true,
+      "website": "https://opencode.ai",
+      "description": "OpenCode Zen - tested and verified models provided by the OpenCode team",
+      "type": "reseller",
+      "api_doc": "https://opencode.ai/docs/providers/",
+      "model_doc": "https://opencode.ai/docs/providers/",
+      "pricing_doc": "https://opencode.ai/docs/providers/",
+      "base_url_openai": "https://opencode.ai/zen/v1",
+      "base_url_anthropic": null,
+      "models": [],
       "model_limits": {},
       "supports_models_endpoint": true
     }

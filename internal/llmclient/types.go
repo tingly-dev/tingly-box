@@ -6,6 +6,7 @@ type ProviderType string
 const (
 	ProviderTypeOpenAI    ProviderType = "openai"
 	ProviderTypeAnthropic ProviderType = "anthropic"
+	ProviderTypeGoogle    ProviderType = "google"
 )
 
 // Client is the unified interface for AI provider clients

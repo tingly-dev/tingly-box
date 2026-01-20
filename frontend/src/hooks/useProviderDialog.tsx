@@ -12,6 +12,7 @@ interface UseProviderDialogReturn {
     providerFormData: EnhancedProviderFormData;
     handleAddProviderClick: () => void;
     handleProviderSubmit: (e: React.FormEvent) => Promise<void>;
+    handleProviderForceAdd: () => Promise<void>;
     handleCloseDialog: () => void;
     handleFieldChange: (field: keyof EnhancedProviderFormData, value: any) => void;
 }
@@ -69,6 +70,33 @@ export const useProviderDialog = (
         }
     };
 
+    // Handle force-add: skip probe and submit directly
+    const handleProviderForceAdd = async () => {
+        console.log('Force add called with data:', providerFormData);
+
+        const providerData = {
+            name: providerFormData.name,
+            api_base: providerFormData.apiBase,
+            api_style: providerFormData.apiStyle,
+            token: providerFormData.token,
+            no_key_required: providerFormData.noKeyRequired,
+            proxy_url: providerFormData.proxyUrl,
+        };
+
+        console.log('Calling api.addProvider with force=true:', providerData);
+        const result = await api.addProvider(providerData, true);
+        console.log('addProvider result:', result);
+
+        if (result.success) {
+            showNotification('API Key added successfully!', 'success');
+            setProviderDialogOpen(false);
+            onProviderAdded?.();
+        } else {
+            console.error('Force add failed:', result);
+            showNotification(`Failed to add API Key: ${result.error}`, 'error');
+        }
+    };
+
     const handleCloseDialog = () => {
         setProviderDialogOpen(false);
     };
@@ -82,6 +110,7 @@ export const useProviderDialog = (
         providerFormData,
         handleAddProviderClick,
         handleProviderSubmit,
+        handleProviderForceAdd,
         handleCloseDialog,
         handleFieldChange,
     };

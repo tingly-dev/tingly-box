@@ -23,8 +23,8 @@ import (
 
 const (
 	// URL templates for displaying to users
-	webUITpl             = "%s://localhost:%d/home"
-	webUITokenTpl        = "%s://localhost:%d/home?token=%s"
+	webUITpl             = "%s://localhost:%d/"
+	webUITokenTpl        = "%s://localhost:%d/?token=%s"
 	openAIEndpointTpl    = "%s://localhost:%d/tingly/openai/v1/chat/completions"
 	anthropicEndpointTpl = "%s://localhost:%d/tingly/anthropic/v1/messages"
 )

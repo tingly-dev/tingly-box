@@ -1,6 +1,5 @@
 import { Add, VpnKey } from '@mui/icons-material';
 import { Box, Button, Stack, Typography } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
 
 interface EmptyStateGuideProps {
     title?: string;
@@ -17,28 +16,12 @@ const EmptyStateGuide: React.FC<EmptyStateGuideProps> = ({
     onAddApiKeyClick,
     onAddOAuthClick,
 }) => {
-    const navigate = useNavigate();
-
-    const handleAddApiKeyClick = () => {
-        if (onAddApiKeyClick) {
-            onAddApiKeyClick();
-        }
-    };
-
-    const handleAddOAuthClick = () => {
-        if (onAddOAuthClick) {
-            onAddOAuthClick();
-        } else {
-            navigate('/oauth');
-        }
-    };
-
     return (
         <Box textAlign="center" py={8} width="100%">
             <Button
                 variant="contained"
                 startIcon={<Add />}
-                onClick={handleAddApiKeyClick}
+                onClick={onAddApiKeyClick}
                 size="large"
                 sx={{
                     backgroundColor: 'primary.main',
@@ -65,16 +48,16 @@ const EmptyStateGuide: React.FC<EmptyStateGuideProps> = ({
                 <Button
                     variant="contained"
                     startIcon={<Add />}
-                    onClick={handleAddApiKeyClick}
+                    onClick={onAddApiKeyClick}
                     size="large"
                 >
                     Add API Key
                 </Button>
-                {showOAuthButton && (
+                {showOAuthButton && onAddOAuthClick && (
                     <Button
                         variant="outlined"
                         startIcon={<VpnKey />}
-                        onClick={handleAddOAuthClick}
+                        onClick={onAddOAuthClick}
                         size="large"
                     >
                         Add OAuth

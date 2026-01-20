@@ -31,10 +31,9 @@
 ```bash
 # Install and run
 npx tingly-box@latest start
-
-# Or preview GUI version (MacOS ARM / M-Chip only)
-npx tingly-box-gui@latest
 ```
+
+> if any trouble, please check tingly-box process and port 12580 and confirm to kill them.
 
 **From source code**
 

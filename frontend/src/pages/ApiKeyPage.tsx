@@ -1,6 +1,7 @@
 import { Add } from '@mui/icons-material';
 import { Alert, Box, Button, Snackbar, Stack, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { PageLayout } from '../components/PageLayout';
 import ProviderFormDialog from '../components/ProviderFormDialog.tsx';
 import { type ProviderFormData } from '../components/ProviderFormDialog.tsx';
@@ -9,6 +10,7 @@ import { api } from '../services/api';
 import ApiKeyTable from '../components/ApiKeyTable.tsx';
 
 const ApiKeyPage = () => {
+    const [searchParams, setSearchParams] = useSearchParams();
     const [providers, setProviders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [snackbar, setSnackbar] = useState<{
@@ -28,6 +30,33 @@ const ApiKeyPage = () => {
         token: '',
         enabled: true,
     });
+
+    // Check URL params on mount to auto-open dialog
+    useEffect(() => {
+        const dialog = searchParams.get('dialog');
+        const style = searchParams.get('style') as 'openai' | 'anthropic' | null;
+
+        if (dialog === 'add') {
+            // Clear URL params
+            setSearchParams({});
+
+            // Set default API style from URL
+            const apiStyle = style === 'openai' || style === 'anthropic' ? style : undefined;
+
+            setDialogMode('add');
+            setProviderFormData({
+                uuid: undefined,
+                name: '',
+                apiBase: '',
+                apiStyle: apiStyle,
+                token: '',
+                enabled: true,
+                noKeyRequired: false,
+                proxyUrl: '',
+            } as any);
+            setDialogOpen(true);
+        }
+    }, [searchParams, setSearchParams]);
 
     useEffect(() => {
         loadProviders();
@@ -79,6 +108,39 @@ const ApiKeyPage = () => {
 
         const result = dialogMode === 'add'
             ? await api.addProvider(providerData)
+            : await api.updateProvider(providerFormData.uuid!, {
+                name: providerData.name,
+                api_base: providerData.api_base,
+                api_style: providerData.api_style,
+                token: providerData.token || undefined,
+                no_key_required: providerData.no_key_required,
+                enabled: providerData.enabled,
+                proxy_url: (providerFormData as any).proxyUrl || undefined,
+            });
+
+        if (result.success) {
+            showNotification(`Provider ${dialogMode === 'add' ? 'added' : 'updated'} successfully!`, 'success');
+            setDialogOpen(false);
+            loadProviders();
+        } else {
+            showNotification(`Failed to ${dialogMode === 'add' ? 'add' : 'update'} provider: ${result.error}`, 'error');
+        }
+    };
+
+    // Handle force-add: skip probe and submit directly
+    const handleProviderForceAdd = async () => {
+        const providerData = {
+            name: providerFormData.name,
+            api_base: providerFormData.apiBase,
+            api_style: providerFormData.apiStyle,
+            token: providerFormData.token,
+            no_key_required: (providerFormData as any).noKeyRequired || false,
+            ...(dialogMode === 'add' && { proxy_url: (providerFormData as any).proxyUrl || '' }),
+            ...(dialogMode === 'edit' && { enabled: providerFormData.enabled }),
+        };
+
+        const result = dialogMode === 'add'
+            ? await api.addProvider(providerData, true)
             : await api.updateProvider(providerFormData.uuid!, {
                 name: providerData.name,
                 api_base: providerData.api_base,
@@ -196,6 +258,7 @@ const ApiKeyPage = () => {
                 open={dialogOpen}
                 onClose={() => setDialogOpen(false)}
                 onSubmit={handleProviderSubmit}
+                onForceAdd={handleProviderForceAdd}
                 data={providerFormData}
                 onChange={(field, value) => setProviderFormData(prev => ({ ...prev, [field]: value }))}
                 mode={dialogMode}

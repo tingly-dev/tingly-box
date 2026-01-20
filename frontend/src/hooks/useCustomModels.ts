@@ -110,6 +110,37 @@ export const useCustomModels = () => {
         return false;
     };
 
+    // Update custom model for a provider (atomically replace old value with new value)
+    const updateCustomModel = (providerUuid: string, oldValue: string, newValue: string) => {
+        if (!newValue?.trim()) return false;
+
+        // Use functional update to avoid stale closure
+        setCustomModels(prev => {
+            const currentModels = prev[providerUuid] || [];
+
+            // Remove old value and add new value in one operation
+            const newModels = currentModels.filter(model => model !== oldValue);
+
+            // Avoid duplicates (in case newValue already exists)
+            if (!newModels.includes(newValue)) {
+                newModels.push(newValue);
+            }
+
+            // Save to storage
+            saveCustomModelToStorage(providerUuid, newModels.length > 0 ? newModels : []);
+
+            // Return updated state
+            if (newModels.length === 0) {
+                const newState = { ...prev };
+                delete newState[providerUuid];
+                return newState;
+            }
+            return { ...prev, [providerUuid]: newModels };
+        });
+
+        return true;
+    };
+
     // Get all custom models for a specific provider
     const getCustomModels = (providerUuid: string): string[] => {
         return customModels[providerUuid] || [];
@@ -130,6 +161,7 @@ export const useCustomModels = () => {
         customModels,
         saveCustomModel,
         removeCustomModel,
+        updateCustomModel,
         getCustomModels,
         getCustomModel, // Keep for backward compatibility
         isCustomModel,

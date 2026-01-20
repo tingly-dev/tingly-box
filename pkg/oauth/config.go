@@ -17,6 +17,7 @@ const (
 	ProviderQwenCode    ProviderType = "qwen_code"
 	ProviderAntigravity ProviderType = "antigravity"
 	ProviderIFlow       ProviderType = "iflow"
+	ProviderCodex       ProviderType = "codex"
 	ProviderMock        ProviderType = "mock"
 )
 
@@ -25,7 +26,7 @@ func ParseProviderType(s string) (ProviderType, error) {
 	p := ProviderType(s)
 	// Validate by checking against known providers
 	switch p {
-	case ProviderClaudeCode, ProviderOpenAI, ProviderGoogle, ProviderGemini, ProviderGitHub, ProviderQwenCode, ProviderAntigravity, ProviderIFlow, ProviderMock:
+	case ProviderClaudeCode, ProviderOpenAI, ProviderGoogle, ProviderGemini, ProviderGitHub, ProviderQwenCode, ProviderAntigravity, ProviderIFlow, ProviderCodex, ProviderMock:
 		return p, nil
 	default:
 		return "", fmt.Errorf("unknown provider type: %s", s)
@@ -103,6 +104,10 @@ type ProviderConfig struct {
 	// RedirectURL is the OAuth redirect URI (optional, uses default if empty)
 	RedirectURL string
 
+	// Callback is the callback route path (optional, defaults to "/callback")
+	// Some providers require specific callback paths, e.g., codex requires "/auth/callback"
+	Callback string
+
 	// ConsoleURL is the URL to the provider's console for creating OAuth apps
 	ConsoleURL string
 
@@ -110,8 +115,17 @@ type ProviderConfig struct {
 	// Default is TokenRequestFormatForm (standard OAuth)
 	TokenRequestFormat TokenRequestFormat
 
+	// StateEncoding specifies the encoding format for OAuth state parameter
+	// Default is StateEncodingHex (standard)
+	StateEncoding StateEncoding
+
 	// Hook is the request preprocessing hook for provider-specific behavior
 	Hook RequestHook
+
+	// CallbackPorts specifies allowed ports for the callback URL
+	// Empty = no constraint (any port is allowed)
+	// Some providers require specific ports, e.g., codex allows [1455]
+	CallbackPorts []int
 }
 
 // TokenRequestFormat represents the format of token request body
@@ -157,6 +171,21 @@ const (
 
 	// OAuthMethodDeviceCodePKCE uses Device Code flow with PKCE (RFC 8628 + RFC 7636)
 	OAuthMethodDeviceCodePKCE
+)
+
+// StateEncoding represents the encoding format for OAuth state parameter
+type StateEncoding int
+
+const (
+	// StateEncodingHex uses hexadecimal encoding (default, 32 chars for 16 bytes)
+	StateEncodingHex StateEncoding = iota
+
+	// StateEncodingBase64URL uses base64url encoding without padding (22 chars for 16 bytes)
+	StateEncodingBase64URL
+
+	// StateEncodingBase64URL32 uses base64url encoding with 32 bytes (43 chars without padding)
+	// Used by OpenAI Codex to match their state format
+	StateEncodingBase64URL32
 )
 
 // Token represents an OAuth token

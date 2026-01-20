@@ -53,6 +53,8 @@ type Manager struct {
 	// Session management for OAuth authorization tracking
 	sessions   map[string]*SessionState
 	sessionsMu sync.RWMutex
+
+	Debug bool
 }
 
 // StateData holds information about an OAuth state
@@ -93,33 +95,47 @@ func NewManager(config *Config, registry *Registry) *Manager {
 	return m
 }
 
-// generateState generates a secure random state parameter using UUID
-func (m *Manager) generateState() (string, error) {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		return "", fmt.Errorf("failed to generate state: %w", err)
+// generateState generates a secure random state parameter
+func (m *Manager) generateState(encoding StateEncoding) (string, error) {
+	var size int
+	switch encoding {
+	case StateEncodingBase64URL32:
+		size = 32 // 32 bytes -> 43 chars in base64url (matches OpenAI Codex)
+	case StateEncodingBase64URL:
+		size = 16 // 16 bytes -> 22 chars in base64url
+	default:
+		size = 16 // 16 bytes -> 32 chars in hex
 	}
-	return hex.EncodeToString(b), nil
+	b := make([]byte, size)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("failed to generate random bytes: %w", err)
+	}
+	switch encoding {
+	case StateEncodingBase64URL, StateEncodingBase64URL32:
+		return base64.RawURLEncoding.EncodeToString(b), nil
+	default:
+		return hex.EncodeToString(b), nil
+	}
 }
 
-// generateCodeVerifier generates a PKCE code verifier (43-128 characters)
-// Uses cryptographically secure random bytes encoded as base64url
+// generateCodeVerifier generates a PKCE code verifier
+// 96 random bytes → 128 base64url chars
 func (m *Manager) generateCodeVerifier() (string, error) {
-	// Generate 32 random bytes (256 bits), which when base64url-encoded
-	// gives us 43 characters (minimum required by PKCE spec)
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
+	// Generate 96 random bytes (matches OpenAI Codex implementation)
+	bytes := make([]byte, 96)
+	if _, err := rand.Read(bytes); err != nil {
 		return "", fmt.Errorf("failed to generate code verifier: %w", err)
 	}
-	return base64.RawURLEncoding.EncodeToString(b), nil
+	verifier := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(bytes)
+	return verifier, nil
 }
 
 // generateCodeChallenge creates a PKCE code challenge from the verifier
-// Uses SHA256 and base64url encoding (S256 method)
+// Uses SHA256 hash + base64url encoding
 func (m *Manager) generateCodeChallenge(verifier string) string {
-	h := sha256.New()
-	h.Write([]byte(verifier))
-	return base64.RawURLEncoding.EncodeToString(h.Sum(nil))
+	hash := sha256.Sum256([]byte(verifier))
+	challenge := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(hash[:])
+	return challenge
 }
 
 // generateStateKey generates a key for storing state data
@@ -193,7 +209,7 @@ func (m *Manager) GetAuthURL(userID string, providerType ProviderType, redirectT
 	}
 
 	// Generate state
-	state, err := m.generateState()
+	state, err := m.generateState(config.StateEncoding)
 	if err != nil {
 		return "", "", err
 	}
@@ -239,10 +255,45 @@ func (m *Manager) buildAuthURL(config *ProviderConfig, state string, codeVerifie
 		return "", "", err
 	}
 
-	//redirectURL := config.RedirectURL
-	//if redirectURL == "" {
-	redirectURL := fmt.Sprintf("%s/callback", m.config.BaseURL)
-	//}
+	// Validate port constraint if specified
+	if len(config.CallbackPorts) > 0 {
+		baseURL, err := url.Parse(m.config.BaseURL)
+		if err == nil {
+			port := baseURL.Port()
+			if port == "" {
+				// Default to port 80 for http, 443 for https
+				if baseURL.Scheme == "https" {
+					port = "443"
+				} else {
+					port = "80"
+				}
+			}
+			portInt := 0
+			if port != "" {
+				_, err := fmt.Sscanf(port, "%d", &portInt)
+				if err != nil {
+					return "", "", fmt.Errorf("invalid port in BaseURL: %w", err)
+				}
+			}
+			allowed := false
+			for _, allowedPort := range config.CallbackPorts {
+				if portInt == allowedPort {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				return "", "", fmt.Errorf("port %d is not allowed for provider %s (allowed ports: %v)", portInt, config.Type, config.CallbackPorts)
+			}
+		}
+	}
+
+	// Use hardcoded RedirectURL if provided (for providers requiring specific redirect URIs)
+	callbackPath := config.Callback
+	if callbackPath == "" {
+		callbackPath = "/callback"
+	}
+	redirectURL := fmt.Sprintf("%s%s", m.config.BaseURL, callbackPath)
 
 	query := u.Query()
 	query.Set("client_id", config.ClientID)
@@ -255,7 +306,8 @@ func (m *Manager) buildAuthURL(config *ProviderConfig, state string, codeVerifie
 
 	// Add PKCE parameters if provider uses PKCE
 	if config.OAuthMethod == OAuthMethodPKCE && codeVerifier != "" {
-		query.Set("code_challenge", m.generateCodeChallenge(codeVerifier))
+		challenge := m.generateCodeChallenge(codeVerifier)
+		query.Set("code_challenge", challenge)
 		query.Set("code_challenge_method", "S256")
 	}
 
@@ -336,23 +388,29 @@ func (m *Manager) HandleCallback(ctx context.Context, r *http.Request) (*Token, 
 
 // exchangeCodeForToken exchanges the authorization code for an access token
 func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConfig, state string, code string, codeVerifier string, redirectURI string) (*Token, error) {
-	useJSON := config.TokenRequestFormat == TokenRequestFormatJSON
-
-	var reqBody io.Reader
-	var contentType string
-
 	// Build common parameters
 	params := map[string]string{
 		"grant_type":   "authorization_code",
 		"client_id":    config.ClientID,
-		"redirect_uri": redirectURI,
 		"code":         code,
-		"state":        state,
+		"redirect_uri": redirectURI,
 	}
 
 	// Add client_secret if possible
-	if config.ClientSecret != "" {
-		params["client_secret"] = config.ClientSecret
+
+	switch config.Type {
+	case ProviderCodex:
+		// ignore client secret for codex
+	case ProviderClaudeCode:
+		// require state for claude code
+		params["state"] = state
+		if config.ClientSecret != "" {
+			params["client_secret"] = config.ClientSecret
+		}
+	default:
+		if config.ClientSecret != "" {
+			params["client_secret"] = config.ClientSecret
+		}
 	}
 
 	// Add code_verifier for PKCE
@@ -360,7 +418,19 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 		params["code_verifier"] = codeVerifier
 	}
 
-	reqBody, contentType, err := buildRequestBody(params, useJSON)
+	logrus.WithFields(logrus.Fields{
+		"state":                state,
+		"provider":             config.Type,
+		"code_verifier_length": len(codeVerifier),
+		"code_verifier":        codeVerifier,
+		"redirect_uri":         redirectURI,
+		"grant_type":           params["grant_type"],
+		"has_client_secret":    config.ClientSecret != "",
+		"token_url":            config.TokenURL,
+		"request_format":       map[TokenRequestFormat]string{TokenRequestFormatJSON: "JSON", TokenRequestFormatForm: "Form"}[config.TokenRequestFormat],
+	}).Info("[OAuth] PKCE code_verifier added to token request")
+
+	reqBody, contentType, err := buildRequestBody(params, config.TokenRequestFormat)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build request body: %w", err)
 	}
@@ -378,17 +448,11 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 		if err := config.Hook.BeforeToken(params, req.Header); err != nil {
 			return nil, err
 		}
-		// Rebuild body in case hook modified params
-		reqBody, contentType, err = buildRequestBody(params, useJSON)
-		if err != nil {
-			return nil, fmt.Errorf("failed to rebuild request body: %w", err)
-		}
 		req.Body = io.NopCloser(reqBody)
-		req.Header.Set("Content-Type", contentType)
 	}
 
 	// Debug: print request details
-	m.debugRequest(req, useJSON)
+	m.debugRequest(req, config.TokenRequestFormat)
 
 	// Send request with optional proxy support
 	// Proxy is read from HTTP_PROXY/HTTPS_PROXY environment variables
@@ -411,7 +475,14 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("token exchange failed: status %d, body: %d", resp.StatusCode, len(string(body)))
+		bodyStr := string(body)
+		// Log the body for debugging (truncate if too long)
+		if len(bodyStr) > 500 {
+			logrus.Debugf("token exchange failed: status %d, body: %s...", resp.StatusCode, bodyStr[:500])
+		} else {
+			logrus.Debugf("token exchange failed: status %d, body: %s", resp.StatusCode, bodyStr)
+		}
+		return nil, fmt.Errorf("token exchange failed: status %d, body: %s", resp.StatusCode, bodyStr)
 	}
 
 	// Parse response directly into Token
@@ -425,6 +496,24 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 		token.Expiry = time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)
 	}
 
+	// For Codex provider, parse ID token to extract user info
+	if config.Type == ProviderCodex && token.IDToken != "" {
+		if claims := parseIDToken(token.IDToken); claims != nil {
+			if token.Metadata == nil {
+				token.Metadata = make(map[string]any)
+			}
+			if claims.Email != "" {
+				token.Metadata["email"] = claims.Email
+			}
+			if accountID := claims.GetAccountID(); accountID != "" {
+				token.Metadata["account_id"] = accountID
+			}
+			if claims.Name != "" {
+				token.Metadata["name"] = claims.Name
+			}
+		}
+	}
+
 	// Call provider's after-token hook to fetch additional metadata
 	if config.Hook != nil && token.AccessToken != "" {
 		metadata, err := config.Hook.AfterToken(ctx, token.AccessToken, client)
@@ -433,7 +522,14 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 			// Continue even if AfterToken fails, as we already have the token
 		}
 		if metadata != nil {
-			token.Metadata = metadata
+			if token.Metadata == nil {
+				token.Metadata = metadata
+			} else {
+				// Merge metadata
+				for k, v := range metadata {
+					token.Metadata[k] = v
+				}
+			}
 		}
 	}
 
@@ -475,8 +571,6 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 		return nil, fmt.Errorf("%w: %s", ErrInvalidProvider, providerType)
 	}
 
-	useJSON := config.TokenRequestFormat == TokenRequestFormatJSON
-
 	// Build common parameters
 	params := map[string]string{
 		"grant_type":    "refresh_token",
@@ -485,7 +579,7 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 		"client_secret": config.ClientSecret,
 	}
 
-	reqBody, contentType, err := buildRequestBody(params, useJSON)
+	reqBody, contentType, err := buildRequestBody(params, config.TokenRequestFormat)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build request body: %w", err)
 	}
@@ -503,17 +597,15 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 		if err := config.Hook.BeforeToken(params, req.Header); err != nil {
 			return nil, err
 		}
-		// Rebuild body in case hook modified params
-		reqBody, contentType, err = buildRequestBody(params, useJSON)
+		reqBody, _, err = buildRequestBody(params, config.TokenRequestFormat)
 		if err != nil {
 			return nil, fmt.Errorf("failed to rebuild request body: %w", err)
 		}
 		req.Body = io.NopCloser(reqBody)
-		req.Header.Set("Content-Type", contentType)
 	}
 
 	// Debug: print request details
-	m.debugRequest(req, useJSON)
+	m.debugRequest(req, config.TokenRequestFormat)
 
 	// Send request with optional proxy support
 	// Proxy is read from HTTP_PROXY/HTTPS_PROXY environment variables
@@ -548,6 +640,24 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 	// Convert ExpiresIn to Expiry
 	if token.ExpiresIn > 0 {
 		token.Expiry = time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)
+	}
+
+	// For Codex provider, parse ID token to extract user info
+	if providerType == ProviderCodex && token.IDToken != "" {
+		if claims := parseIDToken(token.IDToken); claims != nil {
+			if token.Metadata == nil {
+				token.Metadata = make(map[string]any)
+			}
+			if claims.Email != "" {
+				token.Metadata["email"] = claims.Email
+			}
+			if accountID := claims.GetAccountID(); accountID != "" {
+				token.Metadata["account_id"] = accountID
+			}
+			if claims.Name != "" {
+				token.Metadata["name"] = claims.Name
+			}
+		}
 	}
 
 	return token, nil
@@ -621,8 +731,6 @@ func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, pro
 	}
 
 	// Build device authorization request
-	useJSON := config.TokenRequestFormat == TokenRequestFormatJSON
-
 	// Build common parameters
 	params := map[string]string{
 		"client_id": config.ClientID,
@@ -634,7 +742,7 @@ func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, pro
 		params["code_challenge_method"] = "S256"
 	}
 
-	reqBody, contentType, err := buildRequestBody(params, useJSON)
+	reqBody, contentType, err := buildRequestBody(params, config.TokenRequestFormat)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build request body: %w", err)
 	}
@@ -653,7 +761,7 @@ func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, pro
 			return nil, err
 		}
 		// Rebuild body in case hook modified params
-		reqBody, contentType, err = buildRequestBody(params, useJSON)
+		reqBody, contentType, err = buildRequestBody(params, config.TokenRequestFormat)
 		if err != nil {
 			return nil, fmt.Errorf("failed to rebuild request body: %w", err)
 		}
@@ -764,8 +872,6 @@ func (m *Manager) PollForToken(ctx context.Context, data *DeviceCodeData, callba
 
 // pollTokenRequest makes a single token polling request
 func (m *Manager) pollTokenRequest(ctx context.Context, config *ProviderConfig, deviceCode string, codeVerifier string) (*Token, error) {
-	useJSON := config.TokenRequestFormat == TokenRequestFormatJSON
-
 	// Build common parameters
 	params := map[string]string{
 		"grant_type":  config.GrantType,
@@ -780,7 +886,7 @@ func (m *Manager) pollTokenRequest(ctx context.Context, config *ProviderConfig, 
 		params["code_verifier"] = codeVerifier
 	}
 
-	reqBody, contentType, err := buildRequestBody(params, useJSON)
+	reqBody, contentType, err := buildRequestBody(params, config.TokenRequestFormat)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build request body: %w", err)
 	}
@@ -798,13 +904,11 @@ func (m *Manager) pollTokenRequest(ctx context.Context, config *ProviderConfig, 
 		if err := config.Hook.BeforeToken(params, req.Header); err != nil {
 			return nil, err
 		}
-		// Rebuild body in case hook modified params
-		reqBody, contentType, err = buildRequestBody(params, useJSON)
+		reqBody, _, err = buildRequestBody(params, config.TokenRequestFormat)
 		if err != nil {
 			return nil, fmt.Errorf("failed to rebuild request body: %w", err)
 		}
 		req.Body = io.NopCloser(reqBody)
-		req.Header.Set("Content-Type", contentType)
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -874,7 +978,10 @@ func isTransientDeviceCodeError(err error) bool {
 }
 
 // debugRequest prints HTTP request details for debugging
-func (m *Manager) debugRequest(req *http.Request, isJSON bool) {
+func (m *Manager) debugRequest(req *http.Request, format TokenRequestFormat) {
+	if !m.Debug {
+		return
+	}
 	logrus.Debug("=== OAuth Debug: HTTP Request ===")
 	logrus.Debugf("Method: %s", req.Method)
 	logrus.Debugf("URL: %s", req.URL.String())
@@ -895,7 +1002,8 @@ func (m *Manager) debugRequest(req *http.Request, isJSON bool) {
 		bodyBytes, err := io.ReadAll(req.Body)
 		if err == nil {
 			// Try to format JSON for readability
-			if isJSON {
+			switch format {
+			case TokenRequestFormatJSON:
 				var formatted any
 				if json.Unmarshal(bodyBytes, &formatted) == nil {
 					if pretty, err := json.MarshalIndent(formatted, "", "  "); err == nil {
@@ -906,7 +1014,7 @@ func (m *Manager) debugRequest(req *http.Request, isJSON bool) {
 				} else {
 					logrus.Debugf("%s", string(bodyBytes))
 				}
-			} else {
+			default:
 				logrus.Debugf("%s", string(bodyBytes))
 			}
 			// Restore body for actual request

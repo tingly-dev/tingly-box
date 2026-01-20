@@ -2,17 +2,20 @@ package server
 
 import (
 	"context"
+	"fmt"
+	"iter"
 	"net/http"
 	"time"
+	"tingly-box/pkg/adaptor"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/genai"
 
 	"tingly-box/internal/loadbalance"
 	"tingly-box/internal/typ"
-	"tingly-box/pkg/adaptor"
 )
 
 // anthropicMessagesV1Beta implements beta messages API
@@ -49,12 +52,10 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req AnthropicBetaMessag
 	c.Set("model", selectedService.Model)
 
 	// Check provider's API style to decide which path to take
-	apiStyle := string(provider.APIStyle)
-	if apiStyle == "" {
-		apiStyle = "openai" // default to openai
-	}
+	apiStyle := provider.APIStyle
 
-	if apiStyle == "anthropic" {
+	switch apiStyle {
+	case typ.APIStyleAnthropic:
 		// Use direct Anthropic SDK call
 		if isStreaming {
 			// Handle streaming request
@@ -85,18 +86,66 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req AnthropicBetaMessag
 			c.JSON(http.StatusOK, anthropicResp)
 		}
 		return
-	} else {
+	case typ.APIStyleGoogle:
+		if !s.enableAdaptor {
+			SendAdapterDisabledError(c, provider.Name)
+			return
+		}
+
+		// Convert Anthropic beta request to Google format
+		model, googleReq, cfg := adaptor.ConvertAnthropicBetaToGoogleRequest(&req.BetaMessageNewParams, 0)
+
+		if isStreaming {
+			// Create streaming request
+			stream, err := s.forwardGoogleStreamRequest(provider, model, googleReq, cfg)
+			if err != nil {
+				SendStreamingError(c, err)
+				return
+			}
+
+			// Handle the streaming response
+			err = adaptor.HandleGoogleToAnthropicBetaStreamResponse(c, stream, proxyModel)
+			if err != nil {
+				SendInternalError(c, err.Error())
+			}
+
+			// Track usage from stream (would be accumulated in handler)
+			// For Google, usage is tracked in the stream handler
+
+		} else {
+			// Handle non-streaming request
+			response, err := s.forwardGoogleRequest(provider, model, googleReq, cfg)
+			if err != nil {
+				SendForwardingError(c, err)
+				return
+			}
+
+			// Convert Google response to Anthropic beta format
+			anthropicResp := adaptor.ConvertGoogleToAnthropicBetaResponse(response, proxyModel)
+
+			// Track usage from response
+			inputTokens := 0
+			outputTokens := 0
+			if response.UsageMetadata != nil {
+				inputTokens = int(response.UsageMetadata.PromptTokenCount)
+				outputTokens = int(response.UsageMetadata.CandidatesTokenCount)
+			}
+			s.trackUsage(c, rule, provider, actualModel, proxyModel, inputTokens, outputTokens, false, "success", "")
+
+			c.JSON(http.StatusOK, anthropicResp)
+		}
+	case typ.APIStyleOpenAI:
 		// Check if adaptor is enabled
 		if !s.enableAdaptor {
 			SendAdapterDisabledError(c, provider.Name)
 			return
 		}
 
+		// Convert Anthropic beta request to OpenAI format for streaming
+		openaiReq := adaptor.ConvertAnthropicBetaToOpenAIRequest(&req.BetaMessageNewParams, true)
+
 		// Use OpenAI conversion path (default behavior)
 		if isStreaming {
-			// Convert Anthropic beta request to OpenAI format for streaming
-			openaiReq := adaptor.ConvertAnthropicBetaToOpenAIRequest(&req.BetaMessageNewParams, true)
-
 			// Create streaming request
 			stream, err := s.forwardOpenAIStreamRequest(provider, openaiReq)
 			if err != nil {
@@ -111,8 +160,6 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req AnthropicBetaMessag
 			}
 
 		} else {
-			// Handle non-streaming request - convert beta response to OpenAI and back
-			openaiReq := adaptor.ConvertAnthropicBetaToOpenAIRequest(&req.BetaMessageNewParams, true)
 			response, err := s.forwardOpenAIRequest(provider, openaiReq)
 			if err != nil {
 				SendForwardingError(c, err)
@@ -122,6 +169,8 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req AnthropicBetaMessag
 			anthropicResp := adaptor.ConvertOpenAIToAnthropicBetaResponse(response, proxyModel)
 			c.JSON(http.StatusOK, anthropicResp)
 		}
+	default:
+		c.JSON(http.StatusBadRequest, "tingly-box: invalid api style")
 	}
 }
 
@@ -163,21 +212,6 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthrop
 	// Accumulate usage from stream
 	var inputTokens, outputTokens int
 	var hasUsage bool
-
-	defer func() {
-		if r := recover(); r != nil {
-			logrus.Errorf("Panic in Anthropic beta streaming handler: %v", r)
-			// Track panic as error with any usage we accumulated
-			if hasUsage {
-				s.trackUsage(c, rule, provider, actualModel, respModel, inputTokens, outputTokens, true, "error", "panic")
-			}
-		}
-		if stream != nil {
-			if err := stream.Close(); err != nil {
-				logrus.Errorf("Error closing stream: %v", err)
-			}
-		}
-	}()
 
 	// Set SSE headers
 	SetupSSEHeaders(c)
@@ -231,6 +265,44 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthrop
 	// Send completion event
 	SendFinishEvent(c)
 	flusher.Flush()
+}
+
+// forwardGoogleRequest forwards request to Google API
+func (s *Server) forwardGoogleRequest(provider *typ.Provider, model string, contents []*genai.Content, config *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
+	// Get or create Google client wrapper from pool
+	wrapper := s.clientPool.GetGoogleClient(provider, model)
+	if wrapper == nil {
+		return nil, fmt.Errorf("failed to get Google client for provider: %s", provider.Name)
+	}
+
+	// Make the request with timeout
+	timeout := time.Duration(provider.Timeout) * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	response, err := wrapper.GenerateContent(ctx, model, contents, config)
+	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
+}
+
+// forwardGoogleStreamRequest forwards streaming request to Google API
+func (s *Server) forwardGoogleStreamRequest(provider *typ.Provider, model string, contents []*genai.Content, config *genai.GenerateContentConfig) (iter.Seq2[*genai.GenerateContentResponse, error], error) {
+	// Get or create Google client wrapper from pool
+	wrapper := s.clientPool.GetGoogleClient(provider, model)
+	if wrapper == nil {
+		return nil, fmt.Errorf("failed to get Google client for provider: %s", provider.Name)
+	}
+
+	logrus.Debugln("Creating Google streaming request")
+
+	// Use background context for streaming
+	ctx := context.Background()
+	stream := wrapper.GenerateContentStream(ctx, model, contents, config)
+
+	return stream, nil
 }
 
 // anthropicCountTokensV1Beta implements beta count_tokens
