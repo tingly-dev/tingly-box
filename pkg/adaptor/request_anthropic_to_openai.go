@@ -324,16 +324,13 @@ func convertAnthropicAssistantMessageToOpenAI(msg anthropic.MessageParam) openai
 	if len(toolCalls) > 0 {
 		// Use JSON marshaling to create a message with tool_calls
 		msgMap := map[string]interface{}{
-			"role":    "assistant",
-			"content": textContent,
+			"role":              "assistant",
+			"content":           textContent,
+			"reasoning_content": thinking, // Always include for DeepSeek
 		}
 		if len(toolCalls) > 0 {
 			msgMap["tool_calls"] = toolCalls
 		}
-		// Add reasoning_content only if thinking exists
-		if thinking != "" {
-			msgMap["reasoning_content"] = thinking
-		}
 
 		msgBytes, _ := json.Marshal(msgMap)
 		var result openai.ChatCompletionMessageParamUnion
@@ -341,21 +338,16 @@ func convertAnthropicAssistantMessageToOpenAI(msg anthropic.MessageParam) openai
 		return result
 	}
 
-	// Simple text-only assistant message
-	if thinking != "" {
-		// Use JSON marshaling to include reasoning_content
-		msgMap := map[string]interface{}{
-			"role":              "assistant",
-			"content":           textContent,
-			"reasoning_content": thinking,
-		}
-		msgBytes, _ := json.Marshal(msgMap)
-		var result openai.ChatCompletionMessageParamUnion
-		_ = json.Unmarshal(msgBytes, &result)
-		return result
+	// For all other cases, always include reasoning_content
+	msgMap := map[string]interface{}{
+		"role":              "assistant",
+		"content":           textContent,
+		"reasoning_content": thinking,
 	}
-
-	return openai.AssistantMessage(textContent)
+	msgBytes, _ := json.Marshal(msgMap)
+	var result openai.ChatCompletionMessageParamUnion
+	_ = json.Unmarshal(msgBytes, &result)
+	return result
 }
 
 // convertAnthropicUserMessageToOpenAI converts Anthropic user message to OpenAI format
@@ -682,16 +674,13 @@ func convertAnthropicBetaAssistantMessageToOpenAI(msg anthropic.BetaMessageParam
 	if len(toolCalls) > 0 {
 		// Use JSON marshaling to create a message with tool_calls
 		msgMap := map[string]interface{}{
-			"role":    "assistant",
-			"content": textContent,
+			"role":              "assistant",
+			"content":           textContent,
+			"reasoning_content": thinking, // Always include for DeepSeek
 		}
 		if len(toolCalls) > 0 {
 			msgMap["tool_calls"] = toolCalls
 		}
-		// Add reasoning_content only if thinking exists
-		if thinking != "" {
-			msgMap["reasoning_content"] = thinking
-		}
 
 		msgBytes, _ := json.Marshal(msgMap)
 		var result openai.ChatCompletionMessageParamUnion
@@ -699,21 +688,16 @@ func convertAnthropicBetaAssistantMessageToOpenAI(msg anthropic.BetaMessageParam
 		return result
 	}
 
-	// Simple text-only assistant message
-	if thinking != "" {
-		// Use JSON marshaling to include reasoning_content
-		msgMap := map[string]interface{}{
-			"role":              "assistant",
-			"content":           textContent,
-			"reasoning_content": thinking,
-		}
-		msgBytes, _ := json.Marshal(msgMap)
-		var result openai.ChatCompletionMessageParamUnion
-		_ = json.Unmarshal(msgBytes, &result)
-		return result
+	// For all other cases, always include reasoning_content
+	msgMap := map[string]interface{}{
+		"role":              "assistant",
+		"content":           textContent,
+		"reasoning_content": thinking,
 	}
-
-	return openai.AssistantMessage(textContent)
+	msgBytes, _ := json.Marshal(msgMap)
+	var result openai.ChatCompletionMessageParamUnion
+	_ = json.Unmarshal(msgBytes, &result)
+	return result
 }
 
 // convertAnthropicBetaUserMessageToOpenAI converts Anthropic beta user message to OpenAI format
