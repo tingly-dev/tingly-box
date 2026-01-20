@@ -265,7 +265,7 @@ jobs:
       - name: Trigger Docker NPX build
         if: success()
         env:
-          GH_TOKEN: ${{ secrets.TRIGGER_PAT_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           gh workflow run docker-npx.yml \
             --repo tingly-dev/tingly-box \
