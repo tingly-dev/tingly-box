@@ -55,56 +55,6 @@ func ConvertAnthropicBetaToOpenAIRequestWithProvider(
 	return openaiReq
 }
 
-// schemaFieldTransforms defines JSON Schema fields that should be transformed or excluded
-// key: source field name
-// value: target field name (empty string means exclude the field)
-var schemaFieldTransforms = map[string]string{
-	"exclusiveMinimum": "minimum", // convert exclusiveMinimum to minimum
-	"exclusiveMaximum": "maximum", // convert exclusiveMaximum to maximum
-}
-
-// transformProperties recursively transforms and filters a JSON Schema
-// Fields in schemaFieldTransforms are either renamed or excluded
-func transformProperties(props map[string]interface{}) map[string]interface{} {
-	result := make(map[string]interface{})
-
-	for k, v := range props {
-		if nestedSchema, ok := v.(map[string]interface{}); ok {
-			// Apply field transformations to property schemas
-			result[k] = transformPropertySchema(nestedSchema)
-		} else {
-			result[k] = v
-		}
-	}
-
-	return result
-}
-
-// transformPropertySchema transforms field names in a property schema
-// This is where we handle things like exclusiveMinimum → minimum
-func transformPropertySchema(schema map[string]interface{}) map[string]interface{} {
-	if schema == nil {
-		return nil
-	}
-
-	result := make(map[string]interface{})
-
-	for key, value := range schema {
-		// Check if this field needs to be transformed or excluded
-		if targetKey, needsTransform := schemaFieldTransforms[key]; needsTransform {
-			if targetKey == "" {
-				// Empty target means exclude this field
-				continue
-			}
-			// Transform to new field name
-			key = targetKey
-		}
-		result[key] = value
-	}
-
-	return result
-}
-
 // ConvertAnthropicToolsToOpenAI converts Anthropic tools to OpenAI format
 func ConvertAnthropicToolsToOpenAI(tools []anthropic.ToolUnionParam) []openai.ChatCompletionToolUnionParam {
 	if len(tools) == 0 {
@@ -120,7 +70,6 @@ func ConvertAnthropicToolsToOpenAI(tools []anthropic.ToolUnionParam) []openai.Ch
 		}
 
 		// Convert Anthropic input schema to OpenAI function parameters
-		// Only include standard JSON Schema fields that OpenAI accepts
 		var parameters map[string]interface{}
 		if tool.InputSchema.Properties != nil || len(tool.InputSchema.Required) > 0 {
 			parameters = make(map[string]interface{})
@@ -148,56 +97,10 @@ func ConvertAnthropicToolsToOpenAI(tools []anthropic.ToolUnionParam) []openai.Ch
 	return out
 }
 
-// ConvertAnthropicToolsToOpenAIWithTransformedSchema converts Anthropic tools to OpenAI format
-// with schema field transformation. Fields in schemaFieldTransforms are either renamed
-// or excluded to provide better compatibility with OpenAI's schema validation.
+// ConvertAnthropicToolsToOpenAIWithTransformedSchema is an alias for ConvertAnthropicToolsToOpenAI
+// Schema transformation is handled by provider-specific transforms
 func ConvertAnthropicToolsToOpenAIWithTransformedSchema(tools []anthropic.ToolUnionParam) []openai.ChatCompletionToolUnionParam {
-	if len(tools) == 0 {
-		return nil
-	}
-
-	out := make([]openai.ChatCompletionToolUnionParam, 0, len(tools))
-
-	for _, t := range tools {
-		tool := t.OfTool
-		if tool == nil {
-			continue
-		}
-
-		// Convert Anthropic input schema to OpenAI function parameters
-		// Transform excluded fields and apply field name conversions
-		var parameters map[string]interface{}
-		if tool.InputSchema.Properties != nil || len(tool.InputSchema.Required) > 0 {
-			// Build the raw schema first
-			rawSchema := make(map[string]interface{})
-			rawSchema["type"] = "object"
-
-			if tool.InputSchema.Properties != nil {
-				if m, ok := tool.InputSchema.Properties.(map[string]interface{}); ok {
-					rawSchema["properties"] = transformProperties(m)
-				} else {
-					rawSchema["properties"] = tool.InputSchema.Properties
-				}
-			}
-
-			if len(tool.InputSchema.Required) > 0 {
-				rawSchema["required"] = tool.InputSchema.Required
-			}
-
-			parameters = rawSchema
-		}
-
-		// Create function with filtered parameters
-		fn := shared.FunctionDefinitionParam{
-			Name:        tool.Name,
-			Description: param.Opt[string]{Value: tool.Description.Value},
-			Parameters:  parameters,
-		}
-
-		out = append(out, openai.ChatCompletionFunctionTool(fn))
-	}
-
-	return out
+	return ConvertAnthropicToolsToOpenAI(tools)
 }
 
 // ConvertAnthropicToolChoiceToOpenAI converts Anthropic tool_choice to OpenAI format
@@ -238,15 +141,6 @@ func ConvertAnthropicToOpenAIRequest(anthropicReq *anthropic.MessageNewParams, c
 	}
 
 	isThinking := IsThinkingEnabled(anthropicReq)
-	if isThinking {
-		openaiReq.SetExtraFields(
-			map[string]interface{}{
-				"thinking": map[string]interface{}{
-					"type": "enabled",
-				},
-			},
-		)
-	}
 
 	// Set MaxTokens
 	openaiReq.MaxTokens = openai.Opt(anthropicReq.MaxTokens)
@@ -288,7 +182,8 @@ func ConvertAnthropicToOpenAIRequest(anthropicReq *anthropic.MessageNewParams, c
 	}
 
 	config := &extension.OpenAIConfig{
-		HasThinking: isThinking,
+		HasThinking:     isThinking,
+		ReasoningEffort: "low", // Default to "low" for OpenAI-compatible APIs
 	}
 
 	return openaiReq, config
@@ -474,15 +369,6 @@ func ConvertAnthropicBetaToOpenAIRequest(anthropicReq *anthropic.BetaMessageNewP
 	}
 
 	isThinking := IsThinkingEnabledBeta(anthropicReq)
-	if isThinking {
-		openaiReq.SetExtraFields(
-			map[string]interface{}{
-				"thinking": map[string]interface{}{
-					"type": "enabled",
-				},
-			},
-		)
-	}
 
 	// Set MaxTokens
 	openaiReq.MaxTokens = openai.Opt(anthropicReq.MaxTokens)
@@ -524,7 +410,8 @@ func ConvertAnthropicBetaToOpenAIRequest(anthropicReq *anthropic.BetaMessageNewP
 	}
 
 	config := &extension.OpenAIConfig{
-		HasThinking: isThinking,
+		HasThinking:     isThinking,
+		ReasoningEffort: "low", // Default to "low" for OpenAI-compatible APIs
 	}
 
 	return openaiReq, config
@@ -545,7 +432,6 @@ func ConvertAnthropicBetaToolsToOpenAI(tools []anthropic.BetaToolUnionParam) []o
 		}
 
 		// Convert Anthropic input schema to OpenAI function parameters
-		// Only include standard JSON Schema fields that OpenAI accepts
 		var parameters map[string]interface{}
 		if tool.InputSchema.Properties != nil || len(tool.InputSchema.Required) > 0 {
 			parameters = make(map[string]interface{})
@@ -573,55 +459,10 @@ func ConvertAnthropicBetaToolsToOpenAI(tools []anthropic.BetaToolUnionParam) []o
 	return out
 }
 
-// ConvertAnthropicBetaToolsToOpenAIWithTransformedSchema converts Anthropic beta tools to OpenAI format
-// with schema field transformation.
+// ConvertAnthropicBetaToolsToOpenAIWithTransformedSchema is an alias for ConvertAnthropicBetaToolsToOpenAI
+// Schema transformation is handled by provider-specific transforms
 func ConvertAnthropicBetaToolsToOpenAIWithTransformedSchema(tools []anthropic.BetaToolUnionParam) []openai.ChatCompletionToolUnionParam {
-	if len(tools) == 0 {
-		return nil
-	}
-
-	out := make([]openai.ChatCompletionToolUnionParam, 0, len(tools))
-
-	for _, t := range tools {
-		tool := t.OfTool
-		if tool == nil {
-			continue
-		}
-
-		// Convert Anthropic input schema to OpenAI function parameters
-		// Transform excluded fields and apply field name conversions
-		var parameters map[string]interface{}
-		if tool.InputSchema.Properties != nil || len(tool.InputSchema.Required) > 0 {
-			// Build the raw schema first
-			rawSchema := make(map[string]interface{})
-			rawSchema["type"] = "object"
-
-			if tool.InputSchema.Properties != nil {
-				if m, ok := tool.InputSchema.Properties.(map[string]interface{}); ok {
-					rawSchema["properties"] = transformProperties(m)
-				} else {
-					rawSchema["properties"] = tool.InputSchema.Properties
-				}
-			}
-
-			if len(tool.InputSchema.Required) > 0 {
-				rawSchema["required"] = tool.InputSchema.Required
-			}
-
-			parameters = rawSchema
-		}
-
-		// Create function with filtered parameters
-		fn := shared.FunctionDefinitionParam{
-			Name:        tool.Name,
-			Description: param.Opt[string]{Value: tool.Description.Value},
-			Parameters:  parameters,
-		}
-
-		out = append(out, openai.ChatCompletionFunctionTool(fn))
-	}
-
-	return out
+	return ConvertAnthropicBetaToolsToOpenAI(tools)
 }
 
 // ConvertAnthropicBetaToolChoiceToOpenAI converts Anthropic beta tool_choice to OpenAI format
