@@ -15,8 +15,8 @@ func applyDeepSeekTransform(req *openai.ChatCompletionNewParams, provider *typ.P
 	for i := range req.Messages {
 		if req.Messages[i].OfAssistant != nil {
 			// Convert the message to map to check/modify fields
-			msgMap, err := MessageToMap(req.Messages[i])
-			if err != nil {
+			msgMap := req.Messages[i].ExtraFields()
+			if msgMap == nil {
 				continue
 			}
 

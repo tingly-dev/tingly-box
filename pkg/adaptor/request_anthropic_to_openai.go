@@ -15,6 +15,46 @@ import (
 
 type handler func(map[string]interface{}) map[string]interface{}
 
+// ConvertAnthropicToOpenAIRequestWithProvider converts Anthropic request to OpenAI format
+// and applies provider-specific transformations
+func ConvertAnthropicToOpenAIRequestWithProvider(
+	anthropicReq *anthropic.MessageNewParams,
+	compatible bool,
+	provider *typ.Provider,
+	model string,
+) *openai.ChatCompletionNewParams {
+	// Base conversion
+	openaiReq := ConvertAnthropicToOpenAIRequest(anthropicReq, compatible)
+
+	// Apply provider-specific transforms
+	openaiReq = extension.ApplyProviderTransforms(openaiReq, provider, model)
+
+	// Clean up temporary fields (e.g., x_thinking)
+	cleanupTempFields(openaiReq)
+
+	return openaiReq
+}
+
+// ConvertAnthropicBetaToOpenAIRequestWithProvider converts Anthropic beta request to OpenAI format
+// and applies provider-specific transformations
+func ConvertAnthropicBetaToOpenAIRequestWithProvider(
+	anthropicReq *anthropic.BetaMessageNewParams,
+	compatible bool,
+	provider *typ.Provider,
+	model string,
+) *openai.ChatCompletionNewParams {
+	// Base conversion
+	openaiReq := ConvertAnthropicBetaToOpenAIRequest(anthropicReq, compatible)
+
+	// Apply provider-specific transforms
+	openaiReq = extension.ApplyProviderTransforms(openaiReq, provider, model)
+
+	// Clean up temporary fields (e.g., x_thinking)
+	cleanupTempFields(openaiReq)
+
+	return openaiReq
+}
+
 // schemaFieldTransforms defines JSON Schema fields that should be transformed or excluded
 // key: source field name
 // value: target field name (empty string means exclude the field)
@@ -219,16 +259,6 @@ func ConvertAnthropicToOpenAIRequest(anthropicReq *anthropic.MessageNewParams, c
 		} else if string(msg.Role) == "assistant" {
 			// Convert assistant message with potential tool_use blocks
 			openaiMsg := convertAnthropicAssistantMessageToOpenAI(msg)
-			// Guard reasoning_content here
-			if extra := openaiMsg.ExtraFields(); extra != nil {
-				if _, ok := extra["reasoning_content"]; !ok {
-					extra["reasoning_content"] = ""
-				}
-				openaiMsg.SetExtraFields(extra)
-			} else {
-				openaiMsg.SetExtraFields(map[string]any{"reasoning_content": ""})
-			}
-
 			openaiReq.Messages = append(openaiReq.Messages, openaiMsg)
 		}
 	}
@@ -460,16 +490,6 @@ func ConvertAnthropicBetaToOpenAIRequest(anthropicReq *anthropic.BetaMessageNewP
 		} else if string(msg.Role) == "assistant" {
 			// Convert assistant message with potential tool_use blocks
 			openaiMsg := convertAnthropicBetaAssistantMessageToOpenAI(msg)
-			// Guard reasoning_content here
-			if extra := openaiMsg.ExtraFields(); extra != nil {
-				if _, ok := extra["reasoning_content"]; !ok {
-					extra["reasoning_content"] = ""
-				}
-				openaiMsg.SetExtraFields(extra)
-			} else {
-				openaiMsg.SetExtraFields(map[string]any{"reasoning_content": ""})
-			}
-
 			openaiReq.Messages = append(openaiReq.Messages, openaiMsg)
 		}
 	}
@@ -761,62 +781,17 @@ func convertBetaToolResultContent(content []anthropic.BetaToolResultBlockParamCo
 	return result.String()
 }
 
-// ConvertAnthropicToOpenAIRequestWithProvider converts Anthropic request to OpenAI format
-// and applies provider-specific transformations
-func ConvertAnthropicToOpenAIRequestWithProvider(
-	anthropicReq *anthropic.MessageNewParams,
-	compatible bool,
-	provider *typ.Provider,
-	model string,
-) *openai.ChatCompletionNewParams {
-	// Base conversion
-	openaiReq := ConvertAnthropicToOpenAIRequest(anthropicReq, compatible)
-
-	// Apply provider-specific transforms
-	openaiReq = extension.ApplyProviderTransforms(openaiReq, provider, model)
-
-	// Clean up temporary fields (e.g., x_thinking)
-	cleanupTempFields(openaiReq)
-
-	return openaiReq
-}
-
-// ConvertAnthropicBetaToOpenAIRequestWithProvider converts Anthropic beta request to OpenAI format
-// and applies provider-specific transformations
-func ConvertAnthropicBetaToOpenAIRequestWithProvider(
-	anthropicReq *anthropic.BetaMessageNewParams,
-	compatible bool,
-	provider *typ.Provider,
-	model string,
-) *openai.ChatCompletionNewParams {
-	// Base conversion
-	openaiReq := ConvertAnthropicBetaToOpenAIRequest(anthropicReq, compatible)
-
-	// Apply provider-specific transforms
-	openaiReq = extension.ApplyProviderTransforms(openaiReq, provider, model)
-
-	// Clean up temporary fields (e.g., x_thinking)
-	cleanupTempFields(openaiReq)
-
-	return openaiReq
-}
-
 // cleanupTempFields removes temporary fields used during transformation
 func cleanupTempFields(req *openai.ChatCompletionNewParams) {
 	for i := range req.Messages {
 		if req.Messages[i].OfAssistant != nil {
 			// Convert to map to remove temporary fields
-			msgMap, err := extension.MessageToMap(req.Messages[i])
-			if err != nil {
-				continue
-			}
+			msgMap := req.Messages[i].ExtraFields()
 
 			// Remove temporary fields
 			delete(msgMap, "x_thinking")
 
-			// Convert back
-			msgBytes, _ := json.Marshal(msgMap)
-			_ = json.Unmarshal(msgBytes, &req.Messages[i])
+			req.Messages[i].SetExtraFields(msgMap)
 		}
 	}
 }
