@@ -98,7 +98,7 @@ func (p *ClientPool) GetAnthropicClient(provider *typ.Provider, model string) *l
 	}
 
 	// Create new client using factory
-	logrus.Infof("Creating new Anthropic client for provider: %s (API: %s)", provider.Name, provider.APIBase)
+	logrus.Infof("Creating new Anthropic client for provider: %s (API: %s) model: %s", provider.Name, provider.APIBase, model)
 
 	client, err := llmclient.NewAnthropicClient(provider)
 	if err != nil {
