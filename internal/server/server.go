@@ -267,7 +267,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.oauthRefresher = tokenRefresher
 
 	// Initialize template manager with GitHub URL for template sync
-	templateManager := template.NewEmbeddedOnlyTemplateManager()
+	templateManager := template.NewTemplateManager(template.TemplateGitHubURL)
 	if err := templateManager.Initialize(context.Background()); err != nil {
 		log.Printf("Failed to fetch from GitHub, using embedded provider templates: %v", err)
 	} else {
