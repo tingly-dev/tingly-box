@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
+
+	"tingly-box/internal/typ"
 )
 
 // ConvertAnthropicToOpenAIResponse converts an Anthropic response to OpenAI format
@@ -96,4 +98,19 @@ func ConvertAnthropicToOpenAIResponse(
 	}
 
 	return response
+}
+
+// ConvertAnthropicToOpenAIResponseWithProvider converts an Anthropic response to OpenAI format
+// and applies provider-specific transformations to the response
+func ConvertAnthropicToOpenAIResponseWithProvider(
+	anthropicResp *anthropic.Message,
+	responseModel string,
+	provider *typ.Provider,
+	model string,
+) map[string]interface{} {
+	// Base conversion
+	openaiResp := ConvertAnthropicToOpenAIResponse(anthropicResp, responseModel)
+
+	// Apply provider-specific transformations using the transform system
+	return ApplyResponseTransforms(openaiResp, provider, model)
 }

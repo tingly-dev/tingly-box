@@ -283,7 +283,8 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 			outputTokens := int(anthropicResp.Usage.OutputTokens)
 			s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, false, "success", "")
 
-			openaiResp := adaptor.ConvertAnthropicToOpenAIResponse(anthropicResp, responseModel)
+			// Use provider-aware conversion for provider-specific handling
+			openaiResp := adaptor.ConvertAnthropicToOpenAIResponseWithProvider(anthropicResp, responseModel, provider, actualModel)
 			c.JSON(http.StatusOK, openaiResp)
 			return
 		}
