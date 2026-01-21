@@ -22,7 +22,7 @@ const NODE_STYLES = {
 const { node } = { node: NODE_STYLES };
 
 // SmartDefaultNode Container - styled similar to SmartOpNode but with neutral color
-const StyledDefaultNode = styled(Box, {
+const StyledFallbackNode = styled(Box, {
     shouldForwardProp: (prop) => prop !== 'active',
 })<{ active: boolean }>(({ active, theme }) => ({
     display: 'flex',
@@ -64,7 +64,7 @@ const ActionButtonsBox = styled(Box)(({ theme }) => ({
     },
 }));
 
-const StyledDefaultNodeWrapper = styled(Box)(({ theme }) => ({
+const StyledFallbackNodeWrapper = styled(Box)(({ theme }) => ({
     position: 'relative',
     '&:hover .action-buttons': {
         opacity: 1,
@@ -77,14 +77,14 @@ export interface DefaultNodeProps {
     onAddProvider: () => void;
 }
 
-export const SmartDefaultNode: React.FC<DefaultNodeProps> = ({
+export const SmartFallbackNode: React.FC<DefaultNodeProps> = ({
     providersCount,
     active,
     onAddProvider,
 }) => {
     return (
-        <StyledDefaultNodeWrapper>
-            <StyledDefaultNode active={active}>
+        <StyledFallbackNodeWrapper>
+            <StyledFallbackNode active={active}>
                 {/* Content */}
                 <Box sx={{ mt: 1, width: '100%' }}>
                     {/* Description */}
@@ -148,9 +148,9 @@ export const SmartDefaultNode: React.FC<DefaultNodeProps> = ({
                         </IconButton>
                     </Tooltip>
                 </ActionButtonsBox>
-            </StyledDefaultNode>
-        </StyledDefaultNodeWrapper>
+            </StyledFallbackNode>
+        </StyledFallbackNodeWrapper>
     );
 };
 
-export default SmartDefaultNode;
+export default SmartFallbackNode;

@@ -21,7 +21,7 @@ import {
 import { styled } from '@mui/material/styles';
 import React from 'react';
 import type { Provider } from '../types/provider';
-import { SmartOpNode, ActionAddNode, SmartDefaultNode, ConnectionLine, ModelNode, NodeContainer, ProviderNode } from '@/components/nodes';
+import { SmartOpNode, ActionAddNode, SmartFallbackNode, ConnectionLine, ModelNode, NodeContainer, ProviderNode } from '@/components/nodes';
 import type { ConfigRecord } from './RoutingGraphTypes.ts';
 
 // Use same style constants as RuleGraph for consistency
@@ -459,7 +459,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                             <GraphRow>
                                 {/* Default Node */}
                                 <NodeContainer>
-                                    <SmartDefaultNode
+                                    <SmartFallbackNode
                                         providersCount={record.providers.length}
                                         active={active}
                                         onAddProvider={() => onAddDefaultProvider?.()}
