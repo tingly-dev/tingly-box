@@ -68,7 +68,8 @@ func applyGeminiOpenRouterTransform(req *openai.ChatCompletionNewParams, provide
 // applyGeminiPoeTransform handles Gemini via Poe.
 // This applies Poe-specific subset conversion.
 func applyGeminiPoeTransform(req *openai.ChatCompletionNewParams, _ *typ.Provider, _ string, _ *OpenAIConfig) *openai.ChatCompletionNewParams {
-	return applyGeminiToolSchemaFilter(req)
+	res := applyGeminiToolSchemaFilter(req)
+	return res
 }
 
 // ============================================================================
@@ -179,9 +180,9 @@ func applyGeminiToolSchemaFilter(req *openai.ChatCompletionNewParams) *openai.Ch
 
 // filterGeminiSchema recursively filters and transforms a JSON Schema for Gemini compatibility.
 // This handles:
-//   1. Field transformation (e.g., exclusiveMinimum -> minimum)
-//   2. Field filtering (removing unsupported fields)
-//   3. Recursive filtering of nested schemas (properties, items, anyOf)
+//  1. Field transformation (e.g., exclusiveMinimum -> minimum)
+//  2. Field filtering (removing unsupported fields)
+//  3. Recursive filtering of nested schemas (properties, items, anyOf)
 func filterGeminiSchema(schema map[string]interface{}) map[string]interface{} {
 	result := make(map[string]interface{})
 
@@ -192,10 +193,10 @@ func filterGeminiSchema(schema map[string]interface{}) map[string]interface{} {
 			continue
 		}
 
-		// Only include supported fields
-		if !geminiSupportedSchemaFields[key] {
-			continue
-		}
+		// // Only include supported fields
+		// if !geminiSupportedSchemaFields[key] {
+		// 	continue
+		// }
 
 		// Handle special recursive fields
 		switch key {
