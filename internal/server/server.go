@@ -17,6 +17,7 @@ import (
 	"tingly-box/internal/config/template"
 	"tingly-box/internal/constant"
 	"tingly-box/internal/obs"
+	"tingly-box/internal/record"
 	"tingly-box/internal/server/background"
 	"tingly-box/internal/server/config"
 	"tingly-box/internal/server/middleware"
@@ -65,6 +66,10 @@ type Server struct {
 	httpsEnabled    bool
 	httpsCertDir    string
 	httpsRegenerate bool
+
+	// record options
+	record    bool
+	recordDir string
 
 	version string
 }
@@ -133,6 +138,20 @@ func WithHTTPSCertDir(certDir string) ServerOption {
 func WithHTTPSRegenerate(regenerate bool) ServerOption {
 	return func(s *Server) {
 		s.httpsRegenerate = regenerate
+	}
+}
+
+// WithRecord enables or disables request/response recording
+func WithRecord(enabled bool) ServerOption {
+	return func(s *Server) {
+		s.record = enabled
+	}
+}
+
+// WithRecordDir sets the record directory for request/response recording
+func WithRecordDir(dir string) ServerOption {
+	return func(s *Server) {
+		s.recordDir = dir
 	}
 }
 
@@ -217,6 +236,13 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.logger = memoryLogger
 	server.clientPool = NewClientPool() // Initialize client pool
 	server.errorMW = errorMW
+
+	// Initialize record sink if recording is enabled
+	if server.record {
+		recordSink := record.NewSink(server.recordDir, true)
+		server.clientPool.SetRecordSink(recordSink)
+		log.Printf("Request recording enabled, directory: %s", server.recordDir)
+	}
 
 	// Initialize statistics middleware with server reference
 	statsMW := middleware.NewStatsMiddleware(cfg)

@@ -28,6 +28,8 @@ type ServerManager struct {
 	httpsEnabled      bool
 	httpsCertDir      string
 	httpsRegenerate   bool
+	record            bool
+	recordDir         string
 	status            string
 	sync.Mutex
 }
@@ -87,6 +89,20 @@ func WithHTTPSCertDir(certDir string) ServerManagerOption {
 func WithHTTPSRegenerate(regenerate bool) ServerManagerOption {
 	return func(sm *ServerManager) {
 		sm.httpsRegenerate = regenerate
+	}
+}
+
+// WithRecord sets the record flag for request/response recording
+func WithRecord(enabled bool) ServerManagerOption {
+	return func(sm *ServerManager) {
+		sm.record = enabled
+	}
+}
+
+// WithRecordDir sets the record directory for request/response recording
+func WithRecordDir(dir string) ServerManagerOption {
+	return func(sm *ServerManager) {
+		sm.recordDir = dir
 	}
 }
 
@@ -150,6 +166,8 @@ func (sm *ServerManager) Setup(port int) error {
 		server.WithHTTPSCertDir(sm.httpsCertDir),
 		server.WithHTTPSRegenerate(sm.httpsRegenerate),
 		server.WithVersion(sm.appConfig.GetVersion()),
+		server.WithRecord(sm.record),
+		server.WithRecordDir(sm.recordDir),
 	)
 
 	// Set global server instance for web UI control

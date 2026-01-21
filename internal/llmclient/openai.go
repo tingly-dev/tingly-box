@@ -10,6 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"tingly-box/internal/llmclient/httpclient"
+	"tingly-box/internal/record"
 	"tingly-box/internal/typ"
 )
 
@@ -19,6 +20,7 @@ type OpenAIClient struct {
 	provider   *typ.Provider
 	debugMode  bool
 	httpClient *http.Client
+	recordSink *record.Sink
 }
 
 // defaultNewOpenAIClient creates a new OpenAI client wrapper
@@ -85,4 +87,26 @@ func (c *OpenAIClient) ChatCompletionsNew(ctx context.Context, req openai.ChatCo
 // ChatCompletionsNewStreaming creates a new streaming chat completion request
 func (c *OpenAIClient) ChatCompletionsNewStreaming(ctx context.Context, req openai.ChatCompletionNewParams) *ssestream.Stream[openai.ChatCompletionChunk] {
 	return c.client.Chat.Completions.NewStreaming(ctx, req)
+}
+
+// SetRecordSink sets the record sink for the client
+func (c *OpenAIClient) SetRecordSink(sink *record.Sink) {
+	c.recordSink = sink
+	if sink != nil && sink.IsEnabled() {
+		c.applyRecordMode()
+	}
+}
+
+// applyRecordMode wraps the HTTP client with a record round tripper
+func (c *OpenAIClient) applyRecordMode() {
+	if c.recordSink == nil {
+		return
+	}
+	// Create a record round tripper with a default model (will be updated per request)
+	c.httpClient.Transport = NewRecordRoundTripper(c.httpClient.Transport, c.recordSink, c.provider.Name, "")
+}
+
+// GetProvider returns the provider for this client
+func (c *OpenAIClient) GetProvider() *typ.Provider {
+	return c.provider
 }
