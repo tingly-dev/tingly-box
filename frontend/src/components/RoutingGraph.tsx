@@ -94,7 +94,6 @@ interface RuleGraphProps {
     recordUuid: string;
     onUpdateRecord: (field: keyof ConfigRecord, value: any) => void;
     onDeleteProvider: (recordId: string, providerId: string) => void;
-    onRefreshModels: (providerUuid: string) => void;
     onToggleExpanded: () => void;
     onProviderNodeClick: (providerUuid: string) => void;
     onAddProviderButtonClick: () => void;
@@ -160,7 +159,6 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
     recordUuid,
     onUpdateRecord,
     onDeleteProvider,
-    onRefreshModels,
     onToggleExpanded,
     onProviderNodeClick,
     onAddProviderButtonClick,
@@ -488,7 +486,6 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                                                                     providersData={providers as Provider[]}
                                                                     active={record.active && service.active !== false}
                                                                     onDelete={() => onDeleteProvider(recordUuid, service.uuid)}
-                                                                    onRefreshModels={(p) => onRefreshModels(p.uuid)}
                                                                     onNodeClick={() => onProviderNodeClick(service.uuid)}
                                                                 />
                                                             ))}
@@ -642,7 +639,6 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                                                 providersData={providers as Provider[]}
                                                 active={record.active && provider.active !== false}
                                                 onDelete={() => onDeleteProvider(recordUuid, provider.uuid)}
-                                                onRefreshModels={(p) => onRefreshModels(p.uuid)}
                                                 onNodeClick={() => onProviderNodeClick(provider.uuid)}
                                             />
                                         ))}
