@@ -314,19 +314,32 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     const handleEditSmartRule = useCallback(async (ruleUuid: string) => {
         if (!configRecord) return;
 
+        console.log('Editing smart rule with UUID:', ruleUuid);
         const smartRule = (configRecord.smartRouting || []).find(r => r.uuid === ruleUuid);
         if (smartRule) {
-            setEditingSmartRule(smartRule);
+            console.log('Found rule:', smartRule.uuid, smartRule.description);
+            // Create a deep copy to avoid mutating the original object
+            const smartRuleCopy: SmartRouting = JSON.parse(JSON.stringify(smartRule));
+            setEditingSmartRule(smartRuleCopy);
             setSmartRuleDialogOpen(true);
+        } else {
+            console.error('Rule not found with UUID:', ruleUuid);
         }
     }, [configRecord]);
 
     const handleSaveSmartRule = useCallback(async (updatedRule: SmartRouting) => {
         if (!configRecord) return;
 
-        const updatedSmartRouting = (configRecord.smartRouting || []).map(r =>
-            r.uuid === updatedRule.uuid ? updatedRule : r
-        );
+        console.log('Saving smart rule:', updatedRule.uuid, updatedRule.description);
+        console.log('Existing rules:', configRecord.smartRouting?.map(r => ({ uuid: r.uuid, desc: r.description })));
+
+        const updatedSmartRouting = (configRecord.smartRouting || []).map(r => {
+            const shouldUpdate = r.uuid === updatedRule.uuid;
+            if (shouldUpdate) {
+                console.log('Updating rule:', r.uuid, '->', updatedRule.description);
+            }
+            return shouldUpdate ? updatedRule : r;
+        });
 
         const updated = {
             ...configRecord,

@@ -362,8 +362,14 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                                 <SmartOpNode
                                                     smartRouting={rule}
                                                     active={active}
-                                                    onEdit={() => onEditSmartRule(rule.uuid)}
-                                                    onDelete={() => onDeleteSmartRule(rule.uuid)}
+                                                    onEdit={() => {
+                                                        console.log('SmartRoutingGraph: onEdit called for rule:', rule.uuid, rule.description);
+                                                        onEditSmartRule(rule.uuid);
+                                                    }}
+                                                    onDelete={() => {
+                                                        console.log('SmartRoutingGraph: onDelete called for rule:', rule.uuid);
+                                                        onDeleteSmartRule(rule.uuid);
+                                                    }}
                                                 />
                                             </NodeContainer>
 
