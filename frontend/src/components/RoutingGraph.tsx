@@ -142,8 +142,8 @@ const GraphContainer = styled(Box)(({ theme }) => ({
 
 const GraphRow = styled(Box)(({ theme }) => ({
     display: 'flex',
-    alignItems: 'stretch',  // Changed from 'center' to 'stretch' for better alignment
-    justifyContent: 'center',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
     gap: graph.rowGap,
     marginBottom: theme.spacing(1),
 }));
@@ -376,71 +376,86 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                         <Box sx={{ overflowX: 'auto' }}>
                             <GraphContainer>
                                 <GraphRow>
-                                {/* Model Node(s) Container */}
-                                <NodeContainer>
-                                    {record.responseModel ? (
-                                        // Split display when response model is configured
-                                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: graph.modelGap }}>
-                                            {/* Request Model Card */}
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: graph.wrapperGap }}>
-                                                <Box sx={{ flex: 1 }}>
-                                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: graph.iconGap, mb: graph.labelMargin }}>
-                                                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                                            Request Model
-                                                        </Typography>
-                                                        <Tooltip title="The model name that clients use to make requests. This will be matched against incoming API calls.">
-                                                            <InfoIcon sx={{ fontSize: '0.9rem', color: 'text.secondary', cursor: 'help' }} />
-                                                        </Tooltip>
+                                {/* Request Model section - label + node + arrow as a unit */}
+                                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pr: 1, mt: -1 }}>
+                                    {/* Request Model Label */}
+                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: graph.iconGap, mb: graph.labelMargin }}>
+                                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                            Request Model
+                                        </Typography>
+                                        <Tooltip title="The model name that clients use to make requests. This will be matched against incoming API calls.">
+                                            <InfoIcon sx={{ fontSize: '0.9rem', color: 'text.secondary', cursor: 'help' }} />
+                                        </Tooltip>
+                                    </Box>
+                                    {/* Node + Arrow as a row */}
+                                    <Box sx={{ display: 'flex', flexDirection: 'row', alignItems: 'center' }}>
+                                        <NodeContainer>
+                                            {record.responseModel ? (
+                                                // Split display when response model is configured
+                                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: graph.modelGap }}>
+                                                    {/* Request Model Card */}
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: graph.wrapperGap }}>
+                                                        <Box sx={{ flex: 1 }}>
+                                                            <ModelNode
+                                                                active={record.active}
+                                                                label="Unspecified"
+                                                                value={record.requestModel}
+                                                                editable={record.active}
+                                                                onUpdate={(value) => onUpdateRecord('requestModel', value)}
+                                                                compact={true}
+                                                            />
+                                                        </Box>
                                                     </Box>
-                                                    <ModelNode
-                                                        active={record.active}
-                                                        label="Unspecified"
-                                                        value={record.requestModel}
-                                                        editable={record.active}
-                                                        onUpdate={(value) => onUpdateRecord('requestModel', value)}
-                                                        compact={true}
-                                                    />
-                                                </Box>
-                                            </Box>
 
-                                            {/* Response Model Card */}
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: graph.wrapperGap }}>
-                                                <Box sx={{ flex: 1 }}>
-                                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: graph.iconGap, mb: graph.labelMargin }}>
-                                                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                                            Response Model
-                                                        </Typography>
-                                                        <Tooltip title="The model name returned to clients. Responses from upstream providers will be transformed to show this model name instead.">
-                                                            <InfoIcon sx={{ fontSize: '0.9rem', color: 'text.secondary', cursor: 'help' }} />
-                                                        </Tooltip>
+                                                    {/* Response Model Card */}
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: graph.wrapperGap }}>
+                                                        <Box sx={{ flex: 1 }}>
+                                                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: graph.iconGap, mb: graph.labelMargin }}>
+                                                                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                                                    Response Model
+                                                                </Typography>
+                                                                <Tooltip title="The model name returned to clients. Responses from upstream providers will be transformed to show this model name instead.">
+                                                                    <InfoIcon sx={{ fontSize: '0.9rem', color: 'text.secondary', cursor: 'help' }} />
+                                                                </Tooltip>
+                                                            </Box>
+                                                            <ModelNode
+                                                                active={record.active}
+                                                                label=""
+                                                                value={record.responseModel}
+                                                                editable={true}
+                                                                onUpdate={(value) => onUpdateRecord('responseModel', value)}
+                                                                compact={true}
+                                                            />
+                                                        </Box>
                                                     </Box>
-                                                    <ModelNode
-                                                        active={record.active}
-                                                        label=""
-                                                        value={record.responseModel}
-                                                        editable={true}
-                                                        onUpdate={(value) => onUpdateRecord('responseModel', value)}
-                                                        compact={true}
-                                                    />
                                                 </Box>
-                                            </Box>
-                                        </Box>
-                                    ) : (
-                                        // Single display when no response model
-                                        <Box>
-                                            <Typography variant="caption" sx={{ color: 'text.secondary', mb: graph.labelMargin, textAlign: 'center', display: 'block' }}>
-                                                Request Model
-                                            </Typography>
-                                            <ModelNode
-                                                active={record.active}
-                                                label="Unspecified"
-                                                value={record.requestModel}
-                                                editable={record.active}
-                                                onUpdate={(value) => onUpdateRecord('requestModel', value)}
-                                            />
-                                        </Box>
-                                    )}
-                                </NodeContainer>
+                                            ) : (
+                                                // Single display when no response model
+                                                <ModelNode
+                                                    active={record.active}
+                                                    label="Unspecified"
+                                                    value={record.requestModel}
+                                                    editable={record.active}
+                                                    onUpdate={(value) => onUpdateRecord('requestModel', value)}
+                                                />
+                                            )}
+                                        </NodeContainer>
+
+                                        {/* Arrow to providers */}
+                                        <ConnectionLine>
+                                            {record.responseModel ? (
+                                                // When response model exists: show two rotated arrows
+                                                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                                                    <ArrowForwardIcon sx={{ transform: 'rotate(45deg)' }} />
+                                                    <ArrowBackIcon sx={{ transform: 'rotate(-45deg)' }} />
+                                                </Box>
+                                            ) : (
+                                                // When no response model: show only forward arrow
+                                                <ArrowForwardIcon />
+                                            )}
+                                        </ConnectionLine>
+                                    </Box>
+                                </Box>
 
                             {/* Smart Rules Section - Vertical layout between model and providers */}
                             {smartEnabled && hasSmartRules ? (
@@ -532,7 +547,7 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                                                         </Box>
                                                     </Box>
                                                 ) : (
-                                                    <Box sx={{ textAlign: 'center', py: 2 }}>
+                                                    <Box sx={{ textAlign: 'left', py: 2 }}>
                                                         <Typography variant="body2" color="text.secondary" gutterBottom>
                                                             No services for this rule
                                                         </Typography>
@@ -570,7 +585,7 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                                         ))}
 
                                         {/* Add Smart Rule Button */}
-                                        <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}>
+                                        <Box sx={{ display: 'flex', justifyContent: 'flex-start', py: 1 }}>
                                             <Button
                                                 variant="outlined"
                                                 startIcon={<AddIcon />}
@@ -604,23 +619,7 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                                         </ConnectionLine>
                                     )}
                                 </>
-                            ) : (
-                                // Normal mode: Arrow from model(s) to providers (always show arrow for consistency)
-                                <>
-                                    <ConnectionLine>
-                                        {record.responseModel ? (
-                                            // When response model exists: show two rotated arrows
-                                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                                                <ArrowForwardIcon sx={{ transform: 'rotate(45deg)' }} />
-                                                <ArrowBackIcon sx={{ transform: 'rotate(-45deg)' }} />
-                                            </Box>
-                                        ) : (
-                                            // When no response model: show only forward arrow
-                                            <ArrowForwardIcon />
-                                        )}
-                                    </ConnectionLine>
-                                </>
-                            )}
+                            ):<></>}
 
                                 {/* Providers Container - Default providers for normal mode or fallback for smart routing */}
                                 <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
