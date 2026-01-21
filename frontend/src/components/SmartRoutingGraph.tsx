@@ -364,7 +364,6 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                                     active={active}
                                                     onEdit={() => onEditSmartRule(rule.uuid)}
                                                     onDelete={() => onDeleteSmartRule(rule.uuid)}
-                                                    onAddService={() => onAddServiceToSmartRule(rule.uuid)}
                                                 />
                                             </NodeContainer>
 
@@ -385,9 +384,6 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                                             active={active && service.active !== false}
                                                             onDelete={() => {
                                                                 console.log('Delete service:', service.uuid);
-                                                            }}
-                                                            onRefreshModels={(p) => {
-                                                                console.log('Refresh models:', p.uuid);
                                                             }}
                                                             onNodeClick={() => {
                                                                 console.log('Provider node click:', service.uuid);
@@ -467,9 +463,6 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                                 active={active && provider.active !== false}
                                                 onDelete={() => {
                                                     console.log('Delete default provider:', provider.uuid);
-                                                }}
-                                                onRefreshModels={(p) => {
-                                                    console.log('Refresh models:', p.uuid);
                                                 }}
                                                 onNodeClick={() => {
                                                     console.log('Provider node click:', provider.uuid);

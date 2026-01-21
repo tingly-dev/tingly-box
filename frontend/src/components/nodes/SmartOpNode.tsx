@@ -1,5 +1,4 @@
 import {
-    Add as AddIcon,
     Delete as DeleteIcon,
     Edit as EditIcon,
     SmartToy as SmartToyIcon,
@@ -73,9 +72,6 @@ const ActionButtonsBox = styled(Box)(({ theme }) => ({
     gap: 2,
     opacity: 0,
     transition: 'opacity 0.2s',
-    '&:hover': {
-        opacity: 1,
-    },
 }));
 
 const StyledSmartNodeWrapper = styled(Box)(({ theme }) => ({
@@ -90,7 +86,6 @@ export interface SmartNodeProps {
     active: boolean;
     onEdit: () => void;
     onDelete: () => void;
-    onAddService: () => void;
 }
 
 export const SmartOpNode: React.FC<SmartNodeProps> = ({
@@ -98,7 +93,6 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
     active,
     onEdit,
     onDelete,
-    onAddService,
 }) => {
     const { t } = useTranslation();
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -113,19 +107,13 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
         setAnchorEl(null);
     };
 
-    const handleEdit = () => {
-        handleMenuClose();
-        onEdit();
-    };
-
-    const handleAddService = () => {
-        handleMenuClose();
-        onAddService();
-    };
-
     const handleDelete = () => {
         handleMenuClose();
         onDelete();
+    };
+
+    const handleNodeClick = () => {
+        onEdit();
     };
 
     const servicesCount = smartRouting.services?.length || 0;
@@ -143,7 +131,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
 
     return (
         <StyledSmartNodeWrapper>
-            <StyledSmartNode active={active}>
+            <StyledSmartNode active={active} onClick={handleNodeClick}>
                 {/* Content */}
                 <Box sx={{ mt: 1, width: '100%' }}>
                     {/* Description */}
@@ -199,30 +187,6 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
 
                 {/* Action Buttons - visible on hover */}
                 <ActionButtonsBox className="action-buttons">
-                    <Tooltip title="Edit operations">
-                        <IconButton
-                            size="small"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                handleEdit();
-                            }}
-                            sx={{ p: 0.5, backgroundColor: 'background.paper' }}
-                        >
-                            <EditIcon sx={{ fontSize: '1rem' }} />
-                        </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Add service">
-                        <IconButton
-                            size="small"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                handleAddService();
-                            }}
-                            sx={{ p: 0.5, backgroundColor: 'background.paper' }}
-                        >
-                            <AddIcon sx={{ fontSize: '1rem' }} />
-                        </IconButton>
-                    </Tooltip>
                     <Tooltip title="Delete smart rule">
                         <IconButton
                             size="small"
