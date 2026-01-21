@@ -286,6 +286,8 @@ func runImport(appConfig *config.AppConfig, args []string) error {
 	}
 
 	if shouldUpdate {
+		// Preserve the existing rule's UUID when updating
+		rule.UUID = existingRule.UUID
 		if err := globalConfig.UpdateRule(existingRule.UUID, rule); err != nil {
 			return fmt.Errorf("failed to update rule: %w", err)
 		}
