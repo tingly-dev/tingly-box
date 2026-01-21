@@ -16,6 +16,7 @@ export interface ModelSelectOptions {
 export interface UseModelSelectDialogOptions {
     providers: Provider[];
     providerModels?: ProviderModelsDataByUuid;
+    onProviderModelsChange?: (providerUuid: string, models: any) => void;
     rules: Rule[];
     onRuleChange?: (updatedRule: Rule) => void;
     showNotification: (message: string, severity: 'success' | 'error') => void;
@@ -37,6 +38,7 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
     const {
         providers,
         providerModels = {},
+        onProviderModelsChange,
         rules,
         onRuleChange,
         showNotification,
@@ -79,9 +81,12 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
         return null;
     }, []);
 
-    // Fetch models for a provider
+    // Fetch models for a provider - updates parent state
     const handleFetchModels = useCallback(async (providerUuid: string) => {
-        if (!providerUuid || providerModels[providerUuid]) {
+        if (!providerUuid) return;
+
+        // If already have models, skip
+        if (providerModels[providerUuid]) {
             return;
         }
 
@@ -91,15 +96,17 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
                 // If GET returns empty list, auto-fetch from Provider API
                 if (!result.data.models || result.data.models.length === 0) {
                     const refreshResult = await api.updateProviderModelsByUUID(providerUuid);
-                    if (refreshResult.success && refreshResult.data) {
-                        // Note: This would need parent to update providerModels prop
+                    if (refreshResult.success && refreshResult.data && onProviderModelsChange) {
+                        onProviderModelsChange(providerUuid, refreshResult.data);
                     }
+                } else if (onProviderModelsChange) {
+                    onProviderModelsChange(providerUuid, result.data);
                 }
             }
         } catch (error) {
             console.error(`Failed to fetch models for provider ${providerUuid}:`, error);
         }
-    }, [providerModels]);
+    }, [providerModels, onProviderModelsChange]);
 
     // Open the dialog
     const openModelSelect = useCallback((options: ModelSelectOptions) => {
@@ -136,12 +143,7 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
         }
 
         setOpen(true);
-
-        // Auto-fetch models for the first provider when dialog opens
-        if (providers.length > 0) {
-            handleFetchModels(providers[0].uuid);
-        }
-    }, [providers, handleFetchModels, findService]);
+    }, [findService]);
 
     // Handle model selection
     const handleModelSelect = useCallback((option: ProviderSelectTabOption) => {
@@ -269,12 +271,7 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
         setEditingProviderUuid(null);
         currentSmartRuleIndexRef.current = null;
         editingServiceContextRef.current = null;
-
-        // Fetch models for selected provider
-        if (option.provider.uuid) {
-            handleFetchModels(option.provider.uuid);
-        }
-    }, [currentConfigRecord, currentRuleUuid, mode, editingProviderUuid, rules, onRuleChange, showNotification, handleFetchModels]);
+    }, [currentConfigRecord, currentRuleUuid, mode, editingProviderUuid, rules, onRuleChange, showNotification]);
 
     // Get selected provider and model for pre-selection
     const getSelectedProvider = useCallback(() => {
@@ -292,6 +289,9 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
         }
         return undefined;
     }, [mode, editingProviderUuid, currentConfigRecord, findService]);
+
+    // Get a unique key for ModelSelectTab to force remount when selection changes
+    const dialogKey = open ? `${getSelectedProvider() || ''}-${getSelectedModel() || ''}` : 'closed';
 
     // Close dialog
     const closeModelSelect = useCallback(() => {
@@ -322,6 +322,7 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
             </DialogTitle>
             <DialogContent>
                 <ModelSelectTab
+                    key={dialogKey}
                     providers={providers}
                     providerModels={providerModels}
                     selectedProvider={getSelectedProvider()}
