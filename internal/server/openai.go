@@ -374,7 +374,7 @@ func (s *Server) forwardOpenAIRequest(provider *typ.Provider, req *openai.ChatCo
 
 // forwardOpenAIStreamRequest forwards the streaming request to the selected provider using OpenAI library
 func (s *Server) forwardOpenAIStreamRequest(provider *typ.Provider, req *openai.ChatCompletionNewParams) (*ssestream.Stream[openai.ChatCompletionChunk], error) {
-	logrus.Infof("provider: %s (streaming)", provider.Name)
+	logrus.Debugf("provider: %s (streaming)", provider.Name)
 
 	// Apply provider-specific transformations before forwarding
 	config := s.buildOpenAIConfig(req)
