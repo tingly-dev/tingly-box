@@ -68,15 +68,18 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
     const menuOpen = Boolean(anchorEl);
 
     const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
+        console.log('ProviderNode handleMenuClick, active:', active);
         event.stopPropagation();
         setAnchorEl(event.currentTarget);
     };
 
     const handleMenuClose = () => {
+        console.log('ProviderNode handleMenuClose');
         setAnchorEl(null);
     };
 
     const handleDelete = () => {
+        console.log('ProviderNode handleDelete');
         handleMenuClose();
         onDelete();
     };
@@ -93,7 +96,7 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                 transformOrigin={{ horizontal: 'right', vertical: 'top' }}
                 anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
             >
-                <MenuItem onClick={handleDelete} disabled={!active}>
+                <MenuItem onClick={handleDelete}>
                     <ListItemIcon>
                         <DeleteIcon color="error" />
                     </ListItemIcon>
@@ -189,7 +192,6 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                         <IconButton
                             size="small"
                             onClick={handleMenuClick}
-                            disabled={!active}
                             sx={{ p: 0.5, backgroundColor: 'background.paper' }}
                         >
                             <DeleteIcon sx={{ fontSize: '1rem', color: 'error.main' }} />

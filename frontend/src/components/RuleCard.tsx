@@ -87,6 +87,15 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 time_window: service.time_window || 0,
             }));
 
+            // Ensure smartRouting services have uuid
+            const smartRouting = (rule.smart_routing || []).map((routing: any) => ({
+                ...routing,
+                services: (routing.services || []).map((service: any) => ({
+                    ...service,
+                    uuid: service.id || service.uuid || uuidv4(),
+                })),
+            }));
+
             const newConfigRecord: ConfigRecord = {
                 uuid: rule.uuid || uuidv4(),
                 requestModel: rule.request_model || '',
@@ -95,7 +104,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 providers: providersList,
                 description: rule.description,
                 smartEnabled: rule.smart_enabled || false,
-                smartRouting: rule.smart_routing || [],
+                smartRouting: smartRouting,
             };
 
             setConfigRecord(newConfigRecord);
@@ -391,6 +400,62 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         onModelSelectOpen(rule.uuid, configRecord, 'add', smartRuleRef);
     }, [configRecord, rule.uuid, onModelSelectOpen]);
 
+    const handleDeleteServiceFromSmartRule = useCallback(async (ruleUuid: string, serviceUuid: string) => {
+        console.log('handleDeleteServiceFromSmartRule called:', { ruleUuid, serviceUuid });
+        if (!configRecord) {
+            console.log('No configRecord, returning');
+            return;
+        }
+
+        console.log('Current smartRouting:', configRecord.smartRouting);
+        const updatedSmartRouting = (configRecord.smartRouting || []).map(rule => {
+            if (rule.uuid === ruleUuid && rule.services) {
+                console.log('Found rule, filtering services:', rule.services, 'serviceUuid:', serviceUuid);
+                return {
+                    ...rule,
+                    services: rule.services.filter(s => s.uuid !== serviceUuid),
+                };
+            }
+            return rule;
+        });
+        console.log('Updated smartRouting:', updatedSmartRouting);
+
+        const updated = {
+            ...configRecord,
+            smartRouting: updatedSmartRouting,
+        };
+
+        const previousRecord = { ...configRecord };
+        setConfigRecord(updated);
+
+        const success = await autoSave(updated);
+        console.log('autoSave result:', success);
+        if (!success) {
+            setConfigRecord(previousRecord);
+        } else {
+            showNotification('Service deleted successfully', 'success');
+        }
+    }, [configRecord, autoSave, showNotification]);
+
+    const handleDeleteDefaultProvider = useCallback(async (providerUuid: string) => {
+        if (!configRecord) return;
+
+        const updated = {
+            ...configRecord,
+            providers: configRecord.providers.filter(p => p.uuid !== providerUuid),
+        };
+
+        const previousRecord = { ...configRecord };
+        setConfigRecord(updated);
+
+        const success = await autoSave(updated);
+        if (!success) {
+            setConfigRecord(previousRecord);
+        } else {
+            showNotification('Provider deleted successfully', 'success');
+        }
+    }, [configRecord, autoSave, showNotification]);
+
     const handleDeleteButtonClick = useCallback(() => {
         setDeleteDialogOpen(true);
     }, []);
@@ -593,7 +658,9 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                         onEditSmartRule={handleEditSmartRule}
                         onDeleteSmartRule={handleDeleteSmartRule}
                         onAddServiceToSmartRule={handleAddServiceToSmartRule}
+                        onDeleteServiceFromSmartRule={handleDeleteServiceFromSmartRule}
                         onAddDefaultProvider={handleAddProviderButtonClick}
+                        onDeleteDefaultProvider={handleDeleteDefaultProvider}
                     />
                 ) : (
                     <RoutingGraph
@@ -610,6 +677,11 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                         onProviderNodeClick={handleProviderNodeClick}
                         onAddProviderButtonClick={handleAddProviderButtonClick}
                         extraActions={extraActions}
+                        onAddSmartRule={handleAddSmartRule}
+                        onEditSmartRule={handleEditSmartRule}
+                        onDeleteSmartRule={handleDeleteSmartRule}
+                        onAddServiceToSmartRule={handleAddServiceToSmartRule}
+                        onDeleteServiceFromSmartRule={handleDeleteServiceFromSmartRule}
                 />
             )}
 

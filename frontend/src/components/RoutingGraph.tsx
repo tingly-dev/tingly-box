@@ -103,6 +103,7 @@ interface RuleGraphProps {
     onEditSmartRule?: (ruleUuid: string) => void;
     onDeleteSmartRule?: (ruleUuid: string) => void;
     onAddServiceToSmartRule?: (ruleUuid: string) => void;
+    onDeleteServiceFromSmartRule?: (ruleUuid: string, serviceUuid: string) => void;
 }
 
 const StyledCard = styled(Card, {
@@ -168,6 +169,7 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
     onEditSmartRule,
     onDeleteSmartRule,
     onAddServiceToSmartRule,
+    onDeleteServiceFromSmartRule,
 }) => {
     const { t } = useTranslation();
 
@@ -500,7 +502,7 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                                                                     apiStyle={getApiStyle(service.provider)}
                                                                     providersData={providers as Provider[]}
                                                                     active={record.active && service.active !== false}
-                                                                    onDelete={() => onDeleteProvider(recordUuid, service.uuid)}
+                                                                    onDelete={() => onDeleteServiceFromSmartRule?.(rule.uuid, service.uuid)}
                                                                     onNodeClick={() => onProviderNodeClick(service.uuid)}
                                                                 />
                                                             ))}

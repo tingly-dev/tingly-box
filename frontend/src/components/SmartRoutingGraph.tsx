@@ -69,7 +69,9 @@ interface SmartRoutingGraphProps {
     onEditSmartRule: (ruleUuid: string) => void;
     onDeleteSmartRule: (ruleUuid: string) => void;
     onAddServiceToSmartRule: (ruleIndex: number) => void;
+    onDeleteServiceFromSmartRule: (ruleUuid: string, serviceUuid: string) => void;
     onAddDefaultProvider?: () => void;
+    onDeleteDefaultProvider?: (providerUuid: string) => void;
     onToggleSmartEnabled?: (enabled: boolean) => void;
     // Additional props matching RoutingGraph
     saving?: boolean;
@@ -132,7 +134,9 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
     onEditSmartRule,
     onDeleteSmartRule,
     onAddServiceToSmartRule,
+    onDeleteServiceFromSmartRule,
     onAddDefaultProvider,
+    onDeleteDefaultProvider,
     onToggleSmartEnabled,
     saving = false,
     collapsible = false,
@@ -398,7 +402,8 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                                             providersData={providers}
                                                             active={active && service.active !== false}
                                                             onDelete={() => {
-                                                                console.log('Delete service:', service.uuid);
+                                                                console.log('SmartRoutingGraph: onDelete clicked for service:', service.uuid, 'rule:', rule.uuid, 'active:', active, 'service.active:', service.active);
+                                                                onDeleteServiceFromSmartRule(rule.uuid, service.uuid);
                                                             }}
                                                             onNodeClick={() => {
                                                                 console.log('Provider node click:', service.uuid);
@@ -477,7 +482,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                                 providersData={providers}
                                                 active={active && provider.active !== false}
                                                 onDelete={() => {
-                                                    console.log('Delete default provider:', provider.uuid);
+                                                    onDeleteDefaultProvider?.(provider.uuid);
                                                 }}
                                                 onNodeClick={() => {
                                                     console.log('Provider node click:', provider.uuid);
