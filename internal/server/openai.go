@@ -362,8 +362,12 @@ func (s *Server) forwardOpenAIRequest(provider *typ.Provider, req *openai.ChatCo
 	// Get or create OpenAI client wrapper from pool
 	wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
 
-	// Make the request using wrapper method
-	chatCompletion, err := wrapper.ChatCompletionsNew(context.Background(), *req)
+	// Make the request using wrapper method with provider timeout
+	timeout := time.Duration(provider.Timeout) * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	chatCompletion, err := wrapper.ChatCompletionsNew(ctx, *req)
 	if err != nil {
 		logrus.Error(err)
 		return nil, fmt.Errorf("failed to create chat completion: %w", err)
@@ -383,8 +387,12 @@ func (s *Server) forwardOpenAIStreamRequest(provider *typ.Provider, req *openai.
 	// Get or create OpenAI client wrapper from pool
 	wrapper := s.clientPool.GetOpenAIClient(provider, "")
 
-	// Make the streaming request using wrapper method
-	stream := wrapper.ChatCompletionsNewStreaming(context.Background(), *req)
+	// Make the streaming request using wrapper method with provider timeout
+	timeout := time.Duration(provider.Timeout) * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	stream := wrapper.ChatCompletionsNewStreaming(ctx, *req)
 
 	return stream, nil
 }
