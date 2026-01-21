@@ -229,7 +229,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                         }}
                     />
                     {active && record.providers.length === 0 && (
-                        <Tooltip title="No providers configured - add a provider to enable request forwarding">
+                        <Tooltip title="No fallback providers - please add fallback providers to confirm rule works">
                             <WarningIcon
                                 sx={{
                                     fontSize: '1.1rem',
