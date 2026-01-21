@@ -64,7 +64,7 @@ type Sink struct {
 type recordFile struct {
 	file        *os.File
 	writer      *json.Encoder
-	currentDate string // date in YYYY-MM-DD format
+	currentHour string // time in YYYY-MM-DD-HH format (hourly rotation)
 }
 
 // NewSink creates a new record sink
@@ -168,19 +168,19 @@ func (r *Sink) writeEntry(provider string, entry *RecordEntry) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
-	// Get current date for file rotation
-	currentDate := time.Now().UTC().Format("2006-01-02")
+	// Get current hour for file rotation (YYYY-MM-DD-HH)
+	currentHour := time.Now().UTC().Format("2006-01-02-15")
 
 	// Get or create file for this provider
 	rf, exists := r.fileMap[provider]
-	if !exists || rf.currentDate != currentDate {
-		// Close old file if date changed
-		if exists && rf.currentDate != currentDate {
+	if !exists || rf.currentHour != currentHour {
+		// Close old file if hour changed
+		if exists && rf.currentHour != currentHour {
 			r.closeFile(rf)
 		}
 
 		// Create new file
-		filename := filepath.Join(r.baseDir, fmt.Sprintf("%s-%s.jsonl", provider, currentDate))
+		filename := filepath.Join(r.baseDir, fmt.Sprintf("%s-%s.jsonl", provider, currentHour))
 		file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if err != nil {
 			logrus.Errorf("Failed to open record file %s: %v", filename, err)
@@ -190,7 +190,7 @@ func (r *Sink) writeEntry(provider string, entry *RecordEntry) {
 		rf = &recordFile{
 			file:        file,
 			writer:      json.NewEncoder(file),
-			currentDate: currentDate,
+			currentHour: currentHour,
 		}
 		r.fileMap[provider] = rf
 	}
