@@ -20,6 +20,8 @@ const (
 	DefaultRequestTimeout = 1800
 	// DefaultMaxTimeout in seconds
 	DefaultMaxTimeout = 30 * 60
+	// ModelFetchTimeout is the timeout for fetching models from provider API in seconds
+	ModelFetchTimeout = 30
 
 	// DefaultMaxTokens is the default max_tokens value for API requests
 	DefaultMaxTokens = 8192

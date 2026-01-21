@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3/packages/param"
@@ -332,7 +333,11 @@ func (s *Server) forwardResponsesRequest(provider *typ.Provider, params response
 	wrapper := s.clientPool.GetOpenAIClient(provider, "")
 	logrus.Infof("provider: %s (responses)", provider.Name)
 
-	ctx := context.Background()
+	// Make the request using wrapper method with provider timeout
+	timeout := time.Duration(provider.Timeout) * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
 	resp, err := wrapper.Client().Responses.New(ctx, params)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create response: %w", err)
@@ -346,7 +351,11 @@ func (s *Server) forwardResponsesStreamRequest(provider *typ.Provider, params re
 	wrapper := s.clientPool.GetOpenAIClient(provider, "")
 	logrus.Infof("provider: %s (responses streaming)", provider.Name)
 
-	ctx := context.Background()
+	// Make the request using wrapper method with provider timeout
+	timeout := time.Duration(provider.Timeout) * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
 	stream := wrapper.Client().Responses.NewStreaming(ctx, params)
 
 	return stream, nil

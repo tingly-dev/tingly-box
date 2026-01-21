@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"tingly-box/internal/constant"
 	"tingly-box/internal/llmclient/httpclient"
 	"tingly-box/internal/typ"
 	"tingly-box/pkg/oauth"
@@ -68,7 +69,8 @@ func GetProviderModelsFromAPI(provider *typ.Provider) ([]string, error) {
 	} else {
 		httpClient = httpclient.CreateHTTPClientWithProxy(provider.ProxyURL)
 	}
-	httpClient.Timeout = 30 * time.Second
+	// Use constant timeout for model fetching (30s is sufficient)
+	httpClient.Timeout = time.Duration(constant.ModelFetchTimeout) * time.Second
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
