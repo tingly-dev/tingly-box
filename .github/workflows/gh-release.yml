@@ -10,10 +10,10 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Release tag (e.g., v1.0.0)'
+        description: 'Release tag (e.g., v0.20250101.0)'
         required: true
         type: string
-        default: 'v1.0.0'
+        default: ''
       build_gui:
         description: 'Build GUI version'
         required: false
