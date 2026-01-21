@@ -301,7 +301,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
 
         const newSmartRouting = {
             uuid: crypto.randomUUID(),
-            description: 'New Smart Rule',
+            description: 'Smart Rule',
             ops: [],
             services: [],
         };

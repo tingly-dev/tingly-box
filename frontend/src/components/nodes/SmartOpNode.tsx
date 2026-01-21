@@ -5,7 +5,6 @@ import {
 } from '@mui/icons-material';
 import {
     Box,
-    Chip,
     IconButton,
     ListItemIcon,
     ListItemText,
@@ -14,72 +13,21 @@ import {
     Tooltip,
     Typography,
 } from '@mui/material';
-import { styled } from '@mui/material/styles';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SmartRouting } from '../RoutingGraphTypes.ts';
-
-// Node dimensions - smaller for better layout
-const NODE_STYLES = {
-    width: 220,
-    height: 90,
-    padding: 8,
-} as const;
+import {
+    ActionButtonsBox,
+    SMART_NODE_STYLES,
+    StyledSmartNodePrimary,
+    StyledSmartNodeWrapper,
+} from './styles.tsx';
 
 // Smart node internal dimensions
-const SMART_NODE_STYLES = {
+const SMART_NODE_INTERNAL_STYLES = {
     badgeHeight: 20,
     fieldPadding: 4,
 } as const;
-
-const { node } = { node: NODE_STYLES };
-
-// SmartOpNode Container - styled similar to ModelNode but with primary color
-const StyledSmartNode = styled(Box, {
-    shouldForwardProp: (prop) => prop !== 'active',
-})<{ active: boolean }>(({ active, theme }) => ({
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: node.padding,
-    borderRadius: theme.shape.borderRadius,
-    border: '1px solid',
-    borderColor: active ? 'primary.main' : 'divider',
-    backgroundColor: active ? 'primary.50' : 'background.paper',
-    textAlign: 'center',
-    width: node.width,
-    height: node.height,
-    boxShadow: theme.shadows[2],
-    transition: 'all 0.2s ease-in-out',
-    position: 'relative',
-    cursor: 'pointer',
-    opacity: active ? 1 : 0.6,
-    '&:hover': {
-        borderColor: 'primary.main',
-        backgroundColor: 'primary.100',
-        boxShadow: theme.shadows[4],
-        transform: 'translateY(-2px)',
-    }
-}));
-
-// Action button container
-const ActionButtonsBox = styled(Box)(({ theme }) => ({
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    display: 'flex',
-    gap: 2,
-    opacity: 0,
-    transition: 'opacity 0.2s',
-}));
-
-const StyledSmartNodeWrapper = styled(Box)(({ theme }) => ({
-    position: 'relative',
-    '&:hover .action-buttons': {
-        opacity: 1,
-    }
-}));
 
 export interface SmartNodeProps {
     smartRouting: SmartRouting;
@@ -132,7 +80,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
 
     return (
         <StyledSmartNodeWrapper>
-            <StyledSmartNode active={active} onClick={handleNodeClick}>
+            <StyledSmartNodePrimary active={active} onClick={handleNodeClick}>
                 {/* Index Badge */}
                 {index !== undefined && (
                     <Box
@@ -167,12 +115,6 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                             color: 'text.primary',
                             fontSize: '0.85rem',
                             mb: 1,
-                            display: '-webkit-box',
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: 'vertical',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            minHeight: 40,
                         }}
                     >
                         {smartRouting.description || 'Untitled Smart Rule'}
@@ -181,22 +123,34 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                     {/* Summary Info */}
                     <Box
                         sx={{
-                            display: 'flex',
-                            gap: 1,
-                            justifyContent: 'center',
-                            alignItems: 'center',
+                            width: '100%',
                         }}
                     >
-                        <Chip
-                            label={getOpDisplay()}
-                            size="small"
-                            variant="outlined"
+                        <Box
                             sx={{
-                                fontSize: '0.7rem',
-                                height: 20,
+                                width: '100%',
+                                p: 1,
+                                border: '1px solid',
                                 borderColor: active ? 'primary.main' : 'divider',
+                                borderRadius: 1,
+                                backgroundColor: 'background.paper',
+                                transition: 'all 0.2s',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
                             }}
-                        />
+                        >
+                            <Typography
+                                variant="body2"
+                                sx={{
+                                    fontSize: '0.8rem',
+                                    color: active ? 'primary.main' : 'text.secondary',
+                                    fontWeight: 500,
+                                }}
+                            >
+                                {getOpDisplay()}
+                            </Typography>
+                        </Box>
                     </Box>
                 </Box>
 
@@ -212,7 +166,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                         </IconButton>
                     </Tooltip>
                 </ActionButtonsBox>
-            </StyledSmartNode>
+            </StyledSmartNodePrimary>
 
             {/* Delete Confirmation Menu */}
             <Menu
