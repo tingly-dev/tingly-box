@@ -118,7 +118,7 @@ const GraphContainer = styled(Box)(({ theme }) => ({
 
 const GraphRow = styled(Box)(({ theme }) => ({
     display: 'flex',
-    alignItems: 'stretch',
+    alignItems: 'center',
     justifyContent: 'flex-start',
     gap: graph.rowGap,
     marginBottom: theme.spacing(1),
@@ -327,31 +327,39 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                         <Box sx={{ overflowX: 'auto' }}>
                             <GraphContainer>
                                 <GraphRow>
-                                    {/* Model Node on the left */}
-                                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pr: 1 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: graph.iconGap, mb: graph.labelMargin }}>
-                                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                    Request Model
-                                </Typography>
-                                <Tooltip title="The model name that clients use to make requests.">
-                                    <InfoIcon sx={{ fontSize: '0.9rem', color: 'text.secondary', cursor: 'help' }} />
-                                </Tooltip>
-                            </Box>
-                            <NodeContainer>
-                                <ModelNode
-                                    active={active}
-                                    label="Unspecified"
-                                    value={record.requestModel}
-                                    editable={active}
-                                    onUpdate={(value) => {
-                                        console.log('Update request model:', value);
-                                    }}
-                                />
-                            </NodeContainer>
-                        </Box>
+                                    {/* Request Model section - label + node + arrow as a unit */}
+                                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pr: 1, mt: -1 }}>
+                                        {/* Request Model Label */}
+                                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: graph.iconGap, mb: graph.labelMargin }}>
+                                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                                Request Model
+                                            </Typography>
+                                            <Tooltip title="The model name that clients use to make requests.">
+                                                <InfoIcon sx={{ fontSize: '0.9rem', color: 'text.secondary', cursor: 'help' }} />
+                                            </Tooltip>
+                                        </Box>
+                                        {/* Node + Arrow as a row */}
+                                        <Box sx={{ display: 'flex', flexDirection: 'row', alignItems: 'center' }}>
+                                            <NodeContainer>
+                                                <ModelNode
+                                                    active={active}
+                                                    label="Unspecified"
+                                                    value={record.requestModel}
+                                                    editable={active}
+                                                    onUpdate={(value) => {
+                                                        console.log('Update request model:', value);
+                                                    }}
+                                                />
+                                            </NodeContainer>
+                                            {/* Arrow to rules section */}
+                                            <ConnectionLine>
+                                                <ArrowDownIcon sx={{ transform: 'rotate(270deg)' }} />
+                                            </ConnectionLine>
+                                        </Box>
+                                    </Box>
 
                         {/* Rules section on the right */}
-                        <Box sx={{ flex: 1, display: 'flex', alignItems:"flex-start", flexDirection: 'column', gap: 1.5, marginLeft: 3 }}>
+                        <Box sx={{ flex: 1, display: 'flex', alignItems:"flex-start", flexDirection: 'column', gap: 1.5 }}>
                             {/* Smart Rules */}
                             {smartRouting.length > 0 ? (
                                 smartRouting.map((rule, index) => (
