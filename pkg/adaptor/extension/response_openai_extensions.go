@@ -1,6 +1,8 @@
 package extension
 
 import (
+	"strings"
+
 	"tingly-box/internal/typ"
 )
 
@@ -27,7 +29,7 @@ func GetResponseTransform(provider *typ.Provider) ResponseTransform {
 
 	apiBase := provider.APIBase
 	for _, config := range ResponseConfigs {
-		if containsIgnoreCase(apiBase, config.APIBasePattern) {
+		if strings.Contains(strings.ToLower(apiBase), strings.ToLower(config.APIBasePattern)) {
 			return config.Transform
 		}
 	}
@@ -53,32 +55,4 @@ func applyDeepSeekResponseTransform(resp map[string]interface{}, provider *typ.P
 		}
 	}
 	return resp
-}
-
-// containsIgnoreCase checks if a string contains a substring (case-insensitive)
-func containsIgnoreCase(s, substr string) bool {
-	if len(s) < len(substr) {
-		return false
-	}
-	for i := 0; i <= len(s)-len(substr); i++ {
-		match := true
-		for j := 0; j < len(substr); j++ {
-			sc := s[i+j]
-			ss := substr[j]
-			if sc >= 'A' && sc <= 'Z' {
-				sc += 32
-			}
-			if ss >= 'A' && ss <= 'Z' {
-				ss += 32
-			}
-			if sc != ss {
-				match = false
-				break
-			}
-		}
-		if match {
-			return true
-		}
-	}
-	return false
 }
