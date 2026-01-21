@@ -41,7 +41,7 @@ func stopServerWithFileLock(fileLock *lock.FileLock) error {
 	}
 
 	// Wait for process to exit and lock to be released
-	for i := 0; i < 30; i++ { // Wait up to 30 seconds
+	for i := 0; i < 5; i++ { // Wait up to 5 seconds
 		if !fileLock.IsLocked() {
 			return nil
 		}

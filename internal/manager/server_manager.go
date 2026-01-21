@@ -13,7 +13,7 @@ import (
 	"tingly-box/internal/server"
 )
 
-const StopTimeout = time.Second * 10
+const StopTimeout = time.Second
 
 // ServerManager manages the HTTP server lifecycle
 type ServerManager struct {
