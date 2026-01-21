@@ -5,6 +5,7 @@ import {
     ArrowForward as ArrowForwardIcon,
     ExpandMore as ExpandMoreIcon,
     Info as InfoIcon,
+    Warning as WarningIcon,
 } from '@mui/icons-material';
 import {
     Box,
@@ -273,6 +274,21 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                             }}
                         />
                     </Tooltip>
+                    {record.active && record.providers.length === 0 && (
+                        <Tooltip title="No providers configured - add a provider to enable request forwarding">
+                            <WarningIcon
+                                sx={{
+                                    fontSize: '1.1rem',
+                                    color: 'warning.main',
+                                    animation: 'pulse 2s ease-in-out infinite',
+                                    '@keyframes pulse': {
+                                        '0%, 100%': { opacity: 1 },
+                                        '50%': { opacity: 0.5 },
+                                    },
+                                }}
+                            />
+                        </Tooltip>
+                    )}
                     {/* Smart Routing Toggle */}
                     {/*<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>*/}
                     {/*    <Typography variant="body2" sx={{ fontSize: '0.85rem', color: 'text.secondary' }}>*/}
@@ -580,97 +596,57 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                                     )}
                                 </>
                             ) : (
-                                // Normal mode: Arrow from model(s) to providers
+                                // Normal mode: Arrow from model(s) to providers (always show arrow for consistency)
                                 <>
-                                    {record.providers.length > 0 && (
-                                        record.responseModel ? (
-                                            // When response model exists: show two rotated arrows to indicate connection
-                                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-                                                <ConnectionLine>
-                                                    <ArrowForwardIcon sx={{ transform: 'rotate(45deg)' }} />
-                                                </ConnectionLine>
-                                                <ConnectionLine>
-                                                    <ArrowBackIcon sx={{ transform: 'rotate(-45deg)' }} />
-                                                </ConnectionLine>
+                                    <ConnectionLine>
+                                        {record.responseModel ? (
+                                            // When response model exists: show two rotated arrows
+                                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                                                <ArrowForwardIcon sx={{ transform: 'rotate(45deg)' }} />
+                                                <ArrowBackIcon sx={{ transform: 'rotate(-45deg)' }} />
                                             </Box>
                                         ) : (
                                             // When no response model: show only forward arrow
-                                            <ConnectionLine>
-                                                <ArrowForwardIcon />
-                                            </ConnectionLine>
-                                        )
-                                    )}
+                                            <ArrowForwardIcon />
+                                        )}
+                                    </ConnectionLine>
                                 </>
                             )}
 
                                 {/* Providers Container - Default providers for normal mode or fallback for smart routing */}
-                                {record.providers.length > 0 ? (
-                                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                        <Typography variant="caption" sx={{ color: 'text.secondary', mb: graph.labelMargin }}>
-                                            {smartEnabled && hasSmartRules ? 'Default Providers (Fallback)' : 'Forwarding to Providers'}
-                                        </Typography>
-                                        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'nowrap', justifyContent: 'flex-start', alignItems: 'center' }}>
-                                            {record.providers.map((provider) => (
-                                                <ProviderNode
-                                                    key={provider.uuid}
-                                                    provider={provider}
-                                                    apiStyle={getApiStyle(provider.provider)}
-                                                    providersData={providers as Provider[]}
-                                                    active={record.active && provider.active !== false}
-                                                    onDelete={() => onDeleteProvider(recordUuid, provider.uuid)}
-                                                    onRefreshModels={(p) => onRefreshModels(p.uuid)}
-                                                    onNodeClick={() => onProviderNodeClick(provider.uuid)}
-                                                />
-                                            ))}
-                                            {/* Add Provider Button */}
-                                            <ActionAddNode
-                                                active={record.active && !saving}
-                                                onAdd={() => onAddProviderButtonClick()}
-                                                tooltip={
-                                                    record.providers.length === 0
-                                                        ? "Add a provider to enable request forwarding"
-                                                        : record.providers.length === 1
-                                                            ? "Add another provider (with 2+ providers, load balancing will be enabled based on strategy)"
-                                                            : "Add another provider (requests will be load balanced across all providers)"
-                                                }
+                                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                    <Typography variant="caption" sx={{ color: 'text.secondary', mb: graph.labelMargin }}>
+                                        {record.providers.length > 0
+                                            ? (smartEnabled && hasSmartRules ? 'Default Providers (Fallback)' : 'Forwarding to Providers')
+                                            : 'Forwarding to Providers'
+                                        }
+                                    </Typography>
+                                    <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'nowrap', justifyContent: 'flex-start', alignItems: 'center' }}>
+                                        {record.providers.map((provider) => (
+                                            <ProviderNode
+                                                key={provider.uuid}
+                                                provider={provider}
+                                                apiStyle={getApiStyle(provider.provider)}
+                                                providersData={providers as Provider[]}
+                                                active={record.active && provider.active !== false}
+                                                onDelete={() => onDeleteProvider(recordUuid, provider.uuid)}
+                                                onRefreshModels={(p) => onRefreshModels(p.uuid)}
+                                                onNodeClick={() => onProviderNodeClick(provider.uuid)}
                                             />
+                                        ))}
+                                        <ActionAddNode
+                                            active={record.active && !saving}
+                                            onAdd={() => onAddProviderButtonClick()}
+                                            tooltip={
+                                                record.providers.length === 0
+                                                    ? "Add a provider to enable request forwarding"
+                                                    : record.providers.length === 1
+                                                        ? "Add another provider (with 2+ providers, load balancing will be enabled based on strategy)"
+                                                        : "Add another provider (requests will be load balanced across all providers)"
+                                            }
+                                        />
                                     </Box>
                                 </Box>
-                                ) : (
-                                    <Box sx={{ textAlign: 'center', py: 2 }}>
-                                        <Typography variant="body2" color="error" gutterBottom>
-                                            No providers configured
-                                        </Typography>
-                                        <Tooltip title="Add your first provider">
-                                            <IconButton
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onAddProviderButtonClick();
-                                                }}
-                                                disabled={!record.active || saving}
-                                                sx={{
-                                                    width: 48,
-                                                    height: 48,
-                                                    border: '2px dashed',
-                                                    borderColor: 'divider',
-                                                    borderRadius: 2,
-                                                    backgroundColor: 'background.paper',
-                                                    '&:hover': {
-                                                        borderColor: 'primary.main',
-                                                        backgroundColor: 'action.hover',
-                                                        borderStyle: 'solid',
-                                                    },
-                                                    '&:disabled': {
-                                                        borderColor: 'action.disabled',
-                                                        backgroundColor: 'action.disabledBackground',
-                                                    }
-                                                }}
-                                            >
-                                                <AddIcon sx={{ fontSize: 28, color: 'text.secondary' }} />
-                                            </IconButton>
-                                        </Tooltip>
-                                    </Box>
-                                )}
 
                             </GraphRow>
                         </GraphContainer>

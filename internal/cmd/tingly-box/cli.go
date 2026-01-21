@@ -107,6 +107,7 @@ func init() {
 	rootCmd.AddCommand(cli.AddCommand(appConfig))
 	rootCmd.AddCommand(cli.ListCommand(appConfig))
 	rootCmd.AddCommand(cli.DeleteCommand(appConfig))
+	rootCmd.AddCommand(cli.ImportCommand(appConfig))
 	rootCmd.AddCommand(cli.StartCommand(appConfig))
 	rootCmd.AddCommand(cli.StopCommand(appConfig))
 	rootCmd.AddCommand(cli.RestartCommand(appConfig))
