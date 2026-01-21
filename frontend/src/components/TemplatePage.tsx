@@ -84,6 +84,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
     const { openModelSelect, ModelSelectDialog, isOpen: modelSelectDialogOpen } = useModelSelectDialog({
         providers,
         providerModels: providerModelsByUuid,
+        onProviderModelsChange: handleProviderModelsChange,
         rules,
         onRuleChange: handleRuleChange,
         showNotification,
