@@ -21,6 +21,11 @@ interface TokenUsageChartProps {
 }
 
 export default function TokenUsageChart({ data }: TokenUsageChartProps) {
+    // Sort by total tokens (input + output) and take top 5
+    const top5Data = [...data]
+        .sort((a, b) => (b.inputTokens + b.outputTokens) - (a.inputTokens + a.outputTokens))
+        .slice(0, 5);
+
     const formatYAxis = (value: number) => {
         if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
         if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
@@ -45,9 +50,9 @@ export default function TokenUsageChart({ data }: TokenUsageChartProps) {
             }}
         >
             <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-                Token Usage by Model
+                Token Usage by Top 5 Models
             </Typography>
-            {data.length === 0 ? (
+            {top5Data.length === 0 ? (
                 <Box
                     sx={{
                         height: 300,
@@ -61,7 +66,7 @@ export default function TokenUsageChart({ data }: TokenUsageChartProps) {
                 </Box>
             ) : (
                 <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={data} layout="vertical">
+                    <BarChart data={top5Data} layout="vertical">
                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                         <XAxis
                             type="number"

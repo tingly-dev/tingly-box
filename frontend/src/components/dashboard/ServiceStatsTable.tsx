@@ -7,8 +7,10 @@ import {
     TableContainer,
     TableHead,
     TableRow,
+    TablePagination,
     Box,
 } from '@mui/material';
+import { useState } from 'react';
 
 export interface AggregatedStat {
     key: string;
@@ -31,6 +33,9 @@ interface ServiceStatsTableProps {
 }
 
 export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
+    const [page, setPage] = useState(0);
+    const [rowsPerPage, setRowsPerPage] = useState(10);
+
     const formatTokens = (num: number): string => {
         if (num >= 1000000) return `${(num / 1000000).toFixed(2)}M`;
         if (num >= 1000) return `${(num / 1000).toFixed(2)}K`;
@@ -40,6 +45,20 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
     const formatRequests = (num: number): string => {
         return num.toLocaleString();
     };
+
+    const handleChangePage = (_event: unknown, newPage: number) => {
+        setPage(newPage);
+    };
+
+    const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+        setRowsPerPage(parseInt(event.target.value, 10));
+        setPage(0);
+    };
+
+    // Avoid a layout jump when reaching the last page with empty rows
+    const emptyRows = page > 0 ? Math.max(0, (1 + page) * rowsPerPage - stats.length) : 0;
+
+    const visibleStats = stats.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
     return (
         <Paper
@@ -77,45 +96,62 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            stats.map((stat, index) => (
-                                <TableRow key={index} hover>
-                                    <TableCell>{stat.provider_name || '-'}</TableCell>
-                                    <TableCell>
-                                        <Typography
-                                            variant="body2"
-                                            sx={{
-                                                maxWidth: 200,
-                                                overflow: 'hidden',
-                                                textOverflow: 'ellipsis',
-                                                whiteSpace: 'nowrap',
-                                            }}
-                                            title={stat.model}
-                                        >
-                                            {stat.model || stat.key}
-                                        </Typography>
-                                    </TableCell>
-                                    <TableCell align="right">{formatRequests(stat.request_count)}</TableCell>
-                                    <TableCell align="right">{formatTokens(stat.total_input_tokens)}</TableCell>
-                                    <TableCell align="right">{formatTokens(stat.total_output_tokens)}</TableCell>
-                                    {/* <TableCell align="right">
-                                        {stat.avg_latency_ms > 0 ? `${stat.avg_latency_ms.toFixed(0)}ms` : '-'}
-                                    </TableCell> */}
-                                    <TableCell align="right">
-                                        <Typography
-                                            variant="body2"
-                                            sx={{
-                                                color: stat.error_rate > 0.05 ? 'error.main' : 'text.secondary',
-                                            }}
-                                        >
-                                            {(stat.error_rate * 100).toFixed(2)}%
-                                        </Typography>
-                                    </TableCell>
-                                </TableRow>
-                            ))
+                            <>
+                                {visibleStats.map((stat, index) => (
+                                    <TableRow key={index} hover>
+                                        <TableCell>{stat.provider_name || '-'}</TableCell>
+                                        <TableCell>
+                                            <Typography
+                                                variant="body2"
+                                                sx={{
+                                                    maxWidth: 200,
+                                                    overflow: 'hidden',
+                                                    textOverflow: 'ellipsis',
+                                                    whiteSpace: 'nowrap',
+                                                }}
+                                                title={stat.model}
+                                            >
+                                                {stat.model || stat.key}
+                                            </Typography>
+                                        </TableCell>
+                                        <TableCell align="right">{formatRequests(stat.request_count)}</TableCell>
+                                        <TableCell align="right">{formatTokens(stat.total_input_tokens)}</TableCell>
+                                        <TableCell align="right">{formatTokens(stat.total_output_tokens)}</TableCell>
+                                        {/* <TableCell align="right">
+                                            {stat.avg_latency_ms > 0 ? `${stat.avg_latency_ms.toFixed(0)}ms` : '-'}
+                                        </TableCell> */}
+                                        <TableCell align="right">
+                                            <Typography
+                                                variant="body2"
+                                                sx={{
+                                                    color: stat.error_rate > 0.05 ? 'error.main' : 'text.secondary',
+                                                }}
+                                            >
+                                                {(stat.error_rate * 100).toFixed(2)}%
+                                            </Typography>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                                {emptyRows > 0 && (
+                                    <TableRow style={{ height: 53 * emptyRows }}>
+                                        <TableCell colSpan={6} />
+                                    </TableRow>
+                                )}
+                            </>
                         )}
                     </TableBody>
                 </Table>
             </TableContainer>
+            <TablePagination
+                rowsPerPageOptions={[5, 10, 25, 50]}
+                component="div"
+                count={stats.length}
+                rowsPerPage={rowsPerPage}
+                page={page}
+                onPageChange={handleChangePage}
+                onRowsPerPageChange={handleChangeRowsPerPage}
+                sx={{ borderBottomLeftRadius: 8, borderBottomRightRadius: 8 }}
+            />
         </Paper>
     );
 }
