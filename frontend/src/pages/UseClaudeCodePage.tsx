@@ -524,7 +524,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                             providers={providers}
                             onRulesChange={setRules}
                             allowToggleRule={false}
-                            collapsible={false}
+                            collapsible={true}
                         />
 
                         {/* Confirmation dialog for mode change */}
