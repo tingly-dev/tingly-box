@@ -68,8 +68,8 @@ type Server struct {
 	httpsRegenerate bool
 
 	// record options
-	record    bool
-	recordDir string
+	recordMode record.RecordMode
+	recordDir  string
 
 	version string
 }
@@ -141,10 +141,11 @@ func WithHTTPSRegenerate(regenerate bool) ServerOption {
 	}
 }
 
-// WithRecord enables or disables request/response recording
-func WithRecord(enabled bool) ServerOption {
+// WithRecordMode sets the record mode for request/response recording
+// mode: empty string = disabled, "all" = record all, "response" = response only
+func WithRecordMode(mode record.RecordMode) ServerOption {
 	return func(s *Server) {
-		s.record = enabled
+		s.recordMode = mode
 	}
 }
 
@@ -238,10 +239,10 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.errorMW = errorMW
 
 	// Initialize record sink if recording is enabled
-	if server.record {
-		recordSink := record.NewSink(server.recordDir, true)
+	if server.recordMode != "" {
+		recordSink := record.NewSink(server.recordDir, server.recordMode)
 		server.clientPool.SetRecordSink(recordSink)
-		log.Printf("Request recording enabled, directory: %s", server.recordDir)
+		log.Printf("Request recording enabled, mode: %s, directory: %s", server.recordMode, server.recordDir)
 	}
 
 	// Initialize statistics middleware with server reference

@@ -12,6 +12,15 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// RecordMode defines the recording mode
+type RecordMode string
+
+const (
+	RecordModeAll      RecordMode = "all"      // Record both request and response
+	RecordModeResponse RecordMode = "response" // Record only response
+	RecordModeSlim     RecordMode = "slim"     // TODO: Not implemented yet
+)
+
 // RecordEntry represents a single recorded request/response pair
 type RecordEntry struct {
 	Timestamp  string                 `json:"timestamp"`
@@ -45,7 +54,7 @@ type RecordResponse struct {
 
 // Sink manages recording of HTTP requests/responses to JSONL files
 type Sink struct {
-	enabled bool
+	mode    RecordMode
 	baseDir string
 	fileMap map[string]*recordFile // provider -> file
 	mutex   sync.RWMutex
@@ -59,10 +68,28 @@ type recordFile struct {
 }
 
 // NewSink creates a new record sink
-func NewSink(baseDir string, enabled bool) *Sink {
-	if !enabled {
+// mode: empty string = disabled, "all" = record all, "response" = response only
+func NewSink(baseDir string, mode RecordMode) *Sink {
+	// Empty mode means recording is disabled
+	if mode == "" {
 		return &Sink{
-			enabled: false,
+			mode: "",
+		}
+	}
+
+	// Validate mode
+	if mode != RecordModeAll && mode != RecordModeResponse && mode != RecordModeSlim {
+		logrus.Warnf("Invalid record mode '%s', recording disabled", mode)
+		return &Sink{
+			mode: "",
+		}
+	}
+
+	// Check for slim mode (not implemented)
+	if mode == RecordModeSlim {
+		logrus.Warnf("Record mode 'slim' is not implemented yet, please use 'all' or 'response'")
+		return &Sink{
+			mode: "",
 		}
 	}
 
@@ -70,12 +97,12 @@ func NewSink(baseDir string, enabled bool) *Sink {
 	if err := os.MkdirAll(baseDir, 0755); err != nil {
 		logrus.Errorf("Failed to create record directory %s: %v", baseDir, err)
 		return &Sink{
-			enabled: false,
+			mode: "",
 		}
 	}
 
 	return &Sink{
-		enabled: true,
+		mode:    mode,
 		baseDir: baseDir,
 		fileMap: make(map[string]*recordFile),
 	}
@@ -83,7 +110,7 @@ func NewSink(baseDir string, enabled bool) *Sink {
 
 // Record records a single request/response pair
 func (r *Sink) Record(provider, model string, req *RecordRequest, resp *RecordResponse, duration time.Duration, err error) {
-	if !r.enabled {
+	if r.mode == "" {
 		return
 	}
 
@@ -92,9 +119,13 @@ func (r *Sink) Record(provider, model string, req *RecordRequest, resp *RecordRe
 		RequestID:  uuid.New().String(),
 		Provider:   provider,
 		Model:      model,
-		Request:    req,
 		Response:   resp,
 		DurationMs: duration.Milliseconds(),
+	}
+
+	// Only include request if mode is "all"
+	if r.mode == RecordModeAll {
+		entry.Request = req
 	}
 
 	if err != nil {
@@ -106,7 +137,7 @@ func (r *Sink) Record(provider, model string, req *RecordRequest, resp *RecordRe
 
 // RecordWithMetadata records a request/response with additional metadata
 func (r *Sink) RecordWithMetadata(provider, model string, req *RecordRequest, resp *RecordResponse, duration time.Duration, metadata map[string]interface{}, err error) {
-	if !r.enabled {
+	if r.mode == "" {
 		return
 	}
 
@@ -115,10 +146,14 @@ func (r *Sink) RecordWithMetadata(provider, model string, req *RecordRequest, re
 		RequestID:  uuid.New().String(),
 		Provider:   provider,
 		Model:      model,
-		Request:    req,
 		Response:   resp,
 		DurationMs: duration.Milliseconds(),
 		Metadata:   metadata,
+	}
+
+	// Only include request if mode is "all"
+	if r.mode == RecordModeAll {
+		entry.Request = req
 	}
 
 	if err != nil {
@@ -185,14 +220,14 @@ func (r *Sink) Close() {
 	}
 	r.fileMap = make(map[string]*recordFile)
 
-	if r.enabled {
+	if r.mode != "" {
 		logrus.Info("Record sink closed")
 	}
 }
 
 // IsEnabled returns whether recording is enabled
 func (r *Sink) IsEnabled() bool {
-	return r.enabled
+	return r.mode != ""
 }
 
 // GetBaseDir returns the base directory for recordings

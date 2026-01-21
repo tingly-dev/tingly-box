@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"tingly-box/internal/config"
+	"tingly-box/internal/record"
 	"tingly-box/internal/server"
 )
 
@@ -28,7 +29,7 @@ type ServerManager struct {
 	httpsEnabled      bool
 	httpsCertDir      string
 	httpsRegenerate   bool
-	record            bool
+	recordMode        record.RecordMode
 	recordDir         string
 	status            string
 	sync.Mutex
@@ -92,10 +93,11 @@ func WithHTTPSRegenerate(regenerate bool) ServerManagerOption {
 	}
 }
 
-// WithRecord sets the record flag for request/response recording
-func WithRecord(enabled bool) ServerManagerOption {
+// WithRecordMode sets the record mode for request/response recording
+// mode: empty string = disabled, "all" = record all, "response" = response only
+func WithRecordMode(mode record.RecordMode) ServerManagerOption {
 	return func(sm *ServerManager) {
-		sm.record = enabled
+		sm.recordMode = mode
 	}
 }
 
@@ -166,7 +168,7 @@ func (sm *ServerManager) Setup(port int) error {
 		server.WithHTTPSCertDir(sm.httpsCertDir),
 		server.WithHTTPSRegenerate(sm.httpsRegenerate),
 		server.WithVersion(sm.appConfig.GetVersion()),
-		server.WithRecord(sm.record),
+		server.WithRecordMode(sm.recordMode),
 		server.WithRecordDir(sm.recordDir),
 	)
 
