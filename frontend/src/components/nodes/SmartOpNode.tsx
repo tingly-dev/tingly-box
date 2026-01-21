@@ -83,6 +83,7 @@ const StyledSmartNodeWrapper = styled(Box)(({ theme }) => ({
 
 export interface SmartNodeProps {
     smartRouting: SmartRouting;
+    index?: number; // Frontend-generated index for numbering
     active: boolean;
     onEdit: () => void;
     onDelete: () => void;
@@ -90,6 +91,7 @@ export interface SmartNodeProps {
 
 export const SmartOpNode: React.FC<SmartNodeProps> = ({
     smartRouting,
+    index,
     active,
     onEdit,
     onDelete,
@@ -131,6 +133,30 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
     return (
         <StyledSmartNodeWrapper>
             <StyledSmartNode active={active} onClick={handleNodeClick}>
+                {/* Index Badge */}
+                {index !== undefined && (
+                    <Box
+                        sx={{
+                            position: 'absolute',
+                            top: -8,
+                            left: -8,
+                            backgroundColor: 'primary.main',
+                            color: 'primary.contrastText',
+                            borderRadius: '50%',
+                            width: 24,
+                            height: 24,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '0.75rem',
+                            fontWeight: 'bold',
+                            boxShadow: 1,
+                            zIndex: 1,
+                        }}
+                    >
+                        {index + 1}
+                    </Box>
+                )}
                 {/* Content */}
                 <Box sx={{ mt: 1, width: '100%' }}>
                     {/* Description */}

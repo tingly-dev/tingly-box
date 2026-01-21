@@ -1,5 +1,5 @@
 import { Dialog, DialogContent, DialogTitle } from '@mui/material';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useRef } from 'react';
 import ApiKeyModal from '../components/ApiKeyModal';
 import RuleCard from './RuleCard.tsx';
 import UnifiedCard from '../components/UnifiedCard';
@@ -49,6 +49,8 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
     const [editingProviderUuid, setEditingProviderUuid] = useState<string | null>(null);
     const [currentRuleUuid, setCurrentRuleUuid] = useState<string | null>(null);
     const [currentConfigRecord, setCurrentConfigRecord] = useState<ConfigRecord | null>(null);
+    // Use ref to store smart rule index (number) instead of UUID (string)
+    const currentSmartRuleIndexRef = useRef<number | null>(null);
 
     const handleFetchModels = useCallback(async (providerUuid: string) => {
         if (!providerUuid || providerModelsByUuid[providerUuid]) {
@@ -127,7 +129,17 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
         setCurrentRuleUuid(ruleUuid);
         setCurrentConfigRecord(configRecord);
         setModelSelectMode(mode);
-        setEditingProviderUuid(providerUuid || null);
+
+        // Check if providerUuid is a smart rule reference (format: "smart:${index}")
+        if (providerUuid?.startsWith('smart:')) {
+            const index = parseInt(providerUuid.substring(6), 10); // Remove "smart:" prefix and parse as number
+            currentSmartRuleIndexRef.current = index;
+            setEditingProviderUuid(null);
+        } else {
+            currentSmartRuleIndexRef.current = null;
+            setEditingProviderUuid(providerUuid || null);
+        }
+
         setModelSelectDialogOpen(true);
 
         // Auto-fetch models for the first provider when dialog opens
@@ -139,9 +151,31 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
     const handleModelSelect = useCallback((option: ProviderSelectTabOption) => {
         if (!currentConfigRecord || !currentRuleUuid) return;
 
+        const smartRuleIndex = currentSmartRuleIndexRef.current;
+
         let updated: ConfigRecord;
 
-        if (modelSelectMode === 'add') {
+        // Check if we're adding to a smart rule by index
+        if (smartRuleIndex !== null && smartRuleIndex >= 0 && modelSelectMode === 'add') {
+            // Add service to the specific smart rule by index
+            updated = {
+                ...currentConfigRecord,
+                smartRouting: (currentConfigRecord.smartRouting || []).map((rule, index) => {
+                    if (index === smartRuleIndex) {
+                        const newService = { uuid: uuidv4(), provider: option.provider.uuid, model: option.model || '' };
+                        return {
+                            ...rule,
+                            services: [
+                                ...(rule.services || []),
+                                newService,
+                            ],
+                        };
+                    }
+                    return rule;
+                }),
+            };
+        } else if (modelSelectMode === 'add') {
+            // Add to default providers
             updated = {
                 ...currentConfigRecord,
                 providers: [
@@ -150,6 +184,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
                 ],
             };
         } else if (modelSelectMode === 'edit' && editingProviderUuid) {
+            // Edit existing provider
             updated = {
                 ...currentConfigRecord,
                 providers: currentConfigRecord.providers.map(p => {
@@ -208,6 +243,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
         setModelSelectDialogOpen(false);
         setCurrentRuleUuid(null);
         setCurrentConfigRecord(null);
+        currentSmartRuleIndexRef.current = null; // Clear ref
 
         if (option.provider.uuid) {
             handleFetchModels(option.provider.uuid);
@@ -217,8 +253,6 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
     if (!providers.length || !rules?.length) {
         return null;
     }
-
-    console.log("rules", rules)
 
     return (
         <>
