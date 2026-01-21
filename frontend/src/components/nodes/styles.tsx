@@ -12,7 +12,7 @@ export const MODEL_NODE_STYLES = {
 
 // Provider Node dimensions
 export const PROVIDER_NODE_STYLES = {
-    width: 300,
+    width: 220,
     height: 90,
     heightCompact: 60,
     padding: 8,
