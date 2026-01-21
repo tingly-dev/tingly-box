@@ -142,7 +142,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req AnthropicBetaMessag
 		}
 
 		// Convert Anthropic beta request to OpenAI format for streaming
-		openaiReq := adaptor.ConvertAnthropicBetaToOpenAIRequest(&req.BetaMessageNewParams, true)
+		openaiReq := adaptor.ConvertAnthropicBetaToOpenAIRequestWithProvider(&req.BetaMessageNewParams, true, provider, actualModel)
 
 		// Use OpenAI conversion path (default behavior)
 		if isStreaming {

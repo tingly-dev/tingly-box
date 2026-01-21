@@ -16,6 +16,7 @@ import (
 	"tingly-box/internal/loadbalance"
 	"tingly-box/internal/typ"
 	"tingly-box/pkg/adaptor"
+	"tingly-box/pkg/adaptor/extension"
 )
 
 // OpenAIChatCompletionRequest is a type alias for OpenAI chat completion request with extra fields.
@@ -283,7 +284,8 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 			outputTokens := int(anthropicResp.Usage.OutputTokens)
 			s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, false, "success", "")
 
-			openaiResp := adaptor.ConvertAnthropicToOpenAIResponse(anthropicResp, responseModel)
+			// Use provider-aware conversion for provider-specific handling
+			openaiResp := adaptor.ConvertAnthropicToOpenAIResponseWithProvider(anthropicResp, responseModel, provider, actualModel)
 			c.JSON(http.StatusOK, openaiResp)
 			return
 		}
@@ -351,9 +353,14 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 
 // forwardOpenAIRequest forwards the request to the selected provider using OpenAI library
 func (s *Server) forwardOpenAIRequest(provider *typ.Provider, req *openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
+	logrus.Infof("provider: %s, model: %s", provider.Name, req.Model)
+
+	// Apply provider-specific transformations before forwarding
+	config := s.buildOpenAIConfig(req)
+	req = extension.ApplyProviderTransforms(req, provider, req.Model, config)
+
 	// Get or create OpenAI client wrapper from pool
 	wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
-	logrus.Infof("provider: %s, model: %s", provider.Name, req.Model)
 
 	// Make the request using wrapper method
 	chatCompletion, err := wrapper.ChatCompletionsNew(context.Background(), *req)
@@ -367,14 +374,39 @@ func (s *Server) forwardOpenAIRequest(provider *typ.Provider, req *openai.ChatCo
 
 // forwardOpenAIStreamRequest forwards the streaming request to the selected provider using OpenAI library
 func (s *Server) forwardOpenAIStreamRequest(provider *typ.Provider, req *openai.ChatCompletionNewParams) (*ssestream.Stream[openai.ChatCompletionChunk], error) {
+	logrus.Debugf("provider: %s (streaming)", provider.Name)
+
+	// Apply provider-specific transformations before forwarding
+	config := s.buildOpenAIConfig(req)
+	req = extension.ApplyProviderTransforms(req, provider, req.Model, config)
+
 	// Get or create OpenAI client wrapper from pool
 	wrapper := s.clientPool.GetOpenAIClient(provider, "")
-	logrus.Infof("provider: %s (streaming)", provider.Name)
 
 	// Make the streaming request using wrapper method
 	stream := wrapper.ChatCompletionsNewStreaming(context.Background(), *req)
 
 	return stream, nil
+}
+
+// buildOpenAIConfig builds the OpenAIConfig for provider transformations
+func (s *Server) buildOpenAIConfig(req *openai.ChatCompletionNewParams) *extension.OpenAIConfig {
+	config := &extension.OpenAIConfig{
+		HasThinking:     false,
+		ReasoningEffort: "",
+	}
+
+	// Check if request has thinking configuration in extra_fields
+	extraFields := req.ExtraFields()
+	if thinking, ok := extraFields["thinking"]; ok {
+		if _, ok := thinking.(map[string]interface{}); ok {
+			config.HasThinking = true
+			// Set default reasoning effort to "low" for OpenAI-compatible APIs
+			config.ReasoningEffort = "low"
+		}
+	}
+
+	return config
 }
 
 // handleStreamingRequest handles streaming chat completion requests

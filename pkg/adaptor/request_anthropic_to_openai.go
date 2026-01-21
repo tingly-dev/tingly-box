@@ -8,58 +8,51 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/shared"
+
+	"tingly-box/internal/typ"
+	"tingly-box/pkg/adaptor/extension"
 )
 
 type handler func(map[string]interface{}) map[string]interface{}
 
-// schemaFieldTransforms defines JSON Schema fields that should be transformed or excluded
-// key: source field name
-// value: target field name (empty string means exclude the field)
-var schemaFieldTransforms = map[string]string{
-	"exclusiveMinimum": "minimum", // convert exclusiveMinimum to minimum
-	"exclusiveMaximum": "maximum", // convert exclusiveMaximum to maximum
+// ConvertAnthropicToOpenAIRequestWithProvider converts Anthropic request to OpenAI format
+// and applies provider-specific transformations
+func ConvertAnthropicToOpenAIRequestWithProvider(
+	anthropicReq *anthropic.MessageNewParams,
+	compatible bool,
+	provider *typ.Provider,
+	model string,
+) *openai.ChatCompletionNewParams {
+	// Base conversion
+	openaiReq, config := ConvertAnthropicToOpenAIRequest(anthropicReq, compatible)
+
+	// Apply provider-specific transforms
+	openaiReq = extension.ApplyProviderTransforms(openaiReq, provider, model, config)
+
+	// Clean up temporary fields (e.g., x_thinking)
+	cleanupTempFields(openaiReq)
+
+	return openaiReq
 }
 
-// transformProperties recursively transforms and filters a JSON Schema
-// Fields in schemaFieldTransforms are either renamed or excluded
-func transformProperties(props map[string]interface{}) map[string]interface{} {
-	result := make(map[string]interface{})
+// ConvertAnthropicBetaToOpenAIRequestWithProvider converts Anthropic beta request to OpenAI format
+// and applies provider-specific transformations
+func ConvertAnthropicBetaToOpenAIRequestWithProvider(
+	anthropicReq *anthropic.BetaMessageNewParams,
+	compatible bool,
+	provider *typ.Provider,
+	model string,
+) *openai.ChatCompletionNewParams {
+	// Base conversion
+	openaiReq, config := ConvertAnthropicBetaToOpenAIRequest(anthropicReq, compatible)
 
-	for k, v := range props {
-		if nestedSchema, ok := v.(map[string]interface{}); ok {
-			// Apply field transformations to property schemas
-			result[k] = transformPropertySchema(nestedSchema)
-		} else {
-			result[k] = v
-		}
-	}
+	// Apply provider-specific transforms
+	openaiReq = extension.ApplyProviderTransforms(openaiReq, provider, model, config)
 
-	return result
-}
+	// Clean up temporary fields (e.g., x_thinking)
+	cleanupTempFields(openaiReq)
 
-// transformPropertySchema transforms field names in a property schema
-// This is where we handle things like exclusiveMinimum → minimum
-func transformPropertySchema(schema map[string]interface{}) map[string]interface{} {
-	if schema == nil {
-		return nil
-	}
-
-	result := make(map[string]interface{})
-
-	for key, value := range schema {
-		// Check if this field needs to be transformed or excluded
-		if targetKey, needsTransform := schemaFieldTransforms[key]; needsTransform {
-			if targetKey == "" {
-				// Empty target means exclude this field
-				continue
-			}
-			// Transform to new field name
-			key = targetKey
-		}
-		result[key] = value
-	}
-
-	return result
+	return openaiReq
 }
 
 // ConvertAnthropicToolsToOpenAI converts Anthropic tools to OpenAI format
@@ -77,7 +70,6 @@ func ConvertAnthropicToolsToOpenAI(tools []anthropic.ToolUnionParam) []openai.Ch
 		}
 
 		// Convert Anthropic input schema to OpenAI function parameters
-		// Only include standard JSON Schema fields that OpenAI accepts
 		var parameters map[string]interface{}
 		if tool.InputSchema.Properties != nil || len(tool.InputSchema.Required) > 0 {
 			parameters = make(map[string]interface{})
@@ -105,56 +97,10 @@ func ConvertAnthropicToolsToOpenAI(tools []anthropic.ToolUnionParam) []openai.Ch
 	return out
 }
 
-// ConvertAnthropicToolsToOpenAIWithTransformedSchema converts Anthropic tools to OpenAI format
-// with schema field transformation. Fields in schemaFieldTransforms are either renamed
-// or excluded to provide better compatibility with OpenAI's schema validation.
+// ConvertAnthropicToolsToOpenAIWithTransformedSchema is an alias for ConvertAnthropicToolsToOpenAI
+// Schema transformation is handled by provider-specific transforms
 func ConvertAnthropicToolsToOpenAIWithTransformedSchema(tools []anthropic.ToolUnionParam) []openai.ChatCompletionToolUnionParam {
-	if len(tools) == 0 {
-		return nil
-	}
-
-	out := make([]openai.ChatCompletionToolUnionParam, 0, len(tools))
-
-	for _, t := range tools {
-		tool := t.OfTool
-		if tool == nil {
-			continue
-		}
-
-		// Convert Anthropic input schema to OpenAI function parameters
-		// Transform excluded fields and apply field name conversions
-		var parameters map[string]interface{}
-		if tool.InputSchema.Properties != nil || len(tool.InputSchema.Required) > 0 {
-			// Build the raw schema first
-			rawSchema := make(map[string]interface{})
-			rawSchema["type"] = "object"
-
-			if tool.InputSchema.Properties != nil {
-				if m, ok := tool.InputSchema.Properties.(map[string]interface{}); ok {
-					rawSchema["properties"] = transformProperties(m)
-				} else {
-					rawSchema["properties"] = tool.InputSchema.Properties
-				}
-			}
-
-			if len(tool.InputSchema.Required) > 0 {
-				rawSchema["required"] = tool.InputSchema.Required
-			}
-
-			parameters = rawSchema
-		}
-
-		// Create function with filtered parameters
-		fn := shared.FunctionDefinitionParam{
-			Name:        tool.Name,
-			Description: param.Opt[string]{Value: tool.Description.Value},
-			Parameters:  parameters,
-		}
-
-		out = append(out, openai.ChatCompletionFunctionTool(fn))
-	}
-
-	return out
+	return ConvertAnthropicToolsToOpenAI(tools)
 }
 
 // ConvertAnthropicToolChoiceToOpenAI converts Anthropic tool_choice to OpenAI format
@@ -188,21 +134,13 @@ func ConvertAnthropicToolChoiceToOpenAI(tc *anthropic.ToolChoiceUnionParam) open
 }
 
 // ConvertAnthropicToOpenAIRequest converts Anthropic request to OpenAI format
-func ConvertAnthropicToOpenAIRequest(anthropicReq *anthropic.MessageNewParams, compatible bool) *openai.ChatCompletionNewParams {
+// Returns the OpenAI request and a config object with metadata for provider transforms
+func ConvertAnthropicToOpenAIRequest(anthropicReq *anthropic.MessageNewParams, compatible bool) (*openai.ChatCompletionNewParams, *extension.OpenAIConfig) {
 	openaiReq := &openai.ChatCompletionNewParams{
 		Model: openai.ChatModel(anthropicReq.Model),
 	}
 
 	isThinking := IsThinkingEnabled(anthropicReq)
-	if isThinking {
-		openaiReq.SetExtraFields(
-			map[string]interface{}{
-				"thinking": map[string]interface{}{
-					"type": "enabled",
-				},
-			},
-		)
-	}
 
 	// Set MaxTokens
 	openaiReq.MaxTokens = openai.Opt(anthropicReq.MaxTokens)
@@ -216,16 +154,6 @@ func ConvertAnthropicToOpenAIRequest(anthropicReq *anthropic.MessageNewParams, c
 		} else if string(msg.Role) == "assistant" {
 			// Convert assistant message with potential tool_use blocks
 			openaiMsg := convertAnthropicAssistantMessageToOpenAI(msg)
-			// Guard reasoning_content here
-			if extra := openaiMsg.ExtraFields(); extra != nil {
-				if _, ok := extra["reasoning_content"]; !ok {
-					extra["reasoning_content"] = ""
-				}
-				openaiMsg.SetExtraFields(extra)
-			} else {
-				openaiMsg.SetExtraFields(map[string]any{"reasoning_content": ""})
-			}
-
 			openaiReq.Messages = append(openaiReq.Messages, openaiMsg)
 		}
 	}
@@ -253,7 +181,12 @@ func ConvertAnthropicToOpenAIRequest(anthropicReq *anthropic.MessageNewParams, c
 		openaiReq.ToolChoice = ConvertAnthropicToolChoiceToOpenAI(&anthropicReq.ToolChoice)
 	}
 
-	return openaiReq
+	config := &extension.OpenAIConfig{
+		HasThinking:     isThinking,
+		ReasoningEffort: "low", // Default to "low" for OpenAI-compatible APIs
+	}
+
+	return openaiReq, config
 }
 
 // convertToolResultContent extracts the content from a tool result block
@@ -292,6 +225,7 @@ func ConvertTextBlocksToString(blocks []anthropic.TextBlockParam) string {
 
 // convertAnthropicAssistantMessageToOpenAI converts Anthropic assistant message to OpenAI format
 // This handles both text content and tool_use blocks
+// Note: thinking content is preserved in "x_thinking" field for provider-specific transforms
 func convertAnthropicAssistantMessageToOpenAI(msg anthropic.MessageParam) openai.ChatCompletionMessageParamUnion {
 	var textContent string
 	var toolCalls []map[string]interface{}
@@ -324,13 +258,11 @@ func convertAnthropicAssistantMessageToOpenAI(msg anthropic.MessageParam) openai
 	if len(toolCalls) > 0 {
 		// Use JSON marshaling to create a message with tool_calls
 		msgMap := map[string]interface{}{
-			"role":              "assistant",
-			"content":           textContent,
-			"reasoning_content": thinking, // Always include for DeepSeek
+			"role":       "assistant",
+			"content":    textContent,
+			"x_thinking": thinking, // Preserved for provider transforms (e.g., DeepSeek)
 		}
-		if len(toolCalls) > 0 {
-			msgMap["tool_calls"] = toolCalls
-		}
+		msgMap["tool_calls"] = toolCalls
 
 		msgBytes, _ := json.Marshal(msgMap)
 		var result openai.ChatCompletionMessageParamUnion
@@ -338,11 +270,11 @@ func convertAnthropicAssistantMessageToOpenAI(msg anthropic.MessageParam) openai
 		return result
 	}
 
-	// For all other cases, always include reasoning_content
+	// Simple text message
 	msgMap := map[string]interface{}{
-		"role":              "assistant",
-		"content":           textContent,
-		"reasoning_content": thinking,
+		"role":       "assistant",
+		"content":    textContent,
+		"x_thinking": thinking, // Preserved for provider transforms
 	}
 	msgBytes, _ := json.Marshal(msgMap)
 	var result openai.ChatCompletionMessageParamUnion
@@ -430,21 +362,13 @@ func IsThinkingEnabledBeta(anthropicReq *anthropic.BetaMessageNewParams) bool {
 }
 
 // ConvertAnthropicBetaToOpenAIRequest converts Anthropic beta request to OpenAI format
-func ConvertAnthropicBetaToOpenAIRequest(anthropicReq *anthropic.BetaMessageNewParams, compatible bool) *openai.ChatCompletionNewParams {
+// Returns the OpenAI request and a config object with metadata for provider transforms
+func ConvertAnthropicBetaToOpenAIRequest(anthropicReq *anthropic.BetaMessageNewParams, compatible bool) (*openai.ChatCompletionNewParams, *extension.OpenAIConfig) {
 	openaiReq := &openai.ChatCompletionNewParams{
 		Model: openai.ChatModel(anthropicReq.Model),
 	}
 
 	isThinking := IsThinkingEnabledBeta(anthropicReq)
-	if isThinking {
-		openaiReq.SetExtraFields(
-			map[string]interface{}{
-				"thinking": map[string]interface{}{
-					"type": "enabled",
-				},
-			},
-		)
-	}
 
 	// Set MaxTokens
 	openaiReq.MaxTokens = openai.Opt(anthropicReq.MaxTokens)
@@ -458,16 +382,6 @@ func ConvertAnthropicBetaToOpenAIRequest(anthropicReq *anthropic.BetaMessageNewP
 		} else if string(msg.Role) == "assistant" {
 			// Convert assistant message with potential tool_use blocks
 			openaiMsg := convertAnthropicBetaAssistantMessageToOpenAI(msg)
-			// Guard reasoning_content here
-			if extra := openaiMsg.ExtraFields(); extra != nil {
-				if _, ok := extra["reasoning_content"]; !ok {
-					extra["reasoning_content"] = ""
-				}
-				openaiMsg.SetExtraFields(extra)
-			} else {
-				openaiMsg.SetExtraFields(map[string]any{"reasoning_content": ""})
-			}
-
 			openaiReq.Messages = append(openaiReq.Messages, openaiMsg)
 		}
 	}
@@ -495,7 +409,12 @@ func ConvertAnthropicBetaToOpenAIRequest(anthropicReq *anthropic.BetaMessageNewP
 		openaiReq.ToolChoice = ConvertAnthropicBetaToolChoiceToOpenAI(&anthropicReq.ToolChoice)
 	}
 
-	return openaiReq
+	config := &extension.OpenAIConfig{
+		HasThinking:     isThinking,
+		ReasoningEffort: "low", // Default to "low" for OpenAI-compatible APIs
+	}
+
+	return openaiReq, config
 }
 
 // ConvertAnthropicBetaToolsToOpenAI converts Anthropic beta tools to OpenAI format
@@ -513,7 +432,6 @@ func ConvertAnthropicBetaToolsToOpenAI(tools []anthropic.BetaToolUnionParam) []o
 		}
 
 		// Convert Anthropic input schema to OpenAI function parameters
-		// Only include standard JSON Schema fields that OpenAI accepts
 		var parameters map[string]interface{}
 		if tool.InputSchema.Properties != nil || len(tool.InputSchema.Required) > 0 {
 			parameters = make(map[string]interface{})
@@ -541,55 +459,10 @@ func ConvertAnthropicBetaToolsToOpenAI(tools []anthropic.BetaToolUnionParam) []o
 	return out
 }
 
-// ConvertAnthropicBetaToolsToOpenAIWithTransformedSchema converts Anthropic beta tools to OpenAI format
-// with schema field transformation.
+// ConvertAnthropicBetaToolsToOpenAIWithTransformedSchema is an alias for ConvertAnthropicBetaToolsToOpenAI
+// Schema transformation is handled by provider-specific transforms
 func ConvertAnthropicBetaToolsToOpenAIWithTransformedSchema(tools []anthropic.BetaToolUnionParam) []openai.ChatCompletionToolUnionParam {
-	if len(tools) == 0 {
-		return nil
-	}
-
-	out := make([]openai.ChatCompletionToolUnionParam, 0, len(tools))
-
-	for _, t := range tools {
-		tool := t.OfTool
-		if tool == nil {
-			continue
-		}
-
-		// Convert Anthropic input schema to OpenAI function parameters
-		// Transform excluded fields and apply field name conversions
-		var parameters map[string]interface{}
-		if tool.InputSchema.Properties != nil || len(tool.InputSchema.Required) > 0 {
-			// Build the raw schema first
-			rawSchema := make(map[string]interface{})
-			rawSchema["type"] = "object"
-
-			if tool.InputSchema.Properties != nil {
-				if m, ok := tool.InputSchema.Properties.(map[string]interface{}); ok {
-					rawSchema["properties"] = transformProperties(m)
-				} else {
-					rawSchema["properties"] = tool.InputSchema.Properties
-				}
-			}
-
-			if len(tool.InputSchema.Required) > 0 {
-				rawSchema["required"] = tool.InputSchema.Required
-			}
-
-			parameters = rawSchema
-		}
-
-		// Create function with filtered parameters
-		fn := shared.FunctionDefinitionParam{
-			Name:        tool.Name,
-			Description: param.Opt[string]{Value: tool.Description.Value},
-			Parameters:  parameters,
-		}
-
-		out = append(out, openai.ChatCompletionFunctionTool(fn))
-	}
-
-	return out
+	return ConvertAnthropicBetaToolsToOpenAI(tools)
 }
 
 // ConvertAnthropicBetaToolChoiceToOpenAI converts Anthropic beta tool_choice to OpenAI format
@@ -642,6 +515,7 @@ func ConvertBetaContentBlocksToString(blocks []anthropic.BetaContentBlockParamUn
 }
 
 // convertAnthropicBetaAssistantMessageToOpenAI converts Anthropic beta assistant message to OpenAI format
+// Note: thinking content is preserved in "x_thinking" field for provider-specific transforms
 func convertAnthropicBetaAssistantMessageToOpenAI(msg anthropic.BetaMessageParam) openai.ChatCompletionMessageParamUnion {
 	var textContent string
 	var toolCalls []map[string]interface{}
@@ -674,13 +548,11 @@ func convertAnthropicBetaAssistantMessageToOpenAI(msg anthropic.BetaMessageParam
 	if len(toolCalls) > 0 {
 		// Use JSON marshaling to create a message with tool_calls
 		msgMap := map[string]interface{}{
-			"role":              "assistant",
-			"content":           textContent,
-			"reasoning_content": thinking, // Always include for DeepSeek
+			"role":       "assistant",
+			"content":    textContent,
+			"x_thinking": thinking, // Preserved for provider transforms (e.g., DeepSeek)
 		}
-		if len(toolCalls) > 0 {
-			msgMap["tool_calls"] = toolCalls
-		}
+		msgMap["tool_calls"] = toolCalls
 
 		msgBytes, _ := json.Marshal(msgMap)
 		var result openai.ChatCompletionMessageParamUnion
@@ -688,11 +560,11 @@ func convertAnthropicBetaAssistantMessageToOpenAI(msg anthropic.BetaMessageParam
 		return result
 	}
 
-	// For all other cases, always include reasoning_content
+	// Simple text message
 	msgMap := map[string]interface{}{
-		"role":              "assistant",
-		"content":           textContent,
-		"reasoning_content": thinking,
+		"role":       "assistant",
+		"content":    textContent,
+		"x_thinking": thinking, // Preserved for provider transforms
 	}
 	msgBytes, _ := json.Marshal(msgMap)
 	var result openai.ChatCompletionMessageParamUnion
@@ -758,4 +630,19 @@ func convertBetaToolResultContent(content []anthropic.BetaToolResultBlockParamCo
 		}
 	}
 	return result.String()
+}
+
+// cleanupTempFields removes temporary fields used during transformation
+func cleanupTempFields(req *openai.ChatCompletionNewParams) {
+	for i := range req.Messages {
+		if req.Messages[i].OfAssistant != nil {
+			// Convert to map to remove temporary fields
+			msgMap := req.Messages[i].ExtraFields()
+
+			// Remove temporary fields
+			delete(msgMap, "x_thinking")
+
+			req.Messages[i].SetExtraFields(msgMap)
+		}
+	}
 }
