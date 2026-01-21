@@ -1,5 +1,5 @@
-import { Delete as DeleteIcon, PlayArrow as ProbeIcon } from '@mui/icons-material';
-import { Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Tooltip, Typography } from '@mui/material';
+import { Delete as DeleteIcon, Download as ExportIcon, PlayArrow as ProbeIcon, Settings as SettingsIcon } from '@mui/icons-material';
+import { Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, IconButton, Menu, MenuItem, Tooltip, Typography } from '@mui/material';
 import React, { useCallback, useState } from 'react';
 import type { ProbeResponse } from '../client';
 import Probe from './ProbeModal.tsx';
@@ -56,6 +56,18 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     // Delete confirmation state
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
+    // Menu state
+    const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
+    const menuOpen = Boolean(menuAnchorEl);
+
+    const handleMenuOpen = useCallback((event: React.MouseEvent<HTMLElement>) => {
+        setMenuAnchorEl(event.currentTarget);
+    }, []);
+
+    const handleMenuClose = useCallback(() => {
+        setMenuAnchorEl(null);
+    }, []);
+
     // Convert rule to ConfigRecord format
     React.useEffect(() => {
         if (rule && providers.length > 0) {
@@ -69,14 +81,6 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 active: service.active !== undefined ? service.active : true,
                 time_window: service.time_window || 0,
             }));
-
-            if (providersList.length === 0) {
-                providersList.push({
-                    uuid: uuidv4(),
-                    provider: '',
-                    model: '',
-                });
-            }
 
             const newConfigRecord: ConfigRecord = {
                 uuid: rule.uuid || uuidv4(),
@@ -357,6 +361,94 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         }
     }, [rule.uuid, onRuleDelete, showNotification]);
 
+    const handleExport = useCallback(async () => {
+        try {
+            // Collect unique provider UUIDs from services
+            const providerUuids = new Set<string>();
+            (rule.services || []).forEach((service: any) => {
+                if (service.provider) {
+                    providerUuids.add(service.provider);
+                }
+            });
+
+            // Fetch all providers
+            const providersData: any[] = [];
+            for (const uuid of providerUuids) {
+                try {
+                    const result = await api.getProvider(uuid);
+                    if (result.success && result.data) {
+                        providersData.push(result.data);
+                    }
+                } catch (error) {
+                    console.error(`Failed to fetch provider ${uuid}:`, error);
+                }
+            }
+
+            // Build JSONL export
+            const lines: string[] = [];
+
+            // Line 1: Metadata
+            const metadata = {
+                type: 'metadata',
+                version: '1.0',
+                exported_at: new Date().toISOString(),
+            };
+            lines.push(JSON.stringify(metadata));
+
+            // Line 2: Rule
+            const ruleExport = {
+                type: 'rule',
+                uuid: rule.uuid,
+                scenario: rule.scenario,
+                request_model: rule.request_model,
+                response_model: rule.response_model,
+                description: rule.description,
+                services: rule.services || [],
+                lb_tactic: rule.lb_tactic,
+                active: rule.active,
+                smart_enabled: rule.smart_enabled,
+                smart_routing: rule.smart_routing || [],
+            };
+            lines.push(JSON.stringify(ruleExport));
+
+            // Subsequent lines: Providers
+            for (const provider of providersData) {
+                const providerExport = {
+                    type: 'provider',
+                    uuid: provider.uuid,
+                    name: provider.name,
+                    api_base: provider.api_base,
+                    api_style: provider.api_style,
+                    auth_type: provider.auth_type || 'api_key',
+                    token: provider.token,
+                    oauth_detail: provider.oauth_detail,
+                    enabled: provider.enabled,
+                    proxy_url: provider.proxy_url,
+                    timeout: provider.timeout,
+                    tags: provider.tags,
+                    models: provider.models,
+                };
+                lines.push(JSON.stringify(providerExport));
+            }
+
+            // Create download
+            const blob = new Blob([lines.join('\n')], { type: 'application/jsonl' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${rule.request_model || 'rule'}-${rule.scenario}.jsonl`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showNotification('Rule with API keys exported successfully!', 'success');
+        } catch (error) {
+            console.error('Error exporting rule:', error);
+            showNotification('Failed to export rule', 'error');
+        }
+    }, [rule, showNotification]);
+
     if (!configRecord) return null;
 
     const isSmartMode = rule.smart_enabled;
@@ -390,48 +482,67 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                         onProviderNodeClick={handleProviderNodeClick}
                         onAddProviderButtonClick={handleAddProviderButtonClick}
                         extraActions={
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                            <Tooltip title="Test connection to provider">
-                                <Button
+                        <>
+                            <Tooltip title="Rule actions">
+                                <IconButton
                                     size="small"
-                                    onClick={handleProbe}
-                                    disabled={!configRecord.providers[0]?.provider || !configRecord.providers[0]?.model || isProbing}
-                                    startIcon={<ProbeIcon fontSize="small" />}
+                                    onClick={handleMenuOpen}
                                     sx={{
-                                        minWidth: 'auto',
-                                        color: isProbing ? 'primary.main' : 'text.secondary',
+                                        color: 'text.secondary',
                                         '&:hover': {
-                                            backgroundColor: 'primary.main',
-                                            color: 'primary.contrastText',
+                                            backgroundColor: 'action.hover',
                                         },
-                                        '&:disabled': {
-                                            color: 'text.disabled',
-                                        }
                                     }}
                                 >
-                                    Test
-                                </Button>
+                                    <SettingsIcon fontSize="small" />
+                                </IconButton>
                             </Tooltip>
-                            {allowDeleteRule && (
-                                <Tooltip title="Delete routing rule">
-                                    <Button
-                                        size="small"
-                                        onClick={handleDeleteButtonClick}
-                                        startIcon={<DeleteIcon fontSize="small" />}
-                                        sx={{
-                                            minWidth: 'auto',
-                                            color: 'error.main',
-                                            '&:hover': {
-                                                backgroundColor: 'error.main',
-                                                color: 'error.contrastText',
-                                            },
+                            <Menu
+                                anchorEl={menuAnchorEl}
+                                open={menuOpen}
+                                onClose={handleMenuClose}
+                                anchorOrigin={{
+                                    vertical: 'bottom',
+                                    horizontal: 'right',
+                                }}
+                                transformOrigin={{
+                                    vertical: 'top',
+                                    horizontal: 'right',
+                                }}
+                            >
+                                <MenuItem
+                                    onClick={() => {
+                                        handleMenuClose();
+                                        handleProbe();
+                                    }}
+                                    disabled={!configRecord.providers[0]?.provider || !configRecord.providers[0]?.model || isProbing}
+                                >
+                                    <ProbeIcon fontSize="small" sx={{ mr: 1 }} />
+                                    Test Connection
+                                </MenuItem>
+                                <MenuItem
+                                    onClick={() => {
+                                        handleMenuClose();
+                                        handleExport();
+                                    }}
+                                >
+                                    <ExportIcon fontSize="small" sx={{ mr: 1 }} />
+                                    Export with API Keys
+                                </MenuItem>
+                                {allowDeleteRule && (
+                                    <MenuItem
+                                        onClick={() => {
+                                            handleMenuClose();
+                                            handleDeleteButtonClick();
                                         }}
+                                        sx={{ color: 'error.main' }}
                                     >
-                                        Delete
-                                    </Button>
-                                </Tooltip>
-                            )}
-                        </Box>
+                                        <DeleteIcon fontSize="small" sx={{ mr: 1 }} />
+                                        Delete Rule
+                                    </MenuItem>
+                                )}
+                            </Menu>
+                        </>
                     }
                 />
             )}
