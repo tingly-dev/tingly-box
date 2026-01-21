@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
@@ -231,6 +233,8 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 		if isStreaming {
 			stream, err := s.ForwardAnthropicStreamRequest(provider, anthropicReq)
 			if err != nil {
+				// Track error with no usage
+				s.trackUsage(c, rule, provider, actualModel, responseModel, 0, 0, true, "error", "stream_creation_failed")
 				c.JSON(http.StatusInternalServerError, ErrorResponse{
 					Error: ErrorDetail{
 						Message: "Failed to create streaming request: " + err.Error(),
@@ -240,8 +244,12 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 				return
 			}
 
-			err = adaptor.HandleAnthropicToOpenAIStreamResponse(c, &anthropicReq, stream, responseModel)
+			inputTokens, outputTokens, err := adaptor.HandleAnthropicToOpenAIStreamResponse(c, &anthropicReq, stream, responseModel)
 			if err != nil {
+				// Track usage with error status
+				if inputTokens > 0 || outputTokens > 0 {
+					s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, true, "error", "stream_handler_failed")
+				}
 				c.JSON(http.StatusInternalServerError, ErrorResponse{
 					Error: ErrorDetail{
 						Message: "Failed to create streaming request: " + err.Error(),
@@ -250,10 +258,17 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 				})
 				return
 			}
+
+			// Track successful streaming completion
+			if inputTokens > 0 || outputTokens > 0 {
+				s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, true, "success", "")
+			}
 			return
 		} else {
 			anthropicResp, err := s.ForwardAnthropicRequest(provider, anthropicReq)
 			if err != nil {
+				// Track error with no usage
+				s.trackUsage(c, rule, provider, actualModel, responseModel, 0, 0, false, "error", "forward_failed")
 				c.JSON(http.StatusInternalServerError, ErrorResponse{
 					Error: ErrorDetail{
 						Message: "Failed to forward Anthropic request: " + err.Error(),
@@ -262,6 +277,11 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 				})
 				return
 			}
+
+			// Track usage from response
+			inputTokens := int(anthropicResp.Usage.InputTokens)
+			outputTokens := int(anthropicResp.Usage.OutputTokens)
+			s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, false, "success", "")
 
 			openaiResp := adaptor.ConvertAnthropicToOpenAIResponse(anthropicResp, responseModel)
 			c.JSON(http.StatusOK, openaiResp)
@@ -374,14 +394,16 @@ func (s *Server) handleStreamingRequest(c *gin.Context, provider *typ.Provider, 
 	}
 
 	// Handle the streaming response
-	s.handleOpenAIStreamResponse(c, stream, responseModel, actualModel, rule, provider)
+	s.handleOpenAIStreamResponse(c, stream, req, responseModel, actualModel, rule, provider)
 }
 
 // handleOpenAIStreamResponse processes the streaming response and sends it to the client
-func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.Stream[openai.ChatCompletionChunk], responseModel, actualModel string, rule *typ.Rule, provider *typ.Provider) {
+func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.Stream[openai.ChatCompletionChunk], req *openai.ChatCompletionNewParams, responseModel, actualModel string, rule *typ.Rule, provider *typ.Provider) {
 	// Accumulate usage from stream chunks
 	var inputTokens, outputTokens int
 	var hasUsage bool
+	var contentBuilder strings.Builder
+	var firstChunkID string // Store the first chunk ID for usage estimation
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -393,7 +415,12 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 			// Try to send an error event if possible
 			if c.Writer != nil {
 				c.Writer.WriteHeader(http.StatusInternalServerError)
-				c.Writer.Write([]byte("data: {\"error\":{\"message\":\"Internal streaming error\",\"type\":\"internal_error\"}}\n\n"))
+				c.SSEvent("", map[string]interface{}{
+					"error": map[string]interface{}{
+						"message": "Internal streaming error",
+						"type":    "internal_error",
+					},
+				})
 				if flusher, ok := c.Writer.(http.Flusher); ok {
 					flusher.Flush()
 				}
@@ -431,9 +458,18 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 	for stream.Next() {
 		chatChunk := stream.Current()
 
+		// Store the first chunk ID for usage estimation
+		if firstChunkID == "" && chatChunk.ID != "" {
+			firstChunkID = chatChunk.ID
+		}
+
 		// Accumulate usage from chunks (if present)
-		if chatChunk.Usage.PromptTokens != 0 || chatChunk.Usage.CompletionTokens != 0 {
+		if chatChunk.Usage.PromptTokens != 0 {
 			inputTokens = int(chatChunk.Usage.PromptTokens)
+			hasUsage = true
+		}
+
+		if chatChunk.Usage.CompletionTokens != 0 {
 			outputTokens = int(chatChunk.Usage.CompletionTokens)
 			hasUsage = true
 		}
@@ -444,6 +480,11 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 		}
 
 		choice := chatChunk.Choices[0]
+
+		// Accumulate content for estimation
+		if choice.Delta.Content != "" {
+			contentBuilder.WriteString(choice.Delta.Content)
+		}
 
 		// Build delta map - include all fields, JSON marshaling will handle empty values
 		delta := map[string]interface{}{
@@ -488,7 +529,7 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 		}
 
 		// Send the chunk
-		c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", string(chunkJSON))))
+		c.SSEvent("", string(chunkJSON))
 		flusher.Flush()
 	}
 
@@ -496,10 +537,14 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 	if err := stream.Err(); err != nil {
 		logrus.Errorf("Stream error: %v", err)
 
-		// Track usage with error status
-		if hasUsage {
-			s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, true, "error", "stream_error")
+		// If no usage from stream, estimate it
+		if !hasUsage {
+			inputTokens, _ = estimateInputTokens(req)
+			outputTokens = estimateOutputTokens(contentBuilder.String())
 		}
+
+		// Track usage with error status
+		s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, true, "error", "stream_error")
 
 		// Send error event
 		errorChunk := map[string]interface{}{
@@ -511,23 +556,63 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 		}
 
 		errorJSON, marshalErr := json.Marshal(errorChunk)
-		if marshalErr != nil {
-			logrus.Errorf("Failed to marshal error chunk: %v", marshalErr)
-			c.Writer.Write([]byte(fmt.Sprintf("data: {\"error\":{\"message\":\"Failed to marshal error\",\"type\":\"internal_error\"}}\n\n")))
+		if marshalErr == nil {
+			c.SSEvent("", string(errorJSON))
 		} else {
-			c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", string(errorJSON))))
+			c.SSEvent("", map[string]interface{}{
+				"error": map[string]interface{}{
+					"message": "Failed to marshal error",
+					"type":    "internal_error",
+				},
+			})
 		}
 		flusher.Flush()
 		return
 	}
 
 	// Track successful streaming completion
-	if hasUsage {
-		s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, true, "success", "")
+	// If no usage from stream, estimate it and send to client
+	if !hasUsage {
+		inputTokens, _ = estimateInputTokens(req)
+		outputTokens = estimateOutputTokens(contentBuilder.String())
+
+		// Use the first chunk ID, or generate one if not available
+		chunkID := firstChunkID
+		if chunkID == "" {
+			chunkID = fmt.Sprintf("chatcmpl-%d", time.Now().Unix())
+		}
+
+		// Send estimated usage as final chunk
+		usageChunk := map[string]interface{}{
+			"id":      chunkID,
+			"object":  "chat.completion.chunk",
+			"created": 0,
+			"model":   responseModel,
+			"choices": []map[string]interface{}{
+				{
+					"index":         0,
+					"delta":         map[string]interface{}{},
+					"finish_reason": nil,
+				},
+			},
+			"usage": map[string]interface{}{
+				"prompt_tokens":     inputTokens,
+				"completion_tokens": outputTokens,
+				"total_tokens":      inputTokens + outputTokens,
+			},
+		}
+
+		usageChunkJSON, err := json.Marshal(usageChunk)
+		if err == nil {
+			c.SSEvent("", usageChunkJSON)
+			flusher.Flush()
+		}
 	}
 
+	s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, true, "success", "")
+
 	// Send the final [DONE] message
-	c.Writer.Write([]byte("data: [DONE]\n\n"))
+	c.SSEvent("", "[DONE]")
 	flusher.Flush()
 }
 
