@@ -455,50 +455,48 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                 </Button>
                             </Box>
 
-                            {/* Default Providers Section */}
-                            {record.providers.length > 0 && (
-                                <GraphRow>
-                                    {/* Default Node */}
-                                    <NodeContainer>
-                                        <SmartDefaultNode
-                                            providersCount={record.providers.length}
-                                            active={active}
-                                            onAddProvider={() => onAddDefaultProvider?.()}
-                                        />
-                                    </NodeContainer>
+                            {/* Default Providers Section - always show even with 0 providers */}
+                            <GraphRow>
+                                {/* Default Node */}
+                                <NodeContainer>
+                                    <SmartDefaultNode
+                                        providersCount={record.providers.length}
+                                        active={active}
+                                        onAddProvider={() => onAddDefaultProvider?.()}
+                                    />
+                                </NodeContainer>
 
-                                    {/* Arrow to providers */}
-                                    <ConnectionLine>
-                                        <ArrowDownIcon sx={{ transform: 'rotate(270deg)' }} />
-                                    </ConnectionLine>
+                                {/* Arrow to providers */}
+                                <ConnectionLine>
+                                    <ArrowDownIcon sx={{ transform: 'rotate(270deg)' }} />
+                                </ConnectionLine>
 
-                                    {/* Default Providers */}
-                                    <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'nowrap', justifyContent: 'flex-start', alignItems: 'center' }}>
-                                        {record.providers.map((provider) => (
-                                            <ProviderNode
-                                                key={provider.uuid}
-                                                provider={provider}
-                                                apiStyle={getApiStyle(provider.provider)}
-                                                providersData={providers}
-                                                active={active && provider.active !== false}
-                                                onDelete={() => {
-                                                    onDeleteDefaultProvider?.(provider.uuid);
-                                                }}
-                                                onNodeClick={() => {
-                                                    console.log('Provider node click:', provider.uuid);
-                                                }}
-                                            />
-                                        ))}
-                                        {/* Add Provider Button */}
-                                        <ActionAddNode
-                                            active={active}
-                                            warning
-                                            onAdd={() => onAddDefaultProvider?.()}
-                                            tooltip="Add default provider"
+                                {/* Default Providers */}
+                                <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'nowrap', justifyContent: 'flex-start', alignItems: 'center' }}>
+                                    {record.providers.map((provider) => (
+                                        <ProviderNode
+                                            key={provider.uuid}
+                                            provider={provider}
+                                            apiStyle={getApiStyle(provider.provider)}
+                                            providersData={providers}
+                                            active={active && provider.active !== false}
+                                            onDelete={() => {
+                                                onDeleteDefaultProvider?.(provider.uuid);
+                                            }}
+                                            onNodeClick={() => {
+                                                console.log('Provider node click:', provider.uuid);
+                                            }}
                                         />
-                                    </Box>
-                                </GraphRow>
-                            )}
+                                    ))}
+                                    {/* Add Provider Button */}
+                                    <ActionAddNode
+                                        active={active}
+                                        warning={record.providers.length === 0}
+                                        onAdd={() => onAddDefaultProvider?.()}
+                                        tooltip="Add default provider"
+                                    />
+                                </Box>
+                            </GraphRow>
                         </Box>
                     </GraphRow>
                 </GraphContainer>
