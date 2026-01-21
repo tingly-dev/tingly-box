@@ -1,13 +1,11 @@
-import { Dialog, DialogContent, DialogTitle } from '@mui/material';
-import React, { useCallback, useState, useRef } from 'react';
+import React, { useCallback, useState } from 'react';
 import ApiKeyModal from '../components/ApiKeyModal';
 import RuleCard from './RuleCard.tsx';
 import UnifiedCard from '../components/UnifiedCard';
 import { api } from '../services/api';
 import type { Provider, ProviderModelsDataByUuid } from '../types/provider';
-import ModelSelectTab, { type ProviderSelectTabOption } from './ModelSelectTab';
-import type { ConfigRecord, Rule } from './RoutingGraphTypes.ts';
-import { v4 as uuidv4 } from 'uuid';
+import type { Rule } from './RoutingGraphTypes.ts';
+import { useModelSelectDialog } from '../hooks/useModelSelectDialog';
 
 export interface TabTemplatePageProps {
     title?: string | React.ReactNode;
@@ -43,48 +41,21 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
     const [providerModelsByUuid, setProviderModelsByUuid] = useState<ProviderModelsDataByUuid>({});
     const [refreshingProviders, setRefreshingProviders] = useState<string[]>([]);
 
-    // ModelSelectTab dialog state
-    const [modelSelectDialogOpen, setModelSelectDialogOpen] = useState(false);
-    const [modelSelectMode, setModelSelectMode] = useState<'edit' | 'add'>('add');
-    const [editingProviderUuid, setEditingProviderUuid] = useState<string | null>(null);
-    const [currentRuleUuid, setCurrentRuleUuid] = useState<string | null>(null);
-    const [currentConfigRecord, setCurrentConfigRecord] = useState<ConfigRecord | null>(null);
-    // Use ref to store smart rule index (number) instead of UUID (string)
-    const currentSmartRuleIndexRef = useRef<number | null>(null);
-    // Track editing service context: whether it's from smart routing and its location
-    const editingServiceContextRef = useRef<{
-        isSmartRouting: boolean;
-        smartRuleIndex?: number;
-    } | null>(null);
-
-    const handleFetchModels = useCallback(async (providerUuid: string) => {
-        if (!providerUuid || providerModelsByUuid[providerUuid]) {
-            return;
+    const handleRuleChange = useCallback((updatedRule: Rule) => {
+        if (onRulesChange) {
+            const updatedRules = rules.map(r =>
+                r.uuid === updatedRule.uuid ? updatedRule : r
+            );
+            onRulesChange(updatedRules);
         }
+    }, [rules, onRulesChange]);
 
-        try {
-            const result = await api.getProviderModelsByUUID(providerUuid);
-            if (result.success && result.data) {
-                // If GET returns empty list, auto-fetch from Provider API
-                if (!result.data.models || result.data.models.length === 0) {
-                    const refreshResult = await api.updateProviderModelsByUUID(providerUuid);
-                    if (refreshResult.success && refreshResult.data) {
-                        setProviderModelsByUuid((prev: any) => ({
-                            ...prev,
-                            [providerUuid]: refreshResult.data,
-                        }));
-                    }
-                    return;
-                }
-                setProviderModelsByUuid((prev: any) => ({
-                    ...prev,
-                    [providerUuid]: result.data,
-                }));
-            }
-        } catch (error) {
-            console.error(`Failed to fetch models for provider ${providerUuid}:`, error);
-        }
-    }, [providerModelsByUuid]);
+    const handleProviderModelsChange = useCallback((providerUuid: string, models: any) => {
+        setProviderModelsByUuid((prev: any) => ({
+            ...prev,
+            [providerUuid]: models,
+        }));
+    }, []);
 
     const handleRefreshModels = useCallback(async (providerUuid: string) => {
         if (!providerUuid) return;
@@ -109,205 +80,26 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
         }
     }, [showNotification]);
 
-    const handleRuleChange = useCallback((updatedRule: Rule) => {
-        if (onRulesChange) {
-            const updatedRules = rules.map(r =>
-                r.uuid === updatedRule.uuid ? updatedRule : r
-            );
-            onRulesChange(updatedRules);
-        }
-    }, [rules, onRulesChange]);
+    // Use the model select dialog hook
+    const { openModelSelect, ModelSelectDialog, isOpen: modelSelectDialogOpen } = useModelSelectDialog({
+        providers,
+        providerModels: providerModelsByUuid,
+        rules,
+        onRuleChange: handleRuleChange,
+        showNotification,
+        onRefreshProvider: handleRefreshModels,
+        refreshingProviders,
+    });
 
-    const handleProviderModelsChange = useCallback((providerUuid: string, models: any) => {
-        setProviderModelsByUuid((prev: any) => ({
-            ...prev,
-            [providerUuid]: models,
-        }));
-    }, []);
-
+    // Wrapper to maintain compatibility with existing RuleCard interface
     const openModelSelectDialog = useCallback((
         ruleUuid: string,
-        configRecord: ConfigRecord,
+        configRecord: any,
         mode: 'edit' | 'add',
         providerUuid?: string
     ) => {
-        setCurrentRuleUuid(ruleUuid);
-        setCurrentConfigRecord(configRecord);
-        setModelSelectMode(mode);
-
-        // Check if providerUuid is a smart rule reference (format: "smart:${index}")
-        if (providerUuid?.startsWith('smart:')) {
-            const index = parseInt(providerUuid.substring(6), 10); // Remove "smart:" prefix and parse as number
-            currentSmartRuleIndexRef.current = index;
-            setEditingProviderUuid(null);
-            editingServiceContextRef.current = null;
-        } else {
-            currentSmartRuleIndexRef.current = null;
-            setEditingProviderUuid(providerUuid || null);
-
-            // In edit mode, determine if providerUuid refers to a service in smartRouting or providers
-            if (mode === 'edit' && providerUuid) {
-                // First check if it's in smartRouting services
-                let foundInSmartRouting = false;
-                let foundSmartRuleIndex = -1;
-
-                if (configRecord.smartRouting) {
-                    for (let i = 0; i < configRecord.smartRouting.length; i++) {
-                        const rule = configRecord.smartRouting[i];
-                        if (rule.services) {
-                            const service = rule.services.find(s => s.uuid === providerUuid);
-                            if (service) {
-                                foundInSmartRouting = true;
-                                foundSmartRuleIndex = i;
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                // Set the editing context
-                editingServiceContextRef.current = {
-                    isSmartRouting: foundInSmartRouting,
-                    smartRuleIndex: foundInSmartRouting >= 0 ? foundSmartRuleIndex : undefined,
-                };
-            } else {
-                editingServiceContextRef.current = null;
-            }
-        }
-
-        setModelSelectDialogOpen(true);
-
-        // Auto-fetch models for the first provider when dialog opens
-        if (providers.length > 0) {
-            handleFetchModels(providers[0].uuid);
-        }
-    }, [providers, handleFetchModels]);
-
-    const handleModelSelect = useCallback((option: ProviderSelectTabOption) => {
-        if (!currentConfigRecord || !currentRuleUuid) return;
-
-        const smartRuleIndex = currentSmartRuleIndexRef.current;
-        const editingContext = editingServiceContextRef.current;
-
-        let updated: ConfigRecord;
-
-        // Check if we're adding to a smart rule by index
-        if (smartRuleIndex !== null && smartRuleIndex >= 0 && modelSelectMode === 'add') {
-            // Add service to the specific smart rule by index
-            updated = {
-                ...currentConfigRecord,
-                smartRouting: (currentConfigRecord.smartRouting || []).map((rule, index) => {
-                    if (index === smartRuleIndex) {
-                        const newService = { uuid: uuidv4(), provider: option.provider.uuid, model: option.model || '' };
-                        return {
-                            ...rule,
-                            services: [
-                                ...(rule.services || []),
-                                newService,
-                            ],
-                        };
-                    }
-                    return rule;
-                }),
-            };
-        } else if (modelSelectMode === 'add') {
-            // Add to default providers
-            updated = {
-                ...currentConfigRecord,
-                providers: [
-                    ...currentConfigRecord.providers,
-                    { uuid: uuidv4(), provider: option.provider.uuid, model: option.model || '', isManualInput: false },
-                ],
-            };
-        } else if (modelSelectMode === 'edit' && editingProviderUuid) {
-            // Edit existing provider or smart routing service
-            if (editingContext?.isSmartRouting && editingContext.smartRuleIndex !== undefined) {
-                // Edit service in smart routing
-                updated = {
-                    ...currentConfigRecord,
-                    smartRouting: (currentConfigRecord.smartRouting || []).map((rule, index) => {
-                        if (index === editingContext.smartRuleIndex) {
-                            return {
-                                ...rule,
-                                services: (rule.services || []).map(service => {
-                                    if (service.uuid === editingProviderUuid) {
-                                        return { ...service, provider: option.provider.uuid, model: option.model || '' };
-                                    }
-                                    return service;
-                                }),
-                            };
-                        }
-                        return rule;
-                    }),
-                };
-            } else {
-                // Edit in default providers
-                updated = {
-                    ...currentConfigRecord,
-                    providers: currentConfigRecord.providers.map(p => {
-                        if (p.uuid === editingProviderUuid) {
-                            return { ...p, provider: option.provider.uuid, model: option.model || '' };
-                        }
-                        return p;
-                    }),
-                };
-            }
-        } else {
-            updated = currentConfigRecord;
-        }
-
-        const rule = rules.find(r => r.uuid === currentRuleUuid);
-        if (rule && updated) {
-            const ruleData = {
-                uuid: rule.uuid,
-                scenario: rule.scenario,
-                request_model: updated.requestModel,
-                response_model: updated.responseModel,
-                active: updated.active,
-                description: updated.description,
-                services: updated.providers
-                    .filter(p => p.provider && p.model)
-                    .map(provider => ({
-                        provider: provider.provider,
-                        model: provider.model,
-                        weight: provider.weight || 0,
-                        active: provider.active !== undefined ? provider.active : true,
-                        time_window: provider.time_window || 0,
-                    })),
-                smart_enabled: updated.smartEnabled || false,
-                smart_routing: updated.smartRouting || [],
-            };
-
-            api.updateRule(rule.uuid, ruleData).then((result) => {
-                if (result.success) {
-                    showNotification(`Configuration saved successfully`, 'success');
-                    handleRuleChange({
-                        ...rule,
-                        scenario: ruleData.scenario,
-                        request_model: ruleData.request_model,
-                        response_model: ruleData.response_model,
-                        active: ruleData.active,
-                        description: ruleData.description,
-                        services: ruleData.services,
-                        smart_enabled: ruleData.smart_enabled,
-                        smart_routing: ruleData.smart_routing,
-                    });
-                } else {
-                    showNotification(`Failed to save: ${result.error || 'Unknown error'}`, 'error');
-                }
-            });
-        }
-
-        setModelSelectDialogOpen(false);
-        setCurrentRuleUuid(null);
-        setCurrentConfigRecord(null);
-        currentSmartRuleIndexRef.current = null; // Clear ref
-        editingServiceContextRef.current = null; // Clear ref
-
-        if (option.provider.uuid) {
-            handleFetchModels(option.provider.uuid);
-        }
-    }, [currentConfigRecord, currentRuleUuid, modelSelectMode, editingProviderUuid, rules, handleRuleChange, showNotification, handleFetchModels]);
+        openModelSelect({ ruleUuid, configRecord, providerUuid, mode });
+    }, [openModelSelect]);
 
     if (!providers.length || !rules?.length) {
         return null;
@@ -340,71 +132,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
             ))}
             </UnifiedCard>
 
-            <Dialog
-                open={modelSelectDialogOpen}
-                onClose={() => setModelSelectDialogOpen(false)}
-                maxWidth="lg"
-                fullWidth
-                PaperProps={{
-                    sx: { height: '80vh' }
-                }}
-            >
-                <DialogTitle sx={{ textAlign: 'center' }}>
-                    {modelSelectMode === 'add' ? 'Add API Key' : 'Choose Model'}
-                </DialogTitle>
-                <DialogContent>
-                    <ModelSelectTab
-                        providers={providers}
-                        providerModels={providerModelsByUuid}
-                        selectedProvider={(() => {
-                            if (modelSelectMode === 'edit' && editingProviderUuid) {
-                                // First try to find in providers
-                                const providerService = currentConfigRecord?.providers.find(p => p.uuid === editingProviderUuid);
-                                if (providerService) {
-                                    return providerService.provider;
-                                }
-                                // Then try to find in smartRouting services
-                                if (currentConfigRecord?.smartRouting) {
-                                    for (const rule of currentConfigRecord.smartRouting) {
-                                        if (rule.services) {
-                                            const service = rule.services.find(s => s.uuid === editingProviderUuid);
-                                            if (service) {
-                                                return service.provider;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            return undefined;
-                        })()}
-                        selectedModel={(() => {
-                            if (modelSelectMode === 'edit' && editingProviderUuid) {
-                                // First try to find in providers
-                                const providerService = currentConfigRecord?.providers.find(p => p.uuid === editingProviderUuid);
-                                if (providerService) {
-                                    return providerService.model;
-                                }
-                                // Then try to find in smartRouting services
-                                if (currentConfigRecord?.smartRouting) {
-                                    for (const rule of currentConfigRecord.smartRouting) {
-                                        if (rule.services) {
-                                            const service = rule.services.find(s => s.uuid === editingProviderUuid);
-                                            if (service) {
-                                                return service.model;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            return undefined;
-                        })()}
-                        onSelected={handleModelSelect}
-                        onProviderChange={(p) => handleFetchModels(p.uuid)}
-                        onRefresh={(p) => handleRefreshModels(p.uuid)}
-                        refreshingProviders={refreshingProviders}
-                    />
-                </DialogContent>
-            </Dialog>
+            <ModelSelectDialog open={modelSelectDialogOpen} onClose={() => {}} />
 
             <ApiKeyModal
                 open={showTokenModal}
