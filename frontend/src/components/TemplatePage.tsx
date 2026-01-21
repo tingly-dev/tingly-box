@@ -51,6 +51,11 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
     const [currentConfigRecord, setCurrentConfigRecord] = useState<ConfigRecord | null>(null);
     // Use ref to store smart rule index (number) instead of UUID (string)
     const currentSmartRuleIndexRef = useRef<number | null>(null);
+    // Track editing service context: whether it's from smart routing and its location
+    const editingServiceContextRef = useRef<{
+        isSmartRouting: boolean;
+        smartRuleIndex?: number;
+    } | null>(null);
 
     const handleFetchModels = useCallback(async (providerUuid: string) => {
         if (!providerUuid || providerModelsByUuid[providerUuid]) {
@@ -135,9 +140,39 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
             const index = parseInt(providerUuid.substring(6), 10); // Remove "smart:" prefix and parse as number
             currentSmartRuleIndexRef.current = index;
             setEditingProviderUuid(null);
+            editingServiceContextRef.current = null;
         } else {
             currentSmartRuleIndexRef.current = null;
             setEditingProviderUuid(providerUuid || null);
+
+            // In edit mode, determine if providerUuid refers to a service in smartRouting or providers
+            if (mode === 'edit' && providerUuid) {
+                // First check if it's in smartRouting services
+                let foundInSmartRouting = false;
+                let foundSmartRuleIndex = -1;
+
+                if (configRecord.smartRouting) {
+                    for (let i = 0; i < configRecord.smartRouting.length; i++) {
+                        const rule = configRecord.smartRouting[i];
+                        if (rule.services) {
+                            const service = rule.services.find(s => s.uuid === providerUuid);
+                            if (service) {
+                                foundInSmartRouting = true;
+                                foundSmartRuleIndex = i;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // Set the editing context
+                editingServiceContextRef.current = {
+                    isSmartRouting: foundInSmartRouting,
+                    smartRuleIndex: foundInSmartRouting >= 0 ? foundSmartRuleIndex : undefined,
+                };
+            } else {
+                editingServiceContextRef.current = null;
+            }
         }
 
         setModelSelectDialogOpen(true);
@@ -152,6 +187,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
         if (!currentConfigRecord || !currentRuleUuid) return;
 
         const smartRuleIndex = currentSmartRuleIndexRef.current;
+        const editingContext = editingServiceContextRef.current;
 
         let updated: ConfigRecord;
 
@@ -184,16 +220,38 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
                 ],
             };
         } else if (modelSelectMode === 'edit' && editingProviderUuid) {
-            // Edit existing provider
-            updated = {
-                ...currentConfigRecord,
-                providers: currentConfigRecord.providers.map(p => {
-                    if (p.uuid === editingProviderUuid) {
-                        return { ...p, provider: option.provider.uuid, model: option.model || '' };
-                    }
-                    return p;
-                }),
-            };
+            // Edit existing provider or smart routing service
+            if (editingContext?.isSmartRouting && editingContext.smartRuleIndex !== undefined) {
+                // Edit service in smart routing
+                updated = {
+                    ...currentConfigRecord,
+                    smartRouting: (currentConfigRecord.smartRouting || []).map((rule, index) => {
+                        if (index === editingContext.smartRuleIndex) {
+                            return {
+                                ...rule,
+                                services: (rule.services || []).map(service => {
+                                    if (service.uuid === editingProviderUuid) {
+                                        return { ...service, provider: option.provider.uuid, model: option.model || '' };
+                                    }
+                                    return service;
+                                }),
+                            };
+                        }
+                        return rule;
+                    }),
+                };
+            } else {
+                // Edit in default providers
+                updated = {
+                    ...currentConfigRecord,
+                    providers: currentConfigRecord.providers.map(p => {
+                        if (p.uuid === editingProviderUuid) {
+                            return { ...p, provider: option.provider.uuid, model: option.model || '' };
+                        }
+                        return p;
+                    }),
+                };
+            }
         } else {
             updated = currentConfigRecord;
         }
@@ -244,6 +302,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
         setCurrentRuleUuid(null);
         setCurrentConfigRecord(null);
         currentSmartRuleIndexRef.current = null; // Clear ref
+        editingServiceContextRef.current = null; // Clear ref
 
         if (option.provider.uuid) {
             handleFetchModels(option.provider.uuid);
@@ -297,12 +356,48 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
                     <ModelSelectTab
                         providers={providers}
                         providerModels={providerModelsByUuid}
-                        selectedProvider={modelSelectMode === 'edit' && editingProviderUuid
-                            ? currentConfigRecord?.providers.find(p => p.uuid === editingProviderUuid)?.provider
-                            : undefined}
-                        selectedModel={modelSelectMode === 'edit' && editingProviderUuid
-                            ? currentConfigRecord?.providers.find(p => p.uuid === editingProviderUuid)?.model
-                            : undefined}
+                        selectedProvider={(() => {
+                            if (modelSelectMode === 'edit' && editingProviderUuid) {
+                                // First try to find in providers
+                                const providerService = currentConfigRecord?.providers.find(p => p.uuid === editingProviderUuid);
+                                if (providerService) {
+                                    return providerService.provider;
+                                }
+                                // Then try to find in smartRouting services
+                                if (currentConfigRecord?.smartRouting) {
+                                    for (const rule of currentConfigRecord.smartRouting) {
+                                        if (rule.services) {
+                                            const service = rule.services.find(s => s.uuid === editingProviderUuid);
+                                            if (service) {
+                                                return service.provider;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            return undefined;
+                        })()}
+                        selectedModel={(() => {
+                            if (modelSelectMode === 'edit' && editingProviderUuid) {
+                                // First try to find in providers
+                                const providerService = currentConfigRecord?.providers.find(p => p.uuid === editingProviderUuid);
+                                if (providerService) {
+                                    return providerService.model;
+                                }
+                                // Then try to find in smartRouting services
+                                if (currentConfigRecord?.smartRouting) {
+                                    for (const rule of currentConfigRecord.smartRouting) {
+                                        if (rule.services) {
+                                            const service = rule.services.find(s => s.uuid === editingProviderUuid);
+                                            if (service) {
+                                                return service.model;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            return undefined;
+                        })()}
                         onSelected={handleModelSelect}
                         onProviderChange={(p) => handleFetchModels(p.uuid)}
                         onRefresh={(p) => handleRefreshModels(p.uuid)}

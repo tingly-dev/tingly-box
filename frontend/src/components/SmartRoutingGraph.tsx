@@ -73,6 +73,7 @@ interface SmartRoutingGraphProps {
     onAddDefaultProvider?: () => void;
     onDeleteDefaultProvider?: (providerUuid: string) => void;
     onToggleSmartEnabled?: (enabled: boolean) => void;
+    onProviderNodeClick?: (providerUuid: string) => void;
     // Additional props matching RoutingGraph
     saving?: boolean;
     collapsible?: boolean;
@@ -138,6 +139,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
     onAddDefaultProvider,
     onDeleteDefaultProvider,
     onToggleSmartEnabled,
+    onProviderNodeClick,
     saving = false,
     collapsible = false,
     allowToggleRule = true,
@@ -405,9 +407,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                                                 console.log('SmartRoutingGraph: onDelete clicked for service:', service.uuid, 'rule:', rule.uuid, 'active:', active, 'service.active:', service.active);
                                                                 onDeleteServiceFromSmartRule(rule.uuid, service.uuid);
                                                             }}
-                                                            onNodeClick={() => {
-                                                                console.log('Provider node click:', service.uuid);
-                                                            }}
+                                                            onNodeClick={() => onProviderNodeClick?.(service.uuid)}
                                                         />
                                                     ))}
                                                     {/* Add Service Button */}
@@ -483,9 +483,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                             onDelete={() => {
                                                 onDeleteDefaultProvider?.(provider.uuid);
                                             }}
-                                            onNodeClick={() => {
-                                                console.log('Provider node click:', provider.uuid);
-                                            }}
+                                            onNodeClick={() => onProviderNodeClick?.(provider.uuid)}
                                         />
                                     ))}
                                     {/* Add Provider Button */}

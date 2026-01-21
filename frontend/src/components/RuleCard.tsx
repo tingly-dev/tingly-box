@@ -661,6 +661,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                         onDeleteServiceFromSmartRule={handleDeleteServiceFromSmartRule}
                         onAddDefaultProvider={handleAddProviderButtonClick}
                         onDeleteDefaultProvider={handleDeleteDefaultProvider}
+                        onProviderNodeClick={handleProviderNodeClick}
                     />
                 ) : (
                     <RoutingGraph
