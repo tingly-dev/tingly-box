@@ -453,6 +453,71 @@ export const RuleCard: React.FC<RuleCardProps> = ({
 
     const isSmartMode = rule.smart_enabled;
 
+    // Extra actions menu - shared between RoutingGraph and SmartRoutingGraph
+    const extraActions = (
+        <>
+            <Tooltip title="Rule actions">
+                <IconButton
+                    size="small"
+                    onClick={handleMenuOpen}
+                    sx={{
+                        color: 'text.secondary',
+                        '&:hover': {
+                            backgroundColor: 'action.hover',
+                        },
+                    }}
+                >
+                    <SettingsIcon fontSize="small" />
+                </IconButton>
+            </Tooltip>
+            <Menu
+                anchorEl={menuAnchorEl}
+                open={menuOpen}
+                onClose={handleMenuClose}
+                anchorOrigin={{
+                    vertical: 'bottom',
+                    horizontal: 'right',
+                }}
+                transformOrigin={{
+                    vertical: 'top',
+                    horizontal: 'right',
+                }}
+            >
+                <MenuItem
+                    onClick={() => {
+                        handleMenuClose();
+                        handleProbe();
+                    }}
+                    disabled={!configRecord.providers[0]?.provider || !configRecord.providers[0]?.model || isProbing}
+                >
+                    <ProbeIcon fontSize="small" sx={{ mr: 1 }} />
+                    Test Connection
+                </MenuItem>
+                <MenuItem
+                    onClick={() => {
+                        handleMenuClose();
+                        handleExport();
+                    }}
+                >
+                    <ExportIcon fontSize="small" sx={{ mr: 1 }} />
+                    Export with API Keys
+                </MenuItem>
+                {allowDeleteRule && (
+                    <MenuItem
+                        onClick={() => {
+                            handleMenuClose();
+                            handleDeleteButtonClick();
+                        }}
+                        sx={{ color: 'error.main' }}
+                    >
+                        <DeleteIcon fontSize="small" sx={{ mr: 1 }} />
+                        Delete Rule
+                    </MenuItem>
+                )}
+            </Menu>
+        </>
+    );
+
     return (
         <>
             {isSmartMode ? (
@@ -460,11 +525,19 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                         record={configRecord}
                         providers={providers}
                         active={configRecord.active}
+                        saving={saving}
+                        collapsible={collapsible}
+                        allowToggleRule={allowToggleRule}
+                        expanded={expanded}
+                        onToggleExpanded={() => setExpanded(!expanded)}
+                        extraActions={extraActions}
+                        onUpdateRecord={handleUpdateRecord}
                         onToggleSmartEnabled={(enabled) => handleUpdateRecord('smartEnabled', enabled)}
                         onAddSmartRule={handleAddSmartRule}
                         onEditSmartRule={handleEditSmartRule}
                         onDeleteSmartRule={handleDeleteSmartRule}
                         onAddServiceToSmartRule={handleAddServiceToSmartRule}
+                        onAddDefaultProvider={handleAddProviderButtonClick}
                     />
                 ) : (
                     <RoutingGraph
@@ -481,69 +554,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                         onToggleExpanded={() => setExpanded(!expanded)}
                         onProviderNodeClick={handleProviderNodeClick}
                         onAddProviderButtonClick={handleAddProviderButtonClick}
-                        extraActions={
-                        <>
-                            <Tooltip title="Rule actions">
-                                <IconButton
-                                    size="small"
-                                    onClick={handleMenuOpen}
-                                    sx={{
-                                        color: 'text.secondary',
-                                        '&:hover': {
-                                            backgroundColor: 'action.hover',
-                                        },
-                                    }}
-                                >
-                                    <SettingsIcon fontSize="small" />
-                                </IconButton>
-                            </Tooltip>
-                            <Menu
-                                anchorEl={menuAnchorEl}
-                                open={menuOpen}
-                                onClose={handleMenuClose}
-                                anchorOrigin={{
-                                    vertical: 'bottom',
-                                    horizontal: 'right',
-                                }}
-                                transformOrigin={{
-                                    vertical: 'top',
-                                    horizontal: 'right',
-                                }}
-                            >
-                                <MenuItem
-                                    onClick={() => {
-                                        handleMenuClose();
-                                        handleProbe();
-                                    }}
-                                    disabled={!configRecord.providers[0]?.provider || !configRecord.providers[0]?.model || isProbing}
-                                >
-                                    <ProbeIcon fontSize="small" sx={{ mr: 1 }} />
-                                    Test Connection
-                                </MenuItem>
-                                <MenuItem
-                                    onClick={() => {
-                                        handleMenuClose();
-                                        handleExport();
-                                    }}
-                                >
-                                    <ExportIcon fontSize="small" sx={{ mr: 1 }} />
-                                    Export with API Keys
-                                </MenuItem>
-                                {allowDeleteRule && (
-                                    <MenuItem
-                                        onClick={() => {
-                                            handleMenuClose();
-                                            handleDeleteButtonClick();
-                                        }}
-                                        sx={{ color: 'error.main' }}
-                                    >
-                                        <DeleteIcon fontSize="small" sx={{ mr: 1 }} />
-                                        Delete Rule
-                                    </MenuItem>
-                                )}
-                            </Menu>
-                        </>
-                    }
+                        extraActions={extraActions}
                 />
             )}
 

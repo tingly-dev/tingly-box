@@ -6,6 +6,7 @@ import {
     ExpandMore as ExpandMoreIcon,
     Info as InfoIcon,
     Warning as WarningIcon,
+    SmartDisplay as SmartIcon,
 } from '@mui/icons-material';
 import {
     Box,
@@ -20,6 +21,7 @@ import {
     Typography,
     Alert,
     Snackbar,
+    Switch,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import React, { useState } from 'react';
@@ -289,24 +291,34 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                             />
                         </Tooltip>
                     )}
-                    {/* Smart Routing Toggle */}
-                    {/*<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>*/}
-                    {/*    <Typography variant="body2" sx={{ fontSize: '0.85rem', color: 'text.secondary' }}>*/}
-                    {/*        Smart*/}
-                    {/*    </Typography>*/}
-                    {/*    <Switch*/}
-                    {/*        checked={smartEnabled}*/}
-                    {/*        onChange={(e) => onUpdateRecord('smartEnabled', e.target.checked)}*/}
-                    {/*        disabled={saving || !record.active}*/}
-                    {/*        size="small"*/}
-                    {/*        color="primary"*/}
-                    {/*        onClick={(e) => e.stopPropagation()}*/}
-                    {/*    />*/}
-                    {/*</Box>*/}
                 </Box>
                 {/* Right side */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Box onClick={(e) => e.stopPropagation()}>{extraActions}</Box>
+                    {/* Smart Routing Toggle Button */}
+                    <Tooltip title={smartEnabled ? "Switch to normal routing mode" : "Switch to smart routing mode"}>
+                        <Chip
+                            icon={<SmartIcon fontSize="small" />}
+                            label="Smart"
+                            size="small"
+                            color={smartEnabled ? "primary" : "default"}
+                            variant={smartEnabled ? "filled" : "outlined"}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (!saving) {
+                                    onUpdateRecord('smartEnabled', !smartEnabled);
+                                }
+                            }}
+                            sx={{
+                                opacity: record.active ? 1 : 0.5,
+                                minWidth: 75,
+                                cursor: saving ? 'default' : 'pointer',
+                                '&:hover': saving ? {} : {
+                                    opacity: 0.8,
+                                },
+                            }}
+                        />
+                    </Tooltip>
                     {record.responseModel && <Chip
                         label={`Response as ${record.responseModel}`}
                         size="small"
