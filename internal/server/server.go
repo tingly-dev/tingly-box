@@ -57,10 +57,11 @@ type Server struct {
 	templateManager *template.TemplateManager
 
 	// options
-	enableUI      bool
-	enableAdaptor bool
-	openBrowser   bool
-	host          string
+	enableUI        bool
+	enableAdaptor   bool
+	passThroughMode bool // Enable pass-through mode (no request/response transformation)
+	openBrowser     bool
+	host            string
 
 	// https options
 	httpsEnabled    bool
@@ -110,6 +111,13 @@ func WithHost(host string) ServerOption {
 func WithAdaptor(enabled bool) ServerOption {
 	return func(s *Server) {
 		s.enableAdaptor = enabled
+	}
+}
+
+// WithPassThrough enables or disables pass-through mode (no request/response transformation)
+func WithPassThrough(enabled bool) ServerOption {
+	return func(s *Server) {
+		s.passThroughMode = enabled
 	}
 }
 

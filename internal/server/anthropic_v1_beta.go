@@ -22,6 +22,19 @@ import (
 func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req AnthropicBetaMessagesRequest, proxyModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule) {
 	actualModel := selectedService.Model
 
+	// Check if pass-through mode is enabled
+	if s.passThroughMode {
+		logrus.WithFields(logrus.Fields{
+			"provider":     provider.Name,
+			"model":        actualModel,
+			"pass_through": true,
+		}).Info("Using pass-through mode for Anthropic beta messages")
+
+		passThrough := NewPassThroughHandler(s)
+		passThrough.HandleRequest(c, provider, actualModel)
+		return
+	}
+
 	// Check if streaming is requested
 	isStreaming := req.Stream
 

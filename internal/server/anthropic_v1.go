@@ -31,6 +31,19 @@ func sendSSEvent(c *gin.Context, eventType string, data interface{}) error {
 func (s *Server) anthropicMessagesV1(c *gin.Context, req AnthropicMessagesRequest, proxyModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule) {
 	actualModel := selectedService.Model
 
+	// Check if pass-through mode is enabled
+	if s.passThroughMode {
+		logrus.WithFields(logrus.Fields{
+			"provider":     provider.Name,
+			"model":        actualModel,
+			"pass_through": true,
+		}).Info("Using pass-through mode for Anthropic messages")
+
+		passThrough := NewPassThroughHandler(s)
+		passThrough.HandleRequest(c, provider, actualModel)
+		return
+	}
+
 	// Check if streaming is requested
 	isStreaming := req.Stream
 

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 
 	"tingly-box/internal/db"
 	"tingly-box/internal/loadbalance"
@@ -80,6 +81,30 @@ func (sm *StatsMiddleware) extractAndRecordUsage(c *gin.Context, responseBody st
 	if provider == "" || model == "" {
 		return
 	}
+
+	// Check if this was a pass-through request
+	isPassThrough := false
+	transformationMode := "transformation" // default
+	if passThrough, exists := c.Get("pass_through"); exists {
+		if pt, ok := passThrough.(bool); ok && pt {
+			isPassThrough = true
+			transformationMode = "pass_through"
+		}
+	}
+	if mode, exists := c.Get("transformation_mode"); exists {
+		if modeStr, ok := mode.(string); ok {
+			transformationMode = modeStr
+		}
+	}
+
+	// Log the transformation mode for debugging
+	logrus.WithFields(logrus.Fields{
+		"provider":       provider,
+		"model":          model,
+		"transformation": transformationMode,
+		"pass_through":   isPassThrough,
+		"path":           c.Request.URL.Path,
+	}).Debug("Recording usage with transformation mode")
 
 	// Get the rule information from context (set by handlers)
 	if rule, exists := c.Get("rule"); exists {

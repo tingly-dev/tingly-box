@@ -197,6 +197,20 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 	}
 
 	actualModel := selectedService.Model
+
+	// Check if pass-through mode is enabled
+	if s.passThroughMode {
+		logrus.WithFields(logrus.Fields{
+			"provider":     provider.Name,
+			"model":        actualModel,
+			"pass_through": true,
+		}).Info("Using pass-through mode for OpenAI chat completions")
+
+		passThrough := NewPassThroughHandler(s)
+		passThrough.HandleRequest(c, provider, actualModel)
+		return
+	}
+
 	maxAllowed := s.templateManager.GetMaxTokensForModelByProvider(provider, actualModel)
 
 	// FIXME: response as proxy / request

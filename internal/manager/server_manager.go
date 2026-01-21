@@ -24,6 +24,7 @@ type ServerManager struct {
 	host              string
 	enableUI          bool
 	enableAdaptor     bool
+	enablePassThrough bool
 	enableDebug       bool
 	enableOpenBrowser bool
 	httpsEnabled      bool
@@ -49,6 +50,13 @@ func WithUI(enabled bool) ServerManagerOption {
 func WithAdaptor(enabled bool) ServerManagerOption {
 	return func(sm *ServerManager) {
 		sm.enableAdaptor = enabled
+	}
+}
+
+// WithPassThrough enables or disables pass-through mode for the server manager
+func WithPassThrough(enabled bool) ServerManagerOption {
+	return func(sm *ServerManager) {
+		sm.enablePassThrough = enabled
 	}
 }
 
@@ -162,6 +170,7 @@ func (sm *ServerManager) Setup(port int) error {
 		sm.appConfig.GetGlobalConfig(),
 		server.WithUI(sm.enableUI),
 		server.WithAdaptor(sm.enableAdaptor),
+		server.WithPassThrough(sm.enablePassThrough),
 		server.WithOpenBrowser(sm.enableOpenBrowser),
 		server.WithHost(sm.host),
 		server.WithHTTPSEnabled(sm.httpsEnabled),

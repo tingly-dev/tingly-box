@@ -92,19 +92,28 @@ func (t *UsageTracker) recordDetailed(
 	scenario := extractScenarioFromPath(c.Request.URL.Path)
 	latencyMs := calculateLatency(c)
 
+	// Get transformation mode from context
+	transformationMode := "transformation" // default
+	if mode, exists := c.Get("transformation_mode"); exists {
+		if modeStr, ok := mode.(string); ok {
+			transformationMode = modeStr
+		}
+	}
+
 	record := &db.UsageRecord{
-		ProviderUUID: provider.UUID,
-		ProviderName: provider.Name,
-		Model:        model,
-		Scenario:     scenario,
-		RequestModel: requestModel,
-		InputTokens:  inputTokens,
-		OutputTokens: outputTokens,
-		TotalTokens:  inputTokens + outputTokens,
-		Status:       status,
-		ErrorCode:    errorCode,
-		LatencyMs:    latencyMs,
-		Streamed:     streamed,
+		ProviderUUID:       provider.UUID,
+		ProviderName:       provider.Name,
+		Model:              model,
+		Scenario:           scenario,
+		RequestModel:       requestModel,
+		InputTokens:        inputTokens,
+		OutputTokens:       outputTokens,
+		TotalTokens:        inputTokens + outputTokens,
+		Status:             status,
+		ErrorCode:          errorCode,
+		LatencyMs:          latencyMs,
+		Streamed:           streamed,
+		TransformationMode: transformationMode,
 	}
 
 	if rule != nil {

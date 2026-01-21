@@ -82,6 +82,7 @@ type startFlags struct {
 	enableDebug          bool
 	enableOpenBrowser    bool
 	enableStyleTransform bool
+	enablePassThrough    bool
 	daemon               bool
 	logFile              string
 	promptRestart        bool
@@ -101,6 +102,7 @@ func addStartFlags(cmd *cobra.Command, flags *startFlags) {
 	cmd.Flags().BoolVar(&flags.enableDebug, "debug", false, "Enable debug mode including gin, low level logging and so on (default: false)")
 	cmd.Flags().BoolVar(&flags.enableOpenBrowser, "browser", true, "Auto-open browser when server starts (default: true)")
 	cmd.Flags().BoolVar(&flags.enableStyleTransform, "adapter", true, "Enable API style transformation (default: true)")
+	cmd.Flags().BoolVar(&flags.enablePassThrough, "pass-through", false, "Enable pass-through mode (no request/response transformation) for debugging (default: false)")
 	cmd.Flags().BoolVar(&flags.daemon, "daemon", false, "Run as daemon in background (default: false)")
 	cmd.Flags().StringVar(&flags.logFile, "log-file", "", "Log file path for daemon mode (default: ~/.tingly-box/tingly-box.log)")
 	cmd.Flags().BoolVar(&flags.promptRestart, "prompt-restart", false, "Prompt to restart if server is already running (default: false)")
@@ -142,6 +144,7 @@ func resolveStartOptions(cmd *cobra.Command, flags startFlags, appConfig *config
 		EnableUI:          flags.enableUI,
 		EnableDebug:       resolvedDebug,
 		EnableAdaptor:     flags.enableStyleTransform,
+		EnablePassThrough: flags.enablePassThrough,
 		EnableOpenBrowser: resolvedOpenBrowser,
 		Daemon:            flags.daemon,
 		LogFile:           flags.logFile,
@@ -185,6 +188,7 @@ type startServerOptions struct {
 	EnableUI          bool
 	EnableDebug       bool
 	EnableAdaptor     bool
+	EnablePassThrough bool
 	EnableOpenBrowser bool
 	Daemon            bool
 	LogFile           string
@@ -322,6 +326,7 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 		appConfig,
 		manager.WithUI(opts.EnableUI),
 		manager.WithAdaptor(opts.EnableAdaptor),
+		manager.WithPassThrough(opts.EnablePassThrough),
 		manager.WithDebug(opts.EnableDebug),
 		manager.WithOpenBrowser(opts.EnableOpenBrowser),
 		manager.WithHost(opts.Host),

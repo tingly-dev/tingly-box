@@ -17,21 +17,22 @@ import (
 
 // UsageRecord is the GORM model for persisting individual usage records
 type UsageRecord struct {
-	ID           uint      `gorm:"primaryKey;autoIncrement;column:id"`
-	ProviderUUID string    `gorm:"column:provider_uuid;index:idx_provider_model;not null"`
-	ProviderName string    `gorm:"column:provider_name;not null"`
-	Model        string    `gorm:"column:model;index:idx_provider_model;not null"`
-	Scenario     string    `gorm:"column:scenario;index:idx_scenario;not null"`
-	RuleUUID     string    `gorm:"column:rule_uuid;index:idx_rule"`
-	RequestModel string    `gorm:"column:request_model"`
-	Timestamp    time.Time `gorm:"column:timestamp;index:idx_timestamp;index:idx_timestamp_scenario;not null"`
-	InputTokens  int       `gorm:"column:input_tokens;not null"`
-	OutputTokens int       `gorm:"column:output_tokens;not null"`
-	TotalTokens  int       `gorm:"column:total_tokens;index;not null"`
-	Status       string    `gorm:"column:status;index;not null"` // success, error, partial
-	ErrorCode    string    `gorm:"column:error_code"`
-	LatencyMs    int       `gorm:"column:latency_ms"`
-	Streamed     bool      `gorm:"column:streamed;type:integer"`
+	ID                 uint      `gorm:"primaryKey;autoIncrement;column:id"`
+	ProviderUUID       string    `gorm:"column:provider_uuid;index:idx_provider_model;not null"`
+	ProviderName       string    `gorm:"column:provider_name;not null"`
+	Model              string    `gorm:"column:model;index:idx_provider_model;not null"`
+	Scenario           string    `gorm:"column:scenario;index:idx_scenario;not null"`
+	RuleUUID           string    `gorm:"column:rule_uuid;index:idx_rule"`
+	RequestModel       string    `gorm:"column:request_model"`
+	Timestamp          time.Time `gorm:"column:timestamp;index:idx_timestamp;index:idx_timestamp_scenario;not null"`
+	InputTokens        int       `gorm:"column:input_tokens;not null"`
+	OutputTokens       int       `gorm:"column:output_tokens;not null"`
+	TotalTokens        int       `gorm:"column:total_tokens;index;not null"`
+	Status             string    `gorm:"column:status;index;not null"` // success, error, partial
+	ErrorCode          string    `gorm:"column:error_code"`
+	LatencyMs          int       `gorm:"column:latency_ms"`
+	Streamed           bool      `gorm:"column:streamed;type:integer"`
+	TransformationMode string    `gorm:"column:transformation_mode;index"` // pass_through, transformation
 }
 
 // TableName specifies the table name for GORM
