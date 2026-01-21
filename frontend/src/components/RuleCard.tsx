@@ -5,9 +5,10 @@ import type { ProbeResponse } from '../client';
 import Probe from './ProbeModal.tsx';
 import RoutingGraph from './RoutingGraph';
 import SmartRoutingGraph from './SmartRoutingGraph';
+import SmartRuleEditDialog from './SmartRuleEditDialog';
 import { api } from '../services/api';
 import type { Provider, ProviderModelsDataByUuid } from '../types/provider';
-import type { ConfigRecord, Rule } from './RoutingGraphTypes.ts';
+import type { ConfigRecord, Rule, SmartRouting } from './RoutingGraphTypes.ts';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface RuleCardProps {
@@ -59,6 +60,10 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     // Menu state
     const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
     const menuOpen = Boolean(menuAnchorEl);
+
+    // Smart rule edit dialog state
+    const [smartRuleDialogOpen, setSmartRuleDialogOpen] = useState(false);
+    const [editingSmartRule, setEditingSmartRule] = useState<SmartRouting | null>(null);
 
     const handleMenuOpen = useCallback((event: React.MouseEvent<HTMLElement>) => {
         setMenuAnchorEl(event.currentTarget);
@@ -307,9 +312,43 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     }, [configRecord, autoSave]);
 
     const handleEditSmartRule = useCallback(async (ruleUuid: string) => {
-        // TODO: Open smart rule edit dialog
-        showNotification('Smart rule editing not yet implemented', 'info');
-    }, [showNotification]);
+        if (!configRecord) return;
+
+        const smartRule = (configRecord.smartRouting || []).find(r => r.uuid === ruleUuid);
+        if (smartRule) {
+            setEditingSmartRule(smartRule);
+            setSmartRuleDialogOpen(true);
+        }
+    }, [configRecord]);
+
+    const handleSaveSmartRule = useCallback(async (updatedRule: SmartRouting) => {
+        if (!configRecord) return;
+
+        const updatedSmartRouting = (configRecord.smartRouting || []).map(r =>
+            r.uuid === updatedRule.uuid ? updatedRule : r
+        );
+
+        const updated = {
+            ...configRecord,
+            smartRouting: updatedSmartRouting,
+        };
+
+        const previousRecord = { ...configRecord };
+        setConfigRecord(updated);
+
+        const success = await autoSave(updated);
+        if (!success) {
+            setConfigRecord(previousRecord);
+        } else {
+            setSmartRuleDialogOpen(false);
+            showNotification('Smart rule updated successfully', 'success');
+        }
+    }, [configRecord, autoSave, showNotification]);
+
+    const handleCancelSmartRuleEdit = useCallback(() => {
+        setSmartRuleDialogOpen(false);
+        setEditingSmartRule(null);
+    }, []);
 
     const handleDeleteSmartRule = useCallback(async (ruleUuid: string) => {
         if (!configRecord) return;
@@ -550,7 +589,6 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                         allowToggleRule={allowToggleRule}
                         onUpdateRecord={handleUpdateRecord}
                         onDeleteProvider={handleDeleteProvider}
-                        onRefreshModels={handleRefreshModels}
                         onToggleExpanded={() => setExpanded(!expanded)}
                         onProviderNodeClick={handleProviderNodeClick}
                         onAddProviderButtonClick={handleAddProviderButtonClick}
@@ -608,6 +646,14 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                     </Button>
                 </DialogActions>
             </Dialog>
+
+            {/* Smart Rule Edit Dialog */}
+            <SmartRuleEditDialog
+                open={smartRuleDialogOpen}
+                smartRouting={editingSmartRule}
+                onSave={handleSaveSmartRule}
+                onCancel={handleCancelSmartRuleEdit}
+            />
         </>
     );
 };
