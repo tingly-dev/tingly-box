@@ -116,7 +116,6 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
         onEdit();
     };
 
-    const servicesCount = smartRouting.services?.length || 0;
     const firstOp = smartRouting.ops?.[0];
 
     // Format op display: e.g., "model: contains" or "user: regex"
@@ -164,16 +163,6 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                     >
                         <Chip
                             label={getOpDisplay()}
-                            size="small"
-                            variant="outlined"
-                            sx={{
-                                fontSize: '0.7rem',
-                                height: 20,
-                                borderColor: active ? 'primary.main' : 'divider',
-                            }}
-                        />
-                        <Chip
-                            label={`${servicesCount} ${servicesCount === 1 ? 'Service' : 'Services'}`}
                             size="small"
                             variant="outlined"
                             sx={{
