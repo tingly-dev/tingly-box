@@ -382,10 +382,14 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         }
     }, [configRecord, autoSave, showNotification]);
 
-    const handleAddServiceToSmartRule = useCallback(async (ruleUuid: string) => {
-        // TODO: Open provider/service selection dialog
-        showNotification('Add service to smart rule not yet implemented', 'info');
-    }, [showNotification]);
+    const handleAddServiceToSmartRule = useCallback(async (smartRuleIndex: number) => {
+        if (!configRecord) return;
+
+        // Open the model selection dialog with the smart rule index
+        // We use a special format: "smart:${index}" to indicate this is for a smart rule
+        const smartRuleRef = `smart:${smartRuleIndex}`;
+        onModelSelectOpen(rule.uuid, configRecord, 'add', smartRuleRef);
+    }, [configRecord, rule.uuid, onModelSelectOpen]);
 
     const handleDeleteButtonClick = useCallback(() => {
         setDeleteDialogOpen(true);

@@ -68,7 +68,7 @@ interface SmartRoutingGraphProps {
     onAddSmartRule: () => void;
     onEditSmartRule: (ruleUuid: string) => void;
     onDeleteSmartRule: (ruleUuid: string) => void;
-    onAddServiceToSmartRule: (ruleUuid: string) => void;
+    onAddServiceToSmartRule: (ruleIndex: number) => void;
     onAddDefaultProvider?: () => void;
     onToggleSmartEnabled?: (enabled: boolean) => void;
     // Additional props matching RoutingGraph
@@ -354,13 +354,14 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                         <Box sx={{ flex: 1, display: 'flex', alignItems:"flex-start", flexDirection: 'column', gap: 1.5, marginLeft: 3 }}>
                             {/* Smart Rules */}
                             {smartRouting.length > 0 ? (
-                                smartRouting.map((rule) => (
+                                smartRouting.map((rule, index) => (
                                     <React.Fragment key={rule.uuid}>
                                         <GraphRow>
                                             {/* Smart Node */}
                                             <NodeContainer>
                                                 <SmartOpNode
                                                     smartRouting={rule}
+                                                    index={index}
                                                     active={active}
                                                     onEdit={() => {
                                                         console.log('SmartRoutingGraph: onEdit called for rule:', rule.uuid, rule.description);
@@ -399,14 +400,14 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                                     {/* Add Service Button */}
                                                     <ActionAddNode
                                                         active={active}
-                                                        onAdd={() => onAddServiceToSmartRule(rule.uuid)}
+                                                        onAdd={() => onAddServiceToSmartRule(index)}
                                                         tooltip="Add service to this smart rule"
                                                     />
                                                 </Box>
                                             ) : (
                                                 <ActionAddNode
                                                     active={active}
-                                                    onAdd={() => onAddServiceToSmartRule(rule.uuid)}
+                                                    onAdd={() => onAddServiceToSmartRule(index)}
                                                     tooltip="Add service to this smart rule"
                                                 />
                                             )}
