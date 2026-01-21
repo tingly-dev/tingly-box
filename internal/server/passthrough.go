@@ -7,257 +7,275 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
+	"tingly-box/internal/constant"
 	"tingly-box/internal/typ"
 )
 
-// PassThroughHandler handles requests in pass-through mode
-// In this mode, requests are forwarded as-is without any transformation
-type PassThroughHandler struct {
+// PassthroughHandler handles pass-through requests
+// It replaces the model name and proxies the request without any transformations
+type PassthroughHandler struct {
 	server *Server
 }
 
-// NewPassThroughHandler creates a new pass-through handler
-func NewPassThroughHandler(server *Server) *PassThroughHandler {
-	return &PassThroughHandler{
+// NewPassthroughHandler creates a new pass-through handler
+func NewPassthroughHandler(server *Server) *PassthroughHandler {
+	return &PassthroughHandler{
 		server: server,
 	}
 }
 
-// HandleRequest processes a request in pass-through mode
-func (h *PassThroughHandler) HandleRequest(c *gin.Context, provider *typ.Provider, model string) {
-	logrus.WithFields(logrus.Fields{
-		"provider":     provider.Name,
-		"model":        model,
-		"path":         c.Request.URL.Path,
-		"method":       c.Request.Method,
-		"pass_through": true,
-	}).Info("Processing request in pass-through mode")
+// PassthroughOpenAI handles OpenAI-style pass-through requests
+// Consolidates: PassthroughOpenAIChatCompletions, PassthroughOpenAIResponsesCreate, PassthroughOpenAIResponsesGet
+func (s *Server) PassthroughOpenAI(c *gin.Context) {
+	s.handlePassthroughRequest(c, "openai")
+}
 
-	// Record that we're using pass-through mode
-	h.recordPassThroughUsage(c, provider, model, "pass_through")
+// PassthroughAnthropic handles Anthropic-style pass-through requests
+// Consolidates: PassthroughAnthropicMessages, PassthroughAnthropicCountTokens
+func (s *Server) PassthroughAnthropic(c *gin.Context) {
+	s.handlePassthroughRequest(c, "anthropic")
+}
 
-	// Read the original request body
+// handlePassthroughRequest is the common handler for all pass-through requests
+func (s *Server) handlePassthroughRequest(c *gin.Context, apiStyle string) {
+	// Read the request body
 	requestBody, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to read request body in pass-through mode")
+		logrus.WithError(err).Error("Failed to read request body in pass-through handler")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read request body"})
 		return
 	}
 
-	// Parse and modify the request to replace the model name
+	// Parse JSON to extract model
 	var requestJSON map[string]interface{}
 	if err := json.Unmarshal(requestBody, &requestJSON); err != nil {
-		logrus.WithError(err).Error("Failed to parse request JSON in pass-through mode")
+		logrus.WithError(err).Error("Failed to parse request JSON in pass-through handler")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON in request body"})
 		return
 	}
 
+	// Get the model from request
+	requestModel, ok := requestJSON["model"].(string)
+	if !ok || requestModel == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Model is required"})
+		return
+	}
+
+	// Determine provider and service via load balancing
+	provider, selectedService, rule, err := s.DetermineProviderAndModel(requestModel)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Set context for downstream middleware (stats tracking)
+	c.Set("provider", provider.UUID)
+	c.Set("model", selectedService.Model)
+	c.Set("rule", rule)
+	c.Set("pass_through", true)
+
 	// Replace the model name with the actual provider model
-	requestJSON["model"] = model
+	requestJSON["model"] = selectedService.Model
 
 	// Marshal back to JSON
 	modifiedRequestBody, err := json.Marshal(requestJSON)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to marshal modified request in pass-through mode")
+		logrus.WithError(err).Error("Failed to marshal modified request in pass-through handler")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process request"})
 		return
 	}
 
-	// Restore the request body for potential middleware use
-	c.Request.Body = io.NopCloser(bytes.NewBuffer(modifiedRequestBody))
+	logrus.WithFields(logrus.Fields{
+		"provider":     provider.Name,
+		"model":        selectedService.Model,
+		"path":         c.Request.URL.Path,
+		"method":       c.Request.Method,
+		"pass_through": true,
+	}).Debug("Pass-through handler proxying request")
 
+	// Proxy the request
+	if err := s.proxyPassthroughRequest(c, provider, modifiedRequestBody, apiStyle); err != nil {
+		logrus.WithError(err).Error("Failed to proxy request in pass-through handler")
+		c.JSON(http.StatusBadGateway, gin.H{"error": "Failed to proxy request"})
+	}
+}
+
+// proxyPassthroughRequest proxies the request to the provider
+func (s *Server) proxyPassthroughRequest(c *gin.Context, provider *typ.Provider, body []byte, apiStyle string) error {
 	// Build the target URL
-	targetURL, err := h.buildTargetURL(provider, c.Request.URL.Path, c.Request.URL.RawQuery)
+	targetURL, err := s.buildPassthroughTargetURL(provider, c.Request.URL.Path, c.Request.URL.RawQuery, apiStyle)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to build target URL in pass-through mode")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to build target URL"})
-		return
+		return fmt.Errorf("failed to build target URL: %w", err)
 	}
 
-	// Create the proxy request
-	proxyReq, err := http.NewRequestWithContext(
-		context.Background(),
-		c.Request.Method,
-		targetURL,
-		bytes.NewBuffer(modifiedRequestBody),
-	)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to create proxy request in pass-through mode")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create proxy request"})
-		return
-	}
+	logrus.WithFields(logrus.Fields{
+		"target_url": targetURL,
+		"provider":   provider.Name,
+		"base_url":   provider.APIBase,
+	}).Debug("Passthrough target URL constructed")
 
-	// Copy headers from original request
-	h.copyHeaders(c.Request, proxyReq, provider)
+	// Determine if this is a streaming request
+	isStreaming := s.isPassthroughStreamingRequest(body)
 
-	// Set timeout
+	// Set timeout - use provider's timeout if configured
 	timeout := time.Duration(provider.Timeout) * time.Second
 	if timeout == 0 {
-		timeout = 30 * time.Second // Default timeout
+		timeout = time.Duration(constant.DefaultRequestTimeout) * time.Second
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	proxyReq = proxyReq.WithContext(ctx)
 
-	// Execute the request
-	client := &http.Client{
+	// For streaming, use 2x timeout to accommodate longer response times
+	if isStreaming {
+		timeout = timeout * 2
+	}
+
+	// Create HTTP client with timeout for passthrough
+	// Note: We don't use the pooled client's HTTP client because it may have no timeout
+	httpClient := &http.Client{
 		Timeout: timeout,
 	}
 
-	resp, err := client.Do(proxyReq)
+	// Create context with timeout for all requests
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	// Create the proxy request
+	proxyReq, err := http.NewRequestWithContext(ctx, c.Request.Method, targetURL, bytes.NewBuffer(body))
 	if err != nil {
-		logrus.WithError(err).Error("Failed to execute proxy request in pass-through mode")
-		h.recordPassThroughUsage(c, provider, model, "error")
-		c.JSON(http.StatusBadGateway, gin.H{"error": "Failed to proxy request"})
-		return
+		return fmt.Errorf("failed to create proxy request: %w", err)
+	}
+
+	// Copy headers
+	s.copyPassthroughHeaders(c.Request, proxyReq, provider)
+
+	// Use the HTTP client from pool for the request
+	resp, err := httpClient.Do(proxyReq)
+	if err != nil {
+		return fmt.Errorf("failed to execute proxy request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Copy response headers first
+	// Copy response headers
 	for key, values := range resp.Header {
 		for _, value := range values {
 			c.Header(key, value)
 		}
 	}
 
-	// Check if this is a streaming response
+	// Handle streaming vs non-streaming
 	if strings.Contains(resp.Header.Get("Content-Type"), "text/event-stream") {
-		// Handle streaming response
-		h.handleStreamingResponse(c, resp, provider, model)
-	} else {
-		// Handle non-streaming response
-		h.handleNonStreamingResponse(c, resp, provider, model)
+		return s.handlePassthroughStreamingResponse(c, resp)
 	}
+
+	return s.handlePassthroughNonStreamingResponse(c, resp)
 }
 
-// buildTargetURL constructs the target URL for the provider
-func (h *PassThroughHandler) buildTargetURL(provider *typ.Provider, path, query string) (string, error) {
+// isPassthroughStreamingRequest checks if the request body indicates a streaming request
+func (s *Server) isPassthroughStreamingRequest(body []byte) bool {
+	var request map[string]interface{}
+	if err := json.Unmarshal(body, &request); err != nil {
+		return false
+	}
+	if stream, ok := request["stream"].(bool); ok {
+		return stream
+	}
+	return false
+}
+
+// buildPassthroughTargetURL constructs the target URL for the provider
+func (s *Server) buildPassthroughTargetURL(provider *typ.Provider, path, query, apiStyle string) (string, error) {
 	baseURL := provider.APIBase
 	if baseURL == "" {
 		return "", fmt.Errorf("provider %s has no API base URL", provider.Name)
 	}
 
-	// Parse the base URL
-	parsedBase, err := url.Parse(baseURL)
-	if err != nil {
-		return "", fmt.Errorf("invalid API base URL for provider %s: %w", provider.Name, err)
-	}
+	// Map passthrough paths to provider paths
+	targetPath := s.mapPassthroughPathToProvider(path, apiStyle)
 
-	// For pass-through mode, we need to map tingly-box paths to provider paths
-	targetPath := h.mapPathToProvider(path, provider.APIStyle)
+	baseURL = strings.TrimRight(baseURL, "/")
+	targetPath = strings.TrimLeft(targetPath, "/")
 
-	// Construct the full URL
-	targetURL := &url.URL{
-		Scheme:   parsedBase.Scheme,
-		Host:     parsedBase.Host,
-		Path:     strings.TrimSuffix(parsedBase.Path, "/") + targetPath,
-		RawQuery: query,
-	}
-
-	return targetURL.String(), nil
-}
-
-// mapPathToProvider maps tingly-box API paths to provider-specific paths
-func (h *PassThroughHandler) mapPathToProvider(tinglyPath string, apiStyle typ.APIStyle) string {
-	// Remove tingly-box specific prefixes and map to provider paths
-	switch {
-	case strings.HasPrefix(tinglyPath, "/tingly/openai/v1/"):
-		// /tingly/openai/v1/chat/completions -> /v1/chat/completions
-		return strings.TrimPrefix(tinglyPath, "/tingly/openai")
-	case strings.HasPrefix(tinglyPath, "/tingly/anthropic/v1/"):
-		// /tingly/anthropic/v1/messages -> /v1/messages
-		return strings.TrimPrefix(tinglyPath, "/tingly/anthropic")
-	case strings.HasPrefix(tinglyPath, "/tingly/claude_code/"):
-		// /tingly/claude_code/v1/messages -> /v1/messages
-		return strings.TrimPrefix(tinglyPath, "/tingly/claude_code")
-	case strings.HasPrefix(tinglyPath, "/api/"):
-		// Direct API calls - map based on API style
-		switch apiStyle {
-		case typ.APIStyleOpenAI:
-			return strings.TrimPrefix(tinglyPath, "/api")
-		case typ.APIStyleAnthropic:
-			return strings.TrimPrefix(tinglyPath, "/api")
-		default:
-			return strings.TrimPrefix(tinglyPath, "/api")
+	// Avoid duplicate version segments when provider base already includes /v1
+	if strings.HasSuffix(baseURL, "/v1") {
+		switch {
+		case targetPath == "v1":
+			targetPath = ""
+		case strings.HasPrefix(targetPath, "v1/"):
+			targetPath = targetPath[3:]
 		}
-	default:
-		// Default: pass through as-is
-		return tinglyPath
+	} else if apiStyle == "anthropic" && targetPath != "" && !strings.HasPrefix(targetPath, "v1/") {
+		// For Anthropic, prepend /v1 if not already present and base URL doesn't include it
+		targetPath = "v1/" + targetPath
 	}
+
+	finalURL := baseURL
+	if targetPath != "" {
+		finalURL = finalURL + "/" + targetPath
+	}
+	if query != "" {
+		finalURL = finalURL + "?" + query
+	}
+
+	logrus.WithField("final_url", finalURL).Debug("Passthrough final URL")
+	return finalURL, nil
 }
 
-// copyHeaders copies relevant headers from source to destination request
-func (h *PassThroughHandler) copyHeaders(src *http.Request, dst *http.Request, provider *typ.Provider) {
-	// Copy most headers, but handle authentication specially
+// mapPassthroughPathToProvider maps passthrough API paths to provider-specific paths
+func (s *Server) mapPassthroughPathToProvider(passthroughPath, apiStyle string) string {
+	// Remove /passthrough/{apiStyle} prefix
+	// e.g., /passthrough/openai/chat/completions -> /chat/completions
+	// e.g., /passthrough/anthropic/messages -> /messages
+
+	// For passthrough paths, we need to map them to the provider's expected path
+	switch apiStyle {
+	case "openai":
+		return strings.TrimPrefix(passthroughPath, "/passthrough/openai/")
+	case "anthropic":
+		return strings.TrimPrefix(passthroughPath, "/passthrough/anthropic/")
+	}
+	return passthroughPath
+}
+
+// copyPassthroughHeaders copies relevant headers from source to destination request
+func (s *Server) copyPassthroughHeaders(src *http.Request, dst *http.Request, provider *typ.Provider) {
 	for key, values := range src.Header {
-		switch strings.ToLower(key) {
-		case "host", "content-length", "connection":
-			// Skip these headers
+		switch key {
+		case "Host", "Content-Length", "Connection":
 			continue
-		case "authorization":
-			// Handle authentication based on provider configuration
+		case "Authorization":
 			if provider.Token != "" {
-				// Use provider's token instead of client's
 				dst.Header.Set("Authorization", "Bearer "+provider.Token)
 			} else {
-				// Pass through client's authorization
 				for _, value := range values {
 					dst.Header.Add(key, value)
 				}
 			}
 		default:
-			// Copy other headers as-is
 			for _, value := range values {
 				dst.Header.Add(key, value)
 			}
 		}
 	}
 
-	// Set provider-specific headers
 	if provider.Token != "" && dst.Header.Get("Authorization") == "" {
 		dst.Header.Set("Authorization", "Bearer "+provider.Token)
 	}
 
-	// Set content type if not present
 	if dst.Header.Get("Content-Type") == "" {
 		dst.Header.Set("Content-Type", "application/json")
 	}
 }
 
-// recordPassThroughUsage records usage statistics for pass-through requests
-func (h *PassThroughHandler) recordPassThroughUsage(c *gin.Context, provider *typ.Provider, model, status string) {
-	// Set context for middleware to track this as pass-through
-	c.Set("provider", provider.UUID)
-	c.Set("model", model)
-	c.Set("pass_through", true)
-	c.Set("transformation_mode", "pass_through")
-
-	// Log the pass-through usage
-	logrus.WithFields(logrus.Fields{
-		"provider":       provider.Name,
-		"model":          model,
-		"status":         status,
-		"transformation": "pass_through",
-		"path":           c.Request.URL.Path,
-		"method":         c.Request.Method,
-	}).Debug("Recorded pass-through usage")
-}
-
-// handleStreamingResponse handles streaming SSE responses
-func (h *PassThroughHandler) handleStreamingResponse(c *gin.Context, resp *http.Response, provider *typ.Provider, model string) {
+// handlePassthroughStreamingResponse handles streaming SSE responses
+func (s *Server) handlePassthroughStreamingResponse(c *gin.Context, resp *http.Response) error {
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
-		logrus.Error("Streaming not supported by this connection")
-		h.recordPassThroughUsage(c, provider, model, "error")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Streaming not supported"})
-		return
+		return fmt.Errorf("streaming not supported")
 	}
 
 	c.Status(resp.StatusCode)
@@ -272,24 +290,27 @@ func (h *PassThroughHandler) handleStreamingResponse(c *gin.Context, resp *http.
 			break
 		}
 		if err != nil {
-			logrus.WithError(err).Error("Error reading streaming response")
-			break
+			return fmt.Errorf("error reading streaming response: %w", err)
 		}
 	}
-
-	h.recordPassThroughUsage(c, provider, model, "success")
+	return nil
 }
 
-// handleNonStreamingResponse handles regular JSON responses
-func (h *PassThroughHandler) handleNonStreamingResponse(c *gin.Context, resp *http.Response, provider *typ.Provider, model string) {
+// handlePassthroughNonStreamingResponse handles regular JSON responses
+func (s *Server) handlePassthroughNonStreamingResponse(c *gin.Context, resp *http.Response) error {
+	logrus.WithFields(logrus.Fields{
+		"status_code":  resp.StatusCode,
+		"content_type": resp.Header.Get("Content-Type"),
+	}).Debug("Passthrough non-streaming response received")
+
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to read proxy response in pass-through mode")
-		h.recordPassThroughUsage(c, provider, model, "error")
-		c.JSON(http.StatusBadGateway, gin.H{"error": "Failed to read proxy response"})
-		return
+		logrus.WithError(err).Error("Failed to read proxy response body")
+		return fmt.Errorf("failed to read proxy response: %w", err)
 	}
 
-	h.recordPassThroughUsage(c, provider, model, "success")
+	logrus.WithField("body_length", len(responseBody)).Debug("Passthrough response body read")
 	c.Data(resp.StatusCode, resp.Header.Get("Content-Type"), responseBody)
+	logrus.Debug("Passthrough response sent")
+	return nil
 }

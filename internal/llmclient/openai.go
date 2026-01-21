@@ -60,10 +60,15 @@ func (c *OpenAIClient) Close() error {
 	// OpenAI client doesn't need explicit closing
 	return nil
 }
-ls
+
 // Client returns the underlying OpenAI SDK client
 func (c *OpenAIClient) Client() *openai.Client {
 	return &c.client
+}
+
+// HttpClient returns the underlying HTTP client for passthrough/proxy operations
+func (c *OpenAIClient) HttpClient() *http.Client {
+	return c.httpClient
 }
 
 // ChatCompletionsNew creates a new chat completion request

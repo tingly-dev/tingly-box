@@ -87,6 +87,11 @@ func (c *AnthropicClient) Client() *anthropic.Client {
 	return &c.client
 }
 
+// HttpClient returns the underlying HTTP client for passthrough/proxy operations
+func (c *AnthropicClient) HttpClient() *http.Client {
+	return c.httpClient
+}
+
 // MessagesNew creates a new message request
 func (c *AnthropicClient) MessagesNew(ctx context.Context, req anthropic.MessageNewParams) (*anthropic.Message, error) {
 	return c.client.Messages.New(ctx, req)
