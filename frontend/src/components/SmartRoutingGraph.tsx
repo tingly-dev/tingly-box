@@ -119,7 +119,7 @@ const GraphContainer = styled(Box)(({ theme }) => ({
 const GraphRow = styled(Box)(({ theme }) => ({
     display: 'flex',
     alignItems: 'stretch',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     gap: graph.rowGap,
     marginBottom: theme.spacing(1),
 }));
@@ -415,7 +415,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                     </React.Fragment>
                                 ))
                             ) : (
-                                <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center', py: 4 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-start', py: 4 }}>
                                     <Typography variant="body2" color="text.secondary">
                                         No smart rules configured.
                                     </Typography>
@@ -423,7 +423,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                             )}
 
                             {/* Add Smart Rule Button */}
-                            <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'flex-start', py: 1 }}>
                                 <Button
                                     variant="outlined"
                                     startIcon={<AddIcon />}
