@@ -65,19 +65,6 @@ func (c *GoogleClient) Close() error {
 	return nil
 }
 
-// SetMode sets the client mode. When debug is true, all API headers are logged as indented JSON.
-func (c *GoogleClient) SetMode(debug bool) {
-	c.debugMode = debug
-	if debug {
-		c.applyDebugMode()
-	}
-}
-
-// applyDebugMode wraps the HTTP client with a debug round tripper
-func (c *GoogleClient) applyDebugMode() {
-	c.httpClient.Transport = NewDebugRoundTripper(c.httpClient.Transport)
-}
-
 // Client returns the underlying Google genai SDK client
 func (c *GoogleClient) Client() *genai.Client {
 	return c.client

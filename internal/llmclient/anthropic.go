@@ -82,19 +82,6 @@ func (c *AnthropicClient) Close() error {
 	return nil
 }
 
-// SetMode sets the client mode. When debug is true, all API headers are logged as indented JSON.
-func (c *AnthropicClient) SetMode(debug bool) {
-	c.debugMode = debug
-	if debug {
-		c.applyDebugMode()
-	}
-}
-
-// applyDebugMode wraps the HTTP client with a debug round tripper
-func (c *AnthropicClient) applyDebugMode() {
-	c.httpClient.Transport = NewDebugRoundTripper(c.httpClient.Transport)
-}
-
 // Client returns the underlying Anthropic SDK client
 func (c *AnthropicClient) Client() *anthropic.Client {
 	return &c.client

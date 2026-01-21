@@ -60,20 +60,7 @@ func (c *OpenAIClient) Close() error {
 	// OpenAI client doesn't need explicit closing
 	return nil
 }
-
-// SetMode sets the client mode. When debug is true, all API headers are logged as indented JSON.
-func (c *OpenAIClient) SetMode(debug bool) {
-	c.debugMode = debug
-	if debug {
-		c.applyDebugMode()
-	}
-}
-
-// applyDebugMode wraps the HTTP client with a debug round tripper
-func (c *OpenAIClient) applyDebugMode() {
-	c.httpClient.Transport = NewDebugRoundTripper(c.httpClient.Transport)
-}
-
+ls
 // Client returns the underlying OpenAI SDK client
 func (c *OpenAIClient) Client() *openai.Client {
 	return &c.client

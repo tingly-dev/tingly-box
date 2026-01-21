@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -72,7 +73,7 @@ func (r *RecordRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 		}
 
 		// Check if this is a streaming response
-		isStreaming := resp.Header.Get("Content-Type") == "text/event-stream"
+		isStreaming := strings.Contains(resp.Header.Get("Content-Type"), "text/event-stream")
 
 		// Handle response body
 		if resp.Body != nil && resp.Body != http.NoBody {
