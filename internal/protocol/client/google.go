@@ -5,6 +5,7 @@ import (
 	"iter"
 	"net/http"
 	"tingly-box/internal/obs"
+	"tingly-box/internal/protocol"
 
 	"google.golang.org/genai"
 
@@ -54,8 +55,8 @@ func NewGoogleClient(provider *typ.Provider) (*GoogleClient, error) {
 }
 
 // ProviderType returns the provider type
-func (c *GoogleClient) ProviderType() ProviderType {
-	return ProviderTypeGoogle
+func (c *GoogleClient) ProviderType() protocol.ProviderType {
+	return protocol.ProviderTypeGoogle
 }
 
 // Close closes any resources held by the client

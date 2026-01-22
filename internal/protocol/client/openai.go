@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"tingly-box/internal/obs"
+	"tingly-box/internal/protocol"
 
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
@@ -50,8 +51,8 @@ func defaultNewOpenAIClient(provider *typ.Provider) (*OpenAIClient, error) {
 }
 
 // ProviderType returns the provider type
-func (c *OpenAIClient) ProviderType() ProviderType {
-	return ProviderTypeOpenAI
+func (c *OpenAIClient) ProviderType() protocol.ProviderType {
+	return protocol.ProviderTypeOpenAI
 }
 
 // Close closes any resources held by the client

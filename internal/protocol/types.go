@@ -1,4 +1,4 @@
-package client
+package protocol
 
 // ProviderType represents the AI provider type
 type ProviderType string

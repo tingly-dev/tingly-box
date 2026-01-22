@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 	"tingly-box/internal/obs"
+	"tingly-box/internal/protocol"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
@@ -71,8 +72,8 @@ func defaultNewAnthropicClient(provider *typ.Provider) (*AnthropicClient, error)
 }
 
 // ProviderType returns the provider type
-func (c *AnthropicClient) ProviderType() ProviderType {
-	return ProviderTypeAnthropic
+func (c *AnthropicClient) ProviderType() protocol.ProviderType {
+	return protocol.ProviderTypeAnthropic
 }
 
 // Close closes any resources held by the client

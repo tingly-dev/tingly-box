@@ -1,6 +1,7 @@
 package client
 
 import (
+	"tingly-box/internal/protocol"
 	"tingly-box/internal/typ"
 )
 
@@ -11,7 +12,7 @@ var NewOpenAIClient func(provider *typ.Provider) (*OpenAIClient, error) = defaul
 var NewAnthropicClient func(provider *typ.Provider) (*AnthropicClient, error) = defaultNewAnthropicClient
 
 // CloseClient closes a client if it implements Close()
-func CloseClient(client Client) error {
+func CloseClient(client protocol.Client) error {
 	if client != nil {
 		return client.Close()
 	}
