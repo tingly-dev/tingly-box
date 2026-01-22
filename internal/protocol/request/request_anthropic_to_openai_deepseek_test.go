@@ -7,7 +7,8 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 )
 
-// TestDeepSeekReasoningContent verifies that all assistant messages include reasoning_content
+// TestDeepSeekReasoningContent verifies that all assistant messages include x_thinking field
+// The x_thinking field is later converted to reasoning_content by applyDeepSeekTransform
 func TestDeepSeekReasoningContent(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -22,7 +23,7 @@ func TestDeepSeekReasoningContent(t *testing.T) {
 					anthropic.NewTextBlock("Hello!"),
 				},
 			},
-			expectHasField: true,
+			expectHasField: true, // x_thinking field should be present (empty string)
 		},
 		{
 			name: "Message with thinking",
@@ -65,7 +66,8 @@ func TestDeepSeekReasoningContent(t *testing.T) {
 			// Convert to OpenAI format
 			openaiMsg := convertAnthropicAssistantMessageToOpenAI(tt.anthropicMsg)
 
-			// Marshal to JSON to check if reasoning_content is present
+			// Marshal to JSON to check if x_thinking is present
+			// (reasoning_content is added by applyDeepSeekTransform at a higher level)
 			jsonBytes, err := json.Marshal(openaiMsg)
 			if err != nil {
 				t.Fatalf("Failed to marshal: %v", err)
@@ -76,9 +78,9 @@ func TestDeepSeekReasoningContent(t *testing.T) {
 				t.Fatalf("Failed to unmarshal: %v", err)
 			}
 
-			_, hasReasoningContent := result["reasoning_content"]
-			if tt.expectHasField && !hasReasoningContent {
-				t.Errorf("Expected reasoning_content field to be present, but it was missing. JSON: %s", string(jsonBytes))
+			_, hasXThinking := result["x_thinking"]
+			if tt.expectHasField && !hasXThinking {
+				t.Errorf("Expected x_thinking field to be present, but it was missing. JSON: %s", string(jsonBytes))
 			}
 
 			t.Logf("JSON output: %s", string(jsonBytes))
@@ -156,7 +158,8 @@ func TestDeepSeekRequestConversion(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			openaiReq, _ := ConvertAnthropicToOpenAIRequest(&tt.anthropicReq, false)
 
-			// Check all assistant messages have reasoning_content
+			// Check all assistant messages have x_thinking
+			// (reasoning_content is added by applyDeepSeekTransform at a higher level)
 			for i, msg := range openaiReq.Messages {
 				if msg.OfAssistant == nil {
 					continue // Skip non-assistant messages
@@ -172,9 +175,9 @@ func TestDeepSeekRequestConversion(t *testing.T) {
 					t.Fatalf("Failed to unmarshal message %d: %v", i, err)
 				}
 
-				_, hasReasoningContent := result["reasoning_content"]
-				if tt.expectAllHave && !hasReasoningContent {
-					t.Errorf("Assistant message %d missing reasoning_content field. JSON: %s", i, string(jsonBytes))
+				_, hasXThinking := result["x_thinking"]
+				if tt.expectAllHave && !hasXThinking {
+					t.Errorf("Assistant message %d missing x_thinking field. JSON: %s", i, string(jsonBytes))
 				}
 
 				t.Logf("Message %d: %s", i, string(jsonBytes))
