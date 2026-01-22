@@ -258,27 +258,45 @@ func convertAnthropicAssistantMessageToOpenAI(msg anthropic.MessageParam) openai
 	if len(toolCalls) > 0 {
 		// Use JSON marshaling to create a message with tool_calls
 		msgMap := map[string]interface{}{
-			"role":       "assistant",
-			"content":    textContent,
-			"x_thinking": thinking, // Preserved for provider transforms (e.g., DeepSeek)
+			"role":    "assistant",
+			"content": textContent,
 		}
 		msgMap["tool_calls"] = toolCalls
 
 		msgBytes, _ := json.Marshal(msgMap)
 		var result openai.ChatCompletionMessageParamUnion
 		_ = json.Unmarshal(msgBytes, &result)
+
+		// Preserve x_thinking in ExtraFields for provider transforms (e.g., DeepSeek)
+		// Always add the field, even if empty, for consistency
+		extraFields := result.ExtraFields()
+		if extraFields == nil {
+			extraFields = map[string]any{}
+		}
+		extraFields["x_thinking"] = thinking
+		result.SetExtraFields(extraFields)
+
 		return result
 	}
 
 	// Simple text message
 	msgMap := map[string]interface{}{
-		"role":       "assistant",
-		"content":    textContent,
-		"x_thinking": thinking, // Preserved for provider transforms
+		"role":    "assistant",
+		"content": textContent,
 	}
 	msgBytes, _ := json.Marshal(msgMap)
 	var result openai.ChatCompletionMessageParamUnion
 	_ = json.Unmarshal(msgBytes, &result)
+
+	// Preserve x_thinking in ExtraFields for provider transforms
+	// Always add the field, even if empty, for consistency
+	extraFields := result.ExtraFields()
+	if extraFields == nil {
+		extraFields = map[string]any{}
+	}
+	extraFields["x_thinking"] = thinking
+	result.SetExtraFields(extraFields)
+
 	return result
 }
 
