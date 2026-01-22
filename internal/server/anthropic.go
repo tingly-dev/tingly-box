@@ -189,6 +189,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		if s.IsFeatureEnabled(feature.FeatureCompact) {
 			tf := smart_compact.NewCompactTransformer(2)
 			tf.HandleV1Beta(&betaMessages.BetaMessageNewParams)
+			logrus.Infoln("smart compact triggered")
 		}
 		s.anthropicMessagesV1Beta(c, betaMessages, model, provider, selectedService, rule)
 	} else {
@@ -196,6 +197,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		if s.IsFeatureEnabled(feature.FeatureCompact) {
 			tf := smart_compact.NewCompactTransformer(2)
 			tf.HandleV1(&messages.MessageNewParams)
+			logrus.Infoln("smart compact triggered")
 		}
 		s.anthropicMessagesV1(c, messages, model, provider, selectedService, rule)
 	}
