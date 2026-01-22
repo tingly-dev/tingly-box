@@ -27,7 +27,7 @@ const DefaultTemplateCacheTTL = 12 * time.Hour // Default TTL for template cache
 
 const TemplateCacheFileName = "provider_template.json"
 
-const TemplateGitHubURL = "https://raw.githubusercontent.com/tingly-dev/tingly-box/main/internal/config/provider_templates/provider_templates.json"
+const TemplateGitHubURL = "https://raw.githubusercontent.com/tingly-dev/tingly-box/main/internal/template/provider_templates.json"
 
 // ProviderTemplate represents a predefined provider configuration template
 type ProviderTemplate struct {

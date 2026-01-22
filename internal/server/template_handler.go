@@ -3,10 +3,9 @@ package server
 import (
 	"context"
 	"net/http"
+	"tingly-box/internal/template"
 
 	"github.com/gin-gonic/gin"
-
-	"tingly-box/internal/config/template"
 )
 
 // TemplateResponse represents the response for provider template endpoints

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 	"tingly-box/internal/protocol/client"
+	"tingly-box/internal/template"
 	"tingly-box/pkg/auth"
 	"tingly-box/pkg/network"
 
@@ -16,7 +17,6 @@ import (
 	"github.com/pkg/browser"
 	"github.com/sirupsen/logrus"
 
-	"tingly-box/internal/config/template"
 	"tingly-box/internal/constant"
 	"tingly-box/internal/obs"
 	"tingly-box/internal/server/background"

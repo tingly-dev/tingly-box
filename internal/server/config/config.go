@@ -9,12 +9,12 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+	"tingly-box/internal/template"
 	"tingly-box/pkg/auth"
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
-	"tingly-box/internal/config/template"
 	"tingly-box/internal/constant"
 	"tingly-box/internal/db"
 	"tingly-box/internal/helper"
