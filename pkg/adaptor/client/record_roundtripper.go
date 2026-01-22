@@ -1,4 +1,4 @@
-package llmclient
+package client
 
 import (
 	"bytes"

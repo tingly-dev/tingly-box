@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"time"
+	"tingly-box/pkg/adaptor/client"
 	"tingly-box/pkg/auth"
 
 	"github.com/gin-gonic/gin"
@@ -45,7 +46,7 @@ type Server struct {
 	usageAPI        *UsageAPI
 
 	// client pool for caching
-	clientPool *ClientPool
+	clientPool *client.ClientPool
 
 	// OAuth manager
 	oauthManager *oauth2.Manager
@@ -250,7 +251,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.jwtManager = jwtManager
 	server.engine = gin.New()
 	server.logger = memoryLogger
-	server.clientPool = NewClientPool() // Initialize client pool
+	server.clientPool = client.NewClientPool() // Initialize client pool
 	server.errorMW = errorMW
 
 	// Initialize record sink if recording is enabled

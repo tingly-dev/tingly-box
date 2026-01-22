@@ -1,4 +1,4 @@
-package llmclient
+package client
 
 import (
 	"context"
@@ -9,7 +9,6 @@ import (
 	"github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/sirupsen/logrus"
 
-	"tingly-box/internal/llmclient/httpclient"
 	"tingly-box/internal/record"
 	"tingly-box/internal/typ"
 )
@@ -34,7 +33,7 @@ func defaultNewOpenAIClient(provider *typ.Provider) (*OpenAIClient, error) {
 	var httpClient *http.Client
 	// Add proxy if configured
 	if provider.ProxyURL != "" {
-		httpClient = httpclient.CreateHTTPClientWithProxy(provider.ProxyURL)
+		httpClient = CreateHTTPClientWithProxy(provider.ProxyURL)
 		options = append(options, option.WithHTTPClient(httpClient))
 		logrus.Infof("Using proxy for OpenAI client: %s", provider.ProxyURL)
 	} else {

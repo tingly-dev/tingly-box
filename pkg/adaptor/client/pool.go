@@ -1,4 +1,4 @@
-package server
+package client
 
 import (
 	"crypto/sha256"
@@ -8,16 +8,15 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"tingly-box/internal/llmclient"
 	"tingly-box/internal/record"
 	"tingly-box/internal/typ"
 )
 
 // ClientPool manages unified client instances for different providers
 type ClientPool struct {
-	openaiClients    map[string]*llmclient.OpenAIClient
-	anthropicClients map[string]*llmclient.AnthropicClient
-	googleClients    map[string]*llmclient.GoogleClient
+	openaiClients    map[string]*OpenAIClient
+	anthropicClients map[string]*AnthropicClient
+	googleClients    map[string]*GoogleClient
 	mutex            sync.RWMutex
 	recordSink       *record.Sink
 }
@@ -25,14 +24,14 @@ type ClientPool struct {
 // NewClientPool creates a new client pool
 func NewClientPool() *ClientPool {
 	return &ClientPool{
-		openaiClients:    make(map[string]*llmclient.OpenAIClient),
-		anthropicClients: make(map[string]*llmclient.AnthropicClient),
-		googleClients:    make(map[string]*llmclient.GoogleClient),
+		openaiClients:    make(map[string]*OpenAIClient),
+		anthropicClients: make(map[string]*AnthropicClient),
+		googleClients:    make(map[string]*GoogleClient),
 	}
 }
 
 // GetOpenAIClient returns an OpenAI client wrapper for the specified provider
-func (p *ClientPool) GetOpenAIClient(provider *typ.Provider, model string) *llmclient.OpenAIClient {
+func (p *ClientPool) GetOpenAIClient(provider *typ.Provider, model string) *OpenAIClient {
 	// Generate unique key for provider
 	key := p.generateProviderKey(provider, model)
 
@@ -58,7 +57,7 @@ func (p *ClientPool) GetOpenAIClient(provider *typ.Provider, model string) *llmc
 	// Create new client using factory
 	logrus.Infof("Creating new OpenAI client for provider: %s (API: %s)", provider.Name, provider.APIBase)
 
-	client, err := llmclient.NewOpenAIClient(provider)
+	client, err := NewOpenAIClient(provider)
 	if err != nil {
 		logrus.Errorf("Failed to create OpenAI client for provider %s: %v", provider.Name, err)
 		return nil
@@ -75,7 +74,7 @@ func (p *ClientPool) GetOpenAIClient(provider *typ.Provider, model string) *llmc
 }
 
 // GetAnthropicClient returns an Anthropic client wrapper for the specified provider
-func (p *ClientPool) GetAnthropicClient(provider *typ.Provider, model string) *llmclient.AnthropicClient {
+func (p *ClientPool) GetAnthropicClient(provider *typ.Provider, model string) *AnthropicClient {
 	// Generate unique key for provider
 	key := p.generateProviderKey(provider, model)
 
@@ -101,7 +100,7 @@ func (p *ClientPool) GetAnthropicClient(provider *typ.Provider, model string) *l
 	// Create new client using factory
 	logrus.Infof("Creating new Anthropic client for provider: %s (API: %s) model: %s", provider.Name, provider.APIBase, model)
 
-	client, err := llmclient.NewAnthropicClient(provider)
+	client, err := NewAnthropicClient(provider)
 	if err != nil {
 		logrus.Errorf("Failed to create Anthropic client for provider %s: %v", provider.Name, err)
 		return nil
@@ -118,7 +117,7 @@ func (p *ClientPool) GetAnthropicClient(provider *typ.Provider, model string) *l
 }
 
 // GetGoogleClient returns a Google client wrapper for the specified provider
-func (p *ClientPool) GetGoogleClient(provider *typ.Provider, model string) *llmclient.GoogleClient {
+func (p *ClientPool) GetGoogleClient(provider *typ.Provider, model string) *GoogleClient {
 	// Generate unique key for provider
 	key := p.generateProviderKey(provider, model)
 
@@ -144,7 +143,7 @@ func (p *ClientPool) GetGoogleClient(provider *typ.Provider, model string) *llmc
 	// Create new client using factory
 	logrus.Infof("Creating new Google client for provider: %s (API: %s)", provider.Name, provider.APIBase)
 
-	client, err := llmclient.NewGoogleClient(provider)
+	client, err := NewGoogleClient(provider)
 	if err != nil {
 		logrus.Errorf("Failed to create Google client for provider %s: %v", provider.Name, err)
 		return nil
@@ -181,9 +180,9 @@ func (p *ClientPool) Clear() {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
-	p.openaiClients = make(map[string]*llmclient.OpenAIClient)
-	p.anthropicClients = make(map[string]*llmclient.AnthropicClient)
-	p.googleClients = make(map[string]*llmclient.GoogleClient)
+	p.openaiClients = make(map[string]*OpenAIClient)
+	p.anthropicClients = make(map[string]*AnthropicClient)
+	p.googleClients = make(map[string]*GoogleClient)
 	logrus.Info("Client pools cleared")
 }
 

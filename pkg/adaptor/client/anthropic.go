@@ -1,4 +1,4 @@
-package llmclient
+package client
 
 import (
 	"context"
@@ -10,7 +10,6 @@ import (
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/sirupsen/logrus"
 
-	"tingly-box/internal/llmclient/httpclient"
 	"tingly-box/internal/record"
 	"tingly-box/internal/typ"
 	"tingly-box/pkg/oauth"
@@ -46,7 +45,7 @@ func defaultNewAnthropicClient(provider *typ.Provider) (*AnthropicClient, error)
 		if provider.OAuthDetail != nil {
 			providerType = oauth.ProviderType(provider.OAuthDetail.ProviderType)
 		}
-		httpClient = httpclient.CreateHTTPClientForProvider(providerType, provider.ProxyURL, provider.AuthType == typ.AuthTypeOAuth)
+		httpClient = CreateHTTPClientForProvider(providerType, provider.ProxyURL, provider.AuthType == typ.AuthTypeOAuth)
 
 		if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
 			logrus.Infof("Using custom headers/params for OAuth provider type: %s", provider.OAuthDetail.ProviderType)

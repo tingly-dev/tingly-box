@@ -1,9 +1,7 @@
-package server
+package client
 
 import (
 	"testing"
-
-	"tingly-box/internal/llmclient"
 	"tingly-box/internal/typ"
 )
 
@@ -76,7 +74,7 @@ func TestClientPool_ConcurrentAccess(t *testing.T) {
 
 	// Launch multiple goroutines to access the same provider
 	const numGoroutines = 10
-	clients := make([]*llmclient.OpenAIClient, numGoroutines)
+	clients := make([]*OpenAIClient, numGoroutines)
 
 	done := make(chan bool, numGoroutines)
 

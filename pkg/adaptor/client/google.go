@@ -1,4 +1,4 @@
-package llmclient
+package client
 
 import (
 	"context"
@@ -7,7 +7,6 @@ import (
 
 	"google.golang.org/genai"
 
-	"tingly-box/internal/llmclient/httpclient"
 	"tingly-box/internal/record"
 	"tingly-box/internal/typ"
 )
@@ -26,7 +25,7 @@ func NewGoogleClient(provider *typ.Provider) (*GoogleClient, error) {
 	// Create base HTTP client
 	var httpClient *http.Client
 	if provider.ProxyURL != "" {
-		httpClient = httpclient.CreateHTTPClientWithProxy(provider.ProxyURL)
+		httpClient = CreateHTTPClientWithProxy(provider.ProxyURL)
 	} else {
 		httpClient = http.DefaultClient
 	}

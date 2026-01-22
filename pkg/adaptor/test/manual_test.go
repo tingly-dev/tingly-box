@@ -4,7 +4,7 @@ import (
 	"context"
 	"os"
 	"testing"
-	"tingly-box/internal/llmclient/httpclient"
+	"tingly-box/pkg/adaptor/client"
 	"tingly-box/pkg/adaptor/request"
 
 	"github.com/openai/openai-go/v3"
@@ -28,7 +28,7 @@ func TestGoogleGenerateContent(t *testing.T) {
 		ctx,
 		&genai.ClientConfig{
 			APIKey:     apiKey,
-			HTTPClient: httpclient.CreateHTTPClientWithProxy(os.Getenv("HTTPS_PROXY")),
+			HTTPClient: client.CreateHTTPClientWithProxy(os.Getenv("HTTPS_PROXY")),
 			HTTPOptions: genai.HTTPOptions{
 				BaseURL:    os.Getenv("GOOGLE_API_URL"),
 				APIVersion: os.Getenv("GOOGLE_API_VERSION"),

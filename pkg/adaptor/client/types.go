@@ -1,4 +1,4 @@
-package llmclient
+package client
 
 // ProviderType represents the AI provider type
 type ProviderType string
