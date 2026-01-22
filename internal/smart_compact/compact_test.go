@@ -16,8 +16,8 @@ func TestRemoveV1ThinkingBlocks_TextOnly(t *testing.T) {
 		anthropic.NewTextBlock("World"),
 	}
 
-	transformer := NewCompactTransformer()
-	result := transformer.removeV1ThinkingBlocks(content)
+	transformer := NewCompactTransformer(1)
+	result, _ := transformer.removeV1ThinkingBlocks(content, 0)
 
 	assert.Len(t, result, 2)
 	assert.Equal(t, "Hello", result[0].OfText.Text)
@@ -33,8 +33,8 @@ func TestRemoveV1ThinkingBlocks_WithThinking(t *testing.T) {
 		anthropic.NewTextBlock("Final text"),
 	}
 
-	transformer := NewCompactTransformer()
-	result := transformer.removeV1ThinkingBlocks(content)
+	transformer := NewCompactTransformer(1)
+	result, _ := transformer.removeV1ThinkingBlocks(content, 0)
 
 	assert.Len(t, result, 3)
 	assert.Equal(t, "Before thinking", result[0].OfText.Text)
@@ -49,8 +49,8 @@ func TestRemoveV1ThinkingBlocks_ToolUseWithThinking(t *testing.T) {
 		anthropic.NewToolUseBlock("tool-789", map[string]any{}, "search"),
 	}
 
-	transformer := NewCompactTransformer()
-	result := transformer.removeV1ThinkingBlocks(content)
+	transformer := NewCompactTransformer(1)
+	result, _ := transformer.removeV1ThinkingBlocks(content, 0)
 
 	assert.Len(t, result, 2)
 	assert.Equal(t, "I'll use a tool", result[0].OfText.Text)
@@ -66,8 +66,8 @@ func TestRemoveBetaThinkingBlocks_WithThinking(t *testing.T) {
 		anthropic.NewBetaTextBlock("Final text"),
 	}
 
-	transformer := NewCompactTransformer()
-	result := transformer.removeBetaThinkingBlocks(content)
+	transformer := NewCompactTransformer(1)
+	result, _ := transformer.removeBetaThinkingBlocks(content, 0)
 
 	assert.Len(t, result, 3)
 	assert.Equal(t, "Before thinking", result[0].OfText.Text)
@@ -95,7 +95,7 @@ func TestHandleV1_RemovesThinkingFromPastRounds(t *testing.T) {
 		},
 	}
 
-	transformer := NewCompactTransformer()
+	transformer := NewCompactTransformer(1)
 	err := transformer.HandleV1(req)
 
 	require.NoError(t, err)
@@ -118,7 +118,7 @@ func TestHandleV1_EmptyMessages(t *testing.T) {
 		Messages:  []anthropic.MessageParam{},
 	}
 
-	transformer := NewCompactTransformer()
+	transformer := NewCompactTransformer(1)
 	err := transformer.HandleV1(req)
 
 	require.NoError(t, err)
@@ -132,7 +132,7 @@ func TestHandleV1_NilMessages(t *testing.T) {
 		Messages:  nil,
 	}
 
-	transformer := NewCompactTransformer()
+	transformer := NewCompactTransformer(1)
 	err := transformer.HandleV1(req)
 
 	require.NoError(t, err)
@@ -162,7 +162,7 @@ func TestHandleV1_WithToolUse(t *testing.T) {
 		},
 	}
 
-	transformer := NewCompactTransformer()
+	transformer := NewCompactTransformer(1)
 	err := transformer.HandleV1(req)
 
 	require.NoError(t, err)
@@ -209,7 +209,7 @@ func TestHandleV1Beta_RemovesThinkingFromPastRounds(t *testing.T) {
 		},
 	}
 
-	transformer := NewCompactTransformer()
+	transformer := NewCompactTransformer(1)
 	err := transformer.HandleV1Beta(req)
 
 	require.NoError(t, err)
@@ -261,7 +261,7 @@ func TestHandleV1Beta_WithToolUse(t *testing.T) {
 		},
 	}
 
-	transformer := NewCompactTransformer()
+	transformer := NewCompactTransformer(1)
 	err := transformer.HandleV1Beta(req)
 
 	require.NoError(t, err)
@@ -289,7 +289,7 @@ func TestHandleV1_SingleRound(t *testing.T) {
 		},
 	}
 
-	transformer := NewCompactTransformer()
+	transformer := NewCompactTransformer(1)
 	err := transformer.HandleV1(req)
 
 	require.NoError(t, err)
@@ -398,7 +398,7 @@ func TestHandleV1_ComplexToolUseFlow(t *testing.T) {
 		},
 	}
 
-	transformer := NewCompactTransformer()
+	transformer := NewCompactTransformer(1)
 	err := transformer.HandleV1(req)
 
 	require.NoError(t, err)
@@ -415,6 +415,54 @@ func TestHandleV1_ComplexToolUseFlow(t *testing.T) {
 
 	// Round 2 assistant (current) should keep thinking
 	// Index 5: current assistant
+	assert.Len(t, req.Messages[5].Content, 2)
+	assert.Equal(t, "Current thinking", req.Messages[5].Content[0].OfThinking.Thinking)
+	assert.Equal(t, "Current response", req.Messages[5].Content[1].OfText.Text)
+}
+
+// TestHandleV1_KeepLastNRounds verifies that k=2 preserves the last 2 rounds' thinking
+func TestHandleV1_KeepLastNRounds(t *testing.T) {
+	req := &anthropic.MessageNewParams{
+		Model:     anthropic.Model("claude-3-5-sonnet-20241022"),
+		MaxTokens: 1024,
+		Messages: []anthropic.MessageParam{
+			// Round 1 - oldest, should have thinking removed when k=2
+			anthropic.NewUserMessage(anthropic.NewTextBlock("First question")),
+			anthropic.NewAssistantMessage(
+				anthropic.NewThinkingBlock("sig1", "Oldest thinking"),
+				anthropic.NewTextBlock("Old response"),
+			),
+			// Round 2 - should keep thinking when k=2
+			anthropic.NewUserMessage(anthropic.NewTextBlock("Second question")),
+			anthropic.NewAssistantMessage(
+				anthropic.NewThinkingBlock("sig2", "Recent thinking"),
+				anthropic.NewTextBlock("Recent response"),
+			),
+			// Round 3 - current, should keep thinking
+			anthropic.NewUserMessage(anthropic.NewTextBlock("New question")),
+			anthropic.NewAssistantMessage(
+				anthropic.NewThinkingBlock("sig3", "Current thinking"),
+				anthropic.NewTextBlock("Current response"),
+			),
+		},
+	}
+
+	transformer := NewCompactTransformer(2) // Keep last 2 rounds
+	err := transformer.HandleV1(req)
+
+	require.NoError(t, err)
+	require.Len(t, req.Messages, 6)
+
+	// Round 1 assistant (index 1) - thinking removed
+	assert.Len(t, req.Messages[1].Content, 1)
+	assert.Equal(t, "Old response", req.Messages[1].Content[0].OfText.Text)
+
+	// Round 2 assistant (index 3) - thinking preserved
+	assert.Len(t, req.Messages[3].Content, 2)
+	assert.Equal(t, "Recent thinking", req.Messages[3].Content[0].OfThinking.Thinking)
+	assert.Equal(t, "Recent response", req.Messages[3].Content[1].OfText.Text)
+
+	// Round 3 assistant (index 5, current) - thinking preserved
 	assert.Len(t, req.Messages[5].Content, 2)
 	assert.Equal(t, "Current thinking", req.Messages[5].Content[0].OfThinking.Thinking)
 	assert.Equal(t, "Current response", req.Messages[5].Content[1].OfText.Text)
