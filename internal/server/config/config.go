@@ -17,7 +17,6 @@ import (
 
 	"tingly-box/internal/constant"
 	"tingly-box/internal/db"
-	"tingly-box/internal/helper"
 	"tingly-box/internal/loadbalance"
 	"tingly-box/internal/typ"
 )
@@ -49,7 +48,7 @@ type Config struct {
 	ConfigFile string `yaml:"-" json:"-"` // Not serialized to YAML (exported to preserve field)
 	ConfigDir  string `yaml:"-" json:"-"`
 
-	modelManager    *helper.ModelListManager
+	modelManager    *template.ModelListManager
 	statsStore      *db.StatsStore
 	usageStore      *db.UsageStore
 	templateManager *template.TemplateManager
@@ -167,7 +166,7 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 	}
 
 	// Initialize provider model manager
-	providerModelManager, err := helper.NewProviderModelManager(configDir)
+	providerModelManager, err := template.NewProviderModelManager(configDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize provider model manager: %w", err)
 	}
@@ -979,7 +978,7 @@ func (c *Config) FetchAndSaveProviderModels(uid string) error {
 	}
 
 	// Try provider API first
-	models, err := helper.GetProviderModelsFromAPI(provider)
+	models, err := template.GetProviderModelsFromAPI(provider)
 	if err != nil {
 		logrus.Errorf("Failed to fetch models from API: %v", err)
 	} else {
@@ -1000,7 +999,7 @@ func (c *Config) FetchAndSaveProviderModels(uid string) error {
 	return fmt.Errorf("failed to fetch models (API: %v, template fallback: not available)", err)
 }
 
-func (c *Config) GetModelManager() *helper.ModelListManager {
+func (c *Config) GetModelManager() *template.ModelListManager {
 	return c.modelManager
 }
 

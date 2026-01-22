@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"tingly-box/internal/constant"
-	"tingly-box/internal/helper"
 	"tingly-box/internal/typ"
 )
 
@@ -527,7 +526,7 @@ func (tm *TemplateManager) GetModelsForProvider(provider *typ.Provider) ([]strin
 
 	// Tier 1: Try provider API first if supported (no cache)
 	if tmpl.SupportsModelsEndpoint {
-		models, apiErr := helper.GetProviderModelsFromAPI(provider)
+		models, apiErr := GetProviderModelsFromAPI(provider)
 		if apiErr == nil && len(models) > 0 {
 			return models, TemplateSourceAPI, nil
 		}
