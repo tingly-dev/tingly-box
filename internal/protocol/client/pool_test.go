@@ -10,6 +10,7 @@ func TestClientPool_GetClient(t *testing.T) {
 
 	// Create test provider
 	provider := &typ.Provider{
+		UUID:    "test-uuid-1",
 		Name:    "test-provider",
 		Token:   "test-token-12345678",
 		APIBase: "https://api.openai.com/v1",
@@ -38,12 +39,14 @@ func TestClientPool_DifferentProviders(t *testing.T) {
 
 	// Create different providers
 	provider1 := &typ.Provider{
+		UUID:    "provider-uuid-1",
 		Name:    "provider1",
 		Token:   "token1-12345678",
 		APIBase: "https://api.openai.com/v1",
 	}
 
 	provider2 := &typ.Provider{
+		UUID:    "provider-uuid-2",
 		Name:    "provider2",
 		Token:   "token2-87654321",
 		APIBase: "https://api.openai.com/v1",
@@ -67,6 +70,7 @@ func TestClientPool_ConcurrentAccess(t *testing.T) {
 	pool := NewClientPool()
 
 	provider := &typ.Provider{
+		UUID:    "concurrent-uuid",
 		Name:    "concurrent-provider",
 		Token:   "concurrent-token-12345678",
 		APIBase: "https://api.openai.com/v1",
@@ -111,12 +115,14 @@ func TestClientPool_Clear(t *testing.T) {
 
 	// Add some clients
 	provider1 := &typ.Provider{
+		UUID:    "clear-uuid-1",
 		Name:    "provider1",
 		Token:   "token1-12345678",
 		APIBase: "https://api.openai.com/v1",
 	}
 
 	provider2 := &typ.Provider{
+		UUID:    "clear-uuid-2",
 		Name:    "provider2",
 		Token:   "token2-87654321",
 		APIBase: "https://api.openai.com/v1",
@@ -143,12 +149,14 @@ func TestClientPool_RemoveProvider(t *testing.T) {
 	pool := NewClientPool()
 
 	provider1 := &typ.Provider{
+		UUID:    "remove-uuid-1",
 		Name:    "provider1",
 		Token:   "token1-12345678",
 		APIBase: "https://api.openai.com/v1",
 	}
 
 	provider2 := &typ.Provider{
+		UUID:    "remove-uuid-2",
 		Name:    "provider2",
 		Token:   "token2-87654321",
 		APIBase: "https://api.openai.com/v1",
@@ -182,6 +190,7 @@ func TestClientPool_Stats(t *testing.T) {
 	pool := NewClientPool()
 
 	provider := &typ.Provider{
+		UUID:    "stats-uuid",
 		Name:    "stats-provider",
 		Token:   "stats-token-12345678",
 		APIBase: "https://api.openai.com/v1",
