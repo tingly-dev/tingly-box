@@ -83,6 +83,12 @@ func (t *CompactTransformer) HandleV1Beta(req *anthropic.BetaMessageNewParams) e
 //
 // The last round (current request) is always preserved since it contains the reasoning
 // for the pending response.
+//
+// Guard checks:
+//
+//	Rounds failing these checks are skipped (not compacted) to avoid corrupting
+//
+// potentially malformed conversation structures.
 func (t *CompactTransformer) compactV1Rounds(rounds []trajectory.V1Round) ([]anthropic.MessageParam, int) {
 	var result []anthropic.MessageParam
 	removedCount := 0
@@ -94,10 +100,21 @@ func (t *CompactTransformer) compactV1Rounds(rounds []trajectory.V1Round) ([]ant
 
 	for i, rnd := range rounds {
 		shouldPreserve := i >= preserveStart
+		var guardPassed bool
+
+		// Guard: check round structure before compacting
+		if rnd.Stats != nil {
+			guardPassed = t.shouldCompactRound(rnd.Stats)
+			log.Printf("[smart_compact] v1: round %d: user=%d, assistant=%d, tool_result=%d, has_thinking=%v, preserve=%v, guard_ok=%v",
+				i, rnd.Stats.UserMessageCount, rnd.Stats.AssistantCount, rnd.Stats.ToolResultCount, rnd.Stats.HasThinking, shouldPreserve, guardPassed)
+		} else {
+			// No stats available, assume guard passed for backward compatibility
+			guardPassed = true
+		}
 
 		for _, msg := range rnd.Messages {
-			// Only remove thinking from assistant messages in non-preserved rounds
-			if !shouldPreserve && string(msg.Role) == "assistant" {
+			// Only remove thinking from assistant messages in non-preserved rounds that passed guard
+			if !shouldPreserve && guardPassed && string(msg.Role) == "assistant" {
 				msg.Content, removedCount = t.removeV1ThinkingBlocks(msg.Content, removedCount)
 			}
 			result = append(result, msg)
@@ -109,7 +126,7 @@ func (t *CompactTransformer) compactV1Rounds(rounds []trajectory.V1Round) ([]ant
 
 // compactBetaRounds removes thinking blocks from rounds outside the preservation window.
 //
-// See compactV1Rounds for detailed strategy rationale.
+// See compactV1Rounds for detailed strategy rationale and guard checks.
 func (t *CompactTransformer) compactBetaRounds(rounds []trajectory.BetaRound) ([]anthropic.BetaMessageParam, int) {
 	var result []anthropic.BetaMessageParam
 	removedCount := 0
@@ -121,10 +138,21 @@ func (t *CompactTransformer) compactBetaRounds(rounds []trajectory.BetaRound) ([
 
 	for i, rnd := range rounds {
 		shouldPreserve := i >= preserveStart
+		var guardPassed bool
+
+		// Guard: check round structure before compacting
+		if rnd.Stats != nil {
+			guardPassed = t.shouldCompactRound(rnd.Stats)
+			log.Printf("[smart_compact] v1beta: round %d: user=%d, assistant=%d, tool_result=%d, has_thinking=%v, preserve=%v, guard_ok=%v",
+				i, rnd.Stats.UserMessageCount, rnd.Stats.AssistantCount, rnd.Stats.ToolResultCount, rnd.Stats.HasThinking, shouldPreserve, guardPassed)
+		} else {
+			// No stats available, assume guard passed for backward compatibility
+			guardPassed = true
+		}
 
 		for _, msg := range rnd.Messages {
-			// Only remove thinking from assistant messages in non-preserved rounds
-			if !shouldPreserve && string(msg.Role) == "assistant" {
+			// Only remove thinking from assistant messages in non-preserved rounds that passed guard
+			if !shouldPreserve && guardPassed && string(msg.Role) == "assistant" {
 				msg.Content, removedCount = t.removeBetaThinkingBlocks(msg.Content, removedCount)
 			}
 			result = append(result, msg)
@@ -164,4 +192,31 @@ func (t *CompactTransformer) removeBetaThinkingBlocks(content []anthropic.BetaCo
 	}
 
 	return filtered, count
+}
+
+// shouldCompactRound performs guard checks to determine if a round is safe to compact.
+//
+// Guard checks:
+//   - UserMessageCount == 1: Round should have exactly one pure user message as start
+//   - AssistantCount >= 1: Round should have at least one assistant response
+//   - ToolResultCount >= 1: Round should have at least one assistant response
+//
+// Returns false if the round structure appears malformed, preventing compaction
+// on potentially incorrectly grouped rounds.
+func (t *CompactTransformer) shouldCompactRound(stats *trajectory.RoundStats) bool {
+	// Guard: should have exactly one pure user message as the round start
+	if stats.UserMessageCount != 1 {
+		return false
+	}
+
+	// Guard: should have at least one assistant response
+	if stats.AssistantCount < 1 {
+		return false
+	}
+
+	if stats.ToolResultCount < 1 {
+		return false
+	}
+
+	return true
 }
