@@ -55,8 +55,8 @@ tasks:
     cmds:
       - cd frontend; pnpm build:dev:wails
       - |
-        mkdir -p internal/web_wails/dist/
-        cp -R frontend/dist/* internal/web_wails/dist/
+        mkdir -p internal/web_wails3/dist/
+        cp -R frontend/dist/* internal/web_wails3/dist/
       - |
         # Get build info
         VERSION="dev"

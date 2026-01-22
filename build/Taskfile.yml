@@ -43,8 +43,8 @@ tasks:
         pnpm run {{.BUILD_COMMAND}}
       - |
         cd ..
-        mkdir -p ./internal/web_wails/dist
-        cp -R frontend/dist/* ./internal/web_wails/dist/
+        mkdir -p ./internal/web_wails3/dist
+        cp -R frontend/dist/* ./internal/web_wails3/dist/
         
     env:
       PRODUCTION: '{{.PRODUCTION | default "false"}}'

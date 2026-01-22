@@ -1,6 +1,6 @@
 # codegen
 internal/web/dist
-internal/web_wails/dist
+internal/web_wails3/dist
 frontend/src/client
 frontend/src/bindings
 
