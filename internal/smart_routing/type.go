@@ -32,6 +32,7 @@ type SmartOpMeta struct {
 // SmartOp represents a single operation for smart routing
 // Each operation has 4 parts: position, operation, value, meta
 type SmartOp struct {
+	UUID      string           `json:"uuid"`
 	Position  SmartOpPosition  `json:"position" yaml:"position"`
 	Operation SmartOpOperation `json:"operation" yaml:"operation"`
 	Value     string           `json:"value,omitempty" yaml:"value,omitempty"`
