@@ -10,6 +10,7 @@ import (
 	"tingly-box/pkg/adaptor"
 	"tingly-box/pkg/adaptor/nonstream"
 	"tingly-box/pkg/adaptor/request"
+	"tingly-box/pkg/adaptor/stream"
 	"tingly-box/pkg/adaptor/token"
 
 	"github.com/gin-gonic/gin"
@@ -214,7 +215,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 		}
 
 		if isStreaming {
-			stream, err := s.ForwardAnthropicStreamRequest(provider, anthropicReq)
+			streamResp, err := s.ForwardAnthropicStreamRequest(provider, anthropicReq)
 			if err != nil {
 				// Track error with no usage
 				s.trackUsage(c, rule, provider, actualModel, responseModel, 0, 0, true, "error", "stream_creation_failed")
@@ -227,7 +228,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 				return
 			}
 
-			inputTokens, outputTokens, err := stream.HandleAnthropicToOpenAIStreamResponse(c, &anthropicReq, stream, responseModel)
+			inputTokens, outputTokens, err := stream.HandleAnthropicToOpenAIStreamResponse(c, &anthropicReq, streamResp, responseModel)
 			if err != nil {
 				// Track usage with error status
 				if inputTokens > 0 || outputTokens > 0 {
@@ -562,7 +563,7 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 		// If no usage from stream, estimate it
 		if !hasUsage {
 			inputTokens, _ = token.EstimateInputTokens(req)
-			outputTokens = token.estimateOutputTokens(contentBuilder.String())
+			outputTokens = token.EstimateOutputTokens(contentBuilder.String())
 		}
 
 		// Track usage with error status
@@ -596,7 +597,7 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 	// If no usage from stream, estimate it and send to client
 	if !hasUsage {
 		inputTokens, _ = token.EstimateInputTokens(req)
-		outputTokens = token.estimateOutputTokens(contentBuilder.String())
+		outputTokens = token.EstimateOutputTokens(contentBuilder.String())
 
 		// Use the first chunk ID, or generate one if not available
 		chunkID := firstChunkID
