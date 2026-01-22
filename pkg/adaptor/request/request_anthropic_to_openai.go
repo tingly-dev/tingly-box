@@ -1,4 +1,4 @@
-package adaptor
+package request
 
 import (
 	"encoding/json"

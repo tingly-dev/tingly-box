@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"tingly-box/pkg/adaptor/request"
 
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
@@ -225,11 +226,11 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 			return
 		}
 
-		anthropicReq := adaptor.ConvertOpenAIToAnthropicRequest(&req.ChatCompletionNewParams, int64(maxAllowed))
+		anthropicReq := request.ConvertOpenAIToAnthropicRequest(&req.ChatCompletionNewParams, int64(maxAllowed))
 
 		// 🔥 REQUIRED: forward tool_choice
 		if req.ToolChoice.OfAuto.Value != "" || req.ToolChoice.OfAllowedTools != nil || req.ToolChoice.OfFunctionToolChoice != nil || req.ToolChoice.OfCustomToolChoice != nil {
-			anthropicReq.ToolChoice = adaptor.ConvertOpenAIToAnthropicToolChoice(&req.ToolChoice)
+			anthropicReq.ToolChoice = request.ConvertOpenAIToAnthropicToolChoice(&req.ToolChoice)
 		}
 
 		if isStreaming {

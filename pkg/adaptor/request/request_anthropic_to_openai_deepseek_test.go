@@ -1,4 +1,4 @@
-package adaptor
+package request
 
 import (
 	"encoding/json"
@@ -89,9 +89,9 @@ func TestDeepSeekReasoningContent(t *testing.T) {
 // TestDeepSeekRequestConversion tests the full request conversion for DeepSeek compatibility
 func TestDeepSeekRequestConversion(t *testing.T) {
 	tests := []struct {
-		name           string
-		anthropicReq   anthropic.MessageNewParams
-		expectAllHave  bool // expect all assistant messages to have reasoning_content
+		name          string
+		anthropicReq  anthropic.MessageNewParams
+		expectAllHave bool // expect all assistant messages to have reasoning_content
 	}{
 		{
 			name: "Simple conversation",

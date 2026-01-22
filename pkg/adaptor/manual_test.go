@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 	"tingly-box/internal/llmclient/httpclient"
+	"tingly-box/pkg/adaptor/request"
 
 	"github.com/openai/openai-go/v3"
 	"google.golang.org/genai"
@@ -142,7 +143,7 @@ func TestOpenAIToGoogleWithRealAPI(t *testing.T) {
 	}
 
 	// Convert to Google format
-	googleModel, contents, config := ConvertOpenAIToGoogleRequest(openaiReq, 4096)
+	googleModel, contents, config := request.ConvertOpenAIToGoogleRequest(openaiReq, 4096)
 
 	t.Logf("Converted request - Model: %s, Contents: %d", googleModel, len(contents))
 	t.Logf("Config - MaxOutputTokens: %d", config.MaxOutputTokens)

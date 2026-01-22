@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 	"tingly-box/pkg/adaptor"
+	"tingly-box/pkg/adaptor/request"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
@@ -93,7 +94,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req AnthropicBetaMessag
 		}
 
 		// Convert Anthropic beta request to Google format
-		model, googleReq, cfg := adaptor.ConvertAnthropicBetaToGoogleRequest(&req.BetaMessageNewParams, 0)
+		model, googleReq, cfg := request.ConvertAnthropicBetaToGoogleRequest(&req.BetaMessageNewParams, 0)
 
 		if isStreaming {
 			// Create streaming request
@@ -142,7 +143,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req AnthropicBetaMessag
 		}
 
 		// Convert Anthropic beta request to OpenAI format for streaming
-		openaiReq := adaptor.ConvertAnthropicBetaToOpenAIRequestWithProvider(&req.BetaMessageNewParams, true, provider, actualModel)
+		openaiReq := request.ConvertAnthropicBetaToOpenAIRequestWithProvider(&req.BetaMessageNewParams, true, provider, actualModel)
 
 		// Use OpenAI conversion path (default behavior)
 		if isStreaming {

@@ -3,6 +3,7 @@ package adaptor
 import (
 	"encoding/json"
 	"testing"
+	"tingly-box/pkg/adaptor/request"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
@@ -50,6 +51,6 @@ func BenchmarkConvertOpenAIToAnthropicRequest(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ConvertOpenAIToAnthropicRequest(req, 8192)
+		request.ConvertOpenAIToAnthropicRequest(req, 8192)
 	}
 }

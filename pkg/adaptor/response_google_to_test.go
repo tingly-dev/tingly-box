@@ -3,6 +3,7 @@ package adaptor
 import (
 	"encoding/json"
 	"testing"
+	"tingly-box/pkg/adaptor/request"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/stretchr/testify/assert"
@@ -718,7 +719,7 @@ func TestConvertGoogleToolsToOpenAI(t *testing.T) {
 			},
 		}
 
-		tools := ConvertGoogleToolsToOpenAI(funcs)
+		tools := request.ConvertGoogleToolsToOpenAI(funcs)
 
 		if len(tools) != 1 {
 			t.Errorf("expected 1 tool, got %d", len(tools))
@@ -726,7 +727,7 @@ func TestConvertGoogleToolsToOpenAI(t *testing.T) {
 	})
 
 	t.Run("nil tools", func(t *testing.T) {
-		tools := ConvertGoogleToolsToOpenAI(nil)
+		tools := request.ConvertGoogleToolsToOpenAI(nil)
 		if tools != nil {
 			t.Errorf("expected nil, got %v", tools)
 		}
@@ -746,7 +747,7 @@ func TestConvertGoogleToolsToAnthropic(t *testing.T) {
 			},
 		}
 
-		tools := ConvertGoogleToolsToAnthropic(funcs)
+		tools := request.ConvertGoogleToolsToAnthropic(funcs)
 
 		if len(tools) != 1 {
 			t.Errorf("expected 1 tool, got %d", len(tools))
@@ -754,7 +755,7 @@ func TestConvertGoogleToolsToAnthropic(t *testing.T) {
 	})
 
 	t.Run("nil tools", func(t *testing.T) {
-		tools := ConvertGoogleToolsToAnthropic(nil)
+		tools := request.ConvertGoogleToolsToAnthropic(nil)
 		if tools != nil {
 			t.Errorf("expected nil, got %v", tools)
 		}

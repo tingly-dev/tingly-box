@@ -1,9 +1,10 @@
-package adaptor
+package request
 
 import (
 	"encoding/json"
 	"fmt"
 	"testing"
+	"tingly-box/pkg/adaptor"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
@@ -137,7 +138,7 @@ func TestConvertOpenAIToAnthropicRequest(t *testing.T) {
 				},
 				MaxTokens: openai.Opt(int64(100)),
 				Tools: []openai.ChatCompletionToolUnionParam{
-					NewExampleTool(),
+					adaptor.NewExampleTool(),
 				},
 			},
 			expectedModel:      "gpt-4",
@@ -197,7 +198,7 @@ func TestConvertOpenAIToAnthropicTools(t *testing.T) {
 		{
 			name: "simple tool",
 			tools: func() []openai.ChatCompletionToolUnionParam {
-				tool := NewExampleTool()
+				tool := adaptor.NewExampleTool()
 				return []openai.ChatCompletionToolUnionParam{tool}
 			}(),
 			expected: 1,
