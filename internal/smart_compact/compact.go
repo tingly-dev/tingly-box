@@ -6,16 +6,16 @@ package smart_compact
 
 import (
 	"log"
+	"tingly-box/internal/protocol"
 
 	"tingly-box/internal/trajectory"
-	"tingly-box/internal/transformer"
 
 	"github.com/anthropics/anthropic-sdk-go"
 )
 
 // CompactTransformer implements the Transformer interface.
 type CompactTransformer struct {
-	transformer.Transformer
+	protocol.Transformer
 	rounder         *trajectory.Grouper
 	KeepLastNRounds int // Number of recent rounds to preserve thinking blocks (min: 1)
 }

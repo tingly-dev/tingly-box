@@ -1,4 +1,4 @@
-package transformer
+package protocol
 
 import "github.com/anthropics/anthropic-sdk-go"
 
