@@ -3,13 +3,13 @@ package main
 import (
 	"fmt"
 	"os"
+	"tingly-box/pkg/fs"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"tingly-box/internal/cli"
 	"tingly-box/internal/config"
-	"tingly-box/internal/util"
 )
 
 var rootCmd = &cobra.Command{
@@ -70,7 +70,7 @@ func init() {
 	// Initialize config based on parsed flags
 	var err error
 	if configDir != "" {
-		expandedDir, expandErr := util.ExpandConfigDir(configDir)
+		expandedDir, expandErr := fs.ExpandConfigDir(configDir)
 		if expandErr == nil {
 			appConfig, err = config.NewAppConfig(config.WithConfigDir(expandedDir))
 		} else {

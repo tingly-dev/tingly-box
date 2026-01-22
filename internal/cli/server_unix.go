@@ -7,8 +7,7 @@ import (
 	"os"
 	"syscall"
 	"time"
-
-	"tingly-box/internal/util/lock"
+	"tingly-box/pkg/lock"
 )
 
 // stopProcessGracefully attempts to stop a process gracefully on Unix

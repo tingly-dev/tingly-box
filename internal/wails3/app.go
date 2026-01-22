@@ -4,11 +4,11 @@ import (
 	"log"
 	"path/filepath"
 	"time"
+	"tingly-box/pkg/fs"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
 	assets "tingly-box/internal"
-	"tingly-box/internal/util"
 	"tingly-box/internal/wails3/services"
 )
 
@@ -22,7 +22,7 @@ var tinglyService *services.TinglyService
 
 func newApp(port int, debug bool) *application.App {
 	// Create UI service
-	home, err := util.GetUserPath()
+	home, err := fs.GetUserPath()
 	if err != nil {
 		log.Fatal(err)
 	}

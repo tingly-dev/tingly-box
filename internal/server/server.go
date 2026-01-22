@@ -10,6 +10,7 @@ import (
 	"time"
 	"tingly-box/internal/protocol/client"
 	"tingly-box/pkg/auth"
+	"tingly-box/pkg/network"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/browser"
@@ -22,7 +23,6 @@ import (
 	"tingly-box/internal/server/config"
 	"tingly-box/internal/server/middleware"
 	servertls "tingly-box/internal/server/tls"
-	"tingly-box/internal/util/network"
 	oauth2 "tingly-box/pkg/oauth"
 )
 

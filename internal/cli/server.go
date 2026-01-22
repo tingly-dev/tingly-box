@@ -9,6 +9,9 @@ import (
 	"syscall"
 	"time"
 	"tingly-box/internal/obs"
+	daemon2 "tingly-box/pkg/daemon"
+	"tingly-box/pkg/lock"
+	"tingly-box/pkg/network"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -18,9 +21,6 @@ import (
 	"tingly-box/internal/manager"
 	"tingly-box/internal/server"
 	serverconfig "tingly-box/internal/server/config"
-	"tingly-box/internal/util/daemon"
-	"tingly-box/internal/util/lock"
-	"tingly-box/internal/util/network"
 )
 
 const (
@@ -224,7 +224,7 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 	}
 
 	// Create rotating log writer
-	logWriter := daemon.NewLogger(daemon.DefaultLogRotationConfig(logFile))
+	logWriter := daemon2.NewLogger(daemon2.DefaultLogRotationConfig(logFile))
 
 	// Set up logrus to write to both stdout and file with rotation
 	if opts.Daemon {
@@ -241,7 +241,7 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 	// Handle daemon mode
 	if opts.Daemon {
 		// If not yet daemonized, fork and exit
-		if !daemon.IsDaemonProcess() {
+		if !daemon2.IsDaemonProcess() {
 			// Resolve port for display
 			port := opts.Port
 			if port == 0 {
@@ -263,7 +263,7 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 			})
 
 			// Fork and detach
-			if err := daemon.Daemonize(); err != nil {
+			if err := daemon2.Daemonize(); err != nil {
 				return fmt.Errorf("failed to daemonize: %w", err)
 			}
 			// Daemonize() calls os.Exit(0), so we never reach here
