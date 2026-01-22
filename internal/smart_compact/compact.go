@@ -8,15 +8,13 @@ import (
 	"log"
 	"tingly-box/internal/protocol"
 
-	"tingly-box/internal/trajectory"
-
 	"github.com/anthropics/anthropic-sdk-go"
 )
 
 // CompactTransformer implements the Transformer interface.
 type CompactTransformer struct {
 	protocol.Transformer
-	rounder         *trajectory.Grouper
+	rounder         *protocol.Grouper
 	KeepLastNRounds int // Number of recent rounds to preserve thinking blocks (min: 1)
 }
 
@@ -35,7 +33,7 @@ func NewCompactTransformer(keepLastNRounds int) *CompactTransformer {
 		keepLastNRounds = 1
 	}
 	return &CompactTransformer{
-		rounder:         trajectory.NewGrouper(),
+		rounder:         protocol.NewGrouper(),
 		KeepLastNRounds: keepLastNRounds,
 	}
 }
@@ -89,7 +87,7 @@ func (t *CompactTransformer) HandleV1Beta(req *anthropic.BetaMessageNewParams) e
 //	Rounds failing these checks are skipped (not compacted) to avoid corrupting
 //
 // potentially malformed conversation structures.
-func (t *CompactTransformer) compactV1Rounds(rounds []trajectory.V1Round) ([]anthropic.MessageParam, int) {
+func (t *CompactTransformer) compactV1Rounds(rounds []protocol.V1Round) ([]anthropic.MessageParam, int) {
 	var result []anthropic.MessageParam
 	removedCount := 0
 	totalRounds := len(rounds)
@@ -127,7 +125,7 @@ func (t *CompactTransformer) compactV1Rounds(rounds []trajectory.V1Round) ([]ant
 // compactBetaRounds removes thinking blocks from rounds outside the preservation window.
 //
 // See compactV1Rounds for detailed strategy rationale and guard checks.
-func (t *CompactTransformer) compactBetaRounds(rounds []trajectory.BetaRound) ([]anthropic.BetaMessageParam, int) {
+func (t *CompactTransformer) compactBetaRounds(rounds []protocol.BetaRound) ([]anthropic.BetaMessageParam, int) {
 	var result []anthropic.BetaMessageParam
 	removedCount := 0
 	totalRounds := len(rounds)
@@ -203,7 +201,7 @@ func (t *CompactTransformer) removeBetaThinkingBlocks(content []anthropic.BetaCo
 //
 // Returns false if the round structure appears malformed, preventing compaction
 // on potentially incorrectly grouped rounds.
-func (t *CompactTransformer) shouldCompactRound(stats *trajectory.RoundStats) bool {
+func (t *CompactTransformer) shouldCompactRound(stats *protocol.RoundStats) bool {
 	// Guard: should have exactly one pure user message as the round start
 	if stats.UserMessageCount != 1 {
 		return false

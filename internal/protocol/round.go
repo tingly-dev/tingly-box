@@ -1,13 +1,14 @@
-// Package round provides message round grouping for Anthropic requests.
-//
-// A conversation round is defined as starting from a pure user instruction
-// (not a tool result), followed by assistant messages (which may include tool use),
-// tool result messages, until the next pure user instruction (exclusive).
-package trajectory
+package protocol
 
 import (
 	"github.com/anthropics/anthropic-sdk-go"
 )
+
+// File provides message round grouping for Anthropic requests.
+//
+// A conversation round is defined as starting from a pure user instruction
+// (not a tool result), followed by assistant messages (which may include tool use),
+// tool result messages, until the next pure user instruction (exclusive).
 
 // V1Round represents a conversation round for v1 API.
 type V1Round struct {
