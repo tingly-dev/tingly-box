@@ -3,6 +3,8 @@ package smart_compact
 import (
 	"testing"
 
+	"tingly-box/internal/round"
+
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -296,4 +298,124 @@ func TestHandleV1_SingleRound(t *testing.T) {
 	// Only round is current, so thinking should be preserved
 	assert.Len(t, req.Messages[1].Content, 2)
 	assert.Equal(t, "Thinking", req.Messages[1].Content[0].OfThinking.Thinking)
+}
+
+// TestIsPureUserMessage verifies that tool results are not counted as pure user messages
+func TestIsPureUserMessage(t *testing.T) {
+	rounder := round.NewGrouper()
+
+	// Pure user message
+	pureUser := anthropic.NewUserMessage(anthropic.NewTextBlock("Hello"))
+	assert.True(t, rounder.IsPureUserMessage(pureUser))
+
+	// Tool result (role is user but content is tool_result)
+	toolResult := anthropic.NewUserMessage(
+		anthropic.NewToolResultBlock("tool-1", "result", false),
+	)
+	assert.False(t, rounder.IsPureUserMessage(toolResult))
+
+	// Assistant message
+	asst := anthropic.NewAssistantMessage(anthropic.NewTextBlock("Hi"))
+	assert.False(t, rounder.IsPureUserMessage(asst))
+}
+
+// TestGroupV1MessagesIntoRounds_MultipleToolCalls tests that multiple tool calls
+// in the same round are grouped correctly
+func TestGroupV1MessagesIntoRounds_MultipleToolCalls(t *testing.T) {
+	rounder := round.NewGrouper()
+
+	messages := []anthropic.MessageParam{
+		// Round 1 starts
+		anthropic.NewUserMessage(anthropic.NewTextBlock("Search for something")),
+		anthropic.NewAssistantMessage(
+			anthropic.NewThinkingBlock("sig1", "I should search"),
+			anthropic.NewToolUseBlock("tool-1", map[string]any{"query": "test"}, "search"),
+		),
+		// Still round 1 (tool result)
+		anthropic.NewUserMessage(
+			anthropic.NewToolResultBlock("tool-1", "result 1", false),
+		),
+		// Still round 1 (another tool call)
+		anthropic.NewAssistantMessage(
+			anthropic.NewThinkingBlock("sig2", "Let me search more"),
+			anthropic.NewToolUseBlock("tool-2", map[string]any{"query": "test2"}, "search"),
+		),
+		// Still round 1 (tool result)
+		anthropic.NewUserMessage(
+			anthropic.NewToolResultBlock("tool-2", "result 2", false),
+		),
+		// Still round 1 (final assistant response)
+		anthropic.NewAssistantMessage(
+			anthropic.NewThinkingBlock("sig3", "I have results"),
+			anthropic.NewTextBlock("Here are the results"),
+		),
+		// Round 2 starts (pure user message)
+		anthropic.NewUserMessage(anthropic.NewTextBlock("New question")),
+		anthropic.NewAssistantMessage(
+			anthropic.NewThinkingBlock("sig4", "Current thinking"),
+			anthropic.NewTextBlock("Current response"),
+		),
+	}
+
+	rounds := rounder.GroupV1(messages)
+
+	require.Len(t, rounds, 2)
+
+	// First round (not current) - should have 6 messages
+	assert.False(t, rounds[0].IsCurrentRound)
+	assert.Len(t, rounds[0].Messages, 6)
+
+	// Second round (current) - should have 2 messages
+	assert.True(t, rounds[1].IsCurrentRound)
+	assert.Len(t, rounds[1].Messages, 2)
+}
+
+// TestHandleV1_ComplexToolUseFlow tests the complete flow with tool results
+func TestHandleV1_ComplexToolUseFlow(t *testing.T) {
+	req := &anthropic.MessageNewParams{
+		Model:     anthropic.Model("claude-3-5-sonnet-20241022"),
+		MaxTokens: 1024,
+		Messages: []anthropic.MessageParam{
+			// Round 1
+			anthropic.NewUserMessage(anthropic.NewTextBlock("Search for something")),
+			anthropic.NewAssistantMessage(
+				anthropic.NewThinkingBlock("sig1", "Old thinking 1"),
+				anthropic.NewToolUseBlock("tool-1", map[string]any{"query": "test"}, "search"),
+			),
+			anthropic.NewUserMessage(
+				anthropic.NewToolResultBlock("tool-1", "result", false),
+			),
+			anthropic.NewAssistantMessage(
+				anthropic.NewThinkingBlock("sig2", "Old thinking 2"),
+				anthropic.NewTextBlock("Round 1 complete"),
+			),
+			// Round 2 (current)
+			anthropic.NewUserMessage(anthropic.NewTextBlock("New question")),
+			anthropic.NewAssistantMessage(
+				anthropic.NewThinkingBlock("sig3", "Current thinking"),
+				anthropic.NewTextBlock("Current response"),
+			),
+		},
+	}
+
+	transformer := NewCompactTransformer()
+	err := transformer.HandleV1(req)
+
+	require.NoError(t, err)
+	require.Len(t, req.Messages, 6)
+
+	// Round 1 assistant messages should have thinking removed
+	// Index 1: first assistant
+	assert.Len(t, req.Messages[1].Content, 1)
+	assert.Equal(t, "search", req.Messages[1].Content[0].OfToolUse.Name)
+
+	// Index 3: second assistant
+	assert.Len(t, req.Messages[3].Content, 1)
+	assert.Equal(t, "Round 1 complete", req.Messages[3].Content[0].OfText.Text)
+
+	// Round 2 assistant (current) should keep thinking
+	// Index 5: current assistant
+	assert.Len(t, req.Messages[5].Content, 2)
+	assert.Equal(t, "Current thinking", req.Messages[5].Content[0].OfThinking.Thinking)
+	assert.Equal(t, "Current response", req.Messages[5].Content[1].OfText.Text)
 }

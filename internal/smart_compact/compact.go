@@ -1,13 +1,11 @@
 // Package smart_compact provides smart context compression for Anthropic requests.
 //
-// The transformer implements message grouping based on conversation rounds,
-// where each round consists of a user instruction followed by automated tool calls
-// until the next pure user instruction (exclusive).
-//
-// MVP focuses on removing thinking fields from non-current rounds for Anthropic v1 and v1beta.
+// The transformer removes thinking fields from non-current conversation rounds.
+// MVP focuses on Anthropic v1 and v1beta APIs.
 package smart_compact
 
 import (
+	"tingly-box/internal/round"
 	"tingly-box/internal/transform"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -16,11 +14,14 @@ import (
 // CompactTransformer implements the Transformer interface.
 type CompactTransformer struct {
 	transform.Transformer
+	rounder *round.Grouper
 }
 
 // NewCompactTransformer creates a new smart_compact transformer instance.
 func NewCompactTransformer() *CompactTransformer {
-	return &CompactTransformer{}
+	return &CompactTransformer{
+		rounder: round.NewGrouper(),
+	}
 }
 
 // HandleV1 compacts an Anthropic v1 request by removing thinking fields
@@ -30,7 +31,8 @@ func (t *CompactTransformer) HandleV1(req *anthropic.MessageNewParams) error {
 		return nil
 	}
 
-	compacted := t.compactV1Messages(req.Messages)
+	rounds := t.rounder.GroupV1(req.Messages)
+	compacted := t.compactV1Rounds(rounds)
 	req.Messages = compacted
 
 	return nil
@@ -43,34 +45,23 @@ func (t *CompactTransformer) HandleV1Beta(req *anthropic.BetaMessageNewParams) e
 		return nil
 	}
 
-	compacted := t.compactBetaMessages(req.Messages)
+	rounds := t.rounder.GroupBeta(req.Messages)
+	compacted := t.compactBetaRounds(rounds)
 	req.Messages = compacted
 
 	return nil
 }
 
-// compactV1Messages removes thinking blocks from non-current rounds for v1 requests.
-func (t *CompactTransformer) compactV1Messages(messages []anthropic.MessageParam) []anthropic.MessageParam {
+// compactV1Rounds removes thinking blocks from non-current rounds.
+func (t *CompactTransformer) compactV1Rounds(rounds []round.V1Round) []anthropic.MessageParam {
 	var result []anthropic.MessageParam
-	var i int
 
-	for i = 0; i < len(messages); i++ {
-		msg := messages[i]
-		isLast := i == len(messages)-1
-
-		if string(msg.Role) == "user" {
-			result = append(result, msg)
-		} else if string(msg.Role) == "assistant" {
-			// If this is the last message or part of current round, keep thinking
-			// Otherwise, remove thinking blocks
-			content := msg.Content
-			if !isLast {
-				content = t.removeV1ThinkingBlocks(content)
+	for _, rnd := range rounds {
+		for _, msg := range rnd.Messages {
+			// Only remove thinking from assistant messages in non-current rounds
+			if !rnd.IsCurrentRound && string(msg.Role) == "assistant" {
+				msg.Content = t.removeV1ThinkingBlocks(msg.Content)
 			}
-			msg.Content = content
-			result = append(result, msg)
-		} else {
-			// Other message types (tool, etc.) - keep as is
 			result = append(result, msg)
 		}
 	}
@@ -78,28 +69,16 @@ func (t *CompactTransformer) compactV1Messages(messages []anthropic.MessageParam
 	return result
 }
 
-// compactBetaMessages removes thinking blocks from non-current rounds for v1beta requests.
-func (t *CompactTransformer) compactBetaMessages(messages []anthropic.BetaMessageParam) []anthropic.BetaMessageParam {
+// compactBetaRounds removes thinking blocks from non-current rounds.
+func (t *CompactTransformer) compactBetaRounds(rounds []round.BetaRound) []anthropic.BetaMessageParam {
 	var result []anthropic.BetaMessageParam
-	var i int
 
-	for i = 0; i < len(messages); i++ {
-		msg := messages[i]
-		isLast := i == len(messages)-1
-
-		if string(msg.Role) == "user" {
-			result = append(result, msg)
-		} else if string(msg.Role) == "assistant" {
-			// If this is the last message or part of current round, keep thinking
-			// Otherwise, remove thinking blocks
-			content := msg.Content
-			if !isLast {
-				content = t.removeBetaThinkingBlocks(content)
+	for _, rnd := range rounds {
+		for _, msg := range rnd.Messages {
+			// Only remove thinking from assistant messages in non-current rounds
+			if !rnd.IsCurrentRound && string(msg.Role) == "assistant" {
+				msg.Content = t.removeBetaThinkingBlocks(msg.Content)
 			}
-			msg.Content = content
-			result = append(result, msg)
-		} else {
-			// Other message types - keep as is
 			result = append(result, msg)
 		}
 	}
