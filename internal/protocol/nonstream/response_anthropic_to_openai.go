@@ -3,7 +3,7 @@ package nonstream
 import (
 	"encoding/json"
 	"time"
-	"tingly-box/internal/protocol/extension"
+	"tingly-box/internal/protocol/request/transformer"
 
 	"github.com/anthropics/anthropic-sdk-go"
 
@@ -113,5 +113,5 @@ func ConvertAnthropicToOpenAIResponseWithProvider(
 	openaiResp := ConvertAnthropicToOpenAIResponse(anthropicResp, responseModel)
 
 	// Apply provider-specific transformations using the transform system
-	return extension.ApplyResponseTransforms(openaiResp, provider, model)
+	return transformer.ApplyResponseTransforms(openaiResp, provider, model)
 }

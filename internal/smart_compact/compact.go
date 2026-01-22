@@ -8,14 +8,14 @@ import (
 	"log"
 
 	"tingly-box/internal/trajectory"
-	"tingly-box/internal/transform"
+	"tingly-box/internal/transformer"
 
 	"github.com/anthropics/anthropic-sdk-go"
 )
 
 // CompactTransformer implements the Transformer interface.
 type CompactTransformer struct {
-	transform.Transformer
+	transformer.Transformer
 	rounder         *trajectory.Grouper
 	KeepLastNRounds int // Number of recent rounds to preserve thinking blocks (min: 1)
 }

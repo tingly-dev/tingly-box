@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 	"tingly-box/internal/protocol"
-	"tingly-box/internal/protocol/extension"
 	"tingly-box/internal/protocol/nonstream"
 	"tingly-box/internal/protocol/request"
+	"tingly-box/internal/protocol/request/transformer"
 	"tingly-box/internal/protocol/stream"
 	"tingly-box/internal/protocol/token"
 
@@ -340,7 +340,7 @@ func (s *Server) forwardOpenAIRequest(provider *typ.Provider, req *openai.ChatCo
 
 	// Apply provider-specific transformations before forwarding
 	config := s.buildOpenAIConfig(req)
-	req = extension.ApplyProviderTransforms(req, provider, req.Model, config)
+	req = transformer.ApplyProviderTransforms(req, provider, req.Model, config)
 
 	// Get or create OpenAI client wrapper from pool
 	wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
@@ -365,7 +365,7 @@ func (s *Server) forwardOpenAIStreamRequest(provider *typ.Provider, req *openai.
 
 	// Apply provider-specific transformations before forwarding
 	config := s.buildOpenAIConfig(req)
-	req = extension.ApplyProviderTransforms(req, provider, req.Model, config)
+	req = transformer.ApplyProviderTransforms(req, provider, req.Model, config)
 
 	// Get or create OpenAI client wrapper from pool
 	wrapper := s.clientPool.GetOpenAIClient(provider, "")
@@ -381,8 +381,8 @@ func (s *Server) forwardOpenAIStreamRequest(provider *typ.Provider, req *openai.
 }
 
 // buildOpenAIConfig builds the OpenAIConfig for provider transformations
-func (s *Server) buildOpenAIConfig(req *openai.ChatCompletionNewParams) *extension.OpenAIConfig {
-	config := &extension.OpenAIConfig{
+func (s *Server) buildOpenAIConfig(req *openai.ChatCompletionNewParams) *transformer.OpenAIConfig {
+	config := &transformer.OpenAIConfig{
 		HasThinking:     false,
 		ReasoningEffort: "",
 	}

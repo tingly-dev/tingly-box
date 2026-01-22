@@ -3,7 +3,7 @@ package request
 import (
 	"encoding/json"
 	"strings"
-	"tingly-box/internal/protocol/extension"
+	"tingly-box/internal/protocol/request/transformer"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
@@ -27,7 +27,7 @@ func ConvertAnthropicToOpenAIRequestWithProvider(
 	openaiReq, config := ConvertAnthropicToOpenAIRequest(anthropicReq, compatible)
 
 	// Apply provider-specific transforms
-	openaiReq = extension.ApplyProviderTransforms(openaiReq, provider, model, config)
+	openaiReq = transformer.ApplyProviderTransforms(openaiReq, provider, model, config)
 
 	// Clean up temporary fields (e.g., x_thinking)
 	cleanupTempFields(openaiReq)
@@ -47,7 +47,7 @@ func ConvertAnthropicBetaToOpenAIRequestWithProvider(
 	openaiReq, config := ConvertAnthropicBetaToOpenAIRequest(anthropicReq, compatible)
 
 	// Apply provider-specific transforms
-	openaiReq = extension.ApplyProviderTransforms(openaiReq, provider, model, config)
+	openaiReq = transformer.ApplyProviderTransforms(openaiReq, provider, model, config)
 
 	// Clean up temporary fields (e.g., x_thinking)
 	cleanupTempFields(openaiReq)
@@ -135,7 +135,7 @@ func ConvertAnthropicToolChoiceToOpenAI(tc *anthropic.ToolChoiceUnionParam) open
 
 // ConvertAnthropicToOpenAIRequest converts Anthropic request to OpenAI format
 // Returns the OpenAI request and a config object with metadata for provider transforms
-func ConvertAnthropicToOpenAIRequest(anthropicReq *anthropic.MessageNewParams, compatible bool) (*openai.ChatCompletionNewParams, *extension.OpenAIConfig) {
+func ConvertAnthropicToOpenAIRequest(anthropicReq *anthropic.MessageNewParams, compatible bool) (*openai.ChatCompletionNewParams, *transformer.OpenAIConfig) {
 	openaiReq := &openai.ChatCompletionNewParams{
 		Model: openai.ChatModel(anthropicReq.Model),
 	}
@@ -181,7 +181,7 @@ func ConvertAnthropicToOpenAIRequest(anthropicReq *anthropic.MessageNewParams, c
 		openaiReq.ToolChoice = ConvertAnthropicToolChoiceToOpenAI(&anthropicReq.ToolChoice)
 	}
 
-	config := &extension.OpenAIConfig{
+	config := &transformer.OpenAIConfig{
 		HasThinking:     isThinking,
 		ReasoningEffort: "low", // Default to "low" for OpenAI-compatible APIs
 	}
@@ -363,7 +363,7 @@ func IsThinkingEnabledBeta(anthropicReq *anthropic.BetaMessageNewParams) bool {
 
 // ConvertAnthropicBetaToOpenAIRequest converts Anthropic beta request to OpenAI format
 // Returns the OpenAI request and a config object with metadata for provider transforms
-func ConvertAnthropicBetaToOpenAIRequest(anthropicReq *anthropic.BetaMessageNewParams, compatible bool) (*openai.ChatCompletionNewParams, *extension.OpenAIConfig) {
+func ConvertAnthropicBetaToOpenAIRequest(anthropicReq *anthropic.BetaMessageNewParams, compatible bool) (*openai.ChatCompletionNewParams, *transformer.OpenAIConfig) {
 	openaiReq := &openai.ChatCompletionNewParams{
 		Model: openai.ChatModel(anthropicReq.Model),
 	}
@@ -409,7 +409,7 @@ func ConvertAnthropicBetaToOpenAIRequest(anthropicReq *anthropic.BetaMessageNewP
 		openaiReq.ToolChoice = ConvertAnthropicBetaToolChoiceToOpenAI(&anthropicReq.ToolChoice)
 	}
 
-	config := &extension.OpenAIConfig{
+	config := &transformer.OpenAIConfig{
 		HasThinking:     isThinking,
 		ReasoningEffort: "low", // Default to "low" for OpenAI-compatible APIs
 	}
