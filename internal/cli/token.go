@@ -2,10 +2,10 @@ package cli
 
 import (
 	"fmt"
+	"tingly-box/pkg/auth"
 
 	"github.com/spf13/cobra"
 
-	"tingly-box/internal/auth"
 	"tingly-box/internal/config"
 )
 

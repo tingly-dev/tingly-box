@@ -3,10 +3,10 @@ package middleware
 import (
 	"net/http"
 	"strings"
+	"tingly-box/pkg/auth"
 
 	"github.com/gin-gonic/gin"
 
-	"tingly-box/internal/auth"
 	"tingly-box/internal/server/config"
 )
 

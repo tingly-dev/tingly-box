@@ -8,12 +8,12 @@ import (
 	"net/http"
 	"path/filepath"
 	"time"
+	"tingly-box/pkg/auth"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/browser"
 	"github.com/sirupsen/logrus"
 
-	"tingly-box/internal/auth"
 	"tingly-box/internal/config/template"
 	"tingly-box/internal/constant"
 	"tingly-box/internal/obs"
