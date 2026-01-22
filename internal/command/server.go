@@ -18,7 +18,6 @@ import (
 
 	"tingly-box/internal/config"
 	"tingly-box/internal/feature"
-	"tingly-box/internal/manager"
 	"tingly-box/internal/server"
 	serverconfig "tingly-box/internal/server/config"
 )
@@ -325,19 +324,19 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 	}
 	fmt.Printf("Lock acquired: %s\n", fileLock.GetLockFilePath())
 
-	serverManager := manager.NewServerManager(
+	serverManager := NewServerManager(
 		appConfig,
-		manager.WithUI(opts.EnableUI),
-		manager.WithAdaptor(opts.EnableAdaptor),
-		manager.WithDebug(opts.EnableDebug),
-		manager.WithOpenBrowser(opts.EnableOpenBrowser),
-		manager.WithHost(opts.Host),
-		manager.WithHTTPSEnabled(opts.HTTPS.Enabled),
-		manager.WithHTTPSCertDir(opts.HTTPS.CertDir),
-		manager.WithHTTPSRegenerate(opts.HTTPS.Regenerate),
-		manager.WithRecordMode(obs.RecordMode(opts.RecordMode)),
-		manager.WithRecordDir(opts.RecordDir),
-		manager.WithExperimentalFeatures(opts.ExperimentalFeatures),
+		WithUI(opts.EnableUI),
+		WithAdaptor(opts.EnableAdaptor),
+		WithDebug(opts.EnableDebug),
+		WithOpenBrowser(opts.EnableOpenBrowser),
+		WithHost(opts.Host),
+		WithHTTPSEnabled(opts.HTTPS.Enabled),
+		WithHTTPSCertDir(opts.HTTPS.CertDir),
+		WithHTTPSRegenerate(opts.HTTPS.Regenerate),
+		WithRecordMode(obs.RecordMode(opts.RecordMode)),
+		WithRecordDir(opts.RecordDir),
+		WithExperimentalFeatures(opts.ExperimentalFeatures),
 	)
 
 	// Setup signal handling for graceful shutdown

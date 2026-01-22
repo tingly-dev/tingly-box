@@ -6,19 +6,19 @@ import (
 	"log"
 	"net/http"
 	"time"
+	"tingly-box/internal/command"
 
 	"github.com/gin-gonic/gin"
 	"github.com/wailsapp/wails/v3/pkg/application"
 
 	"tingly-box/internal/config"
-	"tingly-box/internal/manager"
 	"tingly-box/internal/server"
 )
 
 // TinglyService manages the web UI and HTTP server functionality
 type TinglyService struct {
 	appConfig     *config.AppConfig
-	serverManager *manager.ServerManager
+	serverManager *command.ServerManager
 	httpServer    *server.Server
 	shutdownChan  chan struct{}
 	isRunning     bool
@@ -34,12 +34,12 @@ func NewTinglyService(configDir string, port int, debug bool) (*TinglyService, e
 
 	appConfig.SetServerPort(port)
 
-	serverManager := manager.NewServerManager(
+	serverManager := command.NewServerManager(
 		appConfig,
-		manager.WithUI(true),
-		manager.WithAdaptor(true),
-		manager.WithDebug(debug),
-		manager.WithOpenBrowser(false), // GUI doesn't need browser auto-open
+		command.WithUI(true),
+		command.WithAdaptor(true),
+		command.WithDebug(debug),
+		command.WithOpenBrowser(false), // GUI doesn't need browser auto-open
 	)
 
 	res := &TinglyService{

@@ -14,7 +14,6 @@ import (
 
 	"tingly-box/internal/config"
 	"tingly-box/internal/constant"
-	"tingly-box/internal/manager"
 	"tingly-box/internal/obs"
 )
 
@@ -269,7 +268,7 @@ func handleServerManagement(appConfig *config.AppConfig, reader *bufio.Reader, l
 	input, _ := reader.ReadString('\n')
 	choice := strings.TrimSpace(strings.TrimSuffix(input, "\n"))
 
-	serverManager := manager.NewServerManager(appConfig)
+	serverManager := NewServerManager(appConfig)
 
 	switch choice {
 	case "1":
@@ -344,7 +343,7 @@ func handleServerManagement(appConfig *config.AppConfig, reader *bufio.Reader, l
 			time.Sleep(1 * time.Second)
 		}
 
-		newServerManager := manager.NewServerManager(appConfig)
+		newServerManager := NewServerManager(appConfig)
 		if err := newServerManager.Start(); err != nil {
 			fmt.Printf("❌ Failed to restart server: %v\n", err)
 			if logger != nil {
@@ -396,7 +395,7 @@ func handleServerStatus(appConfig *config.AppConfig, logger *obs.MemoryLogger) {
 	fmt.Println("\n📊 Server Status")
 	fmt.Println(strings.Repeat("=", 50))
 
-	serverManager := manager.NewServerManager(appConfig)
+	serverManager := NewServerManager(appConfig)
 	running := serverManager.IsRunning()
 
 	status := "❌ Stopped"
