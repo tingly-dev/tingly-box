@@ -66,6 +66,11 @@ func (c *OpenAIClient) Client() *openai.Client {
 	return &c.client
 }
 
+// HttpClient returns the underlying HTTP client for passthrough/proxy operations
+func (c *OpenAIClient) HttpClient() *http.Client {
+	return c.httpClient
+}
+
 // ChatCompletionsNew creates a new chat completion request
 func (c *OpenAIClient) ChatCompletionsNew(ctx context.Context, req openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
 	return c.client.Chat.Completions.New(ctx, req)

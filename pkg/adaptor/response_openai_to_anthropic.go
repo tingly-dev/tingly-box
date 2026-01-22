@@ -84,6 +84,13 @@ func ConvertOpenAIToAnthropicBetaResponse(openaiResp *openai.ChatCompletion, mod
 		},
 	}
 
+	// Preserve server_tool_use from ExtraFields if present
+	if openaiResp.JSON.ExtraFields != nil {
+		if serverToolUse, exists := openaiResp.JSON.ExtraFields["server_tool_use"]; exists && serverToolUse.Valid() {
+			responseJSON["server_tool_use"] = serverToolUse.Raw()
+		}
+	}
+
 	// Add content from OpenAI response
 	var contentBlocks []anthropic.BetaContentBlockParamUnion
 	for _, choice := range openaiResp.Choices {
