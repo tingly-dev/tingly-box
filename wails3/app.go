@@ -5,11 +5,11 @@ import (
 	"path/filepath"
 	"time"
 	"tingly-box/pkg/fs"
+	services2 "tingly-box/wails3/services"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
 	assets "tingly-box/internal"
-	"tingly-box/internal/wails3/services"
 )
 
 const (
@@ -18,7 +18,7 @@ const (
 )
 
 var App *application.App
-var tinglyService *services.TinglyService
+var tinglyService *services2.TinglyService
 
 func newApp(port int, debug bool) *application.App {
 	// Create UI service
@@ -27,7 +27,7 @@ func newApp(port int, debug bool) *application.App {
 		log.Fatal(err)
 	}
 	configDir := filepath.Join(home, ".tingly-box")
-	tinglyService, err = services.NewTinglyService(configDir, port, debug)
+	tinglyService, err = services2.NewTinglyService(configDir, port, debug)
 	if err != nil {
 		log.Fatalf("Failed to create UI service: %v", err)
 	}
@@ -42,7 +42,7 @@ func newApp(port int, debug bool) *application.App {
 		Name:        AppName,
 		Description: AppDescription,
 		Services: []application.Service{
-			application.NewService(&services.GreetService{}),
+			application.NewService(&services2.GreetService{}),
 			application.NewService(tinglyService),
 		},
 		Assets: application.AssetOptions{

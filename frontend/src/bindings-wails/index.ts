@@ -1,3 +1,3 @@
-import {TinglyService} from "../bindings/tingly-box/internal/wails3/services"
+import {TinglyService} from "../bindings/tingly-box/gui/services"
 
 export default TinglyService

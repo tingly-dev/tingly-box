@@ -13,7 +13,7 @@ vars:
   BUILD_DIR: build
   DIST_DIR: build/dist
   
-  PACKAGE_PATH: ./internal/wails3
+  PACKAGE_PATH: ./gui
   
   PORT: 12580
   
@@ -49,7 +49,7 @@ tasks:
   
   wails:binding:
     cmds:
-      - wails3 generate bindings -ts -f '-buildvcs=false -gcflags=all="-l"' -clean=true ./internal/wails3 -d frontend/src/bindings
+      - wails3 generate bindings -ts -f '-buildvcs=false -gcflags=all="-l"' -clean=true ./gui -d frontend/src/bindings
   
   wails:manual:
     cmds:
