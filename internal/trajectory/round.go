@@ -3,7 +3,7 @@
 // A conversation round is defined as starting from a pure user instruction
 // (not a tool result), followed by assistant messages (which may include tool use),
 // tool result messages, until the next pure user instruction (exclusive).
-package round
+package trajectory
 
 import (
 	"github.com/anthropics/anthropic-sdk-go"

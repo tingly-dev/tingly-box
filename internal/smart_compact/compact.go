@@ -5,7 +5,7 @@
 package smart_compact
 
 import (
-	"tingly-box/internal/round"
+	"tingly-box/internal/trajectory"
 	"tingly-box/internal/transform"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -14,13 +14,13 @@ import (
 // CompactTransformer implements the Transformer interface.
 type CompactTransformer struct {
 	transform.Transformer
-	rounder *round.Grouper
+	rounder *trajectory.Grouper
 }
 
 // NewCompactTransformer creates a new smart_compact transformer instance.
 func NewCompactTransformer() *CompactTransformer {
 	return &CompactTransformer{
-		rounder: round.NewGrouper(),
+		rounder: trajectory.NewGrouper(),
 	}
 }
 
@@ -53,7 +53,7 @@ func (t *CompactTransformer) HandleV1Beta(req *anthropic.BetaMessageNewParams) e
 }
 
 // compactV1Rounds removes thinking blocks from non-current rounds.
-func (t *CompactTransformer) compactV1Rounds(rounds []round.V1Round) []anthropic.MessageParam {
+func (t *CompactTransformer) compactV1Rounds(rounds []trajectory.V1Round) []anthropic.MessageParam {
 	var result []anthropic.MessageParam
 
 	for _, rnd := range rounds {
@@ -70,7 +70,7 @@ func (t *CompactTransformer) compactV1Rounds(rounds []round.V1Round) []anthropic
 }
 
 // compactBetaRounds removes thinking blocks from non-current rounds.
-func (t *CompactTransformer) compactBetaRounds(rounds []round.BetaRound) []anthropic.BetaMessageParam {
+func (t *CompactTransformer) compactBetaRounds(rounds []trajectory.BetaRound) []anthropic.BetaMessageParam {
 	var result []anthropic.BetaMessageParam
 
 	for _, rnd := range rounds {
