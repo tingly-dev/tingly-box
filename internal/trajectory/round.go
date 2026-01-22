@@ -13,12 +13,23 @@ import (
 type V1Round struct {
 	Messages       []anthropic.MessageParam
 	IsCurrentRound bool
+	Stats          *RoundStats // Optional metadata about the round structure
 }
 
 // BetaRound represents a conversation round for v1beta API.
 type BetaRound struct {
 	Messages       []anthropic.BetaMessageParam
 	IsCurrentRound bool
+	Stats          *RoundStats // Optional metadata about the round structure
+}
+
+// RoundStats contains metadata about a round's message composition.
+type RoundStats struct {
+	UserMessageCount int  // Number of pure user messages in this round (should be 1)
+	AssistantCount   int  // Number of assistant messages
+	ToolResultCount  int  // Number of tool result messages
+	TotalMessages    int  // Total messages in the round
+	HasThinking      bool // Whether any assistant message contains thinking blocks
 }
 
 // Grouper provides methods to group messages into conversation rounds.
@@ -43,6 +54,7 @@ func (g *Grouper) GroupV1(messages []anthropic.MessageParam) []V1Round {
 				rounds = append(rounds, V1Round{
 					Messages:       currentRound,
 					IsCurrentRound: false,
+					Stats:          g.analyzeV1Round(currentRound),
 				})
 			}
 			// Start new round
@@ -58,6 +70,7 @@ func (g *Grouper) GroupV1(messages []anthropic.MessageParam) []V1Round {
 		rounds = append(rounds, V1Round{
 			Messages:       currentRound,
 			IsCurrentRound: true,
+			Stats:          g.analyzeV1Round(currentRound),
 		})
 	}
 
@@ -76,6 +89,7 @@ func (g *Grouper) GroupBeta(messages []anthropic.BetaMessageParam) []BetaRound {
 				rounds = append(rounds, BetaRound{
 					Messages:       currentRound,
 					IsCurrentRound: false,
+					Stats:          g.analyzeBetaRound(currentRound),
 				})
 			}
 			// Start new round
@@ -91,6 +105,7 @@ func (g *Grouper) GroupBeta(messages []anthropic.BetaMessageParam) []BetaRound {
 		rounds = append(rounds, BetaRound{
 			Messages:       currentRound,
 			IsCurrentRound: true,
+			Stats:          g.analyzeBetaRound(currentRound),
 		})
 	}
 
@@ -123,4 +138,62 @@ func (g *Grouper) IsPureBetaUserMessage(msg anthropic.BetaMessageParam) bool {
 		}
 	}
 	return true
+}
+
+// analyzeV1Round analyzes a v1 round and returns its stats.
+func (g *Grouper) analyzeV1Round(messages []anthropic.MessageParam) *RoundStats {
+	stats := &RoundStats{
+		TotalMessages: len(messages),
+	}
+
+	for _, msg := range messages {
+		switch string(msg.Role) {
+		case "user":
+			if g.IsPureUserMessage(msg) {
+				stats.UserMessageCount++
+			} else {
+				stats.ToolResultCount++
+			}
+		case "assistant":
+			stats.AssistantCount++
+			// Check for thinking blocks
+			for _, block := range msg.Content {
+				if block.OfThinking != nil || block.OfRedactedThinking != nil {
+					stats.HasThinking = true
+					break
+				}
+			}
+		}
+	}
+
+	return stats
+}
+
+// analyzeBetaRound analyzes a beta round and returns its stats.
+func (g *Grouper) analyzeBetaRound(messages []anthropic.BetaMessageParam) *RoundStats {
+	stats := &RoundStats{
+		TotalMessages: len(messages),
+	}
+
+	for _, msg := range messages {
+		switch string(msg.Role) {
+		case "user":
+			if g.IsPureBetaUserMessage(msg) {
+				stats.UserMessageCount++
+			} else {
+				stats.ToolResultCount++
+			}
+		case "assistant":
+			stats.AssistantCount++
+			// Check for thinking blocks
+			for _, block := range msg.Content {
+				if block.OfThinking != nil || block.OfRedactedThinking != nil {
+					stats.HasThinking = true
+					break
+				}
+			}
+		}
+	}
+
+	return stats
 }
