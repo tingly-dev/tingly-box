@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"tingly-box/internal/config"
+	"tingly-box/internal/feature"
 	"tingly-box/internal/manager"
 	"tingly-box/internal/record"
 	"tingly-box/internal/server"
@@ -69,12 +70,11 @@ func printBanner(cfg BannerConfig) {
 	}
 }
 
-// stopServerWithFileLock is implemented in platform-specific files:
+// resolveStartOptions is implemented in platform-specific files:
 // - server_windows.go for Windows (uses process.Kill())
 // - server_unix.go for Unix-like systems (uses SIGTERM/SIGKILL)
 //
-// resolveStartOptions resolves start options from CLI flags and config
-// This is shared between start and restart commands
+// startFlags holds flags for starting the server
 type startFlags struct {
 	port                 int
 	host                 string
@@ -90,6 +90,7 @@ type startFlags struct {
 	httpsRegen           bool
 	recordMode           string
 	recordDir            string
+	expr                 string
 }
 
 // addStartFlags adds all start-related flags to a command
@@ -109,6 +110,7 @@ func addStartFlags(cmd *cobra.Command, flags *startFlags) {
 	cmd.Flags().BoolVar(&flags.httpsRegen, "https-regen", false, "Regenerate HTTPS certificate (default: false)")
 	cmd.Flags().StringVar(&flags.recordMode, "record-mode", "", "Record mode: empty=disabled, 'all'=record request+response, 'response'=response only (default: disabled)")
 	cmd.Flags().StringVar(&flags.recordDir, "record-dir", "", "Record directory (default: ~/.tingly-box/record/)")
+	cmd.Flags().StringVar(&flags.expr, "expr", "", "Enable experimental features (comma-separated, e.g., compact,other)")
 }
 
 func resolveStartOptions(cmd *cobra.Command, flags startFlags, appConfig *config.AppConfig) startServerOptions {
@@ -136,6 +138,9 @@ func resolveStartOptions(cmd *cobra.Command, flags startFlags, appConfig *config
 		resolvedRecordDir = appConfig.ConfigDir() + "/record"
 	}
 
+	// Parse experimental features
+	experimentalFeatures := feature.ParseFeatures(flags.expr)
+
 	return startServerOptions{
 		Host:              flags.host,
 		Port:              resolvedPort,
@@ -155,8 +160,9 @@ func resolveStartOptions(cmd *cobra.Command, flags startFlags, appConfig *config
 			CertDir:    flags.httpsCertDir,
 			Regenerate: flags.httpsRegen,
 		},
-		RecordMode: flags.recordMode,
-		RecordDir:  resolvedRecordDir,
+		RecordMode:           flags.recordMode,
+		RecordDir:            resolvedRecordDir,
+		ExperimentalFeatures: experimentalFeatures,
 	}
 }
 
@@ -194,8 +200,9 @@ type startServerOptions struct {
 		CertDir    string
 		Regenerate bool
 	}
-	RecordMode string
-	RecordDir  string
+	RecordMode           string
+	RecordDir            string
+	ExperimentalFeatures map[string]bool
 }
 
 // startServer handles the server starting logic
@@ -330,6 +337,7 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 		manager.WithHTTPSRegenerate(opts.HTTPS.Regenerate),
 		manager.WithRecordMode(record.RecordMode(opts.RecordMode)),
 		manager.WithRecordDir(opts.RecordDir),
+		manager.WithExperimentalFeatures(opts.ExperimentalFeatures),
 	)
 
 	// Setup signal handling for graceful shutdown
