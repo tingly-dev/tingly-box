@@ -20,7 +20,8 @@ import {
     Typography,
 } from '@mui/material';
 import React, { useEffect, useState } from 'react';
-import type { SmartRouting, SmartOp } from '../RoutingGraphTypes';
+import { v4 as uuidv4 } from 'uuid';
+import type { SmartRouting, SmartOp } from './RoutingGraphTypes';
 
 // Position options with descriptions
 const POSITION_OPTIONS = [
@@ -111,6 +112,7 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
 
     const handleAddOp = () => {
         const newOp: SmartOp = {
+            uuid: uuidv4(),
             position: 'model',
             operation: 'contains',
             value: '',
@@ -209,7 +211,7 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
                             <Stack spacing={2}>
                                 {ops.map((op, index) => (
                                     <Box
-                                        key={index}
+                                        key={op.uuid || index}
                                         sx={{
                                             p: 2,
                                             border: '1px solid',

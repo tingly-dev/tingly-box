@@ -72,10 +72,14 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
     const getOpDisplay = () => {
         if (!firstOp) return 'No Op';
         const opLabel = firstOp.operation || 'unknown';
-        const valuePreview = firstOp.value?.length > 15
-            ? `${firstOp.value.slice(0, 15)}...`
-            : firstOp.value;
-        return `${firstOp.position}: ${opLabel}`;
+        return `${firstOp.position}: ${opLabel} : ${firstOp.value || ''}`;
+    };
+
+    // Full display for tooltip
+    const getOpDisplayFull = () => {
+        if (!firstOp) return 'No Op';
+        const opLabel = firstOp.operation || 'unknown';
+        return `${firstOp.position}: ${opLabel} : ${firstOp.value || ''}`;
     };
 
     return (
@@ -126,31 +130,37 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                             width: '100%',
                         }}
                     >
-                        <Box
-                            sx={{
-                                width: '100%',
-                                p: 1,
-                                border: '1px solid',
-                                borderColor: active ? 'primary.main' : 'divider',
-                                borderRadius: 1,
-                                backgroundColor: 'background.paper',
-                                transition: 'all 0.2s',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                            }}
-                        >
-                            <Typography
-                                variant="body2"
+                        <Tooltip title={getOpDisplayFull()} arrow>
+                            <Box
                                 sx={{
-                                    fontSize: '0.8rem',
-                                    color: active ? 'primary.main' : 'text.secondary',
-                                    fontWeight: 500,
+                                    width: '100%',
+                                    p: 1,
+                                    border: '1px solid',
+                                    borderColor: active ? 'primary.main' : 'divider',
+                                    borderRadius: 1,
+                                    backgroundColor: 'background.paper',
+                                    transition: 'all 0.2s',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
                                 }}
                             >
-                                {getOpDisplay()}
-                            </Typography>
-                        </Box>
+                                <Typography
+                                    variant="body2"
+                                    sx={{
+                                        fontSize: '0.8rem',
+                                        color: active ? 'primary.main' : 'text.secondary',
+                                        fontWeight: 500,
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap',
+                                        width: '100%',
+                                    }}
+                                >
+                                    {getOpDisplay()}
+                                </Typography>
+                            </Box>
+                        </Tooltip>
                     </Box>
                 </Box>
 

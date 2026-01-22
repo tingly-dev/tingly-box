@@ -13,6 +13,7 @@ export interface ConfigProvider {
 }
 
 export interface SmartOp {
+    uuid: string;
     position: 'model' | 'thinking' | 'system' | 'user' | 'tool_use' | 'token';
     operation: string;
     value: string;
