@@ -7,9 +7,10 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"tingly-box/pkg/adaptor"
 	"tingly-box/pkg/adaptor/nonstream"
 	"tingly-box/pkg/adaptor/request"
-	"tingly-box/pkg/adaptor/stream"
+	"tingly-box/pkg/adaptor/token"
 
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
@@ -95,7 +96,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 	}
 
 	// Parse OpenAI-style request
-	var req request.OpenAIChatCompletionRequest
+	var req adaptor.OpenAIChatCompletionRequest
 	if err := json.Unmarshal(bodyBytes, &req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -560,8 +561,8 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 
 		// If no usage from stream, estimate it
 		if !hasUsage {
-			inputTokens, _ = estimateInputTokens(req)
-			outputTokens = estimateOutputTokens(contentBuilder.String())
+			inputTokens, _ = token.EstimateInputTokens(req)
+			outputTokens = token.estimateOutputTokens(contentBuilder.String())
 		}
 
 		// Track usage with error status
@@ -594,8 +595,8 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 	// Track successful streaming completion
 	// If no usage from stream, estimate it and send to client
 	if !hasUsage {
-		inputTokens, _ = estimateInputTokens(req)
-		outputTokens = estimateOutputTokens(contentBuilder.String())
+		inputTokens, _ = token.EstimateInputTokens(req)
+		outputTokens = token.estimateOutputTokens(contentBuilder.String())
 
 		// Use the first chunk ID, or generate one if not available
 		chunkID := firstChunkID

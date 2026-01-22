@@ -1,4 +1,4 @@
-package server
+package token
 
 import (
 	"fmt"
@@ -8,8 +8,8 @@ import (
 	"github.com/tiktoken-go/tokenizer"
 )
 
-// estimateInputTokens estimates input tokens from OpenAI request using tiktoken
-func estimateInputTokens(req *openai.ChatCompletionNewParams) (int, error) {
+// EstimateInputTokens estimates input tokens from OpenAI request using tiktoken
+func EstimateInputTokens(req *openai.ChatCompletionNewParams) (int, error) {
 	// Get the encoding for the model (default to O200kBase which is used by GPT-4o and above)
 	enc, err := tokenizer.Get(tokenizer.O200kBase)
 	if err != nil {
@@ -72,8 +72,8 @@ func estimateInputTokens(req *openai.ChatCompletionNewParams) (int, error) {
 	return totalTokens, nil
 }
 
-// estimateOutputTokens estimates output tokens from accumulated content
-func estimateOutputTokens(content string) int {
+// EstimateOutputTokens estimates output tokens from accumulated content
+func EstimateOutputTokens(content string) int {
 	// Get the encoding
 	enc, err := tokenizer.Get(tokenizer.O200kBase)
 	if err != nil {
@@ -90,8 +90,8 @@ func estimateOutputTokens(content string) int {
 	return count
 }
 
-// countTokensWithTiktoken approximates token count for OpenAI-style providers using tiktoken
-func countTokensWithTiktoken(model string, messages []anthropic.MessageParam, system []anthropic.TextBlockParam) (int, error) {
+// CountTokensWithTiktoken approximates token count for OpenAI-style providers using tiktoken
+func CountTokensWithTiktoken(model string, messages []anthropic.MessageParam, system []anthropic.TextBlockParam) (int, error) {
 	// Get the encoding for the model (default to O200kBase which is used by GPT-4o and above)
 	enc, err := tokenizer.Get(tokenizer.O200kBase)
 	if err != nil {
@@ -150,8 +150,8 @@ func countTokensWithTiktoken(model string, messages []anthropic.MessageParam, sy
 	return totalTokens, nil
 }
 
-// countBetaTokensWithTiktoken approximates token count for OpenAI-style providers using tiktoken
-func countBetaTokensWithTiktoken(model string, messages []anthropic.BetaMessageParam, system anthropic.BetaMessageCountTokensParamsSystemUnion) (int, error) {
+// CountBetaTokensWithTiktoken approximates token count for OpenAI-style providers using tiktoken
+func CountBetaTokensWithTiktoken(model string, messages []anthropic.BetaMessageParam, system anthropic.BetaMessageCountTokensParamsSystemUnion) (int, error) {
 	// Get the encoding for the model (default to O200kBase which is used by GPT-4o and above)
 	enc, err := tokenizer.Get(tokenizer.O200kBase)
 	if err != nil {

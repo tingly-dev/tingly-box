@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"time"
+	"tingly-box/pkg/adaptor"
 	"tingly-box/pkg/adaptor/nonstream"
 	"tingly-box/pkg/adaptor/request"
+	"tingly-box/pkg/adaptor/stream"
+	"tingly-box/pkg/adaptor/token"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
@@ -29,7 +32,7 @@ func sendSSEvent(c *gin.Context, eventType string, data interface{}) error {
 }
 
 // anthropicMessagesV1 implements standard v1 messages API
-func (s *Server) anthropicMessagesV1(c *gin.Context, req request.AnthropicMessagesRequest, proxyModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule) {
+func (s *Server) anthropicMessagesV1(c *gin.Context, req adaptor.AnthropicMessagesRequest, proxyModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule) {
 	actualModel := selectedService.Model
 
 	// Check if streaming is requested
@@ -109,14 +112,14 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req request.AnthropicMessag
 
 		if isStreaming {
 			// Create streaming request
-			stream, err := s.forwardGoogleStreamRequest(provider, model, googleReq, cfg)
+			streamResp, err := s.forwardGoogleStreamRequest(provider, model, googleReq, cfg)
 			if err != nil {
 				SendStreamingError(c, err)
 				return
 			}
 
 			// Handle the streaming response
-			err = stream.HandleGoogleToAnthropicStreamResponse(c, stream, proxyModel)
+			err = stream.HandleGoogleToAnthropicStreamResponse(c, streamResp, proxyModel)
 			if err != nil {
 				SendInternalError(c, err.Error())
 			}
@@ -160,14 +163,14 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req request.AnthropicMessag
 			openaiReq := request.ConvertAnthropicToOpenAIRequestWithProvider(&req.MessageNewParams, true, provider, actualModel)
 
 			// Create streaming request
-			stream, err := s.forwardOpenAIStreamRequest(provider, openaiReq)
+			streamResp, err := s.forwardOpenAIStreamRequest(provider, openaiReq)
 			if err != nil {
 				SendStreamingError(c, err)
 				return
 			}
 
 			// Handle the streaming response
-			err = stream.HandleOpenAIToAnthropicStreamResponse(c, openaiReq, stream, proxyModel)
+			err = stream.HandleOpenAIToAnthropicStreamResponse(c, openaiReq, streamResp, proxyModel)
 			if err != nil {
 				SendInternalError(c, err.Error())
 			}
@@ -325,7 +328,7 @@ func (s *Server) anthropicCountTokensV1(c *gin.Context, bodyBytes []byte, rawReq
 		}
 		c.JSON(http.StatusOK, message)
 	} else {
-		count, err := countTokensWithTiktoken(string(req.Model), req.Messages, req.System.OfTextBlockArray)
+		count, err := token.CountTokensWithTiktoken(string(req.Model), req.Messages, req.System.OfTextBlockArray)
 		if err != nil {
 			SendInvalidRequestBodyError(c, err)
 			return

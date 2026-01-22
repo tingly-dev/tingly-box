@@ -1,4 +1,4 @@
-package server
+package token
 
 import (
 	"fmt"
@@ -54,7 +54,7 @@ func TestCountTokensWithTiktoken(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			count, err := countTokensWithTiktoken(tt.model, tt.messages, tt.system)
+			count, err := CountTokensWithTiktoken(tt.model, tt.messages, tt.system)
 			fmt.Printf("t: %s, count: %d\n", tt.name, count)
 			require.NoError(t, err)
 			assert.GreaterOrEqual(t, count, tt.wantMin, "token count should be at least %d", tt.wantMin)

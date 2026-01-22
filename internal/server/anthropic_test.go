@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
-	"tingly-box/pkg/adaptor/request"
+	"tingly-box/pkg/adaptor"
 
 	"github.com/anthropics/anthropic-sdk-go"
 )
@@ -16,7 +16,7 @@ var rawBody []byte
 func TestAnthropicBetaMessagesRequest_UnmarshalJSON(t *testing.T) {
 	jsonString := "{\"stream\":true}"
 
-	var req request.AnthropicBetaMessagesRequest
+	var req adaptor.AnthropicBetaMessagesRequest
 	if err := json.Unmarshal([]byte(jsonString), &req); err != nil {
 		t.Fatalf("Failed to deserialize rawBody into BetaMessageNewParams: %v", err)
 	}

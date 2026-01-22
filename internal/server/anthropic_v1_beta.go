@@ -6,7 +6,9 @@ import (
 	"iter"
 	"net/http"
 	"time"
+	"tingly-box/pkg/adaptor"
 	"tingly-box/pkg/adaptor/request"
+	"tingly-box/pkg/adaptor/token"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
@@ -19,7 +21,7 @@ import (
 )
 
 // anthropicMessagesV1Beta implements beta messages API
-func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req request.AnthropicBetaMessagesRequest, proxyModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule) {
+func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req adaptor.AnthropicBetaMessagesRequest, proxyModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule) {
 	actualModel := selectedService.Model
 
 	// Check if streaming is requested
@@ -349,7 +351,7 @@ func (s *Server) anthropicCountTokensV1Beta(c *gin.Context, bodyBytes []byte, ra
 
 		c.JSON(http.StatusOK, message)
 	} else {
-		count, err := countBetaTokensWithTiktoken(string(req.Model), req.Messages, req.System)
+		count, err := token.countBetaTokensWithTiktoken(string(req.Model), req.Messages, req.System)
 		if err != nil {
 			SendInvalidRequestBodyError(c, err)
 			return
