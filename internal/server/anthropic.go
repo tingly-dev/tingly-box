@@ -14,7 +14,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
+	"tingly-box/internal/feature"
 	"tingly-box/internal/loadbalance"
+	"tingly-box/internal/smart_compact"
 	"tingly-box/internal/typ"
 )
 
@@ -183,8 +185,20 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 
 	// Delegate to the appropriate implementation based on beta parameter
 	if beta {
+		// Apply compact transformation only if the compact feature is enabled
+		if s.IsFeatureEnabled(feature.FeatureCompact) {
+			tf := smart_compact.NewCompactTransformer(2)
+			tf.HandleV1Beta(&betaMessages.BetaMessageNewParams)
+			logrus.Infoln("smart compact triggered")
+		}
 		s.anthropicMessagesV1Beta(c, betaMessages, model, provider, selectedService, rule)
 	} else {
+		// Apply compact transformation only if the compact feature is enabled
+		if s.IsFeatureEnabled(feature.FeatureCompact) {
+			tf := smart_compact.NewCompactTransformer(2)
+			tf.HandleV1(&messages.MessageNewParams)
+			logrus.Infoln("smart compact triggered")
+		}
 		s.anthropicMessagesV1(c, messages, model, provider, selectedService, rule)
 	}
 }

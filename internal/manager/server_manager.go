@@ -18,20 +18,20 @@ const StopTimeout = time.Second
 
 // ServerManager manages the HTTP server lifecycle
 type ServerManager struct {
-	appConfig *config.AppConfig
-	server    *server.Server
-
-	host              string
-	enableUI          bool
-	enableAdaptor     bool
-	enableDebug       bool
-	enableOpenBrowser bool
-	httpsEnabled      bool
-	httpsCertDir      string
-	httpsRegenerate   bool
-	recordMode        record.RecordMode
-	recordDir         string
-	status            string
+	appConfig            *config.AppConfig
+	server               *server.Server
+	host                 string
+	enableUI             bool
+	enableAdaptor        bool
+	enableDebug          bool
+	enableOpenBrowser    bool
+	httpsEnabled         bool
+	httpsCertDir         string
+	httpsRegenerate      bool
+	recordMode           record.RecordMode
+	recordDir            string
+	experimentalFeatures map[string]bool
+	status               string
 	sync.Mutex
 }
 
@@ -108,6 +108,13 @@ func WithRecordDir(dir string) ServerManagerOption {
 	}
 }
 
+// WithExperimentalFeatures sets the experimental features for the server manager
+func WithExperimentalFeatures(features map[string]bool) ServerManagerOption {
+	return func(sm *ServerManager) {
+		sm.experimentalFeatures = features
+	}
+}
+
 // NewServerManager creates a new server manager with default options (UI enabled, adapter enabled)
 func NewServerManager(appConfig *config.AppConfig, opts ...ServerManagerOption) *ServerManager {
 	// Default options
@@ -170,6 +177,7 @@ func (sm *ServerManager) Setup(port int) error {
 		server.WithVersion(sm.appConfig.GetVersion()),
 		server.WithRecordMode(sm.recordMode),
 		server.WithRecordDir(sm.recordDir),
+		server.WithExperimentalFeatures(sm.experimentalFeatures),
 	)
 
 	// Set global server instance for web UI control

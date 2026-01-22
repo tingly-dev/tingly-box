@@ -71,6 +71,9 @@ type Server struct {
 	recordMode record.RecordMode
 	recordDir  string
 
+	// experimental features
+	experimentalFeatures map[string]bool
+
 	version string
 }
 
@@ -154,6 +157,18 @@ func WithRecordDir(dir string) ServerOption {
 	return func(s *Server) {
 		s.recordDir = dir
 	}
+}
+
+// WithExperimentalFeatures sets the experimental features for the server
+func WithExperimentalFeatures(features map[string]bool) ServerOption {
+	return func(s *Server) {
+		s.experimentalFeatures = features
+	}
+}
+
+// IsFeatureEnabled checks if a specific feature is enabled
+func (s *Server) IsFeatureEnabled(feature string) bool {
+	return s.experimentalFeatures[feature]
 }
 
 // NewServer creates a new HTTP server instance with functional options
