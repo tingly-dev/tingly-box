@@ -6,7 +6,6 @@ import {
     ExpandMore as ExpandMoreIcon,
     Info as InfoIcon,
     Warning as WarningIcon,
-    SmartDisplay as SmartIcon,
 } from '@mui/icons-material';
 import {
     Box,
@@ -295,30 +294,6 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                 {/* Right side */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Box onClick={(e) => e.stopPropagation()}>{extraActions}</Box>
-                    {/* Smart Routing Toggle Button */}
-                    <Tooltip title={smartEnabled ? "Switch to normal routing mode" : "Switch to smart routing mode"}>
-                        <Chip
-                            icon={<SmartIcon fontSize="small" />}
-                            label="Smart"
-                            size="small"
-                            color={smartEnabled ? "primary" : "default"}
-                            variant={smartEnabled ? "filled" : "outlined"}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                if (!saving) {
-                                    onUpdateRecord('smartEnabled', !smartEnabled);
-                                }
-                            }}
-                            sx={{
-                                opacity: record.active ? 1 : 0.5,
-                                minWidth: 75,
-                                cursor: saving ? 'default' : 'pointer',
-                                '&:hover': saving ? {} : {
-                                    opacity: 0.8,
-                                },
-                            }}
-                        />
-                    </Tooltip>
                     {record.responseModel && <Chip
                         label={`Response as ${record.responseModel}`}
                         size="small"

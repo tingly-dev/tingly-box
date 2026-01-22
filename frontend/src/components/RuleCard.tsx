@@ -1,5 +1,4 @@
-import { Delete as DeleteIcon, Download as ExportIcon, PlayArrow as ProbeIcon, Settings as SettingsIcon } from '@mui/icons-material';
-import { Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, IconButton, Menu, MenuItem, Tooltip, Typography } from '@mui/material';
+import { Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Typography } from '@mui/material';
 import React, { useCallback, useState } from 'react';
 import type { ProbeResponse } from '../client';
 import Probe from './ProbeModal.tsx';
@@ -10,6 +9,7 @@ import { api } from '../services/api';
 import type { Provider, ProviderModelsDataByUuid } from '../types/provider';
 import type { ConfigRecord, Rule, SmartRouting } from './RoutingGraphTypes.ts';
 import { v4 as uuidv4 } from 'uuid';
+import GraphSettingsMenu from './GraphSettingsMenu';
 
 export interface RuleCardProps {
     rule: Rule;
@@ -57,21 +57,9 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     // Delete confirmation state
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-    // Menu state
-    const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
-    const menuOpen = Boolean(menuAnchorEl);
-
     // Smart rule edit dialog state
     const [smartRuleDialogOpen, setSmartRuleDialogOpen] = useState(false);
     const [editingSmartRule, setEditingSmartRule] = useState<SmartRouting | null>(null);
-
-    const handleMenuOpen = useCallback((event: React.MouseEvent<HTMLElement>) => {
-        setMenuAnchorEl(event.currentTarget);
-    }, []);
-
-    const handleMenuClose = useCallback(() => {
-        setMenuAnchorEl(null);
-    }, []);
 
     // Convert rule to ConfigRecord format
     React.useEffect(() => {
@@ -576,67 +564,16 @@ export const RuleCard: React.FC<RuleCardProps> = ({
 
     // Extra actions menu - shared between RoutingGraph and SmartRoutingGraph
     const extraActions = (
-        <>
-            <Tooltip title="Rule actions">
-                <IconButton
-                    size="small"
-                    onClick={handleMenuOpen}
-                    sx={{
-                        color: 'text.secondary',
-                        '&:hover': {
-                            backgroundColor: 'action.hover',
-                        },
-                    }}
-                >
-                    <SettingsIcon fontSize="small" />
-                </IconButton>
-            </Tooltip>
-            <Menu
-                anchorEl={menuAnchorEl}
-                open={menuOpen}
-                onClose={handleMenuClose}
-                anchorOrigin={{
-                    vertical: 'bottom',
-                    horizontal: 'right',
-                }}
-                transformOrigin={{
-                    vertical: 'top',
-                    horizontal: 'right',
-                }}
-            >
-                <MenuItem
-                    onClick={() => {
-                        handleMenuClose();
-                        handleProbe();
-                    }}
-                    disabled={!configRecord.providers[0]?.provider || !configRecord.providers[0]?.model || isProbing}
-                >
-                    <ProbeIcon fontSize="small" sx={{ mr: 1 }} />
-                    Test Connection
-                </MenuItem>
-                <MenuItem
-                    onClick={() => {
-                        handleMenuClose();
-                        handleExport();
-                    }}
-                >
-                    <ExportIcon fontSize="small" sx={{ mr: 1 }} />
-                    Export with API Keys
-                </MenuItem>
-                {allowDeleteRule && (
-                    <MenuItem
-                        onClick={() => {
-                            handleMenuClose();
-                            handleDeleteButtonClick();
-                        }}
-                        sx={{ color: 'error.main' }}
-                    >
-                        <DeleteIcon fontSize="small" sx={{ mr: 1 }} />
-                        Delete Rule
-                    </MenuItem>
-                )}
-            </Menu>
-        </>
+        <GraphSettingsMenu
+            smartEnabled={isSmartMode}
+            canProbe={!!configRecord.providers[0]?.provider && !!configRecord.providers[0]?.model}
+            isProbing={isProbing}
+            allowDeleteRule={allowDeleteRule}
+            onToggleSmartRouting={() => handleUpdateRecord('smartEnabled', !isSmartMode)}
+            onProbe={handleProbe}
+            onExport={handleExport}
+            onDelete={handleDeleteButtonClick}
+        />
     );
 
     return (
@@ -653,7 +590,6 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                         onToggleExpanded={() => setExpanded(!expanded)}
                         extraActions={extraActions}
                         onUpdateRecord={handleUpdateRecord}
-                        onToggleSmartEnabled={(enabled) => handleUpdateRecord('smartEnabled', enabled)}
                         onAddSmartRule={handleAddSmartRule}
                         onEditSmartRule={handleEditSmartRule}
                         onDeleteSmartRule={handleDeleteSmartRule}

@@ -2,7 +2,6 @@ import {
     Add as AddIcon,
     ArrowDownward as ArrowDownIcon,
     Info as InfoIcon,
-    SmartDisplay as SmartIcon,
     Warning as WarningIcon,
     ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
@@ -72,7 +71,6 @@ interface SmartRoutingGraphProps {
     onDeleteServiceFromSmartRule: (ruleUuid: string, serviceUuid: string) => void;
     onAddDefaultProvider?: () => void;
     onDeleteDefaultProvider?: (providerUuid: string) => void;
-    onToggleSmartEnabled?: (enabled: boolean) => void;
     onProviderNodeClick?: (providerUuid: string) => void;
     // Additional props matching RoutingGraph
     saving?: boolean;
@@ -138,7 +136,6 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
     onDeleteServiceFromSmartRule,
     onAddDefaultProvider,
     onDeleteDefaultProvider,
-    onToggleSmartEnabled,
     onProviderNodeClick,
     saving = false,
     collapsible = false,
@@ -249,28 +246,6 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                 {/* Right side */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Box onClick={(e) => e.stopPropagation()}>{extraActions}</Box>
-                    {/* Smart Toggle Button */}
-                    <Tooltip title="Switch to normal routing mode">
-                        <Chip
-                            icon={<SmartIcon fontSize="small" />}
-                            label="Smart"
-                            size="small"
-                            color="primary"
-                            variant="filled"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onToggleSmartEnabled?.(false);
-                            }}
-                            sx={{
-                                opacity: active ? 1 : 0.5,
-                                minWidth: 75,
-                                cursor: 'pointer',
-                                '&:hover': {
-                                    opacity: 0.8,
-                                },
-                            }}
-                        />
-                    </Tooltip>
                     {record.responseModel && (
                         <Chip
                             label={`Response as ${record.responseModel}`}
