@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"tingly-box/internal/protocol"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
@@ -111,7 +112,7 @@ func (s *Server) testProviderConnectivity(req *ProbeProviderRequest) (bool, stri
 	provider := &typ.Provider{
 		Name:     req.Name,
 		APIBase:  req.APIBase,
-		APIStyle: typ.APIStyle(req.APIStyle),
+		APIStyle: protocol.APIStyle(req.APIStyle),
 		Token:    req.Token,
 		Enabled:  true,
 	}
@@ -149,7 +150,7 @@ func (s *Server) testProviderConnectivity(req *ProbeProviderRequest) (bool, stri
 func (s *Server) getProviderModelsForProbe(provider *typ.Provider) ([]string, error) {
 	// Construct the models endpoint URL
 	apiBase := strings.TrimSuffix(provider.APIBase, "/")
-	if provider.APIStyle == typ.APIStyleAnthropic {
+	if provider.APIStyle == protocol.APIStyleAnthropic {
 		// Check if already has version suffix like /v1, /v2, etc.
 		matches := strings.Split(apiBase, "/")
 		if len(matches) > 0 {
@@ -176,7 +177,7 @@ func (s *Server) getProviderModelsForProbe(provider *typ.Provider) ([]string, er
 	}
 
 	// Set headers based on provider style
-	if provider.APIStyle == typ.APIStyleAnthropic {
+	if provider.APIStyle == protocol.APIStyleAnthropic {
 		req.Header.Set("x-api-key", provider.Token)
 		req.Header.Set("anthropic-version", "2023-06-01")
 	} else {
@@ -399,9 +400,9 @@ func (s *Server) probeChatEndpoint(provider *typ.Provider) error {
 	defer cancel()
 
 	switch provider.APIStyle {
-	case typ.APIStyleOpenAI:
+	case protocol.APIStyleOpenAI:
 		return s.probeOpenAIChat(ctx, provider)
-	case typ.APIStyleAnthropic:
+	case protocol.APIStyleAnthropic:
 		return s.probeAnthropicChat(ctx, provider)
 	default:
 		return fmt.Errorf("unsupported API style: %s", provider.APIStyle)
@@ -414,7 +415,7 @@ func (s *Server) probeOptionsEndpoint(provider *typ.Provider) error {
 	defer cancel()
 
 	optionsURL := provider.APIBase
-	if provider.APIStyle == typ.APIStyleAnthropic {
+	if provider.APIStyle == protocol.APIStyleAnthropic {
 		apiBase := strings.TrimSuffix(provider.APIBase, "/")
 		if !strings.Contains(apiBase, "/v1") {
 			apiBase = apiBase + "/v1"
@@ -428,7 +429,7 @@ func (s *Server) probeOptionsEndpoint(provider *typ.Provider) error {
 	}
 
 	// Set authentication headers
-	if provider.APIStyle == typ.APIStyleAnthropic {
+	if provider.APIStyle == protocol.APIStyleAnthropic {
 		req.Header.Set("x-api-key", provider.Token)
 		req.Header.Set("anthropic-version", "2023-06-01")
 	} else {

@@ -68,7 +68,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 	apiStyle := provider.APIStyle
 
 	switch apiStyle {
-	case typ.APIStyleAnthropic:
+	case protocol.APIStyleAnthropic:
 		// Use direct Anthropic SDK call
 		if isStreaming {
 			// Handle streaming request
@@ -100,7 +100,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 		}
 		return
 
-	case typ.APIStyleGoogle:
+	case protocol.APIStyleGoogle:
 		// Check if adaptor is enabled
 		if !s.enableAdaptor {
 			SendAdapterDisabledError(c, provider.Name)
@@ -150,7 +150,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			c.JSON(http.StatusOK, anthropicResp)
 		}
 
-	case typ.APIStyleOpenAI:
+	case protocol.APIStyleOpenAI:
 		// Check if adaptor is enabled
 		if !s.enableAdaptor {
 			SendAdapterDisabledError(c, provider.Name)

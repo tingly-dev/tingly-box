@@ -55,8 +55,8 @@ func NewGoogleClient(provider *typ.Provider) (*GoogleClient, error) {
 }
 
 // ProviderType returns the provider type
-func (c *GoogleClient) ProviderType() protocol.ProviderType {
-	return protocol.ProviderTypeGoogle
+func (c *GoogleClient) APIStyle() protocol.APIStyle {
+	return protocol.APIStyleGoogle
 }
 
 // Close closes any resources held by the client

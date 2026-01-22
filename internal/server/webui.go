@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"tingly-box/internal/protocol"
 
 	"github.com/gin-gonic/gin"
 
@@ -139,9 +140,9 @@ func (s *Server) HandleProbeModel(c *gin.Context) {
 	var err error
 
 	switch provider.APIStyle {
-	case typ.APIStyleAnthropic:
+	case protocol.APIStyleAnthropic:
 		responseContent, usage, err = s.probeWithAnthropic(c, provider, model)
-	case typ.APIStyleOpenAI:
+	case protocol.APIStyleOpenAI:
 		fallthrough
 	default:
 		responseContent, usage, err = s.probeWithOpenAI(c, provider, model)

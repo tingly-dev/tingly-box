@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"tingly-box/internal/protocol"
 
 	"tingly-box/internal/constant"
 	"tingly-box/internal/typ"
@@ -418,7 +419,7 @@ func ValidateTemplate(tmpl *ProviderTemplate) error {
 }
 
 // findTemplateByProvider finds a matching template for the given provider.
-// For OAuth providers, it matches by OAuthDetail.ProviderType against template.OAuthProvider.
+// For OAuth providers, it matches by OAuthDetail.APIStyle against template.OAuthProvider.
 // For API key providers, it matches by APIBase against template base URLs based on APIStyle.
 func (tm *TemplateManager) findTemplateByProvider(provider *typ.Provider) *ProviderTemplate {
 	tm.mu.RLock()
@@ -442,11 +443,11 @@ func (tm *TemplateManager) findTemplateByProvider(provider *typ.Provider) *Provi
 
 	// Determine which base URL field to match based on APIStyle
 	switch provider.APIStyle {
-	case typ.APIStyleAnthropic:
+	case protocol.APIStyleAnthropic:
 		return tm.searchTemplates(func(tmpl *ProviderTemplate) bool {
 			return tmpl.BaseURLAnthropic == apiBase
 		})
-	case typ.APIStyleOpenAI:
+	case protocol.APIStyleOpenAI:
 		fallthrough
 	default:
 		return tm.searchTemplates(func(tmpl *ProviderTemplate) bool {

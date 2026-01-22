@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 	"time"
+	"tingly-box/internal/protocol"
 
 	"tingly-box/internal/server/config"
 	"tingly-box/internal/typ"
@@ -247,7 +248,7 @@ func TestOAuthRefresherActualRefresh(t *testing.T) {
 		UUID:     "test-provider-uuid",
 		Name:     "TestOAuthProvider",
 		APIBase:  "https://api.test.com",
-		APIStyle: typ.APIStyleOpenAI,
+		APIStyle: protocol.APIStyleOpenAI,
 		AuthType: typ.AuthTypeOAuth,
 		OAuthDetail: &typ.OAuthDetail{
 			AccessToken:  "old_access_token",
@@ -309,7 +310,7 @@ func TestOAuthRefresherSkipValidTokens(t *testing.T) {
 		UUID:     "test-provider-uuid",
 		Name:     "TestOAuthProvider",
 		APIBase:  "https://api.test.com",
-		APIStyle: typ.APIStyleOpenAI,
+		APIStyle: protocol.APIStyleOpenAI,
 		AuthType: typ.AuthTypeOAuth,
 		OAuthDetail: &typ.OAuthDetail{
 			AccessToken:  "valid_access_token",

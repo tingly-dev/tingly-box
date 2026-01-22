@@ -51,8 +51,8 @@ func defaultNewOpenAIClient(provider *typ.Provider) (*OpenAIClient, error) {
 }
 
 // ProviderType returns the provider type
-func (c *OpenAIClient) ProviderType() protocol.ProviderType {
-	return protocol.ProviderTypeOpenAI
+func (c *OpenAIClient) APIStyle() protocol.APIStyle {
+	return protocol.APIStyleOpenAI
 }
 
 // Close closes any resources held by the client

@@ -72,8 +72,8 @@ func defaultNewAnthropicClient(provider *typ.Provider) (*AnthropicClient, error)
 }
 
 // ProviderType returns the provider type
-func (c *AnthropicClient) ProviderType() protocol.ProviderType {
-	return protocol.ProviderTypeAnthropic
+func (c *AnthropicClient) APIStyle() protocol.APIStyle {
+	return protocol.APIStyleAnthropic
 }
 
 // Close closes any resources held by the client

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+	"tingly-box/internal/protocol"
 	"tingly-box/internal/template"
 	"tingly-box/pkg/auth"
 
@@ -642,7 +643,7 @@ func (c *Config) AddProviderByName(name, apiBase, token string) error {
 		UUID:     GenerateUUID(), // Generate a new UUID for the provider
 		Name:     name,
 		APIBase:  apiBase,
-		APIStyle: typ.APIStyleOpenAI, // default to openai
+		APIStyle: protocol.APIStyleOpenAI, // default to openai
 		Token:    token,
 		Enabled:  true,
 	}

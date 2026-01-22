@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"tingly-box/internal/protocol"
 
 	"github.com/gin-gonic/gin"
 	"github.com/otiai10/copy"
@@ -235,7 +236,7 @@ func (ts *TestServer) AddTestProvider(t *testing.T, name, apiBase, apiStyle stri
 		UUID:     name, // for test, use name as uuid for convenience
 		Name:     name,
 		APIBase:  apiBase,
-		APIStyle: typ.APIStyle(apiStyle),
+		APIStyle: protocol.APIStyle(apiStyle),
 		Token:    "test-token",
 		Enabled:  enabled,
 		Timeout:  int64(constant.DefaultRequestTimeout),
@@ -251,7 +252,7 @@ func (ts *TestServer) AddTestProviderWithURL(t *testing.T, name, url, apiStyle s
 		UUID:     name, // use name as uuid for convenience
 		Name:     name,
 		APIBase:  url,
-		APIStyle: typ.APIStyle(apiStyle),
+		APIStyle: protocol.APIStyle(apiStyle),
 		Token:    "test-token",
 		Enabled:  enabled,
 		Timeout:  int64(constant.DefaultRequestTimeout),

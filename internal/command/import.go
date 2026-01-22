@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"tingly-box/internal/protocol"
 
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
@@ -206,7 +207,7 @@ func runImport(appConfig *config.AppConfig, args []string) error {
 			UUID:        uuid.New().String(),
 			Name:        p.Name,
 			APIBase:     p.APIBase,
-			APIStyle:    typ.APIStyle(p.APIStyle),
+			APIStyle:    protocol.APIStyle(p.APIStyle),
 			AuthType:    typ.AuthType(p.AuthType),
 			Token:       p.Token,
 			OAuthDetail: p.OAuthDetail,

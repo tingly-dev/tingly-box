@@ -1,18 +1,18 @@
 package protocol
 
-// ProviderType represents the AI provider type
-type ProviderType string
+// APIStyle represents the API style/version for a provider
+type APIStyle string
 
 const (
-	ProviderTypeOpenAI    ProviderType = "openai"
-	ProviderTypeAnthropic ProviderType = "anthropic"
-	ProviderTypeGoogle    ProviderType = "google"
+	APIStyleOpenAI    APIStyle = "openai"
+	APIStyleAnthropic APIStyle = "anthropic"
+	APIStyleGoogle    APIStyle = "google"
 )
 
 // Client is the unified interface for AI provider clients
 type Client interface {
-	// ProviderType returns the type of provider this client implements
-	ProviderType() ProviderType
+	// APIStyle returns the type of provider this client implements
+	APIStyle() APIStyle
 
 	// Close closes any resources held by the client
 	Close() error

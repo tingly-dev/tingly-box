@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+	"tingly-box/internal/protocol"
 
 	"tingly-box/internal/typ"
 )
@@ -209,7 +210,7 @@ func TestTemplateManagerGetModelsForProvider(t *testing.T) {
 			provider: &typ.Provider{
 				Name:     "my-minimax",
 				APIBase:  "https://api.minimaxi.com/v1",
-				APIStyle: typ.APIStyleOpenAI,
+				APIStyle: protocol.APIStyleOpenAI,
 			},
 			expectError:    false,
 			expectModels:   true,
@@ -221,7 +222,7 @@ func TestTemplateManagerGetModelsForProvider(t *testing.T) {
 			provider: &typ.Provider{
 				Name:     "my-minimax",
 				APIBase:  "https://api.minimaxi.com/v1",
-				APIStyle: typ.APIStyleOpenAI,
+				APIStyle: protocol.APIStyleOpenAI,
 			},
 			expectError:    false,
 			expectModels:   true,
@@ -233,7 +234,7 @@ func TestTemplateManagerGetModelsForProvider(t *testing.T) {
 			provider: &typ.Provider{
 				Name:     "my-openai",
 				APIBase:  "https://api.openai.com/v1",
-				APIStyle: typ.APIStyleOpenAI,
+				APIStyle: protocol.APIStyleOpenAI,
 			},
 			expectError:    false,
 			expectModels:   false, // Empty models list, but no error

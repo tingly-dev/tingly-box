@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"tingly-box/internal/protocol"
 	"tingly-box/pkg/auth"
 
 	"github.com/spf13/cobra"
@@ -15,7 +16,6 @@ import (
 	"tingly-box/internal/constant"
 	"tingly-box/internal/manager"
 	"tingly-box/internal/obs"
-	"tingly-box/internal/typ"
 )
 
 // ShellCommand represents the interactive CLI command
@@ -166,15 +166,15 @@ func addProviderInteractive(appConfig *config.AppConfig, reader *bufio.Reader, l
 	styleInput, _ := reader.ReadString('\n')
 	styleInput = strings.TrimSpace(strings.TrimSuffix(styleInput, "\n"))
 
-	var apiStyle typ.APIStyle = typ.APIStyleOpenAI
+	var apiStyle protocol.APIStyle = protocol.APIStyleOpenAI
 	switch styleInput {
 	case "2", "anthropic":
-		apiStyle = typ.APIStyleAnthropic
+		apiStyle = protocol.APIStyleAnthropic
 	case "1", "openai", "":
-		apiStyle = typ.APIStyleOpenAI
+		apiStyle = protocol.APIStyleOpenAI
 	default:
 		fmt.Printf("Invalid choice '%s', using default: openai\n", styleInput)
-		apiStyle = typ.APIStyleOpenAI
+		apiStyle = protocol.APIStyleOpenAI
 	}
 
 	if err := appConfig.AddProviderByName(name, apiBase, token); err != nil {

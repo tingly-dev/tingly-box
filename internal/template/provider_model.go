@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 	"tingly-box/internal/constant"
+	"tingly-box/internal/protocol"
 	"tingly-box/internal/protocol/client"
 	"tingly-box/internal/typ"
 	"tingly-box/pkg/oauth"
@@ -19,7 +20,7 @@ func GetProviderModelsFromAPI(provider *typ.Provider) ([]string, error) {
 	// Construct the models endpoint URL
 	// For Anthropic-style providers, ensure they have a version suffix
 	apiBase := strings.TrimSuffix(provider.APIBase, "/")
-	if provider.APIStyle == typ.APIStyleAnthropic {
+	if provider.APIStyle == protocol.APIStyleAnthropic {
 		// Check if already has version suffix like /v1, /v2, etc.
 		matches := strings.Split(apiBase, "/")
 		if len(matches) > 0 {
@@ -46,7 +47,7 @@ func GetProviderModelsFromAPI(provider *typ.Provider) ([]string, error) {
 
 	// Set headers based on provider style and auth type
 	accessToken := provider.GetAccessToken()
-	if provider.APIStyle == typ.APIStyleAnthropic {
+	if provider.APIStyle == protocol.APIStyleAnthropic {
 		// Add OAuth custom headers if applicable
 		if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
 			req.Header.Set("Authorization", "Bearer "+accessToken)
