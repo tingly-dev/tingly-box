@@ -60,7 +60,7 @@ func (c *OpenAIClient) Close() error {
 	// OpenAI client doesn't need explicit closing
 	return nil
 }
-ls
+
 // Client returns the underlying OpenAI SDK client
 func (c *OpenAIClient) Client() *openai.Client {
 	return &c.client
