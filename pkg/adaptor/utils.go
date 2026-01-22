@@ -1,6 +1,8 @@
 package adaptor
 
 import (
+	"tingly-box/pkg/adaptor/stream"
+
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/shared"
@@ -14,7 +16,7 @@ func filterSpecialFields(extras map[string]interface{}) map[string]interface{} {
 	}
 	result := make(map[string]interface{})
 	for k, v := range extras {
-		if k != openaiFieldReasoningContent {
+		if k != stream.openaiFieldReasoningContent {
 			result[k] = v
 		}
 	}

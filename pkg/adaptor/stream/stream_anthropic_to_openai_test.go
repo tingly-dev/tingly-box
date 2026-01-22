@@ -1,4 +1,4 @@
-package adaptor
+package stream
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"tingly-box/pkg/adaptor"
 	"tingly-box/pkg/adaptor/request"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -46,7 +47,7 @@ func TestHandleAnthropicToOpenAIStreamResponse(t *testing.T) {
 		Messages: []anthropic.MessageParam{
 			anthropic.NewUserMessage(anthropic.NewTextBlock("What's the weather like in London?")),
 		},
-		Tools: request.ConvertOpenAIToAnthropicTools([]openai.ChatCompletionToolUnionParam{NewExampleTool()}),
+		Tools: request.ConvertOpenAIToAnthropicTools([]openai.ChatCompletionToolUnionParam{adaptor.NewExampleTool()}),
 	})
 
 	// Create a gin context for the response

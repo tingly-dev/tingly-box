@@ -1,4 +1,4 @@
-package adaptor
+package stream
 
 import (
 	"encoding/json"
@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sort"
 	"time"
+	"tingly-box/pkg/adaptor"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
@@ -171,7 +172,7 @@ func HandleOpenAIToAnthropicV1BetaStreamResponse(c *gin.Context, req *openai.Cha
 
 			// Parse delta raw JSON to get extra fields
 			currentExtras := parseRawJSON(delta.RawJSON())
-			currentExtras = filterSpecialFields(currentExtras)
+			currentExtras = adaptor.filterSpecialFields(currentExtras)
 
 			// Send content_block_delta with actual content
 			deltaMap := map[string]interface{}{
@@ -184,7 +185,7 @@ func HandleOpenAIToAnthropicV1BetaStreamResponse(c *gin.Context, req *openai.Cha
 			// Send empty delta for empty chunks to keep client informed
 			// Only if text block has been initialized
 			currentExtras := parseRawJSON(delta.RawJSON())
-			currentExtras = filterSpecialFields(currentExtras)
+			currentExtras = adaptor.filterSpecialFields(currentExtras)
 
 			deltaMap := map[string]interface{}{
 				"type": deltaTypeTextDelta,

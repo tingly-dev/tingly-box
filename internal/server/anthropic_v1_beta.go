@@ -6,7 +6,6 @@ import (
 	"iter"
 	"net/http"
 	"time"
-	"tingly-box/pkg/adaptor"
 	"tingly-box/pkg/adaptor/request"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -105,7 +104,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req request.AnthropicBe
 			}
 
 			// Handle the streaming response
-			err = adaptor.HandleGoogleToAnthropicBetaStreamResponse(c, stream, proxyModel)
+			err = stream.HandleGoogleToAnthropicBetaStreamResponse(c, stream, proxyModel)
 			if err != nil {
 				SendInternalError(c, err.Error())
 			}
@@ -155,7 +154,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req request.AnthropicBe
 			}
 
 			// Handle the streaming response
-			err = adaptor.HandleOpenAIToAnthropicV1BetaStreamResponse(c, openaiReq, stream, proxyModel)
+			err = stream.HandleOpenAIToAnthropicV1BetaStreamResponse(c, openaiReq, stream, proxyModel)
 			if err != nil {
 				SendInternalError(c, err.Error())
 			}

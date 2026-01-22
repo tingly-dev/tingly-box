@@ -9,6 +9,7 @@ import (
 	"time"
 	"tingly-box/pkg/adaptor/nonstream"
 	"tingly-box/pkg/adaptor/request"
+	"tingly-box/pkg/adaptor/stream"
 
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
@@ -17,7 +18,6 @@ import (
 
 	"tingly-box/internal/loadbalance"
 	"tingly-box/internal/typ"
-	"tingly-box/pkg/adaptor"
 	"tingly-box/pkg/adaptor/extension"
 )
 
@@ -226,7 +226,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 				return
 			}
 
-			inputTokens, outputTokens, err := adaptor.HandleAnthropicToOpenAIStreamResponse(c, &anthropicReq, stream, responseModel)
+			inputTokens, outputTokens, err := stream.HandleAnthropicToOpenAIStreamResponse(c, &anthropicReq, stream, responseModel)
 			if err != nil {
 				// Track usage with error status
 				if inputTokens > 0 || outputTokens > 0 {

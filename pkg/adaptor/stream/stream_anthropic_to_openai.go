@@ -1,4 +1,4 @@
-package adaptor
+package stream
 
 import (
 	"errors"
@@ -50,11 +50,11 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 
 	// Track streaming state
 	var (
-		chatID      = fmt.Sprintf("chatcmpl-%d", time.Now().Unix())
-		created     = time.Now().Unix()
-		contentText = strings.Builder{}
-		usage       *anthropic.MessageDeltaUsage
-		inputTokens int
+		chatID       = fmt.Sprintf("chatcmpl-%d", time.Now().Unix())
+		created      = time.Now().Unix()
+		contentText  = strings.Builder{}
+		usage        *anthropic.MessageDeltaUsage
+		inputTokens  int
 		outputTokens int
 	)
 

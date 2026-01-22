@@ -1,4 +1,4 @@
-package adaptor
+package stream
 
 import (
 	"net/http/httptest"

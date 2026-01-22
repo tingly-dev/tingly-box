@@ -15,7 +15,6 @@ import (
 
 	"tingly-box/internal/loadbalance"
 	"tingly-box/internal/typ"
-	"tingly-box/pkg/adaptor"
 )
 
 // sendSSEvent sends a generic SSE event with JSON data
@@ -117,7 +116,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req request.AnthropicMessag
 			}
 
 			// Handle the streaming response
-			err = adaptor.HandleGoogleToAnthropicStreamResponse(c, stream, proxyModel)
+			err = stream.HandleGoogleToAnthropicStreamResponse(c, stream, proxyModel)
 			if err != nil {
 				SendInternalError(c, err.Error())
 			}
@@ -168,7 +167,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req request.AnthropicMessag
 			}
 
 			// Handle the streaming response
-			err = adaptor.HandleOpenAIToAnthropicStreamResponse(c, openaiReq, stream, proxyModel)
+			err = stream.HandleOpenAIToAnthropicStreamResponse(c, openaiReq, stream, proxyModel)
 			if err != nil {
 				SendInternalError(c, err.Error())
 			}
