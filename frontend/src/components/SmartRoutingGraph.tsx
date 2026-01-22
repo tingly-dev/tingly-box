@@ -2,6 +2,8 @@ import {
     Add as AddIcon,
     ArrowDownward as ArrowDownIcon,
     Info as InfoIcon,
+    Warning as WarningIcon,
+    ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import {
     Box,
@@ -12,11 +14,13 @@ import {
     Stack,
     Tooltip,
     Typography,
+    IconButton,
+    Collapse,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import React from 'react';
 import type { Provider } from '../types/provider';
-import { SmartOpNode, ActionAddNode, SmartDefaultNode, ConnectionLine, ModelNode, NodeContainer, ProviderNode } from '@/components/nodes';
+import { SmartOpNode, ActionAddNode, SmartFallbackNode, ConnectionLine, ModelNode, NodeContainer, ProviderNode } from '@/components/nodes';
 import type { ConfigRecord } from './RoutingGraphTypes.ts';
 
 // Use same style constants as RuleGraph for consistency
@@ -63,8 +67,19 @@ interface SmartRoutingGraphProps {
     onAddSmartRule: () => void;
     onEditSmartRule: (ruleUuid: string) => void;
     onDeleteSmartRule: (ruleUuid: string) => void;
-    onAddServiceToSmartRule: (ruleUuid: string) => void;
+    onAddServiceToSmartRule: (ruleIndex: number) => void;
+    onDeleteServiceFromSmartRule: (ruleUuid: string, serviceUuid: string) => void;
     onAddDefaultProvider?: () => void;
+    onDeleteDefaultProvider?: (providerUuid: string) => void;
+    onProviderNodeClick?: (providerUuid: string) => void;
+    // Additional props matching RoutingGraph
+    saving?: boolean;
+    collapsible?: boolean;
+    allowToggleRule?: boolean;
+    expanded?: boolean;
+    onToggleExpanded?: () => void;
+    extraActions?: React.ReactNode;
+    onUpdateRecord?: (field: keyof ConfigRecord, value: any) => void;
 }
 
 // Styled Card matching RuleGraph style
@@ -79,14 +94,20 @@ const StyledCard = styled(Card, {
     },
 }));
 
-const SummarySection = styled(Box)(({ theme }) => ({
+const SummarySection = styled(Box, {
+    shouldForwardProp: (prop) => prop !== 'collapsible',
+})<{ collapsible?: boolean }>(({ theme, collapsible }) => ({
     display: 'flex',
     flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: `${header.paddingY}px ${header.paddingX}px`,
-    borderBottom: '1px solid',
-    borderBottomColor: 'divider',
+    cursor: collapsible ? 'pointer' : 'default',
+    ...(collapsible && {
+        '&:hover': {
+            backgroundColor: 'action.hover',
+        },
+    }),
 }));
 
 const GraphContainer = styled(Box)(({ theme }) => ({
@@ -98,8 +119,8 @@ const GraphContainer = styled(Box)(({ theme }) => ({
 
 const GraphRow = styled(Box)(({ theme }) => ({
     display: 'flex',
-    alignItems: 'stretch',
-    justifyContent: 'center',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
     gap: graph.rowGap,
     marginBottom: theme.spacing(1),
 }));
@@ -112,9 +133,20 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
     onEditSmartRule,
     onDeleteSmartRule,
     onAddServiceToSmartRule,
+    onDeleteServiceFromSmartRule,
     onAddDefaultProvider,
+    onDeleteDefaultProvider,
+    onProviderNodeClick,
+    saving = false,
+    collapsible = false,
+    allowToggleRule = true,
+    expanded = true,
+    onToggleExpanded,
+    extraActions,
+    onUpdateRecord,
 }) => {
     const smartRouting = record.smartRouting || [];
+    const isExpanded = !collapsible || expanded;
 
     const getApiStyle = (providerUuid: string) => {
         const provider = providers.find(p => p.uuid === providerUuid);
@@ -124,24 +156,67 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
     return (
         <StyledCard active={active}>
             {/* Header Section */}
-            <SummarySection>
+            <SummarySection
+                collapsible={collapsible}
+                onClick={collapsible ? onToggleExpanded : undefined}
+            >
+                {/* Left side */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                        {record.requestModel || 'Unnamed Model'}
-                    </Typography>
-                    <Chip
-                        label="Smart Routing"
-                        size="small"
-                        color="primary"
-                        variant="outlined"
-                        sx={{
-                            opacity: active ? 1 : 0.5,
-                            borderColor: active ? 'primary.main' : 'text.disabled',
-                            minWidth: 90,
-                            fontWeight: 600,
-                            fontSize: '0.75rem',
-                        }}
-                    />
+                    <Tooltip title={record.requestModel
+                        ? `Use "${record.requestModel}" as model name in your API requests. (click to copy)`
+                        : 'No model specified'}>
+                        <Chip
+                            label={`model = ${record.requestModel || 'Unspecified'}`}
+                            size="small"
+                            variant="outlined"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (record.requestModel) {
+                                    void navigator.clipboard.writeText(record.requestModel);
+                                }
+                            }}
+                            sx={{
+                                opacity: active ? 1 : 0.5,
+                                borderColor: active ? 'primary.main' : 'text.disabled',
+                                color: active ? 'primary.main' : 'text.disabled',
+                                minWidth: 150,
+                                fontWeight: 600,
+                                cursor: record.requestModel ? 'pointer' : 'default',
+                                '& .MuiChip-label': {
+                                    fontWeight: 600,
+                                },
+                            }}
+                        />
+                    </Tooltip>
+                    {/* Active/Inactive Toggle */}
+                    <Tooltip title={
+                        saving || !allowToggleRule
+                            ? 'Cannot toggle status while saving'
+                            : active
+                                ? 'Click to deactivate'
+                                : 'Click to activate'
+                    }>
+                        <Chip
+                            label={active ? "Active" : "Inactive"}
+                            size="small"
+                            color={active ? "success" : "default"}
+                            variant={active ? "filled" : "outlined"}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (!saving && allowToggleRule && onUpdateRecord) {
+                                    onUpdateRecord('active', !active);
+                                }
+                            }}
+                            sx={{
+                                opacity: active ? 1 : 0.7,
+                                minWidth: 75,
+                                cursor: (saving || !allowToggleRule) ? 'default' : 'pointer',
+                                '&:hover': (saving || !allowToggleRule) ? {} : {
+                                    opacity: 0.8,
+                                },
+                            }}
+                        />
+                    </Tooltip>
                     <Chip
                         label={`${smartRouting.length} ${smartRouting.length === 1 ? 'Rule' : 'Rules'}`}
                         size="small"
@@ -152,8 +227,73 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                             color: active ? 'inherit' : 'text.disabled',
                         }}
                     />
+                    {active && record.providers.length === 0 && (
+                        <Tooltip title="No fallback providers - please add fallback providers to confirm rule works">
+                            <WarningIcon
+                                sx={{
+                                    fontSize: '1.1rem',
+                                    color: 'warning.main',
+                                    animation: 'pulse 2s ease-in-out infinite',
+                                    '@keyframes pulse': {
+                                        '0%, 100%': { opacity: 1 },
+                                        '50%': { opacity: 0.5 },
+                                    },
+                                }}
+                            />
+                        </Tooltip>
+                    )}
+                </Box>
+                {/* Right side */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Box onClick={(e) => e.stopPropagation()}>{extraActions}</Box>
+                    {record.responseModel && (
+                        <Chip
+                            label={`Response as ${record.responseModel}`}
+                            size="small"
+                            color="info"
+                            onClick={(e) => e.stopPropagation()}
+                            sx={{
+                                opacity: active ? 1 : 0.5,
+                                backgroundColor: active ? 'info.main' : 'action.disabled',
+                                color: active ? 'info.contrastText' : 'text.disabled'
+                            }}
+                        />
+                    )}
+                    {collapsible && onToggleExpanded && (
+                        <IconButton
+                            size="small"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onToggleExpanded();
+                            }}
+                            sx={{
+                                transition: 'transform 0.2s',
+                                transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                            }}
+                        >
+                            <ExpandMoreIcon />
+                        </IconButton>
+                    )}
+                </Box>
+                {/* Description - Full width below */}
+                <Box
+                    onClick={(e) => e.stopPropagation()}
+                    sx={{
+                        width: '100%',
+                        flexBasis: '100%',
+                        mt: 0.5,
+                        minHeight: '18px',
+                    }}
+                >
                     {record.description && (
-                        <Typography variant="body2" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
+                        <Typography
+                            variant="body2"
+                            sx={{
+                                color: 'text.secondary',
+                                fontSize: '0.8rem',
+                                fontStyle: 'italic',
+                            }}
+                        >
                             {record.description}
                         </Typography>
                     )}
@@ -161,49 +301,65 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
             </SummarySection>
 
             {/* Graph Content */}
-            <Box sx={{ overflowX: 'auto' }}>
-                <GraphContainer>
-                    <Stack spacing={1}>
-                        {/* Main layout: Model Node on left, Rules on right */}
-                        <Box sx={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start' }}>
-                        {/* Model Node on the left */}
-                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pr: 1 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: graph.iconGap, mb: graph.labelMargin }}>
-                                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                    Request Model
-                                </Typography>
-                                <Tooltip title="The model name that clients use to make requests.">
-                                    <InfoIcon sx={{ fontSize: '0.9rem', color: 'text.secondary', cursor: 'help' }} />
-                                </Tooltip>
-                            </Box>
-                            <NodeContainer>
-                                <ModelNode
-                                    active={active}
-                                    label="Unspecified"
-                                    value={record.requestModel}
-                                    editable={active}
-                                    onUpdate={(value) => {
-                                        console.log('Update request model:', value);
-                                    }}
-                                />
-                            </NodeContainer>
-                        </Box>
+            <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                <CardContent sx={{ pt: 0, pb: 1 }}>
+                    <Stack spacing={graph.stackSpacing}>
+                        {/* Graph Visualization */}
+                        <Box sx={{ overflowX: 'auto' }}>
+                            <GraphContainer>
+                                <GraphRow>
+                                    {/* Request Model section - label + node + arrow as a unit */}
+                                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pr: 1, mt: -1 }}>
+                                        {/* Request Model Label */}
+                                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: graph.iconGap, mb: graph.labelMargin }}>
+                                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                                Request Model
+                                            </Typography>
+                                            <Tooltip title="The model name that clients use to make requests.">
+                                                <InfoIcon sx={{ fontSize: '0.9rem', color: 'text.secondary', cursor: 'help' }} />
+                                            </Tooltip>
+                                        </Box>
+                                        {/* Node + Arrow as a row */}
+                                        <Box sx={{ display: 'flex', flexDirection: 'row', alignItems: 'center' }}>
+                                            <NodeContainer>
+                                                <ModelNode
+                                                    active={active}
+                                                    label="Unspecified"
+                                                    value={record.requestModel}
+                                                    editable={active}
+                                                    onUpdate={(value) => {
+                                                        console.log('Update request model:', value);
+                                                    }}
+                                                />
+                                            </NodeContainer>
+                                            {/* Arrow to rules section */}
+                                            <ConnectionLine>
+                                                <ArrowDownIcon sx={{ transform: 'rotate(270deg)' }} />
+                                            </ConnectionLine>
+                                        </Box>
+                                    </Box>
 
                         {/* Rules section on the right */}
-                        <Box sx={{ flex: 1, display: 'flex', alignItems:"flex-start", flexDirection: 'column', gap: 1.5, marginLeft: 3 }}>
+                        <Box sx={{ flex: 1, display: 'flex', alignItems:"flex-start", flexDirection: 'column', gap: 1.5 }}>
                             {/* Smart Rules */}
                             {smartRouting.length > 0 ? (
-                                smartRouting.map((rule) => (
+                                smartRouting.map((rule, index) => (
                                     <React.Fragment key={rule.uuid}>
                                         <GraphRow>
                                             {/* Smart Node */}
                                             <NodeContainer>
                                                 <SmartOpNode
                                                     smartRouting={rule}
+                                                    index={index}
                                                     active={active}
-                                                    onEdit={() => onEditSmartRule(rule.uuid)}
-                                                    onDelete={() => onDeleteSmartRule(rule.uuid)}
-                                                    onAddService={() => onAddServiceToSmartRule(rule.uuid)}
+                                                    onEdit={() => {
+                                                        console.log('SmartRoutingGraph: onEdit called for rule:', rule.uuid, rule.description);
+                                                        onEditSmartRule(rule.uuid);
+                                                    }}
+                                                    onDelete={() => {
+                                                        console.log('SmartRoutingGraph: onDelete called for rule:', rule.uuid);
+                                                        onDeleteSmartRule(rule.uuid);
+                                                    }}
                                                 />
                                             </NodeContainer>
 
@@ -223,27 +379,23 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                                             providersData={providers}
                                                             active={active && service.active !== false}
                                                             onDelete={() => {
-                                                                console.log('Delete service:', service.uuid);
+                                                                console.log('SmartRoutingGraph: onDelete clicked for service:', service.uuid, 'rule:', rule.uuid, 'active:', active, 'service.active:', service.active);
+                                                                onDeleteServiceFromSmartRule(rule.uuid, service.uuid);
                                                             }}
-                                                            onRefreshModels={(p) => {
-                                                                console.log('Refresh models:', p.uuid);
-                                                            }}
-                                                            onNodeClick={() => {
-                                                                console.log('Provider node click:', service.uuid);
-                                                            }}
+                                                            onNodeClick={() => onProviderNodeClick?.(service.uuid)}
                                                         />
                                                     ))}
                                                     {/* Add Service Button */}
                                                     <ActionAddNode
                                                         active={active}
-                                                        onAdd={() => onAddServiceToSmartRule(rule.uuid)}
+                                                        onAdd={() => onAddServiceToSmartRule(index)}
                                                         tooltip="Add service to this smart rule"
                                                     />
                                                 </Box>
                                             ) : (
                                                 <ActionAddNode
                                                     active={active}
-                                                    onAdd={() => onAddServiceToSmartRule(rule.uuid)}
+                                                    onAdd={() => onAddServiceToSmartRule(index)}
                                                     tooltip="Add service to this smart rule"
                                                 />
                                             )}
@@ -251,7 +403,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                     </React.Fragment>
                                 ))
                             ) : (
-                                <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center', py: 4 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-start', py: 4 }}>
                                     <Typography variant="body2" color="text.secondary">
                                         No smart rules configured.
                                     </Typography>
@@ -259,7 +411,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                             )}
 
                             {/* Add Smart Rule Button */}
-                            <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'flex-start', py: 1 }}>
                                 <Button
                                     variant="outlined"
                                     startIcon={<AddIcon />}
@@ -278,60 +430,55 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                 </Button>
                             </Box>
 
-                            {/* Default Providers Section */}
-                            {record.providers.length > 0 && (
-                                <GraphRow>
-                                    {/* Default Node */}
-                                    <NodeContainer>
-                                        <SmartDefaultNode
-                                            providersCount={record.providers.length}
-                                            active={active}
-                                            onAddProvider={() => onAddDefaultProvider?.()}
-                                        />
-                                    </NodeContainer>
+                            {/* Default Providers Section - always show even with 0 providers */}
+                            <GraphRow>
+                                {/* Default Node */}
+                                <NodeContainer>
+                                    <SmartFallbackNode
+                                        providersCount={record.providers.length}
+                                        active={active}
+                                        onAddProvider={() => onAddDefaultProvider?.()}
+                                    />
+                                </NodeContainer>
 
-                                    {/* Arrow to providers */}
-                                    <ConnectionLine>
-                                        <ArrowDownIcon sx={{ transform: 'rotate(270deg)' }} />
-                                    </ConnectionLine>
+                                {/* Arrow to providers */}
+                                <ConnectionLine>
+                                    <ArrowDownIcon sx={{ transform: 'rotate(270deg)' }} />
+                                </ConnectionLine>
 
-                                    {/* Default Providers */}
-                                    <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'nowrap', justifyContent: 'flex-start', alignItems: 'center' }}>
-                                        {record.providers.map((provider) => (
-                                            <ProviderNode
-                                                key={provider.uuid}
-                                                provider={provider}
-                                                apiStyle={getApiStyle(provider.provider)}
-                                                providersData={providers}
-                                                active={active && provider.active !== false}
-                                                onDelete={() => {
-                                                    console.log('Delete default provider:', provider.uuid);
-                                                }}
-                                                onRefreshModels={(p) => {
-                                                    console.log('Refresh models:', p.uuid);
-                                                }}
-                                                onNodeClick={() => {
-                                                    console.log('Provider node click:', provider.uuid);
-                                                }}
-                                            />
-                                        ))}
-                                        {/* Add Provider Button */}
-                                        <ActionAddNode
-                                            active={active}
-                                            warning
-                                            onAdd={() => onAddDefaultProvider?.()}
-                                            tooltip="Add default provider"
+                                {/* Default Providers */}
+                                <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'nowrap', justifyContent: 'flex-start', alignItems: 'center' }}>
+                                    {record.providers.map((provider) => (
+                                        <ProviderNode
+                                            key={provider.uuid}
+                                            provider={provider}
+                                            apiStyle={getApiStyle(provider.provider)}
+                                            providersData={providers}
+                                            active={active && provider.active !== false}
+                                            onDelete={() => {
+                                                onDeleteDefaultProvider?.(provider.uuid);
+                                            }}
+                                            onNodeClick={() => onProviderNodeClick?.(provider.uuid)}
                                         />
-                                    </Box>
-                                </GraphRow>
-                            )}
+                                    ))}
+                                    {/* Add Provider Button */}
+                                    <ActionAddNode
+                                        active={active}
+                                        warning={record.providers.length === 0}
+                                        onAdd={() => onAddDefaultProvider?.()}
+                                        tooltip="Add default provider"
+                                    />
+                                </Box>
+                            </GraphRow>
                         </Box>
-                    </Box>
-                </Stack>
-            </GraphContainer>
+                    </GraphRow>
+                </GraphContainer>
             </Box>
-        </StyledCard>
-    );
-};
+        </Stack>
+                    </CardContent>
+                </Collapse>
+            </StyledCard>
+        );
+    };
 
 export default SmartRoutingGraph;

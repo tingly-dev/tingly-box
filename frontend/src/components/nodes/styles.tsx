@@ -12,7 +12,7 @@ export const MODEL_NODE_STYLES = {
 
 // Provider Node dimensions
 export const PROVIDER_NODE_STYLES = {
-    width: 300,
+    width: 220,
     height: 90,
     heightCompact: 60,
     padding: 8,
@@ -24,7 +24,18 @@ export const PROVIDER_NODE_STYLES = {
     elementMargin: 0.5,
 } as const;
 
-export const { modelNode, providerNode } = { modelNode: MODEL_NODE_STYLES, providerNode: PROVIDER_NODE_STYLES };
+// Smart Node dimensions (used by SmartOpNode and SmartFallbackNode)
+export const SMART_NODE_STYLES = {
+    width: 220,
+    height: 90,
+    padding: 8,
+} as const;
+
+export const { modelNode, providerNode, smartNode } = {
+    modelNode: MODEL_NODE_STYLES,
+    providerNode: PROVIDER_NODE_STYLES,
+    smartNode: SMART_NODE_STYLES,
+};
 
 // Container for graph nodes
 export const NodeContainer = styled(Box)(() => ({
@@ -93,3 +104,62 @@ export const StyledModelNode = styled(Box, {
         transform: 'translateY(-2px)',
     }
 }));
+
+// Action button container (shared by SmartOpNode and SmartFallbackNode)
+export const ActionButtonsBox = styled(Box)(({ theme }) => ({
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    display: 'flex',
+    gap: 2,
+    opacity: 0,
+    transition: 'opacity 0.2s',
+}));
+
+// Smart node wrapper (shared by SmartOpNode and SmartFallbackNode)
+export const StyledSmartNodeWrapper = styled(Box)(({ theme }) => ({
+    position: 'relative',
+    '&:hover .action-buttons': {
+        opacity: 1,
+    }
+}));
+
+// Base smart node styles - used to create themed variants
+const baseSmartNodeStyles = ({ active, theme, color }: {
+    active: boolean;
+    theme: any;
+    color: 'primary' | 'warning' | 'secondary' | 'error' | 'info' | 'success';
+}) => ({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: smartNode.padding,
+    borderRadius: theme.shape.borderRadius,
+    border: '1px solid',
+    borderColor: active ? `${color}.main` : 'divider',
+    backgroundColor: active ? `${color}.50` : 'background.paper',
+    textAlign: 'center',
+    width: smartNode.width,
+    height: smartNode.height,
+    boxShadow: theme.shadows[2],
+    transition: 'all 0.2s ease-in-out',
+    position: 'relative' as const,
+    opacity: active ? 1 : 0.6,
+    '&:hover': {
+        borderColor: `${color}.main`,
+        backgroundColor: `${color}.100`,
+        boxShadow: theme.shadows[4],
+        transform: 'translateY(-2px)',
+    }
+});
+
+// Smart node with primary color theme (used by SmartOpNode)
+export const StyledSmartNodePrimary = styled(Box, {
+    shouldForwardProp: (prop) => prop !== 'active',
+})<{ active: boolean }>(({ active, theme }) => baseSmartNodeStyles({ active, theme, color: 'primary' }));
+
+// Smart node with warning color theme (used by SmartFallbackNode)
+export const StyledSmartNodeWarning = styled(Box, {
+    shouldForwardProp: (prop) => prop !== 'active',
+})<{ active: boolean }>(({ active, theme }) => baseSmartNodeStyles({ active, theme, color: 'warning' }));

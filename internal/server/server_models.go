@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	smartrouting "tingly-box/internal/smart_routing"
 	"tingly-box/internal/typ"
 )
 
@@ -240,12 +241,15 @@ type UpdateRuleResponse struct {
 	Success bool   `json:"success" example:"true"`
 	Message string `json:"message" example:"Rule saved successfully"`
 	Data    struct {
-		UUID          string `json:"uuid"`
-		RequestModel  string `json:"request_model" example:"gpt-3.5-turbo"`
-		ResponseModel string `json:"response_model" example:"gpt-3.5-turbo"`
-		Provider      string `json:"provider" example:"openai"`
-		DefaultModel  string `json:"default_model" example:"gpt-3.5-turbo"`
-		Active        bool   `json:"active" example:"true"`
+		UUID          string                      `json:"uuid"`
+		RequestModel  string                      `json:"request_model" example:"gpt-3.5-turbo"`
+		ResponseModel string                      `json:"response_model" example:"gpt-3.5-turbo"`
+		Description   string                      `json:"description" example:"My rule description"`
+		Provider      string                      `json:"provider" example:"openai"`
+		DefaultModel  string                      `json:"default_model" example:"gpt-3.5-turbo"`
+		Active        bool                        `json:"active" example:"true"`
+		SmartEnabled  bool                        `json:"smart_enabled" example:"false"`
+		SmartRouting  []smartrouting.SmartRouting `json:"smart_routing,omitempty"`
 	} `json:"data"`
 }
 

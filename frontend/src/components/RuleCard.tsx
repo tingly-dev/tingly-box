@@ -1,14 +1,15 @@
-import { Delete as DeleteIcon, Download as ExportIcon, PlayArrow as ProbeIcon, Settings as SettingsIcon } from '@mui/icons-material';
-import { Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, IconButton, Menu, MenuItem, Tooltip, Typography } from '@mui/material';
+import { Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Typography } from '@mui/material';
 import React, { useCallback, useState } from 'react';
 import type { ProbeResponse } from '../client';
 import Probe from './ProbeModal.tsx';
 import RoutingGraph from './RoutingGraph';
 import SmartRoutingGraph from './SmartRoutingGraph';
+import SmartRuleEditDialog from './SmartRuleEditDialog';
 import { api } from '../services/api';
 import type { Provider, ProviderModelsDataByUuid } from '../types/provider';
-import type { ConfigRecord, Rule } from './RoutingGraphTypes.ts';
+import type { ConfigRecord, Rule, SmartRouting } from './RoutingGraphTypes.ts';
 import { v4 as uuidv4 } from 'uuid';
+import GraphSettingsMenu from './GraphSettingsMenu';
 
 export interface RuleCardProps {
     rule: Rule;
@@ -56,17 +57,9 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     // Delete confirmation state
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-    // Menu state
-    const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
-    const menuOpen = Boolean(menuAnchorEl);
-
-    const handleMenuOpen = useCallback((event: React.MouseEvent<HTMLElement>) => {
-        setMenuAnchorEl(event.currentTarget);
-    }, []);
-
-    const handleMenuClose = useCallback(() => {
-        setMenuAnchorEl(null);
-    }, []);
+    // Smart rule edit dialog state
+    const [smartRuleDialogOpen, setSmartRuleDialogOpen] = useState(false);
+    const [editingSmartRule, setEditingSmartRule] = useState<SmartRouting | null>(null);
 
     // Convert rule to ConfigRecord format
     React.useEffect(() => {
@@ -82,6 +75,15 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 time_window: service.time_window || 0,
             }));
 
+            // Ensure smartRouting services have uuid
+            const smartRouting = (rule.smart_routing || []).map((routing: any) => ({
+                ...routing,
+                services: (routing.services || []).map((service: any) => ({
+                    ...service,
+                    uuid: service.id || service.uuid || uuidv4(),
+                })),
+            }));
+
             const newConfigRecord: ConfigRecord = {
                 uuid: rule.uuid || uuidv4(),
                 requestModel: rule.request_model || '',
@@ -90,7 +92,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 providers: providersList,
                 description: rule.description,
                 smartEnabled: rule.smart_enabled || false,
-                smartRouting: rule.smart_routing || [],
+                smartRouting: smartRouting,
             };
 
             setConfigRecord(newConfigRecord);
@@ -287,7 +289,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
 
         const newSmartRouting = {
             uuid: crypto.randomUUID(),
-            description: 'New Smart Rule',
+            description: 'Smart Routing',
             ops: [],
             services: [],
         };
@@ -307,9 +309,56 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     }, [configRecord, autoSave]);
 
     const handleEditSmartRule = useCallback(async (ruleUuid: string) => {
-        // TODO: Open smart rule edit dialog
-        showNotification('Smart rule editing not yet implemented', 'info');
-    }, [showNotification]);
+        if (!configRecord) return;
+
+        console.log('Editing smart rule with UUID:', ruleUuid);
+        const smartRule = (configRecord.smartRouting || []).find(r => r.uuid === ruleUuid);
+        if (smartRule) {
+            console.log('Found rule:', smartRule.uuid, smartRule.description);
+            // Create a deep copy to avoid mutating the original object
+            const smartRuleCopy: SmartRouting = JSON.parse(JSON.stringify(smartRule));
+            setEditingSmartRule(smartRuleCopy);
+            setSmartRuleDialogOpen(true);
+        } else {
+            console.error('Rule not found with UUID:', ruleUuid);
+        }
+    }, [configRecord]);
+
+    const handleSaveSmartRule = useCallback(async (updatedRule: SmartRouting) => {
+        if (!configRecord) return;
+
+        console.log('Saving smart rule:', updatedRule.uuid, updatedRule.description);
+        console.log('Existing rules:', configRecord.smartRouting?.map(r => ({ uuid: r.uuid, desc: r.description })));
+
+        const updatedSmartRouting = (configRecord.smartRouting || []).map(r => {
+            const shouldUpdate = r.uuid === updatedRule.uuid;
+            if (shouldUpdate) {
+                console.log('Updating rule:', r.uuid, '->', updatedRule.description);
+            }
+            return shouldUpdate ? updatedRule : r;
+        });
+
+        const updated = {
+            ...configRecord,
+            smartRouting: updatedSmartRouting,
+        };
+
+        const previousRecord = { ...configRecord };
+        setConfigRecord(updated);
+
+        const success = await autoSave(updated);
+        if (!success) {
+            setConfigRecord(previousRecord);
+        } else {
+            setSmartRuleDialogOpen(false);
+            showNotification('Smart rule updated successfully', 'success');
+        }
+    }, [configRecord, autoSave, showNotification]);
+
+    const handleCancelSmartRuleEdit = useCallback(() => {
+        setSmartRuleDialogOpen(false);
+        setEditingSmartRule(null);
+    }, []);
 
     const handleDeleteSmartRule = useCallback(async (ruleUuid: string) => {
         if (!configRecord) return;
@@ -330,10 +379,70 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         }
     }, [configRecord, autoSave, showNotification]);
 
-    const handleAddServiceToSmartRule = useCallback(async (ruleUuid: string) => {
-        // TODO: Open provider/service selection dialog
-        showNotification('Add service to smart rule not yet implemented', 'info');
-    }, [showNotification]);
+    const handleAddServiceToSmartRule = useCallback(async (smartRuleIndex: number) => {
+        if (!configRecord) return;
+
+        // Open the model selection dialog with the smart rule index
+        // We use a special format: "smart:${index}" to indicate this is for a smart rule
+        const smartRuleRef = `smart:${smartRuleIndex}`;
+        onModelSelectOpen(rule.uuid, configRecord, 'add', smartRuleRef);
+    }, [configRecord, rule.uuid, onModelSelectOpen]);
+
+    const handleDeleteServiceFromSmartRule = useCallback(async (ruleUuid: string, serviceUuid: string) => {
+        console.log('handleDeleteServiceFromSmartRule called:', { ruleUuid, serviceUuid });
+        if (!configRecord) {
+            console.log('No configRecord, returning');
+            return;
+        }
+
+        console.log('Current smartRouting:', configRecord.smartRouting);
+        const updatedSmartRouting = (configRecord.smartRouting || []).map(rule => {
+            if (rule.uuid === ruleUuid && rule.services) {
+                console.log('Found rule, filtering services:', rule.services, 'serviceUuid:', serviceUuid);
+                return {
+                    ...rule,
+                    services: rule.services.filter(s => s.uuid !== serviceUuid),
+                };
+            }
+            return rule;
+        });
+        console.log('Updated smartRouting:', updatedSmartRouting);
+
+        const updated = {
+            ...configRecord,
+            smartRouting: updatedSmartRouting,
+        };
+
+        const previousRecord = { ...configRecord };
+        setConfigRecord(updated);
+
+        const success = await autoSave(updated);
+        console.log('autoSave result:', success);
+        if (!success) {
+            setConfigRecord(previousRecord);
+        } else {
+            showNotification('Service deleted successfully', 'success');
+        }
+    }, [configRecord, autoSave, showNotification]);
+
+    const handleDeleteDefaultProvider = useCallback(async (providerUuid: string) => {
+        if (!configRecord) return;
+
+        const updated = {
+            ...configRecord,
+            providers: configRecord.providers.filter(p => p.uuid !== providerUuid),
+        };
+
+        const previousRecord = { ...configRecord };
+        setConfigRecord(updated);
+
+        const success = await autoSave(updated);
+        if (!success) {
+            setConfigRecord(previousRecord);
+        } else {
+            showNotification('Provider deleted successfully', 'success');
+        }
+    }, [configRecord, autoSave, showNotification]);
 
     const handleDeleteButtonClick = useCallback(() => {
         setDeleteDialogOpen(true);
@@ -453,6 +562,20 @@ export const RuleCard: React.FC<RuleCardProps> = ({
 
     const isSmartMode = rule.smart_enabled;
 
+    // Extra actions menu - shared between RoutingGraph and SmartRoutingGraph
+    const extraActions = (
+        <GraphSettingsMenu
+            smartEnabled={isSmartMode}
+            canProbe={!!configRecord.providers[0]?.provider && !!configRecord.providers[0]?.model}
+            isProbing={isProbing}
+            allowDeleteRule={allowDeleteRule}
+            onToggleSmartRouting={() => handleUpdateRecord('smartEnabled', !isSmartMode)}
+            onProbe={handleProbe}
+            onExport={handleExport}
+            onDelete={handleDeleteButtonClick}
+        />
+    );
+
     return (
         <>
             {isSmartMode ? (
@@ -460,11 +583,21 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                         record={configRecord}
                         providers={providers}
                         active={configRecord.active}
-                        onToggleSmartEnabled={(enabled) => handleUpdateRecord('smartEnabled', enabled)}
+                        saving={saving}
+                        collapsible={collapsible}
+                        allowToggleRule={allowToggleRule}
+                        expanded={expanded}
+                        onToggleExpanded={() => setExpanded(!expanded)}
+                        extraActions={extraActions}
+                        onUpdateRecord={handleUpdateRecord}
                         onAddSmartRule={handleAddSmartRule}
                         onEditSmartRule={handleEditSmartRule}
                         onDeleteSmartRule={handleDeleteSmartRule}
                         onAddServiceToSmartRule={handleAddServiceToSmartRule}
+                        onDeleteServiceFromSmartRule={handleDeleteServiceFromSmartRule}
+                        onAddDefaultProvider={handleAddProviderButtonClick}
+                        onDeleteDefaultProvider={handleDeleteDefaultProvider}
+                        onProviderNodeClick={handleProviderNodeClick}
                     />
                 ) : (
                     <RoutingGraph
@@ -477,73 +610,15 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                         allowToggleRule={allowToggleRule}
                         onUpdateRecord={handleUpdateRecord}
                         onDeleteProvider={handleDeleteProvider}
-                        onRefreshModels={handleRefreshModels}
                         onToggleExpanded={() => setExpanded(!expanded)}
                         onProviderNodeClick={handleProviderNodeClick}
                         onAddProviderButtonClick={handleAddProviderButtonClick}
-                        extraActions={
-                        <>
-                            <Tooltip title="Rule actions">
-                                <IconButton
-                                    size="small"
-                                    onClick={handleMenuOpen}
-                                    sx={{
-                                        color: 'text.secondary',
-                                        '&:hover': {
-                                            backgroundColor: 'action.hover',
-                                        },
-                                    }}
-                                >
-                                    <SettingsIcon fontSize="small" />
-                                </IconButton>
-                            </Tooltip>
-                            <Menu
-                                anchorEl={menuAnchorEl}
-                                open={menuOpen}
-                                onClose={handleMenuClose}
-                                anchorOrigin={{
-                                    vertical: 'bottom',
-                                    horizontal: 'right',
-                                }}
-                                transformOrigin={{
-                                    vertical: 'top',
-                                    horizontal: 'right',
-                                }}
-                            >
-                                <MenuItem
-                                    onClick={() => {
-                                        handleMenuClose();
-                                        handleProbe();
-                                    }}
-                                    disabled={!configRecord.providers[0]?.provider || !configRecord.providers[0]?.model || isProbing}
-                                >
-                                    <ProbeIcon fontSize="small" sx={{ mr: 1 }} />
-                                    Test Connection
-                                </MenuItem>
-                                <MenuItem
-                                    onClick={() => {
-                                        handleMenuClose();
-                                        handleExport();
-                                    }}
-                                >
-                                    <ExportIcon fontSize="small" sx={{ mr: 1 }} />
-                                    Export with API Keys
-                                </MenuItem>
-                                {allowDeleteRule && (
-                                    <MenuItem
-                                        onClick={() => {
-                                            handleMenuClose();
-                                            handleDeleteButtonClick();
-                                        }}
-                                        sx={{ color: 'error.main' }}
-                                    >
-                                        <DeleteIcon fontSize="small" sx={{ mr: 1 }} />
-                                        Delete Rule
-                                    </MenuItem>
-                                )}
-                            </Menu>
-                        </>
-                    }
+                        extraActions={extraActions}
+                        onAddSmartRule={handleAddSmartRule}
+                        onEditSmartRule={handleEditSmartRule}
+                        onDeleteSmartRule={handleDeleteSmartRule}
+                        onAddServiceToSmartRule={handleAddServiceToSmartRule}
+                        onDeleteServiceFromSmartRule={handleDeleteServiceFromSmartRule}
                 />
             )}
 
@@ -597,6 +672,14 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                     </Button>
                 </DialogActions>
             </Dialog>
+
+            {/* Smart Rule Edit Dialog */}
+            <SmartRuleEditDialog
+                open={smartRuleDialogOpen}
+                smartRouting={editingSmartRule}
+                onSave={handleSaveSmartRule}
+                onCancel={handleCancelSmartRuleEdit}
+            />
         </>
     );
 };

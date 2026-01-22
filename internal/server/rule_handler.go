@@ -136,9 +136,12 @@ func (s *Server) CreateRule(c *gin.Context) {
 	response.Data.UUID = rule.UUID
 	response.Data.RequestModel = rule.RequestModel
 	response.Data.ResponseModel = rule.ResponseModel
+	response.Data.Description = rule.Description
 	response.Data.Provider = rule.GetDefaultProvider()
 	response.Data.DefaultModel = rule.GetDefaultModel()
 	response.Data.Active = rule.Active
+	response.Data.SmartEnabled = rule.SmartEnabled
+	response.Data.SmartRouting = rule.SmartRouting
 
 	c.JSON(http.StatusOK, response)
 }
@@ -193,11 +196,15 @@ func (s *Server) UpdateRule(c *gin.Context) {
 		Success: true,
 		Message: "Rule saved successfully",
 	}
+	response.Data.UUID = rule.UUID
 	response.Data.RequestModel = rule.RequestModel
 	response.Data.ResponseModel = rule.ResponseModel
+	response.Data.Description = rule.Description
 	response.Data.Provider = rule.GetDefaultProvider()
 	response.Data.DefaultModel = rule.GetDefaultModel()
 	response.Data.Active = rule.Active
+	response.Data.SmartEnabled = rule.SmartEnabled
+	response.Data.SmartRouting = rule.SmartRouting
 
 	c.JSON(http.StatusOK, response)
 }

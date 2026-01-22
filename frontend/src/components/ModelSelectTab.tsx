@@ -337,7 +337,9 @@ export default function ModelSelectTab({
             // Mark as initialized to prevent further automatic switching
             setIsInitialized(true);
         }
-    }, [isInitialized, selectedProvider, selectedModel, flattenedProviders, providerModels, externalActiveTab, customModels, gridLayout.modelsPerPage, onProviderChange]);
+        // Note: We intentionally exclude providerModels from dependencies to avoid re-triggering
+        // when models are fetched after user manually switches tabs
+    }, [isInitialized, selectedProvider, selectedModel, flattenedProviders, externalActiveTab, customModels, gridLayout.modelsPerPage, onProviderChange]);
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'row', height: '100%', width: '100%' }}>

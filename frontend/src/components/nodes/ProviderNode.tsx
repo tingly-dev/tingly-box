@@ -1,7 +1,5 @@
 import {
-    Delete as DeleteIcon,
-    MoreVert as MoreIcon,
-    Refresh as RefreshIcon
+    Delete as DeleteIcon
 } from '@mui/icons-material';
 import {
     Box,
@@ -14,12 +12,31 @@ import {
     Tooltip,
     Typography
 } from '@mui/material';
+import { styled } from '@mui/material/styles';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Provider } from '../../types/provider.ts';
 import { ApiStyleBadge } from '../ApiStyleBadge.tsx';
 import type { ConfigProvider } from '../RoutingGraphTypes.ts';
 import { ProviderNodeContainer, providerNode } from './styles.tsx';
+
+// Action button container
+const ActionButtonsBox = styled(Box)(({ theme }) => ({
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    display: 'flex',
+    gap: 2,
+    opacity: 0,
+    transition: 'opacity 0.2s',
+}));
+
+const ProviderNodeWrapper = styled(Box)(({ theme }) => ({
+    position: 'relative',
+    '&:hover .action-buttons': {
+        opacity: 1,
+    }
+}));
 
 // Helper function to get provider name from providersData
 const getProviderName = (providerUuid: string, providersData: Provider[]): string => {
@@ -34,7 +51,6 @@ export interface ProviderNodeComponentProps {
     providersData: Provider[];
     active: boolean;
     onDelete: () => void;
-    onRefreshModels: (provider: Provider) => void;
     onNodeClick: () => void;
 }
 
@@ -45,7 +61,6 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
     providersData,
     active,
     onDelete,
-    onRefreshModels,
     onNodeClick
 }) => {
     const { t } = useTranslation();
@@ -53,30 +68,44 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
     const menuOpen = Boolean(anchorEl);
 
     const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
+        console.log('ProviderNode handleMenuClick, active:', active);
         event.stopPropagation();
         setAnchorEl(event.currentTarget);
     };
 
     const handleMenuClose = () => {
+        console.log('ProviderNode handleMenuClose');
         setAnchorEl(null);
     };
 
-    const handleRefresh = (p: Provider) => {
-        handleMenuClose();
-        onRefreshModels(p);
-    };
-
     const handleDelete = () => {
+        console.log('ProviderNode handleDelete');
         handleMenuClose();
         onDelete();
     };
 
-    // Get current provider object for display
-    const currentProvider = providersData.find(p => p.uuid === provider.provider);
     const providerName = getProviderName(provider.provider, providersData);
 
     return (
-        <>
+        <ProviderNodeWrapper>
+            <Menu
+                anchorEl={anchorEl}
+                open={menuOpen}
+                onClose={handleMenuClose}
+                onClick={(e) => e.stopPropagation()}
+                transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+                anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+            >
+                <MenuItem onClick={handleDelete}>
+                    <ListItemIcon>
+                        <DeleteIcon color="error" />
+                    </ListItemIcon>
+                    <ListItemText sx={{ color: 'error.main' }}>{t('rule.menu.deleteProvider')}</ListItemText>
+                </MenuItem>
+                <MenuItem onClick={handleMenuClose} sx={{ color: 'text.secondary' }}>
+                    <ListItemText>Cancel</ListItemText>
+                </MenuItem>
+            </Menu>
             <ProviderNodeContainer onClick={onNodeClick} sx={{ cursor: active ? 'pointer' : 'default' }}>
                 {/* API Style Title */}
                 {provider.provider && (
@@ -97,7 +126,7 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                     </Box>
                 )}
 
-                {/* Combined Provider/Model Field with menu button inside */}
+                {/* Combined Provider/Model Field */}
                 <Box sx={{ width: '100%', mb: providerNode.elementMargin }}>
                     <Box
                         sx={{
@@ -154,55 +183,22 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                                 )}
                             </Box>
                         </Tooltip>
-
-                        <IconButton
-                            size="small"
-                            onClick={handleMenuClick}
-                            sx={{
-                                opacity: 0.6,
-                                color: 'text.primary',
-                                ml: 0.5,
-                                '&:hover': {
-                                    opacity: 1,
-                                    backgroundColor: 'primary.main'
-                                }
-                            }}
-                        >
-                            <MoreIcon />
-                        </IconButton>
                     </Box>
                 </Box>
 
-
-
-                {/* Action Menu */}
-                <Menu
-                    anchorEl={anchorEl}
-                    open={menuOpen}
-                    onClose={handleMenuClose}
-                    onClick={(e) => e.stopPropagation()}
-                    transformOrigin={{ horizontal: 'right', vertical: 'top' }}
-                    anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
-                >
-                    {currentProvider && (
-                        <MenuItem onClick={() => {
-                            handleMenuClose();
-                            handleRefresh(currentProvider);
-                        }} disabled={!provider.provider || !active}>
-                            <ListItemIcon>
-                                <RefreshIcon />
-                            </ListItemIcon>
-                            <ListItemText>{t('rule.menu.refreshModels')}</ListItemText>
-                        </MenuItem>
-                    )}
-                    <MenuItem onClick={handleDelete} disabled={!active}>
-                        <ListItemIcon>
-                            <DeleteIcon color="error" />
-                        </ListItemIcon>
-                        <ListItemText sx={{ color: 'error.main' }}>{t('rule.menu.deleteProvider')}</ListItemText>
-                    </MenuItem>
-                </Menu>
+                {/* Action Buttons - visible on hover */}
+                <ActionButtonsBox className="action-buttons">
+                    <Tooltip title={t('rule.menu.deleteProvider')}>
+                        <IconButton
+                            size="small"
+                            onClick={handleMenuClick}
+                            sx={{ p: 0.5, backgroundColor: 'background.paper' }}
+                        >
+                            <DeleteIcon sx={{ fontSize: '1rem', color: 'error.main' }} />
+                        </IconButton>
+                    </Tooltip>
+                </ActionButtonsBox>
             </ProviderNodeContainer>
-        </>
+        </ProviderNodeWrapper>
     );
 };

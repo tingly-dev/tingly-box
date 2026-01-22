@@ -20,6 +20,7 @@ import {
     Typography,
     Alert,
     Snackbar,
+    Switch,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import React, { useState } from 'react';
@@ -92,7 +93,6 @@ interface RuleGraphProps {
     recordUuid: string;
     onUpdateRecord: (field: keyof ConfigRecord, value: any) => void;
     onDeleteProvider: (recordId: string, providerId: string) => void;
-    onRefreshModels: (providerUuid: string) => void;
     onToggleExpanded: () => void;
     onProviderNodeClick: (providerUuid: string) => void;
     onAddProviderButtonClick: () => void;
@@ -102,6 +102,7 @@ interface RuleGraphProps {
     onEditSmartRule?: (ruleUuid: string) => void;
     onDeleteSmartRule?: (ruleUuid: string) => void;
     onAddServiceToSmartRule?: (ruleUuid: string) => void;
+    onDeleteServiceFromSmartRule?: (ruleUuid: string, serviceUuid: string) => void;
 }
 
 const StyledCard = styled(Card, {
@@ -141,8 +142,8 @@ const GraphContainer = styled(Box)(({ theme }) => ({
 
 const GraphRow = styled(Box)(({ theme }) => ({
     display: 'flex',
-    alignItems: 'stretch',  // Changed from 'center' to 'stretch' for better alignment
-    justifyContent: 'center',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
     gap: graph.rowGap,
     marginBottom: theme.spacing(1),
 }));
@@ -158,7 +159,6 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
     recordUuid,
     onUpdateRecord,
     onDeleteProvider,
-    onRefreshModels,
     onToggleExpanded,
     onProviderNodeClick,
     onAddProviderButtonClick,
@@ -168,6 +168,7 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
     onEditSmartRule,
     onDeleteSmartRule,
     onAddServiceToSmartRule,
+    onDeleteServiceFromSmartRule,
 }) => {
     const { t } = useTranslation();
 
@@ -289,20 +290,6 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                             />
                         </Tooltip>
                     )}
-                    {/* Smart Routing Toggle */}
-                    {/*<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>*/}
-                    {/*    <Typography variant="body2" sx={{ fontSize: '0.85rem', color: 'text.secondary' }}>*/}
-                    {/*        Smart*/}
-                    {/*    </Typography>*/}
-                    {/*    <Switch*/}
-                    {/*        checked={smartEnabled}*/}
-                    {/*        onChange={(e) => onUpdateRecord('smartEnabled', e.target.checked)}*/}
-                    {/*        disabled={saving || !record.active}*/}
-                    {/*        size="small"*/}
-                    {/*        color="primary"*/}
-                    {/*        onClick={(e) => e.stopPropagation()}*/}
-                    {/*    />*/}
-                    {/*</Box>*/}
                 </Box>
                 {/* Right side */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -366,71 +353,86 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                         <Box sx={{ overflowX: 'auto' }}>
                             <GraphContainer>
                                 <GraphRow>
-                                {/* Model Node(s) Container */}
-                                <NodeContainer>
-                                    {record.responseModel ? (
-                                        // Split display when response model is configured
-                                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: graph.modelGap }}>
-                                            {/* Request Model Card */}
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: graph.wrapperGap }}>
-                                                <Box sx={{ flex: 1 }}>
-                                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: graph.iconGap, mb: graph.labelMargin }}>
-                                                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                                            Request Model
-                                                        </Typography>
-                                                        <Tooltip title="The model name that clients use to make requests. This will be matched against incoming API calls.">
-                                                            <InfoIcon sx={{ fontSize: '0.9rem', color: 'text.secondary', cursor: 'help' }} />
-                                                        </Tooltip>
+                                {/* Request Model section - label + node + arrow as a unit */}
+                                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pr: 1, mt: -1 }}>
+                                    {/* Request Model Label */}
+                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: graph.iconGap, mb: graph.labelMargin }}>
+                                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                            Request Model
+                                        </Typography>
+                                        <Tooltip title="The model name that clients use to make requests. This will be matched against incoming API calls.">
+                                            <InfoIcon sx={{ fontSize: '0.9rem', color: 'text.secondary', cursor: 'help' }} />
+                                        </Tooltip>
+                                    </Box>
+                                    {/* Node + Arrow as a row */}
+                                    <Box sx={{ display: 'flex', flexDirection: 'row', alignItems: 'center' }}>
+                                        <NodeContainer>
+                                            {record.responseModel ? (
+                                                // Split display when response model is configured
+                                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: graph.modelGap }}>
+                                                    {/* Request Model Card */}
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: graph.wrapperGap }}>
+                                                        <Box sx={{ flex: 1 }}>
+                                                            <ModelNode
+                                                                active={record.active}
+                                                                label="Unspecified"
+                                                                value={record.requestModel}
+                                                                editable={record.active}
+                                                                onUpdate={(value) => onUpdateRecord('requestModel', value)}
+                                                                compact={true}
+                                                            />
+                                                        </Box>
                                                     </Box>
-                                                    <ModelNode
-                                                        active={record.active}
-                                                        label="Unspecified"
-                                                        value={record.requestModel}
-                                                        editable={record.active}
-                                                        onUpdate={(value) => onUpdateRecord('requestModel', value)}
-                                                        compact={true}
-                                                    />
-                                                </Box>
-                                            </Box>
 
-                                            {/* Response Model Card */}
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: graph.wrapperGap }}>
-                                                <Box sx={{ flex: 1 }}>
-                                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: graph.iconGap, mb: graph.labelMargin }}>
-                                                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                                            Response Model
-                                                        </Typography>
-                                                        <Tooltip title="The model name returned to clients. Responses from upstream providers will be transformed to show this model name instead.">
-                                                            <InfoIcon sx={{ fontSize: '0.9rem', color: 'text.secondary', cursor: 'help' }} />
-                                                        </Tooltip>
+                                                    {/* Response Model Card */}
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: graph.wrapperGap }}>
+                                                        <Box sx={{ flex: 1 }}>
+                                                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: graph.iconGap, mb: graph.labelMargin }}>
+                                                                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                                                    Response Model
+                                                                </Typography>
+                                                                <Tooltip title="The model name returned to clients. Responses from upstream providers will be transformed to show this model name instead.">
+                                                                    <InfoIcon sx={{ fontSize: '0.9rem', color: 'text.secondary', cursor: 'help' }} />
+                                                                </Tooltip>
+                                                            </Box>
+                                                            <ModelNode
+                                                                active={record.active}
+                                                                label=""
+                                                                value={record.responseModel}
+                                                                editable={true}
+                                                                onUpdate={(value) => onUpdateRecord('responseModel', value)}
+                                                                compact={true}
+                                                            />
+                                                        </Box>
                                                     </Box>
-                                                    <ModelNode
-                                                        active={record.active}
-                                                        label=""
-                                                        value={record.responseModel}
-                                                        editable={true}
-                                                        onUpdate={(value) => onUpdateRecord('responseModel', value)}
-                                                        compact={true}
-                                                    />
                                                 </Box>
-                                            </Box>
-                                        </Box>
-                                    ) : (
-                                        // Single display when no response model
-                                        <Box>
-                                            <Typography variant="caption" sx={{ color: 'text.secondary', mb: graph.labelMargin, textAlign: 'center', display: 'block' }}>
-                                                Request Model
-                                            </Typography>
-                                            <ModelNode
-                                                active={record.active}
-                                                label="Unspecified"
-                                                value={record.requestModel}
-                                                editable={record.active}
-                                                onUpdate={(value) => onUpdateRecord('requestModel', value)}
-                                            />
-                                        </Box>
-                                    )}
-                                </NodeContainer>
+                                            ) : (
+                                                // Single display when no response model
+                                                <ModelNode
+                                                    active={record.active}
+                                                    label="Unspecified"
+                                                    value={record.requestModel}
+                                                    editable={record.active}
+                                                    onUpdate={(value) => onUpdateRecord('requestModel', value)}
+                                                />
+                                            )}
+                                        </NodeContainer>
+
+                                        {/* Arrow to providers */}
+                                        <ConnectionLine>
+                                            {record.responseModel ? (
+                                                // When response model exists: show two rotated arrows
+                                                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                                                    <ArrowForwardIcon sx={{ transform: 'rotate(45deg)' }} />
+                                                    <ArrowBackIcon sx={{ transform: 'rotate(-45deg)' }} />
+                                                </Box>
+                                            ) : (
+                                                // When no response model: show only forward arrow
+                                                <ArrowForwardIcon />
+                                            )}
+                                        </ConnectionLine>
+                                    </Box>
+                                </Box>
 
                             {/* Smart Rules Section - Vertical layout between model and providers */}
                             {smartEnabled && hasSmartRules ? (
@@ -475,8 +477,7 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                                                                     apiStyle={getApiStyle(service.provider)}
                                                                     providersData={providers as Provider[]}
                                                                     active={record.active && service.active !== false}
-                                                                    onDelete={() => onDeleteProvider(recordUuid, service.uuid)}
-                                                                    onRefreshModels={(p) => onRefreshModels(p.uuid)}
+                                                                    onDelete={() => onDeleteServiceFromSmartRule?.(rule.uuid, service.uuid)}
                                                                     onNodeClick={() => onProviderNodeClick(service.uuid)}
                                                                 />
                                                             ))}
@@ -523,7 +524,7 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                                                         </Box>
                                                     </Box>
                                                 ) : (
-                                                    <Box sx={{ textAlign: 'center', py: 2 }}>
+                                                    <Box sx={{ textAlign: 'left', py: 2 }}>
                                                         <Typography variant="body2" color="text.secondary" gutterBottom>
                                                             No services for this rule
                                                         </Typography>
@@ -561,7 +562,7 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                                         ))}
 
                                         {/* Add Smart Rule Button */}
-                                        <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}>
+                                        <Box sx={{ display: 'flex', justifyContent: 'flex-start', py: 1 }}>
                                             <Button
                                                 variant="outlined"
                                                 startIcon={<AddIcon />}
@@ -595,23 +596,7 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                                         </ConnectionLine>
                                     )}
                                 </>
-                            ) : (
-                                // Normal mode: Arrow from model(s) to providers (always show arrow for consistency)
-                                <>
-                                    <ConnectionLine>
-                                        {record.responseModel ? (
-                                            // When response model exists: show two rotated arrows
-                                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                                                <ArrowForwardIcon sx={{ transform: 'rotate(45deg)' }} />
-                                                <ArrowBackIcon sx={{ transform: 'rotate(-45deg)' }} />
-                                            </Box>
-                                        ) : (
-                                            // When no response model: show only forward arrow
-                                            <ArrowForwardIcon />
-                                        )}
-                                    </ConnectionLine>
-                                </>
-                            )}
+                            ):<></>}
 
                                 {/* Providers Container - Default providers for normal mode or fallback for smart routing */}
                                 <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -630,7 +615,6 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                                                 providersData={providers as Provider[]}
                                                 active={record.active && provider.active !== false}
                                                 onDelete={() => onDeleteProvider(recordUuid, provider.uuid)}
-                                                onRefreshModels={(p) => onRefreshModels(p.uuid)}
                                                 onNodeClick={() => onProviderNodeClick(provider.uuid)}
                                             />
                                         ))}
