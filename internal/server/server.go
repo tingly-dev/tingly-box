@@ -397,6 +397,18 @@ func (s *Server) UseAIEndpoints() {
 	anthropicV1 := s.engine.Group("/anthropic/v1")
 	s.SetupAnthropicEndpoints(anthropicV1)
 
+	// Passthrough endpoints (no request/response transformation, just model replacement)
+	// Non-versioned passthrough routes
+	passthroughOpenai := s.engine.Group("/passthrough/openai")
+	s.SetupPassthroughOpenAIEndpoints(passthroughOpenai)
+
+	passthroughAnthropic := s.engine.Group("/passthrough/anthropic")
+	s.SetupPassthroughAnthropicEndpoints(passthroughAnthropic)
+
+	// Versioned passthrough routes
+	passthroughOpenaiV1 := s.engine.Group("/passthrough/openai/v1")
+	s.SetupPassthroughOpenAIEndpoints(passthroughOpenaiV1)
+
 	// scenario
 	scenario := s.engine.Group("/tingly/:scenario")
 	s.SetupMixinEndpoints(scenario)
@@ -440,6 +452,28 @@ func (s *Server) SetupAnthropicEndpoints(group *gin.RouterGroup) {
 	// Count tokens endpoint (Anthropic compatible)
 	group.POST("/messages/count_tokens", s.authMW.ModelAuthMiddleware(), s.AnthropicCountTokens)
 	// Models endpoint (Anthropic compatible)
+	group.GET("/models", s.authMW.ModelAuthMiddleware(), s.AnthropicListModels)
+}
+
+// SetupPassthroughOpenAIEndpoints sets up pass-through endpoints for OpenAI-style requests
+// These endpoints bypass request/response transformations and only replace the model name
+func (s *Server) SetupPassthroughOpenAIEndpoints(group *gin.RouterGroup) {
+	// POST endpoints that use passthrough (proxy with model replacement)
+	group.POST("/chat/completions", s.authMW.ModelAuthMiddleware(), s.PassthroughOpenAI)
+	group.POST("/responses", s.authMW.ModelAuthMiddleware(), s.PassthroughOpenAI)
+	// GET responses/:id also uses passthrough
+	group.GET("/responses/*path", s.authMW.ModelAuthMiddleware(), s.PassthroughOpenAI)
+	// Models endpoint returns tingly-box's model list (not passthrough)
+	group.GET("/models", s.authMW.ModelAuthMiddleware(), s.OpenAIListModels)
+}
+
+// SetupPassthroughAnthropicEndpoints sets up pass-through endpoints for Anthropic-style requests
+// These endpoints bypass request/response transformations and only replace the model name
+func (s *Server) SetupPassthroughAnthropicEndpoints(group *gin.RouterGroup) {
+	// POST endpoints that use passthrough (proxy with model replacement)
+	group.POST("/messages", s.authMW.ModelAuthMiddleware(), s.PassthroughAnthropic)
+	group.POST("/messages/count_tokens", s.authMW.ModelAuthMiddleware(), s.PassthroughAnthropic)
+	// Models endpoint returns tingly-box's model list (not passthrough)
 	group.GET("/models", s.authMW.ModelAuthMiddleware(), s.AnthropicListModels)
 }
 

@@ -97,6 +97,13 @@ func HandleOpenAIToAnthropicV1BetaStreamResponse(c *gin.Context, req *openai.Cha
 
 		delta := choice.Delta
 
+		// Check for server_tool_use at chunk level (not delta level)
+		if chunk.JSON.ExtraFields != nil {
+			if serverToolUse, exists := chunk.JSON.ExtraFields["server_tool_use"]; exists && serverToolUse.Valid() {
+				state.deltaExtras["server_tool_use"] = serverToolUse.Raw()
+			}
+		}
+
 		// Collect extra fields from this delta (for final message_delta)
 		// Handle special fields that need dedicated content blocks
 		if extras := parseRawJSON(delta.RawJSON()); extras != nil {
