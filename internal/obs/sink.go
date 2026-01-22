@@ -1,4 +1,4 @@
-package record
+package obs
 
 import (
 	"encoding/json"
@@ -48,8 +48,8 @@ type RecordResponse struct {
 	Headers    map[string]string      `json:"headers"`
 	Body       map[string]interface{} `json:"body,omitempty"`
 	// Streaming support
-	IsStreaming      bool   `json:"is_streaming,omitempty"`
-	StreamedContent  string `json:"streamed_content,omitempty"`
+	IsStreaming     bool   `json:"is_streaming,omitempty"`
+	StreamedContent string `json:"streamed_content,omitempty"`
 }
 
 // Sink manages recording of HTTP requests/responses to JSONL files

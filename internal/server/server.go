@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"time"
-	"tingly-box/pkg/adaptor/client"
+	"tingly-box/internal/protocol/client"
 	"tingly-box/pkg/auth"
 
 	"github.com/gin-gonic/gin"
@@ -18,7 +18,6 @@ import (
 	"tingly-box/internal/config/template"
 	"tingly-box/internal/constant"
 	"tingly-box/internal/obs"
-	"tingly-box/internal/record"
 	"tingly-box/internal/server/background"
 	"tingly-box/internal/server/config"
 	"tingly-box/internal/server/middleware"
@@ -69,7 +68,7 @@ type Server struct {
 	httpsRegenerate bool
 
 	// record options
-	recordMode record.RecordMode
+	recordMode obs.RecordMode
 	recordDir  string
 
 	// experimental features
@@ -147,7 +146,7 @@ func WithHTTPSRegenerate(regenerate bool) ServerOption {
 
 // WithRecordMode sets the record mode for request/response recording
 // mode: empty string = disabled, "all" = record all, "response" = response only
-func WithRecordMode(mode record.RecordMode) ServerOption {
+func WithRecordMode(mode obs.RecordMode) ServerOption {
 	return func(s *Server) {
 		s.recordMode = mode
 	}
@@ -256,7 +255,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 
 	// Initialize record sink if recording is enabled
 	if server.recordMode != "" {
-		recordSink := record.NewSink(server.recordDir, server.recordMode)
+		recordSink := obs.NewSink(server.recordDir, server.recordMode)
 		server.clientPool.SetRecordSink(recordSink)
 		log.Printf("Request recording enabled, mode: %s, directory: %s", server.recordMode, server.recordDir)
 	}

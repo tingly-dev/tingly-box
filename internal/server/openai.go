@@ -7,11 +7,12 @@ import (
 	"net/http"
 	"strings"
 	"time"
-	"tingly-box/pkg/adaptor"
-	"tingly-box/pkg/adaptor/nonstream"
-	"tingly-box/pkg/adaptor/request"
-	"tingly-box/pkg/adaptor/stream"
-	"tingly-box/pkg/adaptor/token"
+	"tingly-box/internal/protocol"
+	"tingly-box/internal/protocol/extension"
+	"tingly-box/internal/protocol/nonstream"
+	"tingly-box/internal/protocol/request"
+	"tingly-box/internal/protocol/stream"
+	"tingly-box/internal/protocol/token"
 
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
@@ -20,7 +21,6 @@ import (
 
 	"tingly-box/internal/loadbalance"
 	"tingly-box/internal/typ"
-	"tingly-box/pkg/adaptor/extension"
 )
 
 // OpenAIListModels handles the /v1/models endpoint (OpenAI compatible)
@@ -97,7 +97,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 	}
 
 	// Parse OpenAI-style request
-	var req adaptor.OpenAIChatCompletionRequest
+	var req protocol.OpenAIChatCompletionRequest
 	if err := json.Unmarshal(bodyBytes, &req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{

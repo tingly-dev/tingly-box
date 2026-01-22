@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
-	"tingly-box/pkg/adaptor"
+	"tingly-box/internal/protocol"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
@@ -55,8 +55,8 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		c.Request.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
 	}
 
-	var betaMessages adaptor.AnthropicBetaMessagesRequest
-	var messages adaptor.AnthropicMessagesRequest
+	var betaMessages protocol.AnthropicBetaMessagesRequest
+	var messages protocol.AnthropicMessagesRequest
 	var model string
 	if beta {
 		if err := json.Unmarshal(bodyBytes, &betaMessages); err != nil {

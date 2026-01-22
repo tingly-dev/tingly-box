@@ -3,6 +3,7 @@ package request
 import (
 	"encoding/json"
 	"strings"
+	"tingly-box/internal/protocol/extension"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
@@ -10,7 +11,6 @@ import (
 	"github.com/openai/openai-go/v3/shared"
 
 	"tingly-box/internal/typ"
-	"tingly-box/pkg/adaptor/extension"
 )
 
 type handler func(map[string]interface{}) map[string]interface{}

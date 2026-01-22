@@ -8,6 +8,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"tingly-box/internal/obs"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -15,7 +16,6 @@ import (
 	"tingly-box/internal/config"
 	"tingly-box/internal/feature"
 	"tingly-box/internal/manager"
-	"tingly-box/internal/record"
 	"tingly-box/internal/server"
 	serverconfig "tingly-box/internal/server/config"
 	"tingly-box/internal/util/daemon"
@@ -335,7 +335,7 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 		manager.WithHTTPSEnabled(opts.HTTPS.Enabled),
 		manager.WithHTTPSCertDir(opts.HTTPS.CertDir),
 		manager.WithHTTPSRegenerate(opts.HTTPS.Regenerate),
-		manager.WithRecordMode(record.RecordMode(opts.RecordMode)),
+		manager.WithRecordMode(obs.RecordMode(opts.RecordMode)),
 		manager.WithRecordDir(opts.RecordDir),
 		manager.WithExperimentalFeatures(opts.ExperimentalFeatures),
 	)

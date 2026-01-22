@@ -3,13 +3,13 @@ package client
 import (
 	"context"
 	"net/http"
+	"tingly-box/internal/obs"
 
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/sirupsen/logrus"
 
-	"tingly-box/internal/record"
 	"tingly-box/internal/typ"
 )
 
@@ -19,7 +19,7 @@ type OpenAIClient struct {
 	provider   *typ.Provider
 	debugMode  bool
 	httpClient *http.Client
-	recordSink *record.Sink
+	recordSink *obs.Sink
 }
 
 // defaultNewOpenAIClient creates a new OpenAI client wrapper
@@ -81,7 +81,7 @@ func (c *OpenAIClient) ChatCompletionsNewStreaming(ctx context.Context, req open
 }
 
 // SetRecordSink sets the record sink for the client
-func (c *OpenAIClient) SetRecordSink(sink *record.Sink) {
+func (c *OpenAIClient) SetRecordSink(sink *obs.Sink) {
 	c.recordSink = sink
 	if sink != nil && sink.IsEnabled() {
 		c.applyRecordMode()

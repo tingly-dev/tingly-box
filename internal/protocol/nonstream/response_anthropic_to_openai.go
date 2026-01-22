@@ -3,11 +3,11 @@ package nonstream
 import (
 	"encoding/json"
 	"time"
+	"tingly-box/internal/protocol/extension"
 
 	"github.com/anthropics/anthropic-sdk-go"
 
 	"tingly-box/internal/typ"
-	"tingly-box/pkg/adaptor/extension"
 )
 
 // ConvertAnthropicToOpenAIResponse converts an Anthropic response to OpenAI format

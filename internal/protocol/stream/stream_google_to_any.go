@@ -7,7 +7,7 @@ import (
 	"iter"
 	"net/http"
 	"time"
-	"tingly-box/pkg/adaptor/nonstream"
+	"tingly-box/internal/protocol/nonstream"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"

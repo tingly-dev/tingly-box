@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"tingly-box/pkg/adaptor/request"
+	"tingly-box/internal/protocol/request"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"

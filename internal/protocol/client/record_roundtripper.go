@@ -8,20 +8,19 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"tingly-box/internal/record"
+	"tingly-box/internal/obs"
 )
 
 // RecordRoundTripper is an http.RoundTripper that records requests and responses
 type RecordRoundTripper struct {
 	transport  http.RoundTripper
-	recordSink *record.Sink
+	recordSink *obs.Sink
 	provider   string
 	model      string
 }
 
 // NewRecordRoundTripper creates a new record round tripper
-func NewRecordRoundTripper(transport http.RoundTripper, recordSink *record.Sink, provider, model string) *RecordRoundTripper {
+func NewRecordRoundTripper(transport http.RoundTripper, recordSink *obs.Sink, provider, model string) *RecordRoundTripper {
 	if transport == nil {
 		transport = http.DefaultTransport
 	}
@@ -38,7 +37,7 @@ func (r *RecordRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	startTime := time.Now()
 
 	// Prepare request record
-	reqRecord := &record.RecordRequest{
+	reqRecord := &obs.RecordRequest{
 		Method:  req.Method,
 		URL:     req.URL.String(),
 		Headers: headerToMap(req.Header),
@@ -65,9 +64,9 @@ func (r *RecordRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	resp, err := r.transport.RoundTrip(req)
 	duration := time.Since(startTime)
 
-	var respRecord *record.RecordResponse
+	var respRecord *obs.RecordResponse
 	if resp != nil {
-		respRecord = &record.RecordResponse{
+		respRecord = &obs.RecordResponse{
 			StatusCode: resp.StatusCode,
 			Headers:    headerToMap(resp.Header),
 		}

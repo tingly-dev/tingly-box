@@ -3,8 +3,8 @@ package test
 import (
 	"encoding/json"
 	"testing"
-	"tingly-box/pkg/adaptor/nonstream"
-	"tingly-box/pkg/adaptor/request"
+	"tingly-box/internal/protocol/nonstream"
+	"tingly-box/internal/protocol/request"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"

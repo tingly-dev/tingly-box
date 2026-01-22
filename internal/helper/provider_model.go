@@ -8,9 +8,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
-	"tingly-box/pkg/adaptor/client"
-
 	"tingly-box/internal/constant"
+	"tingly-box/internal/protocol/client"
 	"tingly-box/internal/typ"
 	"tingly-box/pkg/oauth"
 )

@@ -6,11 +6,11 @@ import (
 	"net/http"
 	"sync"
 	"time"
+	"tingly-box/internal/obs"
 
 	"github.com/gin-gonic/gin"
 
 	"tingly-box/internal/config"
-	"tingly-box/internal/record"
 	"tingly-box/internal/server"
 )
 
@@ -28,7 +28,7 @@ type ServerManager struct {
 	httpsEnabled         bool
 	httpsCertDir         string
 	httpsRegenerate      bool
-	recordMode           record.RecordMode
+	recordMode           obs.RecordMode
 	recordDir            string
 	experimentalFeatures map[string]bool
 	status               string
@@ -95,7 +95,7 @@ func WithHTTPSRegenerate(regenerate bool) ServerManagerOption {
 
 // WithRecordMode sets the record mode for request/response recording
 // mode: empty string = disabled, "all" = record all, "response" = response only
-func WithRecordMode(mode record.RecordMode) ServerManagerOption {
+func WithRecordMode(mode obs.RecordMode) ServerManagerOption {
 	return func(sm *ServerManager) {
 		sm.recordMode = mode
 	}

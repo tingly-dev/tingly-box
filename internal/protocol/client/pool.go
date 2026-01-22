@@ -5,10 +5,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"sync"
+	"tingly-box/internal/obs"
 
 	"github.com/sirupsen/logrus"
 
-	"tingly-box/internal/record"
 	"tingly-box/internal/typ"
 )
 
@@ -18,7 +18,7 @@ type ClientPool struct {
 	anthropicClients map[string]*AnthropicClient
 	googleClients    map[string]*GoogleClient
 	mutex            sync.RWMutex
-	recordSink       *record.Sink
+	recordSink       *obs.Sink
 }
 
 // NewClientPool creates a new client pool
@@ -259,7 +259,7 @@ func (p *ClientPool) Stats() map[string]interface{} {
 }
 
 // SetRecordSink sets the record sink for the client pool
-func (p *ClientPool) SetRecordSink(sink *record.Sink) {
+func (p *ClientPool) SetRecordSink(sink *obs.Sink) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 	p.recordSink = sink
@@ -281,7 +281,7 @@ func (p *ClientPool) SetRecordSink(sink *record.Sink) {
 }
 
 // GetRecordSink returns the record sink
-func (p *ClientPool) GetRecordSink() *record.Sink {
+func (p *ClientPool) GetRecordSink() *obs.Sink {
 	p.mutex.RLock()
 	defer p.mutex.RUnlock()
 	return p.recordSink

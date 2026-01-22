@@ -4,13 +4,13 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"tingly-box/internal/obs"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/sirupsen/logrus"
 
-	"tingly-box/internal/record"
 	"tingly-box/internal/typ"
 	"tingly-box/pkg/oauth"
 )
@@ -21,7 +21,7 @@ type AnthropicClient struct {
 	provider   *typ.Provider
 	debugMode  bool
 	httpClient *http.Client
-	recordSink *record.Sink
+	recordSink *obs.Sink
 }
 
 // defaultNewAnthropicClient creates a new Anthropic client wrapper
@@ -121,7 +121,7 @@ func (c *AnthropicClient) BetaMessagesNewStreaming(ctx context.Context, req anth
 }
 
 // SetRecordSink sets the record sink for the client
-func (c *AnthropicClient) SetRecordSink(sink *record.Sink) {
+func (c *AnthropicClient) SetRecordSink(sink *obs.Sink) {
 	c.recordSink = sink
 	if sink != nil && sink.IsEnabled() {
 		c.applyRecordMode()

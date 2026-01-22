@@ -4,8 +4,8 @@ import (
 	"context"
 	"os"
 	"testing"
-	"tingly-box/pkg/adaptor/client"
-	"tingly-box/pkg/adaptor/request"
+	"tingly-box/internal/protocol/client"
+	"tingly-box/internal/protocol/request"
 
 	"github.com/openai/openai-go/v3"
 	"google.golang.org/genai"

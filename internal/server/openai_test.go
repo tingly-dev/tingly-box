@@ -3,13 +3,13 @@ package server
 import (
 	"encoding/json"
 	"testing"
-	"tingly-box/pkg/adaptor"
+	"tingly-box/internal/protocol"
 )
 
 func TestOpenAIChatCompletionRequest_UnmarshalJSON(t *testing.T) {
 	jsonString := "{\"stream\":true}"
 
-	var req adaptor.OpenAIChatCompletionRequest
+	var req protocol.OpenAIChatCompletionRequest
 	if err := json.Unmarshal([]byte(jsonString), &req); err != nil {
 		t.Fatalf("Failed to deserialize rawBody into OpenAIChatCompletionRequest: %v", err)
 	}
