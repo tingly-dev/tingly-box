@@ -1,4 +1,4 @@
-package cli
+package command
 
 import (
 	"bufio"
@@ -44,41 +44,41 @@ type ExportLine struct {
 
 // ExportMetadata represents the metadata line
 type ExportMetadata struct {
-	Type      string `json:"type"`
-	Version   string `json:"version"`
+	Type       string `json:"type"`
+	Version    string `json:"version"`
 	ExportedAt string `json:"exported_at"`
 }
 
 // ExportRuleData represents the rule export data
 type ExportRuleData struct {
-	Type         string                `json:"type"`
-	UUID         string                `json:"uuid"`
-	Scenario     string                `json:"scenario"`
-	RequestModel string                `json:"request_model"`
-	ResponseModel string               `json:"response_model"`
-	Description  string                `json:"description"`
-	Services     []loadbalance.Service `json:"services"`
-	LBTactic     typ.Tactic            `json:"lb_tactic"`
-	Active       bool                  `json:"active"`
-	SmartEnabled bool                  `json:"smart_enabled"`
-	SmartRouting []interface{}         `json:"smart_routing"`
+	Type          string                `json:"type"`
+	UUID          string                `json:"uuid"`
+	Scenario      string                `json:"scenario"`
+	RequestModel  string                `json:"request_model"`
+	ResponseModel string                `json:"response_model"`
+	Description   string                `json:"description"`
+	Services      []loadbalance.Service `json:"services"`
+	LBTactic      typ.Tactic            `json:"lb_tactic"`
+	Active        bool                  `json:"active"`
+	SmartEnabled  bool                  `json:"smart_enabled"`
+	SmartRouting  []interface{}         `json:"smart_routing"`
 }
 
 // ExportProviderData represents the provider export data
 type ExportProviderData struct {
-	Type        string                 `json:"type"`
-	UUID        string                 `json:"uuid"`
-	Name        string                 `json:"name"`
-	APIBase     string                 `json:"api_base"`
-	APIStyle    string                 `json:"api_style"`
-	AuthType    string                 `json:"auth_type"`
-	Token       string                 `json:"token"`
-	OAuthDetail *typ.OAuthDetail       `json:"oauth_detail"`
-	Enabled     bool                   `json:"enabled"`
-	ProxyURL    string                 `json:"proxy_url"`
-	Timeout     int64                  `json:"timeout"`
-	Tags        []string               `json:"tags"`
-	Models      []string               `json:"models"`
+	Type        string           `json:"type"`
+	UUID        string           `json:"uuid"`
+	Name        string           `json:"name"`
+	APIBase     string           `json:"api_base"`
+	APIStyle    string           `json:"api_style"`
+	AuthType    string           `json:"auth_type"`
+	Token       string           `json:"token"`
+	OAuthDetail *typ.OAuthDetail `json:"oauth_detail"`
+	Enabled     bool             `json:"enabled"`
+	ProxyURL    string           `json:"proxy_url"`
+	Timeout     int64            `json:"timeout"`
+	Tags        []string         `json:"tags"`
+	Models      []string         `json:"models"`
 }
 
 func runImport(appConfig *config.AppConfig, args []string) error {
@@ -268,14 +268,14 @@ func runImport(appConfig *config.AppConfig, args []string) error {
 
 	// Create rule
 	rule := typ.Rule{
-		UUID:         uuid.New().String(),
-		Scenario:     typ.RuleScenario(ruleData.Scenario),
-		RequestModel: ruleData.RequestModel,
+		UUID:          uuid.New().String(),
+		Scenario:      typ.RuleScenario(ruleData.Scenario),
+		RequestModel:  ruleData.RequestModel,
 		ResponseModel: ruleData.ResponseModel,
-		Description:  ruleData.Description,
-		Services:     ruleData.Services,
-		LBTactic:     ruleData.LBTactic,
-		Active:       ruleData.Active,
+		Description:   ruleData.Description,
+		Services:      ruleData.Services,
+		LBTactic:      ruleData.LBTactic,
+		Active:        ruleData.Active,
 	}
 
 	// Handle smart routing if present

@@ -8,7 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
-	"tingly-box/internal/cli"
+	"tingly-box/internal/command"
 	"tingly-box/internal/config"
 )
 
@@ -20,7 +20,7 @@ It provides a unified OpenAI-compatible endpoint that routes requests to multipl
 AI providers, with flexible configuration and secure credential management.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Default to start command when no subcommand is provided
-		startCmd := cli.StartCommand(appConfig)
+		startCmd := command.StartCommand(appConfig)
 		startCmd.SetArgs([]string{})
 		if err := startCmd.Execute(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -104,14 +104,14 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 
 	// Add subcommands with initialized config
-	rootCmd.AddCommand(cli.AddCommand(appConfig))
-	rootCmd.AddCommand(cli.ListCommand(appConfig))
-	rootCmd.AddCommand(cli.DeleteCommand(appConfig))
-	rootCmd.AddCommand(cli.ImportCommand(appConfig))
-	rootCmd.AddCommand(cli.StartCommand(appConfig))
-	rootCmd.AddCommand(cli.StopCommand(appConfig))
-	rootCmd.AddCommand(cli.RestartCommand(appConfig))
-	rootCmd.AddCommand(cli.StatusCommand(appConfig))
+	rootCmd.AddCommand(command.AddCommand(appConfig))
+	rootCmd.AddCommand(command.ListCommand(appConfig))
+	rootCmd.AddCommand(command.DeleteCommand(appConfig))
+	rootCmd.AddCommand(command.ImportCommand(appConfig))
+	rootCmd.AddCommand(command.StartCommand(appConfig))
+	rootCmd.AddCommand(command.StopCommand(appConfig))
+	rootCmd.AddCommand(command.RestartCommand(appConfig))
+	rootCmd.AddCommand(command.StatusCommand(appConfig))
 }
 
 func main() {
