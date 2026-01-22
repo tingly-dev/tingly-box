@@ -8,6 +8,7 @@ import (
 	"google.golang.org/genai"
 
 	"tingly-box/internal/llmclient/httpclient"
+	"tingly-box/internal/record"
 	"tingly-box/internal/typ"
 )
 
@@ -17,6 +18,7 @@ type GoogleClient struct {
 	provider   *typ.Provider
 	debugMode  bool
 	httpClient *http.Client
+	recordSink *record.Sink
 }
 
 // NewGoogleClient creates a new Google client wrapper
@@ -63,19 +65,6 @@ func (c *GoogleClient) Close() error {
 	return nil
 }
 
-// SetMode sets the client mode. When debug is true, all API headers are logged as indented JSON.
-func (c *GoogleClient) SetMode(debug bool) {
-	c.debugMode = debug
-	if debug {
-		c.applyDebugMode()
-	}
-}
-
-// applyDebugMode wraps the HTTP client with a debug round tripper
-func (c *GoogleClient) applyDebugMode() {
-	c.httpClient.Transport = NewDebugRoundTripper(c.httpClient.Transport)
-}
-
 // Client returns the underlying Google genai SDK client
 func (c *GoogleClient) Client() *genai.Client {
 	return c.client
@@ -89,4 +78,25 @@ func (c *GoogleClient) GenerateContent(ctx context.Context, model string, conten
 // GenerateContentStream generates content using streaming
 func (c *GoogleClient) GenerateContentStream(ctx context.Context, model string, contents []*genai.Content, config *genai.GenerateContentConfig) iter.Seq2[*genai.GenerateContentResponse, error] {
 	return c.client.Models.GenerateContentStream(ctx, model, contents, config)
+}
+
+// SetRecordSink sets the record sink for the client
+func (c *GoogleClient) SetRecordSink(sink *record.Sink) {
+	c.recordSink = sink
+	if sink != nil && sink.IsEnabled() {
+		c.applyRecordMode()
+	}
+}
+
+// applyRecordMode wraps the HTTP client with a record round tripper
+func (c *GoogleClient) applyRecordMode() {
+	if c.recordSink == nil {
+		return
+	}
+	c.httpClient.Transport = NewRecordRoundTripper(c.httpClient.Transport, c.recordSink, c.provider.Name, "")
+}
+
+// GetProvider returns the provider for this client
+func (c *GoogleClient) GetProvider() *typ.Provider {
+	return c.provider
 }

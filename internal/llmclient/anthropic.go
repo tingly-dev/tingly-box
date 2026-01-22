@@ -11,6 +11,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"tingly-box/internal/llmclient/httpclient"
+	"tingly-box/internal/record"
 	"tingly-box/internal/typ"
 	"tingly-box/pkg/oauth"
 )
@@ -21,6 +22,7 @@ type AnthropicClient struct {
 	provider   *typ.Provider
 	debugMode  bool
 	httpClient *http.Client
+	recordSink *record.Sink
 }
 
 // defaultNewAnthropicClient creates a new Anthropic client wrapper
@@ -80,19 +82,6 @@ func (c *AnthropicClient) Close() error {
 	return nil
 }
 
-// SetMode sets the client mode. When debug is true, all API headers are logged as indented JSON.
-func (c *AnthropicClient) SetMode(debug bool) {
-	c.debugMode = debug
-	if debug {
-		c.applyDebugMode()
-	}
-}
-
-// applyDebugMode wraps the HTTP client with a debug round tripper
-func (c *AnthropicClient) applyDebugMode() {
-	c.httpClient.Transport = NewDebugRoundTripper(c.httpClient.Transport)
-}
-
 // Client returns the underlying Anthropic SDK client
 func (c *AnthropicClient) Client() *anthropic.Client {
 	return &c.client
@@ -125,4 +114,25 @@ func (c *AnthropicClient) BetaMessagesNew(ctx context.Context, req anthropic.Bet
 // BetaMessagesNewStreaming creates a new beta streaming message request
 func (c *AnthropicClient) BetaMessagesNewStreaming(ctx context.Context, req anthropic.BetaMessageNewParams) *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion] {
 	return c.client.Beta.Messages.NewStreaming(ctx, req)
+}
+
+// SetRecordSink sets the record sink for the client
+func (c *AnthropicClient) SetRecordSink(sink *record.Sink) {
+	c.recordSink = sink
+	if sink != nil && sink.IsEnabled() {
+		c.applyRecordMode()
+	}
+}
+
+// applyRecordMode wraps the HTTP client with a record round tripper
+func (c *AnthropicClient) applyRecordMode() {
+	if c.recordSink == nil {
+		return
+	}
+	c.httpClient.Transport = NewRecordRoundTripper(c.httpClient.Transport, c.recordSink, c.provider.Name, "")
+}
+
+// GetProvider returns the provider for this client
+func (c *AnthropicClient) GetProvider() *typ.Provider {
+	return c.provider
 }

@@ -14,6 +14,7 @@ import (
 
 	"tingly-box/internal/config"
 	"tingly-box/internal/manager"
+	"tingly-box/internal/record"
 	"tingly-box/internal/server"
 	serverconfig "tingly-box/internal/server/config"
 	"tingly-box/internal/util/daemon"
@@ -87,6 +88,8 @@ type startFlags struct {
 	https                bool
 	httpsCertDir         string
 	httpsRegen           bool
+	recordMode           string
+	recordDir            string
 }
 
 // addStartFlags adds all start-related flags to a command
@@ -104,6 +107,8 @@ func addStartFlags(cmd *cobra.Command, flags *startFlags) {
 	cmd.Flags().BoolVar(&flags.https, "https", false, "Enable HTTPS mode with self-signed certificate (default: false)")
 	cmd.Flags().StringVar(&flags.httpsCertDir, "https-cert-dir", "", "Certificate directory for HTTPS (default: ~/.tingly-box/certs/)")
 	cmd.Flags().BoolVar(&flags.httpsRegen, "https-regen", false, "Regenerate HTTPS certificate (default: false)")
+	cmd.Flags().StringVar(&flags.recordMode, "record-mode", "", "Record mode: empty=disabled, 'all'=record request+response, 'response'=response only (default: disabled)")
+	cmd.Flags().StringVar(&flags.recordDir, "record-dir", "", "Record directory (default: ~/.tingly-box/record/)")
 }
 
 func resolveStartOptions(cmd *cobra.Command, flags startFlags, appConfig *config.AppConfig) startServerOptions {
@@ -125,6 +130,12 @@ func resolveStartOptions(cmd *cobra.Command, flags startFlags, appConfig *config
 		appConfig.SetServerPort(flags.port)
 	}
 
+	// Resolve record directory
+	resolvedRecordDir := flags.recordDir
+	if resolvedRecordDir == "" {
+		resolvedRecordDir = appConfig.ConfigDir() + "/record"
+	}
+
 	return startServerOptions{
 		Host:              flags.host,
 		Port:              resolvedPort,
@@ -144,6 +155,8 @@ func resolveStartOptions(cmd *cobra.Command, flags startFlags, appConfig *config
 			CertDir:    flags.httpsCertDir,
 			Regenerate: flags.httpsRegen,
 		},
+		RecordMode: flags.recordMode,
+		RecordDir:  resolvedRecordDir,
 	}
 }
 
@@ -181,6 +194,8 @@ type startServerOptions struct {
 		CertDir    string
 		Regenerate bool
 	}
+	RecordMode string
+	RecordDir  string
 }
 
 // startServer handles the server starting logic
@@ -313,6 +328,8 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 		manager.WithHTTPSEnabled(opts.HTTPS.Enabled),
 		manager.WithHTTPSCertDir(opts.HTTPS.CertDir),
 		manager.WithHTTPSRegenerate(opts.HTTPS.Regenerate),
+		manager.WithRecordMode(record.RecordMode(opts.RecordMode)),
+		manager.WithRecordDir(opts.RecordDir),
 	)
 
 	// Setup signal handling for graceful shutdown

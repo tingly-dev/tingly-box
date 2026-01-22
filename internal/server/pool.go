@@ -9,6 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"tingly-box/internal/llmclient"
+	"tingly-box/internal/record"
 	"tingly-box/internal/typ"
 )
 
@@ -18,7 +19,7 @@ type ClientPool struct {
 	anthropicClients map[string]*llmclient.AnthropicClient
 	googleClients    map[string]*llmclient.GoogleClient
 	mutex            sync.RWMutex
-	debugMode        bool
+	recordSink       *record.Sink
 }
 
 // NewClientPool creates a new client pool
@@ -63,9 +64,9 @@ func (p *ClientPool) GetOpenAIClient(provider *typ.Provider, model string) *llmc
 		return nil
 	}
 
-	// Apply debug mode if enabled
-	if p.debugMode {
-		client.SetMode(true)
+	// Apply record sink if enabled
+	if p.recordSink != nil && p.recordSink.IsEnabled() {
+		client.SetRecordSink(p.recordSink)
 	}
 
 	// Store in pool
@@ -106,9 +107,9 @@ func (p *ClientPool) GetAnthropicClient(provider *typ.Provider, model string) *l
 		return nil
 	}
 
-	// Apply debug mode if enabled
-	if p.debugMode {
-		client.SetMode(true)
+	// Apply record sink if enabled
+	if p.recordSink != nil && p.recordSink.IsEnabled() {
+		client.SetRecordSink(p.recordSink)
 	}
 
 	// Store in pool
@@ -149,9 +150,9 @@ func (p *ClientPool) GetGoogleClient(provider *typ.Provider, model string) *llmc
 		return nil
 	}
 
-	// Apply debug mode if enabled
-	if p.debugMode {
-		client.SetMode(true)
+	// Apply record sink if enabled
+	if p.recordSink != nil && p.recordSink.IsEnabled() {
+		client.SetRecordSink(p.recordSink)
 	}
 
 	// Store in pool
@@ -255,33 +256,34 @@ func (p *ClientPool) Stats() map[string]interface{} {
 		"google_clients_count":    len(p.googleClients),
 		"total_clients":           len(p.openaiClients) + len(p.anthropicClients) + len(p.googleClients),
 		"provider_keys":           p.GetProviderKeys(),
-		"debug_mode":              p.debugMode,
 	}
 }
 
-// SetMode sets the debug mode for the pool and all existing clients.
-// When debug is true, all API headers and bodies are logged as indented JSON.
-func (p *ClientPool) SetMode(debug bool) {
+// SetRecordSink sets the record sink for the client pool
+func (p *ClientPool) SetRecordSink(sink *record.Sink) {
 	p.mutex.Lock()
-	p.debugMode = debug
-	p.mutex.Unlock()
+	defer p.mutex.Unlock()
+	p.recordSink = sink
 
-	if debug {
-		logrus.Info("Enabling debug mode for client pool - all API headers and bodies will be logged")
-	} else {
-		logrus.Info("Disabling debug mode for client pool")
-	}
-
-	// Apply mode to all existing OpenAI clients
-	p.mutex.Lock()
+	// Apply record sink to all existing clients
 	for _, client := range p.openaiClients {
-		client.SetMode(debug)
+		client.SetRecordSink(sink)
 	}
 	for _, client := range p.anthropicClients {
-		client.SetMode(debug)
+		client.SetRecordSink(sink)
 	}
 	for _, client := range p.googleClients {
-		client.SetMode(debug)
+		client.SetRecordSink(sink)
 	}
-	p.mutex.Unlock()
+
+	if sink != nil && sink.IsEnabled() {
+		logrus.Info("Record sink enabled for client pool")
+	}
+}
+
+// GetRecordSink returns the record sink
+func (p *ClientPool) GetRecordSink() *record.Sink {
+	p.mutex.RLock()
+	defer p.mutex.RUnlock()
+	return p.recordSink
 }
