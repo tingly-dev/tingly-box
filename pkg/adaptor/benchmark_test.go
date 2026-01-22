@@ -3,6 +3,7 @@ package adaptor
 import (
 	"encoding/json"
 	"testing"
+	"tingly-box/pkg/adaptor/nonstream"
 	"tingly-box/pkg/adaptor/request"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -38,7 +39,7 @@ func BenchmarkConvertAnthropicResponseToOpenAI(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ConvertAnthropicToOpenAIResponse(anthropicResp, "claude-3-sonnet")
+		nonstream.ConvertAnthropicToOpenAIResponse(anthropicResp, "claude-3-sonnet")
 	}
 }
 

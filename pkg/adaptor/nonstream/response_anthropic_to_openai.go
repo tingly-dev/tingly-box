@@ -1,4 +1,4 @@
-package adaptor
+package nonstream
 
 import (
 	"encoding/json"

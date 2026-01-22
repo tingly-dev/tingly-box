@@ -1,4 +1,4 @@
-package adaptor
+package nonstream
 
 import (
 	"encoding/json"
@@ -500,7 +500,7 @@ func TestConvertGoogleToAnthropicBetaResponseComplex(t *testing.T) {
 
 // TestGoogleFinishReasonMapping tests finish reason mapping functions
 func TestGoogleFinishReasonMapping(t *testing.T) {
-	t.Run("mapGoogleFinishReasonToOpenAI", func(t *testing.T) {
+	t.Run("MapGoogleFinishReasonToOpenAI", func(t *testing.T) {
 		tests := []struct {
 			input    genai.FinishReason
 			expected string
@@ -515,13 +515,13 @@ func TestGoogleFinishReasonMapping(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(string(tt.input), func(t *testing.T) {
-				result := mapGoogleFinishReasonToOpenAI(tt.input)
+				result := MapGoogleFinishReasonToOpenAI(tt.input)
 				assert.Equal(t, tt.expected, result)
 			})
 		}
 	})
 
-	t.Run("mapGoogleFinishReasonToAnthropic", func(t *testing.T) {
+	t.Run("MapGoogleFinishReasonToAnthropic", func(t *testing.T) {
 		tests := []struct {
 			input    genai.FinishReason
 			expected string
@@ -535,13 +535,13 @@ func TestGoogleFinishReasonMapping(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(string(tt.input), func(t *testing.T) {
-				result := mapGoogleFinishReasonToAnthropic(tt.input)
+				result := MapGoogleFinishReasonToAnthropic(tt.input)
 				assert.Equal(t, tt.expected, result)
 			})
 		}
 	})
 
-	t.Run("mapGoogleFinishReasonToAnthropicBeta", func(t *testing.T) {
+	t.Run("MapGoogleFinishReasonToAnthropicBeta", func(t *testing.T) {
 		tests := []struct {
 			input    genai.FinishReason
 			expected string
@@ -554,7 +554,7 @@ func TestGoogleFinishReasonMapping(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(string(tt.input), func(t *testing.T) {
-				result := mapGoogleFinishReasonToAnthropicBeta(tt.input)
+				result := MapGoogleFinishReasonToAnthropicBeta(tt.input)
 				assert.Equal(t, tt.expected, string(result))
 			})
 		}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"time"
+	"tingly-box/pkg/adaptor/nonstream"
 	"tingly-box/pkg/adaptor/request"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -133,7 +134,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req request.AnthropicMessag
 			}
 
 			// Convert Google response to Anthropic format
-			anthropicResp := adaptor.ConvertGoogleToAnthropicResponse(response, proxyModel)
+			anthropicResp := nonstream.ConvertGoogleToAnthropicResponse(response, proxyModel)
 
 			// Track usage from response
 			inputTokens := 0
@@ -181,7 +182,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req request.AnthropicMessag
 				return
 			}
 			// Convert OpenAI response back to Anthropic format
-			anthropicResp := adaptor.ConvertOpenAIToAnthropicResponse(response, proxyModel)
+			anthropicResp := nonstream.ConvertOpenAIToAnthropicResponse(response, proxyModel)
 			c.JSON(http.StatusOK, anthropicResp)
 		}
 	default:

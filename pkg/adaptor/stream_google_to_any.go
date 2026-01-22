@@ -7,6 +7,7 @@ import (
 	"iter"
 	"net/http"
 	"time"
+	"tingly-box/pkg/adaptor/nonstream"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -141,7 +142,7 @@ func HandleGoogleToOpenAIStreamResponse(c *gin.Context, stream iter.Seq2[*genai.
 
 			// Check for finish reason
 			if candidate.FinishReason != "" {
-				finishReason := mapGoogleFinishReasonToOpenAI(candidate.FinishReason)
+				finishReason := nonstream.MapGoogleFinishReasonToOpenAI(candidate.FinishReason)
 
 				// If there were tool calls, set finish reason accordingly
 				if len(toolCalls) > 0 && finishReason == "stop" {
@@ -320,7 +321,7 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 
 			// Check for finish reason
 			if candidate.FinishReason != "" {
-				stopReason := mapGoogleFinishReasonToAnthropic(candidate.FinishReason)
+				stopReason := nonstream.MapGoogleFinishReasonToAnthropic(candidate.FinishReason)
 
 				// Send content_block_stop for text if applicable
 				if textBlockIndex != -1 {
@@ -516,7 +517,7 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 
 			// Check for finish reason
 			if candidate.FinishReason != "" {
-				stopReason := mapGoogleFinishReasonToAnthropicBeta(candidate.FinishReason)
+				stopReason := nonstream.MapGoogleFinishReasonToAnthropicBeta(candidate.FinishReason)
 
 				// Send content_block_stop for text if applicable
 				if textBlockIndex != -1 {

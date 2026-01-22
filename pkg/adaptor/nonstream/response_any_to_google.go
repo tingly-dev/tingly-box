@@ -1,4 +1,4 @@
-package adaptor
+package nonstream
 
 import (
 	"encoding/json"
@@ -27,7 +27,7 @@ func ConvertOpenAIToGoogleResponse(openaiResp *openai.ChatCompletion) *genai.Gen
 				Role:  "model",
 				Parts: []*genai.Part{},
 			},
-			FinishReason: mapOpenAIFinishReasonToGoogle(choice.FinishReason),
+			FinishReason: MapOpenAIFinishReasonToGoogle(choice.FinishReason),
 			Index:        0,
 		}
 
@@ -65,7 +65,7 @@ func ConvertOpenAIToGoogleResponse(openaiResp *openai.ChatCompletion) *genai.Gen
 	return googleResp
 }
 
-func mapOpenAIFinishReasonToGoogle(reason string) genai.FinishReason {
+func MapOpenAIFinishReasonToGoogle(reason string) genai.FinishReason {
 	switch reason {
 	case "stop":
 		return genai.FinishReasonStop
@@ -96,7 +96,7 @@ func ConvertAnthropicToGoogleResponse(anthropicResp *anthropic.Message) *genai.G
 			Role:  "model",
 			Parts: []*genai.Part{},
 		},
-		FinishReason: mapAnthropicFinishReasonToGoogle(string(anthropicResp.StopReason)),
+		FinishReason: MapAnthropicFinishReasonToGoogle(string(anthropicResp.StopReason)),
 		Index:        0,
 	}
 
@@ -128,7 +128,7 @@ func ConvertAnthropicToGoogleResponse(anthropicResp *anthropic.Message) *genai.G
 	return googleResp
 }
 
-func mapAnthropicFinishReasonToGoogle(reason string) genai.FinishReason {
+func MapAnthropicFinishReasonToGoogle(reason string) genai.FinishReason {
 	switch reason {
 	case "end_turn":
 		return genai.FinishReasonStop

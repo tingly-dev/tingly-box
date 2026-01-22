@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"tingly-box/pkg/adaptor/nonstream"
 	"tingly-box/pkg/adaptor/request"
 
 	"github.com/gin-gonic/gin"
@@ -265,7 +266,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 			s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, false, "success", "")
 
 			// Use provider-aware conversion for provider-specific handling
-			openaiResp := adaptor.ConvertAnthropicToOpenAIResponseWithProvider(anthropicResp, responseModel, provider, actualModel)
+			openaiResp := nonstream.ConvertAnthropicToOpenAIResponseWithProvider(anthropicResp, responseModel, provider, actualModel)
 			c.JSON(http.StatusOK, openaiResp)
 			return
 		}

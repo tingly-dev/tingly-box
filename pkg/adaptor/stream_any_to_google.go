@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"tingly-box/pkg/adaptor/nonstream"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
@@ -185,7 +186,7 @@ func HandleOpenAIToGoogleStreamResponse(c *gin.Context, stream *openaistream.Str
 							Role:  "model",
 							Parts: parts,
 						},
-						FinishReason: mapOpenAIFinishReasonToGoogle(choice.FinishReason),
+						FinishReason: nonstream.MapOpenAIFinishReasonToGoogle(choice.FinishReason),
 						Index:        0,
 					},
 				},
@@ -354,7 +355,7 @@ func HandleAnthropicToGoogleStreamResponse(c *gin.Context, stream *anthropicstre
 							Role:  "model",
 							Parts: parts,
 						},
-						FinishReason: mapAnthropicFinishReasonToGoogle("end_turn"),
+						FinishReason: nonstream.MapAnthropicFinishReasonToGoogle("end_turn"),
 						Index:        0,
 					},
 				},

@@ -1,4 +1,4 @@
-package adaptor
+package nonstream
 
 import (
 	"encoding/json"
@@ -49,7 +49,7 @@ func ConvertGoogleToOpenAIResponse(googleResp *genai.GenerateContentResponse, re
 		}
 
 		// Map finish reason
-		finishReason = mapGoogleFinishReasonToOpenAI(candidate.FinishReason)
+		finishReason = MapGoogleFinishReasonToOpenAI(candidate.FinishReason)
 	}
 
 	// Build message
@@ -98,7 +98,7 @@ func ConvertGoogleToOpenAIResponse(googleResp *genai.GenerateContentResponse, re
 	return response
 }
 
-func mapGoogleFinishReasonToOpenAI(reason genai.FinishReason) string {
+func MapGoogleFinishReasonToOpenAI(reason genai.FinishReason) string {
 	switch reason {
 	case genai.FinishReasonStop:
 		return "stop"
@@ -165,7 +165,7 @@ func ConvertGoogleToAnthropicResponse(googleResp *genai.GenerateContentResponse,
 		}
 
 		// Map stop reason
-		responseJSON["stop_reason"] = mapGoogleFinishReasonToAnthropic(candidate.FinishReason)
+		responseJSON["stop_reason"] = MapGoogleFinishReasonToAnthropic(candidate.FinishReason)
 	}
 
 	responseJSON["content"] = contentBlocks
@@ -186,7 +186,7 @@ func ConvertGoogleToAnthropicResponse(googleResp *genai.GenerateContentResponse,
 	return msg
 }
 
-func mapGoogleFinishReasonToAnthropic(reason genai.FinishReason) string {
+func MapGoogleFinishReasonToAnthropic(reason genai.FinishReason) string {
 	switch reason {
 	case genai.FinishReasonStop:
 		return "end_turn"
@@ -253,7 +253,7 @@ func ConvertGoogleToAnthropicBetaResponse(googleResp *genai.GenerateContentRespo
 		}
 
 		// Map stop reason
-		responseJSON["stop_reason"] = mapGoogleFinishReasonToAnthropicBeta(candidate.FinishReason)
+		responseJSON["stop_reason"] = MapGoogleFinishReasonToAnthropicBeta(candidate.FinishReason)
 	}
 
 	responseJSON["content"] = contentBlocks
@@ -274,7 +274,7 @@ func ConvertGoogleToAnthropicBetaResponse(googleResp *genai.GenerateContentRespo
 	return msg
 }
 
-func mapGoogleFinishReasonToAnthropicBeta(reason genai.FinishReason) anthropic.BetaStopReason {
+func MapGoogleFinishReasonToAnthropicBeta(reason genai.FinishReason) anthropic.BetaStopReason {
 	switch reason {
 	case genai.FinishReasonStop:
 		return anthropic.BetaStopReasonEndTurn

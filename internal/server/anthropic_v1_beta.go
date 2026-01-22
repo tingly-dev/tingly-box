@@ -122,7 +122,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req request.AnthropicBe
 			}
 
 			// Convert Google response to Anthropic beta format
-			anthropicResp := adaptor.ConvertGoogleToAnthropicBetaResponse(response, proxyModel)
+			anthropicResp := response.ConvertGoogleToAnthropicBetaResponse(response, proxyModel)
 
 			// Track usage from response
 			inputTokens := 0
@@ -167,7 +167,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req request.AnthropicBe
 				return
 			}
 			// Convert OpenAI response back to Anthropic beta format
-			anthropicResp := adaptor.ConvertOpenAIToAnthropicBetaResponse(response, proxyModel)
+			anthropicResp := response.ConvertOpenAIToAnthropicBetaResponse(response, proxyModel)
 			c.JSON(http.StatusOK, anthropicResp)
 		}
 	default:
