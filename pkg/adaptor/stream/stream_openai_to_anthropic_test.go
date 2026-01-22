@@ -7,7 +7,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"tingly-box/pkg/adaptor"
 
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
@@ -46,7 +45,7 @@ func TestHandleOpenAIToAnthropicStreamResponse(t *testing.T) {
 			openai.UserMessage("What's the weather like in London?"),
 		},
 		Tools: []openai.ChatCompletionToolUnionParam{
-			adaptor.NewExampleTool(),
+			NewExampleTool(),
 		},
 	})
 

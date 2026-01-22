@@ -1,22 +1,20 @@
-package adaptor
+package stream
 
 import (
-	"tingly-box/pkg/adaptor/stream"
-
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/shared"
 )
 
-// filterSpecialFields removes special fields that have dedicated content blocks
+// FilterSpecialFields removes special fields that have dedicated content blocks
 // e.g., reasoning_content is handled as thinking block, not merged into text_delta
-func filterSpecialFields(extras map[string]interface{}) map[string]interface{} {
+func FilterSpecialFields(extras map[string]interface{}) map[string]interface{} {
 	if extras == nil || len(extras) == 0 {
 		return extras
 	}
 	result := make(map[string]interface{})
 	for k, v := range extras {
-		if k != stream.openaiFieldReasoningContent {
+		if k != OpenaiFieldReasoningContent {
 			result[k] = v
 		}
 	}

@@ -110,7 +110,7 @@ func HandleOpenAIToAnthropicV1BetaStreamResponse(c *gin.Context, req *openai.Cha
 		if extras := parseRawJSON(delta.RawJSON()); extras != nil {
 			for k, v := range extras {
 				// Handle reasoning_content -> thinking block
-				if k == openaiFieldReasoningContent {
+				if k == OpenaiFieldReasoningContent {
 					// Initialize thinking block on first occurrence
 					if state.thinkingBlockIndex == -1 {
 						state.thinkingBlockIndex = state.nextBlockIndex

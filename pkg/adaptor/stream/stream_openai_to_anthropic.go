@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"sort"
 	"time"
-	"tingly-box/pkg/adaptor"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
@@ -27,7 +26,7 @@ const (
 	anthropicStopReasonContentFilter = string(anthropic.BetaStopReasonRefusal) // "content_filter"
 
 	// OpenAI extra field names that map to Anthropic content blocks
-	openaiFieldReasoningContent = "reasoning_content"
+	OpenaiFieldReasoningContent = "reasoning_content"
 
 	// Anthropic event types
 	eventTypeMessageStart      = "message_start"
@@ -146,7 +145,7 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompl
 		if extras := parseRawJSON(delta.RawJSON()); extras != nil {
 			for k, v := range extras {
 				// Handle reasoning_content -> thinking block
-				if k == openaiFieldReasoningContent {
+				if k == OpenaiFieldReasoningContent {
 					// Initialize thinking block on first occurrence
 					if state.thinkingBlockIndex == -1 {
 						state.thinkingBlockIndex = state.nextBlockIndex
@@ -208,7 +207,7 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompl
 
 			// Parse delta raw JSON to get extra fields
 			currentExtras := parseRawJSON(delta.RawJSON())
-			currentExtras = adaptor.filterSpecialFields(currentExtras)
+			currentExtras = FilterSpecialFields(currentExtras)
 
 			// Send content_block_delta with actual content
 			deltaMap := map[string]interface{}{
@@ -221,7 +220,7 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompl
 			// Send empty delta for empty chunks to keep client informed
 			// Only if text block has been initialized
 			currentExtras := parseRawJSON(delta.RawJSON())
-			currentExtras = adaptor.filterSpecialFields(currentExtras)
+			currentExtras = FilterSpecialFields(currentExtras)
 
 			deltaMap := map[string]interface{}{
 				"type": deltaTypeTextDelta,
