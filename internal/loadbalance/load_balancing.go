@@ -3,6 +3,7 @@ package loadbalance
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 )
@@ -20,6 +21,14 @@ type Service struct {
 // ServiceID returns a unique identifier for the service
 func (s *Service) ServiceID() string {
 	return fmt.Sprintf("%s:%s", s.Provider, s.Model)
+}
+
+// PreferCompletions returns true if the model prefers the /v1/completions endpoint over /v1/chat/completions.
+// This is used for models like Codex that don't support the chat completions endpoint.
+func (s *Service) PreferCompletions() bool {
+	// For now, all models with "codex" in their name (case insensitive) prefer completions
+	// In the future, this can be extended to support more models or be configured per-model
+	return strings.Contains(strings.ToLower(s.Model), "codex")
 }
 
 // InitializeStats initializes the service statistics if they are empty
