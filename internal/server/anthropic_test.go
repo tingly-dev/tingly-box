@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
-	"tingly-box/internal/protocol"
 
 	"github.com/anthropics/anthropic-sdk-go"
+
+	"tingly-box/internal/protocol"
 )
 
 //go:embed anthropic_test.txt

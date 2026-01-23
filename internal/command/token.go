@@ -2,11 +2,11 @@ package command
 
 import (
 	"fmt"
-	"tingly-box/pkg/auth"
 
 	"github.com/spf13/cobra"
 
 	"tingly-box/internal/config"
+	"tingly-box/pkg/auth"
 )
 
 // TokenCommand represents the generate token command

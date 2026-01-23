@@ -8,18 +8,18 @@ import (
 	"strings"
 	"syscall"
 	"time"
-	"tingly-box/internal/obs"
-	daemon2 "tingly-box/pkg/daemon"
-	"tingly-box/pkg/lock"
-	"tingly-box/pkg/network"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"tingly-box/internal/config"
 	"tingly-box/internal/feature"
+	"tingly-box/internal/obs"
 	"tingly-box/internal/server"
 	serverconfig "tingly-box/internal/server/config"
+	daemon2 "tingly-box/pkg/daemon"
+	"tingly-box/pkg/lock"
+	"tingly-box/pkg/network"
 )
 
 const (

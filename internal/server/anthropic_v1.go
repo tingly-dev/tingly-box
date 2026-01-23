@@ -5,11 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"time"
-	"tingly-box/internal/protocol"
-	nonstream2 "tingly-box/internal/protocol/nonstream"
-	request2 "tingly-box/internal/protocol/request"
-	stream2 "tingly-box/internal/protocol/stream"
-	"tingly-box/internal/protocol/token"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
@@ -17,6 +12,11 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"tingly-box/internal/loadbalance"
+	"tingly-box/internal/protocol"
+	nonstream2 "tingly-box/internal/protocol/nonstream"
+	request2 "tingly-box/internal/protocol/request"
+	stream2 "tingly-box/internal/protocol/stream"
+	"tingly-box/internal/protocol/token"
 	"tingly-box/internal/typ"
 )
 

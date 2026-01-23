@@ -4,11 +4,12 @@ import (
 	"context"
 	"os"
 	"testing"
-	"tingly-box/internal/client"
-	"tingly-box/internal/protocol/request"
 
 	"github.com/openai/openai-go/v3"
 	"google.golang.org/genai"
+
+	"tingly-box/internal/client"
+	"tingly-box/internal/protocol/request"
 )
 
 // TestGoogleGenerateContent tests calling Google genai API directly to generate content.

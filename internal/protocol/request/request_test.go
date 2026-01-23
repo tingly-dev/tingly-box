@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
-	"tingly-box/internal/protocol/stream"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
@@ -13,6 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/genai"
+
+	"tingly-box/internal/protocol/stream"
 )
 
 func TestConvertOpenAIToAnthropicRequest(t *testing.T) {

@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"testing"
+
 	"tingly-box/internal/protocol"
 )
 

@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"tingly-box/internal/protocol"
 
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
 	"tingly-box/internal/config"
 	"tingly-box/internal/loadbalance"
+	"tingly-box/internal/protocol"
 	"tingly-box/internal/typ"
 )
 

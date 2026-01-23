@@ -3,10 +3,10 @@ package nonstream
 import (
 	"encoding/json"
 	"time"
-	"tingly-box/internal/protocol/request/transformer"
 
 	"github.com/anthropics/anthropic-sdk-go"
 
+	"tingly-box/internal/protocol/request/transformer"
 	"tingly-box/internal/typ"
 )
 

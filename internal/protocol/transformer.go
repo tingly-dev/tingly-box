@@ -1,6 +1,8 @@
 package protocol
 
-import "github.com/anthropics/anthropic-sdk-go"
+import (
+	"github.com/anthropics/anthropic-sdk-go"
+)
 
 // Transformer defines the interface for request compacting transformations.
 // Each handler method is responsible for a different request model type.

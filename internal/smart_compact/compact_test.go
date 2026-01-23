@@ -2,11 +2,12 @@ package smart_compact
 
 import (
 	"testing"
-	"tingly-box/internal/protocol"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"tingly-box/internal/protocol"
 )
 
 func TestRemoveV1ThinkingBlocks_TextOnly(t *testing.T) {

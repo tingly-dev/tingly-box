@@ -6,8 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
-	"tingly-box/internal/protocol"
 
+	"tingly-box/internal/protocol"
 	"tingly-box/internal/typ"
 )
 

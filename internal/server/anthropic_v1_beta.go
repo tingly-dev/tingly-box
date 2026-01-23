@@ -3,22 +3,22 @@ package server
 import (
 	"context"
 	"fmt"
-	"iter"
 	"net/http"
 	"time"
-	"tingly-box/internal/protocol"
-	nonstream2 "tingly-box/internal/protocol/nonstream"
-	request2 "tingly-box/internal/protocol/request"
-	stream2 "tingly-box/internal/protocol/stream"
-	"tingly-box/internal/protocol/token"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/genai"
+	"iter"
 
 	"tingly-box/internal/loadbalance"
+	"tingly-box/internal/protocol"
+	nonstream2 "tingly-box/internal/protocol/nonstream"
+	request2 "tingly-box/internal/protocol/request"
+	stream2 "tingly-box/internal/protocol/stream"
+	"tingly-box/internal/protocol/token"
 	"tingly-box/internal/typ"
 )
 

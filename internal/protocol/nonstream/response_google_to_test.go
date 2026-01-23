@@ -3,12 +3,13 @@ package nonstream
 import (
 	"encoding/json"
 	"testing"
-	"tingly-box/internal/protocol/request"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/genai"
+
+	"tingly-box/internal/protocol/request"
 )
 
 // TestConvertGoogleToOpenAIResponseComplex tests complex Google to OpenAI response conversions

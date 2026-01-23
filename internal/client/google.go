@@ -2,13 +2,13 @@ package client
 
 import (
 	"context"
-	"iter"
 	"net/http"
-	"tingly-box/internal/obs"
-	"tingly-box/internal/protocol"
 
 	"google.golang.org/genai"
+	"iter"
 
+	"tingly-box/internal/obs"
+	"tingly-box/internal/protocol"
 	"tingly-box/internal/typ"
 )
 

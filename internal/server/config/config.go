@@ -9,9 +9,6 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
-	"tingly-box/internal/protocol"
-	"tingly-box/internal/template"
-	"tingly-box/pkg/auth"
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
@@ -19,7 +16,10 @@ import (
 	"tingly-box/internal/constant"
 	"tingly-box/internal/db"
 	"tingly-box/internal/loadbalance"
+	"tingly-box/internal/protocol"
+	"tingly-box/internal/template"
 	"tingly-box/internal/typ"
+	"tingly-box/pkg/auth"
 )
 
 // Config represents the global configuration

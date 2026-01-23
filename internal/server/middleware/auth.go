@@ -3,11 +3,11 @@ package middleware
 import (
 	"net/http"
 	"strings"
-	"tingly-box/pkg/auth"
 
 	"github.com/gin-gonic/gin"
 
 	"tingly-box/internal/server/config"
+	"tingly-box/pkg/auth"
 )
 
 // AuthMiddleware provides authentication middleware for different types of authentication

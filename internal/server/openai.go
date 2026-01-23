@@ -7,12 +7,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-	"tingly-box/internal/protocol"
-	"tingly-box/internal/protocol/nonstream"
-	"tingly-box/internal/protocol/request"
-	"tingly-box/internal/protocol/request/transformer"
-	"tingly-box/internal/protocol/stream"
-	"tingly-box/internal/protocol/token"
 
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
@@ -20,6 +14,12 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"tingly-box/internal/loadbalance"
+	"tingly-box/internal/protocol"
+	"tingly-box/internal/protocol/nonstream"
+	"tingly-box/internal/protocol/request"
+	"tingly-box/internal/protocol/request/transformer"
+	"tingly-box/internal/protocol/stream"
+	"tingly-box/internal/protocol/token"
 	"tingly-box/internal/typ"
 )
 

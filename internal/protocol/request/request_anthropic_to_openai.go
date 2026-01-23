@@ -3,13 +3,13 @@ package request
 import (
 	"encoding/json"
 	"strings"
-	"tingly-box/internal/protocol/request/transformer"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/shared"
 
+	"tingly-box/internal/protocol/request/transformer"
 	"tingly-box/internal/typ"
 )
 

@@ -3,9 +3,9 @@ package transformer
 import (
 	"encoding/json"
 
-	"tingly-box/internal/typ"
-
 	"github.com/openai/openai-go/v3"
+
+	"tingly-box/internal/typ"
 )
 
 // applyDeepSeekTransform converts x_thinking field to reasoning_content for DeepSeek

@@ -3,14 +3,14 @@ package client
 import (
 	"context"
 	"net/http"
-	"tingly-box/internal/obs"
-	"tingly-box/internal/protocol"
 
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/sirupsen/logrus"
 
+	"tingly-box/internal/obs"
+	"tingly-box/internal/protocol"
 	"tingly-box/internal/typ"
 )
 

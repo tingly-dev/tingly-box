@@ -5,9 +5,9 @@ import (
 	"log"
 	"strings"
 
-	"tingly-box/internal/loadbalance"
-
 	"github.com/gobwas/glob"
+
+	"tingly-box/internal/loadbalance"
 )
 
 // Router evaluates requests against smart routing rules

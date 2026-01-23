@@ -3,9 +3,9 @@ package transformer
 import (
 	"strings"
 
-	"tingly-box/internal/typ"
-
 	"github.com/openai/openai-go/v3"
+
+	"tingly-box/internal/typ"
 )
 
 // Constants and configurations for Gemini API compatibility

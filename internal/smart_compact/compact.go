@@ -6,9 +6,10 @@ package smart_compact
 
 import (
 	"log"
-	"tingly-box/internal/protocol"
 
 	"github.com/anthropics/anthropic-sdk-go"
+
+	"tingly-box/internal/protocol"
 )
 
 // CompactTransformer implements the Transformer interface.

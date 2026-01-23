@@ -6,11 +6,11 @@ import (
 	"log"
 	"net/http"
 	"time"
-	"tingly-box/internal/command"
 
 	"github.com/gin-gonic/gin"
 	"github.com/wailsapp/wails/v3/pkg/application"
 
+	"tingly-box/internal/command"
 	"tingly-box/internal/config"
 	"tingly-box/internal/server"
 )

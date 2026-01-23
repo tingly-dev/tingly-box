@@ -4,14 +4,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"iter"
 	"net/http"
 	"time"
-	"tingly-box/internal/protocol/nonstream"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/genai"
+	"iter"
+
+	"tingly-box/internal/protocol/nonstream"
 )
 
 // HandleGoogleToOpenAIStreamResponse processes Google streaming events and converts them to OpenAI format

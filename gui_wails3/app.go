@@ -4,12 +4,12 @@ import (
 	"log"
 	"path/filepath"
 	"time"
-	services2 "tingly-box/gui_wails3/services"
-	"tingly-box/pkg/fs"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
+	services2 "tingly-box/gui_wails3/services"
 	assets "tingly-box/internal"
+	"tingly-box/pkg/fs"
 )
 
 const (

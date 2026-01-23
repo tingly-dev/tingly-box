@@ -8,21 +8,21 @@ import (
 	"net/http"
 	"path/filepath"
 	"time"
-	"tingly-box/internal/client"
-	"tingly-box/internal/template"
-	"tingly-box/pkg/auth"
-	"tingly-box/pkg/network"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/browser"
 	"github.com/sirupsen/logrus"
 
+	"tingly-box/internal/client"
 	"tingly-box/internal/constant"
 	"tingly-box/internal/obs"
 	"tingly-box/internal/server/background"
 	"tingly-box/internal/server/config"
 	"tingly-box/internal/server/middleware"
 	servertls "tingly-box/internal/server/tls"
+	"tingly-box/internal/template"
+	"tingly-box/pkg/auth"
+	"tingly-box/pkg/network"
 	oauth2 "tingly-box/pkg/oauth"
 )
 

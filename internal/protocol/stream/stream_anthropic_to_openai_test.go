@@ -7,7 +7,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"tingly-box/internal/protocol/request"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
@@ -15,6 +14,8 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"tingly-box/internal/protocol/request"
 )
 
 // TestHandleAnthropicToOpenAIStreamResponse tests the Anthropic to OpenAI stream conversion

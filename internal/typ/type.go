@@ -2,9 +2,9 @@ package typ
 
 import (
 	"time"
-	"tingly-box/internal/protocol"
 
 	"tingly-box/internal/loadbalance"
+	"tingly-box/internal/protocol"
 	"tingly-box/internal/smart_routing"
 )
 

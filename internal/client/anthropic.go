@@ -4,14 +4,14 @@ import (
 	"context"
 	"net/http"
 	"strings"
-	"tingly-box/internal/obs"
-	"tingly-box/internal/protocol"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/sirupsen/logrus"
 
+	"tingly-box/internal/obs"
+	"tingly-box/internal/protocol"
 	"tingly-box/internal/typ"
 	"tingly-box/pkg/oauth"
 )

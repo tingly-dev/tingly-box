@@ -6,11 +6,11 @@ import (
 	"net/http"
 	"sync"
 	"time"
-	"tingly-box/internal/obs"
 
 	"github.com/gin-gonic/gin"
 
 	"tingly-box/internal/config"
+	"tingly-box/internal/obs"
 	"tingly-box/internal/server"
 )
 

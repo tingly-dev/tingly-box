@@ -4,9 +4,10 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"tingly-box/pkg/network"
 
 	"github.com/gin-gonic/gin"
+
+	"tingly-box/pkg/network"
 )
 
 func init() {

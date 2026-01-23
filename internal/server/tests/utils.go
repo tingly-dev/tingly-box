@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"tingly-box/internal/protocol"
 
 	"github.com/gin-gonic/gin"
 	"github.com/otiai10/copy"
@@ -20,6 +19,7 @@ import (
 	"tingly-box/internal/config"
 	"tingly-box/internal/constant"
 	"tingly-box/internal/loadbalance"
+	"tingly-box/internal/protocol"
 	"tingly-box/internal/server"
 	typ "tingly-box/internal/typ"
 )

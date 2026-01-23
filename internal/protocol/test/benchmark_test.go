@@ -3,11 +3,12 @@ package test
 import (
 	"encoding/json"
 	"testing"
-	"tingly-box/internal/protocol/nonstream"
-	"tingly-box/internal/protocol/request"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
+
+	"tingly-box/internal/protocol/nonstream"
+	"tingly-box/internal/protocol/request"
 )
 
 // Benchmark tests

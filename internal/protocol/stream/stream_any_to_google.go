@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"tingly-box/internal/protocol/nonstream"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
@@ -15,6 +14,8 @@ import (
 	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/genai"
+
+	"tingly-box/internal/protocol/nonstream"
 )
 
 // HandleOpenAIToGoogleStreamResponse processes OpenAI streaming events and converts them to Google format

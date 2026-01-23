@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-	"tingly-box/internal/protocol"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
@@ -17,6 +16,7 @@ import (
 
 	"tingly-box/internal/feature"
 	"tingly-box/internal/loadbalance"
+	"tingly-box/internal/protocol"
 	"tingly-box/internal/smart_compact"
 	"tingly-box/internal/typ"
 )

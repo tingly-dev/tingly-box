@@ -3,10 +3,10 @@ package transformer
 import (
 	"strings"
 
-	"tingly-box/internal/typ"
-
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/shared"
+
+	"tingly-box/internal/typ"
 )
 
 // OpenAIConfig contains additional metadata that may be used by provider transforms
