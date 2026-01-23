@@ -387,6 +387,7 @@ func HandleResponsesToAnthropicV1BetaStreamResponse(c *gin.Context, stream *open
 			// Text or content part is done - finalize the text block
 			if textBlockIndex != -1 {
 				sendBetaContentBlockStop(c, textBlockIndex, flusher)
+				state.stoppedBlocks[textBlockIndex] = true
 				textBlockIndex = -1
 			}
 
@@ -409,6 +410,7 @@ func HandleResponsesToAnthropicV1BetaStreamResponse(c *gin.Context, stream *open
 			// Reasoning text is done
 			if state.thinkingBlockIndex != -1 {
 				sendBetaContentBlockStop(c, state.thinkingBlockIndex, flusher)
+				state.stoppedBlocks[state.thinkingBlockIndex] = true
 				state.thinkingBlockIndex = -1
 			}
 
@@ -431,6 +433,7 @@ func HandleResponsesToAnthropicV1BetaStreamResponse(c *gin.Context, stream *open
 			// Reasoning summary text is done
 			if textBlockIndex != -1 {
 				sendBetaContentBlockStop(c, textBlockIndex, flusher)
+				state.stoppedBlocks[textBlockIndex] = true
 				textBlockIndex = -1
 			}
 
@@ -453,6 +456,7 @@ func HandleResponsesToAnthropicV1BetaStreamResponse(c *gin.Context, stream *open
 			// Refusal is done
 			if textBlockIndex != -1 {
 				sendBetaContentBlockStop(c, textBlockIndex, flusher)
+				state.stoppedBlocks[textBlockIndex] = true
 				textBlockIndex = -1
 			}
 
@@ -504,6 +508,7 @@ func HandleResponsesToAnthropicV1BetaStreamResponse(c *gin.Context, stream *open
 					toolCall.name = argsDone.Name
 				}
 				sendBetaContentBlockStop(c, toolCall.blockIndex, flusher)
+				state.stoppedBlocks[toolCall.blockIndex] = true
 				delete(pendingToolCalls, argsDone.ItemID)
 			}
 
@@ -523,6 +528,7 @@ func HandleResponsesToAnthropicV1BetaStreamResponse(c *gin.Context, stream *open
 			customDone := currentEvent.AsResponseCustomToolCallInputDone()
 			if toolCall, exists := pendingToolCalls[customDone.ItemID]; exists {
 				sendBetaContentBlockStop(c, toolCall.blockIndex, flusher)
+				state.stoppedBlocks[toolCall.blockIndex] = true
 				delete(pendingToolCalls, customDone.ItemID)
 			}
 
@@ -542,6 +548,7 @@ func HandleResponsesToAnthropicV1BetaStreamResponse(c *gin.Context, stream *open
 			mcpDone := currentEvent.AsResponseMcpCallArgumentsDone()
 			if toolCall, exists := pendingToolCalls[mcpDone.ItemID]; exists {
 				sendBetaContentBlockStop(c, toolCall.blockIndex, flusher)
+				state.stoppedBlocks[toolCall.blockIndex] = true
 				delete(pendingToolCalls, mcpDone.ItemID)
 			}
 
@@ -554,7 +561,10 @@ func HandleResponsesToAnthropicV1BetaStreamResponse(c *gin.Context, stream *open
 			state.inputTokens = int64(completed.Response.Usage.InputTokens)
 			state.outputTokens = int64(completed.Response.Usage.OutputTokens)
 
-			// Send stop events
+			// Ensure all remaining blocks are stopped (in case any missed done events)
+			sendBetaStopEvents(c, state, flusher)
+
+			// Send final message events
 			sendBetaMessageDelta(c, state, string(anthropic.BetaStopReasonEndTurn), flusher)
 			sendBetaMessageStop(c, messageID, responseModel, state, string(anthropic.BetaStopReasonEndTurn), flusher)
 			return nil

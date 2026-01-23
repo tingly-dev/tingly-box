@@ -13,22 +13,25 @@ import (
 func sendBetaStopEvents(c *gin.Context, state *streamState, flusher http.Flusher) {
 	// Collect block indices to stop
 	var blockIndices []int
-	if state.thinkingBlockIndex != -1 {
+	if state.thinkingBlockIndex != -1 && !state.stoppedBlocks[state.thinkingBlockIndex] {
 		blockIndices = append(blockIndices, state.thinkingBlockIndex)
 	}
-	if state.hasTextContent {
+	if state.hasTextContent && !state.stoppedBlocks[state.textBlockIndex] {
 		blockIndices = append(blockIndices, state.textBlockIndex)
 	}
 	for i := range state.pendingToolCalls {
-		blockIndices = append(blockIndices, i)
+		if !state.stoppedBlocks[i] {
+			blockIndices = append(blockIndices, i)
+		}
 	}
 
 	// Sort by index to stop in order
 	sort.Ints(blockIndices)
 
-	// Send stop events in sorted order
+	// Send stop events in sorted order and mark as stopped
 	for _, idx := range blockIndices {
 		sendBetaContentBlockStop(c, idx, flusher)
+		state.stoppedBlocks[idx] = true
 	}
 }
 
