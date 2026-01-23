@@ -559,6 +559,13 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithResponseModel(ProbeProviderResponse{}),
 	)
 
+	apiV1.POST("/probe/model", s.HandleProbeModelEndpoints,
+		swagger.WithDescription("Probe model endpoints (chat and responses) concurrently"),
+		swagger.WithTags("testing"),
+		swagger.WithRequestModel(ModelProbeRequest{}),
+		swagger.WithResponseModel(ModelProbeResponse{}),
+	)
+
 	// Token Management
 	apiV1.POST("/token", s.GenerateToken,
 		swagger.WithDescription("Generate a new API token"),

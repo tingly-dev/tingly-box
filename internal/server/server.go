@@ -15,6 +15,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server/background"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
@@ -55,6 +56,12 @@ type Server struct {
 
 	// template manager for provider templates
 	templateManager *template.TemplateManager
+
+	// probe cache for model endpoint capabilities
+	probeCache *ProbeCache
+
+	// capability store for persistent model capabilities
+	capabilityStore *db.ModelCapabilityStore
 
 	// options
 	enableUI      bool
@@ -319,6 +326,22 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 
 	// Set template manager in config for model fetching fallback
 	server.config.SetTemplateManager(templateManager)
+
+	// Initialize probe cache with 24-hour TTL
+	server.probeCache = NewProbeCache(24 * time.Hour)
+	// Start background cleanup task for expired cache entries
+	server.probeCache.StartCleanupTask(1 * time.Hour)
+	log.Printf("Probe cache initialized with TTL: 24h")
+
+	// Initialize model capability store
+	capabilityStore, err := db.NewModelCapabilityStore(cfg.ConfigDir)
+	if err != nil {
+		log.Printf("Failed to initialize model capability store: %v", err)
+		// Continue without capability store - will use in-memory cache only
+	} else {
+		server.capabilityStore = capabilityStore
+		log.Printf("Model capability store initialized")
+	}
 
 	// Setup middleware
 	server.setupMiddleware()
