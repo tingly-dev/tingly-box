@@ -441,6 +441,22 @@ func (ap *AdaptiveProbe) GetModelCapability(providerUUID, modelID string) (*Mode
 	// Check database
 	if ap.server.capabilityStore != nil {
 		if dbCapability, found := ap.server.capabilityStore.GetModelCapability(providerUUID, modelID); found {
+			// Check if database record is stale
+			if ap.server.probeCache != nil && time.Since(dbCapability.LastVerified) > ap.server.probeCache.ttl {
+				// Database record is stale, trigger async probe refresh
+				go func() {
+					ctx, cancel := context.WithTimeout(context.Background(), DefaultProbeTimeout)
+					defer cancel()
+					ap.ProbeModelEndpoints(ctx, ModelProbeRequest{
+						ProviderUUID: providerUUID,
+						ModelID:      modelID,
+					})
+				}()
+
+				// Return nil to trigger default behavior, or return stale data with expectation of refresh
+				// For now, return stale data but trigger refresh
+			}
+
 			// Convert DB capability to internal capability type
 			capability := &ModelEndpointCapability{
 				ProviderUUID:       dbCapability.ProviderUUID,
@@ -455,7 +471,7 @@ func (ap *AdaptiveProbe) GetModelCapability(providerUUID, modelID string) (*Mode
 				LastVerified:       dbCapability.LastVerified,
 			}
 
-			// Also cache it
+			// Also cache it (even if stale, will be refreshed soon)
 			if ap.server.probeCache != nil {
 				ap.server.probeCache.Set(providerUUID, modelID, capability)
 			}
