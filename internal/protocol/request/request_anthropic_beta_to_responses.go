@@ -16,29 +16,8 @@ func ConvertAnthropicBetaToResponsesRequestWithProvider(
 	provider *typ.Provider,
 	model string,
 ) responses.ResponseNewParams {
-	// Base conversion
 	responsesReq := ConvertAnthropicBetaToResponsesRequest(anthropicReq)
-
-	// Set the model via raw JSON approach (similar to adaptive_probe.go)
-	paramsJSON, err := json.Marshal(responsesReq)
-	if err != nil {
-		return responsesReq
-	}
-
-	var raw map[string]interface{}
-	if err := json.Unmarshal(paramsJSON, &raw); err != nil {
-		return responsesReq
-	}
-
-	raw["model"] = model
-
-	modifiedJSON, err := json.Marshal(raw)
-	if err != nil {
-		return responsesReq
-	}
-
-	json.Unmarshal(modifiedJSON, &responsesReq)
-
+	responsesReq.Model = model
 	return responsesReq
 }
 
