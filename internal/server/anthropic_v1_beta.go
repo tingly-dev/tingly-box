@@ -11,7 +11,6 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/gin-gonic/gin"
-	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/genai"
@@ -436,18 +435,13 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPIStreaming(c *gin.Context, r
 	}
 
 	// Handle the streaming response
-	s.handleAnthropicV1BetaResponsesAPIStreamResponse(c, streamResp, proxyModel, actualModel, rule, provider)
-}
-
-// handleAnthropicV1BetaResponsesAPIStreamResponse processes the Responses API streaming response and sends it to the client in Anthropic beta format
-func (s *Server) handleAnthropicV1BetaResponsesAPIStreamResponse(c *gin.Context, streamResp *openaistream.Stream[responses.ResponseStreamEventUnion], respModel, actualModel string, rule *typ.Rule, provider *typ.Provider) {
 	// Use the dedicated stream handler to convert Responses API to Anthropic beta format
-	err := stream.HandleResponsesToAnthropicV1BetaStreamResponse(c, streamResp, respModel)
+	err = stream.HandleResponsesToAnthropicV1BetaStreamResponse(c, streamResp, proxyModel)
 
 	// Track usage from stream (would be accumulated in handler)
 	// For now, we'll track minimal usage since the handler manages it
 	if err != nil {
-		s.trackUsage(c, rule, provider, actualModel, respModel, 0, 0, false, "error", "stream_error")
+		s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "stream_error")
 		return
 	}
 
