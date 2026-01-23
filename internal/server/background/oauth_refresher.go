@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"tingly-box/internal/server/config"
-	"tingly-box/internal/typ"
-	oauth2 "tingly-box/pkg/oauth"
+	"github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/typ"
+	oauth2 "github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
 // tokenManager defines the interface for token refresh operations

@@ -5,9 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"tingly-box/internal/server/config"
-	"tingly-box/internal/typ"
-	oauth2 "tingly-box/pkg/oauth"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/typ"
+	oauth2 "github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
 // tokenRefresher is a minimal interface for the refresh functionality
@@ -247,7 +248,7 @@ func TestOAuthRefresherActualRefresh(t *testing.T) {
 		UUID:     "test-provider-uuid",
 		Name:     "TestOAuthProvider",
 		APIBase:  "https://api.test.com",
-		APIStyle: typ.APIStyleOpenAI,
+		APIStyle: protocol.APIStyleOpenAI,
 		AuthType: typ.AuthTypeOAuth,
 		OAuthDetail: &typ.OAuthDetail{
 			AccessToken:  "old_access_token",
@@ -309,7 +310,7 @@ func TestOAuthRefresherSkipValidTokens(t *testing.T) {
 		UUID:     "test-provider-uuid",
 		Name:     "TestOAuthProvider",
 		APIBase:  "https://api.test.com",
-		APIStyle: typ.APIStyleOpenAI,
+		APIStyle: protocol.APIStyleOpenAI,
 		AuthType: typ.AuthTypeOAuth,
 		OAuthDetail: &typ.OAuthDetail{
 			AccessToken:  "valid_access_token",

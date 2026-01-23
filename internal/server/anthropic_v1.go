@@ -11,9 +11,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
-	"tingly-box/internal/loadbalance"
-	"tingly-box/internal/typ"
-	"tingly-box/pkg/adaptor"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	nonstream2 "github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
+	request2 "github.com/tingly-dev/tingly-box/internal/protocol/request"
+	stream2 "github.com/tingly-dev/tingly-box/internal/protocol/stream"
+	"github.com/tingly-dev/tingly-box/internal/protocol/token"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // sendSSEvent sends a generic SSE event with JSON data
@@ -28,7 +32,7 @@ func sendSSEvent(c *gin.Context, eventType string, data interface{}) error {
 }
 
 // anthropicMessagesV1 implements standard v1 messages API
-func (s *Server) anthropicMessagesV1(c *gin.Context, req AnthropicMessagesRequest, proxyModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule) {
+func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessagesRequest, proxyModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule) {
 	actualModel := selectedService.Model
 
 	// Check if streaming is requested
@@ -64,7 +68,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req AnthropicMessagesReques
 	apiStyle := provider.APIStyle
 
 	switch apiStyle {
-	case typ.APIStyleAnthropic:
+	case protocol.APIStyleAnthropic:
 		// Use direct Anthropic SDK call
 		if isStreaming {
 			// Handle streaming request
@@ -96,7 +100,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req AnthropicMessagesReques
 		}
 		return
 
-	case typ.APIStyleGoogle:
+	case protocol.APIStyleGoogle:
 		// Check if adaptor is enabled
 		if !s.enableAdaptor {
 			SendAdapterDisabledError(c, provider.Name)
@@ -104,18 +108,18 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req AnthropicMessagesReques
 		}
 
 		// Convert Anthropic request to Google format
-		model, googleReq, cfg := adaptor.ConvertAnthropicToGoogleRequest(&req.MessageNewParams, 0)
+		model, googleReq, cfg := request2.ConvertAnthropicToGoogleRequest(&req.MessageNewParams, 0)
 
 		if isStreaming {
 			// Create streaming request
-			stream, err := s.forwardGoogleStreamRequest(provider, model, googleReq, cfg)
+			streamResp, err := s.forwardGoogleStreamRequest(provider, model, googleReq, cfg)
 			if err != nil {
 				SendStreamingError(c, err)
 				return
 			}
 
 			// Handle the streaming response
-			err = adaptor.HandleGoogleToAnthropicStreamResponse(c, stream, proxyModel)
+			err = stream2.HandleGoogleToAnthropicStreamResponse(c, streamResp, proxyModel)
 			if err != nil {
 				SendInternalError(c, err.Error())
 			}
@@ -132,7 +136,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req AnthropicMessagesReques
 			}
 
 			// Convert Google response to Anthropic format
-			anthropicResp := adaptor.ConvertGoogleToAnthropicResponse(response, proxyModel)
+			anthropicResp := nonstream2.ConvertGoogleToAnthropicResponse(response, proxyModel)
 
 			// Track usage from response
 			inputTokens := 0
@@ -146,7 +150,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req AnthropicMessagesReques
 			c.JSON(http.StatusOK, anthropicResp)
 		}
 
-	case typ.APIStyleOpenAI:
+	case protocol.APIStyleOpenAI:
 		// Check if adaptor is enabled
 		if !s.enableAdaptor {
 			SendAdapterDisabledError(c, provider.Name)
@@ -156,31 +160,31 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req AnthropicMessagesReques
 		// Use OpenAI conversion path (default behavior)
 		if isStreaming {
 			// Convert Anthropic request to OpenAI format for streaming
-			openaiReq := adaptor.ConvertAnthropicToOpenAIRequestWithProvider(&req.MessageNewParams, true, provider, actualModel)
+			openaiReq := request2.ConvertAnthropicToOpenAIRequestWithProvider(&req.MessageNewParams, true, provider, actualModel)
 
 			// Create streaming request
-			stream, err := s.forwardOpenAIStreamRequest(provider, openaiReq)
+			streamResp, err := s.forwardOpenAIStreamRequest(provider, openaiReq)
 			if err != nil {
 				SendStreamingError(c, err)
 				return
 			}
 
 			// Handle the streaming response
-			err = adaptor.HandleOpenAIToAnthropicStreamResponse(c, openaiReq, stream, proxyModel)
+			err = stream2.HandleOpenAIToAnthropicStreamResponse(c, openaiReq, streamResp, proxyModel)
 			if err != nil {
 				SendInternalError(c, err.Error())
 			}
 
 		} else {
 			// Handle non-streaming request
-			openaiReq, _ := adaptor.ConvertAnthropicToOpenAIRequest(&req.MessageNewParams, true)
+			openaiReq, _ := request2.ConvertAnthropicToOpenAIRequest(&req.MessageNewParams, true)
 			response, err := s.forwardOpenAIRequest(provider, openaiReq)
 			if err != nil {
 				SendForwardingError(c, err)
 				return
 			}
 			// Convert OpenAI response back to Anthropic format
-			anthropicResp := adaptor.ConvertOpenAIToAnthropicResponse(response, proxyModel)
+			anthropicResp := nonstream2.ConvertOpenAIToAnthropicResponse(response, proxyModel)
 			c.JSON(http.StatusOK, anthropicResp)
 		}
 	default:
@@ -324,7 +328,7 @@ func (s *Server) anthropicCountTokensV1(c *gin.Context, bodyBytes []byte, rawReq
 		}
 		c.JSON(http.StatusOK, message)
 	} else {
-		count, err := countTokensWithTiktoken(string(req.Model), req.Messages, req.System.OfTextBlockArray)
+		count, err := token.CountTokensWithTiktoken(string(req.Model), req.Messages, req.System.OfTextBlockArray)
 		if err != nil {
 			SendInvalidRequestBodyError(c, err)
 			return

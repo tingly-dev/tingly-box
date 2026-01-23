@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"tingly-box/internal/util"
+	"github.com/tingly-dev/tingly-box/pkg/fs"
 )
 
 // ActionType represents the type of action performed
@@ -55,7 +55,7 @@ type MemoryLogger struct {
 
 // NewMemoryLogger creates a new memory logger
 func NewMemoryLogger() (*MemoryLogger, error) {
-	home, _ := util.GetUserPath()
+	home, _ := fs.GetUserPath()
 	memoryDir := filepath.Join(home, ".tingly-box", "memory")
 	if err := os.MkdirAll(memoryDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create memory directory: %w", err)

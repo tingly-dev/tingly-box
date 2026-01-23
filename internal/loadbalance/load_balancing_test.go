@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	typ "tingly-box/internal/typ"
+	typ "github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 func TestService_ServiceID(t *testing.T) {

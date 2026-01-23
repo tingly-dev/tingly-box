@@ -13,9 +13,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"tingly-box/internal/typ"
-	oauth2 "tingly-box/pkg/oauth"
-	"tingly-box/pkg/swagger"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/typ"
+	oauth2 "github.com/tingly-dev/tingly-box/pkg/oauth"
+	"github.com/tingly-dev/tingly-box/pkg/swagger"
 )
 
 // =============================================
@@ -958,7 +959,7 @@ func (s *Server) createProviderFromToken(token *oauth2.Token, providerType oauth
 	// Determine API base and style based on provider type
 	// Priority: token.ResourceURL > provider default > mock
 	var apiBase string
-	var apiStyle typ.APIStyle
+	var apiStyle protocol.APIStyle
 
 	// If token contains ResourceURL from OAuth response, use it
 	{
@@ -966,7 +967,7 @@ func (s *Server) createProviderFromToken(token *oauth2.Token, providerType oauth
 		switch providerType {
 		case oauth2.ProviderClaudeCode:
 			apiBase = "https://api.anthropic.com"
-			apiStyle = typ.APIStyleAnthropic
+			apiStyle = protocol.APIStyleAnthropic
 		case oauth2.ProviderQwenCode:
 			if token.ResourceURL != "" {
 				// Normalize ResourceURL: ensure it has /v1 suffix for OpenAI-compatible API
@@ -975,23 +976,23 @@ func (s *Server) createProviderFromToken(token *oauth2.Token, providerType oauth
 			} else {
 				apiBase = "https://portal.qwen.ai/v1"
 			}
-			apiStyle = typ.APIStyleOpenAI
+			apiStyle = protocol.APIStyleOpenAI
 		case oauth2.ProviderGoogle:
 			apiBase = "https://generativelanguage.googleapis.com"
-			apiStyle = typ.APIStyleOpenAI
+			apiStyle = protocol.APIStyleOpenAI
 		case oauth2.ProviderOpenAI:
 			apiBase = "https://api.openai.com/v1"
-			apiStyle = typ.APIStyleOpenAI
+			apiStyle = protocol.APIStyleOpenAI
 		default:
 			// For mock and unknown providers
 			apiBase = "mock"
-			apiStyle = typ.APIStyleOpenAI
+			apiStyle = protocol.APIStyleOpenAI
 		}
 	}
 
 	// For providers without ResourceURL, determine APIStyle if not set
 	if apiStyle == "" {
-		apiStyle = typ.APIStyleOpenAI
+		apiStyle = protocol.APIStyleOpenAI
 	}
 
 	// Build expires_at string

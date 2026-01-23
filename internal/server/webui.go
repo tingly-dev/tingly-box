@@ -12,10 +12,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	assets "tingly-box/internal"
-	"tingly-box/internal/obs"
-	"tingly-box/internal/typ"
-	"tingly-box/pkg/swagger"
+	assets "github.com/tingly-dev/tingly-box/internal"
+	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/pkg/swagger"
 )
 
 // GlobalServerManager manages the global server instance for web UI control
@@ -139,9 +140,9 @@ func (s *Server) HandleProbeModel(c *gin.Context) {
 	var err error
 
 	switch provider.APIStyle {
-	case typ.APIStyleAnthropic:
+	case protocol.APIStyleAnthropic:
 		responseContent, usage, err = s.probeWithAnthropic(c, provider, model)
-	case typ.APIStyleOpenAI:
+	case protocol.APIStyleOpenAI:
 		fallthrough
 	default:
 		responseContent, usage, err = s.probeWithOpenAI(c, provider, model)

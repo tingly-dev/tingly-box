@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // ScenarioUpdateRequest represents the request to update a scenario

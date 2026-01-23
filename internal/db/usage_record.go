@@ -12,7 +12,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	"tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 )
 
 // UsageRecord is the GORM model for persisting individual usage records

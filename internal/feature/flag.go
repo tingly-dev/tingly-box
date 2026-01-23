@@ -1,7 +1,9 @@
 // Package feature provides experimental feature flag definitions and parsing.
 package feature
 
-import "strings"
+import (
+	"strings"
+)
 
 const (
 	// FeatureCompact enables smart compact for conversation history.

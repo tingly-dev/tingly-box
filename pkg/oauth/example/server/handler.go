@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"strings"
 
-	"tingly-box/pkg/oauth"
-
 	"github.com/gin-gonic/gin"
+
+	"github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
 const (

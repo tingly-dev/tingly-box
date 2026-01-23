@@ -49,16 +49,16 @@ type RequestResult struct {
 
 // Use simple structs for requests instead of importing from SDKs
 type OpenAIChatRequest struct {
-	Model    string                 `json:"model"`
+	Model    string                   `json:"model"`
 	Messages []map[string]interface{} `json:"messages"`
-	Stream   bool                   `json:"stream,omitempty"`
+	Stream   bool                     `json:"stream,omitempty"`
 }
 
 type AnthropicMessageRequest struct {
-	Model     string                 `json:"model"`
-	MaxTokens int                    `json:"max_tokens"`
+	Model     string                   `json:"model"`
+	MaxTokens int                      `json:"max_tokens"`
 	Messages  []map[string]interface{} `json:"messages"`
-	Stream    bool                   `json:"stream,omitempty"`
+	Stream    bool                     `json:"stream,omitempty"`
 }
 
 func NewBenchmarkClient(opts *BenchmarkOptions) *BenchmarkClient {

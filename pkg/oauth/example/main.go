@@ -31,10 +31,11 @@ import (
 	"strings"
 	"syscall"
 	"time"
-	oauth2 "tingly-box/pkg/oauth"
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+
+	oauth2 "github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
 const (
@@ -314,7 +315,7 @@ func newSignalChan() chan os.Signal {
 func runAuthCodeFlow(config *ExampleConfig, registry *oauth2.Registry, providerConfig *oauth2.ProviderConfig) error {
 	oauthConfig := newOAuthConfig(config.BaseURL)
 	manager := oauth2.NewManager(oauthConfig, registry)
-    manager.Debug = true
+	manager.Debug = true
 
 	resultChan := make(chan *CallbackResult, 1)
 	errorChan := make(chan error, 1)
@@ -428,7 +429,7 @@ func runAuthCodeFlow(config *ExampleConfig, registry *oauth2.Registry, providerC
 func runDeviceCodeFlow(config *ExampleConfig, registry *oauth2.Registry, providerConfig *oauth2.ProviderConfig) error {
 	oauthConfig := newOAuthConfig(config.BaseURL)
 	manager := oauth2.NewManager(oauthConfig, registry)
-    manager.Debug = true
+	manager.Debug = true
 
 	fmt.Println("\n" + strings.Repeat("=", 80))
 	fmt.Println("MANUAL OAUTH TEST - Device Code Flow")

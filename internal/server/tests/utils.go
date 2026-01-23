@@ -16,11 +16,12 @@ import (
 	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
 
-	"tingly-box/internal/config"
-	"tingly-box/internal/constant"
-	"tingly-box/internal/loadbalance"
-	"tingly-box/internal/server"
-	typ "tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/server"
+	typ "github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // TestServer represents a test server wrapper
@@ -235,7 +236,7 @@ func (ts *TestServer) AddTestProvider(t *testing.T, name, apiBase, apiStyle stri
 		UUID:     name, // for test, use name as uuid for convenience
 		Name:     name,
 		APIBase:  apiBase,
-		APIStyle: typ.APIStyle(apiStyle),
+		APIStyle: protocol.APIStyle(apiStyle),
 		Token:    "test-token",
 		Enabled:  enabled,
 		Timeout:  int64(constant.DefaultRequestTimeout),
@@ -251,7 +252,7 @@ func (ts *TestServer) AddTestProviderWithURL(t *testing.T, name, url, apiStyle s
 		UUID:     name, // use name as uuid for convenience
 		Name:     name,
 		APIBase:  url,
-		APIStyle: typ.APIStyle(apiStyle),
+		APIStyle: protocol.APIStyle(apiStyle),
 		Token:    "test-token",
 		Enabled:  enabled,
 		Timeout:  int64(constant.DefaultRequestTimeout),

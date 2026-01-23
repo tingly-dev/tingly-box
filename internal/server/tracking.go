@@ -6,8 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"tingly-box/internal/db"
-	"tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/db"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // UsageTracker provides usage tracking methods for handlers.
