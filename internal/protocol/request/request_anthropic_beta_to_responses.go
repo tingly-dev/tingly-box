@@ -134,6 +134,7 @@ func convertBetaUserMessageToResponsesInput(msg anthropic.BetaMessageParam) []re
 			} else if block.OfText != nil {
 				// Text content alongside tool results
 				messageItem := responses.EasyInputMessageParam{
+					Type: responses.EasyInputMessageTypeMessage,
 					Role: responses.EasyInputMessageRole("user"),
 					Content: responses.EasyInputMessageContentUnionParam{
 						OfString: ParamOpt(block.OfText.Text),
@@ -149,6 +150,7 @@ func convertBetaUserMessageToResponsesInput(msg anthropic.BetaMessageParam) []re
 		contentStr := ConvertBetaContentBlocksToString(msg.Content)
 		if contentStr != "" {
 			messageItem := responses.EasyInputMessageParam{
+				Type: responses.EasyInputMessageTypeMessage,
 				Role: responses.EasyInputMessageRole("user"),
 				Content: responses.EasyInputMessageContentUnionParam{
 					OfString: ParamOpt(contentStr),
@@ -196,6 +198,7 @@ func convertBetaAssistantMessageToResponsesInput(msg anthropic.BetaMessageParam)
 	// Add text content as a separate message if present
 	if textContent != "" {
 		messageItem := responses.EasyInputMessageParam{
+			Type: responses.EasyInputMessageTypeMessage,
 			Role: responses.EasyInputMessageRole("assistant"),
 			Content: responses.EasyInputMessageContentUnionParam{
 				OfString: ParamOpt(textContent),
@@ -209,6 +212,7 @@ func convertBetaAssistantMessageToResponsesInput(msg anthropic.BetaMessageParam)
 	// If no items were created and we have no text, create an empty assistant message
 	if len(items) == 0 {
 		messageItem := responses.EasyInputMessageParam{
+			Type: responses.EasyInputMessageTypeMessage,
 			Role: responses.EasyInputMessageRole("assistant"),
 			Content: responses.EasyInputMessageContentUnionParam{
 				OfString: ParamOpt(""),
