@@ -10,7 +10,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/packages/ssestream"
+	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
@@ -192,10 +194,17 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 
 	apiStyle := string(provider.APIStyle)
 	if apiStyle == "" {
-		apiStyle = "openai"
+		apiStyle = string(protocol.APIStyleOpenAI)
 	}
 
-	if apiStyle == "anthropic" {
+	// Check if model prefers responses endpoint (for models like Codex)
+	if selectedService.PreferCompletions() && apiStyle == string(protocol.APIStyleOpenAI) {
+		// Convert chat request to responses request
+		s.handleResponsesForChatRequest(c, provider, &req, responseModel, actualModel, rule, isStreaming)
+		return
+	}
+
+	if apiStyle == string(protocol.APIStyleAnthropic) {
 		// Check if adaptor is enabled
 		if !s.enableAdaptor {
 			c.JSON(http.StatusUnprocessableEntity, ErrorResponse{
@@ -663,6 +672,92 @@ func (s *Server) ListModelsByScenario(c *gin.Context) {
 		// OpenAI is the default
 		s.OpenAIListModels(c)
 	}
+}
+
+// handleResponsesForChatRequest handles chat completion requests by converting them to Responses API requests
+// This is used for models that prefer the Responses API over the Chat Completions API
+func (s *Server) handleResponsesForChatRequest(c *gin.Context, provider *typ.Provider, req *protocol.OpenAIChatCompletionRequest, responseModel, actualModel string, rule *typ.Rule, isStreaming bool) {
+	// Convert chat completion request to responses request
+	params := s.convertChatCompletionToResponsesParams(req, actualModel)
+
+	if isStreaming {
+		s.handleResponsesStreamingRequest(c, provider, params, responseModel, actualModel, rule)
+	} else {
+		s.handleResponsesNonStreamingRequest(c, provider, params, responseModel, actualModel, rule)
+	}
+}
+
+// convertChatCompletionToResponsesParams converts a chat completion request to responses API params
+func (s *Server) convertChatCompletionToResponsesParams(req *protocol.OpenAIChatCompletionRequest, actualModel string) responses.ResponseNewParams {
+	// Build input items from chat messages
+	inputItems := s.convertMessagesToResponseInputItems(req.Messages)
+
+	params := responses.ResponseNewParams{
+		Model:       actualModel,
+		Input:       responses.ResponseNewParamsInputUnion{OfInputItemList: responses.ResponseInputParam(inputItems)},
+		Temperature: req.Temperature,
+		TopP:        req.TopP,
+		MaxOutputTokens: func() param.Opt[int64] {
+			if req.MaxTokens.Valid() {
+				return param.NewOpt(req.MaxTokens.Value)
+			}
+			return param.Opt[int64]{}
+		}(),
+	}
+
+	// Add instructions from system message if present
+	for _, msg := range req.Messages {
+		if !param.IsOmitted(msg.OfSystem) {
+			systemMsg := msg.OfSystem
+			if !param.IsOmitted(systemMsg.Content.OfString) {
+				params.Instructions = systemMsg.Content.OfString
+				break
+			}
+		}
+	}
+
+	return params
+}
+
+// convertMessagesToResponseInputItems converts chat messages to response input items
+func (s *Server) convertMessagesToResponseInputItems(messages []openai.ChatCompletionMessageParamUnion) responses.ResponseInputParam {
+	var inputItems responses.ResponseInputParam
+
+	for _, msg := range messages {
+		switch {
+		case !param.IsOmitted(msg.OfUser):
+			userMsg := msg.OfUser
+			if !param.IsOmitted(userMsg.Content.OfString) {
+				content := userMsg.Content.OfString.Value
+				inputItem := responses.ResponseInputItemUnionParam{
+					OfMessage: &responses.EasyInputMessageParam{
+						Role: responses.EasyInputMessageRoleUser,
+						Content: responses.EasyInputMessageContentUnionParam{
+							OfString: param.NewOpt(content),
+						},
+					},
+				}
+				inputItems = append(inputItems, inputItem)
+			}
+
+		case !param.IsOmitted(msg.OfAssistant):
+			assistantMsg := msg.OfAssistant
+			if !param.IsOmitted(assistantMsg.Content.OfString) {
+				content := assistantMsg.Content.OfString.Value
+				inputItem := responses.ResponseInputItemUnionParam{
+					OfMessage: &responses.EasyInputMessageParam{
+						Role: responses.EasyInputMessageRoleAssistant,
+						Content: responses.EasyInputMessageContentUnionParam{
+							OfString: param.NewOpt(content),
+						},
+					},
+				}
+				inputItems = append(inputItems, inputItem)
+			}
+		}
+	}
+
+	return inputItems
 }
 
 // isValidRuleScenario checks if the given scenario is a valid RuleScenario
