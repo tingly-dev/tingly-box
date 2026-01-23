@@ -427,12 +427,13 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPINonStreaming(c *gin.Context
 // handleAnthropicV1BetaViaResponsesAPIStreaming handles streaming Responses API request
 func (s *Server) handleAnthropicV1BetaViaResponsesAPIStreaming(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, proxyModel string, actualModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule, responsesReq responses.ResponseNewParams) {
 	// Create streaming request
-	streamResp, err := s.forwardResponsesStreamRequest(provider, responsesReq)
+	streamResp, cancel, err := s.forwardResponsesStreamRequest(provider, responsesReq)
 	if err != nil {
 		s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "stream_creation_failed")
 		SendStreamingError(c, err)
 		return
 	}
+	defer cancel()
 
 	// Handle the streaming response
 	// Use the dedicated stream handler to convert Responses API to Anthropic beta format

@@ -196,7 +196,7 @@ func (s *Server) handleResponsesNonStreamingRequest(c *gin.Context, provider *ty
 // handleResponsesStreamingRequest handles streaming Responses API requests
 func (s *Server) handleResponsesStreamingRequest(c *gin.Context, provider *typ.Provider, params responses.ResponseNewParams, responseModel, actualModel string, rule *typ.Rule) {
 	// Create streaming request
-	stream, err := s.forwardResponsesStreamRequest(provider, params)
+	stream, _, err := s.forwardResponsesStreamRequest(provider, params)
 	if err != nil {
 		// Track error with no usage
 		s.trackUsage(c, rule, provider, actualModel, responseModel, 0, 0, false, "error", "stream_creation_failed")
@@ -347,18 +347,17 @@ func (s *Server) forwardResponsesRequest(provider *typ.Provider, params response
 }
 
 // forwardResponsesStreamRequest forwards a streaming Responses API request to the provider
-func (s *Server) forwardResponsesStreamRequest(provider *typ.Provider, params responses.ResponseNewParams) (*ssestream.Stream[responses.ResponseStreamEventUnion], error) {
+func (s *Server) forwardResponsesStreamRequest(provider *typ.Provider, params responses.ResponseNewParams) (*ssestream.Stream[responses.ResponseStreamEventUnion], context.CancelFunc, error) {
 	wrapper := s.clientPool.GetOpenAIClient(provider, params.Model)
 	logrus.Infof("provider: %s (responses streaming)", provider.Name)
 
 	// Make the request using wrapper method with provider timeout
 	timeout := time.Duration(provider.Timeout) * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
 
 	stream := wrapper.Client().Responses.NewStreaming(ctx, params)
 
-	return stream, nil
+	return stream, cancel, nil
 }
 
 // convertToResponsesParams converts raw JSON to OpenAI SDK params format
