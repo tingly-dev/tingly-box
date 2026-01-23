@@ -13,7 +13,7 @@ vars:
   BUILD_DIR: build
   DIST_DIR: build/dist
   
-  PACKAGE_PATH: ./wails3
+  PACKAGE_PATH: ./gui_wails3
   
   PORT: 12580
   
@@ -49,7 +49,7 @@ tasks:
   
   wails:binding:
     cmds:
-      - wails3 generate bindings -ts -f '-buildvcs=false -gcflags=all="-l"' -clean=true ./wails3 -d frontend/src/bindings
+      - wails3 generate bindings -ts -f '-buildvcs=false -gcflags=all="-l"' -clean=true ./gui_wails3 -d frontend/src/bindings
   
   wails:manual:
     cmds:
@@ -170,7 +170,7 @@ tasks:
   gui:build:
     cmds:
       - |
-        go build -buildvcs=false -gcflags=all="-l" -o bin/{{.BIN_NAME}} ./wails3
+        go build -buildvcs=false -gcflags=all="-l" -o bin/{{.BIN_NAME}} ./gui_wails3
 
   windows:build:amd64:
     summary: Cross-compiles for Windows AMD64 with CGO enabled (requires mingw-w64)

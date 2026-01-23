@@ -4,8 +4,8 @@ import (
 	"log"
 	"path/filepath"
 	"time"
+	services2 "tingly-box/gui_wails3/services"
 	"tingly-box/pkg/fs"
-	services2 "tingly-box/wails3/services"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
