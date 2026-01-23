@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
@@ -265,7 +264,7 @@ func HandleOpenAIToAnthropicV1BetaStreamResponse(c *gin.Context, req *openai.Cha
 }
 
 // HandleResponsesToAnthropicV1BetaStreamResponse processes OpenAI Responses API streaming events and converts them to Anthropic beta format
-func HandleResponsesToAnthropicV1BetaStreamResponse(c *gin.Context, stream *ssestream.Stream[responses.ResponseStreamEventUnion], responseModel string) error {
+func HandleResponsesToAnthropicV1BetaStreamResponse(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) error {
 	logrus.Info("Starting Responses API to Anthropic beta streaming response handler")
 	defer func() {
 		if r := recover(); r != nil {
