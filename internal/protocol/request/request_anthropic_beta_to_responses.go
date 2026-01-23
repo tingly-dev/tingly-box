@@ -84,12 +84,12 @@ func ConvertAnthropicBetaToResponsesRequest(anthropicReq *anthropic.BetaMessageN
 	}
 
 	// Convert temperature
-	if !anthropicReq.Temperature.Valid() {
+	if anthropicReq.Temperature.Valid() {
 		params.Temperature = ParamOpt(anthropicReq.Temperature.Value)
 	}
 
 	// Convert top_p
-	if !anthropicReq.TopP.Valid() {
+	if anthropicReq.TopP.Valid() {
 		params.TopP = ParamOpt(anthropicReq.TopP.Value)
 	}
 
