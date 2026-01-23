@@ -113,9 +113,6 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompl
 		chunkCount++
 		chunk := stream.Current()
 
-		b, _ := json.Marshal(chunk)
-		fmt.Printf("chunk: %s\n", b)
-
 		// Skip empty chunks (no choices)
 		if len(chunk.Choices) == 0 {
 			// Check for usage info in the last chunk
@@ -134,7 +131,7 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompl
 
 		// Log first few chunks in detail for debugging
 		if chunkCount <= 5 || choice.FinishReason != "" {
-			logrus.Debugf("Full chunk #%d: %+v", chunkCount, chunk)
+			logrus.Debugf("Full chunk #%d: %v", chunkCount, chunk)
 		}
 
 		delta := choice.Delta
