@@ -559,7 +559,7 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithResponseModel(ProbeProviderResponse{}),
 	)
 
-	apiV1.POST("/probe/model", s.HandleProbeModelEndpoints,
+	apiV1.POST("/probe/model/capability", s.HandleProbeModelEndpoints,
 		swagger.WithDescription("Probe model endpoints (chat and responses) concurrently"),
 		swagger.WithTags("testing"),
 		swagger.WithRequestModel(ModelProbeRequest{}),
