@@ -22,6 +22,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
 	servertls "github.com/tingly-dev/tingly-box/internal/server/tls"
 	"github.com/tingly-dev/tingly-box/internal/template"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
 	"github.com/tingly-dev/tingly-box/pkg/network"
 	oauth2 "github.com/tingly-dev/tingly-box/pkg/oauth"
@@ -661,6 +662,13 @@ func (s *Server) GetRouter() *gin.Engine {
 // GetLoadBalancer returns the load balancer instance
 func (s *Server) GetLoadBalancer() *LoadBalancer {
 	return s.loadBalancer
+}
+
+// GetPreferredEndpointForModel returns the preferred endpoint (chat or responses) for a model
+// Returns "responses" if the model supports the Responses API, otherwise returns "chat"
+func (s *Server) GetPreferredEndpointForModel(provider *typ.Provider, modelID string) string {
+	adaptiveProbe := NewAdaptiveProbe(s)
+	return adaptiveProbe.GetPreferredEndpoint(provider, modelID)
 }
 
 // Stop gracefully stops the HTTP server

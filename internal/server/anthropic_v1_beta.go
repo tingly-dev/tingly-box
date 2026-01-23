@@ -6,18 +6,21 @@ import (
 	"net/http"
 	"time"
 
+	"iter"
+
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/gin-gonic/gin"
+	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
+	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/genai"
-	"iter"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	nonstream2 "github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
-	request2 "github.com/tingly-dev/tingly-box/internal/protocol/request"
-	stream2 "github.com/tingly-dev/tingly-box/internal/protocol/stream"
+	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
+	"github.com/tingly-dev/tingly-box/internal/protocol/request"
+	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -97,7 +100,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 		}
 
 		// Convert Anthropic beta request to Google format
-		model, googleReq, cfg := request2.ConvertAnthropicBetaToGoogleRequest(&req.BetaMessageNewParams, 0)
+		model, googleReq, cfg := request.ConvertAnthropicBetaToGoogleRequest(&req.BetaMessageNewParams, 0)
 
 		if isStreaming {
 			// Create streaming request
@@ -108,7 +111,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			}
 
 			// Handle the streaming response
-			err = stream2.HandleGoogleToAnthropicBetaStreamResponse(c, streamResp, proxyModel)
+			err = stream.HandleGoogleToAnthropicBetaStreamResponse(c, streamResp, proxyModel)
 			if err != nil {
 				SendInternalError(c, err.Error())
 			}
@@ -125,7 +128,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			}
 
 			// Convert Google response to Anthropic beta format
-			anthropicResp := nonstream2.ConvertGoogleToAnthropicBetaResponse(resp, proxyModel)
+			anthropicResp := nonstream.ConvertGoogleToAnthropicBetaResponse(resp, proxyModel)
 
 			// Track usage from response
 			inputTokens := 0
@@ -145,33 +148,16 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			return
 		}
 
-		// Convert Anthropic beta request to OpenAI format for streaming
-		openaiReq := request2.ConvertAnthropicBetaToOpenAIRequestWithProvider(&req.BetaMessageNewParams, true, provider, actualModel)
+		// Check if the model supports Responses API and use it if preferred
+		// For streaming v1beta, Responses API has the highest priority
+		preferredEndpoint := s.GetPreferredEndpointForModel(provider, actualModel)
 
-		// Use OpenAI conversion path (default behavior)
-		if isStreaming {
-			// Create streaming request
-			streamResp, err := s.forwardOpenAIStreamRequest(provider, openaiReq)
-			if err != nil {
-				SendStreamingError(c, err)
-				return
-			}
-
-			// Handle the streaming response
-			err = stream2.HandleOpenAIToAnthropicV1BetaStreamResponse(c, openaiReq, streamResp, proxyModel)
-			if err != nil {
-				SendInternalError(c, err.Error())
-			}
-
+		if preferredEndpoint == "responses" {
+			// Use Responses API path (prioritized for streaming v1beta)
+			s.handleAnthropicV1BetaViaResponsesAPI(c, req, proxyModel, actualModel, provider, selectedService, rule, isStreaming)
 		} else {
-			resp, err := s.forwardOpenAIRequest(provider, openaiReq)
-			if err != nil {
-				SendForwardingError(c, err)
-				return
-			}
-			// Convert OpenAI response back to Anthropic beta format
-			anthropicResp := nonstream2.ConvertOpenAIToAnthropicBetaResponse(resp, proxyModel)
-			c.JSON(http.StatusOK, anthropicResp)
+			// Use Chat Completions path (fallback)
+			s.handleAnthropicV1BetaViaChatCompletions(c, req, proxyModel, actualModel, provider, selectedService, rule, isStreaming)
 		}
 	default:
 		c.JSON(http.StatusBadRequest, "tingly-box: invalid api style")
@@ -362,4 +348,109 @@ func (s *Server) anthropicCountTokensV1Beta(c *gin.Context, bodyBytes []byte, ra
 			InputTokens: int64(count),
 		})
 	}
+}
+
+// handleAnthropicV1BetaViaChatCompletions handles Anthropic v1beta request using OpenAI Chat Completions API
+func (s *Server) handleAnthropicV1BetaViaChatCompletions(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, proxyModel string, actualModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule, isStreaming bool) {
+	// Convert Anthropic beta request to OpenAI format
+	openaiReq := request.ConvertAnthropicBetaToOpenAIRequestWithProvider(&req.BetaMessageNewParams, true, provider, actualModel)
+
+	// Use OpenAI Chat Completions path
+	if isStreaming {
+		// Create streaming request
+		streamResp, err := s.forwardOpenAIStreamRequest(provider, openaiReq)
+		if err != nil {
+			SendStreamingError(c, err)
+			return
+		}
+
+		// Handle the streaming response
+		err = stream.HandleOpenAIToAnthropicV1BetaStreamResponse(c, openaiReq, streamResp, proxyModel)
+		if err != nil {
+			SendInternalError(c, err.Error())
+		}
+
+	} else {
+		resp, err := s.forwardOpenAIRequest(provider, openaiReq)
+		if err != nil {
+			SendForwardingError(c, err)
+			return
+		}
+		// Convert OpenAI response back to Anthropic beta format
+		anthropicResp := nonstream.ConvertOpenAIToAnthropicBetaResponse(resp, proxyModel)
+		c.JSON(http.StatusOK, anthropicResp)
+	}
+}
+
+// handleAnthropicV1BetaViaResponsesAPI handles Anthropic v1beta request using OpenAI Responses API
+func (s *Server) handleAnthropicV1BetaViaResponsesAPI(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, proxyModel string, actualModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule, isStreaming bool) {
+	// Convert Anthropic beta request to Responses API format
+	responsesReq := request.ConvertAnthropicBetaToResponsesRequestWithProvider(&req.BetaMessageNewParams, provider, actualModel)
+
+	// Set the rule and provider in context so middleware can use the same rule
+	if rule != nil {
+		c.Set("rule", rule)
+	}
+
+	// Set provider UUID in context
+	c.Set("provider", provider.UUID)
+	c.Set("model", actualModel)
+
+	if isStreaming {
+		s.handleAnthropicV1BetaViaResponsesAPIStreaming(c, req, proxyModel, actualModel, provider, selectedService, rule, responsesReq)
+	} else {
+		s.handleAnthropicV1BetaViaResponsesAPINonStreaming(c, req, proxyModel, actualModel, provider, selectedService, rule, responsesReq)
+	}
+}
+
+// handleAnthropicV1BetaViaResponsesAPINonStreaming handles non-streaming Responses API request
+func (s *Server) handleAnthropicV1BetaViaResponsesAPINonStreaming(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, proxyModel string, actualModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule, responsesReq responses.ResponseNewParams) {
+	// Forward request to provider
+	response, err := s.forwardResponsesRequest(provider, responsesReq)
+	if err != nil {
+		s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "forward_failed")
+		SendForwardingError(c, err)
+		return
+	}
+
+	// Extract usage from response
+	inputTokens := int(response.Usage.InputTokens)
+	outputTokens := int(response.Usage.OutputTokens)
+
+	// Track usage
+	s.trackUsage(c, rule, provider, actualModel, proxyModel, inputTokens, outputTokens, false, "success", "")
+
+	// Convert Responses API response back to Anthropic beta format
+	anthropicResp := nonstream.ConvertResponsesToAnthropicBetaResponse(response, proxyModel)
+	c.JSON(http.StatusOK, anthropicResp)
+}
+
+// handleAnthropicV1BetaViaResponsesAPIStreaming handles streaming Responses API request
+func (s *Server) handleAnthropicV1BetaViaResponsesAPIStreaming(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, proxyModel string, actualModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule, responsesReq responses.ResponseNewParams) {
+	// Create streaming request
+	streamResp, err := s.forwardResponsesStreamRequest(provider, responsesReq)
+	if err != nil {
+		s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "stream_creation_failed")
+		SendStreamingError(c, err)
+		return
+	}
+
+	// Handle the streaming response
+	s.handleAnthropicV1BetaResponsesAPIStreamResponse(c, streamResp, proxyModel, actualModel, rule, provider)
+}
+
+// handleAnthropicV1BetaResponsesAPIStreamResponse processes the Responses API streaming response and sends it to the client in Anthropic beta format
+func (s *Server) handleAnthropicV1BetaResponsesAPIStreamResponse(c *gin.Context, streamResp *openaistream.Stream[responses.ResponseStreamEventUnion], respModel, actualModel string, rule *typ.Rule, provider *typ.Provider) {
+	// Use the dedicated stream handler to convert Responses API to Anthropic beta format
+	err := stream.HandleResponsesToAnthropicV1BetaStreamResponse(c, streamResp, respModel)
+
+	// Track usage from stream (would be accumulated in handler)
+	// For now, we'll track minimal usage since the handler manages it
+	if err != nil {
+		s.trackUsage(c, rule, provider, actualModel, respModel, 0, 0, false, "error", "stream_error")
+		return
+	}
+
+	// Success - usage tracking is handled inside the stream handler
+	// Note: The handler tracks usage when response.completed event is received
 }
