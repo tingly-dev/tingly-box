@@ -1,4 +1,4 @@
-module tingly-box
+module github.com/tingly-dev/tingly-box
 
 go 1.25.3
 

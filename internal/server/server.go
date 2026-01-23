@@ -13,17 +13,17 @@ import (
 	"github.com/pkg/browser"
 	"github.com/sirupsen/logrus"
 
-	"tingly-box/internal/client"
-	"tingly-box/internal/constant"
-	"tingly-box/internal/obs"
-	"tingly-box/internal/server/background"
-	"tingly-box/internal/server/config"
-	"tingly-box/internal/server/middleware"
-	servertls "tingly-box/internal/server/tls"
-	"tingly-box/internal/template"
-	"tingly-box/pkg/auth"
-	"tingly-box/pkg/network"
-	oauth2 "tingly-box/pkg/oauth"
+	"github.com/tingly-dev/tingly-box/internal/client"
+	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/server/background"
+	"github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/server/middleware"
+	servertls "github.com/tingly-dev/tingly-box/internal/server/tls"
+	"github.com/tingly-dev/tingly-box/internal/template"
+	"github.com/tingly-dev/tingly-box/pkg/auth"
+	"github.com/tingly-dev/tingly-box/pkg/network"
+	oauth2 "github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
 // Server represents the HTTP server

@@ -13,14 +13,14 @@ import (
 	"github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/sirupsen/logrus"
 
-	"tingly-box/internal/loadbalance"
-	"tingly-box/internal/protocol"
-	"tingly-box/internal/protocol/nonstream"
-	"tingly-box/internal/protocol/request"
-	"tingly-box/internal/protocol/request/transformer"
-	"tingly-box/internal/protocol/stream"
-	"tingly-box/internal/protocol/token"
-	"tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
+	"github.com/tingly-dev/tingly-box/internal/protocol/request"
+	"github.com/tingly-dev/tingly-box/internal/protocol/request/transformer"
+	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
+	"github.com/tingly-dev/tingly-box/internal/protocol/token"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // OpenAIListModels handles the /v1/models endpoint (OpenAI compatible)

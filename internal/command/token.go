@@ -5,8 +5,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"tingly-box/internal/config"
-	"tingly-box/pkg/auth"
+	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/pkg/auth"
 )
 
 // TokenCommand represents the generate token command

@@ -12,14 +12,14 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
-	"tingly-box/internal/config"
-	"tingly-box/internal/feature"
-	"tingly-box/internal/obs"
-	"tingly-box/internal/server"
-	serverconfig "tingly-box/internal/server/config"
-	daemon2 "tingly-box/pkg/daemon"
-	"tingly-box/pkg/lock"
-	"tingly-box/pkg/network"
+	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/feature"
+	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/server"
+	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
+	daemon2 "github.com/tingly-dev/tingly-box/pkg/daemon"
+	"github.com/tingly-dev/tingly-box/pkg/lock"
+	"github.com/tingly-dev/tingly-box/pkg/network"
 )
 
 const (

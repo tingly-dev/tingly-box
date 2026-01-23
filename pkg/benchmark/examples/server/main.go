@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"syscall"
 
-	"tingly-box/pkg/benchmark"
+	"github.com/tingly-dev/tingly-box/pkg/benchmark"
 )
 
 func main() {

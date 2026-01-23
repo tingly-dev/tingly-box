@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
 func TestRemoveV1ThinkingBlocks_TextOnly(t *testing.T) {

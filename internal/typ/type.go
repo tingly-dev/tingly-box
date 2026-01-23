@@ -3,9 +3,9 @@ package typ
 import (
 	"time"
 
-	"tingly-box/internal/loadbalance"
-	"tingly-box/internal/protocol"
-	"tingly-box/internal/smart_routing"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/smart_routing"
 )
 
 // RuleScenario represents the scenario for a routing rule

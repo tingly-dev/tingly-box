@@ -3,7 +3,7 @@ package constant
 import (
 	"path/filepath"
 
-	"tingly-box/pkg/fs"
+	"github.com/tingly-dev/tingly-box/pkg/fs"
 )
 
 const (

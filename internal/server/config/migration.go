@@ -5,9 +5,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"tingly-box/internal/constant"
-	"tingly-box/internal/loadbalance"
-	typ "tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	typ "github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // Built-in rule UUID constants

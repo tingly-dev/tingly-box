@@ -14,11 +14,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
-	"tingly-box/internal/feature"
-	"tingly-box/internal/loadbalance"
-	"tingly-box/internal/protocol"
-	"tingly-box/internal/smart_compact"
-	"tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/feature"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/smart_compact"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 type (

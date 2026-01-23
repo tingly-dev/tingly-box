@@ -3,7 +3,7 @@ package transformer
 import (
 	"strings"
 
-	"tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // ResponseTransform applies provider-specific transformations to OpenAI responses

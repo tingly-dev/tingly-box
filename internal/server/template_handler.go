@@ -6,7 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"tingly-box/internal/template"
+	"github.com/tingly-dev/tingly-box/internal/template"
 )
 
 // TemplateResponse represents the response for provider template endpoints

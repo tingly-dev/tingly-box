@@ -11,13 +11,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
-	"tingly-box/internal/loadbalance"
-	"tingly-box/internal/protocol"
-	nonstream2 "tingly-box/internal/protocol/nonstream"
-	request2 "tingly-box/internal/protocol/request"
-	stream2 "tingly-box/internal/protocol/stream"
-	"tingly-box/internal/protocol/token"
-	"tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	nonstream2 "github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
+	request2 "github.com/tingly-dev/tingly-box/internal/protocol/request"
+	stream2 "github.com/tingly-dev/tingly-box/internal/protocol/stream"
+	"github.com/tingly-dev/tingly-box/internal/protocol/token"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // sendSSEvent sends a generic SSE event with JSON data

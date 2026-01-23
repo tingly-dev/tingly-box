@@ -9,7 +9,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
-	"tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
 // CompactTransformer implements the Transformer interface.

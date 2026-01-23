@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"tingly-box/pkg/network"
+	"github.com/tingly-dev/tingly-box/pkg/network"
 )
 
 func init() {

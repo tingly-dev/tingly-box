@@ -7,9 +7,9 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
-	services2 "tingly-box/gui_wails3/services"
-	assets "tingly-box/internal"
-	"tingly-box/pkg/fs"
+	services2 "github.com/tingly-dev/tingly-box/gui_wails3/services"
+	assets "github.com/tingly-dev/tingly-box/internal"
+	"github.com/tingly-dev/tingly-box/pkg/fs"
 )
 
 const (

@@ -8,7 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/proxy"
 
-	oauth2 "tingly-box/pkg/oauth"
+	oauth2 "github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
 // HookFunc is a function that can modify the request before it's sent

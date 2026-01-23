@@ -13,10 +13,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"tingly-box/internal/protocol"
-	"tingly-box/internal/typ"
-	oauth2 "tingly-box/pkg/oauth"
-	"tingly-box/pkg/swagger"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/typ"
+	oauth2 "github.com/tingly-dev/tingly-box/pkg/oauth"
+	"github.com/tingly-dev/tingly-box/pkg/swagger"
 )
 
 // =============================================

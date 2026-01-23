@@ -9,7 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
-	"tingly-box/pkg/obs"
+	"github.com/tingly-dev/tingly-box/pkg/obs"
 )
 
 // MemoryLogMiddleware provides Gin middleware with memory log storage

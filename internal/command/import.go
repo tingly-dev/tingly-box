@@ -10,10 +10,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
-	"tingly-box/internal/config"
-	"tingly-box/internal/loadbalance"
-	"tingly-box/internal/protocol"
-	"tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // ImportCommand represents the import rule command

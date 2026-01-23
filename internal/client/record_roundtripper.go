@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/obs"
 )
 
 // RecordRoundTripper is an http.RoundTripper that records requests and responses

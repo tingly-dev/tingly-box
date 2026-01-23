@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"sync"
 
-	"tingly-box/internal/constant"
-	"tingly-box/internal/server/config"
-	"tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // AppConfig holds the application configuration

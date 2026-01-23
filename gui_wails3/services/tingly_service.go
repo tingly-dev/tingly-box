@@ -10,9 +10,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/wailsapp/wails/v3/pkg/application"
 
-	"tingly-box/internal/command"
-	"tingly-box/internal/config"
-	"tingly-box/internal/server"
+	"github.com/tingly-dev/tingly-box/internal/command"
+	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/server"
 )
 
 // TinglyService manages the web UI and HTTP server functionality

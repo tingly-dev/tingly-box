@@ -9,9 +9,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"tingly-box/internal/config"
-	"tingly-box/internal/obs"
-	"tingly-box/internal/server"
+	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/server"
 )
 
 const StopTimeout = time.Second

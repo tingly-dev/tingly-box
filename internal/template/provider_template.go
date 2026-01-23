@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"tingly-box/internal/constant"
-	"tingly-box/internal/protocol"
-	"tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 //go:embed provider_templates.json

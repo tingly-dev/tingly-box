@@ -15,9 +15,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 
-	"tingly-box/internal/obs"
-	"tingly-box/internal/protocol"
-	"tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // ClaudeCodeSystemHeader MENTION: this a special process for subscriptions

@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"tingly-box/internal/client"
-	"tingly-box/internal/constant"
-	"tingly-box/internal/protocol"
-	"tingly-box/internal/typ"
-	"tingly-box/pkg/oauth"
+	"github.com/tingly-dev/tingly-box/internal/client"
+	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
 // GetProviderModelsFromAPI fetches models from provider API via real HTTP requests

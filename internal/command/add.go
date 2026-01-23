@@ -8,8 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"tingly-box/internal/config"
-	"tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
 // APIStyle represents the API style/version for a provider

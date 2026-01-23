@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/config"
 )
 
 // DeleteCommand represents the delete provider command

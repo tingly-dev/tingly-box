@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/genai"
 
-	"tingly-box/internal/protocol/request"
+	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 )
 
 // TestConvertGoogleToOpenAIResponseComplex tests complex Google to OpenAI response conversions

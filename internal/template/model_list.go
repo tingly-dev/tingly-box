@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"tingly-box/internal/db"
-	"tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/db"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // ModelList represents the models available for a specific provider (kept for backward compatibility)

@@ -16,12 +16,12 @@ import (
 	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
 
-	"tingly-box/internal/config"
-	"tingly-box/internal/constant"
-	"tingly-box/internal/loadbalance"
-	"tingly-box/internal/protocol"
-	"tingly-box/internal/server"
-	typ "tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/server"
+	typ "github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // TestServer represents a test server wrapper

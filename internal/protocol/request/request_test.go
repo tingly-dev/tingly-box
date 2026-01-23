@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/genai"
 
-	"tingly-box/internal/protocol/stream"
+	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 )
 
 func TestConvertOpenAIToAnthropicRequest(t *testing.T) {

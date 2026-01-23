@@ -6,8 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"tingly-box/internal/server/config"
-	"tingly-box/pkg/auth"
+	"github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/pkg/auth"
 )
 
 // AuthMiddleware provides authentication middleware for different types of authentication

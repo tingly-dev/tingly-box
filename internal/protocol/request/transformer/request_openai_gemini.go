@@ -5,7 +5,7 @@ import (
 
 	"github.com/openai/openai-go/v3"
 
-	"tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // Constants and configurations for Gemini API compatibility

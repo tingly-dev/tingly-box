@@ -10,11 +10,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"tingly-box/internal/config"
-	"tingly-box/internal/constant"
-	"tingly-box/internal/obs"
-	"tingly-box/internal/protocol"
-	"tingly-box/pkg/auth"
+	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/pkg/auth"
 )
 
 // ShellCommand represents the interactive CLI command

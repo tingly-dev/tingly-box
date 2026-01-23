@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"tingly-box/internal/protocol/request"
+	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 )
 
 // TestHandleAnthropicToOpenAIStreamResponse tests the Anthropic to OpenAI stream conversion

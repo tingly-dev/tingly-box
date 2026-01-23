@@ -15,7 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/genai"
 
-	"tingly-box/internal/protocol/nonstream"
+	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 )
 
 // HandleOpenAIToGoogleStreamResponse processes OpenAI streaming events and converts them to Google format

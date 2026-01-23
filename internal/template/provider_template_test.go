@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"tingly-box/internal/protocol"
-	"tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // TestNewTemplateManager tests the TemplateManager constructor

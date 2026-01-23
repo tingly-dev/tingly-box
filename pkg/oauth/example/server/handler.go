@@ -8,7 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"tingly-box/pkg/oauth"
+	"github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
 const (

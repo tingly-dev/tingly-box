@@ -3,7 +3,7 @@ package client
 import (
 	"testing"
 
-	"tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 func TestClientPool_GetClient(t *testing.T) {

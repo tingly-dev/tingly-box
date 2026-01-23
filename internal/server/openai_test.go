@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
 func TestOpenAIChatCompletionRequest_UnmarshalJSON(t *testing.T) {

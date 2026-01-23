@@ -6,8 +6,8 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
-	"tingly-box/internal/protocol/request/transformer"
-	"tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/protocol/request/transformer"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // ConvertAnthropicToOpenAIResponse converts an Anthropic response to OpenAI format

@@ -7,7 +7,7 @@ import (
 
 	"github.com/gobwas/glob"
 
-	"tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 )
 
 // Router evaluates requests against smart routing rules

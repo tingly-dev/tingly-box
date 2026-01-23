@@ -12,7 +12,7 @@ import (
 	"google.golang.org/genai"
 	"iter"
 
-	"tingly-box/internal/protocol/nonstream"
+	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 )
 
 // HandleGoogleToOpenAIStreamResponse processes Google streaming events and converts them to OpenAI format

@@ -10,10 +10,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"tingly-box/internal/db"
-	"tingly-box/internal/loadbalance"
-	"tingly-box/internal/server/config"
-	"tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/db"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // StatsMiddleware tracks usage statistics by updating service-embedded stats

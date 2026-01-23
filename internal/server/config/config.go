@@ -13,13 +13,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
-	"tingly-box/internal/constant"
-	"tingly-box/internal/db"
-	"tingly-box/internal/loadbalance"
-	"tingly-box/internal/protocol"
-	"tingly-box/internal/template"
-	"tingly-box/internal/typ"
-	"tingly-box/pkg/auth"
+	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/db"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/template"
+	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/pkg/auth"
 )
 
 // Config represents the global configuration

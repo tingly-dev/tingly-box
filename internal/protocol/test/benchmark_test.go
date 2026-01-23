@@ -7,8 +7,8 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
 
-	"tingly-box/internal/protocol/nonstream"
-	"tingly-box/internal/protocol/request"
+	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
+	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 )
 
 // Benchmark tests

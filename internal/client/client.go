@@ -1,8 +1,8 @@
 package client
 
 import (
-	"tingly-box/internal/protocol"
-	"tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // NewOpenAIClient creates a new OpenAI client wrapper

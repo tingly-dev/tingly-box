@@ -35,7 +35,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
-	oauth2 "tingly-box/pkg/oauth"
+	oauth2 "github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
 const (

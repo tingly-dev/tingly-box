@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"tingly-box/internal/protocol"
-	"tingly-box/internal/server/config"
-	"tingly-box/internal/typ"
-	oauth2 "tingly-box/pkg/oauth"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/typ"
+	oauth2 "github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
 // tokenRefresher is a minimal interface for the refresh functionality

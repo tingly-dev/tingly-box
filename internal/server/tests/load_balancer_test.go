@@ -14,12 +14,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"tingly-box/internal/config"
-	"tingly-box/internal/constant"
-	"tingly-box/internal/loadbalance"
-	"tingly-box/internal/server"
-	"tingly-box/internal/server/middleware"
-	typ "tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/server"
+	"github.com/tingly-dev/tingly-box/internal/server/middleware"
+	typ "github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // =================================

@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"tingly-box/pkg/fs"
+	"github.com/tingly-dev/tingly-box/pkg/fs"
 )
 
 // ActionType represents the type of action performed
