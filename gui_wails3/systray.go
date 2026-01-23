@@ -6,7 +6,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-//go:embed assets/icons.icns
+//go:embed slim/icons.icns
 var icon []byte
 
 var (
