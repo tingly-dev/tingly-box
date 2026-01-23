@@ -1,7 +1,7 @@
 version: '3'
 
 vars:
-  PACKAGE_PATH: ./gui_wails3
+  WAILS_PACKAGE_PATH: ./gui_wails3
 
 tasks:
   go:mod:tidy:
@@ -67,7 +67,7 @@ tasks:
     generates:
       - frontend/bindings/**/*
     cmds:
-      - wails3 generate bindings -ts -f '{{.BUILD_FLAGS}}' -clean=true {{.PACKAGE_PATH}} -d frontend/src/bindings
+      - wails3 generate bindings -ts -f '{{.BUILD_FLAGS}}' -clean=true {{.WAILS_PACKAGE_PATH}} -d frontend/src/bindings
 
   generate:icons:
     summary: Generates Windows `.ico` and Mac `.icns` files from an image
