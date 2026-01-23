@@ -126,7 +126,7 @@ func convertBetaUserMessageToResponsesInput(msg anthropic.BetaMessageParam) []re
 					Output: responses.ResponseInputItemFunctionCallOutputOutputUnionParam{
 						OfString: ParamOpt(convertBetaToolResultContent(block.OfToolResult.Content)),
 					},
-					Status: "success",
+					Status: "completed",
 				}
 				items = append(items, responses.ResponseInputItemUnionParam{
 					OfFunctionCallOutput: &outputItem,
