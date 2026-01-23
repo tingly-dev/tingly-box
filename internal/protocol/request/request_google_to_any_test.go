@@ -95,7 +95,7 @@ func TestConvertGoogleToOpenAIRequestComplex(t *testing.T) {
 		var assistantMsg map[string]interface{}
 		json.Unmarshal(assistantMsgBytes, &assistantMsg)
 		assert.Equal(t, "assistant", assistantMsg["role"])
-		toolCalls, ok := assistantMsg["tool_calls"].([]map[string]interface{})
+		toolCalls, ok := assistantMsg["tool_calls"].([]interface{})
 		require.True(t, ok)
 		assert.Len(t, toolCalls, 2)
 
@@ -244,17 +244,26 @@ func TestConvertGoogleToAnthropicRequestComplex(t *testing.T) {
 
 		params := ConvertGoogleToAnthropicRequest("gemini-pro", contents, &genai.GenerateContentConfig{})
 
-		// Should have 2 messages: user, assistant (tool_use is in model response)
-		// Tool results are converted to user messages with tool_result
-		assert.Len(t, params.Messages, 2)
+		// Should have 3 messages:
+		// 1. user message (search query)
+		// 2. assistant message (tool_use)
+		// 3. user message (tool_result)
+		assert.Len(t, params.Messages, 3)
 
-		// First message should be user
+		// First message should be user with search query
 		assert.Equal(t, anthropic.MessageParamRoleUser, params.Messages[0].Role)
+		assert.Len(t, params.Messages[0].Content, 1)
+		assert.NotNil(t, params.Messages[0].Content[0].OfText)
 
 		// Second message should be assistant with tool_use
 		assert.Equal(t, anthropic.MessageParamRoleAssistant, params.Messages[1].Role)
 		assert.Len(t, params.Messages[1].Content, 1)
 		assert.NotNil(t, params.Messages[1].Content[0].OfToolUse)
+
+		// Third message should be user with tool_result
+		assert.Equal(t, anthropic.MessageParamRoleUser, params.Messages[2].Role)
+		assert.Len(t, params.Messages[2].Content, 1)
+		assert.NotNil(t, params.Messages[2].Content[0].OfToolResult)
 	})
 
 	t.Run("complex system instruction with multiple parts", func(t *testing.T) {

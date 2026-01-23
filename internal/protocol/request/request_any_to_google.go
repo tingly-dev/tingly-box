@@ -376,13 +376,7 @@ func ConvertAnthropicToGoogleRequest(anthropicReq *anthropic.MessageNewParams, d
 					}
 				case block.OfToolResult != nil:
 					// Convert tool_result to function_response
-					// Get the function name from the tool_use ID mapping
-					functionName := toolUseIDToFunctionName[block.OfToolResult.ToolUseID]
-					if functionName == "" {
-						// Fallback: use ToolUseID if we couldn't find the function name
-						// This shouldn't happen in a well-formed conversation
-						functionName = block.OfToolResult.ToolUseID
-					}
+					// FunctionResponse.Name should be the tool_use ID for Google API
 
 					resultText := ""
 					for _, c := range block.OfToolResult.Content {
@@ -401,7 +395,7 @@ func ConvertAnthropicToGoogleRequest(anthropicReq *anthropic.MessageNewParams, d
 
 					content.Parts = append(content.Parts, &genai.Part{
 						FunctionResponse: &genai.FunctionResponse{
-							Name:     functionName,
+							Name:     block.OfToolResult.ToolUseID, // Use tool_use ID as Name
 							Response: response,
 						},
 					})
@@ -593,13 +587,7 @@ func ConvertAnthropicBetaToGoogleRequest(anthropicReq *anthropic.BetaMessageNewP
 					}
 				case block.OfToolResult != nil:
 					// Convert tool_result to function_response
-					// Get the function name from the tool_use ID mapping
-					functionName := toolUseIDToFunctionName[block.OfToolResult.ToolUseID]
-					if functionName == "" {
-						// Fallback: use ToolUseID if we couldn't find the function name
-						// This shouldn't happen in a well-formed conversation
-						functionName = block.OfToolResult.ToolUseID
-					}
+					// FunctionResponse.Name should be the tool_use ID for Google API
 
 					resultText := ""
 					for _, c := range block.OfToolResult.Content {
@@ -618,7 +606,7 @@ func ConvertAnthropicBetaToGoogleRequest(anthropicReq *anthropic.BetaMessageNewP
 
 					content.Parts = append(content.Parts, &genai.Part{
 						FunctionResponse: &genai.FunctionResponse{
-							Name:     functionName,
+							Name:     block.OfToolResult.ToolUseID, // Use tool_use ID as Name
 							Response: response,
 						},
 					})

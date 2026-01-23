@@ -174,6 +174,8 @@ func ConvertGoogleToolsToOpenAI(funcs []*genai.FunctionDeclaration) []openai.Cha
 			// Convert Schema to map[string]interface{}
 			if schemaBytes, err := json.Marshal(f.Parameters); err == nil {
 				_ = json.Unmarshal(schemaBytes, &parameters)
+				// Normalize type field from uppercase (OBJECT, ARRAY) to lowercase
+				parameters = normalizeGoogleSchemaTypes(parameters)
 			}
 		}
 
@@ -186,6 +188,52 @@ func ConvertGoogleToolsToOpenAI(funcs []*genai.FunctionDeclaration) []openai.Cha
 	}
 
 	return out
+}
+
+// normalizeGoogleSchemaTypes recursively converts uppercase type names to lowercase
+// Google genai SDK uses OBJECT, ARRAY, STRING, etc. but OpenAI expects lowercase
+func normalizeGoogleSchemaTypes(schema map[string]interface{}) map[string]interface{} {
+	if schema == nil {
+		return nil
+	}
+	result := make(map[string]interface{})
+	for k, v := range schema {
+		if k == "type" {
+			if typeStr, ok := v.(string); ok {
+				result[k] = strings.ToLower(typeStr)
+			} else {
+				result[k] = v
+			}
+		} else if k == "properties" {
+			if props, ok := v.(map[string]interface{}); ok {
+				result[k] = normalizeGoogleSchemaProperties(props)
+			} else {
+				result[k] = v
+			}
+		} else if k == "items" {
+			if items, ok := v.(map[string]interface{}); ok {
+				result[k] = normalizeGoogleSchemaTypes(items)
+			} else {
+				result[k] = v
+			}
+		} else {
+			result[k] = v
+		}
+	}
+	return result
+}
+
+// normalizeGoogleSchemaProperties normalizes all property schemas
+func normalizeGoogleSchemaProperties(props map[string]interface{}) map[string]interface{} {
+	result := make(map[string]interface{})
+	for k, v := range props {
+		if propSchema, ok := v.(map[string]interface{}); ok {
+			result[k] = normalizeGoogleSchemaTypes(propSchema)
+		} else {
+			result[k] = v
+		}
+	}
+	return result
 }
 
 func ConvertGoogleToolChoiceToOpenAI(config *genai.FunctionCallingConfig) openai.ChatCompletionToolChoiceOptionUnionParam {

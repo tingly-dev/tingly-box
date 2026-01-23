@@ -232,10 +232,10 @@ func TestConvertGoogleToAnthropicResponseComplex(t *testing.T) {
 
 		result := ConvertGoogleToAnthropicResponse(resp, "gemini-pro")
 
-		// Check basic structure
-		assert.Equal(t, "assistant", result.Role)
-		assert.Equal(t, "message", result.Type)
-		assert.Equal(t, "gemini-pro", result.Model)
+		// Check basic structure - convert typed fields to strings for comparison
+		assert.Equal(t, "assistant", string(result.Role))
+		assert.Equal(t, "message", string(result.Type))
+		assert.Equal(t, "gemini-pro", string(result.Model))
 
 		// Should have 2 content blocks: text and tool_use
 		assert.Len(t, result.Content, 2)
@@ -256,8 +256,8 @@ func TestConvertGoogleToAnthropicResponseComplex(t *testing.T) {
 		assert.Equal(t, "latest AI news", args["query"])
 		assert.Equal(t, float64(5), args["limit"])
 
-		// Check stop reason
-		assert.Equal(t, "end_turn", result.StopReason)
+		// Check stop reason - convert to string for comparison
+		assert.Equal(t, "end_turn", string(result.StopReason))
 
 		// Check usage
 		assert.Equal(t, int64(15), result.Usage.InputTokens)
@@ -325,7 +325,7 @@ func TestConvertGoogleToAnthropicResponseComplex(t *testing.T) {
 		}
 
 		result := ConvertGoogleToAnthropicResponse(resp, "gemini-pro")
-		assert.Equal(t, "max_tokens", result.StopReason)
+		assert.Equal(t, "max_tokens", string(result.StopReason))
 	})
 
 	t.Run("safety stop reason", func(t *testing.T) {
@@ -342,7 +342,7 @@ func TestConvertGoogleToAnthropicResponseComplex(t *testing.T) {
 		}
 
 		result := ConvertGoogleToAnthropicResponse(resp, "gemini-pro")
-		assert.Equal(t, "content_filter", result.StopReason)
+		assert.Equal(t, "content_filter", string(result.StopReason))
 	})
 
 	t.Run("complex nested tool arguments", func(t *testing.T) {
@@ -446,9 +446,9 @@ func TestConvertGoogleToAnthropicBetaResponseComplex(t *testing.T) {
 
 		result := ConvertGoogleToAnthropicBetaResponse(resp, "gemini-pro")
 
-		// Check basic structure
-		assert.Equal(t, "assistant", result.Role)
-		assert.Equal(t, "message", result.Type)
+		// Check basic structure - convert typed fields to strings for comparison
+		assert.Equal(t, "assistant", string(result.Role))
+		assert.Equal(t, "message", string(result.Type))
 
 		// Should have 2 content blocks
 		assert.Len(t, result.Content, 2)

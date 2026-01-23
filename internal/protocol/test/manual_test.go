@@ -4,7 +4,7 @@ import (
 	"context"
 	"os"
 	"testing"
-	"tingly-box/internal/protocol/client"
+	"tingly-box/internal/client"
 	"tingly-box/internal/protocol/request"
 
 	"github.com/openai/openai-go/v3"
