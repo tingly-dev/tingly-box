@@ -196,7 +196,7 @@ func (s *Server) handleResponsesNonStreamingRequest(c *gin.Context, provider *ty
 // handleResponsesStreamingRequest handles streaming Responses API requests
 func (s *Server) handleResponsesStreamingRequest(c *gin.Context, provider *typ.Provider, params responses.ResponseNewParams, responseModel, actualModel string, rule *typ.Rule) {
 	// Create streaming request
-	stream, err := s.forwardResponsesStreamRequest(provider, params)
+	stream, _, err := s.forwardResponsesStreamRequest(provider, params)
 	if err != nil {
 		// Track error with no usage
 		s.trackUsage(c, rule, provider, actualModel, responseModel, 0, 0, false, "error", "stream_creation_failed")
@@ -262,33 +262,18 @@ func (s *Server) handleResponsesStreamResponse(c *gin.Context, stream *ssestream
 	// Process the stream
 	for stream.Next() {
 		event := stream.Current()
+		event.Response.Model = responseModel
 
 		// Accumulate usage from completed events
-		if event.Type == "response.completed" && event.Response.Usage.TotalTokens > 0 {
+		if event.Response.Usage.InputTokens > 0 {
 			inputTokens = event.Response.Usage.InputTokens
-			outputTokens = event.Response.Usage.OutputTokens
 			hasUsage = true
 		}
-
-		// Override model in response if needed
-		eventJSON, err := json.Marshal(event)
-		if err != nil {
-			logrus.Errorf("Failed to marshal event: %v", err)
-			continue
+		if event.Response.Usage.OutputTokens > 0 {
+			outputTokens = event.Response.Usage.OutputTokens
 		}
 
-		// If responseModel differs, override it
-		if responseModel != actualModel && len(event.Response.Output) > 0 {
-			var eventMap map[string]any
-			if err := json.Unmarshal(eventJSON, &eventMap); err == nil {
-				if responseObj, ok := eventMap["response"].(map[string]any); ok {
-					responseObj["model"] = responseModel
-					eventJSON, _ = json.Marshal(eventMap)
-				}
-			}
-		}
-
-		c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", string(eventJSON))))
+		c.SSEvent("", event)
 		flusher.Flush()
 	}
 
@@ -330,7 +315,7 @@ func (s *Server) handleResponsesStreamResponse(c *gin.Context, stream *ssestream
 
 // forwardResponsesRequest forwards a Responses API request to the provider
 func (s *Server) forwardResponsesRequest(provider *typ.Provider, params responses.ResponseNewParams) (*responses.Response, error) {
-	wrapper := s.clientPool.GetOpenAIClient(provider, "")
+	wrapper := s.clientPool.GetOpenAIClient(provider, params.Model)
 	logrus.Infof("provider: %s (responses)", provider.Name)
 
 	// Make the request using wrapper method with provider timeout
@@ -347,18 +332,17 @@ func (s *Server) forwardResponsesRequest(provider *typ.Provider, params response
 }
 
 // forwardResponsesStreamRequest forwards a streaming Responses API request to the provider
-func (s *Server) forwardResponsesStreamRequest(provider *typ.Provider, params responses.ResponseNewParams) (*ssestream.Stream[responses.ResponseStreamEventUnion], error) {
-	wrapper := s.clientPool.GetOpenAIClient(provider, "")
+func (s *Server) forwardResponsesStreamRequest(provider *typ.Provider, params responses.ResponseNewParams) (*ssestream.Stream[responses.ResponseStreamEventUnion], context.CancelFunc, error) {
+	wrapper := s.clientPool.GetOpenAIClient(provider, params.Model)
 	logrus.Infof("provider: %s (responses streaming)", provider.Name)
 
 	// Make the request using wrapper method with provider timeout
 	timeout := time.Duration(provider.Timeout) * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
 
 	stream := wrapper.Client().Responses.NewStreaming(ctx, params)
 
-	return stream, nil
+	return stream, cancel, nil
 }
 
 // convertToResponsesParams converts raw JSON to OpenAI SDK params format

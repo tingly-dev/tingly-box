@@ -538,3 +538,83 @@ func (s *Server) probeAnthropicChat(ctx context.Context, provider *typ.Provider)
 
 	return fmt.Errorf("messages endpoint failed with status: %d", resp.StatusCode)
 }
+
+// HandleProbeModelEndpoints handles adaptive probe for model endpoints (chat and responses)
+func (s *Server) HandleProbeModelEndpoints(c *gin.Context) {
+	var req ModelProbeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ModelProbeResponse{
+			Success: false,
+			Error: &ErrorDetail{
+				Message: "Invalid request body: " + err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
+	// Validate provider exists
+	provider, err := s.config.GetProviderByUUID(req.ProviderUUID)
+	if err != nil || provider == nil {
+		c.JSON(http.StatusNotFound, ModelProbeResponse{
+			Success: false,
+			Error: &ErrorDetail{
+				Message: fmt.Sprintf("Provider not found: %s", req.ProviderUUID),
+				Type:    "provider_not_found",
+			},
+		})
+		return
+	}
+
+	// Create adaptive probe instance
+	adaptiveProbe := NewAdaptiveProbe(s)
+
+	// Execute probe
+	result, err := adaptiveProbe.ProbeModelEndpoints(c.Request.Context(), req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ModelProbeResponse{
+			Success: false,
+			Error: &ErrorDetail{
+				Message: err.Error(),
+				Type:    "probe_failed",
+			},
+		})
+		return
+	}
+
+	// Convert endpoint status to API response format
+	chatStatus := EndpointProbeStatus{
+		Available:    result.ChatEndpoint.Available,
+		LatencyMs:    result.ChatEndpoint.LatencyMs,
+		ErrorMessage: result.ChatEndpoint.ErrorMessage,
+		LastChecked:  result.ChatEndpoint.LastChecked.Format(time.RFC3339),
+	}
+
+	responsesStatus := EndpointProbeStatus{
+		Available:    result.ResponsesEndpoint.Available,
+		LatencyMs:    result.ResponsesEndpoint.LatencyMs,
+		ErrorMessage: result.ResponsesEndpoint.ErrorMessage,
+		LastChecked:  result.ResponsesEndpoint.LastChecked.Format(time.RFC3339),
+	}
+
+	data := &ModelProbeData{
+		ProviderUUID:      result.ProviderUUID,
+		ModelID:           result.ModelID,
+		ChatEndpoint:      chatStatus,
+		ResponsesEndpoint: responsesStatus,
+		PreferredEndpoint: result.PreferredEndpoint,
+		LastUpdated:       result.LastUpdated.Format(time.RFC3339),
+	}
+
+	c.JSON(http.StatusOK, ModelProbeResponse{
+		Success: true,
+		Data:    data,
+	})
+}
+
+// InvalidateProviderCache invalidates cached capabilities for a provider
+func (s *Server) InvalidateProviderCache(providerUUID string) {
+	if s.probeCache != nil {
+		s.probeCache.InvalidateProvider(providerUUID)
+	}
+}

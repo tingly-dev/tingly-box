@@ -600,3 +600,39 @@ type DeleteOldRecordsResponse struct {
 	DeletedCount int64  `json:"deleted_count" example:"1500"`
 	CutoffDate   string `json:"cutoff_date" example:"2024-10-13T00:00:00Z"`
 }
+
+// =============================================
+// Adaptive Probe API Models
+// =============================================
+
+// ModelProbeRequest represents the request to probe a specific model
+type ModelProbeRequest struct {
+	ProviderUUID string `json:"provider_uuid" binding:"required" description:"Provider UUID to probe" example:"uuid-123"`
+	ModelID      string `json:"model_id" binding:"required" description:"Model ID to probe" example:"gpt-4"`
+	ForceRefresh bool   `json:"force_refresh" description:"Force new probe even if cached" example:"false"`
+}
+
+// EndpointProbeStatus represents the status of an endpoint probe
+type EndpointProbeStatus struct {
+	Available    bool   `json:"available" example:"true"`
+	LatencyMs    int    `json:"latency_ms" example:"234"`
+	ErrorMessage string `json:"error_message,omitempty" example:""`
+	LastChecked  string `json:"last_checked" example:"2026-01-23T10:30:00Z"`
+}
+
+// ModelProbeResponse represents the response from model endpoint probing
+type ModelProbeResponse struct {
+	Success bool            `json:"success" example:"true"`
+	Error   *ErrorDetail    `json:"error,omitempty"`
+	Data    *ModelProbeData `json:"data,omitempty"`
+}
+
+// ModelProbeData represents the probe result data
+type ModelProbeData struct {
+	ProviderUUID      string              `json:"provider_uuid" example:"uuid-123"`
+	ModelID           string              `json:"model_id" example:"gpt-4"`
+	ChatEndpoint      EndpointProbeStatus `json:"chat_endpoint"`
+	ResponsesEndpoint EndpointProbeStatus `json:"responses_endpoint"`
+	PreferredEndpoint string              `json:"preferred_endpoint" example:"responses"`
+	LastUpdated       string              `json:"last_updated" example:"2026-01-23T10:30:00Z"`
+}
