@@ -8,7 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/proxy"
 
-	oauth2 "github.com/tingly-dev/tingly-box/pkg/oauth"
+	"github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
 // HookFunc is a function that can modify the request before it's sent
@@ -16,9 +16,9 @@ type HookFunc func(req *http.Request) error
 
 // oauthHookFunctions defines custom hooks for OAuth providers based on provider type
 // Each hook handles custom headers, query params, and any special request modifications
-var oauthHookFunctions = map[oauth2.ProviderType]HookFunc{
-	oauth2.ProviderClaudeCode:  claudeCodeHook,
-	oauth2.ProviderAntigravity: antigravityHook,
+var oauthHookFunctions = map[oauth.ProviderType]HookFunc{
+	oauth.ProviderClaudeCode:  claudeCodeHook,
+	oauth.ProviderAntigravity: antigravityHook,
 }
 
 func antigravityHook(req *http.Request) error {
@@ -89,7 +89,7 @@ func (t *requestModifier) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 // GetOAuthHook returns the hook function for the given provider type
-func GetOAuthHook(providerType oauth2.ProviderType) HookFunc {
+func GetOAuthHook(providerType oauth.ProviderType) HookFunc {
 	hook, ok := oauthHookFunctions[providerType]
 	if !ok {
 		return nil
@@ -141,12 +141,12 @@ func CreateHTTPClientWithProxy(proxyURL string) *http.Client {
 // CreateHTTPClientForProvider creates an HTTP client configured for the given provider
 // It handles proxy and OAuth hooks if applicable
 //
-// providerType: the OAuth provider type (e.g., oauth2.ProviderClaudeCode)
+// providerType: the OAuth provider type (e.g., oauth.ProviderClaudeCode)
 // proxyURL: optional proxy URL (can be empty)
 // isOAuth: whether this is an OAuth provider
 //
 // Returns a configured http.Client
-func CreateHTTPClientForProvider(providerType oauth2.ProviderType, proxyURL string, isOAuth bool) *http.Client {
+func CreateHTTPClientForProvider(providerType oauth.ProviderType, proxyURL string, isOAuth bool) *http.Client {
 	client := CreateHTTPClientWithProxy(proxyURL)
 
 	if isOAuth {
