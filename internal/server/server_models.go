@@ -4,8 +4,8 @@ import (
 	"strings"
 	"time"
 
-	smartrouting "tingly-box/internal/smart_routing"
-	"tingly-box/internal/typ"
+	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // Error Models

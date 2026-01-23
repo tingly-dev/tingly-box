@@ -3,11 +3,11 @@ package smart_compact
 import (
 	"testing"
 
-	"tingly-box/internal/trajectory"
-
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
 func TestRemoveV1ThinkingBlocks_TextOnly(t *testing.T) {
@@ -302,7 +302,7 @@ func TestHandleV1_SingleRound(t *testing.T) {
 
 // TestIsPureUserMessage verifies that tool results are not counted as pure user messages
 func TestIsPureUserMessage(t *testing.T) {
-	rounder := trajectory.NewGrouper()
+	rounder := protocol.NewGrouper()
 
 	// Pure user message
 	pureUser := anthropic.NewUserMessage(anthropic.NewTextBlock("Hello"))
@@ -322,7 +322,7 @@ func TestIsPureUserMessage(t *testing.T) {
 // TestGroupV1MessagesIntoRounds_MultipleToolCalls tests that multiple tool calls
 // in the same round are grouped correctly
 func TestGroupV1MessagesIntoRounds_MultipleToolCalls(t *testing.T) {
-	rounder := trajectory.NewGrouper()
+	rounder := protocol.NewGrouper()
 
 	messages := []anthropic.MessageParam{
 		// Round 1 starts

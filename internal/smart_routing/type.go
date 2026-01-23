@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 )
 
 // SmartOpPosition represents the field to check in a request for smart routing

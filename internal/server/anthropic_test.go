@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
 //go:embed anthropic_test.txt
@@ -15,7 +17,7 @@ var rawBody []byte
 func TestAnthropicBetaMessagesRequest_UnmarshalJSON(t *testing.T) {
 	jsonString := "{\"stream\":true}"
 
-	var req AnthropicBetaMessagesRequest
+	var req protocol.AnthropicBetaMessagesRequest
 	if err := json.Unmarshal([]byte(jsonString), &req); err != nil {
 		t.Fatalf("Failed to deserialize rawBody into BetaMessageNewParams: %v", err)
 	}

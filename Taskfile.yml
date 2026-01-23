@@ -13,7 +13,7 @@ vars:
   BUILD_DIR: build
   DIST_DIR: build/dist
   
-  PACKAGE_PATH: ./internal/wails3
+  PACKAGE_PATH: ./gui_wails3
   
   PORT: 12580
   
@@ -49,14 +49,14 @@ tasks:
   
   wails:binding:
     cmds:
-      - wails3 generate bindings -ts -f '-buildvcs=false -gcflags=all="-l"' -clean=true ./internal/wails3 -d frontend/src/bindings
+      - wails3 generate bindings -ts -f '-buildvcs=false -gcflags=all="-l"' -clean=true ./gui_wails3 -d frontend/src/bindings
   
   wails:manual:
     cmds:
       - cd frontend; pnpm build:dev:wails
       - |
-        mkdir -p internal/gui/dist/
-        cp -R frontend/dist/* internal/gui/dist/
+        mkdir -p internal/web_wails3/dist/
+        cp -R frontend/dist/* internal/web_wails3/dist/
       - |
         # Get build info
         VERSION="dev"
@@ -92,11 +92,11 @@ tasks:
     aliases:
       - start
     cmds:
-      - go run ./internal/cmd/tingly-box --verbose start --debug
+      - go run ./cli/tingly-box --verbose start --debug
     
   https:
     cmds:
-      - go run ./internal/cmd/tingly-box --verbose start --https
+      - go run ./cli/tingly-box --verbose start --https
   
   cli:build:
     cmds:
@@ -119,7 +119,7 @@ tasks:
         # Build with ldflags
         mkdir -p build
         LDFLAGS="-X main.version=${VERSION} -X main.gitCommit=${GIT_COMMIT} -X main.buildTime=${BUILD_TIME} -X main.goVersion=${GO_VERSION} -X main.platform=${PLATFORM}"
-        GOOS={{.OS}} GOARCH={{.ARCH}} go build -ldflags="${LDFLAGS}" -o ./build/{{.BIN_NAME}} ./internal/cmd/tingly-box
+        GOOS={{.OS}} GOARCH={{.ARCH}} go build -ldflags="${LDFLAGS}" -o ./build/{{.BIN_NAME}} ./cli/tingly-box
   
   go:test:
     cmds:
@@ -130,7 +130,7 @@ tasks:
     cmds:
       - task: web:dist
       - |
-        go run ./internal/cmd/tingly-box start
+        go run ./cli/tingly-box start
   
   web:dev:
     cmds:
@@ -170,7 +170,7 @@ tasks:
   gui:build:
     cmds:
       - |
-        go build -buildvcs=false -gcflags=all="-l" -o bin/{{.BIN_NAME}} ./wails3
+        go build -buildvcs=false -gcflags=all="-l" -o bin/{{.BIN_NAME}} ./gui_wails3
 
   windows:build:amd64:
     summary: Cross-compiles for Windows AMD64 with CGO enabled (requires mingw-w64)
@@ -204,7 +204,7 @@ tasks:
         CC="zig cc -target x86_64-windows-gnu" \
         CXX="zig c++ -target x86_64-windows-gnu" \
         GOOS=windows GOARCH=amd64 CGO_ENABLED=1 \
-        go build -buildvcs=false -ldflags="-w -s" -o {{.BIN_DIR}}/{{.BIN_NAME}}-amd64.exe ./internal/cmd/tingly-box
+        go build -buildvcs=false -ldflags="-w -s" -o {{.BIN_DIR}}/{{.BIN_NAME}}-amd64.exe ./cli/tingly-box
 
   windows:cli:build:cross:arm64:
     summary: Cross-compiles CLI for Windows ARM64 with zig
@@ -217,7 +217,7 @@ tasks:
         CC="zig cc -target aarch64-windows-gnu" \
         CXX="zig c++ -target aarch64-windows-gnu" \
         GOOS=windows GOARCH=arm64 CGO_ENABLED=1 \
-        go build -buildvcs=false -ldflags="-w -s" -o {{.BIN_DIR}}/{{.BIN_NAME}}-arm64.exe ./internal/cmd/tingly-box
+        go build -buildvcs=false -ldflags="-w -s" -o {{.BIN_DIR}}/{{.BIN_NAME}}-arm64.exe ./cli/tingly-box
 
   check:zig:
     summary: Check if zig is installed
@@ -251,7 +251,7 @@ tasks:
         CC="zig cc -target aarch64-linux-gnu" \
         CXX="zig c++ -target aarch64-linux-gnu" \
         GOOS=linux GOARCH=arm64 CGO_ENABLED=1 \
-        go build -buildvcs=false -ldflags="-w -s" -o {{.BIN_DIR}}/{{.BIN_NAME}}-linux-arm64 ./internal/cmd/tingly-box
+        go build -buildvcs=false -ldflags="-w -s" -o {{.BIN_DIR}}/{{.BIN_NAME}}-linux-arm64 ./cli/tingly-box
 
   # Docker build and test tasks for ARM64
   docker:build:arm64:

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
-	"tingly-box/internal/constant"
-	"tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 )
 
 // Global state for round-robin tactics (keyed by rule UUID)

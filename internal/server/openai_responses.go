@@ -13,8 +13,8 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 
-	"tingly-box/internal/loadbalance"
-	"tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // ResponsesCreate handles POST /v1/responses

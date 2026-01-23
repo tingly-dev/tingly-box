@@ -13,8 +13,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
-	"tingly-box/internal/constant"
-	"tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // PassthroughHandler handles pass-through requests

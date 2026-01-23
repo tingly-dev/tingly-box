@@ -5,10 +5,10 @@ import (
 	"sync"
 	"time"
 
-	"tingly-box/internal/loadbalance"
-	"tingly-box/internal/server/config"
-	"tingly-box/internal/server/middleware"
-	typ "tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/server/middleware"
+	typ "github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // LoadBalancer manages load balancing across multiple services

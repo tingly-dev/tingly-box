@@ -7,8 +7,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"tingly-box/internal/obs"
-	"tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // maskProviderForResponse masks sensitive data and returns a safe ProviderResponse
@@ -133,7 +134,7 @@ func (s *Server) CreateProvider(c *gin.Context) {
 		UUID:          uid.String(),
 		Name:          req.Name,
 		APIBase:       req.APIBase,
-		APIStyle:      typ.APIStyle(req.APIStyle),
+		APIStyle:      protocol.APIStyle(req.APIStyle),
 		Token:         req.Token,
 		NoKeyRequired: req.NoKeyRequired,
 		Enabled:       req.Enabled,
@@ -267,7 +268,7 @@ func (s *Server) UpdateProvider(c *gin.Context) {
 		provider.APIBase = *req.APIBase
 	}
 	if req.APIStyle != nil {
-		provider.APIStyle = typ.APIStyle(*req.APIStyle)
+		provider.APIStyle = protocol.APIStyle(*req.APIStyle)
 	}
 	// Only update token if it's provided and not empty
 	if req.Token != nil && *req.Token != "" {

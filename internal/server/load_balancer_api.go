@@ -6,9 +6,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"tingly-box/internal/loadbalance"
-	"tingly-box/internal/server/config"
-	"tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // LoadBalancerAPI provides REST endpoints for load balancer management

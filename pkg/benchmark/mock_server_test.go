@@ -51,18 +51,18 @@ func ExampleMockServer_UseAuthMiddleware() {
 func TestAuthMiddleware(t *testing.T) {
 	tests := []struct {
 		name           string
-		apiKey        string
+		apiKey         string
 		headers        map[string]string
 		expectedStatus int
 	}{
 		{
 			name:           "No auth key configured - should allow all",
-			apiKey:        "",
+			apiKey:         "",
 			headers:        map[string]string{},
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:    "Auth key configured with valid Bearer token",
+			name:   "Auth key configured with valid Bearer token",
 			apiKey: "test-key",
 			headers: map[string]string{
 				"Authorization": "Bearer test-key",
@@ -70,7 +70,7 @@ func TestAuthMiddleware(t *testing.T) {
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:    "Auth key configured with valid x-api-key",
+			name:   "Auth key configured with valid x-api-key",
 			apiKey: "test-key",
 			headers: map[string]string{
 				"x-api-key": "test-key",
@@ -78,7 +78,7 @@ func TestAuthMiddleware(t *testing.T) {
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:    "Auth key configured with invalid token",
+			name:   "Auth key configured with invalid token",
 			apiKey: "test-key",
 			headers: map[string]string{
 				"Authorization": "Bearer wrong-key",
@@ -87,7 +87,7 @@ func TestAuthMiddleware(t *testing.T) {
 		},
 		{
 			name:           "Auth key configured with no auth headers",
-			apiKey:        "test-key",
+			apiKey:         "test-key",
 			headers:        map[string]string{},
 			expectedStatus: http.StatusUnauthorized,
 		},

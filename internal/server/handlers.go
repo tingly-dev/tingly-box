@@ -7,8 +7,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"tingly-box/internal/loadbalance"
-	"tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // GenerateToken handles token generation requests

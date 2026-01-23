@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/server/config"
 )
 
 // TestConfig_DebugVerbose_DefaultValues tests that Debug and Verbose default to false

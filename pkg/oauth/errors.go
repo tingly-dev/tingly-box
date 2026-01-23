@@ -1,6 +1,8 @@
 package oauth
 
-import "errors"
+import (
+	"errors"
+)
 
 var (
 	// ErrTokenNotFound is returned when a token is not found in storage

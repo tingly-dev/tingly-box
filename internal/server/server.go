@@ -13,17 +13,17 @@ import (
 	"github.com/pkg/browser"
 	"github.com/sirupsen/logrus"
 
-	"tingly-box/internal/auth"
-	"tingly-box/internal/config/template"
-	"tingly-box/internal/constant"
-	"tingly-box/internal/obs"
-	"tingly-box/internal/record"
-	"tingly-box/internal/server/background"
-	"tingly-box/internal/server/config"
-	"tingly-box/internal/server/middleware"
-	servertls "tingly-box/internal/server/tls"
-	"tingly-box/internal/util/network"
-	oauth2 "tingly-box/pkg/oauth"
+	"github.com/tingly-dev/tingly-box/internal/client"
+	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/server/background"
+	"github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/server/middleware"
+	servertls "github.com/tingly-dev/tingly-box/internal/server/tls"
+	"github.com/tingly-dev/tingly-box/internal/template"
+	"github.com/tingly-dev/tingly-box/pkg/auth"
+	"github.com/tingly-dev/tingly-box/pkg/network"
+	oauth2 "github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
 // Server represents the HTTP server
@@ -45,7 +45,7 @@ type Server struct {
 	usageAPI        *UsageAPI
 
 	// client pool for caching
-	clientPool *ClientPool
+	clientPool *client.ClientPool
 
 	// OAuth manager
 	oauthManager *oauth2.Manager
@@ -68,7 +68,7 @@ type Server struct {
 	httpsRegenerate bool
 
 	// record options
-	recordMode record.RecordMode
+	recordMode obs.RecordMode
 	recordDir  string
 
 	// experimental features
@@ -146,7 +146,7 @@ func WithHTTPSRegenerate(regenerate bool) ServerOption {
 
 // WithRecordMode sets the record mode for request/response recording
 // mode: empty string = disabled, "all" = record all, "response" = response only
-func WithRecordMode(mode record.RecordMode) ServerOption {
+func WithRecordMode(mode obs.RecordMode) ServerOption {
 	return func(s *Server) {
 		s.recordMode = mode
 	}
@@ -250,12 +250,12 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.jwtManager = jwtManager
 	server.engine = gin.New()
 	server.logger = memoryLogger
-	server.clientPool = NewClientPool() // Initialize client pool
+	server.clientPool = client.NewClientPool() // Initialize client pool
 	server.errorMW = errorMW
 
 	// Initialize record sink if recording is enabled
 	if server.recordMode != "" {
-		recordSink := record.NewSink(server.recordDir, server.recordMode)
+		recordSink := obs.NewSink(server.recordDir, server.recordMode)
 		server.clientPool.SetRecordSink(recordSink)
 		log.Printf("Request recording enabled, mode: %s, directory: %s", server.recordMode, server.recordDir)
 	}

@@ -7,9 +7,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"tingly-box/internal/db"
-	"tingly-box/internal/server/config"
-	"tingly-box/pkg/swagger"
+	"github.com/tingly-dev/tingly-box/internal/db"
+	"github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/pkg/swagger"
 )
 
 // UsageAPI provides REST endpoints for usage statistics

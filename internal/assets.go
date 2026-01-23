@@ -10,7 +10,7 @@ import (
 // made available to the frontend.
 // See https://pkg.go.dev/embed for more information.
 
-//go:embed all:gui/dist
+//go:embed all:web_wails3/dist
 var GUIDistAssets embed.FS
 
 //go:embed web/dist

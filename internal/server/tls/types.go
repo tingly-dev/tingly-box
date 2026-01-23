@@ -1,6 +1,8 @@
 package tls
 
-import "time"
+import (
+	"time"
+)
 
 // TLSConfig holds TLS-related configuration
 type TLSConfig struct {

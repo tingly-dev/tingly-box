@@ -64,7 +64,7 @@ func (ms *MockServer) handleOpenAIChat(c *gin.Context) {
 	ms.applyDelay(ms.config.chatDelayMs)
 
 	response := ms.getChatResponse()
-	c.JSON(http.StatusOK,  response)
+	c.JSON(http.StatusOK, response)
 }
 
 // handleAnthropicMessages handles the /v1/messages endpoint
@@ -72,7 +72,7 @@ func (ms *MockServer) handleAnthropicMessages(c *gin.Context) {
 	// Parse into MessageNewParams using SDK's JSON unmarshaling
 	var req anthropic.MessageNewParams
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusUnprocessableEntity, "request do not follow anthropic api style" )
+		c.JSON(http.StatusUnprocessableEntity, "request do not follow anthropic api style")
 		return
 	}
 

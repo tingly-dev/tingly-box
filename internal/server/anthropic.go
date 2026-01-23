@@ -14,62 +14,14 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
-	"tingly-box/internal/feature"
-	"tingly-box/internal/loadbalance"
-	"tingly-box/internal/smart_compact"
-	"tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/feature"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/smart_compact"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// Use official Anthropic SDK types directly
 type (
-	// Request types
-	AnthropicMessagesRequest struct {
-		Stream bool `json:"stream"`
-		anthropic.MessageNewParams
-	}
-	AnthropicBetaMessagesRequest struct {
-		Stream bool `json:"stream"`
-		anthropic.BetaMessageNewParams
-	}
-)
-
-func (r *AnthropicBetaMessagesRequest) UnmarshalJSON(data []byte) error {
-	var inner anthropic.BetaMessageNewParams
-	aux := &struct {
-		Stream bool `json:"stream"`
-	}{}
-	if err := json.Unmarshal(data, aux); err != nil {
-		return err
-	}
-	if err := json.Unmarshal(data, &inner); err != nil {
-		return err
-	}
-	r.Stream = aux.Stream
-	r.BetaMessageNewParams = inner
-	return nil
-}
-
-func (r *AnthropicMessagesRequest) UnmarshalJSON(data []byte) error {
-	var inner anthropic.MessageNewParams
-	aux := &struct {
-		Stream bool `json:"stream"`
-	}{}
-	if err := json.Unmarshal(data, aux); err != nil {
-		return err
-	}
-	if err := json.Unmarshal(data, &inner); err != nil {
-		return err
-	}
-	r.Stream = aux.Stream
-	r.MessageNewParams = inner
-	return nil
-}
-
-type (
-	// Response types
-	AnthropicMessagesResponse = anthropic.Message
-	AnthropicUsage            = anthropic.Usage
-
 	// Model types - based on Anthropic's official models API format
 	AnthropicModel struct {
 		ID          string `json:"id"`
@@ -103,8 +55,8 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		c.Request.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
 	}
 
-	var betaMessages AnthropicBetaMessagesRequest
-	var messages AnthropicMessagesRequest
+	var betaMessages protocol.AnthropicBetaMessagesRequest
+	var messages protocol.AnthropicMessagesRequest
 	var model string
 	if beta {
 		if err := json.Unmarshal(bodyBytes, &betaMessages); err != nil {

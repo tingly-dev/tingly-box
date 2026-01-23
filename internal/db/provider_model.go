@@ -12,8 +12,8 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	"tingly-box/internal/constant"
-	"tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // ProviderModelRecord is the GORM model for persisting provider models

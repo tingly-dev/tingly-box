@@ -12,9 +12,9 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	"tingly-box/internal/constant"
-	"tingly-box/internal/loadbalance"
-	"tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 const defaultServiceTimeWindow = 300

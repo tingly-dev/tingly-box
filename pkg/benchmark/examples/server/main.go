@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"syscall"
 
-	"tingly-box/pkg/benchmark"
+	"github.com/tingly-dev/tingly-box/pkg/benchmark"
 )
 
 func main() {
@@ -30,7 +30,7 @@ func main() {
 		benchmark.WithPort(*port),
 		benchmark.WithChatResponseContent("Hello from the OpenAI benchmark server! This is a custom response."),
 		benchmark.WithMessageResponseContent("Hello from the Anthropic benchmark server! This is a custom response."),
-		benchmark.WithChatDelay(benchmark.DefaultChatDelayMs/2), // Use half of default for faster response
+		benchmark.WithChatDelay(benchmark.DefaultChatDelayMs/2),       // Use half of default for faster response
 		benchmark.WithMessageDelay(benchmark.DefaultMessageDelayMs/2), // Use half of default for faster response
 		benchmark.WithRandomDelay(benchmark.DefaultRandomDelayMin, benchmark.DefaultRandomDelayMax),
 	)

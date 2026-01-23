@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"tingly-box/pkg/benchmark"
+	"github.com/tingly-dev/tingly-box/pkg/benchmark"
 )
 
 // Benchmark configuration constants

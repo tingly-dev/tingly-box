@@ -7,7 +7,7 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/stretchr/testify/require"
 
-	"tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 )
 
 func TestSmartRouting_Integration_OpenAI(t *testing.T) {

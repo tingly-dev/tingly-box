@@ -3,23 +3,27 @@ package server
 import (
 	"context"
 	"fmt"
-	"iter"
 	"net/http"
 	"time"
-	"tingly-box/pkg/adaptor"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/genai"
+	"iter"
 
-	"tingly-box/internal/loadbalance"
-	"tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	nonstream2 "github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
+	request2 "github.com/tingly-dev/tingly-box/internal/protocol/request"
+	stream2 "github.com/tingly-dev/tingly-box/internal/protocol/stream"
+	"github.com/tingly-dev/tingly-box/internal/protocol/token"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // anthropicMessagesV1Beta implements beta messages API
-func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req AnthropicBetaMessagesRequest, proxyModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule) {
+func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, proxyModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule) {
 	actualModel := selectedService.Model
 
 	// Check if streaming is requested
@@ -55,7 +59,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req AnthropicBetaMessag
 	apiStyle := provider.APIStyle
 
 	switch apiStyle {
-	case typ.APIStyleAnthropic:
+	case protocol.APIStyleAnthropic:
 		// Use direct Anthropic SDK call
 		if isStreaming {
 			// Handle streaming request
@@ -86,25 +90,25 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req AnthropicBetaMessag
 			c.JSON(http.StatusOK, anthropicResp)
 		}
 		return
-	case typ.APIStyleGoogle:
+	case protocol.APIStyleGoogle:
 		if !s.enableAdaptor {
 			SendAdapterDisabledError(c, provider.Name)
 			return
 		}
 
 		// Convert Anthropic beta request to Google format
-		model, googleReq, cfg := adaptor.ConvertAnthropicBetaToGoogleRequest(&req.BetaMessageNewParams, 0)
+		model, googleReq, cfg := request2.ConvertAnthropicBetaToGoogleRequest(&req.BetaMessageNewParams, 0)
 
 		if isStreaming {
 			// Create streaming request
-			stream, err := s.forwardGoogleStreamRequest(provider, model, googleReq, cfg)
+			streamResp, err := s.forwardGoogleStreamRequest(provider, model, googleReq, cfg)
 			if err != nil {
 				SendStreamingError(c, err)
 				return
 			}
 
 			// Handle the streaming response
-			err = adaptor.HandleGoogleToAnthropicBetaStreamResponse(c, stream, proxyModel)
+			err = stream2.HandleGoogleToAnthropicBetaStreamResponse(c, streamResp, proxyModel)
 			if err != nil {
 				SendInternalError(c, err.Error())
 			}
@@ -114,27 +118,27 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req AnthropicBetaMessag
 
 		} else {
 			// Handle non-streaming request
-			response, err := s.forwardGoogleRequest(provider, model, googleReq, cfg)
+			resp, err := s.forwardGoogleRequest(provider, model, googleReq, cfg)
 			if err != nil {
 				SendForwardingError(c, err)
 				return
 			}
 
 			// Convert Google response to Anthropic beta format
-			anthropicResp := adaptor.ConvertGoogleToAnthropicBetaResponse(response, proxyModel)
+			anthropicResp := nonstream2.ConvertGoogleToAnthropicBetaResponse(resp, proxyModel)
 
 			// Track usage from response
 			inputTokens := 0
 			outputTokens := 0
-			if response.UsageMetadata != nil {
-				inputTokens = int(response.UsageMetadata.PromptTokenCount)
-				outputTokens = int(response.UsageMetadata.CandidatesTokenCount)
+			if resp.UsageMetadata != nil {
+				inputTokens = int(resp.UsageMetadata.PromptTokenCount)
+				outputTokens = int(resp.UsageMetadata.CandidatesTokenCount)
 			}
 			s.trackUsage(c, rule, provider, actualModel, proxyModel, inputTokens, outputTokens, false, "success", "")
 
 			c.JSON(http.StatusOK, anthropicResp)
 		}
-	case typ.APIStyleOpenAI:
+	case protocol.APIStyleOpenAI:
 		// Check if adaptor is enabled
 		if !s.enableAdaptor {
 			SendAdapterDisabledError(c, provider.Name)
@@ -142,31 +146,31 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req AnthropicBetaMessag
 		}
 
 		// Convert Anthropic beta request to OpenAI format for streaming
-		openaiReq := adaptor.ConvertAnthropicBetaToOpenAIRequestWithProvider(&req.BetaMessageNewParams, true, provider, actualModel)
+		openaiReq := request2.ConvertAnthropicBetaToOpenAIRequestWithProvider(&req.BetaMessageNewParams, true, provider, actualModel)
 
 		// Use OpenAI conversion path (default behavior)
 		if isStreaming {
 			// Create streaming request
-			stream, err := s.forwardOpenAIStreamRequest(provider, openaiReq)
+			streamResp, err := s.forwardOpenAIStreamRequest(provider, openaiReq)
 			if err != nil {
 				SendStreamingError(c, err)
 				return
 			}
 
 			// Handle the streaming response
-			err = adaptor.HandleOpenAIToAnthropicV1BetaStreamResponse(c, openaiReq, stream, proxyModel)
+			err = stream2.HandleOpenAIToAnthropicV1BetaStreamResponse(c, openaiReq, streamResp, proxyModel)
 			if err != nil {
 				SendInternalError(c, err.Error())
 			}
 
 		} else {
-			response, err := s.forwardOpenAIRequest(provider, openaiReq)
+			resp, err := s.forwardOpenAIRequest(provider, openaiReq)
 			if err != nil {
 				SendForwardingError(c, err)
 				return
 			}
 			// Convert OpenAI response back to Anthropic beta format
-			anthropicResp := adaptor.ConvertOpenAIToAnthropicBetaResponse(response, proxyModel)
+			anthropicResp := nonstream2.ConvertOpenAIToAnthropicBetaResponse(resp, proxyModel)
 			c.JSON(http.StatusOK, anthropicResp)
 		}
 	default:
@@ -349,7 +353,7 @@ func (s *Server) anthropicCountTokensV1Beta(c *gin.Context, bodyBytes []byte, ra
 
 		c.JSON(http.StatusOK, message)
 	} else {
-		count, err := countBetaTokensWithTiktoken(string(req.Model), req.Messages, req.System)
+		count, err := token.CountBetaTokensWithTiktoken(string(req.Model), req.Messages, req.System)
 		if err != nil {
 			SendInvalidRequestBodyError(c, err)
 			return

@@ -13,33 +13,15 @@ import (
 	"github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/sirupsen/logrus"
 
-	"tingly-box/internal/loadbalance"
-	"tingly-box/internal/typ"
-	"tingly-box/pkg/adaptor"
-	"tingly-box/pkg/adaptor/extension"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
+	"github.com/tingly-dev/tingly-box/internal/protocol/request"
+	"github.com/tingly-dev/tingly-box/internal/protocol/request/transformer"
+	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
+	"github.com/tingly-dev/tingly-box/internal/protocol/token"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
-
-// OpenAIChatCompletionRequest is a type alias for OpenAI chat completion request with extra fields.
-type OpenAIChatCompletionRequest struct {
-	openai.ChatCompletionNewParams
-	Stream bool `json:"stream"`
-}
-
-func (r *OpenAIChatCompletionRequest) UnmarshalJSON(data []byte) error {
-	var inner openai.ChatCompletionNewParams
-	aux := &struct {
-		Stream bool `json:"stream"`
-	}{}
-	if err := json.Unmarshal(data, aux); err != nil {
-		return err
-	}
-	if err := json.Unmarshal(data, &inner); err != nil {
-		return err
-	}
-	r.Stream = aux.Stream
-	r.ChatCompletionNewParams = inner
-	return nil
-}
 
 // OpenAIListModels handles the /v1/models endpoint (OpenAI compatible)
 func (s *Server) OpenAIListModels(c *gin.Context) {
@@ -115,7 +97,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 	}
 
 	// Parse OpenAI-style request
-	var req OpenAIChatCompletionRequest
+	var req protocol.OpenAIChatCompletionRequest
 	if err := json.Unmarshal(bodyBytes, &req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -225,15 +207,15 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 			return
 		}
 
-		anthropicReq := adaptor.ConvertOpenAIToAnthropicRequest(&req.ChatCompletionNewParams, int64(maxAllowed))
+		anthropicReq := request.ConvertOpenAIToAnthropicRequest(&req.ChatCompletionNewParams, int64(maxAllowed))
 
 		// 🔥 REQUIRED: forward tool_choice
 		if req.ToolChoice.OfAuto.Value != "" || req.ToolChoice.OfAllowedTools != nil || req.ToolChoice.OfFunctionToolChoice != nil || req.ToolChoice.OfCustomToolChoice != nil {
-			anthropicReq.ToolChoice = adaptor.ConvertOpenAIToAnthropicToolChoice(&req.ToolChoice)
+			anthropicReq.ToolChoice = request.ConvertOpenAIToAnthropicToolChoice(&req.ToolChoice)
 		}
 
 		if isStreaming {
-			stream, err := s.ForwardAnthropicStreamRequest(provider, anthropicReq)
+			streamResp, err := s.ForwardAnthropicStreamRequest(provider, anthropicReq)
 			if err != nil {
 				// Track error with no usage
 				s.trackUsage(c, rule, provider, actualModel, responseModel, 0, 0, true, "error", "stream_creation_failed")
@@ -246,7 +228,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 				return
 			}
 
-			inputTokens, outputTokens, err := adaptor.HandleAnthropicToOpenAIStreamResponse(c, &anthropicReq, stream, responseModel)
+			inputTokens, outputTokens, err := stream.HandleAnthropicToOpenAIStreamResponse(c, &anthropicReq, streamResp, responseModel)
 			if err != nil {
 				// Track usage with error status
 				if inputTokens > 0 || outputTokens > 0 {
@@ -286,7 +268,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 			s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, false, "success", "")
 
 			// Use provider-aware conversion for provider-specific handling
-			openaiResp := adaptor.ConvertAnthropicToOpenAIResponseWithProvider(anthropicResp, responseModel, provider, actualModel)
+			openaiResp := nonstream.ConvertAnthropicToOpenAIResponseWithProvider(anthropicResp, responseModel, provider, actualModel)
 			c.JSON(http.StatusOK, openaiResp)
 			return
 		}
@@ -358,7 +340,7 @@ func (s *Server) forwardOpenAIRequest(provider *typ.Provider, req *openai.ChatCo
 
 	// Apply provider-specific transformations before forwarding
 	config := s.buildOpenAIConfig(req)
-	req = extension.ApplyProviderTransforms(req, provider, req.Model, config)
+	req = transformer.ApplyProviderTransforms(req, provider, req.Model, config)
 
 	// Get or create OpenAI client wrapper from pool
 	wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
@@ -383,7 +365,7 @@ func (s *Server) forwardOpenAIStreamRequest(provider *typ.Provider, req *openai.
 
 	// Apply provider-specific transformations before forwarding
 	config := s.buildOpenAIConfig(req)
-	req = extension.ApplyProviderTransforms(req, provider, req.Model, config)
+	req = transformer.ApplyProviderTransforms(req, provider, req.Model, config)
 
 	// Get or create OpenAI client wrapper from pool
 	wrapper := s.clientPool.GetOpenAIClient(provider, "")
@@ -399,8 +381,8 @@ func (s *Server) forwardOpenAIStreamRequest(provider *typ.Provider, req *openai.
 }
 
 // buildOpenAIConfig builds the OpenAIConfig for provider transformations
-func (s *Server) buildOpenAIConfig(req *openai.ChatCompletionNewParams) *extension.OpenAIConfig {
-	config := &extension.OpenAIConfig{
+func (s *Server) buildOpenAIConfig(req *openai.ChatCompletionNewParams) *transformer.OpenAIConfig {
+	config := &transformer.OpenAIConfig{
 		HasThinking:     false,
 		ReasoningEffort: "",
 	}
@@ -580,8 +562,8 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 
 		// If no usage from stream, estimate it
 		if !hasUsage {
-			inputTokens, _ = estimateInputTokens(req)
-			outputTokens = estimateOutputTokens(contentBuilder.String())
+			inputTokens, _ = token.EstimateInputTokens(req)
+			outputTokens = token.EstimateOutputTokens(contentBuilder.String())
 		}
 
 		// Track usage with error status
@@ -614,8 +596,8 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 	// Track successful streaming completion
 	// If no usage from stream, estimate it and send to client
 	if !hasUsage {
-		inputTokens, _ = estimateInputTokens(req)
-		outputTokens = estimateOutputTokens(contentBuilder.String())
+		inputTokens, _ = token.EstimateInputTokens(req)
+		outputTokens = token.EstimateOutputTokens(contentBuilder.String())
 
 		// Use the first chunk ID, or generate one if not available
 		chunkID := firstChunkID

@@ -3,7 +3,7 @@ package constant
 import (
 	"path/filepath"
 
-	"tingly-box/internal/util"
+	"github.com/tingly-dev/tingly-box/pkg/fs"
 )
 
 const (
@@ -44,7 +44,7 @@ const MemoryDirName = "memory"
 
 // GetTinglyConfDir returns the config directory path (default: ~/.tingly-box)
 func GetTinglyConfDir() string {
-	homeDir, err := util.GetUserPath()
+	homeDir, err := fs.GetUserPath()
 	if err != nil {
 		// Fallback to current directory if home directory is not accessible
 		return ConfigDirName
