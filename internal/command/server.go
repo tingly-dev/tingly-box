@@ -17,7 +17,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
-	daemon2 "github.com/tingly-dev/tingly-box/pkg/daemon"
+	"github.com/tingly-dev/tingly-box/pkg/daemon"
 	"github.com/tingly-dev/tingly-box/pkg/lock"
 	"github.com/tingly-dev/tingly-box/pkg/network"
 )
@@ -223,7 +223,7 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 	}
 
 	// Create rotating log writer
-	logWriter := daemon2.NewLogger(daemon2.DefaultLogRotationConfig(logFile))
+	logWriter := daemon.NewLogger(daemon.DefaultLogRotationConfig(logFile))
 
 	// Set up logrus to write to both stdout and file with rotation
 	if opts.Daemon {
@@ -240,7 +240,7 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 	// Handle daemon mode
 	if opts.Daemon {
 		// If not yet daemonized, fork and exit
-		if !daemon2.IsDaemonProcess() {
+		if !daemon.IsDaemonProcess() {
 			// Resolve port for display
 			port := opts.Port
 			if port == 0 {
@@ -262,7 +262,7 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 			})
 
 			// Fork and detach
-			if err := daemon2.Daemonize(); err != nil {
+			if err := daemon.Daemonize(); err != nil {
 				return fmt.Errorf("failed to daemonize: %w", err)
 			}
 			// Daemonize() calls os.Exit(0), so we never reach here
