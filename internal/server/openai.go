@@ -377,7 +377,7 @@ func (s *Server) forwardOpenAIStreamRequest(provider *typ.Provider, req *openai.
 	req = transformer.ApplyProviderTransforms(req, provider, req.Model, config)
 
 	// Get or create OpenAI client wrapper from pool
-	wrapper := s.clientPool.GetOpenAIClient(provider, "")
+	wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
 
 	// Make the streaming request using wrapper method with provider timeout
 	timeout := time.Duration(provider.Timeout) * time.Second

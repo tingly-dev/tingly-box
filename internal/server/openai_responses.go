@@ -330,7 +330,7 @@ func (s *Server) handleResponsesStreamResponse(c *gin.Context, stream *ssestream
 
 // forwardResponsesRequest forwards a Responses API request to the provider
 func (s *Server) forwardResponsesRequest(provider *typ.Provider, params responses.ResponseNewParams) (*responses.Response, error) {
-	wrapper := s.clientPool.GetOpenAIClient(provider, "")
+	wrapper := s.clientPool.GetOpenAIClient(provider, params.Model)
 	logrus.Infof("provider: %s (responses)", provider.Name)
 
 	// Make the request using wrapper method with provider timeout
@@ -348,7 +348,7 @@ func (s *Server) forwardResponsesRequest(provider *typ.Provider, params response
 
 // forwardResponsesStreamRequest forwards a streaming Responses API request to the provider
 func (s *Server) forwardResponsesStreamRequest(provider *typ.Provider, params responses.ResponseNewParams) (*ssestream.Stream[responses.ResponseStreamEventUnion], error) {
-	wrapper := s.clientPool.GetOpenAIClient(provider, "")
+	wrapper := s.clientPool.GetOpenAIClient(provider, params.Model)
 	logrus.Infof("provider: %s (responses streaming)", provider.Name)
 
 	// Make the request using wrapper method with provider timeout
