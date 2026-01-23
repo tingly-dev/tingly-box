@@ -6,7 +6,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"html/template"
+	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -49,6 +51,7 @@ type OAuthAuthorizeRequest struct {
 	Redirect     string `json:"redirect" description:"URL to redirect after OAuth completion" example:"http://localhost:3000/callback"`
 	ResponseType string `json:"response_type" description:"Response type: 'redirect' or 'json'" example:"json"`
 	Name         string `json:"name" description:"Custom name for the provider (optional, auto-generated if empty)" example:"my-claude-account"`
+	ProxyURL     string `json:"proxy_url,omitempty" description:"HTTP/SOCKS proxy URL (e.g., http://127.0.0.1:7890 or socks5://127.0.0.1:1080)" example:"http://proxy.example.com:8080"`
 }
 
 // OAuthAuthorizeResponse represents the response for OAuth authorization initiation
@@ -378,6 +381,14 @@ func (s *Server) useOAuthEndpoints(manager *swagger.RouteManager) {
 		swagger.WithResponseModel(OAuthSessionStatusResponse{}),
 	)
 
+	// OAuth Cancel Session
+	apiV1.POST("/oauth/cancel", s.CancelOAuthSession,
+		swagger.WithTags("oauth"),
+		swagger.WithDescription("Cancel an in-progress OAuth session and cleanup resources"),
+		swagger.WithRequestModel(OAuthCancelRequest{}),
+		swagger.WithResponseModel(OAuthMessageResponse{}),
+	)
+
 	// OAuth Callback (no authentication required - called by OAuth provider)
 	manager.GetEngine().GET("/oauth/callback", s.OAuthCallback)
 	manager.GetEngine().GET("/callback", s.OAuthCallback)
@@ -572,6 +583,66 @@ func (s *Server) AuthorizeOAuth(c *gin.Context) {
 
 	userID := req.UserID
 
+	// Determine which proxy URL to use (must be done before session creation)
+	// Priority: 1. Manual proxy URL from request, 2. Auto-detect from existing providers
+	proxyURL := req.ProxyURL
+	log.Printf("[OAuth] Received proxy_url from request: '%s'", req.ProxyURL)
+
+	// If no manual proxy URL, try to auto-detect from existing providers
+	if proxyURL == "" {
+		// Map OAuth providers to their corresponding base providers
+		// This allows us to reuse proxy configuration from existing API providers
+		providerToBase := map[oauth2.ProviderType]string{
+			oauth2.ProviderCodex:      "openai",
+			oauth2.ProviderOpenAI:     "openai",
+			oauth2.ProviderClaudeCode: "anthropic",
+			oauth2.ProviderGemini:     "google",
+		}
+
+		if baseProvider, ok := providerToBase[providerType]; ok {
+			// Look for existing providers with this base
+			providers := s.config.ListProviders()
+			for _, p := range providers {
+				// Check if provider matches the base provider and has a proxy URL
+				// Match by checking APIStyle or if models/api_base indicate the base provider
+				isOpenAIProvider := p.APIStyle == protocol.APIStyleOpenAI ||
+					strings.Contains(p.APIBase, "openai.com") ||
+					(p.Models != nil && len(p.Models) > 0 && strings.HasPrefix(p.Models[0], "gpt"))
+				isAnthropicProvider := p.APIStyle == protocol.APIStyleAnthropic ||
+					strings.Contains(p.APIBase, "anthropic.com")
+
+				var matches bool
+				switch baseProvider {
+				case "openai":
+					matches = isOpenAIProvider
+				case "anthropic":
+					matches = isAnthropicProvider
+				}
+
+				if matches && p.ProxyURL != "" {
+					proxyURL = p.ProxyURL
+					log.Printf("[OAuth] Auto-detected proxy URL from provider %s: %s", p.Name, proxyURL)
+					break
+				}
+			}
+		}
+	}
+
+	// Set proxy URL on OAuth manager for token exchange
+	// This must be done before the callback happens so the token exchange uses the proxy
+	if proxyURL != "" {
+		parsedURL, err := url.Parse(proxyURL)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, OAuthErrorResponse{
+				Success: false,
+				Error:   "Invalid proxy URL: " + err.Error(),
+			})
+			return
+		}
+		s.oauthManager.SetProxyURL(parsedURL)
+		log.Printf("[OAuth] Proxy URL configured: %s", proxyURL)
+	}
+
 	// Create session for status tracking
 	session, err := s.oauthManager.CreateSession(userID, providerType)
 	if err != nil {
@@ -580,6 +651,28 @@ func (s *Server) AuthorizeOAuth(c *gin.Context) {
 			Error:   "Failed to create session: " + err.Error(),
 		})
 		return
+	}
+
+	// Store proxy URL in session for later retrieval when creating provider
+	if proxyURL != "" {
+		session.ProxyURL = proxyURL
+		// Re-save the session with the proxy URL
+		s.oauthManager.StoreSession(session)
+	}
+
+	// Start dynamic callback server if provider has port constraints (like Codex)
+	if len(config.CallbackPorts) > 0 {
+		callbackPort := config.CallbackPorts[0]
+		if err := s.startDynamicCallbackServer(session.SessionID, callbackPort); err != nil {
+			c.JSON(http.StatusInternalServerError, OAuthErrorResponse{
+				Success: false,
+				Error:   "Failed to start callback server: " + err.Error(),
+			})
+			return
+		}
+
+		// Update OAuth manager's BaseURL to use the callback server's port
+		s.oauthManager.SetBaseURL(fmt.Sprintf("http://localhost:%d", callbackPort))
 	}
 
 	// Handle device code flow (OAuthMethodDeviceCode or OAuthMethodDeviceCodePKCE)
@@ -609,7 +702,8 @@ func (s *Server) AuthorizeOAuth(c *gin.Context) {
 
 			fmt.Printf("[OAuth] Device code polling succeeded for %s, creating provider\n", providerType)
 			// Create provider with OAuth credentials after successful polling
-			providerUUID, err := s.createProviderFromToken(token, providerType, req.Name)
+			// Pass session ID to retrieve proxy URL from the session
+			providerUUID, err := s.createProviderFromToken(token, providerType, req.Name, session.SessionID)
 			if err != nil {
 				fmt.Printf("[OAuth] Failed to create provider for %s: %v\n", providerType, err)
 				// Update session status to failed
@@ -802,7 +896,8 @@ func (s *Server) OAuthCallback(c *gin.Context) {
 	}
 
 	// Use createProviderFromToken to create the provider
-	providerUUID, err := s.createProviderFromToken(token, token.Provider, "")
+	// Pass session ID to retrieve proxy URL from the session
+	providerUUID, err := s.createProviderFromToken(token, token.Provider, "", token.SessionID)
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "oauth_error.html", gin.H{
 			"error": fmt.Sprintf("Failed to create provider: %v", err),
@@ -814,6 +909,13 @@ func (s *Server) OAuthCallback(c *gin.Context) {
 	if token.SessionID != "" {
 		_ = s.oauthManager.UpdateSessionStatus(token.SessionID, oauth2.SessionStatusSuccess, providerUUID, "")
 	}
+
+	// Stop the dynamic callback server if this session had one
+	// This is done after successful OAuth completion
+	go func() {
+		time.Sleep(1 * time.Second) // Give time for the response to be sent
+		s.stopDynamicCallbackServer(token.SessionID)
+	}()
 
 	// Return success HTML page to inform the user
 	c.HTML(http.StatusOK, "oauth_success.html", gin.H{
@@ -932,10 +1034,22 @@ func (s *Server) RefreshOAuthToken(c *gin.Context) {
 // createProviderFromToken creates a provider from an OAuth token
 // This helper is used by both OAuthCallback and device code flow
 // Returns the provider UUID or an error
-func (s *Server) createProviderFromToken(token *oauth2.Token, providerType oauth2.ProviderType, customName string) (string, error) {
+func (s *Server) createProviderFromToken(token *oauth2.Token, providerType oauth2.ProviderType, customName string, sessionID string) (string, error) {
 	// Get custom name from token (stored in state during authorize)
 	if customName == "" {
 		customName = token.Name
+	}
+
+	// Retrieve proxy URL from session if available
+	var proxyURL string
+	if sessionID != "" {
+		session, err := s.oauthManager.GetSession(sessionID)
+		if err == nil && session != nil {
+			proxyURL = session.ProxyURL
+			if proxyURL != "" {
+				log.Printf("[OAuth] Using proxy URL from session: %s", proxyURL)
+			}
+		}
 	}
 
 	// Generate unique provider name with random suffix
@@ -983,6 +1097,9 @@ func (s *Server) createProviderFromToken(token *oauth2.Token, providerType oauth
 		case oauth2.ProviderOpenAI:
 			apiBase = "https://api.openai.com/v1"
 			apiStyle = protocol.APIStyleOpenAI
+		case oauth2.ProviderCodex:
+			apiBase = "https://api.openai.com/v1"
+			apiStyle = protocol.APIStyleOpenAI
 		default:
 			// For mock and unknown providers
 			apiBase = "mock"
@@ -1008,6 +1125,7 @@ func (s *Server) createProviderFromToken(token *oauth2.Token, providerType oauth
 		APIBase:  apiBase,
 		APIStyle: apiStyle,
 		Enabled:  true,
+		ProxyURL: proxyURL, // Include proxy URL from session
 		AuthType: typ.AuthTypeOAuth,
 		OAuthDetail: &typ.OAuthDetail{
 			AccessToken:  token.AccessToken,
@@ -1021,6 +1139,19 @@ func (s *Server) createProviderFromToken(token *oauth2.Token, providerType oauth
 	// Save provider to config
 	if err := s.config.AddProvider(provider); err != nil {
 		return "", fmt.Errorf("failed to save provider: %w", err)
+	}
+
+	// Fetch models for the newly created OAuth provider
+	// This ensures models are available in the model selection panel
+	log.Printf("[OAuth] Fetching models for OAuth provider %s (%s)", providerName, providerUUID.String())
+	if err := s.config.FetchAndSaveProviderModels(providerUUID.String()); err != nil {
+		log.Printf("[OAuth] Warning: Failed to fetch models for OAuth provider %s: %v", providerName, err)
+		// Don't fail the OAuth flow if model fetching fails - the provider is still usable
+		// Users can manually refresh models later via the UI
+	} else {
+		modelManager := s.config.GetModelManager()
+		models := modelManager.GetModels(providerUUID.String())
+		log.Printf("[OAuth] Successfully fetched %d models for OAuth provider %s", len(models), providerName)
 	}
 
 	// Log the successful provider creation
@@ -1064,4 +1195,39 @@ func (s *Server) GetOAuthSessionStatus(c *gin.Context) {
 	resp.Data.Error = session.Error
 
 	c.JSON(http.StatusOK, resp)
+}
+
+// =============================================
+// OAuth Cancel Models
+// =============================================
+
+// OAuthCancelRequest represents the request to cancel an OAuth session
+type OAuthCancelRequest struct {
+	SessionID string `json:"session_id" binding:"required" description:"Session ID to cancel" example:"abc123def456"`
+}
+
+// CancelOAuthSession cancels an in-progress OAuth session and cleans up resources
+// POST /api/v1/oauth/cancel
+func (s *Server) CancelOAuthSession(c *gin.Context) {
+	var req OAuthCancelRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, OAuthErrorResponse{
+			Success: false,
+			Error:   "Invalid request: " + err.Error(),
+		})
+		return
+	}
+
+	// Stop the callback server if it exists for this session
+	s.stopDynamicCallbackServer(req.SessionID)
+
+	// Update session status to failed (cancelled by user)
+	_ = s.oauthManager.UpdateSessionStatus(req.SessionID, oauth2.SessionStatusFailed, "", "Cancelled by user")
+
+	log.Printf("[OAuth] Cancelled session %s and stopped callback server", req.SessionID)
+
+	c.JSON(http.StatusOK, OAuthMessageResponse{
+		Success: true,
+		Message: "OAuth session cancelled",
+	})
 }

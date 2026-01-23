@@ -14,6 +14,8 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/packages/param"
+	"github.com/openai/openai-go/v3/responses"
 
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -249,9 +251,37 @@ func (s *Server) getProviderModelsForProbe(provider *typ.Provider) ([]string, er
 	return models, nil
 }
 
+// categorizeProbeError categorizes common probe errors into error codes
+func categorizeProbeError(errorMessage string) string {
+	errorCode := "PROBE_FAILED"
+	lowerMsg := strings.ToLower(errorMessage)
+
+	if strings.Contains(lowerMsg, "authentication") || strings.Contains(lowerMsg, "unauthorized") {
+		errorCode = "AUTHENTICATION_FAILED"
+	} else if strings.Contains(lowerMsg, "rate limit") {
+		errorCode = "RATE_LIMIT_EXCEEDED"
+	} else if strings.Contains(lowerMsg, "model") {
+		errorCode = "MODEL_NOT_AVAILABLE"
+	} else if strings.Contains(lowerMsg, "timeout") || strings.Contains(lowerMsg, "deadline") {
+		errorCode = "CONNECTION_TIMEOUT"
+	} else if strings.Contains(lowerMsg, "token") {
+		errorCode = "INVALID_API_KEY"
+	}
+
+	return errorCode
+}
+
 // probeWithOpenAI handles probe requests for OpenAI-style APIs
 func (s *Server) probeWithOpenAI(c *gin.Context, provider *typ.Provider, model string) (string, ProbeUsage, error) {
 	startTime := time.Now()
+
+	// Check if this is a Codex OAuth provider
+	// Codex OAuth requires the Responses API, not Chat Completions
+	if provider.AuthType == typ.AuthTypeOAuth &&
+		provider.OAuthDetail != nil &&
+		provider.OAuthDetail.ProviderType == "codex" {
+		return s.probeWithResponsesAPI(c, provider, model)
+	}
 
 	// Get OpenAI client from pool (supports proxy and caching)
 	openaiClient := s.clientPool.GetOpenAIClient(provider, "")
@@ -285,31 +315,110 @@ func (s *Server) probeWithOpenAI(c *gin.Context, provider *typ.Provider, model s
 	}
 
 	if err != nil {
-		// Handle error response
-		errorMessage := err.Error()
-		errorCode := "PROBE_FAILED"
+		errorCode := categorizeProbeError(err.Error())
+		errMsg := err.Error()
 
-		// Categorize common errors
-		if strings.Contains(strings.ToLower(errorMessage), "authentication") || strings.Contains(strings.ToLower(errorMessage), "unauthorized") {
-			errorCode = "AUTHENTICATION_FAILED"
-		} else if strings.Contains(strings.ToLower(errorMessage), "rate limit") {
-			errorCode = "RATE_LIMIT_EXCEEDED"
-		} else if strings.Contains(strings.ToLower(errorMessage), "model") {
-			errorCode = "MODEL_NOT_AVAILABLE"
-		} else if strings.Contains(strings.ToLower(errorMessage), "timeout") || strings.Contains(strings.ToLower(errorMessage), "deadline") {
-			errorCode = "CONNECTION_TIMEOUT"
-		} else if strings.Contains(strings.ToLower(errorMessage), "token") {
-			errorCode = "INVALID_API_KEY"
+		// Provide helpful message for Codex OAuth providers
+		if provider.AuthType == typ.AuthTypeOAuth &&
+			provider.OAuthDetail != nil &&
+			provider.OAuthDetail.ProviderType == "codex" {
+			errMsg = fmt.Sprintf("%s (Note: Codex OAuth tokens have limited API access. Consider using a regular API key instead.)", err.Error())
 		}
 
-		return "", tokenUsage, fmt.Errorf("%s: %s (processing time: %dms)", errorCode, errorMessage, processingTime)
+		return "", tokenUsage, fmt.Errorf("%s: %s (processing time: %dms)", errorCode, errMsg, processingTime)
 	}
 
-	// If response content is empty, provide fallback
 	if responseContent == "" {
 		responseContent = "<response content is empty, but request success>"
 	}
+	return responseContent, tokenUsage, nil
+}
 
+// probeWithResponsesAPI handles probe requests using the Responses API (for Codex OAuth)
+func (s *Server) probeWithResponsesAPI(c *gin.Context, provider *typ.Provider, model string) (string, ProbeUsage, error) {
+	startTime := time.Now()
+
+	// Get OpenAI client from pool
+	wrapper := s.clientPool.GetOpenAIClient(provider, "")
+	if wrapper == nil {
+		return "", ProbeUsage{}, fmt.Errorf("failed to get OpenAI client")
+	}
+
+	// Create minimal Responses API request
+	params := responses.ResponseNewParams{
+		Input: responses.ResponseNewParamsInputUnion{OfString: param.NewOpt("Hi")},
+	}
+
+	// Set model via raw JSON - marshal to JSON, set model, unmarshal back
+	paramsJSON, err := json.Marshal(params)
+	if err != nil {
+		return "", ProbeUsage{}, fmt.Errorf("failed to marshal params: %w", err)
+	}
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal(paramsJSON, &raw); err != nil {
+		return "", ProbeUsage{}, fmt.Errorf("failed to unmarshal params: %w", err)
+	}
+
+	raw["model"] = model
+
+	modifiedJSON, err := json.Marshal(raw)
+	if err != nil {
+		return "", ProbeUsage{}, fmt.Errorf("failed to marshal modified params: %w", err)
+	}
+
+	if err := json.Unmarshal(modifiedJSON, &params); err != nil {
+		return "", ProbeUsage{}, fmt.Errorf("failed to unmarshal modified params: %w", err)
+	}
+
+	// Make the request
+	resp, err := wrapper.Client().Responses.New(c.Request.Context(), params)
+	processingTime := time.Since(startTime).Milliseconds()
+
+	var responseContent string
+	var tokenUsage ProbeUsage
+
+	if err == nil && resp != nil {
+		// Extract response content from Output
+		if resp.Output != nil {
+			for _, item := range resp.Output {
+				// Check if this is a message output
+				if item.Type == "message" {
+					msg := item.AsMessage()
+					// Extract text from message content
+					for _, content := range msg.Content {
+						if content.Type == "output_text" {
+							responseContent += content.Text
+						}
+					}
+				}
+			}
+		}
+		// Extract usage if available
+		if resp.Usage.InputTokens != 0 {
+			tokenUsage.PromptTokens = int(resp.Usage.InputTokens)
+			tokenUsage.CompletionTokens = int(resp.Usage.OutputTokens)
+			tokenUsage.TotalTokens = int(resp.Usage.InputTokens) + int(resp.Usage.OutputTokens)
+		}
+	}
+
+	if err != nil {
+		errorCode := categorizeProbeError(err.Error())
+		errMsg := err.Error()
+
+		// Provide helpful message for Codex OAuth providers
+		if provider.AuthType == typ.AuthTypeOAuth &&
+			provider.OAuthDetail != nil &&
+			provider.OAuthDetail.ProviderType == "codex" {
+			errMsg = fmt.Sprintf("%s (Note: Codex OAuth tokens have limited API access. Consider using a regular API key instead.)", err.Error())
+		}
+
+		return "", tokenUsage, fmt.Errorf("%s: %s (processing time: %dms)", errorCode, errMsg, processingTime)
+	}
+
+	if responseContent == "" {
+		responseContent = "<response content is empty, but request success>"
+	}
 	return responseContent, tokenUsage, nil
 }
 
@@ -366,31 +475,22 @@ func (s *Server) probeWithAnthropic(c *gin.Context, provider *typ.Provider, mode
 	}
 
 	if err != nil {
-		// Handle error response
-		errorMessage := err.Error()
-		errorCode := "PROBE_FAILED"
+		errorCode := categorizeProbeError(err.Error())
+		errMsg := err.Error()
 
-		// Categorize common errors
-		if strings.Contains(strings.ToLower(errorMessage), "authentication") || strings.Contains(strings.ToLower(errorMessage), "unauthorized") {
-			errorCode = "AUTHENTICATION_FAILED"
-		} else if strings.Contains(strings.ToLower(errorMessage), "rate limit") {
-			errorCode = "RATE_LIMIT_EXCEEDED"
-		} else if strings.Contains(strings.ToLower(errorMessage), "model") {
-			errorCode = "MODEL_NOT_AVAILABLE"
-		} else if strings.Contains(strings.ToLower(errorMessage), "timeout") || strings.Contains(strings.ToLower(errorMessage), "deadline") {
-			errorCode = "CONNECTION_TIMEOUT"
-		} else if strings.Contains(strings.ToLower(errorMessage), "token") {
-			errorCode = "INVALID_API_KEY"
+		// Provide helpful message for Codex OAuth providers
+		if provider.AuthType == typ.AuthTypeOAuth &&
+			provider.OAuthDetail != nil &&
+			provider.OAuthDetail.ProviderType == "codex" {
+			errMsg = fmt.Sprintf("%s (Note: Codex OAuth tokens have limited API access. Consider using a regular API key instead.)", err.Error())
 		}
 
-		return "", tokenUsage, fmt.Errorf("%s: %s (processing time: %dms)", errorCode, errorMessage, processingTime)
+		return "", tokenUsage, fmt.Errorf("%s: %s (processing time: %dms)", errorCode, errMsg, processingTime)
 	}
 
-	// If response content is empty, provide fallback
 	if responseContent == "" {
 		responseContent = "<response content is empty, but request success>"
 	}
-
 	return responseContent, tokenUsage, nil
 }
 

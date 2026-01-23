@@ -166,8 +166,7 @@ func DefaultRegistry() *Registry {
 	// https://platform.openai.com/
 	// Uses PKCE for secure authentication with OpenAI's OAuth
 	// Reference: https://github.com/openai/openai-cli
-	// Codex requires specific callback path: /auth/callback
-	// Codex allows port 1455 for callback
+	// Emulates Codex CLI to use their client ID - requires callback on port 1455
 	registry.Register(&ProviderConfig{
 		Type:               ProviderCodex,
 		DisplayName:        "Codex",
@@ -182,7 +181,7 @@ func DefaultRegistry() *Registry {
 		StateEncoding:      StateEncodingBase64URL32, // Match OpenAI Codex CLI state format (32 bytes)
 		ConsoleURL:         "https://platform.openai.com/",
 		Callback:           "/auth/callback", // Codex requires specific callback path
-		CallbackPorts:      []int{1455},      // Codex allows port 1455
+		CallbackPorts:      []int{1455},      // Codex requires port 1455
 		Hook:               &CodexHook{},
 	})
 

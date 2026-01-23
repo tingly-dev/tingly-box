@@ -11,9 +11,10 @@ import {
     DialogTitle,
     IconButton,
     Stack,
+    TextField,
     Typography,
 } from '@mui/material';
-import {Claude, Gemini, Google, Qwen} from '@lobehub/icons';
+import {Claude, Gemini, Google, OpenAI, Qwen} from '@lobehub/icons';
 import {useEffect, useState} from 'react';
 import api from "@/services/api.ts";
 
@@ -69,6 +70,15 @@ const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
         deviceCodeFlow: true,
     },
     {
+        id: 'codex',
+        name: 'Codex',
+        displayName: 'OpenAI Codex',
+        description: 'Access OpenAI Codex via OAuth',
+        icon: <OpenAI size={32}/>,
+        color: '#10A37F',
+        enabled: true,
+    },
+    {
         id: 'mock',
         name: 'Mock',
         displayName: 'Mock OAuth',
@@ -118,6 +128,20 @@ const OAuthAuthorizationDialog = ({
     const [showConfirmDialog, setShowConfirmDialog] = useState(false);
     const [showTimeoutDialog, setShowTimeoutDialog] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [pollingIntervalId, setPollingIntervalId] = useState<NodeJS.Timeout | null>(null);
+
+    // Cleanup OAuth session when dialog closes without success
+    const cleanupOnClose = async () => {
+        if (authData?.session_id && !opened) {
+            try {
+                const {oauthApi} = await api.instances();
+                await oauthApi.apiV1OauthCancelPost({session_id: authData.session_id});
+                console.log('[OAuth] Cleaned up session on dialog close:', authData.session_id);
+            } catch (error) {
+                console.error('[OAuth] Failed to cleanup session:', error);
+            }
+        }
+    };
 
     // Polling constants
     const POLL_INTERVAL = 2000; // 2 seconds
@@ -127,9 +151,12 @@ const OAuthAuthorizationDialog = ({
     // Clean up polling on unmount
     useEffect(() => {
         return () => {
-            // Cleanup will be handled by the polling function itself
+            // Clear any pending polling interval
+            if (pollingIntervalId) {
+                clearInterval(pollingIntervalId);
+            }
         };
-    }, []);
+    }, [pollingIntervalId]);
 
     // Auto-open authorization URL when dialog opens
     useEffect(() => {
@@ -154,6 +181,10 @@ const OAuthAuthorizationDialog = ({
             }
         }
         if (!open) {
+            // Cleanup when dialog closes without success
+            if (opened && !errorMessage && authData?.session_id) {
+                cleanupOnClose();
+            }
             setOpened(false);
             setPollCount(0);
             setShowConfirmDialog(false);
@@ -206,12 +237,18 @@ const OAuthAuthorizationDialog = ({
 
                 if (response.data.data.status === 'success') {
                     // Success - stop polling and notify
-                    if (intervalId) clearInterval(intervalId);
+                    if (intervalId) {
+                        clearInterval(intervalId);
+                        setPollingIntervalId(null);
+                    }
                     onSuccess?.();
                     return;
                 } else if (response.data.data.status === 'failed') {
                     // Failed - stop polling and show error
-                    if (intervalId) clearInterval(intervalId);
+                    if (intervalId) {
+                        clearInterval(intervalId);
+                        setPollingIntervalId(null);
+                    }
                     const error = response.data.data.error || 'Authorization failed';
                     setErrorMessage(error);
                     onError?.(error);
@@ -220,7 +257,10 @@ const OAuthAuthorizationDialog = ({
                     // Still pending - check thresholds
                     if (currentPollCount >= MAX_POLL_COUNT) {
                         // Max timeout reached
-                        if (intervalId) clearInterval(intervalId);
+                        if (intervalId) {
+                            clearInterval(intervalId);
+                            setPollingIntervalId(null);
+                        }
                         setShowTimeoutDialog(true);
                     } else if (currentPollCount === CONFIRM_THRESHOLD) {
                         // Show confirmation dialog
@@ -238,6 +278,7 @@ const OAuthAuthorizationDialog = ({
 
         // Set up interval
         intervalId = setInterval(doPoll, POLL_INTERVAL);
+        setPollingIntervalId(intervalId);
     };
 
     const copyUserCode = () => {
@@ -275,15 +316,28 @@ const OAuthAuthorizationDialog = ({
 
     const isDeviceCode = authData.flow_type === 'device_code';
 
+    // Handle dialog close - cleanup before closing
+    const handleClose = () => {
+        // Stop polling
+        if (pollingIntervalId) {
+            clearInterval(pollingIntervalId);
+            setPollingIntervalId(null);
+        }
+        // Cleanup OAuth session
+        cleanupOnClose();
+        // Call parent onClose
+        onClose();
+    };
+
     return (
         <>
-        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth aria-labelledby="oauth-auth-title">
+        <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth aria-labelledby="oauth-auth-title">
             <DialogTitle id="oauth-auth-title">
                 <Stack direction="row" alignItems="center" justifyContent="space-between">
                     <Typography variant="h6">
                         {isDeviceCode ? 'Device Code Authorization' : 'OAuth Authorization'}
                     </Typography>
-                    <IconButton onClick={onClose} size="small" aria-label="Close dialog">
+                    <IconButton onClick={handleClose} size="small" aria-label="Close dialog">
                         <Close/>
                     </IconButton>
                 </Stack>
@@ -474,8 +528,93 @@ const OAuthDialog = ({open, onClose, onSuccess}: OAuthDialogProps) => {
     const [authDialogOpen, setAuthDialogOpen] = useState(false);
     const [authData, setAuthData] = useState<OAuthAuthorizationData | null>(null);
     const [oauthProviders, setOAuthProviders] = useState<OAuthProvider[]>(FALLBACK_OAUTH_PROVIDERS);
+    const [initError, setInitError] = useState<string | null>(null);
+    const [proxyUrl, setProxyUrl] = useState('');
+    const [autoDetectedProxy, setAutoDetectedProxy] = useState('');
+    const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+
+    // Load saved proxy URL from localStorage on mount
+    useEffect(() => {
+        const savedProxy = localStorage.getItem('oauth_proxy_url');
+        if (savedProxy) {
+            setProxyUrl(savedProxy);
+        }
+    }, []);
+
+    // Save proxy URL to localStorage when it changes
+    const handleProxyUrlChange = (value: string) => {
+        setProxyUrl(value);
+        localStorage.setItem('oauth_proxy_url', value);
+    };
+
+    // Fetch existing providers to detect proxy URLs when dialog opens
+    useEffect(() => {
+        if (open) {
+            setInitError(null);
+            // Try to auto-detect proxy from existing providers
+            detectProxyFromProviders();
+        }
+    }, [open]);
+
+    // Cleanup callback server when dialog closes
+    useEffect(() => {
+        return () => {
+            // When dialog unmounts or closes, cleanup callback server if there's an active session
+            if (currentSessionId) {
+                cleanupOAuthSession(currentSessionId);
+                setCurrentSessionId(null);
+            }
+        };
+    }, [currentSessionId]);
+
+    // Cleanup OAuth session and callback server
+    const cleanupOAuthSession = async (sessionId: string) => {
+        try {
+            const {oauthApi} = await api.instances();
+            await oauthApi.apiV1OauthCancelPost({session_id: sessionId});
+            console.log('[OAuth] Cleaned up session:', sessionId);
+        } catch (error) {
+            console.error('[OAuth] Failed to cleanup session:', error);
+        }
+    };
+
+    const handleClose = () => {
+        // Cleanup callback server before closing
+        if (currentSessionId) {
+            cleanupOAuthSession(currentSessionId);
+            setCurrentSessionId(null);
+        }
+        setAuthDialogOpen(false);
+        setAuthData(null);
+        onClose();
+    };
+
+    // Auto-detect proxy URL from existing providers
+    const detectProxyFromProviders = async () => {
+        try {
+            const {providersApi} = await api.instances();
+            const response = await providersApi.apiV1ProvidersGet();
+            if (response.data.success && response.data.data) {
+                const providers = response.data.data;
+                // Find OpenAI providers with proxy
+                const openaiProvider = providers.find((p: any) =>
+                    p.provider_base === 'openai' && p.proxy_url
+                );
+                if (openaiProvider?.proxy_url) {
+                    setAutoDetectedProxy(openaiProvider.proxy_url);
+                    setProxyUrl(openaiProvider.proxy_url); // Pre-fill the input
+                } else {
+                    setAutoDetectedProxy('');
+                }
+            }
+        } catch (error) {
+            console.error('Failed to fetch providers:', error);
+        }
+    };
 
     const handleAuthorizationCompleted = () => {
+        // Clear session ID on success (callback server already stopped by backend)
+        setCurrentSessionId(null);
         // Refresh data, close both dialogs
         onSuccess?.();
         setAuthDialogOpen(false);
@@ -491,6 +630,10 @@ const OAuthDialog = ({open, onClose, onSuccess}: OAuthDialogProps) => {
         if (provider.enabled === false) return;
 
         setAuthorizing(provider.id);
+        setInitError(null); // Clear any previous errors
+
+        console.log('[OAuth] Starting OAuth flow for provider:', provider.id);
+        console.log('[OAuth] Using proxy URL:', proxyUrl || '(none)');
 
         try {
             const {oauthApi} = await api.instances()
@@ -500,8 +643,9 @@ const OAuthDialog = ({open, onClose, onSuccess}: OAuthDialogProps) => {
                     redirect: "",
                     user_id: "",
                     provider: provider.id,
-                    response_type: 'json'
-                },
+                    response_type: 'json',
+                    proxy_url: proxyUrl || undefined
+                } as any,
             );
 
             if (response.data.success) {
@@ -525,11 +669,20 @@ const OAuthDialog = ({open, onClose, onSuccess}: OAuthDialogProps) => {
                     flow_type: flowType,
                     session_id: data.session_id, // Session ID for status tracking
                 });
+                setCurrentSessionId(data.session_id || null); // Store for cleanup
                 setAuthDialogOpen(true);
+            } else {
+                // Handle API error response
+                const errorMsg = response.data?.error || response.data?.message || 'Unknown error';
+                setInitError(`OAuth authorization failed: ${errorMsg}`);
+                console.error('OAuth authorization failed:', errorMsg);
             }
 
             console.log('Authorize OAuth for:', provider.id);
-        } catch (error) {
+        } catch (error: any) {
+            // Handle network or other errors
+            const errorMsg = error?.response?.data?.error || error?.response?.data?.message || error?.message || 'Failed to initiate OAuth flow';
+            setInitError(`OAuth authorization failed: ${errorMsg}`);
             console.error('OAuth authorization failed:', error);
         } finally {
             setAuthorizing(null);
@@ -538,11 +691,11 @@ const OAuthDialog = ({open, onClose, onSuccess}: OAuthDialogProps) => {
 
     return (
         <>
-            <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+            <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
                 <DialogTitle>
                     <Stack direction="row" alignItems="center" justifyContent="space-between">
                         <Typography variant="h6">Add OAuth Provider</Typography>
-                        <IconButton onClick={onClose} size="small">
+                        <IconButton onClick={handleClose} size="small">
                             <Close/>
                         </IconButton>
                     </Stack>
@@ -554,6 +707,39 @@ const OAuthDialog = ({open, onClose, onSuccess}: OAuthDialogProps) => {
                             provider&apos;s
                             authorization page.
                         </Typography>
+                    </Box>
+
+                    {/* Error alert */}
+                    {initError && (
+                        <Alert severity="error" sx={{mb: 3}} onClose={() => setInitError(null)}>
+                            {initError}
+                        </Alert>
+                    )}
+
+                    {/* Proxy URL input */}
+                    <Box sx={{mb: 3}}>
+                        <TextField
+                            fullWidth
+                            label="HTTP/SOCKS Proxy URL (Optional)"
+                            placeholder="http://proxy.example.com:8080 or socks5://127.0.0.1:1080"
+                            value={proxyUrl}
+                            onChange={(e) => handleProxyUrlChange(e.target.value)}
+                            helperText={
+                                autoDetectedProxy
+                                    ? `Auto-detected from existing OpenAI provider. You can override it if needed.`
+                                    : "Optional: Use a proxy to bypass region restrictions (e.g., for OpenAI Codex). Saved for future use."
+                            }
+                            size="small"
+                            color={autoDetectedProxy ? "success" : "primary"}
+                            focused={autoDetectedProxy ? true : undefined}
+                        />
+                        {autoDetectedProxy && (
+                            <Alert severity="success" sx={{mt: 1}} icon={<Launch fontSize="small"/>}>
+                                <Typography variant="caption">
+                                    Proxy auto-detected from your OpenAI provider configuration. OAuth requests will use this proxy.
+                                </Typography>
+                            </Alert>
+                        )}
                     </Box>
 
                     {/* Dev Mode Debug Buttons */}
