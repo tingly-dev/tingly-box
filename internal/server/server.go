@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"time"
-	"tingly-box/internal/protocol/client"
+	"tingly-box/internal/client"
 	"tingly-box/internal/template"
 	"tingly-box/pkg/auth"
 	"tingly-box/pkg/network"
