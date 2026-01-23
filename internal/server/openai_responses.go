@@ -262,33 +262,18 @@ func (s *Server) handleResponsesStreamResponse(c *gin.Context, stream *ssestream
 	// Process the stream
 	for stream.Next() {
 		event := stream.Current()
+		event.Response.Model = responseModel
 
 		// Accumulate usage from completed events
-		if event.Type == "response.completed" && event.Response.Usage.TotalTokens > 0 {
+		if event.Response.Usage.InputTokens > 0 {
 			inputTokens = event.Response.Usage.InputTokens
-			outputTokens = event.Response.Usage.OutputTokens
 			hasUsage = true
 		}
-
-		// Override model in response if needed
-		eventJSON, err := json.Marshal(event)
-		if err != nil {
-			logrus.Errorf("Failed to marshal event: %v", err)
-			continue
+		if event.Response.Usage.OutputTokens > 0 {
+			outputTokens = event.Response.Usage.OutputTokens
 		}
 
-		// If responseModel differs, override it
-		if responseModel != actualModel && len(event.Response.Output) > 0 {
-			var eventMap map[string]any
-			if err := json.Unmarshal(eventJSON, &eventMap); err == nil {
-				if responseObj, ok := eventMap["response"].(map[string]any); ok {
-					responseObj["model"] = responseModel
-					eventJSON, _ = json.Marshal(eventMap)
-				}
-			}
-		}
-
-		c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", string(eventJSON))))
+		c.SSEvent("", event)
 		flusher.Flush()
 	}
 
