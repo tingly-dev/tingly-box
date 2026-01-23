@@ -4,7 +4,7 @@ includes:
   common: ../Taskfile.yml
 
 vars:
-  PACKAGE_PATH: ./gui_wails3
+  WAILS_PACKAGE_PATH: ./gui_wails3
 
 tasks:
   build:
@@ -20,7 +20,7 @@ tasks:
       - task: common:generate:icons
     cmds:
       - task: generate:syso
-      - go build {{.BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}}.exe {{.PACKAGE_PATH}}
+      - go build {{.BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}}.exe {{.WAILS_PACKAGE_PATH}}
       - cmd: powershell Remove-item *.syso
         platforms: [windows]
       - cmd: rm -f *.syso
@@ -120,7 +120,7 @@ tasks:
         mkdir -p {{.BIN_DIR}}
         CC=x86_64-w64-mingw32-gcc CXX=x86_64-w64-mingw32-g++ \
           GOOS=windows GOARCH=amd64 CGO_ENABLED=1 \
-          go build {{.BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}}-amd64.exe {{.PACKAGE_PATH}}
+          go build {{.BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}}-amd64.exe {{.WAILS_PACKAGE_PATH}}
       - cmd: powershell Remove-item *.syso
         platforms: [windows]
       - cmd: rm -f *.syso
@@ -152,7 +152,7 @@ tasks:
         CC="zig cc -target aarch64-windows-gnu" \
         CXX="zig c++ -target aarch64-windows-gnu" \
         GOOS=windows GOARCH=arm64 CGO_ENABLED=1 \
-        go build {{.BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}}-arm64.exe {{.PACKAGE_PATH}}
+        go build {{.BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}}-arm64.exe {{.WAILS_PACKAGE_PATH}}
       - cmd: powershell Remove-item *.syso
         platforms: [windows]
       - cmd: rm -f *.syso
