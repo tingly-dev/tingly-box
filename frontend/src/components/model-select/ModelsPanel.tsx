@@ -64,13 +64,35 @@ export function ModelsPanel({
     const modelTypeInfo = getModelTypeInfo(provider, providerModels, customModels);
     const { standardModelsForDisplay, isCustomModel } = modelTypeInfo;
 
+    // Combine all models for unified pagination
+    // Custom models come first, then standard models
+    const allModels = [
+        ...providerCustomModels.map(model => ({ model, type: 'custom' as const })),
+        ...(backendCustomModel && providerCustomModels.length === 0 ? [{ model: backendCustomModel, type: 'custom' as const }] : []),
+        ...(isProviderSelected && selectedModel && isCustomModel(selectedModel) &&
+            !providerCustomModels.includes(selectedModel) &&
+            selectedModel !== backendCustomModel ? [{ model: selectedModel, type: 'custom' as const }] : []
+        ),
+        ...standardModelsForDisplay.map(model => ({ model, type: 'standard' as const })),
+    ];
+
     // Pagination and search
     const { searchTerms, handleSearchChange, getPaginatedData, setCurrentPage } = usePagination(
         [provider.uuid],
         modelsPerPage
     );
 
-    const pagination = getPaginatedData(standardModelsForDisplay, provider.uuid);
+    // Filter by search term
+    const searchTerm = searchTerms[provider.uuid] || '';
+    const filteredModels = searchTerm
+        ? allModels.filter(({ model }) => model.toLowerCase().includes(searchTerm.toLowerCase()))
+        : allModels;
+
+    const pagination = getPaginatedData(filteredModels.map(m => m.model), provider.uuid);
+    const paginatedItems = filteredModels.slice(
+        (pagination.currentPage - 1) * modelsPerPage,
+        pagination.currentPage * modelsPerPage
+    );
 
     const handlePageChange = useCallback((newPage: number) => {
         setCurrentPage(prev => ({ ...prev, [provider.uuid]: newPage }));
@@ -156,80 +178,55 @@ export function ModelsPanel({
                 {/* All Models Section */}
                 <Box sx={{ minHeight: 200 }}>
                     <Box sx={{ display: 'grid', gridTemplateColumns: `repeat(${columns}, 1fr)`, gap: 0.8 }}>
-                        {/* Custom models from local storage */}
-                        {providerCustomModels.map((customModel, index) => (
-                            <CustomModelCard
-                                key={`localStorage-custom-model-${index}`}
-                                model={customModel}
-                                provider={provider}
-                                isSelected={isProviderSelected && selectedModel === customModel}
-                                onEdit={() => onCustomModelEdit(provider, customModel)}
-                                onDelete={() => onCustomModelDelete(provider, customModel)}
-                                onSelect={() => onModelSelect(provider, customModel)}
-                                variant="localStorage"
-                                loading={provider.auth_type === 'oauth' && isModelProbing(`${provider.uuid}-${customModel}`)}
-                            />
-                        ))}
-
-                        {/* Persisted custom model card (from backend) */}
-                        {backendCustomModel && providerCustomModels.length === 0 && (
-                            <CustomModelCard
-                                key="persisted-custom-model"
-                                model={backendCustomModel}
-                                provider={provider}
-                                isSelected={isProviderSelected && selectedModel === backendCustomModel}
-                                onEdit={() => onCustomModelEdit(provider, backendCustomModel)}
-                                onDelete={() => onCustomModelDelete(provider, backendCustomModel)}
-                                onSelect={() => onModelSelect(provider, backendCustomModel)}
-                                variant="backend"
-                                loading={provider.auth_type === 'oauth' && isModelProbing(`${provider.uuid}-${backendCustomModel}`)}
-                            />
-                        )}
-
-                        {/* Currently selected custom model card (not persisted) */}
-                        {isProviderSelected && selectedModel && isCustomModel(selectedModel) &&
-                            !providerCustomModels.includes(selectedModel) &&
-                            selectedModel !== backendCustomModel && (
-                                <CustomModelCard
-                                    key="selected-custom-model"
-                                    model={selectedModel}
-                                    provider={provider}
-                                    isSelected={true}
-                                    onEdit={() => onCustomModelEdit(provider, selectedModel)}
-                                    onDelete={() => onCustomModelDelete(provider, selectedModel)}
-                                    onSelect={() => onModelSelect(provider, selectedModel)}
-                                    variant="selected"
-                                    loading={provider.auth_type === 'oauth' && isModelProbing(`${provider.uuid}-${selectedModel}`)}
-                                />
-                            )}
-
-                        {/* Standard models */}
-                        {pagination.items.map((model) => {
+                        {paginatedItems.map(({ model, type }) => {
                             const isModelSelected = isProviderSelected && selectedModel === model;
-                            return (
-                                <ModelCard
-                                    key={model}
-                                    model={model}
-                                    isSelected={isModelSelected}
-                                    onClick={() => onModelSelect(provider, model)}
-                                    variant="standard"
-                                    loading={provider.auth_type === 'oauth' && isModelProbing(`${provider.uuid}-${model}`)}
-                                />
-                            );
+
+                            if (type === 'custom') {
+                                // Determine variant based on custom model source
+                                let variant: 'localStorage' | 'backend' | 'selected' = 'localStorage';
+                                if (model === backendCustomModel && providerCustomModels.length === 0) {
+                                    variant = 'backend';
+                                } else if (isProviderSelected && model === selectedModel &&
+                                    !providerCustomModels.includes(model) && model !== backendCustomModel) {
+                                    variant = 'selected';
+                                }
+
+                                return (
+                                    <CustomModelCard
+                                        key={model}
+                                        model={model}
+                                        provider={provider}
+                                        isSelected={isModelSelected}
+                                        onEdit={() => onCustomModelEdit(provider, model)}
+                                        onDelete={() => onCustomModelDelete(provider, model)}
+                                        onSelect={() => onModelSelect(provider, model)}
+                                        variant={variant}
+                                        loading={provider.auth_type === 'oauth' && isModelProbing(`${provider.uuid}-${model}`)}
+                                    />
+                                );
+                            } else {
+                                return (
+                                    <ModelCard
+                                        key={model}
+                                        model={model}
+                                        isSelected={isModelSelected}
+                                        onClick={() => onModelSelect(provider, model)}
+                                        variant="standard"
+                                        loading={provider.auth_type === 'oauth' && isModelProbing(`${provider.uuid}-${model}`)}
+                                    />
+                                );
+                            }
                         })}
                     </Box>
 
                     {/* Empty state */}
-                    {pagination.totalItems === 0 &&
-                        providerCustomModels.length === 0 &&
-                        !backendCustomModel &&
-                        !(isProviderSelected && selectedModel && isCustomModel(selectedModel)) && (
-                            <Box sx={{ textAlign: 'center', py: 4 }}>
-                                <Typography variant="body2" color="text.secondary">
-                                    No models found matching "{searchTerms[provider.uuid] || ''}"
-                                </Typography>
-                            </Box>
-                        )}
+                    {paginatedItems.length === 0 && (
+                        <Box sx={{ textAlign: 'center', py: 4 }}>
+                            <Typography variant="body2" color="text.secondary">
+                                No models found matching "{searchTerm}"
+                            </Typography>
+                        </Box>
+                    )}
                 </Box>
 
                 {/* Pagination Controls */}
