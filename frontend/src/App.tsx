@@ -1,6 +1,6 @@
 import CssBaseline from '@mui/material/CssBaseline';
 import { ThemeProvider } from '@mui/material/styles';
-import { CircularProgress, Box, Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, IconButton } from '@mui/material';
+import { CircularProgress, Box, Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, IconButton, Stack } from '@mui/material';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -10,7 +10,7 @@ import { HealthProvider, useHealth } from './contexts/HealthContext';
 import { UpdateNotification } from './components/UpdateNotification';
 import Layout from './layout/Layout';
 import theme from './theme';
-import { CloudUpload, Refresh, Error as ErrorIcon, Close } from '@mui/icons-material';
+import { CloudUpload, Refresh, Error as ErrorIcon, Close, AppRegistration as NPM, GitHub, ShoppingCart } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 
 // Lazy load pages for code splitting
@@ -169,20 +169,43 @@ const AppDialogs = () => {
                     <Typography variant="body1" sx={{ mb: 1 }}>
                         {t('update.versionAvailable', { latest: latestVersion, current: currentVersion })}
                     </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                        Run the following command to update:
+                    </Typography>
+                    <Typography
+                        variant="body2"
+                        component="div"
+                        sx={{
+                            fontFamily: 'monospace',
+                            bgcolor: 'grey.100',
+                            p: 1,
+                            borderRadius: 1,
+                            mb: 2
+                        }}
+                    >
+                        npx tingly-box@latest
+                    </Typography>
                     <Typography variant="body2" color="text.secondary">
-                        {t('update.message', { defaultValue: 'A new version is available on GitHub. Would you like to download it now?' })}
+                        Or visit the release page for more information.
                     </Typography>
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setShowUpdateAlert(false)}>
-                        {t('update.later', { defaultValue: 'Later' })}
+                    <Button
+                        variant="contained"
+                        onClick={() => window.open('https://www.npmjs.com/package/tingly-box', '_blank')}
+                        startIcon={<NPM />}
+                    >
+                        npm
                     </Button>
                     <Button
                         variant="contained"
                         onClick={() => window.open('https://github.com/tingly-dev/tingly-box/releases', '_blank')}
-                        startIcon={<CloudUpload />}
+                        startIcon={<GitHub />}
                     >
-                        {t('update.download')}
+                        GitHub
+                    </Button>
+                     <Button onClick={() => setShowUpdateAlert(false)}>
+                        {t('update.later', { defaultValue: 'Later' })}
                     </Button>
                 </DialogActions>
             </Dialog>
