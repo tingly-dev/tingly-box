@@ -1,5 +1,5 @@
 import { Box, Grid, Typography } from '@mui/material';
-import React, { useMemo } from 'react';
+import React from 'react';
 import type { Provider } from '../../types/provider';
 import { getModelTypeInfo } from '../../utils/modelUtils';
 import { useCustomModels } from '../../hooks/useCustomModels';
@@ -40,30 +40,16 @@ export function ModelGrid({
     const { customModels } = useCustomModels();
     const { isModelProbing } = useModelSelectContext();
 
-    // Memoize model type info to avoid unnecessary recalculations
-    const modelTypeInfo = useMemo(
-        () => getModelTypeInfo(provider, providerModels, customModels),
-        [provider, providerModels, customModels]
-    );
+    // Don't use useMemo for modelTypeInfo - we want it to recalculate when data changes
+    const modelTypeInfo = getModelTypeInfo(provider, providerModels, customModels);
     const { standardModelsForDisplay, isCustomModel } = modelTypeInfo;
 
-    // Memoize computed values
-    const isProviderSelected = useMemo(
-        () => selectedProvider === provider.uuid,
-        [selectedProvider, provider.uuid]
-    );
-
-    const backendCustomModel = useMemo(
-        () => providerModels?.[provider.uuid]?.custom_model,
-        [providerModels, provider.uuid]
-    );
-
+    const isProviderSelected = selectedProvider === provider.uuid;
+    const backendCustomModel = providerModels?.[provider.uuid]?.custom_model;
     const searchTerm = searchTerms[provider.uuid] || '';
 
-    const providerCustomModels = useMemo(
-        () => customModels[provider.uuid] || [],
-        [customModels, provider.uuid]
-    );
+    // Get custom models for this provider
+    const providerCustomModels = customModels[provider.uuid] || [];
 
     return (
         <>
@@ -183,7 +169,6 @@ export function ModelGrid({
     );
 }
 
-// Memoize the component to prevent unnecessary re-renders
-const MemoizedModelGrid = React.memo(ModelGrid);
-export default MemoizedModelGrid;
-export { ModelGrid };
+// Note: Not using React.memo here because providerModels is an object that changes frequently
+// and we need the component to re-render when the data inside changes
+export default ModelGrid;

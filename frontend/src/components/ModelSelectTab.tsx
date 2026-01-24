@@ -6,13 +6,13 @@ import { useProviderGroups } from '../hooks/useProviderGroups';
 import { useModelSelection } from '../hooks/useModelSelection';
 import { ModelSelectProvider, useModelSelectContext } from '../contexts/ModelSelectContext';
 import type { Provider, ProviderModelsDataByUuid } from '../types/provider';
-import { getModelTypeInfo, navigateToModelPage } from '../utils/modelUtils';
+import { getModelTypeInfo } from '../utils/modelUtils';
 import { ProviderSidebar, ModelsPanel, CustomModelDialog } from './model-select';
 import { Alert, Snackbar } from '@mui/material';
 
 export interface ProviderSelectTabOption {
     provider: Provider;
-    model?: string;
+    model: string;
 }
 
 interface ModelSelectTabProps {
@@ -47,7 +47,7 @@ function ModelSelectTabInner({
     onTest,
     testing = false,
 }: ModelSelectTabProps) {
-    const { customModels, removeCustomModel } = useCustomModels();
+    const { customModels, removeCustomModel, saveCustomModel, updateCustomModel } = useCustomModels();
     const gridLayout = useGridLayout();
     const {
         internalCurrentTab,
@@ -56,6 +56,9 @@ function ModelSelectTabInner({
         setIsInitialized,
         snackbar,
         hideSnackbar,
+        openCustomModelDialog,
+        closeCustomModelDialog,
+        customModelDialog,
     } = useModelSelectContext();
 
     const { handleModelSelect } = useModelSelection({ onSelected });
@@ -63,8 +66,6 @@ function ModelSelectTabInner({
     const {
         groupedProviders,
         flattenedProviders,
-        isSingleProviderMode,
-        displayProviders,
     } = useProviderGroups(providers, singleProvider);
 
     // Use external activeTab if provided, otherwise use internal state
@@ -91,34 +92,38 @@ function ModelSelectTabInner({
         if (onProviderChange) {
             onProviderChange(targetProvider);
         }
-
-        // Auto-navigate to page containing selected model when switching tabs
-        if (selectedProvider === targetProvider.uuid && selectedModel) {
-            const modelTypeInfo = getModelTypeInfo(targetProvider, providerModels, customModels);
-            const { isCustomModel, allModelsForSearch } = modelTypeInfo;
-
-            // Only navigate to page for standard models, not custom models
-            if (!isCustomModel(selectedModel)) {
-                const standardModels = allModelsForSearch.filter(model => !isCustomModel(model));
-                // Need to import or create setCurrentPage function
-                // For now, we'll handle this differently
-            }
-        }
-    }, [externalActiveTab, flattenedProviders, onProviderChange, selectedProvider, selectedModel, providerModels, customModels, setInternalCurrentTab]);
+    }, [externalActiveTab, flattenedProviders, onProviderChange, setInternalCurrentTab]);
 
     const handleDeleteCustomModel = useCallback((provider: Provider, customModel: string) => {
         removeCustomModel(provider.uuid, customModel);
         dispatchCustomModelUpdate(provider.uuid, customModel);
     }, [removeCustomModel]);
 
-    const handleCustomModelSave = useCallback((providerUuid: string, customModel: string) => {
-        if (onCustomModelSave) {
-            const provider = providers.find(p => p.uuid === providerUuid);
-            if (provider) {
-                onCustomModelSave(provider, customModel);
+    const handleCustomModelEdit = useCallback((provider: Provider, currentValue?: string) => {
+        openCustomModelDialog(provider, currentValue);
+    }, [openCustomModelDialog]);
+
+    const handleCustomModelSave = useCallback(() => {
+        const customModel = customModelDialog.value?.trim();
+        if (customModel && customModelDialog.provider) {
+            if (customModelDialog.originalValue) {
+                // Editing: use updateCustomModel to atomically replace old value with new value
+                updateCustomModel(customModelDialog.provider.uuid, customModelDialog.originalValue, customModel);
+                dispatchCustomModelUpdate(customModelDialog.provider.uuid, customModel);
+            } else {
+                // Adding new: use saveCustomModel
+                if (saveCustomModel(customModelDialog.provider.uuid, customModel)) {
+                    dispatchCustomModelUpdate(customModelDialog.provider.uuid, customModel);
+                }
+            }
+
+            // Then save to persistence through parent component
+            if (onCustomModelSave) {
+                onCustomModelSave(customModelDialog.provider, customModel);
             }
         }
-    }, [onCustomModelSave, providers]);
+        closeCustomModelDialog();
+    }, [customModelDialog, saveCustomModel, updateCustomModel, onCustomModelSave, closeCustomModelDialog]);
 
     // Auto-switch to selected provider tab and navigate to selected model on component mount (only once)
     useEffect(() => {
@@ -165,14 +170,14 @@ function ModelSelectTabInner({
                 modelsPerPage={gridLayout.modelsPerPage}
                 onModelSelect={handleModelSelect}
                 onRefresh={onRefresh}
-                onCustomModelEdit={() => {/* Handled by context */}}
+                onCustomModelEdit={handleCustomModelEdit}
                 onCustomModelDelete={handleDeleteCustomModel}
                 onTest={onTest}
                 testing={testing}
             />
 
             {/* Custom Model Dialog */}
-            <CustomModelDialog onCustomModelSave={handleCustomModelSave} />
+            <CustomModelDialog onSave={handleCustomModelSave} />
 
             {/* Snackbar for notifications */}
             <Snackbar

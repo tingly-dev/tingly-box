@@ -130,6 +130,4 @@ export function ProviderSidebar({
 }
 
 // Memoize to prevent unnecessary re-renders
-const MemoizedProviderSidebar = React.memo(ProviderSidebar);
-export default MemoizedProviderSidebar;
-export { ProviderSidebar };
+export default React.memo(ProviderSidebar);

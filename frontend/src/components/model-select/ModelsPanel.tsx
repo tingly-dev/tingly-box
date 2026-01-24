@@ -14,11 +14,10 @@ import {
     TextField,
     Typography,
 } from '@mui/material';
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback } from 'react';
 import type { Provider } from '../../types/provider';
 import type { ProviderModelsDataByUuid } from '../../types/provider';
 import { ModelGrid } from './ModelGrid';
-import { useModelSelectContext } from '../../contexts/ModelSelectContext';
 import { getModelTypeInfo } from '../../utils/modelUtils';
 import { usePagination } from '../../hooks/usePagination';
 
@@ -55,8 +54,6 @@ export function ModelsPanel({
     onTest,
     testing = false,
 }: ModelsPanelProps) {
-    const { openCustomModelDialog } = useModelSelectContext();
-
     // Pagination and search - use useMemo to stabilize the provider names array
     const providerNames = React.useMemo(
         () => flattenedProviders.map(p => p.uuid),
@@ -68,10 +65,6 @@ export function ModelsPanel({
         modelsPerPage
     );
 
-    const handleCustomModelEditClick = useCallback((provider: Provider, currentValue?: string) => {
-        openCustomModelDialog(provider, currentValue);
-    }, [openCustomModelDialog]);
-
     const handlePageChange = useCallback((providerUuid: string, newPage: number) => {
         setCurrentPage(providerUuid, newPage);
     }, [setCurrentPage]);
@@ -80,18 +73,15 @@ export function ModelsPanel({
     const currentProvider = flattenedProviders[currentTab];
     if (!currentProvider) return null;
 
-    const modelTypeInfo = useMemo(
-        () => getModelTypeInfo(currentProvider, providerModels, {}),
-        [currentProvider, providerModels]
-    );
+    // Don't use useMemo for modelTypeInfo - we want it to recalculate when data changes
+    const modelTypeInfo = getModelTypeInfo(currentProvider, providerModels, {});
     const { standardModelsForDisplay } = modelTypeInfo;
 
     const isProviderSelected = selectedProvider === currentProvider.uuid;
-    const pagination = useMemo(
-        () => getPaginatedData(standardModelsForDisplay, currentProvider.uuid),
-        [getPaginatedData, standardModelsForDisplay, currentProvider.uuid]
-    );
     const isRefreshing = refreshingProviders.includes(currentProvider.uuid);
+
+    // Don't use useMemo for pagination - we want it to recalculate when data changes
+    const pagination = getPaginatedData(standardModelsForDisplay, currentProvider.uuid);
 
     return (
         <Box sx={{ flex: 1, overflowY: 'auto', p: 2 }}>
@@ -122,7 +112,7 @@ export function ModelsPanel({
                         <Button
                             variant="outlined"
                             startIcon={<AddCircleOutlineIcon />}
-                            onClick={() => handleCustomModelEditClick(currentProvider)}
+                            onClick={() => onCustomModelEdit(currentProvider)}
                             sx={{
                                 height: 40,
                                 minWidth: 110,
@@ -191,7 +181,7 @@ export function ModelsPanel({
                     selectedProvider={selectedProvider}
                     selectedModel={selectedModel}
                     onModelSelect={onModelSelect}
-                    onCustomModelEdit={handleCustomModelEditClick}
+                    onCustomModelEdit={onCustomModelEdit}
                     onCustomModelDelete={onCustomModelDelete}
                     columns={columns}
                     searchTerms={searchTerms}
@@ -227,7 +217,6 @@ export function ModelsPanel({
     );
 }
 
-// Memoize to prevent unnecessary re-renders
-const MemoizedModelsPanel = React.memo(ModelsPanel);
-export default MemoizedModelsPanel;
-export { ModelsPanel };
+// Note: Not using React.memo here because providerModels is an object that changes frequently
+// and we need the component to re-render when the data inside changes
+export default ModelsPanel;

@@ -1,38 +1,17 @@
 import { Button, Dialog, DialogActions, DialogContent, DialogTitle, TextField } from '@mui/material';
 import React, { useCallback } from 'react';
 import { useModelSelectContext } from '../../contexts/ModelSelectContext';
-import { useCustomModels } from '../../hooks/useCustomModels';
-import { dispatchCustomModelUpdate } from '../../hooks/useCustomModels';
 
 export interface CustomModelDialogProps {
-    onCustomModelSave?: (providerUuid: string, customModel: string) => void;
+    onSave: () => void;
 }
 
-export function CustomModelDialog({ onCustomModelSave }: CustomModelDialogProps) {
+export function CustomModelDialog({ onSave }: CustomModelDialogProps) {
     const { customModelDialog, closeCustomModelDialog, updateCustomModelDialogValue } = useModelSelectContext();
-    const { saveCustomModel, updateCustomModel } = useCustomModels();
 
     const handleSave = useCallback(() => {
-        const customModel = customModelDialog.value?.trim();
-        if (customModel && customModelDialog.provider) {
-            if (customModelDialog.originalValue) {
-                // Editing: use updateCustomModel to atomically replace old value with new value
-                updateCustomModel(customModelDialog.provider.uuid, customModelDialog.originalValue, customModel);
-                dispatchCustomModelUpdate(customModelDialog.provider.uuid, customModel);
-            } else {
-                // Adding new: use saveCustomModel
-                if (saveCustomModel(customModelDialog.provider.uuid, customModel)) {
-                    dispatchCustomModelUpdate(customModelDialog.provider.uuid, customModel);
-                }
-            }
-
-            // Then save to persistence through parent component
-            if (onCustomModelSave) {
-                onCustomModelSave(customModelDialog.provider.uuid, customModel);
-            }
-        }
-        closeCustomModelDialog();
-    }, [customModelDialog, saveCustomModel, updateCustomModel, onCustomModelSave, closeCustomModelDialog]);
+        onSave();
+    }, [onSave]);
 
     const handleCancel = useCallback(() => {
         closeCustomModelDialog();
@@ -83,6 +62,4 @@ export function CustomModelDialog({ onCustomModelSave }: CustomModelDialogProps)
 }
 
 // Memoize to prevent unnecessary re-renders
-const MemoizedCustomModelDialog = React.memo(CustomModelDialog);
-export default MemoizedCustomModelDialog;
-export { CustomModelDialog };
+export default React.memo(CustomModelDialog);
