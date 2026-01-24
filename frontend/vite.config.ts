@@ -44,6 +44,18 @@ export default defineConfig(({mode}) => {
                 }
             },
             port: 3000
+        },
+        build: {
+            rollupOptions: {
+                output: {
+                    manualChunks: {
+                        'mui-vendor': ['@mui/material', '@mui/icons-material'],
+                        'router-vendor': ['react-router-dom'],
+                        'react-vendor': ['react', 'react-dom'],
+                    }
+                }
+            },
+            chunkSizeWarningLimit: 600
         }
     }
 })
