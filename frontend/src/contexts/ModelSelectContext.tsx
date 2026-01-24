@@ -16,8 +16,8 @@ export interface CustomModelDialogState {
 
 export interface ModelSelectContextValue {
     // Tab state
-    internalCurrentTab: number;
-    setInternalCurrentTab: (tab: number) => void;
+    internalCurrentTab: string | undefined;
+    setInternalCurrentTab: (tab: string | undefined) => void;
     isInitialized: boolean;
     setIsInitialized: (initialized: boolean) => void;
 
@@ -46,7 +46,7 @@ export interface ModelSelectProviderProps {
 }
 
 export function ModelSelectProvider({ children }: ModelSelectProviderProps) {
-    const [internalCurrentTab, setInternalCurrentTab] = useState(0);
+    const [internalCurrentTab, setInternalCurrentTab] = useState<string | undefined>(undefined);
     const [isInitialized, setIsInitialized] = useState(false);
     const [probingModels, setProbingModels] = useState<Set<string>>(new Set());
     const [snackbar, setSnackbar] = useState<SnackbarState>({

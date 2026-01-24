@@ -26,7 +26,7 @@ export interface ModelsPanelProps {
     providerModels?: ProviderModelsDataByUuid;
     selectedProvider?: string;
     selectedModel?: string;
-    currentTab: number;
+    currentTab: string;
     refreshingProviders: string[];
     columns: number;
     modelsPerPage: number;
@@ -70,7 +70,7 @@ export function ModelsPanel({
     }, [setCurrentPage]);
 
     // Only render the current tab to avoid unnecessary re-renders
-    const currentProvider = flattenedProviders[currentTab];
+    const currentProvider = flattenedProviders.find(p => p.uuid === currentTab);
     if (!currentProvider) return null;
 
     // Don't use useMemo for modelTypeInfo - we want it to recalculate when data changes

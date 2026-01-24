@@ -7,9 +7,9 @@ import { ApiStyleBadge } from '../ApiStyleBadge';
 
 export interface ProviderSidebarProps {
     groupedProviders: Array<{ authType: string; providers: Provider[] }>;
-    currentTab: number;
+    currentTab: string | undefined;
     selectedProvider?: string;
-    onTabChange: (index: number) => void;
+    onTabChange: (providerUuid: string) => void;
 }
 
 export function ProviderSidebar({
@@ -48,12 +48,7 @@ export function ProviderSidebar({
                     },
                 }}
             >
-                {groupedProviders.map((group, groupIndex) => {
-                    // Calculate starting index for this group
-                    const groupStartIndex = groupedProviders
-                        .slice(0, groupIndex)
-                        .reduce((sum, g) => sum + g.providers.length, 0);
-
+                {groupedProviders.map((group) => {
                     return (
                         <Box key={`group-${group.authType}`}>
                             {/* Auth Type Header */}
@@ -78,15 +73,14 @@ export function ProviderSidebar({
                             </Box>
 
                             {/* Provider Items */}
-                            {group.providers.map((provider, providerIndex) => {
-                                const globalIndex = groupStartIndex + providerIndex;
+                            {group.providers.map((provider) => {
                                 const isProviderSelected = selectedProvider === provider.uuid;
-                                const isSelectedTab = currentTab === globalIndex;
+                                const isSelectedTab = currentTab === provider.uuid;
 
                                 return (
                                     <Box
                                         key={provider.uuid}
-                                        onClick={() => onTabChange(globalIndex)}
+                                        onClick={() => onTabChange(provider.uuid)}
                                         sx={{
                                             px: 2,
                                             py: 1.5,

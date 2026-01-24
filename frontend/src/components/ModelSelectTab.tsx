@@ -20,7 +20,7 @@ interface ModelSelectTabProps {
     providerModels?: ProviderModelsDataByUuid;
     selectedProvider?: string; // This is now UUID
     selectedModel?: string;
-    activeTab?: number;
+    activeTab?: string; // Provider UUID
     onSelected?: (option: ProviderSelectTabOption) => void;
     onProviderChange?: (provider: Provider) => void; // Called when switching to a provider tab
     onRefresh?: (provider: Provider) => void;
@@ -79,13 +79,13 @@ function ModelSelectTabInner({
         return cleanup;
     }, []);
 
-    const handleTabChange = useCallback((newValue: number) => {
+    const handleTabChange = useCallback((providerUuid: string) => {
         if (externalActiveTab === undefined) {
-            setInternalCurrentTab(newValue);
+            setInternalCurrentTab(providerUuid);
         }
 
         // Get the target provider from flattened list
-        const targetProvider = flattenedProviders[newValue];
+        const targetProvider = flattenedProviders.find(p => p.uuid === providerUuid);
         if (!targetProvider) return;
 
         // Notify parent component about provider change
@@ -133,7 +133,7 @@ function ModelSelectTabInner({
             // Auto-switch to the selected provider's tab
             if (targetProviderIndex !== -1) {
                 if (externalActiveTab === undefined) {
-                    setInternalCurrentTab(targetProviderIndex);
+                    setInternalCurrentTab(selectedProvider);
                 }
 
                 // Fetch models for the selected provider on initial load
