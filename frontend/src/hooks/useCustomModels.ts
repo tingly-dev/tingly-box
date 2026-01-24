@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 
 // Local storage key for custom models
 const CUSTOM_MODELS_STORAGE_KEY = 'tingly_custom_models';
@@ -56,9 +56,10 @@ export const removeCustomModelFromStorage = (providerUuid: string) => {
 // Custom hook to manage custom models
 export const useCustomModels = () => {
     const [customModels, setCustomModels] = useState<{ [providerUuid: string]: string[] }>({});
+    const [version, setVersion] = useState(0);
 
-    // Load custom models from local storage on hook mount
-    useEffect(() => {
+    // Function to load custom models from storage and update state
+    const refetch = useCallback(() => {
         const storedCustomModels = loadCustomModelsFromStorage();
         // Convert single string to array for backward compatibility
         const adaptedModels: { [providerUuid: string]: string[] } = {};
@@ -68,7 +69,21 @@ export const useCustomModels = () => {
             adaptedModels[providerUuid] = Array.isArray(value) ? value : [value].filter(Boolean);
         });
         setCustomModels(adaptedModels);
+        setVersion(prev => prev + 1);
     }, []);
+
+    // Load custom models from local storage on hook mount
+    useEffect(() => {
+        refetch();
+    }, [refetch]);
+
+    // Listen for custom model updates from other components and reload
+    useEffect(() => {
+        const cleanup = listenForCustomModelUpdates(() => {
+            refetch();
+        });
+        return cleanup;
+    }, [refetch]);
 
     // Save custom model for a provider
     const saveCustomModel = (providerUuid: string, customModel: string) => {
@@ -83,6 +98,7 @@ export const useCustomModels = () => {
         const newModels = [...currentModels, customModel];
         if (saveCustomModelToStorage(providerUuid, newModels)) {
             setCustomModels(prev => ({ ...prev, [providerUuid]: newModels }));
+            dispatchCustomModelUpdate(providerUuid, customModel);
             return true;
         }
         return false;
@@ -101,10 +117,12 @@ export const useCustomModels = () => {
                     delete newModels[providerUuid];
                     return newModels;
                 });
+                dispatchCustomModelUpdate(providerUuid, customModel);
                 return true;
             }
         } else if (saveCustomModelToStorage(providerUuid, newModels)) {
             setCustomModels(prev => ({ ...prev, [providerUuid]: newModels }));
+            dispatchCustomModelUpdate(providerUuid, customModel);
             return true;
         }
         return false;
@@ -128,6 +146,9 @@ export const useCustomModels = () => {
 
             // Save to storage
             saveCustomModelToStorage(providerUuid, newModels.length > 0 ? newModels : []);
+
+            // Dispatch update event
+            dispatchCustomModelUpdate(providerUuid, newValue);
 
             // Return updated state
             if (newModels.length === 0) {
@@ -159,6 +180,8 @@ export const useCustomModels = () => {
 
     return {
         customModels,
+        version,
+        refetch,
         saveCustomModel,
         removeCustomModel,
         updateCustomModel,

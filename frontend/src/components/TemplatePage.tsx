@@ -83,13 +83,9 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
     // Use the model select dialog hook
     const { openModelSelect, ModelSelectDialog, isOpen: modelSelectDialogOpen } = useModelSelectDialog({
         providers,
-        providerModels: providerModelsByUuid,
-        onProviderModelsChange: handleProviderModelsChange,
         rules,
         onRuleChange: handleRuleChange,
         showNotification,
-        onRefreshProvider: handleRefreshModels,
-        refreshingProviders,
     });
 
     // Wrapper to maintain compatibility with existing RuleCard interface

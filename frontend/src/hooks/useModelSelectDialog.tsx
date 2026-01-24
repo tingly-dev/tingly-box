@@ -1,7 +1,6 @@
 import { Dialog, DialogContent, DialogTitle } from '@mui/material';
 import React, { useCallback, useRef, useState } from 'react';
-import { api } from '../services/api';
-import type { Provider, ProviderModelsDataByUuid } from '../types/provider';
+import type { Provider } from '../types/provider';
 import ModelSelectTab, { type ProviderSelectTabOption } from '../components/ModelSelectTab';
 import type { ConfigRecord, Rule } from '../components/RoutingGraphTypes.ts';
 import { v4 as uuidv4 } from 'uuid';
@@ -15,13 +14,9 @@ export interface ModelSelectOptions {
 
 export interface UseModelSelectDialogOptions {
     providers: Provider[];
-    providerModels?: ProviderModelsDataByUuid;
-    onProviderModelsChange?: (providerUuid: string, models: any) => void;
     rules: Rule[];
     onRuleChange?: (updatedRule: Rule) => void;
     showNotification: (message: string, severity: 'success' | 'error') => void;
-    onRefreshProvider?: (providerUuid: string) => void;
-    refreshingProviders?: string[];
 }
 
 interface EditingServiceContext {
@@ -37,13 +32,9 @@ interface ModelSelectDialogProps {
 export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
     const {
         providers,
-        providerModels = {},
-        onProviderModelsChange,
         rules,
         onRuleChange,
         showNotification,
-        onRefreshProvider,
-        refreshingProviders = []
     } = options;
 
     // Dialog state
@@ -80,33 +71,6 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
 
         return null;
     }, []);
-
-    // Fetch models for a provider - updates parent state
-    const handleFetchModels = useCallback(async (providerUuid: string) => {
-        if (!providerUuid) return;
-
-        // If already have models, skip
-        if (providerModels[providerUuid]) {
-            return;
-        }
-
-        try {
-            const result = await api.getProviderModelsByUUID(providerUuid);
-            if (result.success && result.data) {
-                // If GET returns empty list, auto-fetch from Provider API
-                if (!result.data.models || result.data.models.length === 0) {
-                    const refreshResult = await api.updateProviderModelsByUUID(providerUuid);
-                    if (refreshResult.success && refreshResult.data && onProviderModelsChange) {
-                        onProviderModelsChange(providerUuid, refreshResult.data);
-                    }
-                } else if (onProviderModelsChange) {
-                    onProviderModelsChange(providerUuid, result.data);
-                }
-            }
-        } catch (error) {
-            console.error(`Failed to fetch models for provider ${providerUuid}:`, error);
-        }
-    }, [providerModels, onProviderModelsChange]);
 
     // Open the dialog
     const openModelSelect = useCallback((options: ModelSelectOptions) => {
@@ -324,13 +288,9 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
                 <ModelSelectTab
                     key={dialogKey}
                     providers={providers}
-                    providerModels={providerModels}
                     selectedProvider={getSelectedProvider()}
                     selectedModel={getSelectedModel()}
                     onSelected={handleModelSelect}
-                    onProviderChange={(p) => handleFetchModels(p.uuid)}
-                    onRefresh={(p) => onRefreshProvider?.(p.uuid)}
-                    refreshingProviders={refreshingProviders}
                 />
             </DialogContent>
         </Dialog>
