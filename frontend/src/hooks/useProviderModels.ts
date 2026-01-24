@@ -31,17 +31,61 @@ export const useProviderModels = () => {
     const [refreshingProviders, setRefreshingProviders] = useState<Set<string>>(new Set());
     const [version, setVersion] = useState(0);
 
-    // Fetch models for a provider (only if not already cached)
+    // Fetch models for a provider (GET - cached data, auto-refresh if empty)
     const fetchModels = useCallback(async (providerUuid: string): Promise<ProviderModelData | null> => {
         // Return cached data if available
         if (providerModels[providerUuid]) {
             return providerModels[providerUuid];
         }
 
-        return refreshModels(providerUuid);
-    }, [providerModels]);
+        // Prevent duplicate requests
+        if (refreshingProviders.has(providerUuid)) {
+            return null;
+        }
 
-    // Refresh models for a provider (force fetch from API)
+        setRefreshingProviders(prev => new Set(prev).add(providerUuid));
+
+        try {
+            // Try GET first for cached data
+            const result = await api.getProviderModelsByUUID(providerUuid);
+
+            if (result.success && result.data) {
+                // If GET returns empty list, auto-refresh from provider API
+                if (!result.data.models || result.data.models.length === 0) {
+                    const refreshResult = await api.updateProviderModelsByUUID(providerUuid);
+                    if (refreshResult.success && refreshResult.data) {
+                        setProviderModels(prev => ({
+                            ...prev,
+                            [providerUuid]: refreshResult.data!
+                        }));
+                        setVersion(prev => prev + 1);
+                        dispatchProviderModelsUpdate(providerUuid, refreshResult.data);
+                        return refreshResult.data;
+                    }
+                } else {
+                    setProviderModels(prev => ({
+                        ...prev,
+                        [providerUuid]: result.data!
+                    }));
+                    setVersion(prev => prev + 1);
+                    dispatchProviderModelsUpdate(providerUuid, result.data);
+                    return result.data;
+                }
+            }
+        } catch (error) {
+            console.error(`Failed to fetch models for provider ${providerUuid}:`, error);
+        } finally {
+            setRefreshingProviders(prev => {
+                const next = new Set(prev);
+                next.delete(providerUuid);
+                return next;
+            });
+        }
+
+        return null;
+    }, [providerModels, refreshingProviders]);
+
+    // Refresh models for a provider (POST - force fetch from provider API)
     const refreshModels = useCallback(async (providerUuid: string): Promise<ProviderModelData | null> => {
         // Prevent duplicate requests
         if (refreshingProviders.has(providerUuid)) {
@@ -51,7 +95,8 @@ export const useProviderModels = () => {
         setRefreshingProviders(prev => new Set(prev).add(providerUuid));
 
         try {
-            const result = await api.getProviderModelsByUUID(providerUuid);
+            // Force refresh from provider API
+            const result = await api.updateProviderModelsByUUID(providerUuid);
 
             if (result.success && result.data) {
                 setProviderModels(prev => ({
@@ -63,7 +108,7 @@ export const useProviderModels = () => {
                 return result.data;
             }
         } catch (error) {
-            console.error(`Failed to fetch models for provider ${providerUuid}:`, error);
+            console.error(`Failed to refresh models for provider ${providerUuid}:`, error);
         } finally {
             setRefreshingProviders(prev => {
                 const next = new Set(prev);
