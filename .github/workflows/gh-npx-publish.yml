@@ -28,6 +28,11 @@ on:
         type: boolean
         default: true
 
+permissions:
+  contents: write
+  id-token: write
+  actions: write
+
 env:
   NODE_VERSION: '20'
 
@@ -265,7 +270,7 @@ jobs:
       - name: Trigger Docker NPX build
         if: success()
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           gh workflow run docker-npx.yml \
             --repo tingly-dev/tingly-box \
