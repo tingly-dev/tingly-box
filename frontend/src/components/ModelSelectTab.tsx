@@ -1,6 +1,6 @@
 import { Box } from '@mui/material';
 import React, { useEffect, useCallback } from 'react';
-import { dispatchCustomModelUpdate, listenForCustomModelUpdates, useCustomModels } from '../hooks/useCustomModels';
+import { useCustomModels } from '../hooks/useCustomModels';
 import { useGridLayout } from '../hooks/useGridLayout';
 import { useProviderGroups } from '../hooks/useProviderGroups';
 import { useModelSelection } from '../hooks/useModelSelection';
@@ -71,14 +71,6 @@ function ModelSelectTabInner({
     // Use external activeTab if provided, otherwise use internal state
     const currentTab = externalActiveTab !== undefined ? externalActiveTab : internalCurrentTab;
 
-    // Listen for custom model updates from other components
-    useEffect(() => {
-        const cleanup = listenForCustomModelUpdates(() => {
-            // The hook will automatically handle state updates
-        });
-        return cleanup;
-    }, []);
-
     const handleTabChange = useCallback((providerUuid: string) => {
         if (externalActiveTab === undefined) {
             setInternalCurrentTab(providerUuid);
@@ -96,7 +88,6 @@ function ModelSelectTabInner({
 
     const handleDeleteCustomModel = useCallback((provider: Provider, customModel: string) => {
         removeCustomModel(provider.uuid, customModel);
-        dispatchCustomModelUpdate(provider.uuid, customModel);
     }, [removeCustomModel]);
 
     const handleCustomModelEdit = useCallback((provider: Provider, currentValue?: string) => {
@@ -109,12 +100,9 @@ function ModelSelectTabInner({
             if (customModelDialog.originalValue) {
                 // Editing: use updateCustomModel to atomically replace old value with new value
                 updateCustomModel(customModelDialog.provider.uuid, customModelDialog.originalValue, customModel);
-                dispatchCustomModelUpdate(customModelDialog.provider.uuid, customModel);
             } else {
                 // Adding new: use saveCustomModel
-                if (saveCustomModel(customModelDialog.provider.uuid, customModel)) {
-                    dispatchCustomModelUpdate(customModelDialog.provider.uuid, customModel);
-                }
+                saveCustomModel(customModelDialog.provider.uuid, customModel);
             }
 
             // Then save to persistence through parent component
@@ -159,22 +147,28 @@ function ModelSelectTabInner({
             />
 
             {/* Right Panel - Tab Content */}
-            <ModelsPanel
-                flattenedProviders={flattenedProviders}
-                providerModels={providerModels}
-                selectedProvider={selectedProvider}
-                selectedModel={selectedModel}
-                currentTab={currentTab}
-                refreshingProviders={refreshingProviders}
-                columns={gridLayout.columns}
-                modelsPerPage={gridLayout.modelsPerPage}
-                onModelSelect={handleModelSelect}
-                onRefresh={onRefresh}
-                onCustomModelEdit={handleCustomModelEdit}
-                onCustomModelDelete={handleDeleteCustomModel}
-                onTest={onTest}
-                testing={testing}
-            />
+            {currentTab && (() => {
+                const currentProvider = flattenedProviders.find(p => p.uuid === currentTab);
+                if (!currentProvider) return null;
+
+                return (
+                    <ModelsPanel
+                        provider={currentProvider}
+                        providerModels={providerModels}
+                        selectedProvider={selectedProvider}
+                        selectedModel={selectedModel}
+                        refreshingProviders={refreshingProviders}
+                        columns={gridLayout.columns}
+                        modelsPerPage={gridLayout.modelsPerPage}
+                        onModelSelect={handleModelSelect}
+                        onRefresh={onRefresh}
+                        onCustomModelEdit={handleCustomModelEdit}
+                        onCustomModelDelete={handleDeleteCustomModel}
+                        onTest={onTest}
+                        testing={testing}
+                    />
+                );
+            })()}
 
             {/* Custom Model Dialog */}
             <CustomModelDialog onSave={handleCustomModelSave} />

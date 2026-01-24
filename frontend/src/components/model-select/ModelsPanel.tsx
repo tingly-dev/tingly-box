@@ -15,18 +15,19 @@ import {
     Typography,
 } from '@mui/material';
 import React, { useCallback } from 'react';
-import type { Provider } from '../../types/provider';
-import type { ProviderModelsDataByUuid } from '../../types/provider';
-import { ModelGrid } from './ModelGrid';
+import type { Provider, ProviderModelsDataByUuid } from '../../types/provider';
 import { getModelTypeInfo } from '../../utils/modelUtils';
+import { useCustomModels } from '../../hooks/useCustomModels';
 import { usePagination } from '../../hooks/usePagination';
+import { useModelSelectContext } from '../../contexts/ModelSelectContext';
+import CustomModelCard from './CustomModelCard';
+import ModelCard from './ModelCard';
 
 export interface ModelsPanelProps {
-    flattenedProviders: Provider[];
+    provider: Provider;
     providerModels?: ProviderModelsDataByUuid;
     selectedProvider?: string;
     selectedModel?: string;
-    currentTab: string;
     refreshingProviders: string[];
     columns: number;
     modelsPerPage: number;
@@ -39,11 +40,10 @@ export interface ModelsPanelProps {
 }
 
 export function ModelsPanel({
-    flattenedProviders,
+    provider,
     providerModels,
     selectedProvider,
     selectedModel,
-    currentTab,
     refreshingProviders,
     columns,
     modelsPerPage,
@@ -54,50 +54,43 @@ export function ModelsPanel({
     onTest,
     testing = false,
 }: ModelsPanelProps) {
-    // Pagination and search - use useMemo to stabilize the provider names array
-    const providerNames = React.useMemo(
-        () => flattenedProviders.map(p => p.uuid),
-        [flattenedProviders]
-    );
+    const { customModels } = useCustomModels();
+    const { isModelProbing } = useModelSelectContext();
 
-    const { searchTerms, setCurrentPage, handleSearchChange, getPaginatedData } = usePagination(
-        providerNames,
+    const isProviderSelected = selectedProvider === provider.uuid;
+    const isRefreshing = refreshingProviders.includes(provider.uuid);
+    const backendCustomModel = providerModels?.[provider.uuid]?.custom_model;
+
+    // Get custom models for this provider
+    const providerCustomModels = customModels[provider.uuid] || [];
+
+    // Get model type info
+    const modelTypeInfo = getModelTypeInfo(provider, providerModels, customModels);
+    const { standardModelsForDisplay, isCustomModel } = modelTypeInfo;
+
+    // Pagination and search
+    const { searchTerms, handleSearchChange, getPaginatedData, setCurrentPage } = usePagination(
+        [provider.uuid],
         modelsPerPage
     );
 
-    const handlePageChange = useCallback((providerUuid: string, newPage: number) => {
-        setCurrentPage(providerUuid, newPage);
-    }, [setCurrentPage]);
+    const pagination = getPaginatedData(standardModelsForDisplay, provider.uuid);
 
-    // Only render the current tab to avoid unnecessary re-renders
-    const currentProvider = flattenedProviders.find(p => p.uuid === currentTab);
-    if (!currentProvider) return null;
-
-    // Don't use useMemo for modelTypeInfo - we want it to recalculate when data changes
-    const modelTypeInfo = getModelTypeInfo(currentProvider, providerModels, {});
-    const { standardModelsForDisplay } = modelTypeInfo;
-
-    const isProviderSelected = selectedProvider === currentProvider.uuid;
-    const isRefreshing = refreshingProviders.includes(currentProvider.uuid);
-
-    // Don't use useMemo for pagination - we want it to recalculate when data changes
-    const pagination = getPaginatedData(standardModelsForDisplay, currentProvider.uuid);
+    const handlePageChange = useCallback((newPage: number) => {
+        setCurrentPage(prev => ({ ...prev, [provider.uuid]: newPage }));
+    }, [provider.uuid, setCurrentPage]);
 
     return (
         <Box sx={{ flex: 1, overflowY: 'auto', p: 2 }}>
-            {/* Models Display */}
             <Stack spacing={2}>
-                {/* Title and Controls */}
-                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                        Models ({pagination.totalItems})
-                    </Typography>
+                {/* Controls */}
+                <Stack direction="row" justifyContent="space-between" alignItems="center">
                     <Stack direction="row" alignItems="center" spacing={1}>
                         <TextField
                             size="small"
                             placeholder="Search models..."
-                            value={searchTerms[currentProvider.uuid] || ''}
-                            onChange={(e) => handleSearchChange(currentProvider.uuid, e.target.value)}
+                            value={searchTerms[provider.uuid] || ''}
+                            onChange={(e) => handleSearchChange(provider.uuid, e.target.value)}
                             slotProps={{
                                 input: {
                                     startAdornment: (
@@ -107,44 +100,22 @@ export function ModelsPanel({
                                     ),
                                 },
                             }}
-                            sx={{ width: 300 }}
+                            sx={{ width: 200 }}
                         />
                         <Button
                             variant="outlined"
                             startIcon={<AddCircleOutlineIcon />}
-                            onClick={() => onCustomModelEdit(currentProvider)}
-                            sx={{
-                                height: 40,
-                                minWidth: 110,
-                                borderColor: 'primary.main',
-                                color: 'primary.main',
-                                '&:hover': {
-                                    backgroundColor: 'primary.50',
-                                    borderColor: 'primary.dark',
-                                }
-                            }}
+                            onClick={() => onCustomModelEdit(provider)}
+                            sx={{ height: 40, minWidth: 100 }}
                         >
                             Customize
                         </Button>
                         <Button
                             variant="outlined"
                             startIcon={isRefreshing ? <CircularProgress size={16} /> : <RefreshIcon />}
-                            onClick={() => onRefresh && onRefresh(currentProvider)}
+                            onClick={() => onRefresh && onRefresh(provider)}
                             disabled={!onRefresh || isRefreshing}
-                            sx={{
-                                height: 40,
-                                minWidth: 110,
-                                borderColor: isRefreshing ? 'grey.300' : 'primary.main',
-                                color: isRefreshing ? 'grey.500' : 'primary.main',
-                                '&:hover': !isRefreshing ? {
-                                    backgroundColor: 'primary.50',
-                                    borderColor: 'primary.dark',
-                                } : {},
-                                '&:disabled': {
-                                    borderColor: 'grey.300',
-                                    color: 'grey.500',
-                                }
-                            }}
+                            sx={{ height: 40, minWidth: 100 }}
                         >
                             {isRefreshing ? 'Fetching...' : 'Refresh'}
                         </Button>
@@ -154,48 +125,125 @@ export function ModelsPanel({
                                 startIcon={testing ? <CircularProgress size={16} /> : <PlayArrowIcon />}
                                 onClick={() => selectedModel && onTest(selectedModel)}
                                 disabled={!selectedModel || testing}
-                                sx={{
-                                    height: 40,
-                                    minWidth: 110,
-                                    borderColor: !selectedModel || testing ? 'grey.300' : 'primary.main',
-                                    color: !selectedModel || testing ? 'grey.500' : 'primary.main',
-                                    '&:hover': (!selectedModel || testing) ? {} : {
-                                        backgroundColor: 'primary.50',
-                                        borderColor: 'primary.dark',
-                                    },
-                                    '&:disabled': {
-                                        borderColor: 'grey.300',
-                                        color: 'grey.500',
-                                    }
-                                }}
+                                sx={{ height: 40, minWidth: 80 }}
                             >
                                 {testing ? 'Testing...' : 'Test'}
                             </Button>
                         )}
                     </Stack>
+                    <Typography variant="caption" color="text.secondary">
+                        {pagination.totalItems} models
+                    </Typography>
                 </Stack>
 
-                <ModelGrid
-                    provider={currentProvider}
-                    providerModels={providerModels}
-                    selectedProvider={selectedProvider}
-                    selectedModel={selectedModel}
-                    onModelSelect={onModelSelect}
-                    onCustomModelEdit={onCustomModelEdit}
-                    onCustomModelDelete={onCustomModelDelete}
-                    columns={columns}
-                    searchTerms={searchTerms}
-                    paginatedModels={pagination}
-                />
+                {/* Star Models Section */}
+                {providerModels?.[provider.uuid]?.star_models && providerModels[provider.uuid].star_models!.length > 0 && (
+                    <Box>
+                        <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                            Starred Models
+                        </Typography>
+                        <Box sx={{ display: 'grid', gridTemplateColumns: `repeat(${columns}, 1fr)`, gap: 0.8 }}>
+                            {providerModels[provider.uuid].star_models!.map((starModel) => (
+                                <ModelCard
+                                    key={starModel}
+                                    model={starModel}
+                                    isSelected={isProviderSelected && selectedModel === starModel}
+                                    onClick={() => onModelSelect(provider, starModel)}
+                                    variant="starred"
+                                    loading={provider.auth_type === 'oauth' && isModelProbing(`${provider.uuid}-${starModel}`)}
+                                />
+                            ))}
+                        </Box>
+                    </Box>
+                )}
+
+                {/* All Models Section */}
+                <Box sx={{ minHeight: 200 }}>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: `repeat(${columns}, 1fr)`, gap: 0.8 }}>
+                        {/* Custom models from local storage */}
+                        {providerCustomModels.map((customModel, index) => (
+                            <CustomModelCard
+                                key={`localStorage-custom-model-${index}`}
+                                model={customModel}
+                                provider={provider}
+                                isSelected={isProviderSelected && selectedModel === customModel}
+                                onEdit={() => onCustomModelEdit(provider, customModel)}
+                                onDelete={() => onCustomModelDelete(provider, customModel)}
+                                onSelect={() => onModelSelect(provider, customModel)}
+                                variant="localStorage"
+                                loading={provider.auth_type === 'oauth' && isModelProbing(`${provider.uuid}-${customModel}`)}
+                            />
+                        ))}
+
+                        {/* Persisted custom model card (from backend) */}
+                        {backendCustomModel && providerCustomModels.length === 0 && (
+                            <CustomModelCard
+                                key="persisted-custom-model"
+                                model={backendCustomModel}
+                                provider={provider}
+                                isSelected={isProviderSelected && selectedModel === backendCustomModel}
+                                onEdit={() => onCustomModelEdit(provider, backendCustomModel)}
+                                onDelete={() => onCustomModelDelete(provider, backendCustomModel)}
+                                onSelect={() => onModelSelect(provider, backendCustomModel)}
+                                variant="backend"
+                                loading={provider.auth_type === 'oauth' && isModelProbing(`${provider.uuid}-${backendCustomModel}`)}
+                            />
+                        )}
+
+                        {/* Currently selected custom model card (not persisted) */}
+                        {isProviderSelected && selectedModel && isCustomModel(selectedModel) &&
+                            !providerCustomModels.includes(selectedModel) &&
+                            selectedModel !== backendCustomModel && (
+                                <CustomModelCard
+                                    key="selected-custom-model"
+                                    model={selectedModel}
+                                    provider={provider}
+                                    isSelected={true}
+                                    onEdit={() => onCustomModelEdit(provider, selectedModel)}
+                                    onDelete={() => onCustomModelDelete(provider, selectedModel)}
+                                    onSelect={() => onModelSelect(provider, selectedModel)}
+                                    variant="selected"
+                                    loading={provider.auth_type === 'oauth' && isModelProbing(`${provider.uuid}-${selectedModel}`)}
+                                />
+                            )}
+
+                        {/* Standard models */}
+                        {pagination.items.map((model) => {
+                            const isModelSelected = isProviderSelected && selectedModel === model;
+                            return (
+                                <ModelCard
+                                    key={model}
+                                    model={model}
+                                    isSelected={isModelSelected}
+                                    onClick={() => onModelSelect(provider, model)}
+                                    variant="standard"
+                                    loading={provider.auth_type === 'oauth' && isModelProbing(`${provider.uuid}-${model}`)}
+                                />
+                            );
+                        })}
+                    </Box>
+
+                    {/* Empty state */}
+                    {pagination.totalItems === 0 &&
+                        providerCustomModels.length === 0 &&
+                        !backendCustomModel &&
+                        !(isProviderSelected && selectedModel && isCustomModel(selectedModel)) && (
+                            <Box sx={{ textAlign: 'center', py: 4 }}>
+                                <Typography variant="body2" color="text.secondary">
+                                    No models found matching "{searchTerms[provider.uuid] || ''}"
+                                </Typography>
+                            </Box>
+                        )}
+                </Box>
 
                 {/* Pagination Controls */}
                 {pagination.totalPages > 1 && (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'center' }}>
                         <Stack direction="row" alignItems="center" spacing={1}>
                             <IconButton
                                 size="small"
                                 disabled={pagination.currentPage === 1}
-                                onClick={() => handlePageChange(currentProvider.uuid, pagination.currentPage - 1)}
+                                onClick={() => handlePageChange(pagination.currentPage - 1)}
                             >
                                 <NavigateBeforeIcon />
                             </IconButton>
@@ -205,7 +253,7 @@ export function ModelsPanel({
                             <IconButton
                                 size="small"
                                 disabled={pagination.currentPage === pagination.totalPages}
-                                onClick={() => handlePageChange(currentProvider.uuid, pagination.currentPage + 1)}
+                                onClick={() => handlePageChange(pagination.currentPage + 1)}
                             >
                                 <NavigateNextIcon />
                             </IconButton>
@@ -217,6 +265,4 @@ export function ModelsPanel({
     );
 }
 
-// Note: Not using React.memo here because providerModels is an object that changes frequently
-// and we need the component to re-render when the data inside changes
 export default ModelsPanel;
