@@ -15,9 +15,10 @@ import {
     Typography,
 } from '@mui/material';
 import React, { useCallback } from 'react';
-import type { Provider, ProviderModelsDataByUuid } from '../../types/provider';
+import type { Provider } from '../../types/provider';
 import { getModelTypeInfo } from '../../utils/modelUtils';
 import { useCustomModels } from '../../hooks/useCustomModels';
+import { useProviderModels } from '../../hooks/useProviderModels';
 import { usePagination } from '../../hooks/usePagination';
 import { useModelSelectContext } from '../../contexts/ModelSelectContext';
 import CustomModelCard from './CustomModelCard';
@@ -25,14 +26,11 @@ import ModelCard from './ModelCard';
 
 export interface ModelsPanelProps {
     provider: Provider;
-    providerModels?: ProviderModelsDataByUuid;
     selectedProvider?: string;
     selectedModel?: string;
-    refreshingProviders: string[];
     columns: number;
     modelsPerPage: number;
     onModelSelect: (provider: Provider, model: string) => void;
-    onRefresh?: (provider: Provider) => void;
     onCustomModelEdit: (provider: Provider, value?: string) => void;
     onCustomModelDelete: (provider: Provider, customModel: string) => void;
     onTest?: (model: string) => void;
@@ -41,20 +39,18 @@ export interface ModelsPanelProps {
 
 export function ModelsPanel({
     provider,
-    providerModels,
     selectedProvider,
     selectedModel,
-    refreshingProviders,
     columns,
     modelsPerPage,
     onModelSelect,
-    onRefresh,
     onCustomModelEdit,
     onCustomModelDelete,
     onTest,
     testing = false,
 }: ModelsPanelProps) {
     const { customModels } = useCustomModels();
+    const { providerModels, refreshingProviders, refreshModels } = useProviderModels();
     const { isModelProbing } = useModelSelectContext();
 
     const isProviderSelected = selectedProvider === provider.uuid;
@@ -113,8 +109,8 @@ export function ModelsPanel({
                         <Button
                             variant="outlined"
                             startIcon={isRefreshing ? <CircularProgress size={16} /> : <RefreshIcon />}
-                            onClick={() => onRefresh && onRefresh(provider)}
-                            disabled={!onRefresh || isRefreshing}
+                            onClick={() => refreshModels(provider.uuid)}
+                            disabled={isRefreshing}
                             sx={{ height: 40, minWidth: 100 }}
                         >
                             {isRefreshing ? 'Fetching...' : 'Refresh'}

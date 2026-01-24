@@ -1,11 +1,12 @@
 import { Box } from '@mui/material';
 import React, { useEffect, useCallback } from 'react';
 import { useCustomModels } from '../hooks/useCustomModels';
+import { useProviderModels } from '../hooks/useProviderModels';
 import { useGridLayout } from '../hooks/useGridLayout';
 import { useProviderGroups } from '../hooks/useProviderGroups';
 import { useModelSelection } from '../hooks/useModelSelection';
 import { ModelSelectProvider, useModelSelectContext } from '../contexts/ModelSelectContext';
-import type { Provider, ProviderModelsDataByUuid } from '../types/provider';
+import type { Provider } from '../types/provider';
 import { getModelTypeInfo } from '../utils/modelUtils';
 import { ProviderSidebar, ModelsPanel, CustomModelDialog } from './model-select';
 import { Alert, Snackbar } from '@mui/material';
@@ -17,15 +18,12 @@ export interface ProviderSelectTabOption {
 
 interface ModelSelectTabProps {
     providers: Provider[];
-    providerModels?: ProviderModelsDataByUuid;
     selectedProvider?: string; // This is now UUID
     selectedModel?: string;
     activeTab?: string; // Provider UUID
     onSelected?: (option: ProviderSelectTabOption) => void;
     onProviderChange?: (provider: Provider) => void; // Called when switching to a provider tab
-    onRefresh?: (provider: Provider) => void;
     onCustomModelSave?: (provider: Provider, customModel: string) => void;
-    refreshingProviders?: string[]; // These are UUIDs
     // Single provider mode props
     singleProvider?: Provider | null; // If provided, only show this provider
     onTest?: (model: string) => void; // Callback for Test button
@@ -34,20 +32,18 @@ interface ModelSelectTabProps {
 
 function ModelSelectTabInner({
     providers,
-    providerModels,
     selectedProvider,
     selectedModel,
     activeTab: externalActiveTab,
     onSelected,
     onProviderChange,
-    onRefresh,
     onCustomModelSave,
-    refreshingProviders = [],
     singleProvider,
     onTest,
     testing = false,
 }: ModelSelectTabProps) {
     const { customModels, removeCustomModel, saveCustomModel, updateCustomModel } = useCustomModels();
+    const { providerModels, refreshingProviders, fetchModels, refreshModels } = useProviderModels();
     const gridLayout = useGridLayout();
     const {
         internalCurrentTab,
@@ -71,7 +67,7 @@ function ModelSelectTabInner({
     // Use external activeTab if provided, otherwise use internal state
     const currentTab = externalActiveTab !== undefined ? externalActiveTab : internalCurrentTab;
 
-    const handleTabChange = useCallback((providerUuid: string) => {
+    const handleTabChange = useCallback(async (providerUuid: string) => {
         if (externalActiveTab === undefined) {
             setInternalCurrentTab(providerUuid);
         }
@@ -80,11 +76,14 @@ function ModelSelectTabInner({
         const targetProvider = flattenedProviders.find(p => p.uuid === providerUuid);
         if (!targetProvider) return;
 
+        // Fetch models for this provider
+        await fetchModels(providerUuid);
+
         // Notify parent component about provider change
         if (onProviderChange) {
             onProviderChange(targetProvider);
         }
-    }, [externalActiveTab, flattenedProviders, onProviderChange, setInternalCurrentTab]);
+    }, [externalActiveTab, flattenedProviders, onProviderChange, setInternalCurrentTab, fetchModels]);
 
     const handleDeleteCustomModel = useCallback((provider: Provider, customModel: string) => {
         removeCustomModel(provider.uuid, customModel);
@@ -154,14 +153,11 @@ function ModelSelectTabInner({
                 return (
                     <ModelsPanel
                         provider={currentProvider}
-                        providerModels={providerModels}
                         selectedProvider={selectedProvider}
                         selectedModel={selectedModel}
-                        refreshingProviders={refreshingProviders}
                         columns={gridLayout.columns}
                         modelsPerPage={gridLayout.modelsPerPage}
                         onModelSelect={handleModelSelect}
-                        onRefresh={onRefresh}
                         onCustomModelEdit={handleCustomModelEdit}
                         onCustomModelDelete={handleDeleteCustomModel}
                         onTest={onTest}

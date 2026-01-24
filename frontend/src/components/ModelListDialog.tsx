@@ -111,8 +111,6 @@ interface ModelListDialogProps {
 }
 
 const ModelListDialog = ({ open, onClose, provider }: ModelListDialogProps) => {
-    const [providerModels, setProviderModels] = useState<{ [key: string]: any }>({});
-    const [refreshingProviders, setRefreshingProviders] = useState<string[]>([]);
     const [selectedModel, setSelectedModel] = useState<string>('');
     const [testing, setTesting] = useState(false);
     const [testResults, setTestResults] = useState<Map<string, ProbeResponse>>(new Map());
@@ -122,48 +120,18 @@ const ModelListDialog = ({ open, onClose, provider }: ModelListDialogProps) => {
     // Ref to track if dialog is still open (to avoid showing results after closing)
     const isDialogOpenRef = useRef(true);
 
-    // Fetch models when dialog opens
+    // Reset when dialog closes
     useEffect(() => {
-        if (open && provider) {
-            isDialogOpenRef.current = true;
-            fetchProviderModels(provider);
-        } else if (!open) {
-            // Reset when closed
+        if (!open) {
             isDialogOpenRef.current = false;
             setTesting(false);
-            setProviderModels({});
             setSelectedModel('');
             setTestResults(new Map());
             setViewResultModel(null);
+        } else {
+            isDialogOpenRef.current = true;
         }
-    }, [open, provider]);
-
-    const fetchProviderModels = async (prov: Provider, forceRefresh = false) => {
-        setRefreshingProviders(prev => [...prev, prov.uuid]);
-        try {
-            // Use updateProviderModelsByUUID for refresh (POST), getProviderModelsByUUID for initial load (GET)
-            const response = forceRefresh
-                ? await api.updateProviderModelsByUUID(prov.uuid)
-                : await api.getProviderModelsByUUID(prov.uuid);
-
-            if (response.success && response.data) {
-                setProviderModels({ [prov.uuid]: response.data });
-            }
-        } catch (err) {
-            console.error('Failed to fetch models:', err);
-        } finally {
-            setRefreshingProviders(prev => prev.filter(uuid => uuid !== prov.uuid));
-        }
-    };
-
-    const handleRefresh = (prov: Provider) => {
-        fetchProviderModels(prov, true); // Force refresh from provider
-    };
-
-    const handleCustomModelSave = async (prov: Provider, customModel: string) => {
-        // Re-fetch models to get the latest state
-        await fetchProviderModels(prov);
-    };
+    }, [open]);
 
     const handleTest = async (model: string) => {
         if (!provider || testing) return;
@@ -227,17 +195,12 @@ const ModelListDialog = ({ open, onClose, provider }: ModelListDialogProps) => {
                     <Box sx={{ height: '70vh', overflow: 'auto', p: 2 }}>
                         <ModelSelectTab
                             providers={provider ? [provider] : []}
-                            providerModels={providerModels}
                             selectedProvider={provider?.uuid}
                             selectedModel={selectedModel}
                             onSelected={(option) => setSelectedModel(option.model || '')}
-                            onProviderChange={handleRefresh}
-                            onRefresh={handleRefresh}
-                            onCustomModelSave={handleCustomModelSave}
                             singleProvider={provider}
                             onTest={handleTest}
                             testing={testing}
-                            refreshingProviders={refreshingProviders}
                         />
                     </Box>
                 </DialogContent>
