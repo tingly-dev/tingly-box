@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { api } from '../services/api';
-import type { EnhancedProviderFormData } from '../components/ProviderFormDialog';
+import type { EnhancedProviderFormData } from '@/components/ProviderFormDialog';
 
 interface UseProviderDialogOptions {
     defaultApiStyle?: 'openai' | 'anthropic' | undefined;

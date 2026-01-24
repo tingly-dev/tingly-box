@@ -191,7 +191,7 @@ function ModelSelectTabInner({
     );
 }
 
-export default function ModelSelectTab(props: ModelSelectTabProps) {
+export default function ModelSelectDialog(props: ModelSelectTabProps) {
     return (
         <ModelSelectProvider>
             <ModelSelectTabInner {...props} />

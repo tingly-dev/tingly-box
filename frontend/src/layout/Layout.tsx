@@ -214,7 +214,7 @@ const Layout = ({ children }: LayoutProps) => {
                     return (
                         <React.Fragment key={group.key}>
                             {/* Group Header */}
-                            <ListItem disablePadding sx={{ mb: isStandalone ? 0 : 1 }}>
+                            <ListItem key={`header-${group.key}`} disablePadding sx={{ mb: isStandalone ? 0 : 1 }}>
                                 <ListItemButton
                                     component={isStandalone ? RouterLink : undefined}
                                     to={isStandalone ? group.items[0].path : undefined}

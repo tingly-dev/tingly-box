@@ -2,12 +2,12 @@ import { VpnKey } from '@mui/icons-material';
 import { Alert, Box, Button, Snackbar, Stack, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { PageLayout } from '../components/PageLayout';
-import OAuthDialog from '../components/OAuthDialog.tsx';
-import OAuthDetailDialog from '../components/OAuthDetailDialog.tsx';
-import UnifiedCard from '../components/UnifiedCard';
+import { PageLayout } from '@/components/PageLayout';
+import OAuthDialog from '@/components/OAuthDialog.tsx';
+import OAuthDetailDialog from '@/components/OAuthDetailDialog.tsx';
+import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '../services/api';
-import OAuthTable from '../components/OAuthTable.tsx';
+import OAuthTable from '@/components/OAuthTable.tsx';
 
 interface OAuthEditFormData {
     name: string;

@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
-import ApiKeyModal from '../components/ApiKeyModal';
+import ApiKeyModal from '@/components/ApiKeyModal';
 import RuleCard from './RuleCard.tsx';
-import UnifiedCard from '../components/UnifiedCard';
+import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '../services/api';
 import type { Provider, ProviderModelsDataByUuid } from '../types/provider';
 import type { Rule } from './RoutingGraphTypes.ts';

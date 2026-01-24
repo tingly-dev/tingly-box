@@ -21,8 +21,8 @@ import PaidIcon from '@mui/icons-material/Paid';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import StreamIcon from '@mui/icons-material/Stream';
 import SpeedIcon from '@mui/icons-material/Speed';
-import { StatCard, TokenUsageChart, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable } from '../components/dashboard';
-import type { TimeSeriesData, AggregatedStat } from '../components/dashboard';
+import { StatCard, TokenUsageChart, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable } from '@/components/dashboard';
+import type { TimeSeriesData, AggregatedStat } from '@/components/dashboard';
 import api from '../services/api';
 
 interface Provider {
