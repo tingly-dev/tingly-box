@@ -65,7 +65,6 @@ const ProviderFormDialog = ({
 
     const [verifying, setVerifying] = useState(false);
     const [noApiKey, setNoApiKey] = useState(data.noKeyRequired || false);
-    const [isCustomUrl, setIsCustomUrl] = useState(false);
     const [verificationResult, setVerificationResult] = useState<{
         success: boolean;
         message: string;
@@ -84,25 +83,6 @@ const ProviderFormDialog = ({
     useEffect(() => {
         setNoApiKey(data.noKeyRequired || false);
     }, [data.noKeyRequired]);
-
-    // Determine if current URL is custom (not from presets)
-    useEffect(() => {
-        if (data.apiBase && data.apiStyle) {
-            const providers = getCurrentProviders();
-            const isPreset = providers.some(p => p.baseUrl === data.apiBase);
-            setIsCustomUrl(!isPreset);
-        } else {
-            setIsCustomUrl(false);
-        }
-    }, [data.apiBase, data.apiStyle]);
-
-    // Reset noApiKey when switching between preset/custom
-    useEffect(() => {
-        if (!isCustomUrl && noApiKey) {
-            setNoApiKey(false);
-            onChange('noKeyRequired', false);
-        }
-    }, [isCustomUrl]);
 
     const openaiProviders = getProvidersByStyle('openai');
     const anthropicProviders = getProvidersByStyle('anthropic');
@@ -130,11 +110,9 @@ const ProviderFormDialog = ({
         if (typeof newValue === 'string') {
             // Custom input - only update apiBase
             onChange('apiBase', newValue);
-            setIsCustomUrl(true);
         } else if (newValue && newValue.baseUrl) {
             // Preset selected - update apiBase
             onChange('apiBase', newValue.baseUrl);
-            setIsCustomUrl(false);
             // If name is empty and token is empty, set default name
             if (!data.name && !data.token) {
                 onChange('name', t('providerDialog.keyName.autoFill', { title: newValue.title }));
@@ -142,7 +120,6 @@ const ProviderFormDialog = ({
         } else if (newValue === null) {
             // Clear selection - only clear apiBase, preserve name
             onChange('apiBase', '');
-            setIsCustomUrl(true);
         }
     };
 
@@ -284,7 +261,6 @@ const ProviderFormDialog = ({
                                         if (oldStyle && oldStyle !== 'openai' as any) {
                                             onChange('apiBase', '');
                                             onChange('name', '');
-                                            setIsCustomUrl(false);
                                             if (mode === 'edit') {
                                                 setStyleChangedWarning(true);
                                                 setTimeout(() => setStyleChangedWarning(false), 4000);
@@ -328,7 +304,6 @@ const ProviderFormDialog = ({
                                         if (oldStyle && oldStyle !== 'anthropic' as any) {
                                             onChange('apiBase', '');
                                             onChange('name', '');
-                                            setIsCustomUrl(false);
                                             if (mode === 'edit') {
                                                 setStyleChangedWarning(true);
                                                 setTimeout(() => setStyleChangedWarning(false), 4000);
@@ -420,7 +395,6 @@ const ProviderFormDialog = ({
                                     onInputChange={(_event, newInputValue) => {
                                         // Allow custom input
                                         onChange('apiBase', newInputValue);
-                                        setIsCustomUrl(true);
                                         setVerificationResult(null);
                                     }}
                                     renderOption={(props, option) => (
@@ -470,41 +444,39 @@ const ProviderFormDialog = ({
                                         disabled={noApiKey}
                                         slotProps={{
                                             input: {
-                                                sx: { pr: isCustomUrl ? 12 : 0 },
+                                                sx: { pr: 12 },
                                             },
                                         }}
                                     />
-                                    {isCustomUrl && (
-                                        <Stack
-                                            direction="row"
-                                            alignItems="center"
-                                            spacing={0.5}
-                                            sx={{
-                                                position: 'absolute',
-                                                right: 12,
-                                                top: '50%',
-                                                transform: 'translateY(-50%)',
-                                                pointerEvents: 'auto',
+                                    <Stack
+                                        direction="row"
+                                        alignItems="center"
+                                        spacing={0.5}
+                                        sx={{
+                                            position: 'absolute',
+                                            right: 12,
+                                            top: '50%',
+                                            transform: 'translateY(-50%)',
+                                            pointerEvents: 'auto',
+                                        }}
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        <Typography variant="subtitle2" color="text.secondary">
+                                            No Key
+                                        </Typography>
+                                        <Switch
+                                            size="small"
+                                            checked={noApiKey}
+                                            onChange={(e) => {
+                                                setNoApiKey(e.target.checked);
+                                                onChange('noKeyRequired', e.target.checked);
+                                                setVerificationResult(null);
+                                                if (e.target.checked) {
+                                                    onChange('token', '');
+                                                }
                                             }}
-                                            onClick={(e) => e.stopPropagation()}
-                                        >
-                                            <Typography variant="subtitle2" color="text.secondary">
-                                                No Key
-                                            </Typography>
-                                            <Switch
-                                                size="small"
-                                                checked={noApiKey}
-                                                onChange={(e) => {
-                                                    setNoApiKey(e.target.checked);
-                                                    onChange('noKeyRequired', e.target.checked);
-                                                    setVerificationResult(null);
-                                                    if (e.target.checked) {
-                                                        onChange('token', '');
-                                                    }
-                                                }}
-                                            />
-                                        </Stack>
-                                    )}
+                                        />
+                                    </Stack>
                                 </Box>
 
                                 {/* Proxy URL Field */}
