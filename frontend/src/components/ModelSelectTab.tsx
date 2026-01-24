@@ -124,6 +124,9 @@ function ModelSelectTabInner({
                 }
 
                 // Fetch models for the selected provider on initial load
+                fetchModels(selectedProvider);
+
+                // Notify parent component about provider change
                 const targetProvider = flattenedProviders[targetProviderIndex];
                 if (onProviderChange) {
                     onProviderChange(targetProvider);
@@ -133,7 +136,7 @@ function ModelSelectTabInner({
             // Mark as initialized to prevent further automatic switching
             setIsInitialized(true);
         }
-    }, [isInitialized, selectedProvider, flattenedProviders, externalActiveTab, onProviderChange, setInternalCurrentTab, setIsInitialized]);
+    }, [isInitialized, selectedProvider, flattenedProviders, externalActiveTab, onProviderChange, setInternalCurrentTab, setIsInitialized, fetchModels]);
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'row', height: '100%', width: '100%' }}>
