@@ -14,10 +14,10 @@ import {
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import ClaudeCodeConfigModal from '../components/ClaudeCodeConfigModal';
-import EmptyStateGuide from '../components/EmptyStateGuide';
-import PageLayout from '../components/PageLayout';
-import TemplatePage from '../components/TemplatePage.tsx';
+import ClaudeCodeConfigModal from '@/components/ClaudeCodeConfigModal';
+import EmptyStateGuide from '@/components/EmptyStateGuide';
+import PageLayout from '@/components/PageLayout';
+import TemplatePage from '@/components/TemplatePage.tsx';
 import { FEATURE_FLAGS, isFeatureEnabled } from '../constants/featureFlags';
 import { useFunctionPanelData } from '../hooks/useFunctionPanelData';
 import { api, getBaseUrl } from '../services/api';

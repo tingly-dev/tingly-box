@@ -1,8 +1,8 @@
 import { Dialog, DialogContent, DialogTitle } from '@mui/material';
 import React, { useCallback, useRef, useState } from 'react';
 import type { Provider } from '../types/provider';
-import ModelSelectDialog, { type ProviderSelectTabOption } from '../components/ModelSelectDialog.tsx';
-import type { ConfigRecord, Rule } from '../components/RoutingGraphTypes.ts';
+import ModelSelectDialog, { type ProviderSelectTabOption } from '@/components/ModelSelectDialog.tsx';
+import type { ConfigRecord, Rule } from '@/components/RoutingGraphTypes.ts';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface ModelSelectOptions {

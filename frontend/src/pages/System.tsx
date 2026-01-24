@@ -2,10 +2,10 @@ import { Cancel, CheckCircle, Key, PlayArrow, Refresh as RefreshIcon, RestartAlt
 import { Button, IconButton, Stack, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import CardGrid from '../components/CardGrid';
-import { PageLayout } from '../components/PageLayout';
-import UnifiedCard from '../components/UnifiedCard';
-import RequestLog from '../components/RequestLog';
+import CardGrid from '@/components/CardGrid';
+import { PageLayout } from '@/components/PageLayout';
+import UnifiedCard from '@/components/UnifiedCard';
+import RequestLog from '@/components/RequestLog';
 import { api, getBaseUrl } from '../services/api';
 
 const System = () => {

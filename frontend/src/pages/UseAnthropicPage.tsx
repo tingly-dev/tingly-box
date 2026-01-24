@@ -6,11 +6,11 @@ import { Box, Button, IconButton, Stack, Tooltip } from '@mui/material';
 import React, { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
-import { ApiConfigRow } from '../components/ApiConfigRow';
-import { BaseUrlRow } from '../components/BaseUrlRow';
-import EmptyStateGuide from '../components/EmptyStateGuide';
-import PageLayout from '../components/PageLayout';
-import TemplatePage from '../components/TemplatePage.tsx';
+import { ApiConfigRow } from '@/components/ApiConfigRow';
+import { BaseUrlRow } from '@/components/BaseUrlRow';
+import EmptyStateGuide from '@/components/EmptyStateGuide';
+import PageLayout from '@/components/PageLayout';
+import TemplatePage from '@/components/TemplatePage.tsx';
 import { useFunctionPanelData } from '../hooks/useFunctionPanelData';
 import { api, getBaseUrl } from '../services/api';
 

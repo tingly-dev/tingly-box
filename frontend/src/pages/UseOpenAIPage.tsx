@@ -3,15 +3,15 @@ import { Add as AddIcon, ContentCopy as CopyIcon, Key as KeyIcon } from '@mui/ic
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import { Box, Button, IconButton, Stack, Tooltip } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { BaseUrlRow } from '../components/BaseUrlRow';
-import TemplatePage from '../components/TemplatePage.tsx';
-import PageLayout from '../components/PageLayout';
+import { BaseUrlRow } from '@/components/BaseUrlRow';
+import TemplatePage from '@/components/TemplatePage.tsx';
+import PageLayout from '@/components/PageLayout';
 import { api, getBaseUrl } from '../services/api';
 import { ApiConfigRow } from "@/components/ApiConfigRow";
 import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import { useFunctionPanelData } from '../hooks/useFunctionPanelData';
-import EmptyStateGuide from '../components/EmptyStateGuide';
+import EmptyStateGuide from '@/components/EmptyStateGuide';
 import { v4 as uuidv4 } from 'uuid';
 
 const ruleId = "built-in-openai";
