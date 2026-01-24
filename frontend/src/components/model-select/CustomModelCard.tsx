@@ -3,7 +3,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import { Box, Card, CircularProgress, IconButton, Tooltip, Typography } from '@mui/material';
 import React from 'react';
-import type { Provider } from '../types/provider';
+import type { Provider } from '../../types/provider.ts';
 
 interface CustomModelCardProps {
     model: string;
