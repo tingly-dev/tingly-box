@@ -1,7 +1,7 @@
 import { Dialog, DialogContent, DialogTitle } from '@mui/material';
 import React, { useCallback, useRef, useState } from 'react';
 import type { Provider } from '../types/provider';
-import ModelSelectTab, { type ProviderSelectTabOption } from '../components/ModelSelectTab';
+import ModelSelectDialog, { type ProviderSelectTabOption } from '../components/ModelSelectDialog.tsx';
 import type { ConfigRecord, Rule } from '../components/RoutingGraphTypes.ts';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -285,7 +285,7 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
                 {mode === 'add' ? 'Add API Key' : 'Choose Model'}
             </DialogTitle>
             <DialogContent>
-                <ModelSelectTab
+                <ModelSelectDialog
                     key={dialogKey}
                     providers={providers}
                     selectedProvider={getSelectedProvider()}

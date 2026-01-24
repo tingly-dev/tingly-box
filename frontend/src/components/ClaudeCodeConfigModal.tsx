@@ -1,4 +1,4 @@
-import { Box, Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, Checkbox, FormControlLabel, Tab, Tabs } from '@mui/material';
+import { Box, Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, Tab, Tabs } from '@mui/material';
 import React from 'react';
 import CodeBlock from './CodeBlock';
 import { useTranslation } from 'react-i18next';
@@ -8,8 +8,6 @@ type ConfigMode = 'unified' | 'separate' | 'smart';
 interface ClaudeCodeConfigModalProps {
     open: boolean;
     onClose: () => void;
-    dontRemindAgain: boolean;
-    onDontRemindChange: (checked: boolean) => void;
     configMode: ConfigMode;
     // Settings.json scripts
     generateSettingsConfig: () => string;
@@ -27,8 +25,6 @@ type ScriptTab = 'json' | 'windows' | 'unix';
 const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
     open,
     onClose,
-    dontRemindAgain,
-    onDontRemindChange,
     configMode,
     generateSettingsConfig,
     generateSettingsScriptWindows,
@@ -191,30 +187,10 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
                 </Box>
             </DialogContent>
 
-            <DialogActions sx={{ px: 3, pb: 2, pt: 1, flexDirection: 'column', alignItems: 'stretch' }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    {/*<FormControlLabel*/}
-                    {/*    control={*/}
-                    {/*        <Checkbox*/}
-                    {/*            checked={dontRemindAgain}*/}
-                    {/*            onChange={(e) => onDontRemindChange(e.target.checked)}*/}
-                    {/*            size="small"*/}
-                    {/*        />*/}
-                    {/*    }*/}
-                    {/*    label={t('claudeCode.modal.dontRemindAgain')}*/}
-                    {/*    sx={{ mr: 0 }}*/}
-                    {/*/>*/}
-                    <FormControlLabel
-                        control={
-                            <></>
-                        }
-                        label={""}
-                        sx={{ mr: 0 }}
-                    />
-                    <Button onClick={onClose} variant="contained" color="primary">
-                        {t('common.confirm')}
-                    </Button>
-                </Box>
+            <DialogActions sx={{ px: 3, pb: 2, pt: 1, justifyContent: 'flex-end' }}>
+                <Button onClick={onClose} variant="contained" color="primary">
+                    {t('common.confirm')}
+                </Button>
             </DialogActions>
         </Dialog>
     );

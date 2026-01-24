@@ -1,4 +1,3 @@
-import {Anthropic, OpenAI} from '@lobehub/icons';
 import {Box, useTheme, alpha} from '@mui/material';
 import type {SxProps, Theme} from '@mui/material';
 
@@ -70,11 +69,7 @@ export const ApiStyleBadge = ({apiStyle, sx = {}, compact = false}: ApiStyleBadg
                 ...sx,
             }}
         >
-            {/*<Icon size={10} />*/}
-            {
-                compact ? (<span>{label}</span>) : (<span>{label} Style</span>)
-            }
-
+            {compact ? (<span>{label}</span>) : (<span>{label} Style</span>)}
         </Box>
     );
 };

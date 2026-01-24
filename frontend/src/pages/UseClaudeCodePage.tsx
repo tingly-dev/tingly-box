@@ -53,10 +53,6 @@ const UseClaudeCodePage: React.FC = () => {
 
     // Claude Code config modal state
     const [configModalOpen, setConfigModalOpen] = React.useState(false);
-    const [dontRemindAgain, setDontRemindAgain] = React.useState(false);
-
-    // localStorage key for "do not remind again"
-    const CLAUDE_CODE_DONT_REMIND_KEY = 'claudeCode_dontRemindAgain';
 
     const handleAddApiKeyClick = () => {
         navigate('/api-keys?dialog=add');
@@ -108,10 +104,6 @@ const UseClaudeCodePage: React.FC = () => {
 
             if (result.success) {
                 setConfigMode(pendingMode);
-
-                // Reset "do not remind again" and show modal with new configuration
-                localStorage.setItem(CLAUDE_CODE_DONT_REMIND_KEY, 'false');
-                setDontRemindAgain(false);
                 setConfigModalOpen(true);
 
                 showNotification(
@@ -135,17 +127,8 @@ const UseClaudeCodePage: React.FC = () => {
         setPendingMode(null);
     };
 
-    // Handle "do not remind again" checkbox change
-    const handleDontRemindChange = (checked: boolean) => {
-        setDontRemindAgain(checked);
-        localStorage.setItem(CLAUDE_CODE_DONT_REMIND_KEY, String(checked));
-    };
-
     // Show config guide modal (manual trigger) - user wants to be reminded again
     const handleShowConfigGuide = () => {
-        // Reset "do not remind again" since user is manually requesting the guide
-        setDontRemindAgain(false);
-        localStorage.setItem(CLAUDE_CODE_DONT_REMIND_KEY, 'false');
         setConfigModalOpen(true);
     };
 
@@ -557,8 +540,6 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                         <ClaudeCodeConfigModal
                             open={configModalOpen}
                             onClose={() => setConfigModalOpen(false)}
-                            dontRemindAgain={dontRemindAgain}
-                            onDontRemindChange={handleDontRemindChange}
                             configMode={configMode}
                             generateSettingsConfig={generateSettingsConfig}
                             generateSettingsScriptWindows={generateSettingsScriptWindows}

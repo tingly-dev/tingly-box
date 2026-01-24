@@ -11,7 +11,7 @@ import {
 } from '@mui/material';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../services/api';
-import ModelSelectTab from './ModelSelectTab';
+import ModelSelectDialog from './ModelSelectDialog.tsx';
 import ProbeModal from '@/components/ProbeModal';
 import type { Provider } from '../types/provider';
 import type { ProbeResponse } from '../client';
@@ -193,7 +193,7 @@ const ModelListDialog = ({ open, onClose, provider }: ModelListDialogProps) => {
                 </DialogTitle>
                 <DialogContent sx={{ p: 0 }}>
                     <Box sx={{ height: '70vh', overflow: 'auto', p: 2 }}>
-                        <ModelSelectTab
+                        <ModelSelectDialog
                             providers={provider ? [provider] : []}
                             selectedProvider={provider?.uuid}
                             selectedModel={selectedModel}

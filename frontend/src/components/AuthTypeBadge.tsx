@@ -10,48 +10,23 @@ interface AuthTypeBadgeProps {
 export const AuthTypeBadge = ({ authType, sx = {} }: AuthTypeBadgeProps) => {
     const theme = useTheme();
 
-    // Define styles for each auth type
-    const getBadgeStyles = () => {
+    // Define label for each auth type
+    const getLabel = () => {
         switch (authType) {
             case 'oauth':
-                return {
-                    backgroundColor: alpha(theme.palette.success.main, 0.1),
-                    color: theme.palette.success.main,
-                    borderColor: alpha(theme.palette.success.main, 0.3),
-                    label: 'OAuth',
-                };
+                return 'OAuth';
             case 'api_key':
-                return {
-                    backgroundColor: alpha(theme.palette.success.main, 0.1),
-                    color: theme.palette.success.main,
-                    borderColor: alpha(theme.palette.success.main, 0.3),
-                    label: 'API Key',
-                };
+                return 'API Key';
             case 'bearer_token':
-                return {
-                    backgroundColor: alpha(theme.palette.success.main, 0.1),
-                    color: theme.palette.success.main,
-                    borderColor: alpha(theme.palette.success.main, 0.3),
-                    label: 'Bearer',
-                };
+                return 'Bearer';
             case 'basic_auth':
-                return {
-                    backgroundColor: alpha(theme.palette.success.main, 0.1),
-                    color: theme.palette.success.main,
-                    borderColor: alpha(theme.palette.success.main, 0.3),
-                    label: 'Basic',
-                };
+                return 'Basic';
             default:
-                return {
-                    backgroundColor: alpha(theme.palette.success.main, 0.1),
-                    color: theme.palette.success.main,
-                    borderColor: alpha(theme.palette.success.main, 0.3),
-                    label: authType || 'Unknown',
-                };
+                return authType || 'Unknown';
         }
     };
 
-    const badgeStyles = getBadgeStyles();
+    const label = getLabel();
 
     return (
         <Box
@@ -61,26 +36,21 @@ export const AuthTypeBadge = ({ authType, sx = {} }: AuthTypeBadgeProps) => {
                 justifyContent: 'center',
                 px: 1,
                 py: 0.5,
-                // borderRadius: theme.shape.borderRadius,
                 fontSize: '10px',
                 fontWeight: 600,
                 textTransform: 'uppercase',
                 height: '20px',
                 minWidth: '60px',
-                // border: `1px solid ${badgeStyles.borderColor}`,
-                // backgroundColor: badgeStyles.backgroundColor,
-                // color: badgeStyles.color,
                 transition: theme.transitions.create(['background-color', 'color', 'border-color'], {
                     duration: theme.transitions.duration.shorter,
                 }),
                 '&:hover': {
-                    backgroundColor: alpha(badgeStyles.color, 0.15),
-                    borderColor: alpha(badgeStyles.color, 0.5),
+                    backgroundColor: alpha(theme.palette.success.main, 0.15),
                 },
                 ...sx,
             }}
         >
-            {badgeStyles.label}
+            {label}
         </Box>
     );
 };
