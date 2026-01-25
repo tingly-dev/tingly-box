@@ -56,10 +56,12 @@ const AppDialogs = () => {
             console.log('[AppDialogs] Showing disconnect alert');
             setShowDisconnectAlert(true);
             disconnectAlertShown.current = true;
-        } else if (isHealthy) {
+        } else if (isHealthy && showDisconnectAlert) {
+            console.log('[AppDialogs] Connection restored, closing disconnect alert');
+            setShowDisconnectAlert(false);
             disconnectAlertShown.current = false;
         }
-    }, [isHealthy, checking]);
+    }, [isHealthy, checking, showDisconnectAlert]);
 
     // Show update alert when showNotification changes from false to true
     // OR when updateTrigger changes (manual refresh)
