@@ -166,7 +166,8 @@ func resolveStartOptions(cmd *cobra.Command, flags startFlags, appConfig *config
 }
 
 // doStopServer stops the running server
-func doStopServer(appConfig *config.AppConfig) error {
+func doStopServer(appManager *AppManager) error {
+	appConfig := appManager.AppConfig()
 	fileLock := lock.NewFileLock(appConfig.ConfigDir())
 
 	if !fileLock.IsLocked() {
@@ -205,7 +206,9 @@ type startServerOptions struct {
 }
 
 // startServer handles the server starting logic
-func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
+func startServer(appManager *AppManager, opts startServerOptions) error {
+	appConfig := appManager.AppConfig()
+
 	// Set logrus level based on debug flag
 	if opts.EnableDebug {
 		appConfig.SetDebug(true)
@@ -380,7 +383,7 @@ func startServer(appConfig *config.AppConfig, opts startServerOptions) error {
 }
 
 // StartCommand represents the start server command
-func StartCommand(appConfig *config.AppConfig) *cobra.Command {
+func StartCommand(appManager *AppManager) *cobra.Command {
 	var flags startFlags
 
 	cmd := &cobra.Command{
@@ -389,8 +392,8 @@ func StartCommand(appConfig *config.AppConfig) *cobra.Command {
 		Long: `Start the Tingly Box HTTP server that provides the unified API endpoint.
 The server will handle request routing to configured AI providers.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts := resolveStartOptions(cmd, flags, appConfig)
-			return startServer(appConfig, opts)
+			opts := resolveStartOptions(cmd, flags, appManager.AppConfig())
+			return startServer(appManager, opts)
 		},
 	}
 
@@ -399,14 +402,14 @@ The server will handle request routing to configured AI providers.`,
 }
 
 // StopCommand represents the stop server command
-func StopCommand(appConfig *config.AppConfig) *cobra.Command {
+func StopCommand(appManager *AppManager) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "stop",
 		Short: "Stop the Tingly Box server",
 		Long: `Stop the running Tingly Box HTTP server gracefully.
 All ongoing requests will be completed before shutdown.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return doStopServer(appConfig)
+			return doStopServer(appManager)
 		},
 	}
 
@@ -414,14 +417,15 @@ All ongoing requests will be completed before shutdown.`,
 }
 
 // StatusCommand represents the status command
-func StatusCommand(appConfig *config.AppConfig) *cobra.Command {
+func StatusCommand(appManager *AppManager) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Check server status and configuration",
 		Long: `Display the current status of the Tingly Box server and
 show configuration information including number of providers and server port.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			providers := appConfig.ListProviders()
+			providers := appManager.ListProviders()
+			appConfig := appManager.AppConfig()
 			fileLock := lock.NewFileLock(appConfig.ConfigDir())
 			serverRunning := fileLock.IsLocked()
 			globalConfig := appConfig.GetGlobalConfig()
@@ -485,7 +489,7 @@ show configuration information including number of providers and server port.`,
 }
 
 // RestartCommand represents the restart server command
-func RestartCommand(appConfig *config.AppConfig) *cobra.Command {
+func RestartCommand(appManager *AppManager) *cobra.Command {
 	var flags startFlags
 
 	cmd := &cobra.Command{
@@ -495,8 +499,9 @@ func RestartCommand(appConfig *config.AppConfig) *cobra.Command {
 This command will stop the current server (if running) and start a new instance.
 The restart is graceful - ongoing requests will be completed before shutdown.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts := resolveStartOptions(cmd, flags, appConfig)
+			opts := resolveStartOptions(cmd, flags, appManager.AppConfig())
 
+			appConfig := appManager.AppConfig()
 			fileLock := lock.NewFileLock(appConfig.ConfigDir())
 			wasRunning := fileLock.IsLocked()
 
@@ -514,7 +519,7 @@ The restart is graceful - ongoing requests will be completed before shutdown.`,
 			}
 
 			// Start new server
-			return startServer(appConfig, opts)
+			return startServer(appManager, opts)
 		},
 	}
 

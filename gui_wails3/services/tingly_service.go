@@ -8,16 +8,17 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/wailsapp/wails/v3/pkg/application"
 
 	"github.com/tingly-dev/tingly-box/internal/command"
-	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/server"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // TinglyService manages the web UI and HTTP server functionality
 type TinglyService struct {
-	appConfig     *config.AppConfig
+	appManager    *command.AppManager
 	serverManager *command.ServerManager
 	httpServer    *server.Server
 	shutdownChan  chan struct{}
@@ -27,15 +28,19 @@ type TinglyService struct {
 
 // NewTinglyService creates a new UI service instance
 func NewTinglyService(configDir string, port int, debug bool) (*TinglyService, error) {
-	appConfig, err := config.NewAppConfig(config.WithConfigDir(configDir))
+	// Create AppManager
+	appManager, err := command.NewAppManager(configDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create app config: %w", err)
+		return nil, fmt.Errorf("failed to create app manager: %w", err)
 	}
 
-	appConfig.SetServerPort(port)
+	// Set port
+	if err := appManager.SetServerPort(port); err != nil {
+		return nil, fmt.Errorf("failed to set server port: %w", err)
+	}
 
 	serverManager := command.NewServerManager(
-		appConfig,
+		appManager.AppConfig(),
 		command.WithUI(true),
 		command.WithAdaptor(true),
 		command.WithDebug(debug),
@@ -43,13 +48,13 @@ func NewTinglyService(configDir string, port int, debug bool) (*TinglyService, e
 	)
 
 	res := &TinglyService{
-		appConfig:     appConfig,
+		appManager:    appManager,
 		serverManager: serverManager,
 		shutdownChan:  make(chan struct{}),
 		isRunning:     false,
 	}
 
-	log.Printf("config file: %s\n", appConfig.GetGlobalConfig().ConfigFile)
+	log.Printf("config file: %s\n", appManager.AppConfig().GetGlobalConfig().ConfigFile)
 
 	return res, nil
 }
@@ -121,12 +126,58 @@ func (s *TinglyService) ServiceShutdown(ctx context.Context) error {
 	return nil
 }
 
+// ============
+// Configuration Accessors
+// ============
+
 func (s *TinglyService) GetUserAuthToken() string {
 	fmt.Println("Getting auth token")
-	return s.appConfig.GetGlobalConfig().GetUserToken()
+	return s.appManager.GetUserToken()
 }
 
 func (s *TinglyService) GetPort() int {
 	fmt.Println("Getting port")
-	return s.appConfig.GetGlobalConfig().GetServerPort()
+	return s.appManager.GetServerPort()
+}
+
+// ============
+// Provider Management (exposed to GUI)
+// ============
+
+// ListProviders returns all configured providers
+func (s *TinglyService) ListProviders() []*typ.Provider {
+	return s.appManager.ListProviders()
+}
+
+// AddProvider adds a new AI provider
+func (s *TinglyService) AddProvider(name, apiBase, token, apiStyle string) error {
+	return s.appManager.AddProvider(name, apiBase, token, protocol.APIStyle(apiStyle))
+}
+
+// DeleteProvider removes an AI provider by name
+func (s *TinglyService) DeleteProvider(name string) error {
+	return s.appManager.DeleteProvider(name)
+}
+
+// GetProvider returns a provider by name
+func (s *TinglyService) GetProvider(name string) (*typ.Provider, error) {
+	return s.appManager.GetProvider(name)
+}
+
+// ============
+// Rule Management (exposed to GUI)
+// ============
+
+// ListRules returns all configured rules
+func (s *TinglyService) ListRules() []typ.Rule {
+	return s.appManager.ListRules()
+}
+
+// ImportRule imports a rule from JSONL format
+func (s *TinglyService) ImportRule(data string) (*command.ImportResult, error) {
+	return s.appManager.ImportRuleFromJSONL(data, command.ImportOptions{
+		OnProviderConflict: "use",
+		OnRuleConflict:     "skip",
+		Quiet:              true,
+	})
 }
