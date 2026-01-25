@@ -1,16 +1,15 @@
 import CssBaseline from '@mui/material/CssBaseline';
 import { ThemeProvider } from '@mui/material/styles';
-import { CircularProgress, Box, Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, IconButton, Stack } from '@mui/material';
+import { CircularProgress, Box, Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, IconButton } from '@mui/material';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider } from './contexts/AuthContext';
 import { VersionProvider, useVersion } from './contexts/VersionContext';
 import { HealthProvider, useHealth } from './contexts/HealthContext';
-import { UpdateNotification } from './components/UpdateNotification';
 import Layout from './layout/Layout';
 import theme from './theme';
-import { CloudUpload, Refresh, Error as ErrorIcon, Close, AppRegistration as NPM, GitHub, ShoppingCart } from '@mui/icons-material';
+import { CloudUpload, Refresh, Error as ErrorIcon, AppRegistration as NPM, GitHub } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 
 // Lazy load pages for code splitting
@@ -43,7 +42,7 @@ const PageLoader = () => (
 const AppDialogs = () => {
     const { t } = useTranslation();
     const { isHealthy, checking, checkHealth } = useHealth();
-    const { showNotification, updateTrigger, checking: checkingVersion, checkForUpdates, currentVersion, latestVersion } = useVersion();
+    const { showNotification, updateTrigger, currentVersion, latestVersion } = useVersion();
     const [showDisconnectAlert, setShowDisconnectAlert] = useState(false);
     const [showUpdateAlert, setShowUpdateAlert] = useState(false);
     const disconnectAlertShown = useRef(false);
@@ -85,7 +84,7 @@ const AppDialogs = () => {
             setShowUpdateAlert(true);
             lastUpdateTrigger.current = updateTrigger;
         }
-    }, [showNotification, updateTrigger]);
+    }, [showNotification, updateTrigger, currentVersion, latestVersion]);
 
     // Listen for test events
     useEffect(() => {
@@ -206,7 +205,7 @@ const AppDialogs = () => {
                     >
                         GitHub
                     </Button>
-                     <Button onClick={() => setShowUpdateAlert(false)}>
+                    <Button onClick={() => setShowUpdateAlert(false)}>
                         {t('update.later', { defaultValue: 'Later' })}
                     </Button>
                 </DialogActions>
@@ -239,7 +238,6 @@ function App() {
                     <VersionProvider>
                         <AuthProvider>
                             <Suspense fallback={<PageLoader />}>
-                                <UpdateNotification />
                                 <Routes>
                                     <Route path="/login" element={<Login />} />
                                     <Route
