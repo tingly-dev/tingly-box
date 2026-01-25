@@ -110,6 +110,29 @@
         }
       }
     },
+    "/api/v1/info/version/check": {
+      "get": {
+        "tags": [
+          "info"
+        ],
+        "summary": "Check if a newer version is available on GitHub",
+        "description": "Check if a newer version is available on GitHub",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/LatestVersionResponse"
+            }
+          }
+        }
+      }
+    },
     "/api/v1/log": {
       "get": {
         "tags": [
@@ -407,6 +430,40 @@
             "description": "Successful response",
             "schema": {
               "$ref": "#/definitions/ProbeResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/probe/model/capability": {
+      "post": {
+        "tags": [
+          "testing"
+        ],
+        "summary": "Probe model endpoints (chat and responses) concurrently",
+        "description": "Probe model endpoints (chat and responses) concurrently",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "request",
+            "in": "body",
+            "description": "Request body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ModelProbeRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ModelProbeResponse"
             }
           }
         }
@@ -1910,6 +1967,17 @@
             "$ref": "#/definitions/Service"
           }
         },
+        "smart_enabled": {
+          "type": "boolean",
+          "description": "Field smart_enabled"
+        },
+        "smart_routing": {
+          "type": "array",
+          "description": "Field smart_routing",
+          "items": {
+            "$ref": "#/definitions/SmartRouting"
+          }
+        },
         "uuid": {
           "type": "string",
           "description": "Field uuid"
@@ -1924,7 +1992,8 @@
         "services",
         "current_service_index",
         "lb_tactic",
-        "active"
+        "active",
+        "smart_enabled"
       ]
     },
     "DeleteOldRecordsRequest": {
@@ -2006,6 +2075,36 @@
         "message"
       ]
     },
+    "EndpointProbeStatus": {
+      "type": "object",
+      "properties": {
+        "available": {
+          "type": "boolean",
+          "description": "Field available",
+          "example": true
+        },
+        "error_message": {
+          "type": "string",
+          "description": "Field error_message"
+        },
+        "last_checked": {
+          "type": "string",
+          "description": "Field last_checked",
+          "example": "2026-01-23T10:30:00Z"
+        },
+        "latency_ms": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field latency_ms",
+          "example": 234
+        }
+      },
+      "required": [
+        "available",
+        "latency_ms",
+        "last_checked"
+      ]
+    },
     "ErrorDetail": {
       "type": "object",
       "properties": {
@@ -2083,6 +2182,57 @@
         "data"
       ]
     },
+    "LatestVersionInfo": {
+      "type": "object",
+      "properties": {
+        "current_version": {
+          "type": "string",
+          "description": "Field current_version",
+          "example": "0.260124.1430"
+        },
+        "has_update": {
+          "type": "boolean",
+          "description": "Field has_update",
+          "example": true
+        },
+        "latest_version": {
+          "type": "string",
+          "description": "Field latest_version",
+          "example": "0.260130.1200"
+        },
+        "release_url": {
+          "type": "string",
+          "description": "Field release_url",
+          "example": "https://github.com/tingly-dev/tingly-box/releases/tag/v0.260130.1200"
+        }
+      },
+      "required": [
+        "current_version",
+        "latest_version",
+        "has_update",
+        "release_url"
+      ]
+    },
+    "LatestVersionResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "description": "Field data",
+          "$ref": "#/definitions/LatestVersionInfo"
+        },
+        "error": {
+          "type": "string",
+          "description": "Field error"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success"
+        }
+      },
+      "required": [
+        "success"
+      ]
+    },
     "LogEntry": {
       "type": "object",
       "properties": {
@@ -2139,6 +2289,93 @@
       "required": [
         "total",
         "logs"
+      ]
+    },
+    "ModelProbeData": {
+      "type": "object",
+      "properties": {
+        "chat_endpoint": {
+          "description": "Field chat_endpoint",
+          "$ref": "#/definitions/EndpointProbeStatus"
+        },
+        "last_updated": {
+          "type": "string",
+          "description": "Field last_updated",
+          "example": "2026-01-23T10:30:00Z"
+        },
+        "model_id": {
+          "type": "string",
+          "description": "Field model_id",
+          "example": "gpt-4"
+        },
+        "preferred_endpoint": {
+          "type": "string",
+          "description": "Field preferred_endpoint",
+          "example": "responses"
+        },
+        "provider_uuid": {
+          "type": "string",
+          "description": "Field provider_uuid",
+          "example": "uuid-123"
+        },
+        "responses_endpoint": {
+          "description": "Field responses_endpoint",
+          "$ref": "#/definitions/EndpointProbeStatus"
+        }
+      },
+      "required": [
+        "provider_uuid",
+        "model_id",
+        "chat_endpoint",
+        "responses_endpoint",
+        "preferred_endpoint",
+        "last_updated"
+      ]
+    },
+    "ModelProbeRequest": {
+      "type": "object",
+      "properties": {
+        "force_refresh": {
+          "type": "boolean",
+          "description": "Force new probe even if cached",
+          "example": false
+        },
+        "model_id": {
+          "type": "string",
+          "description": "Model ID to probe",
+          "example": "gpt-4"
+        },
+        "provider_uuid": {
+          "type": "string",
+          "description": "Provider UUID to probe",
+          "example": "uuid-123"
+        }
+      },
+      "required": [
+        "provider_uuid",
+        "model_id",
+        "force_refresh"
+      ]
+    },
+    "ModelProbeResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "description": "Field data",
+          "$ref": "#/definitions/ModelProbeData"
+        },
+        "error": {
+          "description": "Field error",
+          "$ref": "#/definitions/ErrorDetail"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success"
       ]
     },
     "OAuthAuthorizeRequest": {
@@ -3069,6 +3306,17 @@
             "$ref": "#/definitions/Service"
           }
         },
+        "smart_enabled": {
+          "type": "boolean",
+          "description": "Field smart_enabled"
+        },
+        "smart_routing": {
+          "type": "array",
+          "description": "Field smart_routing",
+          "items": {
+            "$ref": "#/definitions/SmartRouting"
+          }
+        },
         "uuid": {
           "type": "string",
           "description": "Field uuid"
@@ -3083,7 +3331,8 @@
         "services",
         "current_service_index",
         "lb_tactic",
-        "active"
+        "active",
+        "smart_enabled"
       ]
     },
     "RuleResponse": {
@@ -3402,6 +3651,77 @@
         "window_input_tokens",
         "window_output_tokens",
         "time_window"
+      ]
+    },
+    "SmartOp": {
+      "type": "object",
+      "properties": {
+        "meta": {
+          "description": "Field meta",
+          "$ref": "#/definitions/SmartOpMeta"
+        },
+        "operation": {
+          "type": "string",
+          "description": "Field operation"
+        },
+        "position": {
+          "type": "string",
+          "description": "Field position"
+        },
+        "uuid": {
+          "type": "string",
+          "description": "Field uuid"
+        },
+        "value": {
+          "type": "string",
+          "description": "Field value"
+        }
+      },
+      "required": [
+        "uuid",
+        "position",
+        "operation"
+      ]
+    },
+    "SmartOpMeta": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "Field description"
+        },
+        "type": {
+          "type": "string",
+          "description": "Field type"
+        }
+      }
+    },
+    "SmartRouting": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "Field description"
+        },
+        "ops": {
+          "type": "array",
+          "description": "Field ops",
+          "items": {
+            "$ref": "#/definitions/SmartOp"
+          }
+        },
+        "services": {
+          "type": "array",
+          "description": "Field services",
+          "items": {
+            "$ref": "#/definitions/Service"
+          }
+        }
+      },
+      "required": [
+        "description",
+        "ops",
+        "services"
       ]
     },
     "StatusResponse": {
@@ -3772,6 +4092,17 @@
             "$ref": "#/definitions/Service"
           }
         },
+        "smart_enabled": {
+          "type": "boolean",
+          "description": "Field smart_enabled"
+        },
+        "smart_routing": {
+          "type": "array",
+          "description": "Field smart_routing",
+          "items": {
+            "$ref": "#/definitions/SmartRouting"
+          }
+        },
         "uuid": {
           "type": "string",
           "description": "Field uuid"
@@ -3786,7 +4117,8 @@
         "services",
         "current_service_index",
         "lb_tactic",
-        "active"
+        "active",
+        "smart_enabled"
       ]
     },
     "UpdateRuleResponse": {
@@ -3804,6 +4136,10 @@
               "type": "string",
               "description": "Field default_model"
             },
+            "description": {
+              "type": "string",
+              "description": "Field description"
+            },
             "provider": {
               "type": "string",
               "description": "Field provider"
@@ -3816,6 +4152,17 @@
               "type": "string",
               "description": "Field response_model"
             },
+            "smart_enabled": {
+              "type": "boolean",
+              "description": "Field smart_enabled"
+            },
+            "smart_routing": {
+              "type": "array",
+              "description": "Field smart_routing",
+              "items": {
+                "type": "SmartRouting"
+              }
+            },
             "uuid": {
               "type": "string",
               "description": "Field uuid"
@@ -3825,9 +4172,11 @@
             "uuid",
             "request_model",
             "response_model",
+            "description",
             "provider",
             "default_model",
-            "active"
+            "active",
+            "smart_enabled"
           ]
         },
         "message": {
@@ -4093,12 +4442,28 @@
   },
   "tags": [
     {
+      "name": "rules",
+      "description": "Operations related to rules"
+    },
+    {
+      "name": "scenarios",
+      "description": "Operations related to scenarios"
+    },
+    {
       "name": "models",
       "description": "Operations related to models"
     },
     {
       "name": "testing",
       "description": "Operations related to testing"
+    },
+    {
+      "name": "token",
+      "description": "Operations related to token"
+    },
+    {
+      "name": "providers",
+      "description": "Operations related to providers"
     },
     {
       "name": "info",
@@ -4113,14 +4478,6 @@
       "description": "Operations related to history"
     },
     {
-      "name": "token",
-      "description": "Operations related to token"
-    },
-    {
-      "name": "providers",
-      "description": "Operations related to providers"
-    },
-    {
       "name": "oauth",
       "description": "Operations related to oauth"
     },
@@ -4131,14 +4488,6 @@
     {
       "name": "logs",
       "description": "Operations related to logs"
-    },
-    {
-      "name": "rules",
-      "description": "Operations related to rules"
-    },
-    {
-      "name": "scenarios",
-      "description": "Operations related to scenarios"
     }
   ]
 }

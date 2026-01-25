@@ -4,6 +4,7 @@ import type { Provider } from '../types/provider';
 import ModelSelectDialog, { type ProviderSelectTabOption } from '@/components/ModelSelectDialog.tsx';
 import type { ConfigRecord, Rule } from '@/components/RoutingGraphTypes.ts';
 import { v4 as uuidv4 } from 'uuid';
+import api from "@/services/api.ts";
 
 export interface ModelSelectOptions {
     ruleUuid: string;
@@ -268,7 +269,7 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
     }, []);
 
     // Dialog component
-    const ModelSelectDialog: React.FC<ModelSelectDialogProps> = ({ open: dialogOpen, onClose }) => (
+    const WrappedModelSelectDialog: React.FC<ModelSelectDialogProps> = ({ open: dialogOpen, onClose }) => (
         <Dialog
             open={dialogOpen}
             onClose={() => {
@@ -299,7 +300,7 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
     return {
         openModelSelect,
         closeModelSelect,
-        ModelSelectDialog,
+        ModelSelectDialog: WrappedModelSelectDialog,
         isOpen: open,
     };
 };

@@ -7,6 +7,11 @@ import {
     ExpandLess,
     ExpandMore,
     BarChart as BarChartIcon,
+    CloudUpload,
+    Refresh,
+    CheckCircle,
+    Error as ErrorIcon,
+    Error as VersionIcon,
 } from '@mui/icons-material';
 import LockIcon from '@mui/icons-material/Lock';
 import {
@@ -20,14 +25,15 @@ import {
     ListItemIcon,
     ListItemText,
     Typography,
+    CircularProgress,
 } from '@mui/material';
 import type { ReactNode } from 'react';
-import React from 'react';
-import { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import api from '../services/api';
+import { useHealth } from '../contexts/HealthContext';
+import { useVersion as useAppVersion } from '../contexts/VersionContext';
 import VerifiedIcon from '@mui/icons-material/Verified';
 import OpenAI from '@lobehub/icons/es/OpenAI';
 import Anthropic from '@lobehub/icons/es/Anthropic';
@@ -58,19 +64,12 @@ const Layout = ({ children }: LayoutProps) => {
     const location = useLocation();
     const navigate = useNavigate();
     const { logout } = useAuth();
+    const { isHealthy, checking, checkHealth } = useHealth();
+    const { hasUpdate, checking: checkingVersion, checkForUpdates, currentVersion, latestVersion } = useAppVersion();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-    const [version, setVersion] = useState<string>('Loading...');
     const [homeMenuOpen, setHomeMenuOpen] = useState(true);
     const [credentialMenuOpen, setCredentialMenuOpen] = useState(true);
-
-    useEffect(() => {
-        const fetchVersion = async () => {
-            const v = await api.getVersion();
-            setVersion(v);
-        };
-        fetchVersion();
-    }, []);
 
     const handleDrawerToggle = () => {
         setMobileOpen(!mobileOpen);
@@ -88,6 +87,10 @@ const Layout = ({ children }: LayoutProps) => {
         logout();
         navigate('/login');
         handleMenuClose();
+    };
+
+    const handleCheckUpdates = () => {
+        checkForUpdates(true);
     };
 
     const isActive = (path: string) => {
@@ -288,22 +291,75 @@ const Layout = ({ children }: LayoutProps) => {
                 })}
             </List>
 
-            {/* Version Info */}
-            <Typography
-                variant="body2"
+            {/* Status Section - Health & Version */}
+            <Box
                 sx={{
-                    color: 'text.secondary',
-                    fontSize: '0.75rem',
-                    textAlign: 'center',
-                    py: 1,
+                    p: 2,
                     borderTop: '1px solid',
+                    borderBottom: '1px solid',
                     borderColor: 'divider',
-                    mt: 1,
-                    fontStyle: 'italic',
                 }}
             >
-                {t('layout.version', { version })}
-            </Typography>
+                {/* Connection Status */}
+                <Box sx={{ mb: 2 }}>
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            mb: 1,
+                        }}
+                    >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            {checking ? (
+                                <CircularProgress size={14} thickness={2} />
+                            ) : isHealthy ? (
+                                <CheckCircle color="success" sx={{ fontSize: 16 }} />
+                            ) : (
+                                <ErrorIcon color="error" sx={{ fontSize: 16 }} />
+                            )}
+                            <Typography variant="body2" color="text.secondary">
+                                Server: <span/>
+                                {checking ? t('health.checking') : isHealthy ? t('health.connected') : t('health.disconnected')}
+                            </Typography>
+                        </Box>
+                        <IconButton size="small" onClick={checkHealth} disabled={checking}>
+                            <Refresh sx={{ fontSize: 14 }} />
+                        </IconButton>
+                    </Box>
+                </Box>
+
+                {/* Version Status */}
+                <Box>
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                        }}
+                    >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            {hasUpdate? (
+                                <CloudUpload color="info" sx={{ fontSize: 14 }} />
+                            ): <CheckCircle color="success" sx={{ fontSize: 14 }} />}
+                            <Typography variant="body2" color="text.secondary">
+                                Version: <span/>
+                                {hasUpdate
+                                    ? t('update.versionAvailable', { latest: latestVersion, current: currentVersion })
+                                    : currentVersion
+                                }
+                            </Typography>
+                        </Box>
+                        <IconButton size="small" onClick={handleCheckUpdates} disabled={checkingVersion}>
+                            {checkingVersion ? (
+                                <CircularProgress size={14} thickness={2} />
+                            ) : (
+                                <Refresh sx={{ fontSize: 14 }} />
+                            )}
+                        </IconButton>
+                    </Box>
+                </Box>
+            </Box>
 
             {/* Bottom Section - Slogan and User */}
             <Box

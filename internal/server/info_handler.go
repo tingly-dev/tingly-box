@@ -7,6 +7,7 @@ import (
 )
 
 // GetHealthInfo handles health check requests
+// This is a lightweight health check that can be called frequently
 func (s *Server) GetHealthInfo(c *gin.Context) {
 	c.JSON(http.StatusOK, HealthInfoResponse{
 		Health:  true,
@@ -64,4 +65,47 @@ type VersionInfoResponse struct {
 
 type VersionInfo struct {
 	Version string `json:"version" example:"1.0.0"`
+}
+
+// GetLatestVersion checks GitHub releases for the latest version
+func (s *Server) GetLatestVersion(c *gin.Context) {
+	checker := newVersionChecker()
+	latestVersion, releaseURL, err := checker.CheckLatestVersion()
+	if err != nil {
+		c.JSON(http.StatusServiceUnavailable, LatestVersionResponse{
+			Success: false,
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	currentVersion := s.version
+	hasUpdate := compareVersions(latestVersion, currentVersion) > 0
+
+	c.JSON(http.StatusOK, LatestVersionResponse{
+		Success: true,
+		Data: LatestVersionInfo{
+			CurrentVersion: currentVersion,
+			LatestVersion:  latestVersion,
+			HasUpdate:      hasUpdate,
+			ReleaseURL:     releaseURL,
+			ShouldNotify:   hasUpdate,
+		},
+	})
+}
+
+// LatestVersionResponse represents the response for version check endpoint
+type LatestVersionResponse struct {
+	Success bool              `json:"success"`
+	Error   string            `json:"error,omitempty"`
+	Data    LatestVersionInfo `json:"data,omitempty"`
+}
+
+// LatestVersionInfo contains version comparison information
+type LatestVersionInfo struct {
+	CurrentVersion string `json:"current_version" example:"0.260124.1430"`
+	LatestVersion  string `json:"latest_version" example:"0.260130.1200"`
+	HasUpdate      bool   `json:"has_update" example:"true"`
+	ReleaseURL     string `json:"release_url" example:"https://github.com/tingly-dev/tingly-box/releases/tag/v0.260130.1200"`
+	ShouldNotify   bool   `json:"should_notify" example:"true"`
 }

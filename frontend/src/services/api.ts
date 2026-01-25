@@ -619,6 +619,31 @@ export const api = {
         }
     },
 
+    getLatestVersion: async (): Promise<any> => {
+        try {
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.infoApi.apiV1InfoVersionCheckGet();
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                localStorage.removeItem('user_auth_token');
+                window.location.href = '/login';
+                return { success: false, error: 'Authentication required' };
+            }
+            return { success: false, error: error.message };
+        }
+    },
+
+    healthCheck: async (): Promise<boolean> => {
+        try {
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.infoApi.apiV1InfoHealthGet();
+            return response.data.health === true;
+        } catch {
+            return false;
+        }
+    },
+
     // Model API calls (OpenAI/Anthropic compatible)
     openAIChatCompletions: (data: any): Promise<any> => fetchModelAPI('/openai/v1/chat/completions', {
         method: 'POST',
