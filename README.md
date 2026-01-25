@@ -1,26 +1,19 @@
 # Tingly Box
 
-**Tingly Box** is a high‑performance desktop LLM proxy for personal or local use. It unifies access to hundreds of models from diverse providers through a single, unified API without locking you into any one vendor.
-
-- **Credential Management**: Store and manage API keys, OAuth tokens, and other credentials in one place.  
-- **Flexible Routing & Model Switching**: Define custom routes, alias model names, and switch target models on the fly—no code changes needed.  
-- **Provider‑Agnostic Compatibility**: Seamlessly supports OpenAI, Anthropic, Google, and other API styles through a consistent interface.
-
-> Think of Tingly Box as your personal *LLM gateway*—simplifying integration, boosting flexibility, and keeping your workflows future‑proof.
+**Tingly Box is your local AI intelligence layer — not just a proxy, but an autonomous orchestrator that decides *which model to call, when to compress context, and how to route requests for maximum efficiency*.**  
 
 ![Tingly Box Web UI Demo](./docs/images/output.gif)
 
 
 ## ✨ Key Features
 
-- **Unified API** – Single OpenAI‑compatible endpoint for many providers
-- **Load Balancing** – Distribute traffic across multiple API tokens using routing tactics
-- **Auto API Translation** – Seamlessly translate between OpenAI‑ and Anthropic‑style APIs
-- **OAuth Support** – Connect providers like Claude Code without API keys, use your existing quota anywhere
-- **High Performance** – Additional latency typically **< 1ms**
-- **JWT Authentication** – Separate user tokens and model tokens
-- **Web Management UI** – Visual provider, routing, and model management
-
+- **Unified API** – One mixin endpoint to rule them all, use what you like - OpenAI / Anthropic / Google
+- **Smart Routing, Not Just Load Balancing** – Intelligently route requests across models and tokens based on cost, speed, or custom policies, not simple load balancing
+- **Smart Context Compression** – (Coming soon) Automatically distill context to its essential parts: sharper relevance, lower cost, and faster responses
+- **Auto API Translation** – Seamlessly bridge OpenAI, Anthropic, Google, and other API dialects—no code changes needed  
+- **Blazing Fast** – Adds typically **< 1ms** of overhead—so you get flexibility without latency tax  
+- **Flexible Auth** – Support for both API keys and OAuth (e.g., Claude.ai), so you can use your existing quotas anywhere  
+- **Visual Control Panel** – Intuitive UI to manage providers, routes, aliases, and models at a glance  
 
 ## 🚀 Quick Start
 
