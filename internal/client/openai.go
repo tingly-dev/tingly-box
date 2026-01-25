@@ -8,6 +8,7 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/packages/ssestream"
+	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/obs"
@@ -150,6 +151,16 @@ func (c *OpenAIClient) ChatCompletionsNew(ctx context.Context, req openai.ChatCo
 // ChatCompletionsNewStreaming creates a new streaming chat completion request
 func (c *OpenAIClient) ChatCompletionsNewStreaming(ctx context.Context, req openai.ChatCompletionNewParams) *ssestream.Stream[openai.ChatCompletionChunk] {
 	return c.client.Chat.Completions.NewStreaming(ctx, req)
+}
+
+// ResponsesNew creates a new Responses API request
+func (c *OpenAIClient) ResponsesNew(ctx context.Context, req responses.ResponseNewParams) (*responses.Response, error) {
+	return c.client.Responses.New(ctx, req)
+}
+
+// ResponsesNewStreaming creates a new streaming Responses API request
+func (c *OpenAIClient) ResponsesNewStreaming(ctx context.Context, req responses.ResponseNewParams) *ssestream.Stream[responses.ResponseStreamEventUnion] {
+	return c.client.Responses.NewStreaming(ctx, req)
 }
 
 // SetRecordSink sets the record sink for the client

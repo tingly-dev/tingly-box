@@ -558,34 +558,6 @@ func (s *Server) handleChatGPTBackendStreamingRequest(c *gin.Context, provider *
 		return
 	}
 
-	// Make HTTP request to ChatGPT backend API
-	resp, err := s.makeChatGPTBackendRequest(wrapper, provider, params, true)
-	if err != nil {
-		s.trackUsage(c, rule, provider, actualModel, responseModel, 0, 0, false, "error", "request_failed")
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Request failed: " + err.Error(),
-				Type:    "api_error",
-			},
-		})
-		return
-	}
-	defer resp.Body.Close()
-
-	// Check for error status
-	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		logrus.Errorf("[ChatGPT] API error: %s", string(respBody))
-		s.trackUsage(c, rule, provider, actualModel, responseModel, 0, 0, false, "error", "api_error")
-		c.JSON(http.StatusBadGateway, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "API error: " + string(respBody),
-				Type:    "api_error",
-			},
-		})
-		return
-	}
-
 	// Set SSE headers
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
@@ -605,8 +577,20 @@ func (s *Server) handleChatGPTBackendStreamingRequest(c *gin.Context, provider *
 		return
 	}
 
+	// Use SDK's streaming method to handle all delta events properly
+	timeout := time.Duration(provider.Timeout) * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	stream := wrapper.ResponsesNewStreaming(ctx, params)
+	defer func() {
+		if err := stream.Close(); err != nil {
+			logrus.Errorf("[ChatGPT] Error closing stream: %v", err)
+		}
+	}()
+
 	// Process the SSE stream and convert to OpenAI format
-	s.processChatGPTBackendStream(c, resp.Body, responseModel, actualModel, provider, rule, flusher)
+	s.processChatGPTBackendStreamSDK(c, stream, responseModel, actualModel, provider, rule, flusher)
 }
 
 // makeChatGPTBackendRequest creates and executes an HTTP request to ChatGPT backend API
@@ -735,6 +719,64 @@ func (s *Server) processChatGPTBackendStream(c *gin.Context, reader io.Reader, r
 
 	// Check for scan errors
 	if err := scanner.Err(); err != nil {
+		logrus.Errorf("[ChatGPT] Streaming error: %v", err)
+		s.trackUsage(c, rule, provider, actualModel, responseModel, int(inputTokens), int(outputTokens), true, "error", "stream_error")
+		errorChunk := map[string]any{
+			"error": map[string]any{
+				"message": err.Error(),
+				"type":    "stream_error",
+			},
+		}
+		errorJSON, _ := json.Marshal(errorChunk)
+		c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", string(errorJSON))))
+		flusher.Flush()
+		return
+	}
+
+	// Track successful streaming completion
+	s.trackUsage(c, rule, provider, actualModel, responseModel, int(inputTokens), int(outputTokens), true, "success", "")
+
+	// Send the final [DONE] message
+	c.Writer.Write([]byte("data: [DONE]\n\n"))
+	flusher.Flush()
+}
+
+// processChatGPTBackendStreamSDK reads SSE stream from ChatGPT backend API using the SDK's streaming decoder
+// and properly handles all delta events including output_text.delta, reasoning_text.delta, etc.
+func (s *Server) processChatGPTBackendStreamSDK(c *gin.Context, stream *ssestream.Stream[responses.ResponseStreamEventUnion], responseModel, actualModel string, provider *typ.Provider, rule *typ.Rule, flusher http.Flusher) {
+	var inputTokens, outputTokens int64
+
+	logrus.Infof("[ChatGPT] Reading streaming response from ChatGPT backend API (SDK mode)")
+	chunkCount := 0
+
+	for stream.Next() {
+		chunkCount++
+		event := stream.Current()
+
+		// Log first few chunks for debugging
+		if chunkCount <= 3 {
+			logrus.Infof("[ChatGPT] SSE chunk #%d: type=%s, delta=%q", chunkCount, event.Type, event.Delta)
+		}
+
+		// Track usage
+		if event.Response.Usage.InputTokens > 0 {
+			inputTokens = int64(event.Response.Usage.InputTokens)
+		}
+		if event.Response.Usage.OutputTokens > 0 {
+			outputTokens = int64(event.Response.Usage.OutputTokens)
+		}
+
+		// Forward the event to the client using the raw JSON from the API
+		// The SDK's ResponseStreamEventUnion.RawJSON() returns the original JSON
+		rawJSON := event.RawJSON()
+		c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", rawJSON)))
+		flusher.Flush()
+	}
+
+	logrus.Infof("[ChatGPT] Finished reading SSE stream: %d chunks, tokens: %d in, %d out", chunkCount, inputTokens, outputTokens)
+
+	// Check for stream errors
+	if err := stream.Err(); err != nil {
 		logrus.Errorf("[ChatGPT] Streaming error: %v", err)
 		s.trackUsage(c, rule, provider, actualModel, responseModel, int(inputTokens), int(outputTokens), true, "error", "stream_error")
 		errorChunk := map[string]any{
