@@ -376,6 +376,12 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithResponseModel(VersionInfoResponse{}),
 	)
 
+	apiV1.GET("/info/version/check", s.GetLatestVersion,
+		swagger.WithTags("info"),
+		swagger.WithDescription("Check if a newer version is available on GitHub"),
+		swagger.WithResponseModel(LatestVersionResponse{}),
+	)
+
 	// Log API routes
 	apiV1.GET("/log", s.GetLogs,
 		swagger.WithDescription("Get logs with optional filtering"),

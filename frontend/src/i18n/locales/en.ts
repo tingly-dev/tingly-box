@@ -36,6 +36,25 @@ export default {
       "credential": "Credential"
     }
   },
+  "health": {
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "checking": "Checking...",
+    "lastChecked": "Last checked: {{time}}",
+    "never": "Never",
+    "retry": "Retry",
+    "disconnectMessage": "Connection to server lost. Please check if the server is running.",
+    "disconnectTitle": "Connection Lost"
+  },
+  "update": {
+    "newVersionAvailable": "New Version Available",
+    "versionAvailable": "New: {{latest}} (you have {{current}})",
+    "download": "Download",
+    "close": "Close",
+    "checking": "Checking for updates...",
+    "message": "A new version is available on GitHub. Would you like to download it now?",
+    "later": "Later"
+  },
   "login": {
     "title": "Tingly Box",
     "subtitle": "Authentication Required",
