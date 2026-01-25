@@ -1,14 +1,18 @@
-import { Cancel, CheckCircle, Key, PlayArrow, Refresh as RefreshIcon, RestartAlt, Stop } from '@mui/icons-material';
-import { Button, IconButton, Stack, Typography } from '@mui/material';
+import { Cancel, CheckCircle, Key, PlayArrow, Refresh as RefreshIcon, RestartAlt, Stop, Visibility as ViewIcon, Info as InfoIcon } from '@mui/icons-material';
+import { Button, IconButton, Stack, Typography, Switch, Box, Alert, AlertTitle, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import CardGrid from '@/components/CardGrid';
 import { PageLayout } from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api, getBaseUrl } from '../services/api';
+import { useAnalytics } from '@/contexts/AnalyticsContext';
+import { useVersion } from '@/contexts/VersionContext';
 
 const System = () => {
     const { t } = useTranslation();
+    const { enabled: analyticsEnabled, hasConsent, grantConsent, revokeConsent, getDataPreview } = useAnalytics();
+    const { currentVersion } = useVersion();
     const [serverStatus, setServerStatus] = useState<any>(null);
     const [baseUrl, setBaseUrl] = useState<string>("");
     const [providersStatus, setProvidersStatus] = useState<any>(null);
@@ -17,6 +21,15 @@ const System = () => {
     const [providerModels, setProviderModels] = useState<any>({});
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [loading, setLoading] = useState(true);
+    const [previewOpen, setPreviewOpen] = useState(false);
+
+    const handleAnalyticsToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
+        if (event.target.checked) {
+            grantConsent();
+        } else {
+            revokeConsent();
+        }
+    };
 
     useEffect(() => {
         loadAllData();
@@ -228,8 +241,184 @@ const System = () => {
                     )}
                 </UnifiedCard>
 
+                {/* Analytics Settings */}
+                <UnifiedCard title="Analytics & Usage Data" size="full">
+                    <Stack spacing={3}>
+                        <Alert severity="info" icon={<InfoIcon />}>
+                            <AlertTitle>Help us improve Tingly-Box</AlertTitle>
+                            <Typography variant="body2">
+                                We collect only anonymous usage data to understand which features are used most.
+                                No personal information, no request content, no provider credentials.
+                            </Typography>
+                        </Alert>
+
+                        <Box
+                            sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                p: 2,
+                                borderRadius: 2,
+                                bgcolor: 'background.default',
+                            }}
+                        >
+                            <Box>
+                                <Typography variant="subtitle1" fontWeight={600}>
+                                    Share anonymous usage data
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    Help improve Tingly-Box by sharing anonymous usage statistics
+                                </Typography>
+                            </Box>
+                            <Switch
+                                checked={hasConsent}
+                                onChange={handleAnalyticsToggle}
+                                disabled={!analyticsEnabled}
+                                color="primary"
+                            />
+                        </Box>
+
+                        {!analyticsEnabled && (
+                            <Alert severity="warning">
+                                <Typography variant="body2">
+                                    Analytics is disabled in this build. No data will be collected.
+                                </Typography>
+                            </Alert>
+                        )}
+
+                        <Box sx={{ pl: 2 }}>
+                            <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+                                What we collect:
+                            </Typography>
+                            <Stack spacing={1}>
+                                <Stack direction="row" alignItems="flex-start" spacing={1}>
+                                    <CheckCircle color="success" sx={{ fontSize: 16, mt: 0.3 }} />
+                                    <Typography variant="body2" color="text.secondary">
+                                        <strong>Page visits:</strong> Which pages you visit (e.g., Dashboard, System)
+                                    </Typography>
+                                </Stack>
+                                <Stack direction="row" alignItems="flex-start" spacing={1}>
+                                    <CheckCircle color="success" sx={{ fontSize: 16, mt: 0.3 }} />
+                                    <Typography variant="body2" color="text.secondary">
+                                        <strong>System info:</strong> App version, OS type (macOS/Windows/Linux)
+                                    </Typography>
+                                </Stack>
+                            </Stack>
+                        </Box>
+
+                        <Box sx={{ pl: 2 }}>
+                            <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+                                What we DON'T collect:
+                            </Typography>
+                            <Stack spacing={1}>
+                                <Stack direction="row" alignItems="flex-start" spacing={1}>
+                                    <Cancel color="disabled" sx={{ fontSize: 16, mt: 0.3 }} />
+                                    <Typography variant="body2" color="text.secondary">
+                                        IP addresses, location data
+                                    </Typography>
+                                </Stack>
+                                <Stack direction="row" alignItems="flex-start" spacing={1}>
+                                    <Cancel color="disabled" sx={{ fontSize: 16, mt: 0.3 }} />
+                                    <Typography variant="body2" color="text.secondary">
+                                        Request content, API keys, tokens
+                                    </Typography>
+                                </Stack>
+                                <Stack direction="row" alignItems="flex-start" spacing={1}>
+                                    <Cancel color="disabled" sx={{ fontSize: 16, mt: 0.3 }} />
+                                    <Typography variant="body2" color="text.secondary">
+                                        Provider names, model names
+                                    </Typography>
+                                </Stack>
+                                <Stack direction="row" alignItems="flex-start" spacing={1}>
+                                    <Cancel color="disabled" sx={{ fontSize: 16, mt: 0.3 }} />
+                                    <Typography variant="body2" color="text.secondary">
+                                        Error messages or crash details
+                                    </Typography>
+                                </Stack>
+                            </Stack>
+                        </Box>
+
+                        <Box>
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                startIcon={<ViewIcon />}
+                                onClick={() => setPreviewOpen(true)}
+                            >
+                                View sample data
+                            </Button>
+                        </Box>
+                    </Stack>
+                </UnifiedCard>
+
+                {/* About */}
+                <UnifiedCard title="About" size="full">
+                    <Stack spacing={2}>
+                        <Box>
+                            <Typography variant="body2" color="text.secondary">
+                                <strong>Version:</strong> {currentVersion}
+                            </Typography>
+                        </Box>
+                        <Box>
+                            <Typography variant="body2" color="text.secondary">
+                                <strong>License:</strong> MPL v2.0
+                            </Typography>
+                        </Box>
+                        <Box>
+                            <Typography variant="body2" color="text.secondary">
+                                <strong>Repository:</strong>{' '}
+                                <Typography
+                                    component="a"
+                                    href="https://github.com/tingly-dev/tingly-box"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    sx={{ color: 'primary.main', textDecoration: 'none' }}
+                                >
+                                    github.com/tingly-dev/tingly-box
+                                </Typography>
+                            </Typography>
+                        </Box>
+                    </Stack>
                 </UnifiedCard>
             </CardGrid>
+
+            {/* Data Preview Dialog */}
+            <Dialog
+                open={previewOpen}
+                onClose={() => setPreviewOpen(false)}
+                maxWidth="md"
+                fullWidth
+            >
+                <DialogTitle>Sample data collected</DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        Here are examples of the data that would be sent to Google Analytics when you enable
+                        analytics. We collect ONLY:
+                    </Typography>
+                    <Box
+                        sx={{
+                            bgcolor: 'grey.900',
+                            color: 'grey.100',
+                            p: 2,
+                            borderRadius: 1,
+                            fontFamily: 'monospace',
+                            fontSize: '0.875rem',
+                            overflow: 'auto',
+                        }}
+                    >
+                        <pre style={{ margin: 0 }}>{getDataPreview()}</pre>
+                    </Box>
+                    <Alert severity="success" sx={{ mt: 2 }}>
+                        <Typography variant="body2">
+                            <strong>That's it!</strong> We only collect page visits and basic system info.
+                            No IP addresses, no request content, no provider data, no error messages.
+                        </Typography>
+                    </Alert>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setPreviewOpen(false)}>Close</Button>
+                </DialogActions>
+            </Dialog>
         </PageLayout>
     );
 };

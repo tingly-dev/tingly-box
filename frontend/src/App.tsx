@@ -1,16 +1,18 @@
 import CssBaseline from '@mui/material/CssBaseline';
 import { ThemeProvider } from '@mui/material/styles';
 import { CircularProgress, Box, Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, IconButton } from '@mui/material';
-import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider } from './contexts/AuthContext';
 import { VersionProvider, useVersion } from './contexts/VersionContext';
 import { HealthProvider, useHealth } from './contexts/HealthContext';
+import { AnalyticsProvider } from './contexts/AnalyticsContext';
 import Layout from './layout/Layout';
 import theme from './theme';
 import { CloudUpload, Refresh, Error as ErrorIcon, AppRegistration as NPM, GitHub } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
+import { usePageTracking } from './hooks/usePageTracking';
 
 // Lazy load pages for code splitting
 const Login = lazy(() => import('./pages/Login'));
@@ -21,6 +23,7 @@ const UseClaudeCodePage = lazy(() => import('./pages/UseClaudeCodePage'));
 const ApiKeyPage = lazy(() => import('./pages/ApiKeyPage'));
 const OAuthPage = lazy(() => import('./pages/OAuthPage'));
 const System = lazy(() => import('./pages/System'));
+const Logs = lazy(() => import('./pages/Logs'));
 const UsageDashboardPage = lazy(() => import('./pages/UsageDashboardPage'));
 const ModelTestPage = lazy(() => import('./pages/ModelTestPage'));
 
@@ -50,13 +53,11 @@ const AppDialogs = () => {
 
     // Show disconnect alert when health status changes to unhealthy
     useEffect(() => {
-        console.log('[AppDialogs] Health status changed:', { isHealthy, checking, disconnectAlertShown: disconnectAlertShown.current });
+        console.debug('[AppDialogs] Health status changed:', { isHealthy, checking, disconnectAlertShown: disconnectAlertShown.current });
         if (!checking && !isHealthy && !disconnectAlertShown.current) {
-            console.log('[AppDialogs] Showing disconnect alert');
             setShowDisconnectAlert(true);
             disconnectAlertShown.current = true;
         } else if (isHealthy && showDisconnectAlert) {
-            console.log('[AppDialogs] Connection restored, closing disconnect alert');
             setShowDisconnectAlert(false);
             disconnectAlertShown.current = false;
         }
@@ -65,7 +66,7 @@ const AppDialogs = () => {
     // Show update alert when showNotification changes from false to true
     // OR when updateTrigger changes (manual refresh)
     useEffect(() => {
-        console.log('[AppDialogs] showNotification/updateTrigger changed:', {
+        console.debug('[AppDialogs] showNotification/updateTrigger changed:', {
             showNotification,
             updateTrigger,
             currentVersion,
@@ -75,12 +76,10 @@ const AppDialogs = () => {
 
         // If this is a manual trigger (updateTrigger increased)
         if (updateTrigger > lastUpdateTrigger.current) {
-            console.log('[AppDialogs] Manual update trigger detected, showing update alert');
             setShowUpdateAlert(true);
             lastUpdateTrigger.current = updateTrigger;
         } else if (showNotification && lastUpdateTrigger.current === 0) {
             // First time showing notification (on mount)
-            console.log('[AppDialogs] Showing update alert (initial notification)');
             setShowUpdateAlert(true);
             lastUpdateTrigger.current = updateTrigger;
         }
@@ -89,11 +88,11 @@ const AppDialogs = () => {
     // Listen for test events
     useEffect(() => {
         const handleTestUpdate = () => {
-            console.log('[AppDialogs] Test: Showing update dialog');
+            console.debug('[AppDialogs] Test: Showing update dialog');
             setShowUpdateAlert(true);
         };
         const handleTestDisconnect = () => {
-            console.log('[AppDialogs] Test: Showing disconnect dialog');
+            console.debug('[AppDialogs] Test: Showing disconnect dialog');
             setShowDisconnectAlert(true);
         };
 
@@ -119,8 +118,6 @@ const AppDialogs = () => {
             window.removeEventListener('keydown', handleKeyDown);
         };
     }, []);
-
-    console.log('[AppDialogs] Render:', { showDisconnectAlert, showUpdateAlert, isHealthy, showNotification });
 
     return (
         <>
@@ -214,7 +211,14 @@ const AppDialogs = () => {
     );
 };
 
-function App() {
+// Inner component that has access to Router context
+const AppContent = () => {
+    // Track page views automatically (must be inside Router)
+    usePageTracking();
+
+    // Get version from VersionContext for analytics
+    const { currentVersion } = useVersion();
+
     // Expose test functions to window for debugging
     useEffect(() => {
         (window as any).testShowUpdateDialog = () => {
@@ -231,42 +235,56 @@ function App() {
     }, []);
 
     return (
+        <AnalyticsProvider
+            measurementId={import.meta.env.VITE_GA_MEASUREMENT_ID}
+            enabled={!!import.meta.env.VITE_GA_MEASUREMENT_ID}
+            debug={!import.meta.env.VITE_GA_MEASUREMENT_ID}
+            version={currentVersion}
+        >
+            <Suspense fallback={<PageLoader />}>
+                <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route
+                    path="/*"
+                    element={
+                        <ProtectedRoute>
+                            <Layout>
+                                <Suspense fallback={<PageLoader />}>
+                                    <Routes>
+                                        <Route path="/" element={<Dashboard />} />
+                                        {/* Function panel routes */}
+                                        <Route path="/use-openai" element={<UseOpenAIPage />} />
+                                        <Route path="/use-anthropic" element={<UseAnthropicPage />} />
+                                        <Route path="/use-claude-code" element={<UseClaudeCodePage />} />
+                                        {/* Other routes */}
+                                        <Route path="/api-keys" element={<ApiKeyPage />} />
+                                        <Route path="/oauth" element={<OAuthPage />} />
+                                        <Route path="/system" element={<System />} />
+                                        <Route path="/logs" element={<Logs />} />
+                                        <Route path="/dashboard" element={<UsageDashboardPage />} />
+                                        <Route path="/model-test/:providerUuid" element={<ModelTestPage />} />
+                                    </Routes>
+                                </Suspense>
+                            </Layout>
+                        </ProtectedRoute>
+                    }
+                />
+            </Routes>
+        </Suspense>
+        <AppDialogs />
+        </AnalyticsProvider>
+    );
+};
+
+function App() {
+    return (
         <ThemeProvider theme={theme}>
             <CssBaseline />
             <BrowserRouter>
                 <HealthProvider>
                     <VersionProvider>
                         <AuthProvider>
-                            <Suspense fallback={<PageLoader />}>
-                                <Routes>
-                                    <Route path="/login" element={<Login />} />
-                                    <Route
-                                        path="/*"
-                                        element={
-                                            <ProtectedRoute>
-                                                <Layout>
-                                                    <Suspense fallback={<PageLoader />}>
-                                                        <Routes>
-                                                            <Route path="/" element={<Dashboard />} />
-                                                            {/* Function panel routes */}
-                                                            <Route path="/use-openai" element={<UseOpenAIPage />} />
-                                                            <Route path="/use-anthropic" element={<UseAnthropicPage />} />
-                                                            <Route path="/use-claude-code" element={<UseClaudeCodePage />} />
-                                                            {/* Other routes */}
-                                                            <Route path="/api-keys" element={<ApiKeyPage />} />
-                                                            <Route path="/oauth" element={<OAuthPage />} />
-                                                            <Route path="/system" element={<System />} />
-                                                            <Route path="/dashboard" element={<UsageDashboardPage />} />
-                                                            <Route path="/model-test/:providerUuid" element={<ModelTestPage />} />
-                                                        </Routes>
-                                                    </Suspense>
-                                                </Layout>
-                                            </ProtectedRoute>
-                                        }
-                                    />
-                                </Routes>
-                            </Suspense>
-                            <AppDialogs />
+                            <AppContent />
                         </AuthProvider>
                     </VersionProvider>
                 </HealthProvider>
