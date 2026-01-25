@@ -26,12 +26,12 @@ import {
     ListItemText,
     Typography,
     CircularProgress,
+    Popover,
 } from '@mui/material';
 import type { ReactNode } from 'react';
 import React, { useState } from 'react';
-import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useAuth } from '../contexts/AuthContext';
 import { useHealth } from '../contexts/HealthContext';
 import { useVersion as useAppVersion } from '../contexts/VersionContext';
 import VerifiedIcon from '@mui/icons-material/Verified';
@@ -62,31 +62,23 @@ interface MenuGroup {
 const Layout = ({ children }: LayoutProps) => {
     const { t } = useTranslation();
     const location = useLocation();
-    const navigate = useNavigate();
-    const { logout } = useAuth();
     const { isHealthy, checking, checkHealth } = useHealth();
     const { hasUpdate, checking: checkingVersion, checkForUpdates, currentVersion, latestVersion } = useAppVersion();
     const [mobileOpen, setMobileOpen] = useState(false);
-    const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const [homeMenuOpen, setHomeMenuOpen] = useState(true);
     const [credentialMenuOpen, setCredentialMenuOpen] = useState(true);
+    const [easterEggAnchorEl, setEasterEggAnchorEl] = useState<HTMLElement | null>(null);
 
     const handleDrawerToggle = () => {
         setMobileOpen(!mobileOpen);
     };
 
-    const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-        setAnchorEl(event.currentTarget);
+    const handleEasterEgg = (event: React.MouseEvent<HTMLElement>) => {
+        setEasterEggAnchorEl(event.currentTarget);
     };
 
-    const handleMenuClose = () => {
-        setAnchorEl(null);
-    };
-
-    const handleLogout = () => {
-        logout();
-        navigate('/login');
-        handleMenuClose();
+    const handleEasterEggClose = () => {
+        setEasterEggAnchorEl(null);
     };
 
     const handleCheckUpdates = () => {
@@ -111,7 +103,7 @@ const Layout = ({ children }: LayoutProps) => {
                 {
                     path: '/dashboard',
                     label: 'Usage Dashboard',
-                    icon: <BarChartIcon sx={{ fontSize: 18 }} />,
+                    icon: <BarChartIcon sx={{ fontSize: 20 }} />,
                 },
             ],
         },
@@ -123,17 +115,17 @@ const Layout = ({ children }: LayoutProps) => {
                 {
                     path: '/use-openai',
                     label: t('layout.nav.useOpenAI', { defaultValue: 'OpenAI' }),
-                    icon: <OpenAI size={18} />,
+                    icon: <OpenAI size={20} />,
                 },
                 {
                     path: '/use-anthropic',
                     label: t('layout.nav.useAnthropic', { defaultValue: 'Anthropic' }),
-                    icon: <Anthropic size={18} />,
+                    icon: <Anthropic size={20} />,
                 },
                 {
                     path: '/use-claude-code',
                     label: t('layout.nav.useClaudeCode', { defaultValue: 'Claude Code' }),
-                    icon: <Claude size={18} />,
+                    icon: <Claude size={20} />,
                 },
             ],
         },
@@ -145,12 +137,12 @@ const Layout = ({ children }: LayoutProps) => {
                 {
                     path: '/api-keys',
                     label: t('layout.nav.apiKeys', { defaultValue: 'API Keys' }),
-                    icon: <KeyIcon sx={{ fontSize: 18 }} />,
+                    icon: <KeyIcon sx={{ fontSize: 20 }} />,
                 },
                 {
                     path: '/oauth',
                     label: t('layout.nav.oauth', { defaultValue: 'OAuth' }),
-                    icon: <VerifiedIcon sx={{ fontSize: 18 }} />,
+                    icon: <VerifiedIcon sx={{ fontSize: 20 }} />,
                 },
             ],
         },
@@ -163,7 +155,7 @@ const Layout = ({ children }: LayoutProps) => {
                 {
                     path: '/system',
                     label: 'System',
-                    icon: <SystemIcon sx={{ fontSize: 18 }} />,
+                    icon: <SystemIcon sx={{ fontSize: 20 }} />,
                 },
             ],
         },
@@ -173,6 +165,10 @@ const Layout = ({ children }: LayoutProps) => {
         <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             {/* Logo Section */}
             <Box
+                component="a"
+                href="https://github.com/tingly-dev/tingly-box"
+                target="_blank"
+                rel="noopener noreferrer"
                 sx={{
                     p: 3,
                     borderBottom: '1px solid',
@@ -180,6 +176,11 @@ const Layout = ({ children }: LayoutProps) => {
                     display: 'flex',
                     alignItems: 'center',
                     gap: 2,
+                    textDecoration: 'none',
+                    cursor: 'pointer',
+                    '&:hover': {
+                        opacity: 0.8,
+                    },
                 }}
             >
                 <Box
@@ -312,11 +313,11 @@ const Layout = ({ children }: LayoutProps) => {
                     >
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                             {checking ? (
-                                <CircularProgress size={14} thickness={2} />
+                                <CircularProgress size={16} thickness={2} />
                             ) : isHealthy ? (
-                                <CheckCircle color="success" sx={{ fontSize: 16 }} />
+                                <CheckCircle color="success" sx={{ fontSize: 18 }} />
                             ) : (
-                                <ErrorIcon color="error" sx={{ fontSize: 16 }} />
+                                <ErrorIcon color="error" sx={{ fontSize: 18 }} />
                             )}
                             <Typography variant="body2" color="text.secondary">
                                 Server: <span/>
@@ -324,7 +325,7 @@ const Layout = ({ children }: LayoutProps) => {
                             </Typography>
                         </Box>
                         <IconButton size="small" onClick={checkHealth} disabled={checking}>
-                            <Refresh sx={{ fontSize: 14 }} />
+                            <Refresh sx={{ fontSize: 16 }} />
                         </IconButton>
                     </Box>
                 </Box>
@@ -340,8 +341,8 @@ const Layout = ({ children }: LayoutProps) => {
                     >
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                             {hasUpdate? (
-                                <CloudUpload color="info" sx={{ fontSize: 14 }} />
-                            ): <CheckCircle color="success" sx={{ fontSize: 14 }} />}
+                                <CloudUpload color="info" sx={{ fontSize: 18 }} />
+                            ): <CheckCircle color="success" sx={{ fontSize: 18 }} />}
                             <Typography variant="body2" color="text.secondary">
                                 Version: <span/>
                                 {hasUpdate
@@ -352,9 +353,9 @@ const Layout = ({ children }: LayoutProps) => {
                         </Box>
                         <IconButton size="small" onClick={handleCheckUpdates} disabled={checkingVersion}>
                             {checkingVersion ? (
-                                <CircularProgress size={14} thickness={2} />
+                                <CircularProgress size={16} thickness={2} />
                             ) : (
-                                <Refresh sx={{ fontSize: 14 }} />
+                                <Refresh sx={{ fontSize: 16 }} />
                             )}
                         </IconButton>
                     </Box>
@@ -386,10 +387,10 @@ const Layout = ({ children }: LayoutProps) => {
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <IconButton
                         color="inherit"
-                        onClick={handleMenuOpen}
+                        onClick={handleEasterEgg}
                         sx={{ color: 'text.secondary' }}
                     >
-                        <AccountIcon />
+                        <AccountIcon sx={{ fontSize: 24 }} />
                     </IconButton>
                 </Box>
             </Box>
@@ -493,6 +494,33 @@ const Layout = ({ children }: LayoutProps) => {
                     {children}
                 </Box>
             </Box>
+
+            {/* Easter Egg Popover */}
+            <Popover
+                open={Boolean(easterEggAnchorEl)}
+                anchorEl={easterEggAnchorEl}
+                onClose={handleEasterEggClose}
+                anchorOrigin={{
+                    vertical: 'top',
+                    horizontal: 'center',
+                }}
+                transformOrigin={{
+                    vertical: 'bottom',
+                    horizontal: 'center',
+                }}
+                sx={{
+                    '& .MuiPopover-paper': {
+                        bgcolor: 'primary.main',
+                        color: 'white',
+                        borderRadius: 2,
+                        px: 2,
+                        py: 1,
+                        fontSize: '0.875rem',
+                    },
+                }}
+            >
+                Hi, I'm Tingly-Box, your Smart AI Proxy
+            </Popover>
         </Box>
     );
 };
