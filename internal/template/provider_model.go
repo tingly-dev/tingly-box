@@ -18,6 +18,19 @@ import (
 
 // GetProviderModelsFromAPI fetches models from provider API via real HTTP requests
 func GetProviderModelsFromAPI(provider *typ.Provider) ([]string, error) {
+	// Special handling for Codex (ChatGPT OAuth) providers
+	// The ChatGPT OAuth token cannot access OpenAI's /models endpoint
+	// because it's a ChatGPT web interface token, not an OpenAI API token.
+	// It lacks the required api.model.read scope.
+	// Return a hardcoded list of supported models instead.
+	if provider.OAuthDetail != nil && provider.OAuthDetail.ProviderType == "codex" {
+		return getCodexModels(), nil
+	}
+	// Also handle legacy ChatGPT backend API providers
+	if provider.APIBase == "https://chatgpt.com/backend-api" {
+		return getCodexModels(), nil
+	}
+
 	// Construct the models endpoint URL
 	// For Anthropic-style providers, ensure they have a version suffix
 	apiBase := strings.TrimSuffix(provider.APIBase, "/")
@@ -132,4 +145,19 @@ func GetProviderModelsFromAPI(provider *typ.Provider) ([]string, error) {
 	}
 
 	return models, nil
+}
+
+// getCodexModels returns a hardcoded list of available Codex models
+// ChatGPT OAuth (Codex) only supports models with the "-codex" suffix
+func getCodexModels() []string {
+	return []string{
+		// GPT-5 Codex models
+		"gpt-5-codex",
+		// GPT-5.1 Codex models
+		"gpt-5.1-codex",
+		"gpt-5.1-codex-max",
+		"gpt-5.1-codex-mini",
+		// GPT-5.2 Codex (latest)
+		"gpt-5.2-codex",
+	}
 }

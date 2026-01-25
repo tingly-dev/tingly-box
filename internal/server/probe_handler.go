@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -14,9 +15,6 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
-	"github.com/openai/openai-go/v3/packages/param"
-	"github.com/openai/openai-go/v3/responses"
-
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -334,86 +332,153 @@ func (s *Server) probeWithOpenAI(c *gin.Context, provider *typ.Provider, model s
 	return responseContent, tokenUsage, nil
 }
 
-// probeWithResponsesAPI handles probe requests using the Responses API (for Codex OAuth)
+// probeWithResponsesAPI handles probe requests using the ChatGPT backend API Responses endpoint (for Codex OAuth)
+// Reference: https://github.com/SamSaffron/term-llm/blob/main/internal/llm/chatgpt.go
 func (s *Server) probeWithResponsesAPI(c *gin.Context, provider *typ.Provider, model string) (string, ProbeUsage, error) {
 	startTime := time.Now()
 
-	// Get OpenAI client from pool
+	// Get HTTP client from the OpenAI client wrapper
 	wrapper := s.clientPool.GetOpenAIClient(provider, "")
 	if wrapper == nil {
 		return "", ProbeUsage{}, fmt.Errorf("failed to get OpenAI client")
 	}
 
-	// Create minimal Responses API request
-	params := responses.ResponseNewParams{
-		Input: responses.ResponseNewParamsInputUnion{OfString: param.NewOpt("Hi")},
+	// Build ChatGPT backend API request format
+	// The ChatGPT backend API uses a different format than standard OpenAI Responses API
+	inputItems := []map[string]interface{}{
+		{
+			"type": "message",
+			"role": "user",
+			"content": []map[string]string{
+				{"type": "input_text", "text": "Hi"},
+			},
+		},
 	}
 
-	// Set model via raw JSON - marshal to JSON, set model, unmarshal back
-	paramsJSON, err := json.Marshal(params)
+	reqBody := map[string]interface{}{
+		"model":        model,
+		"instructions": "work as `echo`",
+		"input":        inputItems,
+		"tools":        []interface{}{},
+		"tool_choice":  "auto",
+		"stream":       true,
+		"store":        false,
+		"include":      []string{},
+	}
+
+	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
-		return "", ProbeUsage{}, fmt.Errorf("failed to marshal params: %w", err)
+		return "", ProbeUsage{}, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	var raw map[string]interface{}
-	if err := json.Unmarshal(paramsJSON, &raw); err != nil {
-		return "", ProbeUsage{}, fmt.Errorf("failed to unmarshal params: %w", err)
-	}
-
-	raw["model"] = model
-
-	modifiedJSON, err := json.Marshal(raw)
+	// Create HTTP request to ChatGPT backend API
+	// The URL rewriting transport will convert this to /backend-api/codex/responses
+	reqURL := provider.APIBase + "/responses"
+	req, err := http.NewRequestWithContext(c.Request.Context(), "POST", reqURL, bytes.NewReader(bodyBytes))
 	if err != nil {
-		return "", ProbeUsage{}, fmt.Errorf("failed to marshal modified params: %w", err)
+		return "", ProbeUsage{}, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	if err := json.Unmarshal(modifiedJSON, &params); err != nil {
-		return "", ProbeUsage{}, fmt.Errorf("failed to unmarshal modified params: %w", err)
+	// Set required headers for ChatGPT backend API
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+provider.GetAccessToken())
+	req.Header.Set("OpenAI-Beta", "responses=experimental")
+	req.Header.Set("originator", "tingly-box")
+
+	// Add ChatGPT-Account-ID header if available from OAuth metadata
+	if provider.OAuthDetail != nil && provider.OAuthDetail.ExtraFields != nil {
+		if accountID, ok := provider.OAuthDetail.ExtraFields["account_id"].(string); ok && accountID != "" {
+			req.Header.Set("ChatGPT-Account-ID", accountID)
+		}
 	}
 
 	// Make the request
-	resp, err := wrapper.Client().Responses.New(c.Request.Context(), params)
+	resp, err := wrapper.HttpClient().Do(req)
 	processingTime := time.Since(startTime).Milliseconds()
-
-	var responseContent string
-	var tokenUsage ProbeUsage
-
-	if err == nil && resp != nil {
-		// Extract response content from Output
-		if resp.Output != nil {
-			for _, item := range resp.Output {
-				// Check if this is a message output
-				if item.Type == "message" {
-					msg := item.AsMessage()
-					// Extract text from message content
-					for _, content := range msg.Content {
-						if content.Type == "output_text" {
-							responseContent += content.Text
-						}
-					}
-				}
-			}
-		}
-		// Extract usage if available
-		if resp.Usage.InputTokens != 0 {
-			tokenUsage.PromptTokens = int(resp.Usage.InputTokens)
-			tokenUsage.CompletionTokens = int(resp.Usage.OutputTokens)
-			tokenUsage.TotalTokens = int(resp.Usage.InputTokens) + int(resp.Usage.OutputTokens)
-		}
-	}
 
 	if err != nil {
 		errorCode := categorizeProbeError(err.Error())
-		errMsg := err.Error()
+		return "", ProbeUsage{}, fmt.Errorf("%s: %s (processing time: %dms)", errorCode, err.Error(), processingTime)
+	}
+	defer resp.Body.Close()
+
+	// Check for error status
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		errorCode := categorizeProbeError(string(respBody))
+		errMsg := string(respBody)
 
 		// Provide helpful message for Codex OAuth providers
 		if provider.AuthType == typ.AuthTypeOAuth &&
 			provider.OAuthDetail != nil &&
 			provider.OAuthDetail.ProviderType == "codex" {
-			errMsg = fmt.Sprintf("%s (Note: Codex OAuth tokens have limited API access. Consider using a regular API key instead.)", err.Error())
+			errMsg = fmt.Sprintf("%s (Note: Codex OAuth tokens have limited API access. Consider using a regular API key instead.)", string(respBody))
 		}
 
-		return "", tokenUsage, fmt.Errorf("%s: %s (processing time: %dms)", errorCode, errMsg, processingTime)
+		return "", ProbeUsage{}, fmt.Errorf("%s: %s (processing time: %dms)", errorCode, errMsg, processingTime)
+	}
+
+	// Read streaming response and collect all chunks
+	var responseContent string
+	tokenUsage := ProbeUsage{}
+
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		// Skip empty lines and non-data lines
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+
+		// Extract JSON data from SSE format
+		jsonData := strings.TrimPrefix(line, "data: ")
+
+		// Check for stream end
+		if jsonData == "[DONE]" {
+			break
+		}
+
+		// Parse SSE chunk
+		var chunk struct {
+			Output []struct {
+				Type    string `json:"type"`
+				Content []struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				} `json:"content"`
+			} `json:"output"`
+			Usage struct {
+				InputTokens  int `json:"input_tokens"`
+				OutputTokens int `json:"output_tokens"`
+			} `json:"usage"`
+		}
+
+		if err := json.Unmarshal([]byte(jsonData), &chunk); err != nil {
+			continue // Skip invalid JSON chunks
+		}
+
+		// Extract response content from output
+		for _, item := range chunk.Output {
+			if item.Type == "message" {
+				for _, content := range item.Content {
+					if content.Type == "output_text" {
+						responseContent += content.Text
+					}
+				}
+			}
+		}
+
+		// Extract usage from the last chunk
+		if chunk.Usage.InputTokens > 0 {
+			tokenUsage.PromptTokens = chunk.Usage.InputTokens
+			tokenUsage.CompletionTokens = chunk.Usage.OutputTokens
+			tokenUsage.TotalTokens = chunk.Usage.InputTokens + chunk.Usage.OutputTokens
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return "", ProbeUsage{}, fmt.Errorf("failed to read streaming response: %w", err)
 	}
 
 	if responseContent == "" {

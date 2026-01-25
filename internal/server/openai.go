@@ -706,14 +706,22 @@ func (s *Server) convertChatCompletionToResponsesParams(req *protocol.OpenAIChat
 	}
 
 	// Add instructions from system message if present
+	instructionsFound := false
 	for _, msg := range req.Messages {
 		if !param.IsOmitted(msg.OfSystem) {
 			systemMsg := msg.OfSystem
 			if !param.IsOmitted(systemMsg.Content.OfString) {
 				params.Instructions = systemMsg.Content.OfString
+				instructionsFound = true
 				break
 			}
 		}
+	}
+
+	// If no system message (no instructions), add a default instruction
+	// This is required by ChatGPT backend API for Codex OAuth providers
+	if !instructionsFound {
+		params.Instructions = param.NewOpt("You are a helpful AI assistant.")
 	}
 
 	return params

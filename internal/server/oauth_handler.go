@@ -1098,7 +1098,9 @@ func (s *Server) createProviderFromToken(token *oauth2.Token, providerType oauth
 			apiBase = "https://api.openai.com/v1"
 			apiStyle = protocol.APIStyleOpenAI
 		case oauth2.ProviderCodex:
-			apiBase = "https://api.openai.com/v1"
+			// Use ChatGPT backend API for Codex OAuth (not the standard OpenAI API)
+			// Reference: https://github.com/SamSaffron/term-llm/blob/main/internal/llm/chatgpt.go
+			apiBase = "https://chatgpt.com/backend-api"
 			apiStyle = protocol.APIStyleOpenAI
 		default:
 			// For mock and unknown providers
@@ -1133,7 +1135,21 @@ func (s *Server) createProviderFromToken(token *oauth2.Token, providerType oauth
 			UserID:       uuid.New().String(),
 			RefreshToken: token.RefreshToken,
 			ExpiresAt:    expiresAt,
+			ExtraFields:  make(map[string]interface{}),
 		},
+	}
+
+	// Store account_id from token metadata for ChatGPT API
+	// This is required for ChatGPT backend API calls (ChatGPT-Account-ID header)
+	if token.Metadata != nil {
+		if accountID, ok := token.Metadata["account_id"].(string); ok && accountID != "" {
+			provider.OAuthDetail.ExtraFields["account_id"] = accountID
+			log.Printf("[OAuth] Stored account_id for %s provider: %s", providerType, accountID)
+		}
+		// Store any other metadata that might be useful
+		if email, ok := token.Metadata["email"].(string); ok && email != "" {
+			provider.OAuthDetail.ExtraFields["email"] = email
+		}
 	}
 
 	// Save provider to config
