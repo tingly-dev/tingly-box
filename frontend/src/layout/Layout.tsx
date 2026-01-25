@@ -67,23 +67,18 @@ const Layout = ({ children }: LayoutProps) => {
     const [mobileOpen, setMobileOpen] = useState(false);
     const [homeMenuOpen, setHomeMenuOpen] = useState(true);
     const [credentialMenuOpen, setCredentialMenuOpen] = useState(true);
+    const [easterEggAnchorEl, setEasterEggAnchorEl] = useState<HTMLElement | null>(null);
 
     const handleDrawerToggle = () => {
         setMobileOpen(!mobileOpen);
     };
 
-    const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-        setAnchorEl(event.currentTarget);
+    const handleEasterEgg = (event: React.MouseEvent<HTMLElement>) => {
+        setEasterEggAnchorEl(event.currentTarget);
     };
 
-    const handleMenuClose = () => {
-        setAnchorEl(null);
-    };
-
-    const handleLogout = () => {
-        logout();
-        navigate('/login');
-        handleMenuClose();
+    const handleEasterEggClose = () => {
+        setEasterEggAnchorEl(null);
     };
 
     const handleCheckUpdates = () => {
@@ -392,7 +387,7 @@ const Layout = ({ children }: LayoutProps) => {
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <IconButton
                         color="inherit"
-                        onClick={handleMenuOpen}
+                        onClick={handleEasterEgg}
                         sx={{ color: 'text.secondary' }}
                     >
                         <AccountIcon sx={{ fontSize: 24 }} />
@@ -499,6 +494,33 @@ const Layout = ({ children }: LayoutProps) => {
                     {children}
                 </Box>
             </Box>
+
+            {/* Easter Egg Popover */}
+            <Popover
+                open={Boolean(easterEggAnchorEl)}
+                anchorEl={easterEggAnchorEl}
+                onClose={handleEasterEggClose}
+                anchorOrigin={{
+                    vertical: 'top',
+                    horizontal: 'center',
+                }}
+                transformOrigin={{
+                    vertical: 'bottom',
+                    horizontal: 'center',
+                }}
+                sx={{
+                    '& .MuiPopover-paper': {
+                        bgcolor: 'primary.main',
+                        color: 'white',
+                        borderRadius: 2,
+                        px: 2,
+                        py: 1,
+                        fontSize: '0.875rem',
+                    },
+                }}
+            >
+                Hi, I'm Tingly-Box, your Smart AI Proxy
+            </Popover>
         </Box>
     );
 };
