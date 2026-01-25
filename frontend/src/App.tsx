@@ -11,6 +11,7 @@ import Layout from './layout/Layout';
 import theme from './theme';
 import { CloudUpload, Refresh, Error as ErrorIcon, AppRegistration as NPM, GitHub } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
+import Logs from "@/pages/Logs.tsx";
 
 // Lazy load pages for code splitting
 const Login = lazy(() => import('./pages/Login'));
@@ -214,6 +215,41 @@ const AppDialogs = () => {
     );
 };
 
+function AppContent() {
+    return (
+        <Suspense fallback={<PageLoader/>}>
+            <Routes>
+                <Route path="/login" element={<Login/>}/>
+                <Route
+                    path="/*"
+                    element={
+                        <ProtectedRoute>
+                            <Layout>
+                                <Suspense fallback={<PageLoader/>}>
+                                    <Routes>
+                                        <Route path="/" element={<Dashboard/>}/>
+                                        {/* Function panel routes */}
+                                        <Route path="/use-openai" element={<UseOpenAIPage/>}/>
+                                        <Route path="/use-anthropic" element={<UseAnthropicPage/>}/>
+                                        <Route path="/use-claude-code" element={<UseClaudeCodePage/>}/>
+                                        {/* Other routes */}
+                                        <Route path="/api-keys" element={<ApiKeyPage/>}/>
+                                        <Route path="/oauth" element={<OAuthPage/>}/>
+                                        <Route path="/system" element={<System/>}/>
+                                        <Route path="/logs" element={<Logs/>}/>
+                                        <Route path="/dashboard" element={<UsageDashboardPage/>}/>
+                                        <Route path="/model-test/:providerUuid" element={<ModelTestPage/>}/>
+                                    </Routes>
+                                </Suspense>
+                            </Layout>
+                        </ProtectedRoute>
+                    }
+                />
+            </Routes>
+        </Suspense>
+    )
+}
+
 function App() {
     // Expose test functions to window for debugging
     useEffect(() => {
@@ -232,41 +268,13 @@ function App() {
 
     return (
         <ThemeProvider theme={theme}>
-            <CssBaseline />
+            <CssBaseline/>
             <BrowserRouter>
                 <HealthProvider>
                     <VersionProvider>
                         <AuthProvider>
-                            <Suspense fallback={<PageLoader />}>
-                                <Routes>
-                                    <Route path="/login" element={<Login />} />
-                                    <Route
-                                        path="/*"
-                                        element={
-                                            <ProtectedRoute>
-                                                <Layout>
-                                                    <Suspense fallback={<PageLoader />}>
-                                                        <Routes>
-                                                            <Route path="/" element={<Dashboard />} />
-                                                            {/* Function panel routes */}
-                                                            <Route path="/use-openai" element={<UseOpenAIPage />} />
-                                                            <Route path="/use-anthropic" element={<UseAnthropicPage />} />
-                                                            <Route path="/use-claude-code" element={<UseClaudeCodePage />} />
-                                                            {/* Other routes */}
-                                                            <Route path="/api-keys" element={<ApiKeyPage />} />
-                                                            <Route path="/oauth" element={<OAuthPage />} />
-                                                            <Route path="/system" element={<System />} />
-                                                            <Route path="/dashboard" element={<UsageDashboardPage />} />
-                                                            <Route path="/model-test/:providerUuid" element={<ModelTestPage />} />
-                                                        </Routes>
-                                                    </Suspense>
-                                                </Layout>
-                                            </ProtectedRoute>
-                                        }
-                                    />
-                                </Routes>
-                            </Suspense>
-                            <AppDialogs />
+                            <AppContent/>
+                            <AppDialogs/>
                         </AuthProvider>
                     </VersionProvider>
                 </HealthProvider>

@@ -4,6 +4,7 @@ import {
     Key as KeyIcon,
     Menu as MenuIcon,
     Settings as SystemIcon,
+    Description as LogsIcon,
     ExpandLess,
     ExpandMore,
     BarChart as BarChartIcon,
@@ -143,6 +144,19 @@ const Layout = ({ children }: LayoutProps) => {
                     path: '/oauth',
                     label: t('layout.nav.oauth', { defaultValue: 'OAuth' }),
                     icon: <VerifiedIcon sx={{ fontSize: 20 }} />,
+                },
+            ],
+        },
+        {
+            key: 'logs',
+            label: 'Logs',
+            icon: <LogsIcon sx={{ fontSize: 20 }} />,
+            standalone: true,
+            items: [
+                {
+                    path: '/logs',
+                    label: 'Logs',
+                    icon: <LogsIcon sx={{ fontSize: 18 }} />,
                 },
             ],
         },
