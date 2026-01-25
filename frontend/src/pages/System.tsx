@@ -228,7 +228,6 @@ const System = () => {
                     )}
                 </UnifiedCard>
 
-                </UnifiedCard>
             </CardGrid>
         </PageLayout>
     );
