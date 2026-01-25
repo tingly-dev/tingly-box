@@ -85,10 +85,8 @@ func defaultNewOpenAIClient(provider *typ.Provider) (*OpenAIClient, error) {
 		if provider.OAuthDetail != nil && provider.OAuthDetail.ExtraFields != nil {
 			if accountID, ok := provider.OAuthDetail.ExtraFields["account_id"].(string); ok && accountID != "" {
 				options = append(options, option.WithHeader("ChatGPT-Account-ID", accountID))
-				logrus.Infof("[ChatGPT] Using account_id: %s", accountID)
 			}
 		}
-		logrus.Infof("[ChatGPT] Configured client with ChatGPT backend API headers")
 	}
 
 	// Create base HTTP client

@@ -147,12 +147,18 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			return
 		}
 
-		// Check if the model supports Responses API and use it if preferred
-		// For streaming v1beta, Responses API has the highest priority
-		preferredEndpoint := s.GetPreferredEndpointForModel(provider, actualModel)
+		// Check if model prefers Responses API (for models like Codex)
+		// This is used for ChatGPT backend API which only supports Responses API
+		useResponsesAPI := selectedService.PreferCompletions()
 
-		if preferredEndpoint == "responses" {
-			// Use Responses API path (prioritized for streaming v1beta)
+		// Also check the probe cache if not already determined
+		if !useResponsesAPI {
+			preferredEndpoint := s.GetPreferredEndpointForModel(provider, actualModel)
+			useResponsesAPI = (preferredEndpoint == "responses")
+		}
+
+		if useResponsesAPI {
+			// Use Responses API path (for Codex and other models that prefer it)
 			s.handleAnthropicV1BetaViaResponsesAPI(c, req, proxyModel, actualModel, provider, selectedService, rule, isStreaming)
 		} else {
 			// Use Chat Completions path (fallback)
@@ -404,8 +410,18 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPI(c *gin.Context, req protoc
 
 // handleAnthropicV1BetaViaResponsesAPINonStreaming handles non-streaming Responses API request
 func (s *Server) handleAnthropicV1BetaViaResponsesAPINonStreaming(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, proxyModel string, actualModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule, responsesReq responses.ResponseNewParams) {
-	// Forward request to provider
-	response, err := s.forwardResponsesRequest(provider, responsesReq)
+	var response *responses.Response
+	var err error
+
+	// Check if this is a ChatGPT backend API provider
+	if provider.APIBase == "https://chatgpt.com/backend-api" {
+		// Use the ChatGPT backend API handler
+		response, err = s.forwardChatGPTBackendRequest(provider, responsesReq)
+	} else {
+		// Use standard OpenAI Responses API
+		response, err = s.forwardResponsesRequest(provider, responsesReq)
+	}
+
 	if err != nil {
 		s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "forward_failed")
 		SendForwardingError(c, err)
@@ -426,7 +442,16 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPINonStreaming(c *gin.Context
 
 // handleAnthropicV1BetaViaResponsesAPIStreaming handles streaming Responses API request
 func (s *Server) handleAnthropicV1BetaViaResponsesAPIStreaming(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, proxyModel string, actualModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule, responsesReq responses.ResponseNewParams) {
-	// Create streaming request
+	// Check if this is a ChatGPT backend API provider
+	// These providers need special handling because they use custom HTTP implementation
+	if provider.APIBase == "https://chatgpt.com/backend-api" {
+		// Use the ChatGPT backend API streaming handler
+		// This handler sends the stream directly to the client in OpenAI Responses API format
+		s.handleChatGPTBackendStreamingRequest(c, provider, responsesReq, proxyModel, actualModel, rule)
+		return
+	}
+
+	// For standard OpenAI providers, use the OpenAI SDK
 	streamResp, cancel, err := s.forwardResponsesStreamRequest(provider, responsesReq)
 	if err != nil {
 		s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "stream_creation_failed")

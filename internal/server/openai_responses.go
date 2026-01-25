@@ -17,6 +17,7 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -208,6 +209,13 @@ func (s *Server) handleResponsesNonStreamingRequest(c *gin.Context, provider *ty
 
 // handleResponsesStreamingRequest handles streaming Responses API requests
 func (s *Server) handleResponsesStreamingRequest(c *gin.Context, provider *typ.Provider, params responses.ResponseNewParams, responseModel, actualModel string, rule *typ.Rule) {
+	// Check if this is a ChatGPT backend API provider (Codex OAuth)
+	// These providers use a custom streaming handler
+	if provider.APIBase == "https://chatgpt.com/backend-api" {
+		s.handleChatGPTBackendStreamingRequest(c, provider, params, responseModel, actualModel, rule)
+		return
+	}
+
 	// Create streaming request
 	stream, _, err := s.forwardResponsesStreamRequest(provider, params)
 	if err != nil {
@@ -352,13 +360,7 @@ func (s *Server) forwardResponsesRequest(provider *typ.Provider, params response
 
 // forwardResponsesStreamRequest forwards a streaming Responses API request to the provider
 func (s *Server) forwardResponsesStreamRequest(provider *typ.Provider, params responses.ResponseNewParams) (*ssestream.Stream[responses.ResponseStreamEventUnion], context.CancelFunc, error) {
-	// Check if this is a ChatGPT backend API provider (Codex OAuth)
-	// ChatGPT backend API requires a different request format than standard OpenAI Responses API
-	if provider.APIBase == "https://chatgpt.com/backend-api" {
-		// ChatGPT backend API streaming is not yet supported - fall back to non-streaming
-		// For now, return an error indicating streaming is not supported
-		return nil, nil, fmt.Errorf("streaming is not yet supported for ChatGPT backend API providers")
-	}
+	// Note: ChatGPT backend API providers are handled separately in the Anthropic beta handler
 
 	wrapper := s.clientPool.GetOpenAIClient(provider, params.Model)
 	logrus.Infof("provider: %s (responses streaming)", provider.Name)
@@ -375,7 +377,6 @@ func (s *Server) forwardResponsesStreamRequest(provider *typ.Provider, params re
 // forwardChatGPTBackendRequest forwards a request to ChatGPT backend API using the correct format
 // Reference: https://github.com/SamSaffron/term-llm/blob/main/internal/llm/chatgpt.go
 func (s *Server) forwardChatGPTBackendRequest(provider *typ.Provider, params responses.ResponseNewParams) (*responses.Response, error) {
-	// Get HTTP client from the OpenAI client wrapper
 	wrapper := s.clientPool.GetOpenAIClient(provider, params.Model)
 	if wrapper == nil {
 		return nil, fmt.Errorf("failed to get OpenAI client")
@@ -383,47 +384,10 @@ func (s *Server) forwardChatGPTBackendRequest(provider *typ.Provider, params res
 
 	logrus.Infof("provider: %s (ChatGPT backend API)", provider.Name)
 
-	// Convert OpenAI Responses API params to ChatGPT backend API format
-	// Build the request body in the format expected by ChatGPT backend API
-	chatGPTReqBody := s.convertToChatGPTBackendFormat(params)
-
-	bodyBytes, err := json.Marshal(chatGPTReqBody)
+	// Make HTTP request to ChatGPT backend API
+	resp, err := s.makeChatGPTBackendRequest(wrapper, provider, params, true)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	// Log the request body for debugging
-	logrus.Infof("[ChatGPT] Sending request to ChatGPT backend API: %s", string(bodyBytes))
-
-	// Create HTTP request to ChatGPT backend API
-	// The URL rewriting transport will convert this to /backend-api/codex/responses
-	reqURL := provider.APIBase + "/responses"
-	timeout := time.Duration(provider.Timeout) * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, bytes.NewReader(bodyBytes))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// Set required headers for ChatGPT backend API
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+provider.GetAccessToken())
-	req.Header.Set("OpenAI-Beta", "responses=experimental")
-	req.Header.Set("originator", "tingly-box")
-
-	// Add ChatGPT-Account-ID header if available from OAuth metadata
-	if provider.OAuthDetail != nil && provider.OAuthDetail.ExtraFields != nil {
-		if accountID, ok := provider.OAuthDetail.ExtraFields["account_id"].(string); ok && accountID != "" {
-			req.Header.Set("ChatGPT-Account-ID", accountID)
-		}
-	}
-
-	// Make the request
-	resp, err := wrapper.HttpClient().Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
+		return nil, err
 	}
 	defer resp.Body.Close()
 
@@ -436,38 +400,37 @@ func (s *Server) forwardChatGPTBackendRequest(provider *typ.Provider, params res
 
 	// Read streaming response and accumulate chunks
 	// ChatGPT backend API returns SSE format when stream=true
+	return s.accumulateChatGPTBackendStream(resp.Body, params)
+}
+
+// accumulateChatGPTBackendStream reads SSE stream from ChatGPT backend API and accumulates into a Response
+func (s *Server) accumulateChatGPTBackendStream(reader io.Reader, params responses.ResponseNewParams) (*responses.Response, error) {
 	var fullOutput strings.Builder
 	var inputTokens, outputTokens int
 	var responseID string
 	var created int64
 
 	logrus.Infof("[ChatGPT] Reading streaming response from ChatGPT backend API")
-	scanner := bufio.NewScanner(resp.Body)
+	scanner := bufio.NewScanner(reader)
+	// Increase buffer size to handle large SSE chunks (default 64KB is too small)
+	scanner.Buffer(nil, bufio.MaxScanTokenSize<<9) // 32MB buffer
 	chunkCount := 0
 	for scanner.Scan() {
 		line := scanner.Text()
-		logrus.Debugf("[ChatGPT] SSE line: %s", line)
-
-		// Skip empty lines and non-data lines
 		if !strings.HasPrefix(line, "data: ") {
 			continue
 		}
 
-		// Extract JSON data from SSE format
 		jsonData := strings.TrimPrefix(line, "data: ")
-
-		// Check for stream end
 		if jsonData == "[DONE]" {
 			logrus.Infof("[ChatGPT] Received [DONE] signal")
 			break
 		}
 
-		// Log first few chunks for debugging
 		if chunkCount < 3 {
 			logrus.Infof("[ChatGPT] SSE chunk #%d: %s", chunkCount+1, jsonData)
 		}
 
-		// Parse SSE chunk - ChatGPT backend API format
 		var chunk struct {
 			Type     string `json:"type"`
 			Response *struct {
@@ -491,28 +454,15 @@ func (s *Server) forwardChatGPTBackendRequest(provider *typ.Provider, params res
 					TotalTokens  int `json:"total_tokens"`
 				} `json:"usage"`
 			} `json:"response"`
-			Item *struct {
-				ID      string `json:"id"`
-				Type    string `json:"type"`
-				Content []struct {
-					Type string `json:"type"`
-					Text string `json:"text"`
-				} `json:"content"`
-				Summary []struct {
-					Type string `json:"type"`
-					Text string `json:"text"`
-				} `json:"summary"`
-			} `json:"item"`
 		}
 
 		if err := json.Unmarshal([]byte(jsonData), &chunk); err != nil {
 			logrus.Warnf("[ChatGPT] Failed to parse SSE chunk: %s, data: %s", err, jsonData)
-			continue // Skip invalid JSON chunks
+			continue
 		}
 
 		chunkCount++
 
-		// Extract metadata from response
 		if chunk.Response != nil {
 			if chunk.Response.ID != "" {
 				responseID = chunk.Response.ID
@@ -521,9 +471,7 @@ func (s *Server) forwardChatGPTBackendRequest(provider *typ.Provider, params res
 				created = chunk.Response.CreatedAt
 			}
 
-			// Extract response content from output
 			for _, item := range chunk.Response.Output {
-				// Handle message items
 				if item.Type == "message" {
 					for _, content := range item.Content {
 						if content.Type == "output_text" {
@@ -532,17 +480,8 @@ func (s *Server) forwardChatGPTBackendRequest(provider *typ.Provider, params res
 						}
 					}
 				}
-				// Handle reasoning items (summary)
-				if item.Type == "reasoning" {
-					for _, summary := range item.Summary {
-						if summary.Type == "text" {
-							logrus.Debugf("[ChatGPT] Reasoning summary: %s", summary.Text)
-						}
-					}
-				}
 			}
 
-			// Extract usage from the response
 			if chunk.Response.Usage != nil {
 				if chunk.Response.Usage.InputTokens > 0 {
 					inputTokens = chunk.Response.Usage.InputTokens
@@ -560,18 +499,13 @@ func (s *Server) forwardChatGPTBackendRequest(provider *typ.Provider, params res
 		return nil, fmt.Errorf("failed to read streaming response: %w", err)
 	}
 
-	// Generate default ID if none was provided
 	if responseID == "" {
 		responseID = "chatgpt-" + fmt.Sprintf("%d", time.Now().Unix())
 	}
-	// Generate default created timestamp if none was provided
 	if created == 0 {
 		created = time.Now().Unix()
 	}
 
-	// Build OpenAI Responses API format response from accumulated data
-	// Since we received a streaming response, we need to construct a non-streaming Response
-	// We'll use a map instead of the Response struct to avoid serialization issues
 	resultMap := map[string]interface{}{
 		"id":         responseID,
 		"object":     "response",
@@ -585,7 +519,6 @@ func (s *Server) forwardChatGPTBackendRequest(provider *typ.Provider, params res
 		},
 	}
 
-	// Build the output array from accumulated text
 	if fullOutput.Len() > 0 {
 		resultMap["output"] = []map[string]interface{}{
 			{
@@ -602,19 +535,331 @@ func (s *Server) forwardChatGPTBackendRequest(provider *typ.Provider, params res
 		}
 	}
 
-	// Marshal the map to JSON and unmarshal into Response struct
 	resultJSON, _ := json.Marshal(resultMap)
 	var result responses.Response
 	if err := json.Unmarshal(resultJSON, &result); err != nil {
-		// If unmarshal fails, return a basic error response
 		return nil, fmt.Errorf("failed to construct response: %w", err)
 	}
 
 	return &result, nil
 }
 
+// handleChatGPTBackendStreamingRequest handles streaming requests for ChatGPT backend API providers
+func (s *Server) handleChatGPTBackendStreamingRequest(c *gin.Context, provider *typ.Provider, params responses.ResponseNewParams, responseModel, actualModel string, rule *typ.Rule) {
+	wrapper := s.clientPool.GetOpenAIClient(provider, params.Model)
+	if wrapper == nil {
+		s.trackUsage(c, rule, provider, actualModel, responseModel, 0, 0, false, "error", "no_client")
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Failed to get OpenAI client",
+				Type:    "api_error",
+			},
+		})
+		return
+	}
+
+	// Make HTTP request to ChatGPT backend API
+	resp, err := s.makeChatGPTBackendRequest(wrapper, provider, params, true)
+	if err != nil {
+		s.trackUsage(c, rule, provider, actualModel, responseModel, 0, 0, false, "error", "request_failed")
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Request failed: " + err.Error(),
+				Type:    "api_error",
+			},
+		})
+		return
+	}
+	defer resp.Body.Close()
+
+	// Check for error status
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		logrus.Errorf("[ChatGPT] API error: %s", string(respBody))
+		s.trackUsage(c, rule, provider, actualModel, responseModel, 0, 0, false, "error", "api_error")
+		c.JSON(http.StatusBadGateway, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "API error: " + string(respBody),
+				Type:    "api_error",
+			},
+		})
+		return
+	}
+
+	// Set SSE headers
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("Access-Control-Allow-Origin", "*")
+	c.Header("Access-Control-Allow-Headers", "Cache-Control")
+
+	flusher, ok := c.Writer.(http.Flusher)
+	if !ok {
+		s.trackUsage(c, rule, provider, actualModel, responseModel, 0, 0, false, "error", "streaming_unsupported")
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Streaming not supported by this connection",
+				Type:    "api_error",
+			},
+		})
+		return
+	}
+
+	// Process the SSE stream and convert to OpenAI format
+	s.processChatGPTBackendStream(c, resp.Body, responseModel, actualModel, provider, rule, flusher)
+}
+
+// makeChatGPTBackendRequest creates and executes an HTTP request to ChatGPT backend API
+// This is a shared helper function used by both streaming and non-streaming handlers
+func (s *Server) makeChatGPTBackendRequest(wrapper *client.OpenAIClient, provider *typ.Provider, params responses.ResponseNewParams, _ bool) (*http.Response, error) {
+	// Convert OpenAI Responses API params to ChatGPT backend API format
+	chatGPTReqBody := s.convertToChatGPTBackendFormat(params, provider)
+
+	bodyBytes, err := json.Marshal(chatGPTReqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	logrus.Infof("[ChatGPT] Sending request to ChatGPT backend API: %s", string(bodyBytes))
+
+	// Create HTTP request to ChatGPT backend API
+	reqURL := provider.APIBase + "/responses"
+	timeout := time.Duration(provider.Timeout) * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set required headers for ChatGPT backend API
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+provider.GetAccessToken())
+	req.Header.Set("OpenAI-Beta", "responses=experimental")
+	req.Header.Set("originator", "tingly-box")
+
+	// Add ChatGPT-Account-ID header if available from OAuth metadata
+	if provider.OAuthDetail != nil && provider.OAuthDetail.ExtraFields != nil {
+		if accountID, ok := provider.OAuthDetail.ExtraFields["account_id"].(string); ok && accountID != "" {
+			req.Header.Set("ChatGPT-Account-ID", accountID)
+		}
+	}
+
+	// Make the request (caller is responsible for closing response body and canceling context)
+	// Store cancel func in a way that caller can use it - for now we'll just return the response
+	_ = cancel // TODO: Return cancel func to caller
+	resp, err := wrapper.HttpClient().Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+
+	return resp, nil
+}
+
+// processChatGPTBackendStream reads SSE stream from ChatGPT backend API and converts to OpenAI format
+func (s *Server) processChatGPTBackendStream(c *gin.Context, reader io.Reader, responseModel, actualModel string, provider *typ.Provider, rule *typ.Rule, flusher http.Flusher) {
+	var inputTokens, outputTokens int64
+
+	scanner := bufio.NewScanner(reader)
+	// Increase buffer size to handle large SSE chunks (default 64KB is too small)
+	scanner.Buffer(nil, bufio.MaxScanTokenSize<<9) // 32MB buffer
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		// Skip empty lines and non-data lines
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+
+		// Extract JSON data from SSE format
+		jsonData := strings.TrimPrefix(line, "data: ")
+
+		// Check for stream end
+		if jsonData == "[DONE]" {
+			break
+		}
+
+		// Parse SSE chunk - ChatGPT backend API format
+		var chunk struct {
+			Type     string `json:"type"`
+			Response *struct {
+				ID        string `json:"id"`
+				CreatedAt int64  `json:"created_at"`
+				Output    []struct {
+					ID      string `json:"id"`
+					Type    string `json:"type"`
+					Content []struct {
+						Type string `json:"type"`
+						Text string `json:"text"`
+					} `json:"content"`
+				} `json:"output"`
+				Usage *struct {
+					InputTokens  int `json:"input_tokens"`
+					OutputTokens int `json:"output_tokens"`
+					TotalTokens  int `json:"total_tokens"`
+				} `json:"usage"`
+			} `json:"response"`
+		}
+
+		if err := json.Unmarshal([]byte(jsonData), &chunk); err != nil {
+			logrus.Warnf("[ChatGPT] Streaming: Failed to parse SSE chunk: %s, data: %s", err, jsonData)
+			continue
+		}
+
+		// Update metadata from response
+		if chunk.Response != nil {
+			// Extract usage
+			if chunk.Response.Usage != nil {
+				if chunk.Response.Usage.InputTokens > 0 {
+					inputTokens = int64(chunk.Response.Usage.InputTokens)
+				}
+				if chunk.Response.Usage.OutputTokens > 0 {
+					outputTokens = int64(chunk.Response.Usage.OutputTokens)
+				}
+			}
+
+			// Create OpenAI Responses API event and send to client
+			event := s.convertChatGPTEventToOpenAI(chunk, responseModel)
+			if event != nil {
+				eventJSON, err := json.Marshal(event)
+				if err != nil {
+					logrus.Warnf("[ChatGPT] Streaming: Failed to marshal event: %s", err)
+					continue
+				}
+				c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", string(eventJSON))))
+				flusher.Flush()
+			}
+		}
+	}
+
+	// Check for scan errors
+	if err := scanner.Err(); err != nil {
+		logrus.Errorf("[ChatGPT] Streaming error: %v", err)
+		s.trackUsage(c, rule, provider, actualModel, responseModel, int(inputTokens), int(outputTokens), true, "error", "stream_error")
+		errorChunk := map[string]any{
+			"error": map[string]any{
+				"message": err.Error(),
+				"type":    "stream_error",
+			},
+		}
+		errorJSON, _ := json.Marshal(errorChunk)
+		c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", string(errorJSON))))
+		flusher.Flush()
+		return
+	}
+
+	// Track successful streaming completion
+	s.trackUsage(c, rule, provider, actualModel, responseModel, int(inputTokens), int(outputTokens), true, "success", "")
+
+	// Send the final [DONE] message
+	c.Writer.Write([]byte("data: [DONE]\n\n"))
+	flusher.Flush()
+}
+
+// convertChatGPTEventToOpenAI converts a ChatGPT backend API event to OpenAI Responses API format
+func (s *Server) convertChatGPTEventToOpenAI(chunk struct {
+	Type     string `json:"type"`
+	Response *struct {
+		ID        string `json:"id"`
+		CreatedAt int64  `json:"created_at"`
+		Output    []struct {
+			ID      string `json:"id"`
+			Type    string `json:"type"`
+			Content []struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"output"`
+		Usage *struct {
+			InputTokens  int `json:"input_tokens"`
+			OutputTokens int `json:"output_tokens"`
+			TotalTokens  int `json:"total_tokens"`
+		} `json:"usage"`
+	} `json:"response"`
+}, responseModel string) map[string]interface{} {
+	if chunk.Response == nil {
+		return nil
+	}
+
+	// Accumulate content from output items
+	var fullContent strings.Builder
+	for _, item := range chunk.Response.Output {
+		if item.Type == "message" {
+			for _, content := range item.Content {
+				if content.Type == "output_text" {
+					fullContent.WriteString(content.Text)
+				}
+			}
+		}
+	}
+
+	// Build the event based on type
+	event := map[string]interface{}{
+		"type": chunk.Type,
+		"response": map[string]interface{}{
+			"id":         chunk.Response.ID,
+			"object":     "response",
+			"created_at": float64(chunk.Response.CreatedAt),
+			"model":      responseModel,
+		},
+	}
+
+	// Set status based on event type
+	if chunk.Type == "response.created" {
+		event["response"].(map[string]interface{})["status"] = "in_progress"
+	} else if chunk.Type == "response.in_progress" {
+		event["response"].(map[string]interface{})["status"] = "in_progress"
+		// Add output if content accumulated
+		if fullContent.Len() > 0 {
+			event["response"].(map[string]interface{})["output"] = []map[string]interface{}{
+				{
+					"type":   "message",
+					"role":   "assistant",
+					"status": "in_progress",
+					"content": []map[string]string{
+						{
+							"type": "output_text",
+							"text": fullContent.String(),
+						},
+					},
+				},
+			}
+		}
+	} else if chunk.Type == "response.done" || chunk.Type == "response.completed" {
+		event["response"].(map[string]interface{})["status"] = "completed"
+		// Add final output
+		if fullContent.Len() > 0 {
+			event["response"].(map[string]interface{})["output"] = []map[string]interface{}{
+				{
+					"type":   "message",
+					"role":   "assistant",
+					"status": "completed",
+					"content": []map[string]string{
+						{
+							"type": "output_text",
+							"text": fullContent.String(),
+						},
+					},
+				},
+			}
+		}
+	}
+
+	// Add usage if available
+	if chunk.Response.Usage != nil {
+		event["response"].(map[string]interface{})["usage"] = map[string]interface{}{
+			"input_tokens":  chunk.Response.Usage.InputTokens,
+			"output_tokens": chunk.Response.Usage.OutputTokens,
+			"total_tokens":  chunk.Response.Usage.TotalTokens,
+		}
+	}
+
+	return event
+}
+
 // convertToChatGPTBackendFormat converts OpenAI Responses API params to ChatGPT backend API format
-func (s *Server) convertToChatGPTBackendFormat(params responses.ResponseNewParams) map[string]interface{} {
+func (s *Server) convertToChatGPTBackendFormat(params responses.ResponseNewParams, provider *typ.Provider) map[string]interface{} {
 	// Build ChatGPT backend API request body
 	// ChatGPT backend API requires stream to be true
 	chatGPTReqBody := map[string]interface{}{
@@ -626,9 +871,13 @@ func (s *Server) convertToChatGPTBackendFormat(params responses.ResponseNewParam
 		"include":     []string{},
 	}
 
-	// Add instructions if present
+	// Add instructions if present, otherwise use default
+	// ChatGPT backend API requires instructions to be present
 	if !param.IsOmitted(params.Instructions) {
 		chatGPTReqBody["instructions"] = params.Instructions.Value
+	} else {
+		// Use a default instructions value
+		chatGPTReqBody["instructions"] = "You are a helpful AI assistant."
 	}
 
 	// Convert input to ChatGPT backend API format
@@ -639,18 +888,84 @@ func (s *Server) convertToChatGPTBackendFormat(params responses.ResponseNewParam
 		}
 	}
 
+	// Convert tools to ChatGPT backend API format
+	if !param.IsOmitted(params.Tools) && len(params.Tools) > 0 {
+		tools := s.convertResponseToolsToChatGPTFormat(params.Tools)
+		if tools != nil {
+			chatGPTReqBody["tools"] = tools
+		}
+	}
+
+	// Convert tool_choice if present
+	if !param.IsOmitted(params.ToolChoice) {
+		chatGPTReqBody["tool_choice"] = s.convertResponseToolChoiceToChatGPTFormat(params.ToolChoice)
+	}
+
 	// Copy other fields if present
+	// Note: Codex OAuth providers do not support max_tokens, max_completion_tokens, temperature, or top_p
+	// For other providers: newer OpenAI models (gpt-4o, o1, gpt-4.1) use max_completion_tokens
+	// while older models use max_tokens
 	if !param.IsOmitted(params.MaxOutputTokens) {
-		chatGPTReqBody["max_output_tokens"] = int(params.MaxOutputTokens.Value)
+		// Skip for Codex OAuth providers
+		if !s.isCodexOAuthProvider(provider) {
+			model := params.Model
+			maxTokensKey := "max_tokens"
+			if s.requiresMaxCompletionTokens(model) {
+				maxTokensKey = "max_completion_tokens"
+			}
+			chatGPTReqBody[maxTokensKey] = int(params.MaxOutputTokens.Value)
+		}
 	}
 	if !param.IsOmitted(params.Temperature) {
-		chatGPTReqBody["temperature"] = params.Temperature.Value
+		// Skip for Codex OAuth providers
+		if !s.isCodexOAuthProvider(provider) {
+			chatGPTReqBody["temperature"] = params.Temperature.Value
+		}
 	}
 	if !param.IsOmitted(params.TopP) {
-		chatGPTReqBody["top_p"] = params.TopP.Value
+		// Skip for Codex OAuth providers
+		if !s.isCodexOAuthProvider(provider) {
+			chatGPTReqBody["top_p"] = params.TopP.Value
+		}
 	}
 
 	return chatGPTReqBody
+}
+
+// isCodexOAuthProvider checks if the provider is a Codex OAuth provider
+// Codex OAuth providers do not support max_tokens or max_completion_tokens parameters
+func (s *Server) isCodexOAuthProvider(provider *typ.Provider) bool {
+	if provider == nil || provider.OAuthDetail == nil {
+		return false
+	}
+	return provider.OAuthDetail.ProviderType == "codex"
+}
+
+// requiresMaxCompletionTokens checks if the model requires max_completion_tokens instead of max_tokens
+// Newer OpenAI models (gpt-4o, o1 series, gpt-4.1) use max_completion_tokens
+func (s *Server) requiresMaxCompletionTokens(model string) bool {
+	// Models that require max_completion_tokens
+	modelsRequiringMaxCompletionTokens := []string{
+		"gpt-4o",
+		"gpt-4o-",
+		"gpt-4o-mini",
+		"gpt-4o-mini-",
+		"o1-",
+		"o1-2024",
+		"chatgpt-4o",
+		"chatgpt-4o-",
+		"chatgpt-4o-mini",
+		"chatgpt-4o-mini-",
+		"gpt-4.1",
+		"gpt-4.1-",
+	}
+
+	for _, prefix := range modelsRequiringMaxCompletionTokens {
+		if strings.HasPrefix(model, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // convertResponseInputToChatGPTFormat converts ResponseInputParam to ChatGPT backend API format
@@ -683,6 +998,57 @@ func (s *Server) convertResponseInputToChatGPTFormat(inputItems responses.Respon
 	}
 
 	return result
+}
+
+// convertResponseToolsToChatGPTFormat converts Tools from Responses API format to ChatGPT backend API format
+func (s *Server) convertResponseToolsToChatGPTFormat(tools []responses.ToolUnionParam) []interface{} {
+	if len(tools) == 0 {
+		return nil
+	}
+
+	result := make([]interface{}, 0, len(tools))
+
+	for _, tool := range tools {
+		// Handle function tools (custom tools for function calling)
+		if !param.IsOmitted(tool.OfFunction) {
+			fn := tool.OfFunction
+			toolMap := map[string]interface{}{
+				"type":       "function",
+				"name":       fn.Name,
+				"parameters": fn.Parameters,
+			}
+			if !param.IsOmitted(fn.Description) {
+				toolMap["description"] = fn.Description.Value
+			}
+			if !param.IsOmitted(fn.Strict) {
+				toolMap["strict"] = fn.Strict.Value
+			}
+			result = append(result, toolMap)
+		}
+		// Add other tool types as needed (web_search, file_search, etc.)
+		// For now, we only support function tools
+	}
+
+	return result
+}
+
+// convertResponseToolChoiceToChatGPTFormat converts ToolChoice from Responses API format to ChatGPT backend API format
+func (s *Server) convertResponseToolChoiceToChatGPTFormat(toolChoice responses.ResponseNewParamsToolChoiceUnion) interface{} {
+	// Handle different tool_choice variants
+	if !param.IsOmitted(toolChoice.OfToolChoiceMode) {
+		// "auto", "none", "required" modes
+		return toolChoice.OfToolChoiceMode.Value
+	}
+	if !param.IsOmitted(toolChoice.OfFunctionTool) {
+		// Specific function tool choice
+		fn := toolChoice.OfFunctionTool
+		return map[string]interface{}{
+			"type": "function",
+			"name": fn.Name,
+		}
+	}
+	// Default to auto
+	return "auto"
 }
 
 // extractInstructions extracts system message content as instructions

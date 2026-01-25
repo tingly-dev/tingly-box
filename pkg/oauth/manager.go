@@ -503,7 +503,11 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 			if claims.Name != "" {
 				token.Metadata["name"] = claims.Name
 			}
+		} else {
+			logrus.Warnf("[OAuth] Failed to parse ID token for Codex provider")
 		}
+	} else if config.Type == ProviderCodex {
+		logrus.Warnf("[OAuth] Codex provider token has no ID token (id_token field is empty)")
 	}
 
 	// Call provider's after-token hook to fetch additional metadata
