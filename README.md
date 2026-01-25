@@ -13,7 +13,8 @@
 - **Auto API Translation** – Seamlessly bridge OpenAI, Anthropic, Google, and other API dialects—no code changes needed  
 - **Blazing Fast** – Adds typically **< 1ms** of overhead—so you get flexibility without latency tax  
 - **Flexible Auth** – Support for both API keys and OAuth (e.g., Claude.ai), so you can use your existing quotas anywhere  
-- **Visual Control Panel** – Intuitive UI to manage providers, routes, aliases, and models at a glance  
+- **Visual Control Panel** – Intuitive UI to manage providers, routes, aliases, and models at a glance
+- **Client Side Usage Stats** - Track token consumption, latency, cost estimates, and model selection per request—directly from your client
 
 ## 🚀 Quick Start
 
