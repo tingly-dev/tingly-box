@@ -170,6 +170,10 @@ const Layout = ({ children }: LayoutProps) => {
         <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             {/* Logo Section */}
             <Box
+                component="a"
+                href="https://github.com/tingly-dev/tingly-box"
+                target="_blank"
+                rel="noopener noreferrer"
                 sx={{
                     p: 3,
                     borderBottom: '1px solid',
@@ -177,6 +181,11 @@ const Layout = ({ children }: LayoutProps) => {
                     display: 'flex',
                     alignItems: 'center',
                     gap: 2,
+                    textDecoration: 'none',
+                    cursor: 'pointer',
+                    '&:hover': {
+                        opacity: 0.8,
+                    },
                 }}
             >
                 <Box
