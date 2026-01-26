@@ -48,6 +48,12 @@ const (
 	AuthTypeOAuth  AuthType = "oauth"
 )
 
+// Provider API Base URLs
+const (
+	// ChatGPTBackendAPIBase is the API base URL for ChatGPT/Codex OAuth provider
+	ChatGPTBackendAPIBase = "https://chatgpt.com/backend-api"
+)
+
 // OAuthDetail contains OAuth-specific authentication information
 type OAuthDetail struct {
 	AccessToken  string                 `json:"access_token"`  // OAuth access token

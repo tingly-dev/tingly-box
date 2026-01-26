@@ -185,7 +185,7 @@ func (s *Server) handleResponsesNonStreamingRequest(c *gin.Context, provider *ty
 
 	// Check if this is a ChatGPT backend API provider (Codex OAuth)
 	// These providers return responses in a different format that needs conversion
-	if provider.APIBase == "https://chatgpt.com/backend-api" && response.ID != "" {
+	if provider.APIBase == typ.ChatGPTBackendAPIBase && response.ID != "" {
 		// Convert ChatGPT backend API response to OpenAI chat completion format
 		// The response was accumulated from streaming chunks in forwardChatGPTBackendRequest
 		s.convertChatGPTResponseToOpenAIChatCompletion(c, *response, responseModel, inputTokens, outputTokens)
@@ -212,7 +212,7 @@ func (s *Server) handleResponsesNonStreamingRequest(c *gin.Context, provider *ty
 func (s *Server) handleResponsesStreamingRequest(c *gin.Context, provider *typ.Provider, params responses.ResponseNewParams, responseModel, actualModel string, rule *typ.Rule) {
 	// Check if this is a ChatGPT backend API provider (Codex OAuth)
 	// These providers use a custom streaming handler
-	if provider.APIBase == "https://chatgpt.com/backend-api" {
+	if provider.APIBase == typ.ChatGPTBackendAPIBase {
 		s.handleChatGPTBackendStreamingRequest(c, provider, params, responseModel, actualModel, rule)
 		return
 	}
@@ -339,7 +339,7 @@ func (s *Server) handleResponsesStreamResponse(c *gin.Context, stream *ssestream
 func (s *Server) forwardResponsesRequest(provider *typ.Provider, params responses.ResponseNewParams) (*responses.Response, error) {
 	// Check if this is a ChatGPT backend API provider (Codex OAuth)
 	// ChatGPT backend API requires a different request format than standard OpenAI Responses API
-	if provider.APIBase == "https://chatgpt.com/backend-api" {
+	if provider.APIBase == typ.ChatGPTBackendAPIBase {
 		return s.forwardChatGPTBackendRequest(provider, params)
 	}
 

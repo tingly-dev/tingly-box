@@ -1100,7 +1100,7 @@ func (s *Server) createProviderFromToken(token *oauth2.Token, providerType oauth
 		case oauth2.ProviderCodex:
 			// Use ChatGPT backend API for Codex OAuth (not the standard OpenAI API)
 			// Reference: https://github.com/SamSaffron/term-llm/blob/main/internal/llm/chatgpt.go
-			apiBase = "https://chatgpt.com/backend-api"
+			apiBase = typ.ChatGPTBackendAPIBase
 			apiStyle = protocol.APIStyleOpenAI
 		default:
 			// For mock and unknown providers

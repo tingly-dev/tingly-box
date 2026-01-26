@@ -414,7 +414,7 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPINonStreaming(c *gin.Context
 	var err error
 
 	// Check if this is a ChatGPT backend API provider
-	if provider.APIBase == "https://chatgpt.com/backend-api" {
+	if provider.APIBase == typ.ChatGPTBackendAPIBase {
 		// Use the ChatGPT backend API handler
 		response, err = s.forwardChatGPTBackendRequest(provider, responsesReq)
 	} else {
@@ -444,7 +444,7 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPINonStreaming(c *gin.Context
 func (s *Server) handleAnthropicV1BetaViaResponsesAPIStreaming(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, proxyModel string, actualModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule, responsesReq responses.ResponseNewParams) {
 	// Check if this is a ChatGPT backend API provider
 	// These providers need special handling because they use custom HTTP implementation
-	if provider.APIBase == "https://chatgpt.com/backend-api" {
+	if provider.APIBase == typ.ChatGPTBackendAPIBase {
 		// Use the ChatGPT backend API streaming handler
 		// This handler sends the stream directly to the client in OpenAI Responses API format
 		s.handleChatGPTBackendStreamingRequest(c, provider, responsesReq, proxyModel, actualModel, rule)
