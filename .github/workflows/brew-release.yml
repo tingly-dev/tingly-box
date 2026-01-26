@@ -1,0 +1,161 @@
+name: Homebrew Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag to update Homebrew formula for'
+        required: true
+        type: string
+
+env:
+  GO_VERSION: '1.25'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  build-bottles:
+    name: Build Homebrew bottles
+    runs-on: ${{ matrix.runs-on }}
+    strategy:
+      matrix:
+        include:
+          - goos: darwin
+            goarch: arm64
+            platform: darwin-arm64
+            runs-on: macos-latest
+          - goos: darwin
+            goarch: amd64
+            platform: darwin-amd64
+            runs-on: macos-15-intel
+          - goos: linux
+            goarch: amd64
+            platform: linux-amd64
+            runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: true
+
+      - name: Set release tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.release_tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Build CLI binary
+        run: |
+          # Build for Homebrew bottle (simple binary without embedded frontend)
+          VERSION="${{ steps.tag.outputs.tag }}"
+          GIT_COMMIT="$(git rev-parse HEAD 2>/dev/null || echo 'unknown')"
+          BUILD_TIME="$(date -u '+%Y-%m-%d-%H-%M-%S' 2>/dev/null || echo 'unknown')"
+          GO_VERSION="$(go version | awk '{print $3}' | sed 's/go//' 2>/dev/null || echo 'unknown')"
+          PLATFORM="${{ matrix.goos }}/${{ matrix.goarch }}"
+
+          LDFLAGS="-s -w -X main.version=${VERSION} -X main.gitCommit=${GIT_COMMIT} -X main.buildTime=${BUILD_TIME} -X main.goVersion=${GO_VERSION} -X main.platform=${PLATFORM}"
+
+          CGO_ENABLED=1 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
+            go build -ldflags="${LDFLAGS}" -o tingly-box ./cli/tingly-box
+
+          chmod +x tingly-box || true
+
+      - name: Create bottle archive
+        run: |
+          tar -czf tingly-box-${{ matrix.platform }}.tar.gz tingly-box
+          shasum -a 256 tingly-box-${{ matrix.platform }}.tar.gz | cut -d' ' -f1 > tingly-box-${{ matrix.platform }}.sha256
+
+      - name: Upload bottle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bottle-${{ matrix.platform }}
+          path: |
+            tingly-box-${{ matrix.platform }}.tar.gz
+            tingly-box-${{ matrix.platform }}.sha256
+          retention-days: 7
+
+      - name: Upload to GitHub Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: tingly-box-${{ matrix.platform }}.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-formula:
+    name: Update Homebrew formula
+    needs: build-bottles
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download all bottle artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bottle-*
+          path: ./bottles
+          merge-multiple: true
+
+      - name: Set release tag and get checksums
+        id: info
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.release_tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+          fi
+
+          # Get SHA256 checksums from downloaded artifacts
+          if [ -f "bottles/tingly-box-darwin-arm64.sha256" ]; then
+            echo "sha256_darwin_arm64=$(cat bottles/tingly-box-darwin-arm64.sha256)" >> $GITHUB_OUTPUT
+          fi
+          if [ -f "bottles/tingly-box-darwin-amd64.sha256" ]; then
+            echo "sha256_darwin_amd64=$(cat bottles/tingly-box-darwin-amd64.sha256)" >> $GITHUB_OUTPUT
+          fi
+          if [ -f "bottles/tingly-box-linux-amd64.sha256" ]; then
+            echo "sha256_linux_amd64=$(cat bottles/tingly-box-linux-amd64.sha256)" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate formula
+        run: |
+          ruby Formula/generate.rb \
+            VERSION=${{ steps.info.outputs.tag }} \
+            SHA256_DARWIN_ARM64=${{ steps.info.outputs.sha256_darwin_arm64 }} \
+            SHA256_DARWIN_AMD64=${{ steps.info.outputs.sha256_darwin_amd64 }} \
+            SHA256_LINUX_AMD64=${{ steps.info.outputs.sha256_linux_amd64 }}
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: brew/${{ steps.info.outputs.tag }}
+          commit-message: "brew: update to ${{ steps.info.outputs.tag }}"
+          title: "Homebrew: Update to ${{ steps.info.outputs.tag }}"
+          body: |
+            Automatically generated by Homebrew Release workflow.
+
+            **Version:** ${{ steps.info.outputs.tag }}
+
+            **SHA256 Checksums:**
+            - darwin-arm64: `${{ steps.info.outputs.sha256_darwin_arm64 }}`
+            - darwin-amd64: `${{ steps.info.outputs.sha256_darwin_amd64 }}`
+            - linux-amd64: `${{ steps.info.outputs.sha256_linux_amd64 }}`
+          labels: homebrew
+          draft: false
