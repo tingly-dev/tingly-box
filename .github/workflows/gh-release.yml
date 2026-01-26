@@ -184,17 +184,17 @@ jobs:
 
           CGO_ENABLED=1 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build \
             -ldflags="${LDFLAGS}" \
-            -o ./dist/tingly-box-${{ matrix.suffix }}${{ matrix.exe }} \
+            -o ./dist/tingly-box${{ matrix.exe }} \
             ./cli/tingly-box
 
           # Make binary executable for non-Windows
-          [ "${{ matrix.goos }}" != "windows" ] && chmod +x ./dist/tingly-box-${{ matrix.suffix }}${{ matrix.exe }} || true
+          [ "${{ matrix.goos }}" != "windows" ] && chmod +x ./dist/tingly-box${{ matrix.exe }} || true
 
       - name: Upload build artifact (${{ matrix.suffix }})
         uses: actions/upload-artifact@v4
         with:
           name: cli-${{ matrix.suffix }}
-          path: ./dist/tingly-box-${{ matrix.suffix }}${{ matrix.exe }}
+          path: ./dist/tingly-box${{ matrix.exe }}
           retention-days: 7
 
   build-gui:
@@ -361,34 +361,47 @@ jobs:
         with:
           pattern: cli-*
           path: ./dist/cli
-          merge-multiple: true
+          # Keep artifacts in separate subdirectories to avoid overwriting same-named binaries
 
       - name: Download GUI artifacts
         uses: actions/download-artifact@v4
         with:
           pattern: gui-*
           path: ./dist/gui
-          merge-multiple: true
+          # Keep artifacts in separate subdirectories
 
       - name: Package binaries with proper extensions
         run: |
           mkdir -p release
 
-          # Process CLI binaries
+          # Process CLI binaries - each artifact is in its own subdirectory
           if [ -d "dist/cli" ]; then
-            cd dist/cli
-            chmod +x tingly-box-* || true
+            for artifact_dir in dist/cli/cli-*; do
+              if [ -d "$artifact_dir" ]; then
+                # Extract platform from artifact directory name
+                platform=$(basename "$artifact_dir" | sed 's/cli-//')
+                cd "$artifact_dir"
+                chmod +x tingly-box* || true
 
-            # Package all CLI binaries as zip
-            for binary in tingly-box-*; do
-              zip "../../release/${binary%.exe}.zip" "$binary"
+                # Package the binary with platform suffix in zip filename
+                binary=$(ls tingly-box* 2>/dev/null | head -1)
+                if [ -n "$binary" ]; then
+                  zip "../../../release/tingly-box-${platform}.zip" "$binary"
+                fi
+                cd ../../../..
+              fi
             done
-            cd ../..
           fi
 
           # Process GUI binaries (already zipped)
           if [ -d "dist/gui" ]; then
-            cp dist/gui/*/*.zip release/ 2>/dev/null || true
+            # GUI artifacts are also in subdirectories
+            for artifact_dir in dist/gui/gui-*; do
+              if [ -d "$artifact_dir" ]; then
+                cp "$artifact_dir"/*.zip release/ 2>/dev/null || true
+              fi
+            done
+            # Also check for direct files
             cp dist/gui/*.zip release/ 2>/dev/null || true
           fi
 
