@@ -1,4 +1,4 @@
-import { Delete as DeleteIcon, Download as ExportIcon, PlayArrow as ProbeIcon, Settings as SettingsIcon, SmartDisplay as SmartIcon } from '@mui/icons-material';
+import { Block as InactiveIcon, CheckCircle as ActiveIcon, Delete as DeleteIcon, Download as ExportIcon, PlayArrow as ProbeIcon, Settings as SettingsIcon, SmartDisplay as SmartIcon } from '@mui/icons-material';
 import { IconButton, Menu, MenuItem, Tooltip } from '@mui/material';
 import React, { useCallback } from 'react';
 
@@ -8,12 +8,16 @@ export interface GraphSettingsMenuProps {
     canProbe: boolean;
     isProbing: boolean;
     allowDeleteRule: boolean;
+    active: boolean;
+    allowToggleRule: boolean;
+    saving: boolean;
 
     // Callbacks
     onToggleSmartRouting: () => void;
     onProbe: () => void;
     onExport: () => void;
     onDelete: () => void;
+    onToggleActive: () => void;
 }
 
 export const GraphSettingsMenu: React.FC<GraphSettingsMenuProps> = ({
@@ -21,10 +25,14 @@ export const GraphSettingsMenu: React.FC<GraphSettingsMenuProps> = ({
     canProbe,
     isProbing,
     allowDeleteRule,
+    active,
+    allowToggleRule,
+    saving,
     onToggleSmartRouting,
     onProbe,
     onExport,
     onDelete,
+    onToggleActive,
 }) => {
     const [menuAnchorEl, setMenuAnchorEl] = React.useState<null | HTMLElement>(null);
     const menuOpen = Boolean(menuAnchorEl);
@@ -56,6 +64,11 @@ export const GraphSettingsMenu: React.FC<GraphSettingsMenuProps> = ({
         handleMenuClose();
         onDelete();
     }, [onDelete]);
+
+    const handleToggleActive = useCallback(() => {
+        handleMenuClose();
+        onToggleActive();
+    }, [onToggleActive]);
 
     return (
         <>
@@ -99,6 +112,27 @@ export const GraphSettingsMenu: React.FC<GraphSettingsMenuProps> = ({
                 <MenuItem onClick={handleExport}>
                     <ExportIcon fontSize="small" sx={{ mr: 1 }} />
                     Export with API Keys
+                </MenuItem>
+
+                {/* Toggle Active/Inactive */}
+                <MenuItem
+                    onClick={handleToggleActive}
+                    disabled={!allowToggleRule || saving}
+                    sx={{
+                        color: active ? 'warning.main' : 'success.main',
+                    }}
+                >
+                    {active ? (
+                        <>
+                            <InactiveIcon fontSize="small" sx={{ mr: 1 }} />
+                            Deactivate Rule
+                        </>
+                    ) : (
+                        <>
+                            <ActiveIcon fontSize="small" sx={{ mr: 1 }} />
+                            Activate Rule
+                        </>
+                    )}
                 </MenuItem>
 
                 {/* Delete Rule */}

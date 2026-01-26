@@ -13,6 +13,7 @@ import {
     CheckCircle,
     Error as ErrorIcon,
     Error as VersionIcon,
+    Code as CodeIcon,
 } from '@mui/icons-material';
 import LockIcon from '@mui/icons-material/Lock';
 import {
@@ -127,6 +128,11 @@ const Layout = ({ children }: LayoutProps) => {
                     path: '/use-claude-code',
                     label: t('layout.nav.useClaudeCode', { defaultValue: 'Claude Code' }),
                     icon: <Claude size={20} />,
+                },
+                {
+                    path: '/use-opencode',
+                    label: t('layout.nav.useOpenCode', { defaultValue: 'OpenCode' }),
+                    icon: <CodeIcon sx={{ fontSize: 20 }} />,
                 },
             ],
         },

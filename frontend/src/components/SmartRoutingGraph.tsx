@@ -4,6 +4,8 @@ import {
     Info as InfoIcon,
     Warning as WarningIcon,
     ExpandMore as ExpandMoreIcon,
+    BlockOutlined as BlockIcon,
+    SignalCellularAlt as SignalIcon,
 } from '@mui/icons-material';
 import {
     Box,
@@ -89,6 +91,22 @@ const StyledCard = styled(Card, {
     transition: 'all 0.2s ease-in-out',
     opacity: active ? 1 : 0.6,
     filter: active ? 'none' : 'grayscale(0.3)',
+    border: active ? 'none' : '2px dashed',
+    borderColor: active ? 'transparent' : theme.palette.text.disabled,
+    position: 'relative',
+    ...(active ? {} : {
+        '&::before': {
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.03) 10px, rgba(0,0,0,0.03) 20px)',
+            pointerEvents: 'none',
+            borderRadius: theme.shape.borderRadius,
+        },
+    }),
     '&:hover': {
         boxShadow: active ? theme.shadows[4] : theme.shadows[1],
     },
@@ -188,35 +206,22 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                             }}
                         />
                     </Tooltip>
-                    {/* Active/Inactive Toggle */}
-                    <Tooltip title={
-                        saving || !allowToggleRule
-                            ? 'Cannot toggle status while saving'
-                            : active
-                                ? 'Click to deactivate'
-                                : 'Click to activate'
-                    }>
-                        <Chip
-                            label={active ? "Active" : "Inactive"}
-                            size="small"
-                            color={active ? "success" : "default"}
-                            variant={active ? "filled" : "outlined"}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                if (!saving && allowToggleRule && onUpdateRecord) {
-                                    onUpdateRecord('active', !active);
-                                }
-                            }}
-                            sx={{
-                                opacity: active ? 1 : 0.7,
-                                minWidth: 75,
-                                cursor: (saving || !allowToggleRule) ? 'default' : 'pointer',
-                                '&:hover': (saving || !allowToggleRule) ? {} : {
-                                    opacity: 0.8,
-                                },
-                            }}
-                        />
-                    </Tooltip>
+                    {/* Active/Inactive Status Badge - Read only, use settings menu to toggle */}
+                    <Chip
+                        label={active ? "Active" : "Inactive"}
+                        size="small"
+                        color={active ? "success" : "default"}
+                        variant={active ? "filled" : "filled"}
+                        icon={active ? <SignalIcon fontSize="small" /> : <BlockIcon fontSize="small" />}
+                        sx={{
+                            opacity: active ? 1 : 0.7,
+                            minWidth: 75,
+                            cursor: 'default',
+                            borderColor: !active ? 'error.main' : undefined,
+                            color: !active ? 'error.main' : undefined,
+                            fontWeight: !active ? 600 : undefined,
+                        }}
+                    />
                     <Chip
                         label={`${smartRouting.length} ${smartRouting.length === 1 ? 'Rule' : 'Rules'}`}
                         size="small"

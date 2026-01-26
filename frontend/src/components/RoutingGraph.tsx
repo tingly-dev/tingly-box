@@ -6,6 +6,8 @@ import {
     ExpandMore as ExpandMoreIcon,
     Info as InfoIcon,
     Warning as WarningIcon,
+    Block as BlockIcon,
+    SignalCellularAlt as SignalIcon,
 } from '@mui/icons-material';
 import {
     Box,
@@ -111,6 +113,22 @@ const StyledCard = styled(Card, {
     transition: 'all 0.2s ease-in-out',
     opacity: active ? 1 : 0.6,
     filter: active ? 'none' : 'grayscale(0.3)',
+    border: active ? 'none' : '2px dashed',
+    borderColor: active ? 'transparent' : theme.palette.text.disabled,
+    position: 'relative',
+    ...(active ? {} : {
+        '&::before': {
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.03) 10px, rgba(0,0,0,0.03) 20px)',
+            pointerEvents: 'none',
+            borderRadius: theme.shape.borderRadius,
+        },
+    }),
     '&:hover': {
         boxShadow: active ? theme.shadows[4] : theme.shadows[1],
     },
@@ -247,34 +265,22 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                         }}
                         />
                     )}
-                    <Tooltip title={
-                        saving || !allowToggleRule
-                            ? t('rule.status.cannotToggle')
-                            : record.active
-                                ? t('rule.status.clickToDeactivate')
-                                : t('rule.status.clickToActivate')
-                    }>
-                        <Chip
-                            label={record.active ? "Active" : "Inactive"}
-                            size="small"
-                            color={record.active ? "success" : "default"}
-                            variant={record.active ? "filled" : "outlined"}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                if (!saving && allowToggleRule) {
-                                    onUpdateRecord('active', !record.active);
-                                }
-                            }}
-                            sx={{
-                                opacity: record.active ? 1 : 0.7,
-                                minWidth: 75,
-                                cursor: (saving || !allowToggleRule) ? 'default' : 'pointer',
-                                '&:hover': (saving || !allowToggleRule) ? {} : {
-                                    opacity: 0.8,
-                                },
-                            }}
-                        />
-                    </Tooltip>
+                    {/* Active/Inactive Status Badge - Read only, use settings menu to toggle */}
+                    <Chip
+                        label={record.active ? "Active" : "Inactive"}
+                        size="small"
+                        color={record.active ? "success" : "default"}
+                        variant={record.active ? "filled" : "outlined"}
+                        icon={record.active ? <SignalIcon fontSize="small" /> : <BlockIcon fontSize="small" />}
+                        sx={{
+                            opacity: record.active ? 1 : 0.7,
+                            minWidth: 75,
+                            cursor: 'default',
+                            borderColor: !record.active ? 'error.main' : undefined,
+                            color: !record.active ? 'error.main' : undefined,
+                            fontWeight: !record.active ? 600 : undefined,
+                        }}
+                    />
                     {record.active && record.providers.length === 0 && (
                         <Tooltip title="No providers configured - add a provider to enable request forwarding">
                             <WarningIcon

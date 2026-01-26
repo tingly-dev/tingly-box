@@ -15,6 +15,7 @@ const (
 	ScenarioOpenAI     RuleScenario = "openai"
 	ScenarioAnthropic  RuleScenario = "anthropic"
 	ScenarioClaudeCode RuleScenario = "claude_code"
+	ScenarioOpenCode   RuleScenario = "opencode"
 )
 
 // ScenarioFlags represents configuration flags for a scenario
