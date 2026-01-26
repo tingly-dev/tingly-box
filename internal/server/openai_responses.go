@@ -577,19 +577,53 @@ func (s *Server) handleChatGPTBackendStreamingRequest(c *gin.Context, provider *
 		return
 	}
 
-	// Use SDK's streaming method to handle all delta events properly
-	timeout := time.Duration(provider.Timeout) * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
+	// Make HTTP request to ChatGPT backend API for streaming
+	// Note: ChatGPT backend API requires stream=true and uses a different request format
+	// than standard OpenAI Responses API, so we make a raw HTTP request
+	resp, err := s.makeChatGPTBackendRequest(wrapper, provider, params, true)
+	if err != nil {
+		s.trackUsage(c, rule, provider, actualModel, responseModel, 0, 0, false, "error", "request_failed")
+		logrus.Errorf("[ChatGPT] Streaming request failed: %v", err)
+		errorChunk := map[string]any{
+			"error": map[string]any{
+				"message": "Failed to create streaming request: " + err.Error(),
+				"type":    "api_error",
+			},
+		}
+		errorJSON, _ := json.Marshal(errorChunk)
+		c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", string(errorJSON))))
+		flusher.Flush()
+		return
+	}
+	defer resp.Body.Close()
 
-	stream := wrapper.ResponsesNewStreaming(ctx, params)
+	// Check for error status
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		logrus.Errorf("[ChatGPT] API error: %s", string(respBody))
+		s.trackUsage(c, rule, provider, actualModel, responseModel, 0, 0, false, "error", "api_error")
+		errorChunk := map[string]any{
+			"error": map[string]any{
+				"message": fmt.Sprintf("API error (%d): %s", resp.StatusCode, string(respBody)),
+				"type":    "api_error",
+			},
+		}
+		errorJSON, _ := json.Marshal(errorChunk)
+		c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", string(errorJSON))))
+		flusher.Flush()
+		return
+	}
+
+	// Create SSE stream from the HTTP response using SDK's decoder
+	// This properly handles all delta events from ChatGPT backend API
+	stream := ssestream.NewStream[responses.ResponseStreamEventUnion](ssestream.NewDecoder(resp), nil)
 	defer func() {
 		if err := stream.Close(); err != nil {
 			logrus.Errorf("[ChatGPT] Error closing stream: %v", err)
 		}
 	}()
 
-	// Process the SSE stream and convert to OpenAI format
+	// Process the SSE stream using SDK-based handler
 	s.processChatGPTBackendStreamSDK(c, stream, responseModel, actualModel, provider, rule, flusher)
 }
 
@@ -737,17 +771,24 @@ func (s *Server) processChatGPTBackendStream(c *gin.Context, reader io.Reader, r
 	s.trackUsage(c, rule, provider, actualModel, responseModel, int(inputTokens), int(outputTokens), true, "success", "")
 
 	// Send the final [DONE] message
+	logrus.Infof("[ChatGPT] Sending final [DONE] message to client")
 	c.Writer.Write([]byte("data: [DONE]\n\n"))
 	flusher.Flush()
+	logrus.Infof("[ChatGPT] [DONE] message sent successfully")
 }
 
 // processChatGPTBackendStreamSDK reads SSE stream from ChatGPT backend API using the SDK's streaming decoder
 // and properly handles all delta events including output_text.delta, reasoning_text.delta, etc.
+// It also handles conversion of reasoning items to message items for models like gpt-5.1-codex.
 func (s *Server) processChatGPTBackendStreamSDK(c *gin.Context, stream *ssestream.Stream[responses.ResponseStreamEventUnion], responseModel, actualModel string, provider *typ.Provider, rule *typ.Rule, flusher http.Flusher) {
 	var inputTokens, outputTokens int64
 
 	logrus.Infof("[ChatGPT] Reading streaming response from ChatGPT backend API (SDK mode)")
+	logrus.Infof("[ChatGPT] Starting to process stream events")
 	chunkCount := 0
+
+	// Track if we've seen reasoning items and need to convert them
+	hasReasoningItems := false
 
 	for stream.Next() {
 		chunkCount++
@@ -758,20 +799,87 @@ func (s *Server) processChatGPTBackendStreamSDK(c *gin.Context, stream *ssestrea
 			logrus.Infof("[ChatGPT] SSE chunk #%d: type=%s, delta=%q", chunkCount, event.Type, event.Delta)
 		}
 
-		// Track usage
+		// Get the raw JSON and potentially transform it
+		rawJSON := event.RawJSON()
+
+		// Parse the event to check if it needs transformation
+		var parsedEvent map[string]interface{}
+		if err := json.Unmarshal([]byte(rawJSON), &parsedEvent); err == nil {
+			eventType, _ := parsedEvent["type"].(string)
+
+			// Handle response.output_item.added events - detect reasoning items
+			if eventType == "response.output_item.added" {
+				if response, ok := parsedEvent["response"].(map[string]interface{}); ok {
+					if output, ok := response["output"].([]interface{}); ok && len(output) > 0 {
+						// Check the most recently added item
+						for _, item := range output {
+							if itemMap, ok := item.(map[string]interface{}); ok {
+								if itemType, _ := itemMap["type"].(string); itemType == "reasoning" {
+									hasReasoningItems = true
+									logrus.Infof("[ChatGPT] Detected reasoning item, will convert to message")
+
+									// Transform the reasoning item to a message item
+									itemMap["type"] = "message"
+									// Also change the content type from reasoning_text to output_text
+									if content, ok := itemMap["content"].([]interface{}); ok {
+										for _, c := range content {
+											if cMap, ok := c.(map[string]interface{}); ok {
+												if cType, _ := cMap["type"].(string); cType == "reasoning_text" {
+													cMap["type"] = "output_text"
+												}
+											}
+										}
+									}
+
+									// Marshal the transformed event back to JSON
+									if transformedJSON, err := json.Marshal(parsedEvent); err == nil {
+										rawJSON = string(transformedJSON)
+										logrus.Infof("[ChatGPT] Transformed reasoning item to message item")
+									}
+									break
+								}
+							}
+						}
+					}
+				}
+			}
+
+			// Handle reasoning_text.delta events - convert to output_text.delta
+			if eventType == "reasoning_text.delta" && hasReasoningItems {
+				logrus.Infof("[ChatGPT] Converting reasoning_text.delta to output_text.delta")
+				parsedEvent["type"] = "output_text.delta"
+
+				// Marshal the transformed event back to JSON
+				if transformedJSON, err := json.Marshal(parsedEvent); err == nil {
+					rawJSON = string(transformedJSON)
+				}
+			}
+
+			// Handle response.done event - check if we need to add a synthesized message
+			if eventType == "response.done" && hasReasoningItems {
+				logrus.Infof("[ChatGPT] Response complete with reasoning items")
+				// The reasoning items should have been converted during the stream
+			}
+		}
+
+		// Log the raw JSON for first few chunks to debug
+		if chunkCount <= 3 {
+			logrus.Infof("[ChatGPT] Sending to client: %s", rawJSON)
+		}
+
+		c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", rawJSON)))
+		flusher.Flush()
+
+		// Track usage (safe access)
 		if event.Response.Usage.InputTokens > 0 {
 			inputTokens = int64(event.Response.Usage.InputTokens)
 		}
 		if event.Response.Usage.OutputTokens > 0 {
 			outputTokens = int64(event.Response.Usage.OutputTokens)
 		}
-
-		// Forward the event to the client using the raw JSON from the API
-		// The SDK's ResponseStreamEventUnion.RawJSON() returns the original JSON
-		rawJSON := event.RawJSON()
-		c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", rawJSON)))
-		flusher.Flush()
 	}
+
+	logrus.Infof("[ChatGPT] Finished processing %d chunks", chunkCount)
 
 	logrus.Infof("[ChatGPT] Finished reading SSE stream: %d chunks, tokens: %d in, %d out", chunkCount, inputTokens, outputTokens)
 
@@ -795,8 +903,10 @@ func (s *Server) processChatGPTBackendStreamSDK(c *gin.Context, stream *ssestrea
 	s.trackUsage(c, rule, provider, actualModel, responseModel, int(inputTokens), int(outputTokens), true, "success", "")
 
 	// Send the final [DONE] message
+	logrus.Infof("[ChatGPT] Sending final [DONE] message to client")
 	c.Writer.Write([]byte("data: [DONE]\n\n"))
 	flusher.Flush()
+	logrus.Infof("[ChatGPT] [DONE] message sent successfully")
 }
 
 // convertChatGPTEventToOpenAI converts a ChatGPT backend API event to OpenAI Responses API format
@@ -1023,19 +1133,39 @@ func (s *Server) convertResponseInputToChatGPTFormat(inputItems responses.Respon
 				"role": string(msg.Role),
 			}
 
+			// Determine content type based on role
+			contentType := "input_text"
+			if string(msg.Role) == "assistant" {
+				contentType = "output_text"
+			}
+
 			// Handle content - check if it's a simple string
 			if !param.IsOmitted(msg.Content.OfString) {
 				// Simple string content - convert to ChatGPT format
-				contentType := "input_text"
-				if string(msg.Role) == "assistant" {
-					contentType = "output_text"
-				}
 				chatGPTItem["content"] = []map[string]string{
 					{"type": contentType, "text": msg.Content.OfString.Value},
 				}
+			} else if !param.IsOmitted(msg.Content.OfInputItemContentList) {
+				// Array content - convert each content item to ChatGPT format
+				var contentItems []map[string]interface{}
+				for _, contentItem := range msg.Content.OfInputItemContentList {
+					if !param.IsOmitted(contentItem.OfInputText) {
+						contentItems = append(contentItems, map[string]interface{}{
+							"type": contentType,
+							"text": contentItem.OfInputText.Text,
+						})
+					}
+					// Handle other content types as needed (images, audio, etc.)
+				}
+				if len(contentItems) > 0 {
+					chatGPTItem["content"] = contentItems
+				}
 			}
 
-			result = append(result, chatGPTItem)
+			// Only add if content was successfully set
+			if _, hasContent := chatGPTItem["content"]; hasContent {
+				result = append(result, chatGPTItem)
+			}
 		}
 	}
 
