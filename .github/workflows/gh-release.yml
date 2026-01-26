@@ -62,11 +62,11 @@ jobs:
           - goos: linux
             goarch: amd64
             suffix: linux-amd64
-            runs-on: ubuntu-20.04
+            runs-on: ubuntu-22.04
           - goos: linux
             goarch: arm64
             suffix: linux-arm64
-            runs-on: ubuntu-20.04
+            runs-on: ubuntu-22.04
             cross_compile: true
           - goos: darwin
             goarch: amd64
