@@ -1,12 +1,14 @@
 version: '3'
 
 vars:
-  WAILS_PACKAGE_PATH: ./gui_wails3
+  BUILD_PACKAGE_PATH: ./gui/wails3
+  GEN_PACKAGE_PATH: ./gui/wails3
 
 tasks:
   go:mod:tidy:
     summary: Runs `go mod tidy`
     internal: true
+    dir: "{{.GEN_PACKAGE_PATH}}"
     cmds:
       - go mod tidy
 
@@ -57,6 +59,7 @@ tasks:
     summary: Generates bindings for the frontend
     deps:
       - task: go:mod:tidy
+    dir: "{{.GEN_PACKAGE_PATH}}"
     sources:
       - "**/*.[jt]s"
       - exclude: frontend/**/*
@@ -65,9 +68,9 @@ tasks:
       - go.mod
       - go.sum
     generates:
-      - frontend/bindings/**/*
+      - ../../frontend/bindings/**/*
     cmds:
-      - wails3 generate bindings -ts -f '{{.BUILD_FLAGS}}' -clean=true {{.WAILS_PACKAGE_PATH}} -d frontend/src/bindings
+      - wails3 generate bindings -ts -f '{{.BUILD_FLAGS}}' -clean=true {{.GEN_PACKAGE_PATH}} -d ../../frontend/src/bindings
 
   generate:icons:
     summary: Generates Windows `.ico` and Mac `.icns` files from an image

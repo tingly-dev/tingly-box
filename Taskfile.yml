@@ -13,8 +13,6 @@ vars:
   BUILD_DIR: build
   DIST_DIR: build/dist
   
-  WAILS_PACKAGE_PATH: ./gui_wails3
-  
   PORT: 12580
   
   APP_NAME: "TinglyBox"
@@ -48,8 +46,9 @@ tasks:
       - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
   
   wails:binding:
+    dir: gui/wails3
     cmds:
-      - wails3 generate bindings -ts -f '-buildvcs=false -gcflags=all="-l"' -clean=true ./gui_wails3 -d frontend/src/bindings
+      - wails3 generate bindings -ts -f '-buildvcs=false -gcflags=all="-l"' -clean=true ./ -d ../../frontend/src/bindings
   
   wails:manual:
     cmds:
