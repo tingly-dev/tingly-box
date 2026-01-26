@@ -379,10 +379,10 @@ func (s *Server) forwardOpenAIStreamRequest(provider *typ.Provider, req *openai.
 	// Get or create OpenAI client wrapper from pool
 	wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
 
-	// Make the streaming request using wrapper method with provider timeout
-	timeout := time.Duration(provider.Timeout) * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
+	// Use background context for streaming
+	// The stream will manage its own lifecycle and timeout
+	// We don't use a timeout here because streaming responses can take longer
+	ctx := context.Background()
 
 	stream := wrapper.ChatCompletionsNewStreaming(ctx, *req)
 
@@ -771,7 +771,7 @@ func (s *Server) convertMessagesToResponseInputItems(messages []openai.ChatCompl
 // isValidRuleScenario checks if the given scenario is a valid RuleScenario
 func isValidRuleScenario(scenario typ.RuleScenario) bool {
 	switch scenario {
-	case typ.ScenarioOpenAI, typ.ScenarioAnthropic, typ.ScenarioClaudeCode:
+	case typ.ScenarioOpenAI, typ.ScenarioAnthropic, typ.ScenarioClaudeCode, typ.ScenarioOpenCode:
 		return true
 	default:
 		return false

@@ -178,4 +178,7 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 // sendOpenAIStreamChunk helper function to send a chunk in OpenAI format
 func sendOpenAIStreamChunk(c *gin.Context, chunk map[string]interface{}) {
 	c.SSEvent("", chunk)
+	if flusher, ok := c.Writer.(http.Flusher); ok {
+		flusher.Flush()
+	}
 }
