@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -14,7 +15,6 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
-
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -249,9 +249,37 @@ func (s *Server) getProviderModelsForProbe(provider *typ.Provider) ([]string, er
 	return models, nil
 }
 
+// categorizeProbeError categorizes common probe errors into error codes
+func categorizeProbeError(errorMessage string) string {
+	errorCode := "PROBE_FAILED"
+	lowerMsg := strings.ToLower(errorMessage)
+
+	if strings.Contains(lowerMsg, "authentication") || strings.Contains(lowerMsg, "unauthorized") {
+		errorCode = "AUTHENTICATION_FAILED"
+	} else if strings.Contains(lowerMsg, "rate limit") {
+		errorCode = "RATE_LIMIT_EXCEEDED"
+	} else if strings.Contains(lowerMsg, "model") {
+		errorCode = "MODEL_NOT_AVAILABLE"
+	} else if strings.Contains(lowerMsg, "timeout") || strings.Contains(lowerMsg, "deadline") {
+		errorCode = "CONNECTION_TIMEOUT"
+	} else if strings.Contains(lowerMsg, "token") {
+		errorCode = "INVALID_API_KEY"
+	}
+
+	return errorCode
+}
+
 // probeWithOpenAI handles probe requests for OpenAI-style APIs
 func (s *Server) probeWithOpenAI(c *gin.Context, provider *typ.Provider, model string) (string, ProbeUsage, error) {
 	startTime := time.Now()
+
+	// Check if this is a Codex OAuth provider
+	// Codex OAuth requires the Responses API, not Chat Completions
+	if provider.AuthType == typ.AuthTypeOAuth &&
+		provider.OAuthDetail != nil &&
+		provider.OAuthDetail.ProviderType == "codex" {
+		return s.probeWithResponsesAPI(c, provider, model)
+	}
 
 	// Get OpenAI client from pool (supports proxy and caching)
 	openaiClient := s.clientPool.GetOpenAIClient(provider, "")
@@ -285,31 +313,177 @@ func (s *Server) probeWithOpenAI(c *gin.Context, provider *typ.Provider, model s
 	}
 
 	if err != nil {
-		// Handle error response
-		errorMessage := err.Error()
-		errorCode := "PROBE_FAILED"
+		errorCode := categorizeProbeError(err.Error())
+		errMsg := err.Error()
 
-		// Categorize common errors
-		if strings.Contains(strings.ToLower(errorMessage), "authentication") || strings.Contains(strings.ToLower(errorMessage), "unauthorized") {
-			errorCode = "AUTHENTICATION_FAILED"
-		} else if strings.Contains(strings.ToLower(errorMessage), "rate limit") {
-			errorCode = "RATE_LIMIT_EXCEEDED"
-		} else if strings.Contains(strings.ToLower(errorMessage), "model") {
-			errorCode = "MODEL_NOT_AVAILABLE"
-		} else if strings.Contains(strings.ToLower(errorMessage), "timeout") || strings.Contains(strings.ToLower(errorMessage), "deadline") {
-			errorCode = "CONNECTION_TIMEOUT"
-		} else if strings.Contains(strings.ToLower(errorMessage), "token") {
-			errorCode = "INVALID_API_KEY"
+		// Provide helpful message for Codex OAuth providers
+		if provider.AuthType == typ.AuthTypeOAuth &&
+			provider.OAuthDetail != nil &&
+			provider.OAuthDetail.ProviderType == "codex" {
+			errMsg = fmt.Sprintf("%s (Note: Codex OAuth tokens have limited API access. Consider using a regular API key instead.)", err.Error())
 		}
 
-		return "", tokenUsage, fmt.Errorf("%s: %s (processing time: %dms)", errorCode, errorMessage, processingTime)
+		return "", tokenUsage, fmt.Errorf("%s: %s (processing time: %dms)", errorCode, errMsg, processingTime)
 	}
 
-	// If response content is empty, provide fallback
 	if responseContent == "" {
 		responseContent = "<response content is empty, but request success>"
 	}
+	return responseContent, tokenUsage, nil
+}
 
+// probeWithResponsesAPI handles probe requests using the ChatGPT backend API Responses endpoint (for Codex OAuth)
+// Reference: https://github.com/SamSaffron/term-llm/blob/main/internal/llm/chatgpt.go
+func (s *Server) probeWithResponsesAPI(c *gin.Context, provider *typ.Provider, model string) (string, ProbeUsage, error) {
+	startTime := time.Now()
+
+	// Get HTTP client from the OpenAI client wrapper
+	wrapper := s.clientPool.GetOpenAIClient(provider, "")
+	if wrapper == nil {
+		return "", ProbeUsage{}, fmt.Errorf("failed to get OpenAI client")
+	}
+
+	// Build ChatGPT backend API request format
+	// The ChatGPT backend API uses a different format than standard OpenAI Responses API
+	inputItems := []map[string]interface{}{
+		{
+			"type": "message",
+			"role": "user",
+			"content": []map[string]string{
+				{"type": "input_text", "text": "Hi"},
+			},
+		},
+	}
+
+	reqBody := map[string]interface{}{
+		"model":        model,
+		"instructions": "work as `echo`",
+		"input":        inputItems,
+		"tools":        []interface{}{},
+		"tool_choice":  "auto",
+		"stream":       true,
+		"store":        false,
+		"include":      []string{},
+	}
+
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return "", ProbeUsage{}, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// Create HTTP request to ChatGPT backend API
+	// The URL rewriting transport will convert this to /backend-api/codex/responses
+	reqURL := provider.APIBase + "/responses"
+	req, err := http.NewRequestWithContext(c.Request.Context(), "POST", reqURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return "", ProbeUsage{}, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set required headers for ChatGPT backend API
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+provider.GetAccessToken())
+	req.Header.Set("OpenAI-Beta", "responses=experimental")
+	req.Header.Set("originator", "tingly-box")
+
+	// Add ChatGPT-Account-ID header if available from OAuth metadata
+	if provider.OAuthDetail != nil && provider.OAuthDetail.ExtraFields != nil {
+		if accountID, ok := provider.OAuthDetail.ExtraFields["account_id"].(string); ok && accountID != "" {
+			req.Header.Set("ChatGPT-Account-ID", accountID)
+		}
+	}
+
+	// Make the request
+	resp, err := wrapper.HttpClient().Do(req)
+	processingTime := time.Since(startTime).Milliseconds()
+
+	if err != nil {
+		errorCode := categorizeProbeError(err.Error())
+		return "", ProbeUsage{}, fmt.Errorf("%s: %s (processing time: %dms)", errorCode, err.Error(), processingTime)
+	}
+	defer resp.Body.Close()
+
+	// Check for error status
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		errorCode := categorizeProbeError(string(respBody))
+		errMsg := string(respBody)
+
+		// Provide helpful message for Codex OAuth providers
+		if provider.AuthType == typ.AuthTypeOAuth &&
+			provider.OAuthDetail != nil &&
+			provider.OAuthDetail.ProviderType == "codex" {
+			errMsg = fmt.Sprintf("%s (Note: Codex OAuth tokens have limited API access. Consider using a regular API key instead.)", string(respBody))
+		}
+
+		return "", ProbeUsage{}, fmt.Errorf("%s: %s (processing time: %dms)", errorCode, errMsg, processingTime)
+	}
+
+	// Read streaming response and collect all chunks
+	var responseContent string
+	tokenUsage := ProbeUsage{}
+
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		// Skip empty lines and non-data lines
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+
+		// Extract JSON data from SSE format
+		jsonData := strings.TrimPrefix(line, "data: ")
+
+		// Check for stream end
+		if jsonData == "[DONE]" {
+			break
+		}
+
+		// Parse SSE chunk
+		var chunk struct {
+			Output []struct {
+				Type    string `json:"type"`
+				Content []struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				} `json:"content"`
+			} `json:"output"`
+			Usage struct {
+				InputTokens  int `json:"input_tokens"`
+				OutputTokens int `json:"output_tokens"`
+			} `json:"usage"`
+		}
+
+		if err := json.Unmarshal([]byte(jsonData), &chunk); err != nil {
+			continue // Skip invalid JSON chunks
+		}
+
+		// Extract response content from output
+		for _, item := range chunk.Output {
+			if item.Type == "message" {
+				for _, content := range item.Content {
+					if content.Type == "output_text" {
+						responseContent += content.Text
+					}
+				}
+			}
+		}
+
+		// Extract usage from the last chunk
+		if chunk.Usage.InputTokens > 0 {
+			tokenUsage.PromptTokens = chunk.Usage.InputTokens
+			tokenUsage.CompletionTokens = chunk.Usage.OutputTokens
+			tokenUsage.TotalTokens = chunk.Usage.InputTokens + chunk.Usage.OutputTokens
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return "", ProbeUsage{}, fmt.Errorf("failed to read streaming response: %w", err)
+	}
+
+	if responseContent == "" {
+		responseContent = "<response content is empty, but request success>"
+	}
 	return responseContent, tokenUsage, nil
 }
 
@@ -366,31 +540,22 @@ func (s *Server) probeWithAnthropic(c *gin.Context, provider *typ.Provider, mode
 	}
 
 	if err != nil {
-		// Handle error response
-		errorMessage := err.Error()
-		errorCode := "PROBE_FAILED"
+		errorCode := categorizeProbeError(err.Error())
+		errMsg := err.Error()
 
-		// Categorize common errors
-		if strings.Contains(strings.ToLower(errorMessage), "authentication") || strings.Contains(strings.ToLower(errorMessage), "unauthorized") {
-			errorCode = "AUTHENTICATION_FAILED"
-		} else if strings.Contains(strings.ToLower(errorMessage), "rate limit") {
-			errorCode = "RATE_LIMIT_EXCEEDED"
-		} else if strings.Contains(strings.ToLower(errorMessage), "model") {
-			errorCode = "MODEL_NOT_AVAILABLE"
-		} else if strings.Contains(strings.ToLower(errorMessage), "timeout") || strings.Contains(strings.ToLower(errorMessage), "deadline") {
-			errorCode = "CONNECTION_TIMEOUT"
-		} else if strings.Contains(strings.ToLower(errorMessage), "token") {
-			errorCode = "INVALID_API_KEY"
+		// Provide helpful message for Codex OAuth providers
+		if provider.AuthType == typ.AuthTypeOAuth &&
+			provider.OAuthDetail != nil &&
+			provider.OAuthDetail.ProviderType == "codex" {
+			errMsg = fmt.Sprintf("%s (Note: Codex OAuth tokens have limited API access. Consider using a regular API key instead.)", err.Error())
 		}
 
-		return "", tokenUsage, fmt.Errorf("%s: %s (processing time: %dms)", errorCode, errorMessage, processingTime)
+		return "", tokenUsage, fmt.Errorf("%s: %s (processing time: %dms)", errorCode, errMsg, processingTime)
 	}
 
-	// If response content is empty, provide fallback
 	if responseContent == "" {
 		responseContent = "<response content is empty, but request success>"
 	}
-
 	return responseContent, tokenUsage, nil
 }
 

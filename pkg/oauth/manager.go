@@ -12,7 +12,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -39,6 +38,7 @@ type SessionState struct {
 	ExpiresAt    time.Time     `json:"expires_at"`
 	ProviderUUID string        `json:"provider_uuid,omitempty"` // Set when success
 	Error        string        `json:"error,omitempty"`         // Set when failed
+	ProxyURL     string        `json:"proxy_url,omitempty"`     // Proxy URL used for this session
 }
 
 // Manager handles OAuth flows
@@ -455,17 +455,9 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 	m.debugRequest(req, config.TokenRequestFormat)
 
 	// Send request with optional proxy support
-	// Proxy is read from HTTP_PROXY/HTTPS_PROXY environment variables
-	client := &http.Client{Timeout: 60 * time.Second}
-
-	// Check if proxy is configured
-	if os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != "" {
-		// Use proxy from environment
-		client.Transport = &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-		}
-		fmt.Printf("[OAuth] Using proxy from environment\n")
-	}
+	// Uses OAUTH_PROXY_URL, HTTP_PROXY, or HTTPS_PROXY environment variables
+	client := m.config.GetHTTPClient()
+	client.Timeout = 60 * time.Second
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -511,7 +503,11 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 			if claims.Name != "" {
 				token.Metadata["name"] = claims.Name
 			}
+		} else {
+			logrus.Warnf("[OAuth] Failed to parse ID token for Codex provider")
 		}
+	} else if config.Type == ProviderCodex {
+		logrus.Warnf("[OAuth] Codex provider token has no ID token (id_token field is empty)")
 	}
 
 	// Call provider's after-token hook to fetch additional metadata
@@ -608,17 +604,9 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 	m.debugRequest(req, config.TokenRequestFormat)
 
 	// Send request with optional proxy support
-	// Proxy is read from HTTP_PROXY/HTTPS_PROXY environment variables
-	client := &http.Client{Timeout: 30 * time.Second}
-
-	// Check if proxy is configured
-	if os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != "" {
-		// Use proxy from environment
-		client.Transport = &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-		}
-		fmt.Printf("[OAuth] Using proxy from environment\n")
-	}
+	// Uses OAUTH_PROXY_URL, HTTP_PROXY, or HTTPS_PROXY environment variables
+	client := m.config.GetHTTPClient()
+	client.Timeout = 30 * time.Second
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -702,6 +690,28 @@ func (m *Manager) GetConfig() *Config {
 	return m.config
 }
 
+// SetBaseURL updates the BaseURL in the OAuth configuration
+// This is used when starting a dynamic callback server on a specific port
+func (m *Manager) SetBaseURL(baseURL string) {
+	m.config.BaseURL = baseURL
+}
+
+// SetProxyURL updates the ProxyURL in the OAuth configuration
+// This is used to temporarily set a proxy for a specific OAuth flow
+func (m *Manager) SetProxyURL(proxyURL *url.URL) {
+	m.config.ProxyURL = proxyURL
+	if proxyURL != nil {
+		logrus.Infof("[OAuth] Set proxy URL: %s", proxyURL.String())
+	}
+}
+
+// ResetProxyURL clears the ProxyURL in the OAuth configuration
+// This should be called after OAuth flow completes
+func (m *Manager) ResetProxyURL() {
+	m.config.ProxyURL = nil
+	logrus.Info("[OAuth] Reset proxy URL")
+}
+
 // InitiateDeviceCodeFlow initiates the Device Code flow and returns device code data
 // RFC 8628: OAuth 2.0 Device Authorization Grant
 func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, providerType ProviderType, redirectTo string, name string) (*DeviceCodeData, error) {
@@ -769,7 +779,8 @@ func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, pro
 		req.Header.Set("Content-Type", contentType)
 	}
 
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := m.config.GetHTTPClient()
+	client.Timeout = 30 * time.Second
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("device code request failed: %w", err)
@@ -911,7 +922,8 @@ func (m *Manager) pollTokenRequest(ctx context.Context, config *ProviderConfig, 
 		req.Body = io.NopCloser(reqBody)
 	}
 
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := m.config.GetHTTPClient()
+	client.Timeout = 30 * time.Second
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("token poll request failed: %w", err)
@@ -1083,6 +1095,13 @@ func (m *Manager) GetSession(sessionID string) (*SessionState, error) {
 	}
 
 	return session, nil
+}
+
+// StoreSession stores or updates a session
+func (m *Manager) StoreSession(session *SessionState) {
+	m.sessionsMu.Lock()
+	defer m.sessionsMu.Unlock()
+	m.sessions[session.SessionID] = session
 }
 
 // UpdateSessionStatus updates the status of a session

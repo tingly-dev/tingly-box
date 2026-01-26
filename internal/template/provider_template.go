@@ -589,3 +589,29 @@ func (tm *TemplateManager) GetMaxTokensForModelByProvider(provider *typ.Provider
 	// Fallback to global default
 	return constant.DefaultMaxTokens
 }
+
+// GetCodexModels returns the list of available Codex models from the codex_oauth provider template
+func (tm *TemplateManager) GetCodexModels() []string {
+	if tm == nil {
+		// Fallback to hardcoded models if manager is nil
+		return getCodexModelsDefault()
+	}
+
+	codexTemplate, err := tm.GetTemplate("codex_oauth")
+	if err != nil || codexTemplate == nil || len(codexTemplate.Models) == 0 {
+		// Fallback to hardcoded models if template not found or has no models
+		return getCodexModelsDefault()
+	}
+	return codexTemplate.Models
+}
+
+// getCodexModelsDefault returns the default hardcoded Codex models list
+func getCodexModelsDefault() []string {
+	return []string{
+		"gpt-5-codex",
+		"gpt-5.1-codex",
+		"gpt-5.1-codex-max",
+		"gpt-5.1-codex-mini",
+		"gpt-5.2-codex",
+	}
+}

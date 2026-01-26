@@ -328,7 +328,7 @@ func (h *IFlowHook) AfterToken(ctx context.Context, accessToken string, httpClie
 type CodexHook struct{}
 
 func (h *CodexHook) BeforeAuth(params map[string]string) error {
-	// Add OpenAI Codex CLI specific parameters
+	// Emulate OpenAI Codex CLI by adding the exact parameters it uses
 	params["id_token_add_organizations"] = "true"
 	params["codex_cli_simplified_flow"] = "true"
 	params["originator"] = "codex_cli_rs"
