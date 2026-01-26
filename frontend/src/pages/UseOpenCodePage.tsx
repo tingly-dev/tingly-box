@@ -11,6 +11,7 @@ import { BaseUrlRow } from '@/components/BaseUrlRow';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from '@/components/TemplatePage.tsx';
+import OpenCodeConfigModal from '@/components/OpenCodeConfigModal';
 import { useFunctionPanelData } from '../hooks/useFunctionPanelData';
 import { api, getBaseUrl } from '../services/api';
 
@@ -30,6 +31,7 @@ const UseOpenCodePage: React.FC = () => {
     const [rules, setRules] = React.useState<any[]>([]);
     const [loadingRule, setLoadingRule] = React.useState(true);
     const [newlyCreatedRuleUuids, setNewlyCreatedRuleUuids] = React.useState<Set<string>>(new Set());
+    const [configModalOpen, setConfigModalOpen] = React.useState(false);
     const navigate = useNavigate();
 
     const handleAddApiKeyClick = () => {
@@ -105,6 +107,12 @@ const UseOpenCodePage: React.FC = () => {
         };
     }, []);
 
+    // Get the default request model from the built-in rule
+    const getRequestModel = () => {
+        const builtInRule = rules.find(r => r.uuid === 'built-in-opencode');
+        return builtInRule?.request_model || 'tingly-opencode';
+    };
+
     const header = (
         <Box sx={{ p: 2 }}>
             <BaseUrlRow
@@ -173,6 +181,14 @@ const UseOpenCodePage: React.FC = () => {
                                         New Rule
                                     </Button>
                                 </Tooltip>
+                                <Button
+                                    onClick={() => setConfigModalOpen(true)}
+                                    variant="contained"
+                                    size="small"
+                                    sx={{ fontSize: '0.875rem' }}
+                                >
+                                    Config OpenCode
+                                </Button>
                             </Stack>
                         }
                     >
@@ -195,6 +211,16 @@ const UseOpenCodePage: React.FC = () => {
                         newlyCreatedRuleUuids={newlyCreatedRuleUuids}
                         allowDeleteRule={true}
                         onRuleDelete={handleRuleDelete}
+                    />
+
+                    {/* OpenCode Config Modal */}
+                    <OpenCodeConfigModal
+                        open={configModalOpen}
+                        onClose={() => setConfigModalOpen(false)}
+                        baseUrl={baseUrl}
+                        token={token}
+                        requestModel={getRequestModel()}
+                        copyToClipboard={copyToClipboard}
                     />
                 </CardGrid>
             )}
