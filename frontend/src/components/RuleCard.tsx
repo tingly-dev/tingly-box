@@ -569,10 +569,14 @@ export const RuleCard: React.FC<RuleCardProps> = ({
             canProbe={!!configRecord.providers[0]?.provider && !!configRecord.providers[0]?.model}
             isProbing={isProbing}
             allowDeleteRule={allowDeleteRule}
+            active={configRecord.active}
+            allowToggleRule={allowToggleRule}
+            saving={saving}
             onToggleSmartRouting={() => handleUpdateRecord('smartEnabled', !isSmartMode)}
             onProbe={handleProbe}
             onExport={handleExport}
             onDelete={handleDeleteButtonClick}
+            onToggleActive={() => handleUpdateRecord('active', !configRecord.active)}
         />
     );
 
