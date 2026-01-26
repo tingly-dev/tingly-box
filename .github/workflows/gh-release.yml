@@ -18,7 +18,7 @@ on:
         description: 'Build GUI version'
         required: false
         type: boolean
-        default: true
+        default: false
       
 env:
   GO_VERSION: '1.25'
@@ -46,11 +46,11 @@ jobs:
             echo "build_gui=${{ github.event.inputs.build_gui }}" >> $GITHUB_OUTPUT
           elif [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             echo "release_tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-            echo "build_gui=true" >> $GITHUB_OUTPUT
+            echo "build_gui=false" >> $GITHUB_OUTPUT
           else
             # CI push to branch - use a dev version
             echo "release_tag=dev-${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
-            echo "build_gui=true" >> $GITHUB_OUTPUT
+            echo "build_gui=false" >> $GITHUB_OUTPUT
           fi
 
   build-cli:
@@ -364,6 +364,7 @@ jobs:
           # Keep artifacts in separate subdirectories to avoid overwriting same-named binaries
 
       - name: Download GUI artifacts
+        if: needs.setup.outputs.build_gui == 'true'
         uses: actions/download-artifact@v4
         with:
           pattern: gui-*
