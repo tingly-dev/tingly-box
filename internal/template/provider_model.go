@@ -27,7 +27,7 @@ func GetProviderModelsFromAPI(provider *typ.Provider) ([]string, error) {
 		return getCodexModels(), nil
 	}
 	// Also handle legacy ChatGPT backend API providers
-	if provider.APIBase == typ.ChatGPTBackendAPIBase {
+	if provider.APIBase == protocol.ChatGPTBackendAPIBase {
 		return getCodexModels(), nil
 	}
 

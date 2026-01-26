@@ -5,7 +5,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/smart_routing"
+	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
 )
 
 // RuleScenario represents the scenario for a routing rule
@@ -46,12 +46,6 @@ type AuthType string
 const (
 	AuthTypeAPIKey AuthType = "api_key"
 	AuthTypeOAuth  AuthType = "oauth"
-)
-
-// Provider API Base URLs
-const (
-	// ChatGPTBackendAPIBase is the API base URL for ChatGPT/Codex OAuth provider
-	ChatGPTBackendAPIBase = "https://chatgpt.com/backend-api"
 )
 
 // OAuthDetail contains OAuth-specific authentication information

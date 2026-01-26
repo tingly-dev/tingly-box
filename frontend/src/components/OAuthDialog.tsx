@@ -721,7 +721,7 @@ const OAuthDialog = ({open, onClose, onSuccess}: OAuthDialogProps) => {
                         <TextField
                             fullWidth
                             label="HTTP/SOCKS Proxy URL (Optional)"
-                            placeholder="http://proxy.example.com:8080 or socks5://127.0.0.1:1080"
+                            placeholder="http://127.0.0.1:7890 or socks5://127.0.0.1:7890"
                             value={proxyUrl}
                             onChange={(e) => handleProxyUrlChange(e.target.value)}
                             helperText={
