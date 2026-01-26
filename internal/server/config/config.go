@@ -1204,6 +1204,19 @@ func init() {
 			},
 			Active: true,
 		},
+		{
+			UUID:          "built-in-opencode",
+			Scenario:      typ.ScenarioOpenCode,
+			RequestModel:  "tingly-opencode",
+			ResponseModel: "",
+			Description:   "Default proxy rule for OpenCode - AI coding assistant",
+			Services:      []loadbalance.Service{},
+			LBTactic: typ.Tactic{
+				Type:   loadbalance.TacticRoundRobin,
+				Params: typ.DefaultRoundRobinParams(),
+			},
+			Active: true,
+		},
 	}
 }
 
