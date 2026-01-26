@@ -18,7 +18,7 @@ on:
         description: 'Build GUI version'
         required: false
         type: boolean
-        default: true
+        default: false
       
 env:
   GO_VERSION: '1.25'
