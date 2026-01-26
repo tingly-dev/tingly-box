@@ -1,4 +1,4 @@
-module github.com/tingly-dev/tingly-box/gui_wails3
+module github.com/tingly-dev/tingly-box/gui/wails3
 
 go 1.25.3
 

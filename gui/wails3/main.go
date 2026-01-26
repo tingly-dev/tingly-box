@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/tingly-dev/tingly-box/gui_wails3/internal/flags"
+	"github.com/tingly-dev/tingly-box/gui/wails3/internal/flags"
 	"github.com/tingly-dev/tingly-box/pkg/network"
 )
 
