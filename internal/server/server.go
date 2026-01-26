@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -54,6 +55,13 @@ type Server struct {
 
 	// OAuth refresher for OAuth auto-refresh
 	oauthRefresher *background.OAuthRefresher
+
+	// OAuth callback server (for providers requiring specific ports like Codex on 1455)
+	oauthCallbackServer *http.Server
+
+	// Dynamic callback servers (one per active OAuth flow)
+	callbackServers   map[string]*oauth2.CallbackServer
+	callbackServersMu sync.RWMutex
 
 	// template manager for provider templates
 	templateManager *template.TemplateManager
@@ -293,6 +301,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	}
 
 	// Initialize OAuth manager and handler
+	// Note: BaseURL will be dynamically updated for providers with port constraints
 	registry := oauth2.DefaultRegistry()
 	oauthConfig := &oauth2.Config{
 		BaseURL:           fmt.Sprintf("%s://localhost:%d", protocol, cfg.GetServerPort()),
@@ -353,6 +362,9 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Setup configuration watcher
 	server.setupConfigWatcher()
 
+	// Initialize dynamic callback servers map
+	server.callbackServers = make(map[string]*oauth2.CallbackServer)
+
 	return server
 }
 
@@ -385,6 +397,133 @@ func (s *Server) setupConfigWatcher() {
 			}
 		}
 	})
+}
+
+// startDynamicCallbackServer starts a temporary callback server for a specific OAuth session
+func (s *Server) startDynamicCallbackServer(sessionID string, port int) error {
+	s.callbackServersMu.Lock()
+	defer s.callbackServersMu.Unlock()
+
+	// Check if a callback server already exists for this session
+	if _, exists := s.callbackServers[sessionID]; exists {
+		return fmt.Errorf("callback server already exists for session %s", sessionID)
+	}
+
+	// Create an http.HandlerFunc that properly handles the OAuth callback
+	handlerFunc := func(w http.ResponseWriter, r *http.Request) {
+		// Ignore favicon requests
+		if r.URL.Path == "/favicon.ico" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		log.Printf("[OAuth] Callback received: %s %s", r.Method, r.URL.Path)
+		log.Printf("[OAuth] Query params: %v", r.URL.Query())
+
+		// Delegate to the OAuth callback handler
+		// We need to directly call the oauth manager since gin won't work here
+		token, err := s.oauthManager.HandleCallback(r.Context(), r)
+		if err != nil {
+			log.Printf("[OAuth] Callback error: %v", err)
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, "<html><body><h1>OAuth Error</h1><p>%s</p></body></html>", err.Error())
+			return
+		}
+
+		// Use createProviderFromToken to create the provider
+		providerUUID, err := s.createProviderFromToken(token, token.Provider, "", token.SessionID)
+		if err != nil {
+			log.Printf("[OAuth] Failed to create provider: %v", err)
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "<html><body><h1>OAuth Error</h1><p>Failed to create provider: %v</p></body></html>", err)
+			return
+		}
+
+		// Update session status to success if session ID exists
+		if token.SessionID != "" {
+			_ = s.oauthManager.UpdateSessionStatus(token.SessionID, oauth2.SessionStatusSuccess, providerUUID, "")
+		}
+
+		log.Printf("[OAuth] Callback successful for provider %s, created provider %s", token.Provider, providerUUID)
+
+		// Stop the dynamic callback server after successful callback
+		go func() {
+			time.Sleep(1 * time.Second) // Give time for the response to be sent
+			s.stopDynamicCallbackServer(sessionID)
+		}()
+
+		// Return success HTML page
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, `<!DOCTYPE html>
+<html>
+<head>
+    <title>OAuth Success</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
+        .success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 20px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div class="success">
+        <h1>OAuth Authorization Successful!</h1>
+        <p>You can close this window and return to the application.</p>
+        <h2>Provider: %s</h2>
+        <p>Token: %s...</p>
+    </div>
+</body>
+</html>`, string(token.Provider), token.AccessToken[:20])
+	}
+
+	// Create a new callback server with the handler
+	callbackServer := oauth2.NewCallbackServer(handlerFunc)
+
+	// Start the callback server on the specified port
+	if err := callbackServer.Start(port); err != nil {
+		return fmt.Errorf("failed to start callback server on port %d: %w", port, err)
+	}
+
+	// Store the callback server reference
+	s.callbackServers[sessionID] = callbackServer
+
+	log.Printf("[OAuth] Started dynamic callback server on port %d for session %s", port, sessionID)
+
+	// Auto-shutdown after 5 minutes
+	go func() {
+		time.Sleep(5 * time.Minute)
+		s.stopDynamicCallbackServer(sessionID)
+	}()
+
+	return nil
+}
+
+// stopDynamicCallbackServer stops and removes a dynamic callback server
+func (s *Server) stopDynamicCallbackServer(sessionID string) {
+	s.callbackServersMu.Lock()
+	defer s.callbackServersMu.Unlock()
+
+	callbackServer, exists := s.callbackServers[sessionID]
+	if !exists {
+		return
+	}
+
+	// Shutdown the callback server
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := callbackServer.Stop(ctx); err != nil {
+		log.Printf("[OAuth] Error stopping callback server for session %s: %v", sessionID, err)
+	}
+
+	// Remove from map
+	delete(s.callbackServers, sessionID)
+
+	// Reset proxy URL after OAuth flow completes
+	s.oauthManager.ResetProxyURL()
+
+	log.Printf("[OAuth] Stopped dynamic callback server for session %s", sessionID)
 }
 
 // setupMiddleware configures server middleware

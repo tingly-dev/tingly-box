@@ -2,7 +2,12 @@ package oauth
 
 import (
 	"fmt"
+	"net/http"
+	"net/url"
+	"os"
 	"time"
+
+	"github.com/sirupsen/logrus"
 )
 
 // ProviderType represents the OAuth provider type
@@ -54,17 +59,49 @@ type Config struct {
 
 	// TokenExpiryBuffer is the buffer before token expiry to trigger refresh
 	TokenExpiryBuffer time.Duration
+
+	// ProxyURL is the HTTP proxy URL for OAuth requests (e.g., "http://proxy.example.com:8080")
+	// Can be set via OAUTH_PROXY_URL environment variable
+	ProxyURL *url.URL
 }
 
 // DefaultConfig returns a default OAuth configuration
 func DefaultConfig() *Config {
-	return &Config{
+	cfg := &Config{
 		BaseURL:           "http://localhost:12580",
 		ProviderConfigs:   make(map[ProviderType]*ProviderConfig),
 		TokenStorage:      NewMemoryTokenStorage(),
 		StateExpiry:       10 * time.Minute,
 		TokenExpiryBuffer: 5 * time.Minute,
 	}
+
+	// Read proxy URL from environment variable
+	if proxyURL := os.Getenv("OAUTH_PROXY_URL"); proxyURL != "" {
+		if u, err := url.Parse(proxyURL); err == nil {
+			cfg.ProxyURL = u
+		}
+	}
+
+	return cfg
+}
+
+// GetHTTPClient returns an HTTP client configured with proxy if set
+func (c *Config) GetHTTPClient() *http.Client {
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	if c.ProxyURL != nil {
+		transport := &http.Transport{
+			Proxy: http.ProxyURL(c.ProxyURL),
+		}
+		client.Transport = transport
+		logrus.Infof("[OAuth] Using proxy: %s for token request", c.ProxyURL.String())
+	} else {
+		logrus.Debug("[OAuth] No proxy configured for token request")
+	}
+
+	return client
 }
 
 // ProviderConfig holds the OAuth configuration for a specific provider

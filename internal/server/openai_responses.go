@@ -14,6 +14,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -177,6 +178,15 @@ func (s *Server) handleResponsesNonStreamingRequest(c *gin.Context, provider *ty
 	// Track usage
 	s.trackUsage(c, rule, provider, actualModel, responseModel, int(inputTokens), int(outputTokens), false, "success", "")
 
+	// Check if this is a ChatGPT backend API provider (Codex OAuth)
+	// These providers return responses in a different format that needs conversion
+	if provider.APIBase == protocol.ChatGPTBackendAPIBase && response.ID != "" {
+		// Convert ChatGPT backend API response to OpenAI chat completion format
+		// The response was accumulated from streaming chunks in forwardChatGPTBackendRequest
+		s.convertChatGPTResponseToOpenAIChatCompletion(c, *response, responseModel, inputTokens, outputTokens)
+		return
+	}
+
 	// Override model in response if needed
 	if responseModel != actualModel {
 		// Create a copy of the response with updated model
@@ -195,6 +205,13 @@ func (s *Server) handleResponsesNonStreamingRequest(c *gin.Context, provider *ty
 
 // handleResponsesStreamingRequest handles streaming Responses API requests
 func (s *Server) handleResponsesStreamingRequest(c *gin.Context, provider *typ.Provider, params responses.ResponseNewParams, responseModel, actualModel string, rule *typ.Rule) {
+	// Check if this is a ChatGPT backend API provider (Codex OAuth)
+	// These providers use a custom streaming handler
+	if provider.APIBase == protocol.ChatGPTBackendAPIBase {
+		s.handleChatGPTBackendStreamingRequest(c, provider, params, responseModel, actualModel, rule)
+		return
+	}
+
 	// Create streaming request
 	stream, _, err := s.forwardResponsesStreamRequest(provider, params)
 	if err != nil {
@@ -315,6 +332,12 @@ func (s *Server) handleResponsesStreamResponse(c *gin.Context, stream *ssestream
 
 // forwardResponsesRequest forwards a Responses API request to the provider
 func (s *Server) forwardResponsesRequest(provider *typ.Provider, params responses.ResponseNewParams) (*responses.Response, error) {
+	// Check if this is a ChatGPT backend API provider (Codex OAuth)
+	// ChatGPT backend API requires a different request format than standard OpenAI Responses API
+	if provider.APIBase == protocol.ChatGPTBackendAPIBase {
+		return s.forwardChatGPTBackendRequest(provider, params)
+	}
+
 	wrapper := s.clientPool.GetOpenAIClient(provider, params.Model)
 	logrus.Infof("provider: %s (responses)", provider.Name)
 
@@ -333,6 +356,8 @@ func (s *Server) forwardResponsesRequest(provider *typ.Provider, params response
 
 // forwardResponsesStreamRequest forwards a streaming Responses API request to the provider
 func (s *Server) forwardResponsesStreamRequest(provider *typ.Provider, params responses.ResponseNewParams) (*ssestream.Stream[responses.ResponseStreamEventUnion], context.CancelFunc, error) {
+	// Note: ChatGPT backend API providers are handled separately in the Anthropic beta handler
+
 	wrapper := s.clientPool.GetOpenAIClient(provider, params.Model)
 	logrus.Infof("provider: %s (responses streaming)", provider.Name)
 

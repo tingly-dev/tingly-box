@@ -7,11 +7,13 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/packages/ssestream"
+	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
 // OpenAIClient wraps the OpenAI SDK client
@@ -30,16 +32,47 @@ func defaultNewOpenAIClient(provider *typ.Provider) (*OpenAIClient, error) {
 		option.WithBaseURL(provider.APIBase),
 	}
 
-	// Create base HTTP client
-	var httpClient *http.Client
-	// Add proxy if configured
-	if provider.ProxyURL != "" {
-		httpClient = CreateHTTPClientWithProxy(provider.ProxyURL)
-		options = append(options, option.WithHTTPClient(httpClient))
-		logrus.Infof("Using proxy for OpenAI client: %s", provider.ProxyURL)
-	} else {
-		httpClient = http.DefaultClient
+	// Add X-ChatGPT-Account-ID header if available from OAuth metadata
+	// The codexHook will transform this to ChatGPT-Account-ID and add other required headers
+	// Reference: https://github.com/SamSaffron/term-llm/blob/main/internal/llm/chatgpt.go
+	if provider.OAuthDetail != nil && provider.OAuthDetail.ExtraFields != nil {
+		if accountID, ok := provider.OAuthDetail.ExtraFields["account_id"].(string); ok && accountID != "" {
+			options = append(options, option.WithHeader("X-ChatGPT-Account-ID", accountID))
+		}
 	}
+
+	// Create HTTP client with proper hook configuration
+	var httpClient *http.Client
+	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
+		// Parse provider type from OAuthDetail
+		providerType, err := oauth.ParseProviderType(provider.OAuthDetail.ProviderType)
+		if err != nil {
+			// If parsing fails, fall back to proxy client
+			if provider.ProxyURL != "" {
+				httpClient = CreateHTTPClientWithProxy(provider.ProxyURL)
+				logrus.Infof("Using proxy for OpenAI client: %s", provider.ProxyURL)
+			} else {
+				httpClient = http.DefaultClient
+			}
+		} else if providerType == oauth.ProviderCodex {
+			// Use CreateHTTPClientForProvider which applies the codex hook for path rewriting
+			httpClient = CreateHTTPClientForProvider(providerType, provider.ProxyURL, true)
+			logrus.Infof("[Codex] Using hook-based transport for ChatGPT backend API path rewriting")
+		} else {
+			// For other OAuth providers, still use CreateHTTPClientForProvider
+			httpClient = CreateHTTPClientForProvider(providerType, provider.ProxyURL, true)
+		}
+	} else {
+		// For non-OAuth providers, use simple proxy client
+		if provider.ProxyURL != "" {
+			httpClient = CreateHTTPClientWithProxy(provider.ProxyURL)
+			logrus.Infof("Using proxy for OpenAI client: %s", provider.ProxyURL)
+		} else {
+			httpClient = http.DefaultClient
+		}
+	}
+
+	options = append(options, option.WithHTTPClient(httpClient))
 
 	openaiClient := openai.NewClient(options...)
 
@@ -79,6 +112,16 @@ func (c *OpenAIClient) ChatCompletionsNew(ctx context.Context, req openai.ChatCo
 // ChatCompletionsNewStreaming creates a new streaming chat completion request
 func (c *OpenAIClient) ChatCompletionsNewStreaming(ctx context.Context, req openai.ChatCompletionNewParams) *ssestream.Stream[openai.ChatCompletionChunk] {
 	return c.client.Chat.Completions.NewStreaming(ctx, req)
+}
+
+// ResponsesNew creates a new Responses API request
+func (c *OpenAIClient) ResponsesNew(ctx context.Context, req responses.ResponseNewParams) (*responses.Response, error) {
+	return c.client.Responses.New(ctx, req)
+}
+
+// ResponsesNewStreaming creates a new streaming Responses API request
+func (c *OpenAIClient) ResponsesNewStreaming(ctx context.Context, req responses.ResponseNewParams) *ssestream.Stream[responses.ResponseStreamEventUnion] {
+	return c.client.Responses.NewStreaming(ctx, req)
 }
 
 // SetRecordSink sets the record sink for the client
