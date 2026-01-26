@@ -842,10 +842,68 @@ func (s *Server) convertResponseInputToChatGPTFormat(inputItems responses.Respon
 			if _, hasContent := chatGPTItem["content"]; hasContent {
 				result = append(result, chatGPTItem)
 			}
+			continue
+		}
+
+		// Handle function call items (tool invocations)
+		if !param.IsOmitted(item.OfFunctionCall) {
+			if chatGPTItem := s.convertFunctionCallToChatGPTFormat(item.OfFunctionCall); chatGPTItem != nil {
+				result = append(result, chatGPTItem)
+			}
+			continue
+		}
+
+		// Handle function call output items (tool results)
+		if !param.IsOmitted(item.OfFunctionCallOutput) {
+			if chatGPTItem := s.convertFunctionCallOutputToChatGPTFormat(item.OfFunctionCallOutput); chatGPTItem != nil {
+				result = append(result, chatGPTItem)
+			}
 		}
 	}
 
 	return result
+}
+
+// convertFunctionCallOutputToChatGPTFormat converts function_call_output items to ChatGPT backend format
+func (s *Server) convertFunctionCallOutputToChatGPTFormat(output *responses.ResponseInputItemFunctionCallOutputParam) map[string]interface{} {
+	if output == nil {
+		return nil
+	}
+
+	data, err := json.Marshal(output)
+	if err != nil {
+		logrus.Debugf("Failed to marshal function call output: %v", err)
+		return nil
+	}
+
+	var chatGPTItem map[string]interface{}
+	if err := json.Unmarshal(data, &chatGPTItem); err != nil {
+		logrus.Debugf("Failed to unmarshal function call output: %v", err)
+		return nil
+	}
+
+	return chatGPTItem
+}
+
+// convertFunctionCallToChatGPTFormat converts function_call items to ChatGPT backend format
+func (s *Server) convertFunctionCallToChatGPTFormat(call *responses.ResponseFunctionToolCallParam) map[string]interface{} {
+	if call == nil {
+		return nil
+	}
+
+	data, err := json.Marshal(call)
+	if err != nil {
+		logrus.Debugf("Failed to marshal function call: %v", err)
+		return nil
+	}
+
+	var chatGPTItem map[string]interface{}
+	if err := json.Unmarshal(data, &chatGPTItem); err != nil {
+		logrus.Debugf("Failed to unmarshal function call: %v", err)
+		return nil
+	}
+
+	return chatGPTItem
 }
 
 // convertResponseToolsToChatGPTFormat converts Tools from Responses API format to ChatGPT backend API format
