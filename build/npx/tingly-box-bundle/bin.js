@@ -68,7 +68,8 @@ async function extractBinary(platformDir) {
 	const cacheDir = getCacheDir();
 	const targetPath = join(cacheDir, platformDir);
 
-	const binaryName = "tingly-box-" + platformDir + (process.platform === "win32" ? ".exe" : "");
+	// All platforms now use unified binary name "tingly-box"
+	const binaryName = "tingly-box" + (process.platform === "win32" ? ".exe" : "");
 	const cachedBinary = join(targetPath, binaryName);
 
 	// Check if binary already exists in cache and has executable permission
