@@ -19,6 +19,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard'));
 const UseOpenAIPage = lazy(() => import('./pages/UseOpenAIPage'));
 const UseAnthropicPage = lazy(() => import('./pages/UseAnthropicPage'));
 const UseClaudeCodePage = lazy(() => import('./pages/UseClaudeCodePage'));
+const UseOpenCodePage = lazy(() => import('./pages/UseOpenCodePage'));
 const ApiKeyPage = lazy(() => import('./pages/ApiKeyPage'));
 const OAuthPage = lazy(() => import('./pages/OAuthPage'));
 const System = lazy(() => import('./pages/System'));
@@ -232,6 +233,7 @@ function AppContent() {
                                         <Route path="/use-openai" element={<UseOpenAIPage/>}/>
                                         <Route path="/use-anthropic" element={<UseAnthropicPage/>}/>
                                         <Route path="/use-claude-code" element={<UseClaudeCodePage/>}/>
+                                        <Route path="/use-opencode" element={<UseOpenCodePage/>}/>
                                         {/* Other routes */}
                                         <Route path="/api-keys" element={<ApiKeyPage/>}/>
                                         <Route path="/oauth" element={<OAuthPage/>}/>

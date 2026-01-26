@@ -31,6 +31,7 @@ export default {
       "useOpenAI": "OpenAI SDK",
       "useAnthropic": "Anthropic SDK",
       "useClaudeCode": "Claude Code",
+      "useOpenCode": "OpenCode",
       "apiKeys": "API Keys",
       "oauth": "OAuth",
       "credential": "Credential"
