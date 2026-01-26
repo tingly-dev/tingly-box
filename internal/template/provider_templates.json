@@ -529,6 +529,36 @@
       "supports_models_endpoint": true,
       "oauth_provider": "gemini"
     },
+    "codex_oauth": {
+      "id": "codex_oauth",
+      "name": "ChatGPT Code (OAuth)",
+      "status": "active",
+      "valid": true,
+      "website": "https://chatgpt.com",
+      "description": "ChatGPT Code API via OAuth authorization",
+      "auth_type": "oauth",
+      "api_doc": "https://platform.openai.com/docs/guides/function-calling",
+      "model_doc": "https://platform.openai.com/docs/models",
+      "pricing_doc": "https://platform.openai.com/pricing",
+      "base_url_openai": "https://chatgpt.com/backend-api",
+      "base_url_anthropic": null,
+      "models": [
+        "gpt-5-codex",
+        "gpt-5.1-codex",
+        "gpt-5.1-codex-max",
+        "gpt-5.1-codex-mini",
+        "gpt-5.2-codex"
+      ],
+      "model_limits": {
+        "gpt-5-codex": 8192,
+        "gpt-5.1-codex": 8192,
+        "gpt-5.1-codex-max": 8192,
+        "gpt-5.1-codex-mini": 8192,
+        "gpt-5.2-codex": 8192
+      },
+      "supports_models_endpoint": false,
+      "oauth_provider": "codex"
+    },
     "antigravity": {
       "id": "antigravity",
       "name": "Antigravity (Google OAuth)",

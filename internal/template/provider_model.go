@@ -147,17 +147,34 @@ func GetProviderModelsFromAPI(provider *typ.Provider) ([]string, error) {
 	return models, nil
 }
 
-// getCodexModels returns a hardcoded list of available Codex models
-// ChatGPT OAuth (Codex) only supports models with the "-codex" suffix
+// getCodexModels returns the list of available Codex models
+// Reads models from providers.codex_oauth.models in the template configuration
 func getCodexModels() []string {
-	return []string{
-		// GPT-5 Codex models
-		"gpt-5-codex",
-		// GPT-5.1 Codex models
-		"gpt-5.1-codex",
-		"gpt-5.1-codex-max",
-		"gpt-5.1-codex-mini",
-		// GPT-5.2 Codex (latest)
-		"gpt-5.2-codex",
+	// Use embedded-only template manager to get codex_oauth template
+	tm := NewEmbeddedOnlyTemplateManager()
+	if err := tm.Initialize(nil); err != nil {
+		// Fallback to hardcoded models if template loading fails
+		return []string{
+			"gpt-5-codex",
+			"gpt-5.1-codex",
+			"gpt-5.1-codex-max",
+			"gpt-5.1-codex-mini",
+			"gpt-5.2-codex",
+		}
 	}
+
+	// Get codex_oauth template
+	codexTemplate, err := tm.GetTemplate("codex_oauth")
+	if err != nil || codexTemplate == nil || len(codexTemplate.Models) == 0 {
+		// Fallback to hardcoded models if template not found or has no models
+		return []string{
+			"gpt-5-codex",
+			"gpt-5.1-codex",
+			"gpt-5.1-codex-max",
+			"gpt-5.1-codex-mini",
+			"gpt-5.2-codex",
+		}
+	}
+
+	return codexTemplate.Models
 }
