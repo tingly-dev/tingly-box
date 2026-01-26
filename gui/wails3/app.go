@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"time"
 
-	services2 "github.com/tingly-dev/tingly-box/gui_wails3/services"
+	services2 "github.com/tingly-dev/tingly-box/gui/wails3/services"
 	"github.com/wailsapp/wails/v3/pkg/application"
 
 	assets "github.com/tingly-dev/tingly-box/internal"

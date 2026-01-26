@@ -1,16 +1,15 @@
-module github.com/tingly-dev/tingly-box/gui_wails3
+module github.com/tingly-dev/tingly-box/gui/wails3
 
 go 1.25.3
 
-replace github.com/openai/openai-go/v3 => ../libs/openai-go
+replace github.com/openai/openai-go/v3 => ./../../libs/openai-go
 
-replace github.com/anthropics/anthropic-sdk-go => ../libs/anthropic-sdk-go
+replace github.com/anthropics/anthropic-sdk-go => ./../../libs/anthropic-sdk-go
 
-replace github.com/tingly-dev/tingly-box => ../
+replace github.com/tingly-dev/tingly-box => ../../
 
 require (
 	github.com/gin-gonic/gin v1.11.0
-	github.com/spf13/cobra v1.10.2
 	github.com/tingly-dev/tingly-box v0.0.0-00010101000000-000000000000
 )
 
@@ -49,13 +48,11 @@ require (
 	github.com/sergi/go-diff v1.4.0 // indirect
 	github.com/skeema/knownhosts v1.3.2 // indirect
 	github.com/wailsapp/go-webview2 v1.0.23 // indirect
-	github.com/wailsapp/mimetype v1.4.1 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	golang.org/x/crypto v0.47.0 // indirect
 	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/text v0.33.0 // indirect
-	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 
@@ -98,6 +95,7 @@ require (
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/quic-go/quic-go v0.59.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
+	github.com/spf13/cobra v1.10.2 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.2.0 // indirect
