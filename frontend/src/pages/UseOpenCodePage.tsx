@@ -3,7 +3,7 @@ import UnifiedCard from "@/components/UnifiedCard.tsx";
 import { Add as AddIcon, ContentCopy as CopyIcon, Key as KeyIcon } from '@mui/icons-material';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import { Box, Button, IconButton, Stack, Tooltip } from '@mui/material';
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { ApiConfigRow } from '@/components/ApiConfigRow';
@@ -32,6 +32,12 @@ const UseOpenCodePage: React.FC = () => {
     const [loadingRule, setLoadingRule] = React.useState(true);
     const [newlyCreatedRuleUuids, setNewlyCreatedRuleUuids] = React.useState<Set<string>>(new Set());
     const [configModalOpen, setConfigModalOpen] = React.useState(false);
+    const [isApplyLoading, setIsApplyLoading] = React.useState(false);
+    // Config preview state
+    const [configJson, setConfigJson] = React.useState('');
+    const [scriptWindows, setScriptWindows] = React.useState('');
+    const [scriptUnix, setScriptUnix] = React.useState('');
+    const [isConfigLoading, setIsConfigLoading] = React.useState(false);
     const navigate = useNavigate();
 
     const handleAddApiKeyClick = () => {
@@ -83,6 +89,42 @@ const UseOpenCodePage: React.FC = () => {
         setRules((prevRules) => prevRules.filter(r => r.uuid !== deletedRuleUuid));
     }, []);
 
+    // Fetch OpenCode config preview from backend
+    const fetchConfigPreview = async () => {
+        setIsConfigLoading(true);
+        try {
+            const result = await api.getOpenCodeConfigPreview();
+            if (result.success) {
+                setConfigJson(result.configJson);
+                setScriptWindows(result.scriptWindows);
+                setScriptUnix(result.scriptUnix);
+            } else {
+                setConfigJson('// Error: ' + (result.message || 'Failed to load config'));
+                setScriptWindows('// Error loading config');
+                setScriptUnix('// Error loading config');
+                showNotification('Failed to load config preview: ' + (result.message || 'Unknown error'), 'error');
+            }
+        } catch (err) {
+            console.error('Failed to fetch config preview:', err);
+            setConfigJson('// Error: Failed to connect to server');
+            setScriptWindows('// Error: Failed to connect to server');
+            setScriptUnix('// Error: Failed to connect to server');
+            showNotification('Failed to load config preview', 'error');
+        } finally {
+            setIsConfigLoading(false);
+        }
+    };
+
+    // Handle opening config modal - fetch preview first
+    const handleOpenConfigModal = async () => {
+        // Reset config state
+        setConfigJson('// Loading...');
+        setScriptWindows('// Loading...');
+        setScriptUnix('// Loading...');
+        await fetchConfigPreview();
+        setConfigModalOpen(true);
+    };
+
     useEffect(() => {
         let isMounted = true;
 
@@ -111,6 +153,34 @@ const UseOpenCodePage: React.FC = () => {
     const getRequestModel = () => {
         const builtInRule = rules.find(r => r.uuid === 'built-in-opencode');
         return builtInRule?.request_model || 'tingly-opencode';
+    };
+
+    // Apply handler for OpenCode config - calls backend to generate and write config
+    const handleApply = async () => {
+        try {
+            setIsApplyLoading(true);
+            const result = await api.applyOpenCodeConfig();
+
+            if (result.success) {
+                const configPath = '~/.config/opencode/opencode.json';
+                let successMsg = `Configuration file written: ${configPath}`;
+                if (result.created) {
+                    successMsg += ' (created)';
+                } else if (result.updated) {
+                    successMsg += ' (updated)';
+                }
+                if (result.backupPath) {
+                    successMsg += `\nBackup created: ${result.backupPath}`;
+                }
+                showNotification(successMsg, 'success');
+            } else {
+                showNotification(`Failed to apply opencode.json: ${result.message || 'Unknown error'}`, 'error');
+            }
+        } catch (err) {
+            showNotification('Failed to apply OpenCode config', 'error');
+        } finally {
+            setIsApplyLoading(false);
+        }
     };
 
     const header = (
@@ -182,7 +252,7 @@ const UseOpenCodePage: React.FC = () => {
                                     </Button>
                                 </Tooltip>
                                 <Button
-                                    onClick={() => setConfigModalOpen(true)}
+                                    onClick={handleOpenConfigModal}
                                     variant="contained"
                                     size="small"
                                     sx={{ fontSize: '0.875rem' }}
@@ -217,10 +287,13 @@ const UseOpenCodePage: React.FC = () => {
                     <OpenCodeConfigModal
                         open={configModalOpen}
                         onClose={() => setConfigModalOpen(false)}
-                        baseUrl={baseUrl}
-                        token={token}
-                        requestModel={getRequestModel()}
+                        generateConfigJson={() => configJson}
+                        generateScriptWindows={() => scriptWindows}
+                        generateScriptUnix={() => scriptUnix}
                         copyToClipboard={copyToClipboard}
+                        onApply={handleApply}
+                        isApplyLoading={isApplyLoading}
+                        isLoading={isConfigLoading}
                     />
                 </CardGrid>
             )}
