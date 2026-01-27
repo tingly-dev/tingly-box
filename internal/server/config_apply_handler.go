@@ -80,8 +80,8 @@ func (s *Server) ApplyClaudeConfig(c *gin.Context) {
 		"DISABLE_ERROR_REPORTING":             "1",
 		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
 		"API_TIMEOUT_MS":                      "3000000",
-		"ANTHROPIC_BASE_URL":                  baseURL + "/tingly/anthropic",
-		"ANTHROPIC_AUTH_TOKEN":                provider.GetAccessToken(),
+		"ANTHROPIC_BASE_URL":                  baseURL + "/tingly/claude_code",
+		"ANTHROPIC_AUTH_TOKEN":                s.config.GetModelToken(),
 	}
 
 	if req.Mode == "separate" {
@@ -230,7 +230,8 @@ func (s *Server) ApplyOpenCodeConfigFromState(c *gin.Context) {
 		requestModel = "tingly/cc-default"
 	}
 
-	apiKey := provider.GetAccessToken()
+	// Use the model token from config (tingly-box- prefixed JWT)
+	apiKey := s.config.GetModelToken()
 
 	// Generate OpenCode config with the actual request model
 	providerConfig := map[string]interface{}{
@@ -359,7 +360,8 @@ func (s *Server) GetOpenCodeConfigPreview(c *gin.Context) {
 		requestModel = "tingly/cc-default"
 	}
 
-	apiKey := provider.GetAccessToken()
+	// Use the model token from config (tingly-box- prefixed JWT)
+	apiKey := s.config.GetModelToken()
 
 	// Generate OpenCode config JSON
 	providerConfig := map[string]interface{}{
