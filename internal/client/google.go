@@ -99,7 +99,7 @@ func (c *GoogleClient) applyRecordMode() {
 	if c.recordSink == nil {
 		return
 	}
-	c.httpClient.Transport = NewRecordRoundTripper(c.httpClient.Transport, c.recordSink, c.provider, c.APIStyle())
+	c.httpClient.Transport = NewRecordRoundTripper(c.httpClient.Transport, c.recordSink, c.provider)
 }
 
 // GetProvider returns the provider for this client
