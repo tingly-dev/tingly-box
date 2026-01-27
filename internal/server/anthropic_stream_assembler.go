@@ -2,6 +2,7 @@ package server
 
 import (
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/shared/constant"
 )
 
 // AnthropicStreamAssembler assembles Anthropic streaming responses
@@ -167,20 +168,8 @@ func (a *AnthropicStreamAssembler) SetUsage(inputTokens, outputTokens int) {
 	}
 }
 
-// AssembledMessage represents the final assembled Anthropic message response
-type AssembledMessage struct {
-	ID           string                        `json:"id"`
-	Type         string                        `json:"type"`
-	Role         string                        `json:"role"`
-	Content      []anthropic.ContentBlockUnion `json:"content"`
-	Model        string                        `json:"model"`
-	StopReason   string                        `json:"stop_reason"`
-	StopSequence string                        `json:"stop_sequence"`
-	Usage        anthropic.Usage               `json:"usage"`
-}
-
-// Finish assembles the final response and returns it
-func (a *AnthropicStreamAssembler) Finish(model string, inputTokens, outputTokens int) *AssembledMessage {
+// Finish assembles the final response and returns it as anthropic.Message
+func (a *AnthropicStreamAssembler) Finish(model string, inputTokens, outputTokens int) *anthropic.Message {
 	if a == nil || a.msgID == "" {
 		return nil
 	}
@@ -217,13 +206,13 @@ func (a *AnthropicStreamAssembler) Finish(model string, inputTokens, outputToken
 		}
 	}
 
-	return &AssembledMessage{
+	return &anthropic.Message{
 		ID:           a.msgID,
-		Type:         msgType,
-		Role:         msgRole,
+		Type:         "message",
+		Role:         constant.Assistant(msgRole),
 		Content:      content,
-		Model:        model,
-		StopReason:   stopReason,
+		Model:        anthropic.Model(model),
+		StopReason:   anthropic.StopReason(stopReason),
 		StopSequence: stopSeq,
 		Usage:        *usage,
 	}
