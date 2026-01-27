@@ -300,6 +300,10 @@ func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.M
 		}
 		MarshalAndSendErrorEvent(c, err.Error(), "stream_error", "stream_failed")
 		flusher.Flush()
+		// Record error
+		if recorder != nil {
+			recorder.RecordError(err)
+		}
 		return
 	}
 
@@ -311,6 +315,11 @@ func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.M
 	// Send completion event
 	SendFinishEvent(c)
 	flusher.Flush()
+
+	// Record the response after stream completes
+	if recorder != nil {
+		recorder.RecordResponse()
+	}
 }
 
 // anthropicCountTokensV1 implements standard v1 count_tokens

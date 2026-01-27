@@ -47,11 +47,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 	if recorder != nil {
 		// Store recorder in context for use in handlers
 		c.Set("scenario_recorder", recorder)
-		defer func() {
-			if c.Writer.Written() {
-				recorder.RecordResponse()
-			}
-		}()
+		// Note: RecordResponse will be called by handler after stream completes
 	}
 
 	// Check if beta parameter is set to true
