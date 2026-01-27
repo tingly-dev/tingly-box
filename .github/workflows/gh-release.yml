@@ -373,7 +373,10 @@ jobs:
 
       - name: Package binaries with proper extensions
         run: |
-          mkdir -p release
+          # Save original directory and use absolute path for release
+          ORIGINAL_DIR="$(pwd)"
+          RELEASE_DIR="${ORIGINAL_DIR}/release"
+          mkdir -p "$RELEASE_DIR"
 
           # Process CLI binaries - each artifact is in its own subdirectory
           if [ -d "dist/cli" ]; then
@@ -381,15 +384,13 @@ jobs:
               if [ -d "$artifact_dir" ]; then
                 # Extract platform from artifact directory name
                 platform=$(basename "$artifact_dir" | sed 's/cli-//')
-                cd "$artifact_dir"
-                chmod +x tingly-box* || true
+                chmod +x "$artifact_dir"/tingly-box* || true
 
                 # Package the binary with platform suffix in zip filename
-                binary=$(ls tingly-box* 2>/dev/null | head -1)
+                binary=$(ls "$artifact_dir"/tingly-box* 2>/dev/null | head -1)
                 if [ -n "$binary" ]; then
-                  zip "../../../release/tingly-box-${platform}.zip" "$binary"
+                  (cd "$artifact_dir" && zip "${RELEASE_DIR}/tingly-box-${platform}.zip" "$(basename "$binary")")
                 fi
-                cd ../../../..
               fi
             done
           fi
@@ -399,22 +400,19 @@ jobs:
             # GUI artifacts are also in subdirectories
             for artifact_dir in dist/gui/gui-*; do
               if [ -d "$artifact_dir" ]; then
-                cp "$artifact_dir"/*.zip release/ 2>/dev/null || true
+                cp "$artifact_dir"/*.zip "$RELEASE_DIR/" 2>/dev/null || true
               fi
             done
             # Also check for direct files
-            cp dist/gui/*.zip release/ 2>/dev/null || true
+            find dist/gui -maxdepth 1 -name "*.zip" -exec cp {} "$RELEASE_DIR/" \; 2>/dev/null || true
           fi
 
-          # Create checksums for all files
-          cd release
-          sha256sum *.zip > checksums.txt 2>/dev/null || true
-          # Handle case where no zips exist
-          if [ ! -s checksums.txt ]; then
-            echo "No zip files found, skipping checksums.txt"
-            rm -f checksums.txt
+          # Create checksums for all files (only if we have zip files)
+          if ls "$RELEASE_DIR"/*.zip 1> /dev/null 2>&1; then
+            (cd "$RELEASE_DIR" && sha256sum *.zip > checksums.txt)
+          else
+            echo "No zip files found in release directory"
           fi
-          cd ..
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
