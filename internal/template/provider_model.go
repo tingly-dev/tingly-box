@@ -13,7 +13,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
-	"github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
 // GetProviderModelsFromAPI fetches models from provider API via real HTTP requests
@@ -76,13 +75,7 @@ func GetProviderModelsFromAPI(provider *typ.Provider) ([]string, error) {
 	}
 
 	// Create HTTP client with proxy and OAuth hook support
-	var httpClient *http.Client
-	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
-		providerType := oauth.ProviderType(provider.OAuthDetail.ProviderType)
-		httpClient = client.CreateHTTPClientForProvider(providerType, provider.ProxyURL, true)
-	} else {
-		httpClient = client.CreateHTTPClientWithProxy(provider.ProxyURL)
-	}
+	httpClient := client.CreateHTTPClientForProvider(provider)
 	// Use constant timeout for model fetching (30s is sufficient)
 	httpClient.Timeout = time.Duration(constant.ModelFetchTimeout) * time.Second
 

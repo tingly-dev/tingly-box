@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/sirupsen/logrus"
 	"google.golang.org/genai"
 	"iter"
 
@@ -23,11 +24,16 @@ type GoogleClient struct {
 
 // NewGoogleClient creates a new Google client wrapper
 func NewGoogleClient(provider *typ.Provider) (*GoogleClient, error) {
-	// Create base HTTP client
+	// Create base HTTP client using shared transport from transport pool
+	// Google doesn't use OAuth hooks in this implementation, so providerType is empty
 	var httpClient *http.Client
 	if provider.ProxyURL != "" {
-		httpClient = CreateHTTPClientWithProxy(provider.ProxyURL)
+		// Use shared transport from transport pool for proxy scenarios
+		transport := GetGlobalTransportPool().GetTransport(provider.APIBase, provider.ProxyURL, "")
+		httpClient = &http.Client{Transport: transport}
+		logrus.Infof("Using shared transport for Google client with proxy: %s", provider.ProxyURL)
 	} else {
+		// Use default client for non-proxy scenarios
 		httpClient = http.DefaultClient
 	}
 
@@ -93,7 +99,7 @@ func (c *GoogleClient) applyRecordMode() {
 	if c.recordSink == nil {
 		return
 	}
-	c.httpClient.Transport = NewRecordRoundTripper(c.httpClient.Transport, c.recordSink, c.provider.Name, "")
+	c.httpClient.Transport = NewRecordRoundTripper(c.httpClient.Transport, c.recordSink, c.provider, c.APIStyle())
 }
 
 // GetProvider returns the provider for this client

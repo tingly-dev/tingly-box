@@ -44,23 +44,13 @@ func defaultNewOpenAIClient(provider *typ.Provider) (*OpenAIClient, error) {
 	// Create HTTP client with proper hook configuration
 	var httpClient *http.Client
 	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
-		// Parse provider type from OAuthDetail
-		providerType, err := oauth.ParseProviderType(provider.OAuthDetail.ProviderType)
-		if err != nil {
-			// If parsing fails, fall back to proxy client
-			if provider.ProxyURL != "" {
-				httpClient = CreateHTTPClientWithProxy(provider.ProxyURL)
-				logrus.Infof("Using proxy for OpenAI client: %s", provider.ProxyURL)
-			} else {
-				httpClient = http.DefaultClient
-			}
-		} else if providerType == oauth.ProviderCodex {
-			// Use CreateHTTPClientForProvider which applies the codex hook for path rewriting
-			httpClient = CreateHTTPClientForProvider(providerType, provider.ProxyURL, true)
+		// Use CreateHTTPClientForProvider which applies OAuth hooks and uses shared transport
+		httpClient = CreateHTTPClientForProvider(provider)
+		providerType := oauth.ProviderType(provider.OAuthDetail.ProviderType)
+		if providerType == oauth.ProviderCodex {
 			logrus.Infof("[Codex] Using hook-based transport for ChatGPT backend API path rewriting")
 		} else {
-			// For other OAuth providers, still use CreateHTTPClientForProvider
-			httpClient = CreateHTTPClientForProvider(providerType, provider.ProxyURL, true)
+			logrus.Infof("Using shared transport for OAuth provider type: %s", providerType)
 		}
 	} else {
 		// For non-OAuth providers, use simple proxy client
@@ -137,8 +127,8 @@ func (c *OpenAIClient) applyRecordMode() {
 	if c.recordSink == nil {
 		return
 	}
-	// Create a record round tripper with a default model (will be updated per request)
-	c.httpClient.Transport = NewRecordRoundTripper(c.httpClient.Transport, c.recordSink, c.provider.Name, "")
+	// Create a record round tripper with provider and API style (model extracted from request)
+	c.httpClient.Transport = NewRecordRoundTripper(c.httpClient.Transport, c.recordSink, c.provider, c.APIStyle())
 }
 
 // GetProvider returns the provider for this client

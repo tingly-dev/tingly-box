@@ -13,7 +13,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
-	"github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
 // AnthropicClient wraps the Anthropic SDK client
@@ -42,14 +41,10 @@ func defaultNewAnthropicClient(provider *typ.Provider) (*AnthropicClient, error)
 	var httpClient *http.Client
 	// Add proxy and/or custom headers if configured
 	if provider.ProxyURL != "" || provider.AuthType == typ.AuthTypeOAuth {
-		var providerType oauth.ProviderType
-		if provider.OAuthDetail != nil {
-			providerType = oauth.ProviderType(provider.OAuthDetail.ProviderType)
-		}
-		httpClient = CreateHTTPClientForProvider(providerType, provider.ProxyURL, provider.AuthType == typ.AuthTypeOAuth)
+		httpClient = CreateHTTPClientForProvider(provider)
 
 		if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
-			logrus.Infof("Using custom headers/params for OAuth provider type: %s", provider.OAuthDetail.ProviderType)
+			logrus.Infof("Using shared transport with custom headers/params for OAuth provider type: %s", provider.OAuthDetail.ProviderType)
 		}
 		if provider.ProxyURL != "" {
 			logrus.Infof("Using proxy for Anthropic client: %s", provider.ProxyURL)
@@ -134,7 +129,7 @@ func (c *AnthropicClient) applyRecordMode() {
 	if c.recordSink == nil {
 		return
 	}
-	c.httpClient.Transport = NewRecordRoundTripper(c.httpClient.Transport, c.recordSink, c.provider.Name, "")
+	c.httpClient.Transport = NewRecordRoundTripper(c.httpClient.Transport, c.recordSink, c.provider, c.APIStyle())
 }
 
 // GetProvider returns the provider for this client
