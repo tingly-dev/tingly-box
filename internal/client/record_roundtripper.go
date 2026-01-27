@@ -67,7 +67,6 @@ func (r *RecordRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 
 	// Execute the request
 	resp, err := r.transport.RoundTrip(req)
-	duration := time.Since(startTime)
 
 	var respRecord *obs.RecordResponse
 	if resp != nil {
@@ -82,19 +81,23 @@ func (r *RecordRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 		// Handle response body
 		if resp.Body != nil && resp.Body != http.NoBody {
 			if isStreaming {
-				// For streaming responses, use recordingReader to capture data as it's read
+				// For streaming responses, delay recording until stream is fully read
 				respRecord.IsStreaming = true
-				// Wrap the body with recordingReader, pass apiStyle for format detection
 				resp.Body = newRecordingReader(resp.Body, r.apiStyle, func(rawContent string, chunks []string, assembledBody map[string]any) {
-					// Store raw SSE content for backward compatibility
+					// Populate response record in onClose callback
 					respRecord.StreamedContent = rawContent
-					// Store parsed SSE chunks
 					respRecord.StreamChunks = chunks
-					// Store assembled body (combined response)
 					if assembledBody != nil {
 						respRecord.Body = assembledBody
 					}
+					// Record after stream is consumed
+					duration := time.Since(startTime)
+					if r.recordSink != nil && r.recordSink.IsEnabled() {
+						r.recordSink.Record(r.provider.Name, model, reqRecord, respRecord, duration, err)
+					}
 				})
+				// For streaming, return early - recording will happen in onClose
+				return resp, err
 			} else {
 				// For non-streaming responses, read the entire body
 				bodyBytes, readErr := io.ReadAll(resp.Body)
@@ -114,7 +117,8 @@ func (r *RecordRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 		}
 	}
 
-	// Record the request/response
+	// Record the request/response (non-streaming or error case)
+	duration := time.Since(startTime)
 	if r.recordSink != nil && r.recordSink.IsEnabled() {
 		r.recordSink.Record(r.provider.Name, model, reqRecord, respRecord, duration, err)
 	}
@@ -146,14 +150,25 @@ func (r *recordingReader) Read(p []byte) (n int, err error) {
 	if n > 0 {
 		r.buffer.Write(p[:n])
 	}
+	// When stream ends (EOF), trigger recording
+	if err == io.EOF && !r.closed {
+		r.closed = true
+		if r.onClose != nil {
+			rawContent := r.buffer.String()
+			chunks, assembledBody := parseSSEAndAssemble(rawContent, r.apiStyle)
+			r.onClose(rawContent, chunks, assembledBody)
+		}
+	}
 	return n, err
 }
 
 func (r *recordingReader) Close() error {
+	// Close may not be called by SDK for streaming responses
+	// Recording is triggered on EOF instead
 	err := r.source.Close()
 	r.closeOnce.Do(func() {
-		r.closed = true
-		if r.onClose != nil {
+		// Trigger recording if not already done via EOF
+		if !r.closed && r.onClose != nil {
 			rawContent := r.buffer.String()
 			chunks, assembledBody := parseSSEAndAssemble(rawContent, r.apiStyle)
 			r.onClose(rawContent, chunks, assembledBody)
