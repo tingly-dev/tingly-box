@@ -76,6 +76,18 @@ export const useNewModels = () => {
         return cleanup;
     }, [refetch]);
 
+    // Clear new models for a specific provider
+    const clearNewModels = useCallback((providerUuid: string) => {
+        if (removeNewModelsFromStorage(providerUuid)) {
+            setNewModels(prev => {
+                const newModelsData = { ...prev };
+                delete newModelsData[providerUuid];
+                return newModelsData;
+            });
+            dispatchNewModelsUpdate(providerUuid, null);
+        }
+    }, []);
+
     // Detect and store new models after a refresh
     const detectAndStoreNewModels = useCallback((
         providerUuid: string,
@@ -97,8 +109,11 @@ export const useNewModels = () => {
         const existingDiff = newModels[providerUuid];
         const existingNewModels = existingDiff?.newModels || [];
 
-        // Merge existing new models with newly detected ones (avoid duplicates)
-        const mergedNewModels = Array.from(new Set([...existingNewModels, ...addedModels]));
+        // Filter out existing new models that no longer exist in the current model list
+        const stillExistingNewModels = existingNewModels.filter(m => newSet.has(m));
+
+        // Merge existing new models (that still exist) with newly detected ones (avoid duplicates)
+        const mergedNewModels = Array.from(new Set([...stillExistingNewModels, ...addedModels]));
 
         // Only update if there are new models to show
         if (mergedNewModels.length > 0) {
@@ -111,26 +126,16 @@ export const useNewModels = () => {
                 setNewModels(prev => ({ ...prev, [providerUuid]: diff }));
                 dispatchNewModelsUpdate(providerUuid, diff);
             }
+        } else {
+            // No new models left (all were removed), clear the entry
+            clearNewModels(providerUuid);
         }
-        // Don't auto-clear - let users dismiss explicitly via close button
-    }, [newModels]);
+    }, [newModels, clearNewModels]);
 
     // Get new models diff for a specific provider
     const getNewModels = useCallback((providerUuid: string): NewModelsDiff | undefined => {
         return newModels[providerUuid];
     }, [newModels]);
-
-    // Clear new models for a specific provider
-    const clearNewModels = useCallback((providerUuid: string) => {
-        if (removeNewModelsFromStorage(providerUuid)) {
-            setNewModels(prev => {
-                const newModelsData = { ...prev };
-                delete newModelsData[providerUuid];
-                return newModelsData;
-            });
-            dispatchNewModelsUpdate(providerUuid, null);
-        }
-    }, []);
 
     return {
         newModels,
