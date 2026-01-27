@@ -14,6 +14,11 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// Context key for scenario in request context
+type contextKey string
+
+const ScenarioContextKey contextKey = "scenario"
+
 // RecordRoundTripper is an http.RoundTripper that records requests and responses
 type RecordRoundTripper struct {
 	transport  http.RoundTripper
@@ -38,6 +43,14 @@ func NewRecordRoundTripper(transport http.RoundTripper, recordSink *obs.Sink, pr
 // RoundTrip executes a single HTTP transaction and records request/response
 func (r *RecordRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	startTime := time.Now()
+
+	// Extract scenario from request context
+	scenario := ""
+	if scenarioVal := req.Context().Value(ScenarioContextKey); scenarioVal != nil {
+		if scenarioStr, ok := scenarioVal.(string); ok {
+			scenario = scenarioStr
+		}
+	}
 
 	// Prepare request record
 	reqRecord := &obs.RecordRequest{
@@ -93,7 +106,7 @@ func (r *RecordRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 					// Record after stream is consumed
 					duration := time.Since(startTime)
 					if r.recordSink != nil && r.recordSink.IsEnabled() {
-						r.recordSink.Record(r.provider.Name, model, reqRecord, respRecord, duration, err)
+						r.recordSink.RecordWithScenario(r.provider.Name, model, scenario, reqRecord, respRecord, duration, err)
 					}
 				})
 				// For streaming, return early - recording will happen in onClose
@@ -120,7 +133,7 @@ func (r *RecordRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	// Record the request/response (non-streaming or error case)
 	duration := time.Since(startTime)
 	if r.recordSink != nil && r.recordSink.IsEnabled() {
-		r.recordSink.Record(r.provider.Name, model, reqRecord, respRecord, duration, err)
+		r.recordSink.RecordWithScenario(r.provider.Name, model, scenario, reqRecord, respRecord, duration, err)
 	}
 
 	return resp, err
@@ -263,16 +276,24 @@ func assembleOpenAIResponse(chunks []string) map[string]any {
 						"role":    baseMsg["role"],
 						"content": baseMsg["content"],
 					},
-					"finish_reason": "stop",
+					"finish_reason": nil, // Will be set from last chunk
 				}},
 			}
 
-			// Copy usage from last chunk if available
+			// Copy usage and finish_reason from last chunk if available
 			if len(chunks) > 0 {
 				var lastChunk map[string]any
 				if err := json.Unmarshal([]byte(chunks[len(chunks)-1]), &lastChunk); err == nil {
 					if usage, ok := lastChunk["usage"].(map[string]any); ok {
 						assembled["usage"] = usage
+					}
+					// Get finish_reason from last chunk's choices
+					if choices, ok := lastChunk["choices"].([]any); ok && len(choices) > 0 {
+						if choice, ok := choices[0].(map[string]any); ok {
+							if finishReason, ok := choice["finish_reason"]; ok {
+								assembled["choices"].([]any)[0].(map[string]any)["finish_reason"] = finishReason
+							}
+						}
 					}
 				}
 			}

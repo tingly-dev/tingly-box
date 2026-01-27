@@ -42,6 +42,16 @@ type (
 func (s *Server) AnthropicMessages(c *gin.Context) {
 	scenario := c.Param("scenario")
 
+	// Start scenario-level recording (client -> tingly-box traffic)
+	recorder := s.RecordScenarioRequest(c, scenario)
+	if recorder != nil {
+		defer func() {
+			if c.Writer.Written() {
+				recorder.RecordResponse()
+			}
+		}()
+	}
+
 	// Check if beta parameter is set to true
 	beta := c.Query("beta") == "true"
 	logrus.Debugf("scenario: %s beta: %v", scenario, beta)
@@ -50,6 +60,10 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 	bodyBytes, err := c.GetRawData()
 	if err != nil {
 		logrus.Debugf("Failed to read request body: %v", err)
+		// Record error if recording is enabled
+		if recorder != nil {
+			recorder.RecordError(err)
+		}
 	} else {
 		// Store the body back for parsing
 		c.Request.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
@@ -61,6 +75,10 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 	if beta {
 		if err := json.Unmarshal(bodyBytes, &betaMessages); err != nil {
 			logrus.Debugf("Failed to unmarshal request body: %v", err)
+			// Record error if recording is enabled
+			if recorder != nil {
+				recorder.RecordError(err)
+			}
 			c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{
 					Message: "Message error",
@@ -73,6 +91,10 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 	} else {
 		if err := json.Unmarshal(bodyBytes, &messages); err != nil {
 			logrus.Debugf("Failed to unmarshal request body: %v", err)
+			// Record error if recording is enabled
+			if recorder != nil {
+				recorder.RecordError(err)
+			}
 			c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{
 					Message: "Message error",
@@ -85,6 +107,10 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 	}
 
 	if model == "" {
+		// Record error if recording is enabled
+		if recorder != nil {
+			recorder.RecordError(nil)
+		}
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Model is required",
@@ -374,11 +400,13 @@ func (s *Server) forwardAnthropicRequestRaw(provider *typ.Provider, rawReq map[s
 // ForwardAnthropicRequest forwards request using Anthropic SDK with proper types
 // This is a public utility function used by other handlers (e.g., openai.go)
 func (s *Server) ForwardAnthropicRequest(provider *typ.Provider, req anthropic.MessageNewParams) (*anthropic.Message, error) {
-	return s.forwardAnthropicRequestV1(provider, req)
+	// Empty scenario for backward compatibility with callers that don't specify scenario
+	return s.forwardAnthropicRequestV1(provider, req, "")
 }
 
 // ForwardAnthropicStreamRequest forwards streaming request using Anthropic SDK
 // This is a public utility function used by other handlers (e.g., openai.go)
 func (s *Server) ForwardAnthropicStreamRequest(provider *typ.Provider, req anthropic.MessageNewParams) (*anthropicstream.Stream[anthropic.MessageStreamEventUnion], error) {
-	return s.forwardAnthropicStreamRequestV1(provider, req)
+	// Empty scenario for backward compatibility with callers that don't specify scenario
+	return s.forwardAnthropicStreamRequestV1(provider, req, "")
 }

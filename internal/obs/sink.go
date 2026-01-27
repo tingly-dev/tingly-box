@@ -26,6 +26,7 @@ type RecordEntry struct {
 	Timestamp  string                 `json:"timestamp"`
 	RequestID  string                 `json:"request_id"`
 	Provider   string                 `json:"provider"`
+	Scenario   string                 `json:"scenario,omitempty"` // Scenario: openai, anthropic, claude_code, etc.
 	Model      string                 `json:"model"`
 	Request    *RecordRequest         `json:"request"`
 	Response   *RecordResponse        `json:"response"`
@@ -164,6 +165,36 @@ func (r *Sink) RecordWithMetadata(provider, model string, req *RecordRequest, re
 	r.writeEntry(provider, entry)
 }
 
+// RecordWithScenario records a request/response with scenario information
+// Uses scenario-based file naming (e.g., claude_code-{date}.jsonl)
+func (r *Sink) RecordWithScenario(provider, model, scenario string, req *RecordRequest, resp *RecordResponse, duration time.Duration, err error) {
+	if r.mode == "" {
+		return
+	}
+
+	entry := &RecordEntry{
+		Timestamp:  time.Now().UTC().Format(time.RFC3339),
+		RequestID:  uuid.New().String(),
+		Provider:   provider,
+		Scenario:   scenario,
+		Model:      model,
+		Response:   resp,
+		DurationMs: duration.Milliseconds(),
+	}
+
+	// Only include request if mode is "all"
+	if r.mode == RecordModeAll {
+		entry.Request = req
+	}
+
+	if err != nil {
+		entry.Error = err.Error()
+	}
+
+	// Use scenario-based file naming
+	r.writeEntryWithScenario(scenario, entry)
+}
+
 // writeEntry writes an entry to the appropriate file
 func (r *Sink) writeEntry(provider string, entry *RecordEntry) {
 	r.mutex.Lock()
@@ -194,6 +225,52 @@ func (r *Sink) writeEntry(provider string, entry *RecordEntry) {
 			currentHour: currentHour,
 		}
 		r.fileMap[provider] = rf
+	}
+
+	// Write entry as JSONL (one JSON object per line)
+	if err := rf.writer.Encode(entry); err != nil {
+		logrus.Errorf("Failed to write record entry: %v", err)
+	}
+}
+
+// writeEntryWithScenario writes an entry to a scenario-based file
+func (r *Sink) writeEntryWithScenario(scenario string, entry *RecordEntry) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	// If scenario is empty, fall back to provider-based naming
+	if scenario == "" {
+		scenario = entry.Provider
+	}
+
+	// Get current hour for file rotation (YYYY-MM-DD-HH)
+	currentHour := time.Now().UTC().Format("2006-01-02-15")
+
+	// Use scenario as the file key
+	fileKey := fmt.Sprintf("scenario:%s", scenario)
+
+	// Get or create file for this scenario
+	rf, exists := r.fileMap[fileKey]
+	if !exists || rf.currentHour != currentHour {
+		// Close old file if hour changed
+		if exists && rf.currentHour != currentHour {
+			r.closeFile(rf)
+		}
+
+		// Create new file with scenario-based naming
+		filename := filepath.Join(r.baseDir, fmt.Sprintf("%s-%s.jsonl", scenario, currentHour))
+		file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			logrus.Errorf("Failed to open record file %s: %v", filename, err)
+			return
+		}
+
+		rf = &recordFile{
+			file:        file,
+			writer:      json.NewEncoder(file),
+			currentHour: currentHour,
+		}
+		r.fileMap[fileKey] = rf
 	}
 
 	// Write entry as JSONL (one JSON object per line)

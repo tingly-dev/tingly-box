@@ -72,6 +72,9 @@ type Server struct {
 	// capability store for persistent model capabilities
 	capabilityStore *db.ModelCapabilityStore
 
+	// recording sinks
+	scenarioRecordSink *obs.Sink // Scenario-level recording sink (client -> tingly-box traffic)
+
 	// options
 	enableUI      bool
 	enableAdaptor bool
@@ -84,8 +87,10 @@ type Server struct {
 	httpsRegenerate bool
 
 	// record options
-	recordMode obs.RecordMode
-	recordDir  string
+	recordMode         obs.RecordMode
+	recordDir          string
+	scenarioRecordMode obs.RecordMode // Scenario-level recording (client -> tingly-box traffic)
+	scenarioRecordDir  string         // Scenario-level recording directory
 
 	// experimental features
 	experimentalFeatures map[string]bool
@@ -172,6 +177,20 @@ func WithRecordMode(mode obs.RecordMode) ServerOption {
 func WithRecordDir(dir string) ServerOption {
 	return func(s *Server) {
 		s.recordDir = dir
+	}
+}
+
+// WithScenarioRecordMode sets the scenario-level record mode (client -> tingly-box traffic)
+func WithScenarioRecordMode(mode obs.RecordMode) ServerOption {
+	return func(s *Server) {
+		s.scenarioRecordMode = mode
+	}
+}
+
+// WithScenarioRecordDir sets the scenario-level record directory
+func WithScenarioRecordDir(dir string) ServerOption {
+	return func(s *Server) {
+		s.scenarioRecordDir = dir
 	}
 }
 
@@ -274,6 +293,12 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 		recordSink := obs.NewSink(server.recordDir, server.recordMode)
 		server.clientPool.SetRecordSink(recordSink)
 		log.Printf("Request recording enabled, mode: %s, directory: %s", server.recordMode, server.recordDir)
+	}
+
+	// Initialize scenario record sink if scenario recording is enabled
+	if server.scenarioRecordMode != "" {
+		server.scenarioRecordSink = obs.NewSink(server.scenarioRecordDir, server.scenarioRecordMode)
+		log.Printf("Scenario recording enabled, mode: %s, directory: %s", server.scenarioRecordMode, server.scenarioRecordDir)
 	}
 
 	// Initialize statistics middleware with server reference

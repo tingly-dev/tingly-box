@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	nonstream2 "github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
@@ -34,6 +35,9 @@ func sendSSEvent(c *gin.Context, eventType string, data interface{}) error {
 // anthropicMessagesV1 implements standard v1 messages API
 func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessagesRequest, proxyModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule) {
 	actualModel := selectedService.Model
+
+	// Extract scenario from URL path for recording
+	scenario := c.Param("scenario")
 
 	// Check if streaming is requested
 	isStreaming := req.Stream
@@ -72,7 +76,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 		// Use direct Anthropic SDK call
 		if isStreaming {
 			// Handle streaming request
-			stream, err := s.forwardAnthropicStreamRequestV1(provider, req.MessageNewParams)
+			stream, err := s.forwardAnthropicStreamRequestV1(provider, req.MessageNewParams, scenario)
 			if err != nil {
 				s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "stream_creation_failed")
 				SendStreamingError(c, err)
@@ -82,7 +86,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			s.handleAnthropicStreamResponseV1(c, req.MessageNewParams, stream, proxyModel, actualModel, rule, provider)
 		} else {
 			// Handle non-streaming request
-			anthropicResp, err := s.forwardAnthropicRequestV1(provider, req.MessageNewParams)
+			anthropicResp, err := s.forwardAnthropicRequestV1(provider, req.MessageNewParams, scenario)
 			if err != nil {
 				s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "forward_failed")
 				SendForwardingError(c, err)
@@ -194,13 +198,16 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 }
 
 // forwardAnthropicRequestV1 forwards request using Anthropic SDK with proper types (v1)
-func (s *Server) forwardAnthropicRequestV1(provider *typ.Provider, req anthropic.MessageNewParams) (*anthropic.Message, error) {
+func (s *Server) forwardAnthropicRequestV1(provider *typ.Provider, req anthropic.MessageNewParams, scenario string) (*anthropic.Message, error) {
 	// Get or create Anthropic client wrapper from pool
 	wrapper := s.clientPool.GetAnthropicClient(provider, string(req.Model))
 
+	// Create context with scenario for recording
+	ctx := context.WithValue(context.Background(), client.ScenarioContextKey, scenario)
+
 	// Make the request using Anthropic SDK with timeout (provider.Timeout is in seconds)
 	timeout := time.Duration(provider.Timeout) * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	message, err := wrapper.MessagesNew(ctx, req)
 	if err != nil {
@@ -211,16 +218,18 @@ func (s *Server) forwardAnthropicRequestV1(provider *typ.Provider, req anthropic
 }
 
 // forwardAnthropicStreamRequestV1 forwards streaming request using Anthropic SDK (v1)
-func (s *Server) forwardAnthropicStreamRequestV1(provider *typ.Provider, req anthropic.MessageNewParams) (*anthropicstream.Stream[anthropic.MessageStreamEventUnion], error) {
+func (s *Server) forwardAnthropicStreamRequestV1(provider *typ.Provider, req anthropic.MessageNewParams, scenario string) (*anthropicstream.Stream[anthropic.MessageStreamEventUnion], error) {
 	// Get or create Anthropic client wrapper from pool
 	wrapper := s.clientPool.GetAnthropicClient(provider, string(req.Model))
 
 	logrus.Debugln("Creating Anthropic streaming request")
 
+	// Create context with scenario for recording
+	ctx := context.WithValue(context.Background(), client.ScenarioContextKey, scenario)
+
 	// Use background context for streaming
 	// The stream will manage its own lifecycle and timeout
 	// We don't use a timeout here because streaming responses can take longer
-	ctx := context.Background()
 	stream := wrapper.MessagesNewStreaming(ctx, req)
 
 	return stream, nil
