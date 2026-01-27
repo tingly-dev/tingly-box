@@ -167,7 +167,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 		// Also check the probe cache if not already determined
 		if !useResponsesAPI {
 			preferredEndpoint := s.GetPreferredEndpointForModel(provider, actualModel)
-			useResponsesAPI = (preferredEndpoint == "responses")
+			useResponsesAPI = preferredEndpoint == "responses"
 		}
 
 		if useResponsesAPI {
