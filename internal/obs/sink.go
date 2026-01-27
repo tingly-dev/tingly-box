@@ -18,7 +18,8 @@ type RecordMode string
 const (
 	RecordModeAll      RecordMode = "all"      // Record both request and response
 	RecordModeResponse RecordMode = "response" // Record only response
-	RecordModeSlim     RecordMode = "slim"     // TODO: Not implemented yet
+	RecordModeScenario RecordMode = "scenario"
+	RecordModeSlim     RecordMode = "slim" // TODO: Not implemented yet
 )
 
 // RecordEntry represents a single recorded request/response pair
