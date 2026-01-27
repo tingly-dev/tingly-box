@@ -6,3 +6,9 @@ export type { ModelsPanelProps } from './ModelsPanel';
 
 export { CustomModelDialog } from './CustomModelDialog';
 export type { CustomModelDialogProps } from './CustomModelDialog';
+
+export { RecentModelsSection } from './RecentModelsSection';
+export type { RecentModelsSectionProps } from './RecentModelsSection';
+
+export { NewModelsSection } from './NewModelsSection';
+export type { NewModelsSectionProps } from './NewModelsSection';

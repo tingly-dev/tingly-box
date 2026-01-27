@@ -9,6 +9,7 @@ interface ModelCardProps {
     variant?: 'standard' | 'starred';
     gridColumns?: number;
     loading?: boolean;
+    showNewBadge?: boolean;
 }
 
 export default function ModelCard({
@@ -18,6 +19,7 @@ export default function ModelCard({
     variant = 'standard',
     gridColumns,
     loading = false,
+    showNewBadge = false,
 }: ModelCardProps) {
     const getCardStyles = () => {
         const baseStyles = {
@@ -98,6 +100,24 @@ export default function ModelCard({
                             fontSize: 16
                         }}
                     />
+                )}
+                {showNewBadge && !loading && (
+                    <Box
+                        sx={{
+                            position: 'absolute',
+                            top: 4,
+                            left: 4,
+                            bgcolor: 'success.main',
+                            color: 'white',
+                            fontSize: '0.6rem',
+                            px: 0.5,
+                            py: 0.2,
+                            borderRadius: 1,
+                            fontWeight: 'bold',
+                        }}
+                    >
+                        NEW
+                    </Box>
                 )}
             </CardContent>
         </Card>

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import api from '../services/api';
 import type { ProviderModelData, ProviderModelsDataByUuid } from '../types/provider';
+import { useNewModels } from './useNewModels';
 
 // Export event name for provider models updates
 export const PROVIDER_MODELS_UPDATE_EVENT = 'tingly_provider_models_update';
@@ -30,6 +31,7 @@ export const useProviderModels = () => {
     const [providerModels, setProviderModels] = useState<ProviderModelsDataByUuid>({});
     const [refreshingProviders, setRefreshingProviders] = useState<Set<string>>(new Set());
     const [version, setVersion] = useState(0);
+    const { detectAndStoreNewModels } = useNewModels();
 
     // Fetch models for a provider (GET - cached data, auto-refresh if empty)
     const fetchModels = useCallback(async (providerUuid: string): Promise<ProviderModelData | null> => {
@@ -95,10 +97,17 @@ export const useProviderModels = () => {
         setRefreshingProviders(prev => new Set(prev).add(providerUuid));
 
         try {
+            // Store old models for diff detection
+            const oldModels = providerModels[providerUuid]?.models || [];
+
             // Force refresh from provider API
             const result = await api.updateProviderModelsByUUID(providerUuid);
 
             if (result.success && result.data) {
+                // Detect and store new models
+                const newModelsList = result.data.models || [];
+                detectAndStoreNewModels(providerUuid, oldModels, newModelsList);
+
                 setProviderModels(prev => ({
                     ...prev,
                     [providerUuid]: result.data!
@@ -118,7 +127,7 @@ export const useProviderModels = () => {
         }
 
         return null;
-    }, [refreshingProviders]);
+    }, [refreshingProviders, providerModels, detectAndStoreNewModels]);
 
     // Update models for a provider (manual set, e.g., from websocket or external source)
     const setModels = useCallback((providerUuid: string, models: ProviderModelData) => {

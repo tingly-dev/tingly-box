@@ -21,8 +21,12 @@ import { useCustomModels } from '../../hooks/useCustomModels';
 import { useProviderModels } from '../../hooks/useProviderModels';
 import { usePagination } from '../../hooks/usePagination';
 import { useModelSelectContext } from '../../contexts/ModelSelectContext';
+import { useRecentModels } from '../../hooks/useRecentModels';
+import { useNewModels } from '../../hooks/useNewModels';
 import CustomModelCard from './CustomModelCard';
 import ModelCard from './ModelCard';
+import RecentModelsSection from './RecentModelsSection';
+import NewModelsSection from './NewModelsSection';
 
 export interface ModelsPanelProps {
     provider: Provider;
@@ -52,6 +56,8 @@ export function ModelsPanel({
     const { customModels } = useCustomModels();
     const { providerModels, refreshingProviders, refreshModels } = useProviderModels();
     const { isModelProbing } = useModelSelectContext();
+    const { recentModels } = useRecentModels();
+    const { newModels, clearNewModels } = useNewModels();
 
     const isProviderSelected = selectedProvider === provider.uuid;
     const isRefreshing = refreshingProviders.includes(provider.uuid);
@@ -153,6 +159,29 @@ export function ModelsPanel({
                         {pagination.totalItems} models
                     </Typography>
                 </Stack>
+
+                {/* New Models Section */}
+                {newModels[provider.uuid]?.newModels && newModels[provider.uuid].newModels.length > 0 && (
+                    <NewModelsSection
+                        providerUuid={provider.uuid}
+                        newModels={newModels[provider.uuid].newModels}
+                        selectedModel={isProviderSelected ? selectedModel : undefined}
+                        onModelSelect={(model) => onModelSelect(provider, model)}
+                        onDismiss={() => clearNewModels(provider.uuid)}
+                        columns={columns}
+                    />
+                )}
+
+                {/* Recent Models Section */}
+                {recentModels[provider.uuid]?.length > 0 && (
+                    <RecentModelsSection
+                        providerUuid={provider.uuid}
+                        recentModels={recentModels[provider.uuid]}
+                        selectedModel={isProviderSelected ? selectedModel : undefined}
+                        onModelSelect={(model) => onModelSelect(provider, model)}
+                        columns={columns}
+                    />
+                )}
 
                 {/* Star Models Section */}
                 {providerModels?.[provider.uuid]?.star_models && providerModels[provider.uuid].star_models!.length > 0 && (
