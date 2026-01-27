@@ -16,11 +16,12 @@ import (
 // RecordScenarioRequest records the scenario-level request (client -> tingly-box)
 // This captures the original request from the client before any transformation
 func (s *Server) RecordScenarioRequest(c *gin.Context, scenario string) *ScenarioRecorder {
-	if s.scenarioRecordSink == nil || !s.scenarioRecordSink.IsEnabled() {
+	if s.scenarioRecordSink == nil {
 		return nil
 	}
 
 	// Read and restore the request body
+
 	bodyBytes, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		logrus.Debugf("Failed to read request body for scenario recording: %v", err)

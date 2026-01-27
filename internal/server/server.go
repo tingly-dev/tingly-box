@@ -73,6 +73,7 @@ type Server struct {
 	capabilityStore *db.ModelCapabilityStore
 
 	// recording sinks
+	recordSink         *obs.Sink
 	scenarioRecordSink *obs.Sink // Scenario-level recording sink (client -> tingly-box traffic)
 
 	// options
@@ -87,10 +88,8 @@ type Server struct {
 	httpsRegenerate bool
 
 	// record options
-	recordMode         obs.RecordMode
-	recordDir          string
-	scenarioRecordMode obs.RecordMode // Scenario-level recording (client -> tingly-box traffic)
-	scenarioRecordDir  string         // Scenario-level recording directory
+	recordMode obs.RecordMode
+	recordDir  string
 
 	// experimental features
 	experimentalFeatures map[string]bool
@@ -166,31 +165,17 @@ func WithHTTPSRegenerate(regenerate bool) ServerOption {
 }
 
 // WithRecordMode sets the record mode for request/response recording
-// mode: empty string = disabled, "all" = record all, "response" = response only
+// mode: empty string = disabled, "all" = record all, "response" = response only, "scenario" = record scenario only
 func WithRecordMode(mode obs.RecordMode) ServerOption {
 	return func(s *Server) {
 		s.recordMode = mode
 	}
 }
 
-// WithRecordDir sets the record directory for request/response recording
+// WithRecordDir sets the scenario-level record directory
 func WithRecordDir(dir string) ServerOption {
 	return func(s *Server) {
 		s.recordDir = dir
-	}
-}
-
-// WithScenarioRecordMode sets the scenario-level record mode (client -> tingly-box traffic)
-func WithScenarioRecordMode(mode obs.RecordMode) ServerOption {
-	return func(s *Server) {
-		s.scenarioRecordMode = mode
-	}
-}
-
-// WithScenarioRecordDir sets the scenario-level record directory
-func WithScenarioRecordDir(dir string) ServerOption {
-	return func(s *Server) {
-		s.scenarioRecordDir = dir
 	}
 }
 
@@ -296,9 +281,9 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	}
 
 	// Initialize scenario record sink if scenario recording is enabled
-	if server.scenarioRecordMode != "" {
-		server.scenarioRecordSink = obs.NewSink(server.scenarioRecordDir, server.scenarioRecordMode)
-		log.Printf("Scenario recording enabled, mode: %s, directory: %s", server.scenarioRecordMode, server.scenarioRecordDir)
+	if server.recordMode != obs.RecordModeResponse {
+		server.scenarioRecordSink = obs.NewSink(server.recordDir, server.recordMode)
+		log.Printf("Scenario recording enabled, mode: %s, directory: %s", server.recordMode, server.recordDir)
 	}
 
 	// Initialize statistics middleware with server reference
