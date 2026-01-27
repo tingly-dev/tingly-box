@@ -258,10 +258,7 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthrop
 		}
 
 		// Convert the event to JSON and send as SSE
-		if err := sendSSEvent(c, event.Type, event); err != nil {
-			logrus.Debugf("Failed to marshal Anthropic beta stream event: %v", err)
-			continue
-		}
+		c.SSEvent(event.Type, event)
 		flusher.Flush()
 	}
 

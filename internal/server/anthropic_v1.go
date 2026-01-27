@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"time"
 
@@ -20,17 +19,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
-
-// sendSSEvent sends a generic SSE event with JSON data
-func sendSSEvent(c *gin.Context, eventType string, data interface{}) error {
-	eventJSON, err := json.Marshal(data)
-	if err != nil {
-		logrus.Debugf("Failed to marshal SSE event: %v", err)
-		return err
-	}
-	c.SSEvent(eventType, string(eventJSON))
-	return nil
-}
 
 // anthropicMessagesV1 implements standard v1 messages API
 func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessagesRequest, proxyModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule) {
@@ -282,10 +270,7 @@ func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.M
 		}
 
 		// Convert the event to JSON and send as SSE
-		if err := sendSSEvent(c, event.Type, event); err != nil {
-			logrus.Debugf("Failed to marshal Anthropic stream event: %v", err)
-			continue
-		}
+		c.SSEvent(event.Type, event)
 		flusher.Flush()
 	}
 
