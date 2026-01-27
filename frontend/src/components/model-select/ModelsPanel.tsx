@@ -4,6 +4,7 @@ import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
+import BugReportIcon from '@mui/icons-material/BugReport';
 import {
     Box,
     Button,
@@ -21,8 +22,12 @@ import { useCustomModels } from '../../hooks/useCustomModels';
 import { useProviderModels } from '../../hooks/useProviderModels';
 import { usePagination } from '../../hooks/usePagination';
 import { useModelSelectContext } from '../../contexts/ModelSelectContext';
+import { useRecentModels } from '../../hooks/useRecentModels';
+import { useNewModels } from '../../hooks/useNewModels';
 import CustomModelCard from './CustomModelCard';
 import ModelCard from './ModelCard';
+import RecentModelsSection from './RecentModelsSection';
+import NewModelsSection from './NewModelsSection';
 
 export interface ModelsPanelProps {
     provider: Provider;
@@ -52,6 +57,8 @@ export function ModelsPanel({
     const { customModels } = useCustomModels();
     const { providerModels, refreshingProviders, refreshModels } = useProviderModels();
     const { isModelProbing } = useModelSelectContext();
+    const { recentModels } = useRecentModels();
+    const { newModels, clearNewModels } = useNewModels();
 
     const isProviderSelected = selectedProvider === provider.uuid;
     const isRefreshing = refreshingProviders.includes(provider.uuid);
@@ -98,6 +105,35 @@ export function ModelsPanel({
         setCurrentPage(prev => ({ ...prev, [provider.uuid]: newPage }));
     }, [provider.uuid, setCurrentPage]);
 
+    // Dev mode test handler: Simulate removing some models to test "new models" feature
+    const handleDevTestRemoveModels = useCallback(async () => {
+        const currentModels = providerModels[provider.uuid]?.models || [];
+        if (currentModels.length < 2) {
+            alert('Not enough models to test with');
+            return;
+        }
+
+        // Randomly select 2-3 models to mark as "new" for testing
+        const shuffled = [...currentModels].sort(() => Math.random() - 0.5);
+        const modelsToMarkAsNew = shuffled.slice(0, Math.min(3, shuffled.length));
+
+        // Manually set them in new_models storage for testing
+        const storage = localStorage.getItem('tingly_new_models');
+        const data = storage ? JSON.parse(storage) : {};
+        data[provider.uuid] = {
+            newModels: modelsToMarkAsNew,
+            timestamp: new Date().toISOString(),
+        };
+        localStorage.setItem('tingly_new_models', JSON.stringify(data));
+
+        // Force reload of new models
+        window.dispatchEvent(new CustomEvent('tingly_new_models_update', {
+            detail: { providerUuid: provider.uuid, diff: data[provider.uuid] }
+        }));
+
+        console.log('[Dev Test] Marked models as new:', modelsToMarkAsNew);
+    }, [provider.uuid, providerModels]);
+
     return (
         <Box sx={{ flex: 1, overflowY: 'auto', p: 2 }}>
             <Stack spacing={2}>
@@ -137,6 +173,18 @@ export function ModelsPanel({
                         >
                             {isRefreshing ? 'Fetching...' : 'Refresh'}
                         </Button>
+                        {import.meta.env.DEV && (
+                            <Button
+                                variant="outlined"
+                                color="warning"
+                                startIcon={<BugReportIcon />}
+                                onClick={handleDevTestRemoveModels}
+                                sx={{ height: 40, minWidth: 100 }}
+                                title="Dev: Randomly mark some models as 'new' for testing"
+                            >
+                                Test New
+                            </Button>
+                        )}
                         {onTest && (
                             <Button
                                 variant="outlined"
@@ -153,6 +201,29 @@ export function ModelsPanel({
                         {pagination.totalItems} models
                     </Typography>
                 </Stack>
+
+                {/* New Models Section */}
+                {newModels[provider.uuid]?.newModels && newModels[provider.uuid].newModels.length > 0 && (
+                    <NewModelsSection
+                        providerUuid={provider.uuid}
+                        newModels={newModels[provider.uuid].newModels}
+                        selectedModel={isProviderSelected ? selectedModel : undefined}
+                        onModelSelect={(model) => onModelSelect(provider, model)}
+                        onDismiss={() => clearNewModels(provider.uuid)}
+                        columns={columns}
+                    />
+                )}
+
+                {/* Recent Models Section */}
+                {recentModels[provider.uuid]?.length > 0 && (
+                    <RecentModelsSection
+                        providerUuid={provider.uuid}
+                        recentModels={recentModels[provider.uuid]}
+                        selectedModel={isProviderSelected ? selectedModel : undefined}
+                        onModelSelect={(model) => onModelSelect(provider, model)}
+                        columns={columns}
+                    />
+                )}
 
                 {/* Star Models Section */}
                 {providerModels?.[provider.uuid]?.star_models && providerModels[provider.uuid].star_models!.length > 0 && (
