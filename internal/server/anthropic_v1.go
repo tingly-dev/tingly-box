@@ -239,8 +239,13 @@ func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.M
 	var inputTokens, outputTokens int
 	var hasUsage bool
 
-	// Create stream assembler for recording
-	assembler := NewAnthropicStreamAssembler(recorder)
+	// Create stream assembler (pure assembler, no recorder dependency)
+	assembler := NewAnthropicStreamAssembler()
+
+	// Enable streaming on recorder if provided
+	if recorder != nil {
+		recorder.EnableStreaming()
+	}
 
 	// Set SSE headers
 	SetupSSEHeaders(c)
@@ -257,8 +262,12 @@ func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.M
 		event := stream.Current()
 		event.Message.Model = anthropic.Model(respModel)
 
-		// Record and assemble the response
-		assembler.RecordV1Event(&event)
+		// Record raw chunk to recorder if provided
+		if recorder != nil {
+			recorder.RecordStreamChunk(event.Type, event)
+			// Assemble the response
+			assembler.RecordV1Event(&event)
+		}
 
 		// Accumulate usage from message_stop event
 		if event.Usage.InputTokens > 0 {
@@ -275,8 +284,14 @@ func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.M
 		flusher.Flush()
 	}
 
-	// Finish recording - assemble and set the final response
-	assembler.Finish(respModel, inputTokens, outputTokens)
+	// Set assembled response on recorder if provided
+	if recorder != nil {
+		// Finish assembling - get the assembled message
+		assembled := assembler.Finish(respModel, inputTokens, outputTokens)
+		if assembled != nil {
+			recorder.SetAssembledResponse(assembled)
+		}
+	}
 
 	// Check for stream errors
 	if err := stream.Err(); err != nil {

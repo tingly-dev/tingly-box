@@ -4,10 +4,9 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 )
 
-// AnthropicStreamAssembler assembles Anthropic streaming responses for recording
+// AnthropicStreamAssembler assembles Anthropic streaming responses
+// It is a pure assembler that doesn't depend on recording logic
 type AnthropicStreamAssembler struct {
-	recorder *ScenarioRecorder
-
 	// Message-level data
 	msgID      string
 	msgType    string
@@ -20,27 +19,16 @@ type AnthropicStreamAssembler struct {
 	blocks map[int]anthropic.ContentBlockUnion
 }
 
-// NewAnthropicStreamAssembler creates a new assembler for recording Anthropic streams
-func NewAnthropicStreamAssembler(recorder *ScenarioRecorder) *AnthropicStreamAssembler {
-	if recorder != nil {
-		recorder.EnableStreaming()
-	}
+// NewAnthropicStreamAssembler creates a new assembler for Anthropic streams
+func NewAnthropicStreamAssembler() *AnthropicStreamAssembler {
 	return &AnthropicStreamAssembler{
-		recorder: recorder,
-		blocks:   make(map[int]anthropic.ContentBlockUnion),
+		blocks: make(map[int]anthropic.ContentBlockUnion),
 	}
 }
 
-// RecordV1Event records a v1 stream event
+// RecordV1Event processes a v1 stream event
 func (a *AnthropicStreamAssembler) RecordV1Event(event *anthropic.MessageStreamEventUnion) {
-	if a == nil || a.recorder == nil {
-		return
-	}
 
-	// Record the raw chunk
-	a.recorder.RecordStreamChunk(event.Type, event)
-
-	// Assemble the final response
 	switch event.Type {
 	case "message_start":
 		a.msgID = string(event.Message.ID)
@@ -65,16 +53,9 @@ func (a *AnthropicStreamAssembler) RecordV1Event(event *anthropic.MessageStreamE
 	}
 }
 
-// RecordV1BetaEvent records a v1 beta stream event
+// RecordV1BetaEvent processes a v1 beta stream event
 func (a *AnthropicStreamAssembler) RecordV1BetaEvent(event *anthropic.BetaRawMessageStreamEventUnion) {
-	if a == nil || a.recorder == nil {
-		return
-	}
 
-	// Record the raw chunk
-	a.recorder.RecordStreamChunk(event.Type, event)
-
-	// Assemble the final response
 	switch event.Type {
 	case "message_start":
 		a.msgID = string(event.Message.ID)
@@ -129,8 +110,6 @@ func (a *AnthropicStreamAssembler) handleContentBlockStartBeta(blockIndex int, b
 	switch block.Type {
 	case "text":
 		union.Text = ""
-		// For beta events, we can't directly assign BetaTextCitationUnion to TextCitationUnion
-		// but they have the same JSON structure, so we skip citations for now
 	case "thinking":
 		union.Thinking = ""
 		union.Signature = block.Signature
@@ -180,7 +159,7 @@ func (a *AnthropicStreamAssembler) handleContentBlockDeltaBeta(blockIndex int, d
 	a.blocks[blockIndex] = block
 }
 
-// SetUsage sets the usage data (for cases where usage is accumulated separately)
+// SetUsage sets the usage data
 func (a *AnthropicStreamAssembler) SetUsage(inputTokens, outputTokens int) {
 	a.usageData = &anthropic.Usage{
 		InputTokens:  int64(inputTokens),
@@ -188,10 +167,22 @@ func (a *AnthropicStreamAssembler) SetUsage(inputTokens, outputTokens int) {
 	}
 }
 
-// Finish assembles the final response and sets it on the recorder
-func (a *AnthropicStreamAssembler) Finish(model string, inputTokens, outputTokens int) {
-	if a == nil || a.recorder == nil || a.msgID == "" {
-		return
+// AssembledMessage represents the final assembled Anthropic message response
+type AssembledMessage struct {
+	ID           string                        `json:"id"`
+	Type         string                        `json:"type"`
+	Role         string                        `json:"role"`
+	Content      []anthropic.ContentBlockUnion `json:"content"`
+	Model        string                        `json:"model"`
+	StopReason   string                        `json:"stop_reason"`
+	StopSequence string                        `json:"stop_sequence"`
+	Usage        anthropic.Usage               `json:"usage"`
+}
+
+// Finish assembles the final response and returns it
+func (a *AnthropicStreamAssembler) Finish(model string, inputTokens, outputTokens int) *AssembledMessage {
+	if a == nil || a.msgID == "" {
+		return nil
 	}
 
 	// Set defaults
@@ -226,19 +217,7 @@ func (a *AnthropicStreamAssembler) Finish(model string, inputTokens, outputToken
 		}
 	}
 
-	// Build the complete Anthropic Message response using string types
-	type AssembledMessage struct {
-		ID           string                        `json:"id"`
-		Type         string                        `json:"type"`
-		Role         string                        `json:"role"`
-		Content      []anthropic.ContentBlockUnion `json:"content"`
-		Model        string                        `json:"model"`
-		StopReason   string                        `json:"stop_reason"`
-		StopSequence string                        `json:"stop_sequence"`
-		Usage        anthropic.Usage               `json:"usage"`
-	}
-
-	assembled := AssembledMessage{
+	return &AssembledMessage{
 		ID:           a.msgID,
 		Type:         msgType,
 		Role:         msgRole,
@@ -248,6 +227,4 @@ func (a *AnthropicStreamAssembler) Finish(model string, inputTokens, outputToken
 		StopSequence: stopSeq,
 		Usage:        *usage,
 	}
-
-	a.recorder.SetAssembledResponse(assembled)
 }
