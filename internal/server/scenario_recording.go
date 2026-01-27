@@ -63,6 +63,86 @@ type ScenarioRecorder struct {
 	startTime time.Time
 	c         *gin.Context
 	bodyBytes []byte
+
+	// For streaming responses
+	streamChunks      []map[string]interface{} // Collected stream chunks
+	isStreaming       bool                     // Whether this is a streaming response
+	assembledResponse map[string]interface{}   // Assembled response from stream
+}
+
+// EnableStreaming enables streaming mode for this recorder
+func (sr *ScenarioRecorder) EnableStreaming() {
+	if sr != nil {
+		sr.isStreaming = true
+		sr.streamChunks = make([]map[string]interface{}, 0)
+	}
+}
+
+// RecordStreamChunk records a single stream chunk
+func (sr *ScenarioRecorder) RecordStreamChunk(eventType string, chunk interface{}) {
+	if sr == nil || !sr.isStreaming {
+		return
+	}
+
+	// Convert chunk to map
+	chunkMap, err := json.Marshal(chunk)
+	if err != nil {
+		logrus.Debugf("Failed to marshal stream chunk: %v", err)
+		return
+	}
+
+	var chunkData map[string]interface{}
+	if err := json.Unmarshal(chunkMap, &chunkData); err != nil {
+		return
+	}
+
+	// Add event type if not present
+	if _, ok := chunkData["type"]; !ok {
+		chunkData["type"] = eventType
+	}
+
+	sr.streamChunks = append(sr.streamChunks, chunkData)
+}
+
+// SetAssembledResponse sets the assembled response for streaming
+// Accepts any type (e.g., anthropic.Message) and converts to map for storage
+func (sr *ScenarioRecorder) SetAssembledResponse(response any) {
+	if sr == nil {
+		return
+	}
+
+	// Convert response to map[string]interface{}
+	var responseMap map[string]interface{}
+	switch v := response.(type) {
+	case map[string]interface{}:
+		responseMap = v
+	case []byte:
+		if err := json.Unmarshal(v, &responseMap); err != nil {
+			logrus.Debugf("Failed to unmarshal response: %v", err)
+			return
+		}
+	default:
+		// Marshal to JSON then unmarshal to map
+		data, err := json.Marshal(response)
+		if err != nil {
+			logrus.Debugf("Failed to marshal response: %v", err)
+			return
+		}
+		if err := json.Unmarshal(data, &responseMap); err != nil {
+			logrus.Debugf("Failed to unmarshal response: %v", err)
+			return
+		}
+	}
+
+	sr.assembledResponse = responseMap
+}
+
+// GetStreamChunks returns the collected stream chunks
+func (sr *ScenarioRecorder) GetStreamChunks() []map[string]interface{} {
+	if sr == nil {
+		return nil
+	}
+	return sr.streamChunks
 }
 
 // RecordResponse records the scenario-level response (tingly-box -> client)
@@ -76,12 +156,18 @@ func (sr *ScenarioRecorder) RecordResponse() {
 	statusCode := sr.c.Writer.Status()
 	headers := headerToMap(sr.c.Writer.Header())
 
-	// Try to get response body if it was captured
 	var bodyJSON map[string]interface{}
-	if responseBody, exists := sr.c.Get("response_body"); exists {
-		if bytes, ok := responseBody.([]byte); ok {
-			if err := json.Unmarshal(bytes, &bodyJSON); err == nil {
-				bodyJSON = map[string]interface{}{"raw": string(bytes)}
+
+	// If this was a streaming response, use the assembled response
+	if sr.isStreaming && sr.assembledResponse != nil {
+		bodyJSON = sr.assembledResponse
+	} else {
+		// Try to get response body if it was captured
+		if responseBody, exists := sr.c.Get("response_body"); exists {
+			if bytes, ok := responseBody.([]byte); ok {
+				if err := json.Unmarshal(bytes, &bodyJSON); err == nil {
+					bodyJSON = map[string]interface{}{"raw": string(bytes)}
+				}
 			}
 		}
 	}
@@ -90,6 +176,21 @@ func (sr *ScenarioRecorder) RecordResponse() {
 		StatusCode: statusCode,
 		Headers:    headers,
 		Body:       bodyJSON,
+	}
+
+	// Mark as streaming if applicable
+	if sr.isStreaming {
+		resp.IsStreaming = true
+		if len(sr.streamChunks) > 0 {
+			// Store raw chunks for reference
+			chunksJSON := make([]string, 0, len(sr.streamChunks))
+			for _, chunk := range sr.streamChunks {
+				if data, err := json.Marshal(chunk); err == nil {
+					chunksJSON = append(chunksJSON, string(data))
+				}
+			}
+			resp.StreamChunks = chunksJSON
+		}
 	}
 
 	// Extract model from request if available

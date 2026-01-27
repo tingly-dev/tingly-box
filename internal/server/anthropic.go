@@ -45,6 +45,8 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 	// Start scenario-level recording (client -> tingly-box traffic)
 	recorder := s.RecordScenarioRequest(c, scenario)
 	if recorder != nil {
+		// Store recorder in context for use in handlers
+		c.Set("scenario_recorder", recorder)
 		defer func() {
 			if c.Writer.Written() {
 				recorder.RecordResponse()

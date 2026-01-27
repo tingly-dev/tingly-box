@@ -32,6 +32,12 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 	// Extract scenario from URL path for recording
 	scenario := c.Param("scenario")
 
+	// Get scenario recorder if exists (set by AnthropicMessages)
+	var recorder *ScenarioRecorder
+	if r, exists := c.Get("scenario_recorder"); exists {
+		recorder = r.(*ScenarioRecorder)
+	}
+
 	// Check if streaming is requested
 	isStreaming := req.Stream
 
@@ -73,10 +79,13 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			if err != nil {
 				s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "stream_creation_failed")
 				SendStreamingError(c, err)
+				if recorder != nil {
+					recorder.RecordError(err)
+				}
 				return
 			}
 			// Handle the streaming response
-			s.handleAnthropicStreamResponseV1Beta(c, req.BetaMessageNewParams, stream, proxyModel, actualModel, rule, provider)
+			s.handleAnthropicStreamResponseV1Beta(c, req.BetaMessageNewParams, stream, proxyModel, actualModel, rule, provider, recorder)
 		} else {
 			// Handle non-streaming request
 			anthropicResp, err := s.forwardAnthropicRequestV1Beta(provider, req.BetaMessageNewParams, scenario)
@@ -212,10 +221,13 @@ func (s *Server) forwardAnthropicStreamRequestV1Beta(provider *typ.Provider, req
 }
 
 // handleAnthropicStreamResponseV1Beta processes the Anthropic beta streaming response and sends it to the client
-func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthropic.BetaMessageNewParams, stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], respModel, actualModel string, rule *typ.Rule, provider *typ.Provider) {
+func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthropic.BetaMessageNewParams, stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], respModel, actualModel string, rule *typ.Rule, provider *typ.Provider, recorder *ScenarioRecorder) {
 	// Accumulate usage from stream
 	var inputTokens, outputTokens int
 	var hasUsage bool
+
+	// Create stream assembler for recording
+	assembler := NewAnthropicStreamAssembler(recorder)
 
 	// Set SSE headers
 	SetupSSEHeaders(c)
@@ -231,6 +243,9 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthrop
 	for stream.Next() {
 		event := stream.Current()
 		event.Message.Model = anthropic.Model(respModel)
+
+		// Record and assemble the response
+		assembler.RecordV1BetaEvent(&event)
 
 		// Accumulate usage from message_stop event
 		if event.Usage.InputTokens > 0 {
@@ -249,6 +264,9 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthrop
 		}
 		flusher.Flush()
 	}
+
+	// Finish recording - assemble and set the final response
+	assembler.Finish(respModel, inputTokens, outputTokens)
 
 	// Check for stream errors
 	if err := stream.Err(); err != nil {
