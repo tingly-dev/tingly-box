@@ -1,14 +1,16 @@
 import { Cancel, CheckCircle, Key, PlayArrow, Refresh as RefreshIcon, RestartAlt, Stop } from '@mui/icons-material';
-import { Button, IconButton, Stack, Typography } from '@mui/material';
+import { Box, Button, IconButton, Stack, Typography, Link } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import CardGrid from '@/components/CardGrid';
 import { PageLayout } from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api, getBaseUrl } from '../services/api';
+import { useVersion } from '../contexts/VersionContext';
 
 const System = () => {
     const { t } = useTranslation();
+    const { currentVersion } = useVersion();
     const [serverStatus, setServerStatus] = useState<any>(null);
     const [baseUrl, setBaseUrl] = useState<string>("");
     const [providersStatus, setProvidersStatus] = useState<any>(null);
@@ -226,6 +228,32 @@ const System = () => {
                     ) : (
                         <div>{t('system.status.loading')}</div>
                     )}
+                </UnifiedCard>
+
+                {/* About Card */}
+                <UnifiedCard
+                    title="About"
+                    size="medium"
+                    width="100%"
+                >
+                    <Stack spacing={1.5}>
+                        <Typography variant="body2" color="text.secondary">
+                            <strong>Version:</strong> {currentVersion || 'N/A'}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                            <strong>License:</strong> MPL v2.0
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                            <strong>GitHub:</strong>{' '}
+                            <Link
+                                href="https://github.com/tingly-dev/tingly-box"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                tingly-dev/tingly-box
+                            </Link>
+                        </Typography>
+                    </Stack>
                 </UnifiedCard>
 
             </CardGrid>
