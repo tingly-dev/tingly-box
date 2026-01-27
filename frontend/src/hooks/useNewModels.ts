@@ -93,26 +93,27 @@ export const useNewModels = () => {
         // Find newly added models
         const addedModels = newModelsList.filter(m => !oldSet.has(m));
 
-        // Find removed models (optional, for reference)
-        const removedModels = oldModels.filter(m => !newSet.has(m));
+        // Get existing new models for this provider
+        const existingDiff = newModels[providerUuid];
+        const existingNewModels = existingDiff?.newModels || [];
 
-        // Only store if there are actual changes
-        if (addedModels.length > 0 || removedModels.length > 0) {
+        // Merge existing new models with newly detected ones (avoid duplicates)
+        const mergedNewModels = Array.from(new Set([...existingNewModels, ...addedModels]));
+
+        // Only update if there are new models to show
+        if (mergedNewModels.length > 0) {
             const diff: NewModelsDiff = {
-                newModels: addedModels,
-                removedModels,
-                timestamp: new Date().toISOString(),
+                newModels: mergedNewModels,
+                timestamp: existingDiff?.timestamp || new Date().toISOString(),
             };
 
             if (saveNewModelsToStorage(providerUuid, diff)) {
                 setNewModels(prev => ({ ...prev, [providerUuid]: diff }));
                 dispatchNewModelsUpdate(providerUuid, diff);
             }
-        } else {
-            // No changes, clear any previous diff for this provider
-            clearNewModels(providerUuid);
         }
-    }, []);
+        // Don't auto-clear - let users dismiss explicitly via close button
+    }, [newModels]);
 
     // Get new models diff for a specific provider
     const getNewModels = useCallback((providerUuid: string): NewModelsDiff | undefined => {
