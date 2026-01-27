@@ -56,6 +56,7 @@ interface MenuItem {
 interface MenuGroup {
     key: string;
     label?: string;
+    path?: string;  // Optional path for group header click
     icon?: ReactNode;
     standalone?: boolean;
     items: MenuItem[];
@@ -69,6 +70,7 @@ const Layout = ({ children }: LayoutProps) => {
     const [mobileOpen, setMobileOpen] = useState(false);
     const [homeMenuOpen, setHomeMenuOpen] = useState(true);
     const [credentialMenuOpen, setCredentialMenuOpen] = useState(true);
+    const [systemMenuOpen, setSystemMenuOpen] = useState(false);
     const [easterEggAnchorEl, setEasterEggAnchorEl] = useState<HTMLElement | null>(null);
 
     const handleDrawerToggle = () => {
@@ -154,28 +156,15 @@ const Layout = ({ children }: LayoutProps) => {
             ],
         },
         {
-            key: 'logs',
-            label: 'Logs',
-            icon: <LogsIcon sx={{ fontSize: 20 }} />,
-            standalone: true,
+            key: 'system',
+            label: 'System',
+            path: '/system',
+            icon: <SystemIcon sx={{ fontSize: 20 }} />,
             items: [
                 {
                     path: '/logs',
                     label: 'Logs',
                     icon: <LogsIcon sx={{ fontSize: 18 }} />,
-                },
-            ],
-        },
-        {
-            key: 'system',
-            label: 'System',
-            icon: <SystemIcon sx={{ fontSize: 20 }} />,
-            standalone: true,
-            items: [
-                {
-                    path: '/system',
-                    label: 'System',
-                    icon: <SystemIcon sx={{ fontSize: 20 }} />,
                 },
             ],
         },
@@ -227,22 +216,43 @@ const Layout = ({ children }: LayoutProps) => {
             {/* Navigation Menu */}
             <List sx={{ flex: 1, py: 2 }}>
                 {menuGroups.map((group) => {
-                    const isHomeGroup = group.key === 'home';
+                    const isDashboardGroup = group.key === 'dashboard';
+                    const isHomeGroup = group.key === 'scenario';
                     const isCredentialGroup = group.key === 'credential';
+                    const isSystemGroup = group.key === 'system';
                     const isStandalone = group.standalone;
 
-                    // For standalone groups (like System), no collapse state
-                    const isOpen = isStandalone ? true : (isHomeGroup ? homeMenuOpen : credentialMenuOpen);
-                    const setIsOpen = isStandalone ? undefined : (isHomeGroup ? setHomeMenuOpen : setCredentialMenuOpen);
+                    // For standalone groups (like Dashboard), no collapse state
+                    let isOpen = true;
+                    let setIsOpen: ((value: boolean) => void) | undefined = undefined;
+
+                    if (!isStandalone) {
+                        if (isHomeGroup) {
+                            isOpen = homeMenuOpen;
+                            setIsOpen = setHomeMenuOpen;
+                        } else if (isCredentialGroup) {
+                            isOpen = credentialMenuOpen;
+                            setIsOpen = setCredentialMenuOpen;
+                        } else if (isSystemGroup) {
+                            isOpen = systemMenuOpen;
+                            setIsOpen = setSystemMenuOpen;
+                        }
+                    }
 
                     return (
                         <React.Fragment key={group.key}>
                             {/* Group Header */}
                             <ListItem key={`header-${group.key}`} disablePadding sx={{ mb: isStandalone ? 0 : 1 }}>
                                 <ListItemButton
-                                    component={isStandalone ? RouterLink : undefined}
-                                    to={isStandalone ? group.items[0].path : undefined}
-                                    onClick={isStandalone ? handleDrawerToggle : () => setIsOpen && setIsOpen(!isOpen)}
+                                    component={RouterLink}
+                                    to={group.path || group.items[0].path}
+                                    onClick={() => {
+                                        handleDrawerToggle();
+                                        // Expand the group when clicking header
+                                        if (!isStandalone && !isOpen && setIsOpen) {
+                                            setIsOpen(true);
+                                        }
+                                    }}
                                     sx={{
                                         mx: 2,
                                         borderRadius: 2,
@@ -261,7 +271,18 @@ const Layout = ({ children }: LayoutProps) => {
                                             fontWeight: isGroupActive(group.items) ? 600 : 400,
                                         }}
                                     />
-                                    {!isStandalone && (isOpen ? <ExpandLess /> : <ExpandMore />)}
+                                    {!isStandalone && (
+                                        <Box
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                setIsOpen && setIsOpen(!isOpen);
+                                            }}
+                                            sx={{ display: 'flex', alignItems: 'center' }}
+                                        >
+                                            {isOpen ? <ExpandLess /> : <ExpandMore />}
+                                        </Box>
+                                    )}
                                 </ListItemButton>
                             </ListItem>
 
