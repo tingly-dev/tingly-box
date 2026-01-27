@@ -75,7 +75,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 		// Use direct Anthropic SDK call
 		if isStreaming {
 			// Handle streaming request
-			stream, err := s.forwardAnthropicStreamRequestV1Beta(provider, req.BetaMessageNewParams, scenario)
+			streamResp, err := s.forwardAnthropicStreamRequestV1Beta(provider, req.BetaMessageNewParams, scenario)
 			if err != nil {
 				s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "stream_creation_failed")
 				SendStreamingError(c, err)
@@ -85,7 +85,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 				return
 			}
 			// Handle the streaming response
-			s.handleAnthropicStreamResponseV1Beta(c, req.BetaMessageNewParams, stream, proxyModel, actualModel, rule, provider, recorder)
+			s.handleAnthropicStreamResponseV1Beta(c, req.BetaMessageNewParams, streamResp, proxyModel, actualModel, rule, provider, recorder)
 		} else {
 			// Handle non-streaming request
 			anthropicResp, err := s.forwardAnthropicRequestV1Beta(provider, req.BetaMessageNewParams, scenario)
@@ -215,9 +215,9 @@ func (s *Server) forwardAnthropicStreamRequestV1Beta(provider *typ.Provider, req
 	// Use background context for streaming
 	// The stream will manage its own lifecycle and timeout
 	// We don't use a timeout here because streaming responses can take longer
-	stream := wrapper.BetaMessagesNewStreaming(ctx, req)
+	streamResp := wrapper.BetaMessagesNewStreaming(ctx, req)
 
-	return stream, nil
+	return streamResp, nil
 }
 
 // handleAnthropicStreamResponseV1Beta processes the Anthropic beta streaming response and sends it to the client
@@ -343,9 +343,9 @@ func (s *Server) forwardGoogleStreamRequest(provider *typ.Provider, model string
 
 	// Use background context for streaming
 	ctx := context.Background()
-	stream := wrapper.GenerateContentStream(ctx, model, contents, config)
+	streamResp := wrapper.GenerateContentStream(ctx, model, contents, config)
 
-	return stream, nil
+	return streamResp, nil
 }
 
 // anthropicCountTokensV1Beta implements beta count_tokens
