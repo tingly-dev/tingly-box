@@ -221,13 +221,13 @@ func (s *Server) forwardAnthropicStreamRequestV1Beta(provider *typ.Provider, req
 }
 
 // handleAnthropicStreamResponseV1Beta processes the Anthropic beta streaming response and sends it to the client
-func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthropic.BetaMessageNewParams, stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], respModel, actualModel string, rule *typ.Rule, provider *typ.Provider, recorder *ScenarioRecorder) {
+func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthropic.BetaMessageNewParams, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], respModel, actualModel string, rule *typ.Rule, provider *typ.Provider, recorder *ScenarioRecorder) {
 	// Accumulate usage from stream
 	var inputTokens, outputTokens int
 	var hasUsage bool
 
 	// Create stream assembler (pure assembler, no recorder dependency)
-	assembler := NewAnthropicStreamAssembler()
+	assembler := stream.NewAnthropicStreamAssembler()
 
 	// Enable streaming on recorder if provided
 	if recorder != nil {
@@ -245,8 +245,8 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthrop
 	flusher, _ := c.Writer.(http.Flusher)
 
 	// Process the stream
-	for stream.Next() {
-		event := stream.Current()
+	for streamResp.Next() {
+		event := streamResp.Current()
 		event.Message.Model = anthropic.Model(respModel)
 
 		// Record raw chunk to recorder if provided
@@ -281,7 +281,7 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthrop
 	}
 
 	// Check for stream errors
-	if err := stream.Err(); err != nil {
+	if err := streamResp.Err(); err != nil {
 		// Track usage with error status
 		if hasUsage {
 			s.trackUsage(c, rule, provider, actualModel, respModel, inputTokens, outputTokens, true, "error", "stream_error")
