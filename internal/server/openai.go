@@ -140,39 +140,27 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 		selectedService *loadbalance.Service
 		rule            *typ.Rule
 	)
-	if scenario == "" {
-		provider, selectedService, rule, err = s.DetermineProviderAndModel(req.Model)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error: ErrorDetail{
-					Message: err.Error(),
-					Type:    "invalid_request_error",
-				},
-			})
-			return
-		}
-	} else {
-		// Convert string to RuleScenario and validate
-		scenarioType := typ.RuleScenario(scenario)
-		if !isValidRuleScenario(scenarioType) {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error: ErrorDetail{
-					Message: fmt.Sprintf("invalid scenario: %s", scenario),
-					Type:    "invalid_request_error",
-				},
-			})
-			return
-		}
-		provider, selectedService, rule, err = s.DetermineProviderAndModelWithScenario(scenarioType, req.Model)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error: ErrorDetail{
-					Message: err.Error(),
-					Type:    "invalid_request_error",
-				},
-			})
-			return
-		}
+
+	// Convert string to RuleScenario and validate
+	scenarioType := typ.RuleScenario(scenario)
+	if !isValidRuleScenario(scenarioType) {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: fmt.Sprintf("invalid scenario: %s", scenario),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+	provider, selectedService, rule, err = s.DetermineProviderAndModelWithScenario(scenarioType, req.Model)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
 	}
 
 	// Set the rule and provider in context so middleware can use the same rule
@@ -192,19 +180,18 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 	c.Set("provider", provider.UUID)
 	c.Set("model", actualModel)
 
-	apiStyle := string(provider.APIStyle)
-	if apiStyle == "" {
-		apiStyle = string(protocol.APIStyleOpenAI)
-	}
+	apiStyle := provider.APIStyle
 
-	// Check if model prefers responses endpoint (for models like Codex)
-	if selectedService.PreferCompletions() && apiStyle == string(protocol.APIStyleOpenAI) {
-		// Convert chat request to responses request
-		s.handleResponsesForChatRequest(c, provider, &req, responseModel, actualModel, rule, isStreaming)
+	switch apiStyle {
+	default:
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: fmt.Sprintf("Unsupported API style: %s %s", provider.Name, apiStyle),
+				Type:    "invalid_request_error",
+			},
+		})
 		return
-	}
-
-	if apiStyle == string(protocol.APIStyleAnthropic) {
+	case protocol.APIStyleAnthropic:
 		// Check if adaptor is enabled
 		if !s.enableAdaptor {
 			c.JSON(http.StatusUnprocessableEntity, ErrorResponse{
@@ -281,7 +268,14 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 			c.JSON(http.StatusOK, openaiResp)
 			return
 		}
-	} else {
+	case protocol.APIStyleOpenAI:
+		// Check if model prefers responses endpoint (for models like Codex)
+		if selectedService.PreferCompletions() {
+			// Convert chat request to responses request
+			s.handleResponsesForChatRequest(c, provider, &req, responseModel, actualModel, rule, isStreaming)
+			return
+		}
+
 		if isStreaming {
 			s.handleStreamingRequest(c, provider, &req.ChatCompletionNewParams, responseModel, actualModel, rule)
 		} else {

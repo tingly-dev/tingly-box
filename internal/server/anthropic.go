@@ -124,39 +124,27 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		selectedService *loadbalance.Service
 		rule            *typ.Rule
 	)
-	if scenario == "" {
-		provider, selectedService, rule, err = s.DetermineProviderAndModel(model)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error: ErrorDetail{
-					Message: err.Error(),
-					Type:    "invalid_request_error",
-				},
-			})
-			return
-		}
-	} else {
-		// Convert string to RuleScenario and validate
-		scenarioType := typ.RuleScenario(scenario)
-		if !isValidRuleScenario(scenarioType) {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error: ErrorDetail{
-					Message: fmt.Sprintf("invalid scenario: %s", scenario),
-					Type:    "invalid_request_error",
-				},
-			})
-			return
-		}
-		provider, selectedService, rule, err = s.DetermineProviderAndModelWithScenario(scenarioType, model)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error: ErrorDetail{
-					Message: err.Error(),
-					Type:    "invalid_request_error",
-				},
-			})
-			return
-		}
+
+	// Convert string to RuleScenario and validate
+	scenarioType := typ.RuleScenario(scenario)
+	if !isValidRuleScenario(scenarioType) {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: fmt.Sprintf("invalid scenario: %s", scenario),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+	provider, selectedService, rule, err = s.DetermineProviderAndModelWithScenario(scenarioType, model)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
 	}
 
 	// Delegate to the appropriate implementation based on beta parameter

@@ -78,38 +78,25 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 		rule            *typ.Rule
 	)
 
-	if scenario == "" {
-		provider, selectedService, rule, err = s.DetermineProviderAndModel(responseModel)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error: ErrorDetail{
-					Message: err.Error(),
-					Type:    "invalid_request_error",
-				},
-			})
-			return
-		}
-	} else {
-		scenarioType := typ.RuleScenario(scenario)
-		if !isValidRuleScenario(scenarioType) {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error: ErrorDetail{
-					Message: fmt.Sprintf("invalid scenario: %s", scenario),
-					Type:    "invalid_request_error",
-				},
-			})
-			return
-		}
-		provider, selectedService, rule, err = s.DetermineProviderAndModelWithScenario(scenarioType, responseModel)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error: ErrorDetail{
-					Message: err.Error(),
-					Type:    "invalid_request_error",
-				},
-			})
-			return
-		}
+	scenarioType := typ.RuleScenario(scenario)
+	if !isValidRuleScenario(scenarioType) {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: fmt.Sprintf("invalid scenario: %s", scenario),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+	provider, selectedService, rule, err = s.DetermineProviderAndModelWithScenario(scenarioType, responseModel)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
 	}
 
 	// Set the rule and provider in context

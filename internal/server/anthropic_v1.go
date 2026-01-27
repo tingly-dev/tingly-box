@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -317,10 +318,7 @@ func (s *Server) anthropicCountTokensV1(c *gin.Context, bodyBytes []byte, rawReq
 	c.Set("model", selectedService.Model)
 
 	// Check provider's API style to decide which path to take
-	apiStyle := string(provider.APIStyle)
-	if apiStyle == "" {
-		apiStyle = "openai" // default to openai
-	}
+	apiStyle := provider.APIStyle
 
 	// Get or create Anthropic client wrapper from pool
 	wrapper := s.clientPool.GetAnthropicClient(provider, actualModel)
@@ -342,14 +340,23 @@ func (s *Server) anthropicCountTokensV1(c *gin.Context, bodyBytes []byte, rawReq
 	req.Model = anthropic.Model(actualModel)
 
 	// If the provider uses Anthropic API style, use the actual count_tokens endpoint
-	if apiStyle == "anthropic" {
+	switch apiStyle {
+	default:
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: fmt.Sprintf("Unsupported API style: %s %s", provider.Name, apiStyle),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	case protocol.APIStyleAnthropic:
 		message, err := wrapper.MessagesCountTokens(ctx, req)
 		if err != nil {
 			SendInvalidRequestBodyError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, message)
-	} else {
+	case protocol.APIStyleOpenAI:
 		count, err := token.CountTokensWithTiktoken(string(req.Model), req.Messages, req.System.OfTextBlockArray)
 		if err != nil {
 			SendInvalidRequestBodyError(c, err)
