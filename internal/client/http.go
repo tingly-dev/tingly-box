@@ -176,6 +176,7 @@ func (t *requestModifier) RoundTrip(req *http.Request) (*http.Response, error) {
 type antigravityRoundTripper struct {
 	http.RoundTripper
 	project, model string
+	proxyURL       string
 }
 
 // isStreamingRequest checks if the request is for streaming generate content
@@ -361,6 +362,10 @@ func (t *antigravityRoundTripper) RoundTrip(req *http.Request) (*http.Response, 
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal wrapped body: %w", err)
 			}
+			// Set GetBody to allow retries and redirects
+			req.GetBody = func() (io.ReadCloser, error) {
+				return io.NopCloser(bytes.NewReader(wrappedBody)), nil
+			}
 			req.Body = io.NopCloser(bytes.NewReader(wrappedBody))
 			req.ContentLength = int64(len(wrappedBody))
 		}
@@ -370,15 +375,23 @@ func (t *antigravityRoundTripper) RoundTrip(req *http.Request) (*http.Response, 
 	req.Header = http.Header{}
 	req.Header.Set("User-Agent", "antigravity/1.11.5 windows/amd64")
 	req.Header.Set("Content-Type", "application/json")
+	if req.ContentLength > 0 {
+		req.Header.Set("Content-Length", fmt.Sprintf("%d", req.ContentLength))
+	}
 	if key != "" {
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
 	}
 
+	logrus.Debugf("[Antigravity] Sending request to %s, Content-Length=%d, isStreaming=%v", req.URL.Path, req.ContentLength, isStreaming)
+
 	// Send request
 	resp, err := t.RoundTripper.RoundTrip(req)
 	if err != nil {
+		logrus.Errorf("[Antigravity] Request failed: %v", err)
 		return nil, err
 	}
+
+	logrus.Debugf("[Antigravity] Response received, status=%d", resp.StatusCode)
 
 	// Unwrap response body
 	// Antigravity wraps the response in a "response" field
@@ -499,13 +512,24 @@ func CreateHTTPClientForProvider(provider *typ.Provider) *http.Client {
 					model = m
 				}
 			}
+			// Create a separate transport with proxy for Antigravity
+			var antigravityTransport http.RoundTripper = transport
+			if provider.ProxyURL != "" {
+				// Use CreateHTTPClientWithProxy to create a transport with proxy
+				proxyClient := CreateHTTPClientWithProxy(provider.ProxyURL)
+				if proxyClient.Transport != nil {
+					antigravityTransport = proxyClient.Transport
+				}
+			}
+
 			// Use antigravityRoundTripper for both request wrapping and response unwrapping
 			client.Transport = &antigravityRoundTripper{
-				RoundTripper: transport,
+				RoundTripper: antigravityTransport,
 				project:      project,
 				model:        model,
+				proxyURL:     provider.ProxyURL,
 			}
-			logrus.Infof("Created Antigravity RoundTripper with project=%s, model=%s", project, model)
+			logrus.Infof("Created Antigravity RoundTripper with project=%s, model=%s, proxy=%s", project, model, provider.ProxyURL)
 		} else {
 			// For other OAuth providers, use the hook-based approach
 			hook := GetOAuthHook(providerType)
