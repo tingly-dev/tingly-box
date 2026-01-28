@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
@@ -978,16 +980,58 @@ func (c *Config) FetchAndSaveProviderModels(uid string) error {
 		return fmt.Errorf("provider with UUID %s not found", uid)
 	}
 
-	// Try provider API first
-	models, err := template.GetProviderModelsFromAPI(provider)
-	if err != nil {
-		logrus.Errorf("Failed to fetch models from API: %v", err)
-	} else {
-		// Save models to local storage
-		return c.modelManager.SaveModels(provider, provider.APIBase, models)
+	// Try provider API first using client layer
+	ctx := context.Background()
+	var models []string
+	var apiErr error
+
+	// Create appropriate client based on provider API style
+	var lister client.ModelLister
+	switch provider.APIStyle {
+	case protocol.APIStyleAnthropic:
+		aClient, err := client.NewAnthropicClient(provider)
+		if err == nil {
+			defer aClient.Close()
+			lister = aClient
+		}
+		apiErr = err
+	case protocol.APIStyleGoogle:
+		gClient, err := client.NewGoogleClient(provider)
+		if err == nil {
+			defer gClient.Close()
+			lister = gClient
+		}
+		apiErr = err
+	case protocol.APIStyleOpenAI:
+		fallthrough
+	default:
+		oClient, err := client.NewOpenAIClient(provider)
+		if err == nil {
+			defer oClient.Close()
+			lister = oClient
+		}
+		apiErr = err
 	}
 
-	// API failed, try template fallback
+	// If we have a lister, try to fetch models
+	if lister != nil {
+		models, apiErr = lister.ListModels(ctx)
+		if apiErr == nil && len(models) > 0 {
+			// Successfully fetched models from API
+			return c.modelManager.SaveModels(provider, provider.APIBase, models)
+		}
+		// Check if the error is because the endpoint is not supported
+		if client.IsModelsEndpointNotSupported(apiErr) {
+			logrus.Infof("Provider %s does not support models endpoint, using template fallback", provider.Name)
+			apiErr = nil // Clear error to proceed to template fallback
+		} else {
+			logrus.Errorf("Failed to fetch models from API: %v", apiErr)
+		}
+	} else {
+		logrus.Errorf("Failed to create client for provider %s: %v", provider.Name, apiErr)
+	}
+
+	// API failed or not supported, try template fallback
 	if c.templateManager != nil {
 		tmplModels, _, tmplErr := c.templateManager.GetModelsForProvider(provider)
 		if tmplErr == nil && len(tmplModels) > 0 {
@@ -996,8 +1040,11 @@ func (c *Config) FetchAndSaveProviderModels(uid string) error {
 		}
 	}
 
-	// All fallbacks failed, return original API error
-	return fmt.Errorf("failed to fetch models (API: %v, template fallback: not available)", err)
+	// All fallbacks failed
+	if apiErr != nil {
+		return fmt.Errorf("failed to fetch models (API: %v, template fallback: not available)", apiErr)
+	}
+	return fmt.Errorf("failed to fetch models (template fallback: not available)")
 }
 
 func (c *Config) GetModelManager() *template.ModelListManager {

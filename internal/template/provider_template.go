@@ -63,9 +63,10 @@ type ProviderTemplateRegistry struct {
 type TemplateSource int
 
 const (
-	TemplateSourceAPI    TemplateSource = iota // From provider API
-	TemplateSourceGitHub                       // From GitHub templates
-	TemplateSourceLocal                        // From local embedded templates
+	// TemplateSourceGitHub - From GitHub templates
+	TemplateSourceGitHub TemplateSource = iota
+	// TemplateSourceLocal - From local embedded templates
+	TemplateSourceLocal
 )
 
 // TemplateSourcePreference defines the priority order for loading templates
@@ -508,10 +509,10 @@ func deepCopyTemplate(tmpl *ProviderTemplate) *ProviderTemplate {
 	return &result
 }
 
-// GetModelsForProvider returns models for a provider using 3-tier fallback hierarchy:
-// 1. Provider API (real-time, no cache)
-// 2. GitHub templates (cached remote)
-// 3. Embedded templates (local fallback)
+// GetModelsForProvider returns models for a provider using template-only hierarchy:
+// 1. GitHub/embedded templates with models list
+// Note: API-based model fetching is now handled by the client layer (client.ModelLister)
+// This method only returns static models from templates
 func (tm *TemplateManager) GetModelsForProvider(provider *typ.Provider) ([]string, TemplateSource, error) {
 	// Find template by matching APIBase or OAuthProvider
 	tmpl := tm.findTemplateByProvider(provider)
@@ -525,16 +526,7 @@ func (tm *TemplateManager) GetModelsForProvider(provider *typ.Provider) ([]strin
 	source := tm.source
 	tm.mu.RUnlock()
 
-	// Tier 1: Try provider API first if supported (no cache)
-	if tmpl.SupportsModelsEndpoint {
-		models, apiErr := GetProviderModelsFromAPI(provider)
-		if apiErr == nil && len(models) > 0 {
-			return models, TemplateSourceAPI, nil
-		}
-		// API failed or returned empty, continue to tier 2
-	}
-
-	// Tier 2: Use matched template models
+	// Return models from template
 	if len(tmpl.Models) > 0 {
 		return tmpl.Models, source, nil
 	}
@@ -588,30 +580,4 @@ func (tm *TemplateManager) GetMaxTokensForModelByProvider(provider *typ.Provider
 
 	// Fallback to global default
 	return constant.DefaultMaxTokens
-}
-
-// GetCodexModels returns the list of available Codex models from the codex_oauth provider template
-func (tm *TemplateManager) GetCodexModels() []string {
-	if tm == nil {
-		// Fallback to hardcoded models if manager is nil
-		return getCodexModelsDefault()
-	}
-
-	codexTemplate, err := tm.GetTemplate("codex_oauth")
-	if err != nil || codexTemplate == nil || len(codexTemplate.Models) == 0 {
-		// Fallback to hardcoded models if template not found or has no models
-		return getCodexModelsDefault()
-	}
-	return codexTemplate.Models
-}
-
-// getCodexModelsDefault returns the default hardcoded Codex models list
-func getCodexModelsDefault() []string {
-	return []string{
-		"gpt-5-codex",
-		"gpt-5.1-codex",
-		"gpt-5.1-codex-max",
-		"gpt-5.1-codex-mini",
-		"gpt-5.2-codex",
-	}
 }

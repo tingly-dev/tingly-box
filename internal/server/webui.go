@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	assets "github.com/tingly-dev/tingly-box/internal"
+	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -137,31 +138,35 @@ func (s *Server) HandleProbeModel(c *gin.Context) {
 	// Create the mock request data that would be sent to the API
 	mockRequest := NewMockRequest(provider.Name, req.Model)
 
-	// Call the appropriate probe function based on provider API style
-	var responseContent string
-	var usage ProbeUsage
-	var err error
-
+	// Get the appropriate client based on API style
+	var prober client.Prober
 	switch provider.APIStyle {
-	case protocol.APIStyleAnthropic:
-		responseContent, usage, err = s.probeWithAnthropic(c, provider, model)
 	case protocol.APIStyleOpenAI:
-		fallthrough
+		prober = s.clientPool.GetOpenAIClient(provider, model)
+	case protocol.APIStyleAnthropic:
+		prober = s.clientPool.GetAnthropicClient(provider, model)
 	default:
-		responseContent, usage, err = s.probeWithOpenAI(c, provider, model)
+		prober = s.clientPool.GetOpenAIClient(provider, model)
+	}
+
+	// Call the probe method
+	var result client.ProbeResult
+	if prober != nil {
+		result = prober.ProbeChatEndpoint(c.Request.Context(), model)
 	}
 
 	endTime := time.Now()
 
-	if err != nil {
-		// Extract error code from the formatted error message
-		errorMessage := err.Error()
-		errorCode := "PROBE_FAILED"
+	if !result.Success {
+		errorMessage := result.ErrorMessage
+		if errorMessage == "" {
+			errorMessage = "Probe failed"
+		}
 
 		errorResp := ErrorDetail{
 			Message: fmt.Sprintf("Probe failed: %s", errorMessage),
 			Type:    "error",
-			Code:    errorCode,
+			Code:    "PROBE_FAILED",
 		}
 
 		c.JSON(http.StatusNotFound, ProbeResponse{
@@ -178,16 +183,22 @@ func (s *Server) HandleProbeModel(c *gin.Context) {
 	}
 
 	finishReason := "stop"
-	if usage.TotalTokens == 0 {
+	if result.TotalTokens == 0 {
 		finishReason = "unknown"
 	}
 
-	usage.TimeCost = int(endTime.Sub(startTime).Milliseconds())
+	usage := ProbeUsage{
+		PromptTokens:     result.PromptTokens,
+		CompletionTokens: result.CompletionTokens,
+		TotalTokens:      result.TotalTokens,
+		TimeCost:         int(endTime.Sub(startTime).Milliseconds()),
+	}
+
 	c.JSON(http.StatusOK, ProbeResponse{
 		Success: true,
 		Data: &ProbeResponseData{
 			Request:     mockRequest,
-			Response:    ProbeResponseDetail{Content: responseContent, FinishReason: finishReason},
+			Response:    ProbeResponseDetail{Content: result.Content, FinishReason: finishReason},
 			Usage:       usage,
 			CurlCommand: curlCommand,
 		},
