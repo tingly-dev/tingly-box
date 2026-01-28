@@ -3,10 +3,8 @@ package client
 import (
 	"context"
 	"fmt"
-	"net/http"
-	"runtime"
-
 	"iter"
+	"net/http"
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
@@ -110,13 +108,6 @@ func NewGoogleClient(provider *typ.Provider) (*GoogleClient, error) {
 	// Apply Antigravity-specific configuration
 	if isAntigravityProvider(provider) {
 		project, model := getAntigravityExtraFields(provider)
-
-		// Set custom User-Agent header for Antigravity
-		osType := runtime.GOOS
-		arch := runtime.GOARCH
-		httpOptions.Headers = http.Header{
-			"User-Agent": []string{fmt.Sprintf("antigravity/1.11.5 %s/%s", osType, arch)},
-		}
 
 		// Apply request wrapper to transform request body
 		if project != "" && model != "" {
