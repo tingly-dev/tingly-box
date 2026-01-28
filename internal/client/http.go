@@ -64,79 +64,7 @@ func antigravityHook(req *http.Request) error {
 	return nil
 }
 
-// newAntigravityHookWithConfig creates an Antigravity hook with provider-specific configuration
-// This hook handles both URL rewriting and request body wrapping
-func newAntigravityHookWithConfig(project, model string) HookFunc {
-	return func(req *http.Request) error {
-		key := req.Header.Get("X-Goog-Api-Key")
-
-		// Rewrite URL path from standard Google format to Antigravity format
-		originalPath := req.URL.Path
-		newPath := originalPath
-
-		if strings.Contains(newPath, ":generateContent") {
-			parts := strings.Split(newPath, ":")
-			if len(parts) >= 2 {
-				operation := parts[1]
-				newPath = fmt.Sprintf("/v1internal:%s", operation)
-			}
-		}
-
-		if newPath != originalPath {
-			logrus.Debugf("[Antigravity] Rewriting URL path: %s -> %s", originalPath, newPath)
-			req.URL.Path = newPath
-		}
-
-		// Read and wrap request body
-		if req.Body != nil && project != "" && model != "" {
-			body, err := io.ReadAll(req.Body)
-			if err != nil {
-				return fmt.Errorf("failed to read request body: %w", err)
-			}
-			req.Body.Close()
-
-			// Parse original body
-			var originalBody map[string]any
-			if err := json.Unmarshal(body, &originalBody); err == nil {
-				// Remove model from original body
-				cleanBody := make(map[string]any)
-				for k, v := range originalBody {
-					if k != "model" {
-						cleanBody[k] = v
-					}
-				}
-
-				// Wrap in Antigravity format
-				wrapped := map[string]any{
-					"project":     project,
-					"requestId":   fmt.Sprintf("agent-%s", uuid.New().String()),
-					"request":     cleanBody,
-					"model":       model,
-					"userAgent":   "antigravity",
-					"requestType": "agent",
-				}
-
-				wrappedBody, err := json.Marshal(wrapped)
-				if err != nil {
-					return fmt.Errorf("failed to marshal wrapped body: %w", err)
-				}
-				req.Body = io.NopCloser(bytes.NewReader(wrappedBody))
-				req.ContentLength = int64(len(wrappedBody))
-			}
-		}
-
-		// Set headers
-		req.Header = http.Header{}
-		req.Header.Set("User-Agent", "antigravity/1.11.5 windows/amd64")
-		req.Header.Set("Content-Type", "application/json")
-		if key != "" {
-			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
-		}
-		return nil
-	}
-}
-
-// claudeCodeHook applies Claude Code OAuth specific request modifications:
+// requestModifier wraps an http.RoundTripper to apply hooks to each request:
 // - Converts X-Api-Key header to Authorization header
 // - Adds required Claude Code specific headers
 // - Adds beta query parameter
@@ -243,6 +171,116 @@ func (t *requestModifier) RoundTrip(req *http.Request) (*http.Response, error) {
 	return t.RoundTripper.RoundTrip(req)
 }
 
+// antigravityRoundTripper wraps an http.RoundTripper to handle Antigravity's
+// custom request/response format
+type antigravityRoundTripper struct {
+	http.RoundTripper
+	project, model string
+}
+
+func (t *antigravityRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	key := req.Header.Get("X-Goog-Api-Key")
+
+	// Rewrite URL path from standard Google format to Antigravity format
+	originalPath := req.URL.Path
+	newPath := originalPath
+
+	if strings.Contains(newPath, ":generateContent") || strings.Contains(newPath, ":streamGenerateContent") {
+		parts := strings.Split(newPath, ":")
+		if len(parts) >= 2 {
+			operation := parts[1]
+			newPath = fmt.Sprintf("/v1internal:%s", operation)
+		}
+	}
+
+	if newPath != originalPath {
+		logrus.Debugf("[Antigravity] Rewriting URL path: %s -> %s", originalPath, newPath)
+		req.URL.Path = newPath
+	}
+
+	// Read and wrap request body
+	if req.Body != nil && t.project != "" && t.model != "" {
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read request body: %w", err)
+		}
+		req.Body.Close()
+
+		// Parse original body
+		var originalBody map[string]any
+		if err := json.Unmarshal(body, &originalBody); err == nil {
+			// Remove model from original body
+			cleanBody := make(map[string]any)
+			for k, v := range originalBody {
+				if k != "model" {
+					cleanBody[k] = v
+				}
+			}
+
+			// Wrap in Antigravity format
+			wrapped := map[string]any{
+				"project":     t.project,
+				"requestId":   fmt.Sprintf("agent-%s", uuid.New().String()),
+				"request":     cleanBody,
+				"model":       t.model,
+				"userAgent":   "antigravity",
+				"requestType": "agent",
+			}
+
+			wrappedBody, err := json.Marshal(wrapped)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal wrapped body: %w", err)
+			}
+			req.Body = io.NopCloser(bytes.NewReader(wrappedBody))
+			req.ContentLength = int64(len(wrappedBody))
+		}
+	}
+
+	// Set headers
+	req.Header = http.Header{}
+	req.Header.Set("User-Agent", "antigravity/1.11.5 windows/amd64")
+	req.Header.Set("Content-Type", "application/json")
+	if key != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
+	}
+
+	// Send request
+	resp, err := t.RoundTripper.RoundTrip(req)
+	if err != nil {
+		return nil, err
+	}
+
+	// Unwrap response body
+	// Antigravity wraps the response in a "response" field
+	if resp.Body != nil {
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			return nil, fmt.Errorf("failed to read response body: %w", err)
+		}
+
+		// Try to unwrap the response
+		var wrappedResponse map[string]any
+		if err := json.Unmarshal(body, &wrappedResponse); err == nil {
+			if innerResponse, ok := wrappedResponse["response"]; ok {
+				// Unwrap: extract the inner "response" field
+				unwrappedBody, err := json.Marshal(innerResponse)
+				if err != nil {
+					return nil, fmt.Errorf("failed to marshal unwrapped response: %w", err)
+				}
+				resp.Body = io.NopCloser(bytes.NewReader(unwrappedBody))
+				resp.ContentLength = int64(len(unwrappedBody))
+			}
+		} else {
+			// If parsing fails, return original body (might not be wrapped)
+			resp.Body = io.NopCloser(bytes.NewReader(body))
+			resp.ContentLength = int64(len(body))
+		}
+	}
+
+	return resp, nil
+}
+
 // GetOAuthHook returns the hook function for the given provider type
 func GetOAuthHook(providerType oauth.ProviderType) HookFunc {
 	hook, ok := oauthHookFunctions[providerType]
@@ -311,9 +349,7 @@ func CreateHTTPClientForProvider(provider *typ.Provider) *http.Client {
 	}
 
 	if provider.AuthType == typ.AuthTypeOAuth {
-		var hook HookFunc
-
-		// For Antigravity, create a specialized hook with provider-specific config
+		// For Antigravity, create a specialized RoundTripper with provider-specific config
 		if providerType == oauth.ProviderAntigravity && provider.OAuthDetail != nil {
 			project, model := "", ""
 			if provider.OAuthDetail.ExtraFields != nil {
@@ -324,17 +360,21 @@ func CreateHTTPClientForProvider(provider *typ.Provider) *http.Client {
 					model = m
 				}
 			}
-			hook = newAntigravityHookWithConfig(project, model)
-			logrus.Infof("Created Antigravity hook with project=%s, model=%s", project, model)
-		} else {
-			hook = GetOAuthHook(providerType)
-		}
-
-		if hook != nil {
-			// Wrap the transport with request modifier for OAuth hooks
-			client.Transport = &requestModifier{
+			// Use antigravityRoundTripper for both request wrapping and response unwrapping
+			client.Transport = &antigravityRoundTripper{
 				RoundTripper: transport,
-				hooks:        []HookFunc{hook},
+				project:      project,
+				model:        model,
+			}
+			logrus.Infof("Created Antigravity RoundTripper with project=%s, model=%s", project, model)
+		} else {
+			// For other OAuth providers, use the hook-based approach
+			hook := GetOAuthHook(providerType)
+			if hook != nil {
+				client.Transport = &requestModifier{
+					RoundTripper: transport,
+					hooks:        []HookFunc{hook},
+				}
 			}
 		}
 	}
