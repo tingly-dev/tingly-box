@@ -2,11 +2,10 @@ package client
 
 import (
 	"context"
-	"fmt"
-	"iter"
 	"net/http"
 
-	"github.com/google/uuid"
+	"iter"
+
 	"github.com/sirupsen/logrus"
 	"google.golang.org/genai"
 
@@ -33,43 +32,6 @@ func getAntigravityExtraFields(provider *typ.Provider) (project, model string) {
 		}
 	}
 	return
-}
-
-// newAntigravityRequestWrapper creates a request wrapper for Antigravity's custom API format
-//
-// Antigravity's API requires wrapping the standard genai request in an outer structure:
-//
-//	{
-//	  "project": "project-id",
-//	  "requestId": "uuid",
-//	  "request": { /* standard genai request */ },
-//	  "model": "gemini-2.5-flash",
-//	  "userAgent": "antigravity",
-//	  "requestType": "agent"
-//	}
-func newAntigravityRequestWrapper(project, model string) genai.ExtrasRequestProvider {
-	return func(originalBody map[string]any) map[string]any {
-		// Remove model from original body as it will be at the top level
-		// The genai SDK puts "model" in the body, but Antigravity expects it at the wrapper level
-		cleanBody := make(map[string]any)
-		for k, v := range originalBody {
-			if k != "model" {
-				cleanBody[k] = v
-			}
-		}
-
-		// Wrap the original genai request
-		wrapped := map[string]any{
-			"project":     project,
-			"requestId":   fmt.Sprintf("agent-%s", uuid.New().String()),
-			"request":     cleanBody,
-			"model":       model,
-			"userAgent":   "antigravity",
-			"requestType": "agent",
-		}
-
-		return wrapped
-	}
 }
 
 // GoogleClient wraps the Google genai SDK client
@@ -103,19 +65,6 @@ func NewGoogleClient(provider *typ.Provider) (*GoogleClient, error) {
 	// Create Google client config
 	httpOptions := genai.HTTPOptions{
 		BaseURL: provider.APIBase,
-	}
-
-	// Apply Antigravity-specific configuration
-	if isAntigravityProvider(provider) {
-		project, model := getAntigravityExtraFields(provider)
-
-		// Apply request wrapper to transform request body
-		if project != "" && model != "" {
-			httpOptions.ExtrasRequestProvider = newAntigravityRequestWrapper(project, model)
-			logrus.Infof("Applied Antigravity request wrapper for project=%s, model=%s", project, model)
-		} else {
-			logrus.Warnf("Antigravity provider missing project or model in ExtraFields")
-		}
 	}
 
 	config := &genai.ClientConfig{

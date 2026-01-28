@@ -1,11 +1,15 @@
 package client
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/proxy"
 
@@ -58,6 +62,78 @@ func antigravityHook(req *http.Request) error {
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
 	}
 	return nil
+}
+
+// newAntigravityHookWithConfig creates an Antigravity hook with provider-specific configuration
+// This hook handles both URL rewriting and request body wrapping
+func newAntigravityHookWithConfig(project, model string) HookFunc {
+	return func(req *http.Request) error {
+		key := req.Header.Get("X-Goog-Api-Key")
+
+		// Rewrite URL path from standard Google format to Antigravity format
+		originalPath := req.URL.Path
+		newPath := originalPath
+
+		if strings.Contains(newPath, ":generateContent") {
+			parts := strings.Split(newPath, ":")
+			if len(parts) >= 2 {
+				operation := parts[1]
+				newPath = fmt.Sprintf("/v1internal:%s", operation)
+			}
+		}
+
+		if newPath != originalPath {
+			logrus.Debugf("[Antigravity] Rewriting URL path: %s -> %s", originalPath, newPath)
+			req.URL.Path = newPath
+		}
+
+		// Read and wrap request body
+		if req.Body != nil && project != "" && model != "" {
+			body, err := io.ReadAll(req.Body)
+			if err != nil {
+				return fmt.Errorf("failed to read request body: %w", err)
+			}
+			req.Body.Close()
+
+			// Parse original body
+			var originalBody map[string]any
+			if err := json.Unmarshal(body, &originalBody); err == nil {
+				// Remove model from original body
+				cleanBody := make(map[string]any)
+				for k, v := range originalBody {
+					if k != "model" {
+						cleanBody[k] = v
+					}
+				}
+
+				// Wrap in Antigravity format
+				wrapped := map[string]any{
+					"project":     project,
+					"requestId":   fmt.Sprintf("agent-%s", uuid.New().String()),
+					"request":     cleanBody,
+					"model":       model,
+					"userAgent":   "antigravity",
+					"requestType": "agent",
+				}
+
+				wrappedBody, err := json.Marshal(wrapped)
+				if err != nil {
+					return fmt.Errorf("failed to marshal wrapped body: %w", err)
+				}
+				req.Body = io.NopCloser(bytes.NewReader(wrappedBody))
+				req.ContentLength = int64(len(wrappedBody))
+			}
+		}
+
+		// Set headers
+		req.Header = http.Header{}
+		req.Header.Set("User-Agent", "antigravity/1.11.5 windows/amd64")
+		req.Header.Set("Content-Type", "application/json")
+		if key != "" {
+			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
+		}
+		return nil
+	}
 }
 
 // claudeCodeHook applies Claude Code OAuth specific request modifications:
@@ -235,7 +311,24 @@ func CreateHTTPClientForProvider(provider *typ.Provider) *http.Client {
 	}
 
 	if provider.AuthType == typ.AuthTypeOAuth {
-		hook := GetOAuthHook(providerType)
+		var hook HookFunc
+
+		// For Antigravity, create a specialized hook with provider-specific config
+		if providerType == oauth.ProviderAntigravity && provider.OAuthDetail != nil {
+			project, model := "", ""
+			if provider.OAuthDetail.ExtraFields != nil {
+				if p, ok := provider.OAuthDetail.ExtraFields["project"].(string); ok {
+					project = p
+				}
+				if m, ok := provider.OAuthDetail.ExtraFields["model"].(string); ok {
+					model = m
+				}
+			}
+			hook = newAntigravityHookWithConfig(project, model)
+			logrus.Infof("Created Antigravity hook with project=%s, model=%s", project, model)
+		} else {
+			hook = GetOAuthHook(providerType)
+		}
 
 		if hook != nil {
 			// Wrap the transport with request modifier for OAuth hooks
