@@ -92,11 +92,11 @@ tasks:
     aliases:
       - start
     cmds:
-      - go run ./cli/tingly-box --verbose start --debug
+      - go run ./cli/tingly-box --verbose start --debug --port 12580
     
   https:
     cmds:
-      - go run ./cli/tingly-box --verbose start --https
+      - go run ./cli/tingly-box --verbose start --https --port 12581
   
   cli:build:
     cmds:
