@@ -1,4 +1,4 @@
-import { Cancel, CheckCircle, ContentCopy, Delete, Edit, ListAlt, Visibility } from '@mui/icons-material';
+import { Cancel, ContentCopy, Delete, Edit, ListAlt, Route, Visibility } from '@mui/icons-material';
 import {
     Box,
     Button,
@@ -156,94 +156,20 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete }: ApiKeyTableProps
             <Table>
                 <TableHead>
                     <TableRow>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 150 }}>Name</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 150 }}>API Key</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 200 }}>API Base URL</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>API Style</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Actions</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Model List</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Status</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Name</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 150 }}>API Style</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>API Base URL</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 180 }}>API Key</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 80 }}>Proxy</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Model List</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Actions</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
                     {providers.map((provider) => (
                         <TableRow key={provider.uuid}>
-                            <TableCell>
-                                <Stack direction="row" alignItems="center" spacing={1}>
-                                    {provider.enabled ? (
-                                        <CheckCircle color="success" fontSize="small" />
-                                    ) : (
-                                        <Cancel color="error" fontSize="small" />
-                                    )}
-                                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                        {provider.name}
-                                    </Typography>
-                                </Stack>
-                            </TableCell>
-                            <TableCell>
-                                <Stack direction="row" alignItems="center" spacing={1}>
-                                    <Typography
-                                        variant="body2"
-                                        sx={{
-                                            fontFamily: 'monospace',
-                                            wordBreak: 'break-all',
-                                            flex: 1,
-                                            minWidth: 0,
-                                        }}
-                                    >
-                                        {formatTokenDisplay(provider)}
-                                    </Typography>
-                                    {provider.token && (
-                                        <Tooltip title="View Token">
-                                            <IconButton size="small" onClick={() => handleViewToken(provider.uuid)} sx={{ p: 0.25 }}>
-                                                <Visibility fontSize="small" />
-                                            </IconButton>
-                                        </Tooltip>
-                                    )}
-                                </Stack>
-                            </TableCell>
-                            <TableCell>
-                                <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all', maxWidth: 200 }}>
-                                    {provider.api_base}
-                                </Typography>
-                            </TableCell>
-                            <TableCell>
-                                <ApiStyleBadge sx={{ minWidth: '110px' }} apiStyle={provider.api_style} />
-                            </TableCell>
-                            <TableCell>
-                                <Stack direction="row" spacing={0.5}>
-                                    {onEdit && (
-                                        <Tooltip title="Edit">
-                                            <IconButton size="small" color="primary" onClick={() => onEdit(provider.uuid)}>
-                                                <Edit fontSize="small" />
-                                            </IconButton>
-                                        </Tooltip>
-                                    )}
-                                    {onDelete && (
-                                        <Tooltip title="Delete">
-                                            <IconButton size="small" color="error" onClick={() => handleDeleteClick(provider.uuid)}>
-                                                <Delete fontSize="small" />
-                                            </IconButton>
-                                        </Tooltip>
-                                    )}
-                                </Stack>
-                            </TableCell>
-                            <TableCell>
-                                <Button
-                                    variant="outlined"
-                                    size="small"
-                                    startIcon={<ListAlt />}
-                                    onClick={() => handleModelListClick(provider.uuid)}
-                                    disabled={!provider.enabled}
-                                    sx={{
-                                        textTransform: 'none',
-                                        borderRadius: 1.5,
-                                        fontSize: '0.8rem',
-                                    }}
-                                >
-                                    Models
-                                </Button>
-                            </TableCell>
+                            {/* Status */}
                             <TableCell>
                                 <Stack direction="row" alignItems="center" spacing={1}>
                                     <FormControlLabel
@@ -260,6 +186,93 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete }: ApiKeyTableProps
                                     <Typography variant="body2" color={provider.enabled ? 'success.main' : 'error.main'}>
                                         {provider.enabled ? 'Enabled' : 'Disabled'}
                                     </Typography>
+                                </Stack>
+                            </TableCell>
+                            {/* Name */}
+                            <TableCell>
+                                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                    {provider.name}
+                                </Typography>
+                            </TableCell>
+                            {/* API Style */}
+                            <TableCell>
+                                <ApiStyleBadge sx={{ minWidth: '110px' }} apiStyle={provider.api_style} />
+                            </TableCell>
+                            {/* API Base URL */}
+                            <TableCell>
+                                <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all', maxWidth: 200 }}>
+                                    {provider.api_base}
+                                </Typography>
+                            </TableCell>
+                            {/* API Key */}
+                            <TableCell>
+                                <Stack direction="row" alignItems="center" spacing={1}>
+                                    {provider.token && (
+                                        <Tooltip title="View Token">
+                                            <IconButton size="small" onClick={() => handleViewToken(provider.uuid)} sx={{ p: 0.25 }}>
+                                                <Visibility fontSize="small" />
+                                            </IconButton>
+                                        </Tooltip>
+                                    )}
+                                    <Typography
+                                        variant="body2"
+                                        sx={{
+                                            fontFamily: 'monospace',
+                                            wordBreak: 'break-all',
+                                            flex: 1,
+                                            minWidth: 0,
+                                        }}
+                                    >
+                                        {formatTokenDisplay(provider)}
+                                    </Typography>
+                                </Stack>
+                            </TableCell>
+                            {/* Proxy */}
+                            <TableCell align="center">
+                                {provider.proxy_url ? (
+                                    <Tooltip title={provider.proxy_url} arrow>
+                                        <Route fontSize="small" sx={{ color: 'text.secondary' }} />
+                                    </Tooltip>
+                                ) : (
+                                    <Typography variant="body2" color="text.secondary">
+                                        -
+                                    </Typography>
+                                )}
+                            </TableCell>
+                            {/* Model List */}
+                            <TableCell>
+                                <Button
+                                    variant="outlined"
+                                    size="small"
+                                    startIcon={<ListAlt />}
+                                    onClick={() => handleModelListClick(provider.uuid)}
+                                    disabled={!provider.enabled}
+                                    sx={{
+                                        textTransform: 'none',
+                                        borderRadius: 1.5,
+                                        fontSize: '0.8rem',
+                                    }}
+                                >
+                                    Models
+                                </Button>
+                            </TableCell>
+                            {/* Actions */}
+                            <TableCell>
+                                <Stack direction="row" spacing={0.5}>
+                                    {onEdit && (
+                                        <Tooltip title="Edit">
+                                            <IconButton size="small" color="primary" onClick={() => onEdit(provider.uuid)}>
+                                                <Edit fontSize="small" />
+                                            </IconButton>
+                                        </Tooltip>
+                                    )}
+                                    {onDelete && (
+                                        <Tooltip title="Delete">
+                                            <IconButton size="small" color="error" onClick={() => handleDeleteClick(provider.uuid)}>
+                                                <Delete fontSize="small" />
+                                            </IconButton>
+                                        </Tooltip>
+                                    )}
                                 </Stack>
                             </TableCell>
                         </TableRow>

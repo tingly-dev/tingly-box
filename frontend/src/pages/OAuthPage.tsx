@@ -14,6 +14,7 @@ interface OAuthEditFormData {
     apiBase: string;
     apiStyle: 'openai' | 'anthropic';
     enabled: boolean;
+    proxyUrl?: string;
 }
 
 const OAuthPage = () => {
@@ -243,6 +244,7 @@ const OAuthPage = () => {
                         api_base: data.apiBase,
                         api_style: data.apiStyle,
                         enabled: data.enabled,
+                        proxy_url: data.proxyUrl,
                     });
                     if (!result.success) {
                         throw new Error(result.error || 'Failed to update provider');

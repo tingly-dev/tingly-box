@@ -1,4 +1,4 @@
-import { Cancel, CheckCircle, Delete, Edit, ListAlt, Refresh as RefreshIcon, Schedule, VpnKey } from '@mui/icons-material';
+import { Delete, Edit, ListAlt, Refresh as RefreshIcon, Route, Schedule, VpnKey } from '@mui/icons-material';
 import {
     Box,
     Button,
@@ -170,13 +170,14 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
             <Table>
                 <TableHead>
                     <TableRow>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Status</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 150 }}>Name</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Provider Type</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Expires At</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>API Style</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 140 }}>Actions</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 80 }}>Proxy</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Model List</TableCell>
-                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Status</TableCell>
+                        <TableCell sx={{ fontWeight: 600, minWidth: 140 }}>Actions</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -186,15 +187,29 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
 
                         return (
                             <TableRow key={provider.uuid}>
+                                {/* Status */}
                                 <TableCell>
                                     <Stack direction="row" alignItems="center" spacing={1}>
-                                        {provider.enabled ? (
-                                            <CheckCircle color="success" fontSize="small" />
-                                        ) : (
-                                            <Cancel color="error" fontSize="small" />
-                                        )}
-                                         <Chip
-                                            // icon={<VpnKey fontSize="small" sx={{ fontSize: 14 }} />}
+                                        <FormControlLabel
+                                            control={
+                                                <Switch
+                                                    checked={provider.enabled}
+                                                    onChange={() => onToggle?.(provider.uuid)}
+                                                    size="small"
+                                                    color="success"
+                                                />
+                                            }
+                                            label=""
+                                        />
+                                        <Typography variant="body2" color={provider.enabled ? 'success.main' : 'error.main'}>
+                                            {provider.enabled ? 'Enabled' : 'Disabled'}
+                                        </Typography>
+                                    </Stack>
+                                </TableCell>
+                                {/* Name */}
+                                <TableCell>
+                                    <Stack direction="row" alignItems="center" spacing={1}>
+                                        <Chip
                                             label="OAuth"
                                             size="small"
                                             color="primary"
@@ -206,11 +221,13 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
                                         </Typography>
                                     </Stack>
                                 </TableCell>
+                                {/* Provider Type */}
                                 <TableCell>
                                     <Typography variant="body2" sx={{ textTransform: 'capitalize' }}>
                                         {provider.oauth_detail?.provider_type || 'N/A'}
                                     </Typography>
                                 </TableCell>
+                                {/* Expires At */}
                                 <TableCell>
                                     <Stack direction="row" alignItems="center" spacing={1}>
                                         <Schedule fontSize="small" color={getExpirationColor(expiresAt) as any} />
@@ -222,9 +239,40 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
                                         )}
                                     </Stack>
                                 </TableCell>
+                                {/* API Style */}
                                 <TableCell>
                                     <ApiStyleBadge sx={{ minWidth: '110px' }} apiStyle={provider.api_style} />
                                 </TableCell>
+                                {/* Proxy */}
+                                <TableCell align="center">
+                                    {provider.proxy_url ? (
+                                        <Tooltip title={provider.proxy_url} arrow>
+                                            <Route fontSize="small" sx={{ color: 'text.secondary' }} />
+                                        </Tooltip>
+                                    ) : (
+                                        <Typography variant="body2" color="text.secondary">
+                                            -
+                                        </Typography>
+                                    )}
+                                </TableCell>
+                                {/* Model List */}
+                                <TableCell>
+                                    <Button
+                                        variant="outlined"
+                                        size="small"
+                                        startIcon={<ListAlt />}
+                                        onClick={() => handleModelListClick(provider.uuid)}
+                                        disabled={!provider.enabled}
+                                        sx={{
+                                            textTransform: 'none',
+                                            borderRadius: 1.5,
+                                            fontSize: '0.8rem',
+                                        }}
+                                    >
+                                        Models
+                                    </Button>
+                                </TableCell>
+                                {/* Actions */}
                                 <TableCell>
                                     <Stack direction="row" spacing={0.5}>
                                         {onEdit && (
@@ -268,40 +316,6 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
                                                 </IconButton>
                                             </Tooltip>
                                         )}
-                                    </Stack>
-                                </TableCell>
-                                <TableCell>
-                                    <Button
-                                        variant="outlined"
-                                        size="small"
-                                        startIcon={<ListAlt />}
-                                        onClick={() => handleModelListClick(provider.uuid)}
-                                        disabled={!provider.enabled}
-                                        sx={{
-                                            textTransform: 'none',
-                                            borderRadius: 1.5,
-                                            fontSize: '0.8rem',
-                                        }}
-                                    >
-                                        Models
-                                    </Button>
-                                </TableCell>
-                                <TableCell>
-                                    <Stack direction="row" alignItems="center" spacing={1}>
-                                        <FormControlLabel
-                                            control={
-                                                <Switch
-                                                    checked={provider.enabled}
-                                                    onChange={() => onToggle?.(provider.uuid)}
-                                                    size="small"
-                                                    color="success"
-                                                />
-                                            }
-                                            label=""
-                                        />
-                                        <Typography variant="body2" color={provider.enabled ? 'success.main' : 'error.main'}>
-                                            {provider.enabled ? 'Enabled' : 'Disabled'}
-                                        </Typography>
                                     </Stack>
                                 </TableCell>
                             </TableRow>

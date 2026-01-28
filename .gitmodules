@@ -6,3 +6,6 @@
 	path = libs/anthropic-sdk-go
 	url = git@github.com:tingly-dev/anthropic-sdk-go.git
 	branch = "fork"
+[submodule "libs/go-genai"]
+	path = libs/go-genai
+	url = git@github.com:tingly-dev/go-genai.git

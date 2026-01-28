@@ -4,14 +4,35 @@ import (
 	"context"
 	"net/http"
 
+	"iter"
+
 	"github.com/sirupsen/logrus"
 	"google.golang.org/genai"
-	"iter"
 
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/pkg/oauth"
 )
+
+// isAntigravityProvider checks if the provider is using Antigravity's API
+func isAntigravityProvider(provider *typ.Provider) bool {
+	return provider.OAuthDetail != nil &&
+		provider.OAuthDetail.ProviderType == string(oauth.ProviderAntigravity)
+}
+
+// getAntigravityExtraFields retrieves Antigravity-specific fields from OAuth extra fields
+func getAntigravityExtraFields(provider *typ.Provider) (project, model string) {
+	if provider.OAuthDetail != nil && provider.OAuthDetail.ExtraFields != nil {
+		if v, ok := provider.OAuthDetail.ExtraFields["project"].(string); ok {
+			project = v
+		}
+		if v, ok := provider.OAuthDetail.ExtraFields["model"].(string); ok {
+			model = v
+		}
+	}
+	return
+}
 
 // GoogleClient wraps the Google genai SDK client
 type GoogleClient struct {
@@ -24,26 +45,32 @@ type GoogleClient struct {
 
 // NewGoogleClient creates a new Google client wrapper
 func NewGoogleClient(provider *typ.Provider) (*GoogleClient, error) {
-	// Create base HTTP client using shared transport from transport pool
-	// Google doesn't use OAuth hooks in this implementation, so providerType is empty
+	// Create HTTP client with proper OAuth/proxy configuration
 	var httpClient *http.Client
-	if provider.ProxyURL != "" {
-		// Use shared transport from transport pool for proxy scenarios
-		transport := GetGlobalTransportPool().GetTransport(provider.APIBase, provider.ProxyURL, "")
-		httpClient = &http.Client{Transport: transport}
-		logrus.Infof("Using shared transport for Google client with proxy: %s", provider.ProxyURL)
+	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
+		// Use CreateHTTPClientForProvider which applies OAuth hooks and uses shared transport
+		httpClient = CreateHTTPClientForProvider(provider)
+		providerType := oauth.ProviderType(provider.OAuthDetail.ProviderType)
+		logrus.Infof("Using shared transport for OAuth provider type: %s", providerType)
 	} else {
-		// Use default client for non-proxy scenarios
-		httpClient = http.DefaultClient
+		// For non-OAuth providers, use simple proxy client or default
+		if provider.ProxyURL != "" {
+			httpClient = CreateHTTPClientWithProxy(provider.ProxyURL)
+			logrus.Infof("Using proxy for Google client: %s", provider.ProxyURL)
+		} else {
+			httpClient = http.DefaultClient
+		}
 	}
 
 	// Create Google client config
+	httpOptions := genai.HTTPOptions{
+		BaseURL: provider.APIBase,
+	}
+
 	config := &genai.ClientConfig{
-		APIKey: provider.GetAccessToken(),
-		HTTPOptions: genai.HTTPOptions{
-			BaseURL: provider.APIBase,
-		},
-		HTTPClient: httpClient,
+		APIKey:      provider.GetAccessToken(),
+		HTTPOptions: httpOptions,
+		HTTPClient:  httpClient,
 	}
 
 	// Create Google client (requires context)
