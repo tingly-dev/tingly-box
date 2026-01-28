@@ -27,8 +27,32 @@ var oauthHookFunctions = map[oauth.ProviderType]HookFunc{
 func antigravityHook(req *http.Request) error {
 	key := req.Header.Get("X-Goog-Api-Key")
 
+	// Rewrite URL path from standard Google format to Antigravity format
+	// Standard: /v1beta/models/{model}:generateContent
+	// Antigravity: /v1internal:generateContent
+	originalPath := req.URL.Path
+	newPath := originalPath
+
+	// Check if this is a generateContent request
+	if strings.Contains(newPath, ":generateContent") {
+		// Extract the operation name (generateContent, streamGenerateContent, etc.)
+		parts := strings.Split(newPath, ":")
+		if len(parts) >= 2 {
+			operation := parts[1]
+			// Rewrite to Antigravity format
+			newPath = fmt.Sprintf("/v1internal:%s", operation)
+		}
+	}
+
+	// Apply the path rewrite if changed
+	if newPath != originalPath {
+		logrus.Debugf("[Antigravity] Rewriting URL path: %s -> %s", originalPath, newPath)
+		req.URL.Path = newPath
+	}
+
+	// Set headers (will be applied after URL rewrite)
 	req.Header = http.Header{}
-	req.Header.Set("User-Agent", "antigravity/1.11.3 Darwin/arm64")
+	req.Header.Set("User-Agent", "antigravity/1.11.5 windows/amd64")
 	req.Header.Set("Content-Type", "application/json")
 	if key != "" {
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
