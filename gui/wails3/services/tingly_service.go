@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/wailsapp/wails/v3/pkg/application"
 
@@ -145,12 +146,12 @@ func (s *TinglyService) ServiceShutdown(ctx context.Context) error {
 // ============
 
 func (s *TinglyService) GetUserAuthToken() string {
-	fmt.Println("Getting auth token")
+	logrus.Debugf("Getting auth token %s\n", s.appManager.GetUserToken())
 	return s.appManager.GetUserToken()
 }
 
 func (s *TinglyService) GetPort() int {
-	fmt.Println("Getting port")
+	logrus.Debugf("Getting port %d\n", s.appManager.GetServerPort())
 	return s.appManager.GetServerPort()
 }
 
