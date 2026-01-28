@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -12,22 +13,39 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// pooledClient wraps a client with its last access timestamp for TTL tracking
+type pooledClient struct {
+	client     interface{} // *OpenAIClient, *AnthropicClient, or *GoogleClient
+	lastAccess time.Time
+}
+
+// Constants for client TTL and cleanup interval
+const (
+	DefaultClientTTL       = 60 * time.Minute // Default time-to-live for cached clients
+	DefaultCleanupInterval = 60 * time.Minute // Default interval for cleanup task
+)
+
 // ClientPool manages unified client instances for different providers
 type ClientPool struct {
-	openaiClients    map[string]*OpenAIClient
-	anthropicClients map[string]*AnthropicClient
-	googleClients    map[string]*GoogleClient
+	openaiClients    map[string]*pooledClient
+	anthropicClients map[string]*pooledClient
+	googleClients    map[string]*pooledClient
 	mutex            sync.RWMutex
 	recordSink       *obs.Sink
+	clientTTL        time.Duration
 }
 
 // NewClientPool creates a new client pool
 func NewClientPool() *ClientPool {
-	return &ClientPool{
-		openaiClients:    make(map[string]*OpenAIClient),
-		anthropicClients: make(map[string]*AnthropicClient),
-		googleClients:    make(map[string]*GoogleClient),
+	pool := &ClientPool{
+		openaiClients:    make(map[string]*pooledClient),
+		anthropicClients: make(map[string]*pooledClient),
+		googleClients:    make(map[string]*pooledClient),
+		clientTTL:        DefaultClientTTL,
 	}
+	// Start cleanup task for expired clients
+	pool.StartCleanupTask(DefaultCleanupInterval)
+	return pool
 }
 
 // GetOpenAIClient returns an OpenAI client wrapper for the specified provider
@@ -37,10 +55,14 @@ func (p *ClientPool) GetOpenAIClient(provider *typ.Provider, model string) *Open
 
 	// Try to get existing client with read lock first
 	p.mutex.RLock()
-	if client, exists := p.openaiClients[key]; exists {
+	if pooled, exists := p.openaiClients[key]; exists {
 		p.mutex.RUnlock()
+		// Update last access time
+		p.mutex.Lock()
+		pooled.lastAccess = time.Now()
+		p.mutex.Unlock()
 		logrus.Debugf("Using cached OpenAI client for provider: %s", provider.Name)
-		return client
+		return pooled.client.(*OpenAIClient)
 	}
 	p.mutex.RUnlock()
 
@@ -49,9 +71,10 @@ func (p *ClientPool) GetOpenAIClient(provider *typ.Provider, model string) *Open
 	defer p.mutex.Unlock()
 
 	// Double-check after acquiring write lock to avoid race conditions
-	if client, exists := p.openaiClients[key]; exists {
+	if pooled, exists := p.openaiClients[key]; exists {
+		pooled.lastAccess = time.Now()
 		logrus.Debugf("Using cached OpenAI client for provider: %s (double-check)", provider.Name)
-		return client
+		return pooled.client.(*OpenAIClient)
 	}
 
 	// Create new client using factory
@@ -68,8 +91,11 @@ func (p *ClientPool) GetOpenAIClient(provider *typ.Provider, model string) *Open
 		client.SetRecordSink(p.recordSink)
 	}
 
-	// Store in pool
-	p.openaiClients[key] = client
+	// Store in pool with timestamp
+	p.openaiClients[key] = &pooledClient{
+		client:     client,
+		lastAccess: time.Now(),
+	}
 	return client
 }
 
@@ -80,10 +106,14 @@ func (p *ClientPool) GetAnthropicClient(provider *typ.Provider, model string) *A
 
 	// Try to get existing client with read lock first
 	p.mutex.RLock()
-	if client, exists := p.anthropicClients[key]; exists {
+	if pooled, exists := p.anthropicClients[key]; exists {
 		p.mutex.RUnlock()
+		// Update last access time
+		p.mutex.Lock()
+		pooled.lastAccess = time.Now()
+		p.mutex.Unlock()
 		logrus.Debugf("Using cached Anthropic client for provider: %s model: %s", provider.Name, model)
-		return client
+		return pooled.client.(*AnthropicClient)
 	}
 	p.mutex.RUnlock()
 
@@ -92,9 +122,10 @@ func (p *ClientPool) GetAnthropicClient(provider *typ.Provider, model string) *A
 	defer p.mutex.Unlock()
 
 	// Double-check after acquiring write lock to avoid race conditions
-	if client, exists := p.anthropicClients[key]; exists {
+	if pooled, exists := p.anthropicClients[key]; exists {
+		pooled.lastAccess = time.Now()
 		logrus.Debugf("Using cached Anthropic client for provider: %s (double-check)", provider.Name)
-		return client
+		return pooled.client.(*AnthropicClient)
 	}
 
 	// Create new client using factory
@@ -111,8 +142,11 @@ func (p *ClientPool) GetAnthropicClient(provider *typ.Provider, model string) *A
 		client.SetRecordSink(p.recordSink)
 	}
 
-	// Store in pool
-	p.anthropicClients[key] = client
+	// Store in pool with timestamp
+	p.anthropicClients[key] = &pooledClient{
+		client:     client,
+		lastAccess: time.Now(),
+	}
 	return client
 }
 
@@ -123,10 +157,14 @@ func (p *ClientPool) GetGoogleClient(provider *typ.Provider, model string) *Goog
 
 	// Try to get existing client with read lock first
 	p.mutex.RLock()
-	if client, exists := p.googleClients[key]; exists {
+	if pooled, exists := p.googleClients[key]; exists {
 		p.mutex.RUnlock()
+		// Update last access time
+		p.mutex.Lock()
+		pooled.lastAccess = time.Now()
+		p.mutex.Unlock()
 		logrus.Debugf("Using cached Google client for provider: %s model: %s", provider.Name, model)
-		return client
+		return pooled.client.(*GoogleClient)
 	}
 	p.mutex.RUnlock()
 
@@ -135,9 +173,10 @@ func (p *ClientPool) GetGoogleClient(provider *typ.Provider, model string) *Goog
 	defer p.mutex.Unlock()
 
 	// Double-check after acquiring write lock to avoid race conditions
-	if client, exists := p.googleClients[key]; exists {
+	if pooled, exists := p.googleClients[key]; exists {
+		pooled.lastAccess = time.Now()
 		logrus.Debugf("Using cached Google client for provider: %s (double-check)", provider.Name)
-		return client
+		return pooled.client.(*GoogleClient)
 	}
 
 	// Create new client using factory
@@ -154,8 +193,11 @@ func (p *ClientPool) GetGoogleClient(provider *typ.Provider, model string) *Goog
 		client.SetRecordSink(p.recordSink)
 	}
 
-	// Store in pool
-	p.googleClients[key] = client
+	// Store in pool with timestamp
+	p.googleClients[key] = &pooledClient{
+		client:     client,
+		lastAccess: time.Now(),
+	}
 	return client
 }
 
@@ -180,9 +222,9 @@ func (p *ClientPool) Clear() {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
-	p.openaiClients = make(map[string]*OpenAIClient)
-	p.anthropicClients = make(map[string]*AnthropicClient)
-	p.googleClients = make(map[string]*GoogleClient)
+	p.openaiClients = make(map[string]*pooledClient)
+	p.anthropicClients = make(map[string]*pooledClient)
+	p.googleClients = make(map[string]*pooledClient)
 	logrus.Info("Client pools cleared")
 }
 
@@ -265,14 +307,14 @@ func (p *ClientPool) SetRecordSink(sink *obs.Sink) {
 	p.recordSink = sink
 
 	// Apply record sink to all existing clients
-	for _, client := range p.openaiClients {
-		client.SetRecordSink(sink)
+	for _, pooled := range p.openaiClients {
+		pooled.client.(*OpenAIClient).SetRecordSink(sink)
 	}
-	for _, client := range p.anthropicClients {
-		client.SetRecordSink(sink)
+	for _, pooled := range p.anthropicClients {
+		pooled.client.(*AnthropicClient).SetRecordSink(sink)
 	}
-	for _, client := range p.googleClients {
-		client.SetRecordSink(sink)
+	for _, pooled := range p.googleClients {
+		pooled.client.(*GoogleClient).SetRecordSink(sink)
 	}
 
 	if sink != nil && sink.IsEnabled() {
@@ -285,4 +327,55 @@ func (p *ClientPool) GetRecordSink() *obs.Sink {
 	p.mutex.RLock()
 	defer p.mutex.RUnlock()
 	return p.recordSink
+}
+
+// cleanupExpiredClients removes clients that haven't been accessed within the TTL period
+func (p *ClientPool) cleanupExpiredClients() {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	now := time.Now()
+	expirationThreshold := now.Add(-p.clientTTL)
+
+	removedCount := 0
+
+	// Clean up OpenAI clients
+	for key, pooled := range p.openaiClients {
+		if pooled.lastAccess.Before(expirationThreshold) {
+			delete(p.openaiClients, key)
+			removedCount++
+		}
+	}
+
+	// Clean up Anthropic clients
+	for key, pooled := range p.anthropicClients {
+		if pooled.lastAccess.Before(expirationThreshold) {
+			delete(p.anthropicClients, key)
+			removedCount++
+		}
+	}
+
+	// Clean up Google clients
+	for key, pooled := range p.googleClients {
+		if pooled.lastAccess.Before(expirationThreshold) {
+			delete(p.googleClients, key)
+			removedCount++
+		}
+	}
+
+	if removedCount > 0 {
+		logrus.Infof("Cleaned up %d expired clients from pool", removedCount)
+	}
+}
+
+// StartCleanupTask starts a periodic cleanup task that removes expired clients
+// The cleanup runs in a background goroutine and continues until the process exits
+func (p *ClientPool) StartCleanupTask(interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	go func() {
+		for range ticker.C {
+			p.cleanupExpiredClients()
+		}
+	}()
+	logrus.Infof("Started client pool cleanup task with interval: %v", interval)
 }

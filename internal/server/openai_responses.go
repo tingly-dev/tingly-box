@@ -78,38 +78,25 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 		rule            *typ.Rule
 	)
 
-	if scenario == "" {
-		provider, selectedService, rule, err = s.DetermineProviderAndModel(responseModel)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error: ErrorDetail{
-					Message: err.Error(),
-					Type:    "invalid_request_error",
-				},
-			})
-			return
-		}
-	} else {
-		scenarioType := typ.RuleScenario(scenario)
-		if !isValidRuleScenario(scenarioType) {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error: ErrorDetail{
-					Message: fmt.Sprintf("invalid scenario: %s", scenario),
-					Type:    "invalid_request_error",
-				},
-			})
-			return
-		}
-		provider, selectedService, rule, err = s.DetermineProviderAndModelWithScenario(scenarioType, responseModel)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error: ErrorDetail{
-					Message: err.Error(),
-					Type:    "invalid_request_error",
-				},
-			})
-			return
-		}
+	scenarioType := typ.RuleScenario(scenario)
+	if !isValidRuleScenario(scenarioType) {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: fmt.Sprintf("invalid scenario: %s", scenario),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+	provider, selectedService, rule, err = s.DetermineProviderAndModelWithScenario(scenarioType, responseModel)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
 	}
 
 	// Set the rule and provider in context
@@ -124,11 +111,10 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 	c.Set("model", actualModel)
 
 	// Check provider API style - only OpenAI-style providers support Responses API
-	apiStyle := string(provider.APIStyle)
-	if apiStyle == "" || apiStyle != "openai" {
+	if provider.APIStyle != protocol.APIStyleOpenAI {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
-				Message: fmt.Sprintf("Responses API is only supported by OpenAI-style providers. Provider '%s' has API style: %s", provider.Name, apiStyle),
+				Message: fmt.Sprintf("Responses API is only supported by OpenAI-style providers. Provider '%s' has API style: %s", provider.Name, provider.APIStyle),
 				Type:    "invalid_request_error",
 			},
 		})

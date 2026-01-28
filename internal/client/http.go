@@ -9,6 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/proxy"
 
+	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
@@ -195,24 +196,25 @@ func CreateHTTPClientWithProxy(proxyURL string) *http.Client {
 // CreateHTTPClientForProvider creates an HTTP client configured for the given provider
 // It handles proxy and OAuth hooks if applicable
 //
-// providerType: the OAuth provider type (e.g., oauth.ProviderClaudeCode)
-// proxyURL: optional proxy URL (can be empty)
-// isOAuth: whether this is an OAuth provider
-//
 // Returns a configured http.Client
-func CreateHTTPClientForProvider(providerType oauth.ProviderType, proxyURL string, isOAuth bool) *http.Client {
-	client := CreateHTTPClientWithProxy(proxyURL)
+func CreateHTTPClientForProvider(provider *typ.Provider) *http.Client {
+	var providerType oauth.ProviderType
+	if provider.OAuthDetail != nil {
+		providerType = oauth.ProviderType(provider.OAuthDetail.ProviderType)
+	}
 
-	if isOAuth {
+	// Get shared transport from transport pool
+	transport := GetGlobalTransportPool().GetTransport(provider.APIBase, provider.ProxyURL, providerType)
+
+	client := &http.Client{
+		Transport: transport,
+	}
+
+	if provider.AuthType == typ.AuthTypeOAuth {
 		hook := GetOAuthHook(providerType)
 
 		if hook != nil {
-			// Use the client's transport, or default transport if nil (http.DefaultClient has nil Transport)
-			transport := client.Transport
-			if transport == nil {
-				transport = http.DefaultTransport
-			}
-
+			// Wrap the transport with request modifier for OAuth hooks
 			client.Transport = &requestModifier{
 				RoundTripper: transport,
 				hooks:        []HookFunc{hook},
