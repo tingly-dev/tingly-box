@@ -53,7 +53,7 @@ const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
     {
         id: 'antigravity',
         name: 'Antigravity',
-        displayName: 'Antigravity',
+        displayName: 'Antigravity (Experimental)',
         description: 'Access Antigravity services via Google OAuth',
         icon: <Google size={32}/>,
         color: '#7B1FA2',
