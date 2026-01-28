@@ -1,6 +1,5 @@
 import { CheckCircle } from '@mui/icons-material';
 import { Box, Card, CardContent, CircularProgress, IconButton, Typography } from '@mui/material';
-import React from 'react';
 
 interface ModelCardProps {
     model: string;
