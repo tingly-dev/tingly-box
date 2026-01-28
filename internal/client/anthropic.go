@@ -17,6 +17,9 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// ClaudeCodeSystemHeader is a special system message for Claude Code OAuth subscriptions
+const ClaudeCodeSystemHeader = "You are Claude Code, Anthropic's official CLI for Claude."
+
 // AnthropicClient wraps the Anthropic SDK client
 type AnthropicClient struct {
 	client     anthropic.Client
@@ -162,10 +165,25 @@ func (c *AnthropicClient) ListModels(ctx context.Context) ([]string, error) {
 func (c *AnthropicClient) ProbeChatEndpoint(ctx context.Context, model string) ProbeResult {
 	startTime := time.Now()
 
+	// Determine system message based on OAuth provider type
+	systemMessages := []anthropic.TextBlockParam{
+		{
+			Text: "work as `echo`",
+		},
+	}
+	if c.provider.AuthType == typ.AuthTypeOAuth && c.provider.OAuthDetail != nil &&
+		c.provider.OAuthDetail.ProviderType == "claude_code" {
+		// Prepend Claude Code system message as the first block
+		systemMessages = append([]anthropic.TextBlockParam{{
+			Text: ClaudeCodeSystemHeader,
+		}}, systemMessages...)
+	}
+
 	// Create message request using Anthropic SDK
 	messageRequest := anthropic.MessageNewParams{
 		Model:     anthropic.Model(model),
 		MaxTokens: 100,
+		System:    systemMessages,
 		Messages: []anthropic.MessageParam{
 			anthropic.NewUserMessage(anthropic.NewTextBlock("hi")),
 		},
