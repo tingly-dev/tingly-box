@@ -1,6 +1,8 @@
 package client
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -274,4 +276,314 @@ func (c *OpenAIClient) ListModels(ctx context.Context) ([]string, error) {
 	}
 
 	return models, nil
+}
+
+// ProbeChatEndpoint tests the chat completions endpoint with a minimal request
+func (c *OpenAIClient) ProbeChatEndpoint(ctx context.Context, model string) ProbeResult {
+	startTime := time.Now()
+
+	// Check if this is a Codex OAuth provider
+	// Codex OAuth requires the Responses API, not Chat Completions
+	if c.provider.AuthType == typ.AuthTypeOAuth &&
+		c.provider.OAuthDetail != nil &&
+		c.provider.OAuthDetail.ProviderType == "codex" {
+		return c.probeResponsesEndpoint(ctx, model)
+	}
+
+	// Create chat completion request using OpenAI SDK
+	chatRequest := &openai.ChatCompletionNewParams{
+		Model: openai.ChatModel(model),
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.SystemMessage("work as `echo`"),
+			openai.UserMessage("hi"),
+		},
+	}
+
+	// Make request
+	resp, err := c.client.Chat.Completions.New(ctx, *chatRequest)
+	latencyMs := time.Since(startTime).Milliseconds()
+
+	if err != nil {
+		return ProbeResult{
+			Success:      false,
+			ErrorMessage: err.Error(),
+			LatencyMs:    latencyMs,
+		}
+	}
+
+	// Extract response data
+	responseContent := ""
+	promptTokens := 0
+	completionTokens := 0
+	totalTokens := 0
+
+	if resp != nil {
+		if len(resp.Choices) > 0 {
+			responseContent = resp.Choices[0].Message.Content
+		}
+		if resp.Usage.PromptTokens != 0 {
+			promptTokens = int(resp.Usage.PromptTokens)
+			completionTokens = int(resp.Usage.CompletionTokens)
+			totalTokens = int(resp.Usage.TotalTokens)
+		}
+	}
+
+	if responseContent == "" {
+		responseContent = "<response content is empty, but request success>"
+	}
+
+	return ProbeResult{
+		Success:          true,
+		Message:          "Chat endpoint is accessible",
+		Content:          responseContent,
+		LatencyMs:        latencyMs,
+		PromptTokens:     promptTokens,
+		CompletionTokens: completionTokens,
+		TotalTokens:      totalTokens,
+	}
+}
+
+// ProbeModelsEndpoint tests the models list endpoint
+func (c *OpenAIClient) ProbeModelsEndpoint(ctx context.Context) ProbeResult {
+	startTime := time.Now()
+
+	// Make request to models endpoint
+	resp, err := c.client.Models.List(ctx)
+	latencyMs := time.Since(startTime).Milliseconds()
+
+	if err != nil {
+		return ProbeResult{
+			Success:      false,
+			ErrorMessage: err.Error(),
+			LatencyMs:    latencyMs,
+		}
+	}
+
+	modelsCount := 0
+	if resp != nil {
+		modelsCount = len(resp.Data)
+	}
+
+	if modelsCount == 0 {
+		return ProbeResult{
+			Success:      false,
+			ErrorMessage: "No models available from provider",
+			LatencyMs:    latencyMs,
+		}
+	}
+
+	return ProbeResult{
+		Success:     true,
+		Message:     "Models endpoint is accessible",
+		LatencyMs:   latencyMs,
+		ModelsCount: modelsCount,
+	}
+}
+
+// ProbeOptionsEndpoint tests basic connectivity with an OPTIONS request
+func (c *OpenAIClient) ProbeOptionsEndpoint(ctx context.Context) ProbeResult {
+	startTime := time.Now()
+
+	// Use the API base URL for OPTIONS request
+	optionsURL := c.provider.APIBase
+
+	req, err := http.NewRequestWithContext(ctx, "OPTIONS", optionsURL, nil)
+	if err != nil {
+		return ProbeResult{
+			Success:      false,
+			ErrorMessage: fmt.Sprintf("Failed to create OPTIONS request: %v", err),
+		}
+	}
+
+	// Set authentication header
+	req.Header.Set("Authorization", "Bearer "+c.provider.GetAccessToken())
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	latencyMs := time.Since(startTime).Milliseconds()
+
+	if err != nil {
+		return ProbeResult{
+			Success:      false,
+			ErrorMessage: fmt.Sprintf("OPTIONS request failed: %v", err),
+			LatencyMs:    latencyMs,
+		}
+	}
+	defer resp.Body.Close()
+
+	// Consider any 2xx status as success for OPTIONS
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return ProbeResult{
+			Success:   true,
+			Message:   "OPTIONS request successful",
+			LatencyMs: latencyMs,
+		}
+	}
+
+	return ProbeResult{
+		Success:      false,
+		ErrorMessage: fmt.Sprintf("OPTIONS request failed with status: %d", resp.StatusCode),
+		LatencyMs:    latencyMs,
+	}
+}
+
+// probeResponsesEndpoint tests the Responses API (for Codex OAuth providers)
+func (c *OpenAIClient) probeResponsesEndpoint(ctx context.Context, model string) ProbeResult {
+	startTime := time.Now()
+
+	// Build ChatGPT backend API request format
+	inputItems := []map[string]interface{}{
+		{
+			"type": "message",
+			"role": "user",
+			"content": []map[string]string{
+				{"type": "input_text", "text": "Hi"},
+			},
+		},
+	}
+
+	reqBody := map[string]interface{}{
+		"model":        model,
+		"instructions": "work as `echo`",
+		"input":        inputItems,
+		"tools":        []interface{}{},
+		"tool_choice":  "auto",
+		"stream":       true,
+		"store":        false,
+		"include":      []string{},
+	}
+
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return ProbeResult{
+			Success:      false,
+			ErrorMessage: fmt.Sprintf("Failed to marshal request: %v", err),
+		}
+	}
+
+	// Create HTTP request
+	reqURL := c.provider.APIBase + "/responses"
+	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return ProbeResult{
+			Success:      false,
+			ErrorMessage: fmt.Sprintf("Failed to create request: %v", err),
+		}
+	}
+
+	// Set required headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.provider.GetAccessToken())
+	req.Header.Set("OpenAI-Beta", "responses=experimental")
+	req.Header.Set("originator", "tingly-box")
+
+	// Add ChatGPT-Account-ID header if available
+	if c.provider.OAuthDetail != nil && c.provider.OAuthDetail.ExtraFields != nil {
+		if accountID, ok := c.provider.OAuthDetail.ExtraFields["account_id"].(string); ok && accountID != "" {
+			req.Header.Set("ChatGPT-Account-ID", accountID)
+		}
+	}
+
+	// Make the request
+	resp, err := c.httpClient.Do(req)
+	latencyMs := time.Since(startTime).Milliseconds()
+
+	if err != nil {
+		return ProbeResult{
+			Success:      false,
+			ErrorMessage: err.Error(),
+			LatencyMs:    latencyMs,
+		}
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return ProbeResult{
+			Success:      false,
+			ErrorMessage: string(respBody),
+			LatencyMs:    latencyMs,
+		}
+	}
+
+	// Read streaming response and collect all chunks
+	var responseContent string
+	tokenUsage := ProbeUsage{}
+
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		// Skip empty lines and non-data lines
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+
+		// Extract JSON data from SSE format
+		jsonData := strings.TrimPrefix(line, "data: ")
+
+		// Check for stream end
+		if jsonData == "[DONE]" {
+			break
+		}
+
+		// Parse SSE chunk
+		var chunk struct {
+			Output []struct {
+				Type    string `json:"type"`
+				Content []struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				} `json:"content"`
+			} `json:"output"`
+			Usage struct {
+				InputTokens  int `json:"input_tokens"`
+				OutputTokens int `json:"output_tokens"`
+			} `json:"usage"`
+		}
+
+		if err := json.Unmarshal([]byte(jsonData), &chunk); err != nil {
+			continue
+		}
+
+		// Extract response content from output
+		for _, item := range chunk.Output {
+			if item.Type == "message" {
+				for _, content := range item.Content {
+					if content.Type == "output_text" {
+						responseContent += content.Text
+					}
+				}
+			}
+		}
+
+		// Extract usage from the last chunk
+		if chunk.Usage.InputTokens > 0 {
+			tokenUsage.PromptTokens = chunk.Usage.InputTokens
+			tokenUsage.CompletionTokens = chunk.Usage.OutputTokens
+			tokenUsage.TotalTokens = chunk.Usage.InputTokens + chunk.Usage.OutputTokens
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return ProbeResult{
+			Success:      false,
+			ErrorMessage: fmt.Sprintf("Failed to read streaming response: %v", err),
+			LatencyMs:    latencyMs,
+		}
+	}
+
+	if responseContent == "" {
+		responseContent = "<response content is empty, but request success>"
+	}
+
+	return ProbeResult{
+		Success:          true,
+		Message:          "Responses endpoint is accessible",
+		Content:          responseContent,
+		LatencyMs:        latencyMs,
+		PromptTokens:     tokenUsage.PromptTokens,
+		CompletionTokens: tokenUsage.CompletionTokens,
+		TotalTokens:      tokenUsage.TotalTokens,
+	}
 }

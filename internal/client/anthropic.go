@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
@@ -155,4 +156,152 @@ func (c *AnthropicClient) ListModels(ctx context.Context) ([]string, error) {
 	}
 
 	return result, nil
+}
+
+// ProbeChatEndpoint tests the messages endpoint with a minimal request
+func (c *AnthropicClient) ProbeChatEndpoint(ctx context.Context, model string) ProbeResult {
+	startTime := time.Now()
+
+	// Create message request using Anthropic SDK
+	messageRequest := anthropic.MessageNewParams{
+		Model:     anthropic.Model(model),
+		MaxTokens: 100,
+		Messages: []anthropic.MessageParam{
+			anthropic.NewUserMessage(anthropic.NewTextBlock("hi")),
+		},
+	}
+
+	// Make request
+	resp, err := c.client.Messages.New(ctx, messageRequest)
+	latencyMs := time.Since(startTime).Milliseconds()
+
+	if err != nil {
+		return ProbeResult{
+			Success:      false,
+			ErrorMessage: err.Error(),
+			LatencyMs:    latencyMs,
+		}
+	}
+
+	// Extract response data
+	responseContent := ""
+	promptTokens := 0
+	completionTokens := 0
+	totalTokens := 0
+
+	if resp != nil {
+		for _, block := range resp.Content {
+			if block.Type == "text" {
+				responseContent += string(block.Text)
+			}
+		}
+		if resp.Usage.InputTokens != 0 {
+			promptTokens = int(resp.Usage.InputTokens)
+			completionTokens = int(resp.Usage.OutputTokens)
+			totalTokens = promptTokens + completionTokens
+		}
+	}
+
+	if responseContent == "" {
+		responseContent = "<response content is empty, but request success>"
+	}
+
+	return ProbeResult{
+		Success:          true,
+		Message:          "Messages endpoint is accessible",
+		Content:          responseContent,
+		LatencyMs:        latencyMs,
+		PromptTokens:     promptTokens,
+		CompletionTokens: completionTokens,
+		TotalTokens:      totalTokens,
+	}
+}
+
+// ProbeModelsEndpoint tests the models list endpoint
+func (c *AnthropicClient) ProbeModelsEndpoint(ctx context.Context) ProbeResult {
+	startTime := time.Now()
+
+	// Make request to models endpoint
+	resp, err := c.client.Models.List(ctx, anthropic.ModelListParams{})
+	latencyMs := time.Since(startTime).Milliseconds()
+
+	if err != nil {
+		return ProbeResult{
+			Success:      false,
+			ErrorMessage: err.Error(),
+			LatencyMs:    latencyMs,
+		}
+	}
+
+	modelsCount := 0
+	if resp != nil {
+		modelsCount = len(resp.Data)
+	}
+
+	if modelsCount == 0 {
+		return ProbeResult{
+			Success:      false,
+			ErrorMessage: "No models available from provider",
+			LatencyMs:    latencyMs,
+		}
+	}
+
+	return ProbeResult{
+		Success:     true,
+		Message:     "Models endpoint is accessible",
+		LatencyMs:   latencyMs,
+		ModelsCount: modelsCount,
+	}
+}
+
+// ProbeOptionsEndpoint tests basic connectivity with an OPTIONS request
+func (c *AnthropicClient) ProbeOptionsEndpoint(ctx context.Context) ProbeResult {
+	startTime := time.Now()
+
+	// Build the options URL - ensure it has /v1 suffix for Anthropic
+	apiBase := strings.TrimSuffix(c.provider.APIBase, "/")
+	if !strings.Contains(apiBase, "/v1") {
+		apiBase = apiBase + "/v1"
+	}
+	optionsURL := apiBase
+
+	req, err := http.NewRequestWithContext(ctx, "OPTIONS", optionsURL, nil)
+	if err != nil {
+		return ProbeResult{
+			Success:      false,
+			ErrorMessage: fmt.Sprintf("Failed to create OPTIONS request: %v", err),
+		}
+	}
+
+	// Set authentication headers
+	req.Header.Set("x-api-key", c.provider.GetAccessToken())
+	req.Header.Set("anthropic-version", "2023-06-01")
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	latencyMs := time.Since(startTime).Milliseconds()
+
+	if err != nil {
+		return ProbeResult{
+			Success:      false,
+			ErrorMessage: fmt.Sprintf("OPTIONS request failed: %v", err),
+			LatencyMs:    latencyMs,
+		}
+	}
+	defer resp.Body.Close()
+
+	// Consider any 2xx status as success for OPTIONS
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return ProbeResult{
+			Success:   true,
+			Message:   "OPTIONS request successful",
+			LatencyMs: latencyMs,
+		}
+	}
+
+	return ProbeResult{
+		Success:      false,
+		ErrorMessage: fmt.Sprintf("OPTIONS request failed with status: %d", resp.StatusCode),
+		LatencyMs:    latencyMs,
+	}
 }
