@@ -178,8 +178,138 @@ type antigravityRoundTripper struct {
 	project, model string
 }
 
+// isStreamingRequest checks if the request is for streaming generate content
+func isStreamingRequest(req *http.Request) bool {
+	return strings.Contains(req.URL.Path, ":streamGenerateContent")
+}
+
+// streamingUnwrapReader wraps an io.Reader to unwrap Antigravity's streaming response format
+// Antigravity wraps each SSE event's data in a "response" field, e.g.:
+//
+//	data: {"response": {...actual google response...}}
+//
+// This reader unwraps it to:
+//
+//	data: {...actual google response...}
+type streamingUnwrapReader struct {
+	reader io.ReadCloser
+	buffer []byte
+	err    error
+}
+
+func (r *streamingUnwrapReader) Read(p []byte) (n int, err error) {
+	// Return any buffered data first
+	if len(r.buffer) > 0 {
+		n = copy(p, r.buffer)
+		r.buffer = r.buffer[n:]
+		return n, nil
+	}
+
+	// Return previous error if any
+	if r.err != nil {
+		return 0, r.err
+	}
+
+	// Read data line by line from source
+	buf := make([]byte, 4096)
+	var lineBuffer bytes.Buffer
+
+	for {
+		nn, readErr := r.reader.Read(buf)
+		if nn > 0 {
+			lineBuffer.Write(buf[:nn])
+		}
+		if readErr != nil {
+			if readErr == io.EOF {
+				// Flush remaining buffer at EOF
+				if lineBuffer.Len() > 0 {
+					r.buffer = r.processBuffer(lineBuffer.Bytes())
+					n = copy(p, r.buffer)
+					r.buffer = r.buffer[n:]
+					if len(r.buffer) == 0 {
+						r.err = io.EOF
+					}
+					return n, nil
+				}
+				return 0, io.EOF
+			}
+			r.err = readErr
+			return 0, readErr
+		}
+
+		// Process the buffer to extract complete lines
+		processed := r.processBuffer(lineBuffer.Bytes())
+		if len(processed) > 0 {
+			// Return processed data
+			n = copy(p, processed)
+			r.buffer = processed[n:]
+			return n, nil
+		}
+
+		// Check if we have enough data to work with
+		if lineBuffer.Len() > 40960 {
+			// Buffer too large, return as-is (fallback)
+			n = copy(p, lineBuffer.Bytes())
+			lineBuffer.Next(n)
+			return n, nil
+		}
+	}
+}
+
+func (r *streamingUnwrapReader) processBuffer(data []byte) []byte {
+	// Process SSE format, unwrapping "response" field in data lines
+	lines := bytes.Split(data, []byte("\n"))
+	var result bytes.Buffer
+
+	for i, line := range lines {
+		if bytes.HasPrefix(line, []byte("data:")) {
+			// Extract JSON from data line
+			jsonData := bytes.TrimSpace(line[5:]) // Skip "data:"
+			if len(jsonData) == 0 {
+				result.Write(line)
+			} else {
+				// Try to unwrap the JSON
+				var wrapped map[string]any
+				if err := json.Unmarshal(jsonData, &wrapped); err == nil {
+					if innerResponse, ok := wrapped["response"]; ok {
+						// Unwrap: extract inner "response" field
+						unwrapped, err := json.Marshal(innerResponse)
+						if err == nil {
+							result.Write([]byte("data: "))
+							result.Write(unwrapped)
+						} else {
+							// Failed to marshal, keep original
+							result.Write(line)
+						}
+					} else {
+						// No "response" field, keep original
+						result.Write(line)
+					}
+				} else {
+					// Not valid JSON, keep original
+					result.Write(line)
+				}
+			}
+		} else {
+			result.Write(line)
+		}
+
+		// Add newline back (except for last line if original didn't end with \n)
+		if i < len(lines)-1 || data[len(data)-1] == '\n' {
+			result.WriteByte('\n')
+		}
+	}
+
+	return result.Bytes()
+}
+
+func (r *streamingUnwrapReader) Close() error {
+	return r.reader.Close()
+}
+
 func (t *antigravityRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	key := req.Header.Get("X-Goog-Api-Key")
+	isStreaming := isStreamingRequest(req)
 
 	// Rewrite URL path from standard Google format to Antigravity format
 	originalPath := req.URL.Path
@@ -252,29 +382,38 @@ func (t *antigravityRoundTripper) RoundTrip(req *http.Request) (*http.Response, 
 
 	// Unwrap response body
 	// Antigravity wraps the response in a "response" field
+	// For streaming: we need to unwrap each SSE event's data field
+	// For non-streaming: we can unwrap the entire JSON response
 	if resp.Body != nil {
-		body, err := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		if err != nil {
-			return nil, fmt.Errorf("failed to read response body: %w", err)
-		}
-
-		// Try to unwrap the response
-		var wrappedResponse map[string]any
-		if err := json.Unmarshal(body, &wrappedResponse); err == nil {
-			if innerResponse, ok := wrappedResponse["response"]; ok {
-				// Unwrap: extract the inner "response" field
-				unwrappedBody, err := json.Marshal(innerResponse)
-				if err != nil {
-					return nil, fmt.Errorf("failed to marshal unwrapped response: %w", err)
-				}
-				resp.Body = io.NopCloser(bytes.NewReader(unwrappedBody))
-				resp.ContentLength = int64(len(unwrappedBody))
-			}
+		if isStreaming {
+			// For streaming responses, wrap the body with streamingUnwrapReader
+			// to unwrap each SSE event's data field on-the-fly
+			resp.Body = &streamingUnwrapReader{reader: resp.Body}
 		} else {
-			// If parsing fails, return original body (might not be wrapped)
-			resp.Body = io.NopCloser(bytes.NewReader(body))
-			resp.ContentLength = int64(len(body))
+			// For non-streaming responses, read and unwrap the entire JSON body
+			body, err := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if err != nil {
+				return nil, fmt.Errorf("failed to read response body: %w", err)
+			}
+
+			// Try to unwrap the response
+			var wrappedResponse map[string]any
+			if err := json.Unmarshal(body, &wrappedResponse); err == nil {
+				if innerResponse, ok := wrappedResponse["response"]; ok {
+					// Unwrap: extract the inner "response" field
+					unwrappedBody, err := json.Marshal(innerResponse)
+					if err != nil {
+						return nil, fmt.Errorf("failed to marshal unwrapped response: %w", err)
+					}
+					resp.Body = io.NopCloser(bytes.NewReader(unwrappedBody))
+					resp.ContentLength = int64(len(unwrappedBody))
+				}
+			} else {
+				// If parsing fails, return original body (might not be wrapped)
+				resp.Body = io.NopCloser(bytes.NewReader(body))
+				resp.ContentLength = int64(len(body))
+			}
 		}
 	}
 
