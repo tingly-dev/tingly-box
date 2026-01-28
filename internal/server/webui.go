@@ -43,13 +43,17 @@ func GetGlobalServer() *Server {
 
 // Init sets up Server routes and templates on the main server engine
 func (s *Server) UseUIEndpoints() {
-	// UI page routes
-	s.engine.GET("/provider", s.UseIndexHTML)
-	s.engine.GET("/api-keys", s.UseIndexHTML)
-	s.engine.GET("/oauth", s.UseIndexHTML)
-	s.engine.GET("/routing", s.UseIndexHTML)
-	s.engine.GET("/system", s.UseIndexHTML)
-	s.engine.GET("/history", s.UseIndexHTML)
+	// SPA routes - serve index.html for all frontend routes (catch-all)
+	// This allows React Router to handle client-side routing
+	s.engine.GET("/:page", s.UseIndexHTML)
+
+	// API endpoints are handled separately and won't match this pattern
+	// Admin/backend routes that need their own pages:
+	// - /provider, /api-keys, /oauth, /routing, /system, /history etc.
+	// All serve the same index.html, letting React Router handle the navigation
+
+	// Exclude API routes from SPA catch-all by registering them first
+	// The routes registered below (manager APIs, OAuth, usage, etc.) will take precedence
 
 	// Create route manager
 	manager := swagger.NewRouteManager(s.engine)
