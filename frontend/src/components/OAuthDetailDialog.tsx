@@ -22,6 +22,7 @@ interface OAuthEditFormData {
     apiBase: string;
     apiStyle: 'openai' | 'anthropic';
     enabled: boolean;
+    proxyUrl?: string;
 }
 
 interface OAuthDetailDialogProps {
@@ -37,6 +38,7 @@ const OAuthDetailDialog = ({ open, provider, onClose, onSubmit }: OAuthDetailDia
         apiBase: provider?.api_base || '',
         apiStyle: provider?.api_style || 'openai',
         enabled: provider?.enabled || false,
+        proxyUrl: provider?.proxy_url || '',
     });
     const [submitting, setSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
@@ -51,9 +53,10 @@ const OAuthDetailDialog = ({ open, provider, onClose, onSubmit }: OAuthDetailDia
                 apiBase: provider.api_base,
                 apiStyle: provider.api_style || 'openai',
                 enabled: provider.enabled,
+                proxyUrl: provider.proxy_url || '',
             });
         }
-    }, [provider?.name, provider?.api_base, provider?.api_style, provider?.enabled]);
+    }, [provider?.name, provider?.api_base, provider?.api_style, provider?.enabled, provider?.proxy_url]);
 
     const formatDate = (dateStr?: string) => {
         if (!dateStr) return 'N/A';
@@ -166,6 +169,16 @@ const OAuthDetailDialog = ({ open, provider, onClose, onSubmit }: OAuthDetailDia
                                     ? "https://api.openai.com/v1"
                                     : "https://api.anthropic.com"
                             }
+                        />
+
+                        <TextField
+                            size="small"
+                            fullWidth
+                            label="Proxy URL"
+                            value={formData.proxyUrl || ''}
+                            onChange={(e) => setFormData(prev => ({ ...prev, proxyUrl: e.target.value }))}
+                            placeholder="http://proxy.example.com:8080"
+                            helperText="Optional: HTTP/HTTPS proxy URL for requests"
                         />
 
                         {/* Read-only OAuth Credentials */}

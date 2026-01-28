@@ -8,6 +8,7 @@ export interface Provider {
     token?: string;
     auth_type?: "api_key" | "oauth"; // "api_key" or "oauth"
     oauth_detail?: OAuthDetail;
+    proxy_url?: string;
 }
 
 export interface OAuthDetail {
