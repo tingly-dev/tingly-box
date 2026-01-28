@@ -758,6 +758,27 @@ export const api = {
             return { success: false, error: error.message };
         }
     },
+
+    // Config Apply API - Safe endpoints that generate config from system state
+    applyClaudeConfig: async (mode: string): Promise<any> => {
+        return fetchUIAPI('/config/apply/claude', {
+            method: 'POST',
+            body: JSON.stringify({ mode }),
+        });
+    },
+
+    applyOpenCodeConfig: async (): Promise<any> => {
+        return fetchUIAPI('/config/apply/opencode', {
+            method: 'POST',
+            body: JSON.stringify({}),
+        });
+    },
+
+    getOpenCodeConfigPreview: async (): Promise<any> => {
+        return fetchUIAPI('/config/preview/opencode', {
+            method: 'GET',
+        });
+    },
 };
 
 export default api;
