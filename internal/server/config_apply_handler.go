@@ -76,12 +76,12 @@ func (s *Server) ApplyClaudeConfig(c *gin.Context) {
 
 	// Generate env vars based on mode
 	env := map[string]string{
-		"DISABLE_TELEMETRY":                   "1",
-		"DISABLE_ERROR_REPORTING":             "1",
+		"DISABLE_TELEMETRY":                        "1",
+		"DISABLE_ERROR_REPORTING":                  "1",
 		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-		"API_TIMEOUT_MS":                      "3000000",
-		"ANTHROPIC_BASE_URL":                  baseURL + "/tingly/claude_code",
-		"ANTHROPIC_AUTH_TOKEN":                s.config.GetModelToken(),
+		"API_TIMEOUT_MS":                           "3000000",
+		"ANTHROPIC_BASE_URL":                       baseURL + "/tingly/claude_code",
+		"ANTHROPIC_AUTH_TOKEN":                     s.config.GetModelToken(),
 	}
 
 	if req.Mode == "separate" {
@@ -156,12 +156,12 @@ func (s *Server) ApplyClaudeConfig(c *gin.Context) {
 
 	// Build response
 	response := ApplyConfigResponse{
-		Success:     combinedResult.Success,
-		SettingsResult: *settingsResult,
+		Success:          combinedResult.Success,
+		SettingsResult:   *settingsResult,
 		OnboardingResult: *onboardingResult,
-		CreatedFiles:  createdFiles,
-		UpdatedFiles:  updatedFiles,
-		BackupPaths:   backupPaths,
+		CreatedFiles:     createdFiles,
+		UpdatedFiles:     updatedFiles,
+		BackupPaths:      backupPaths,
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -224,16 +224,22 @@ func (s *Server) ApplyOpenCodeConfigFromState(c *gin.Context) {
 	baseURL := fmt.Sprintf("http://%s:%d", s.host, port)
 	configBaseURL := baseURL + "/tingly/opencode"
 
-	// Get the request model from the first active OpenCode rule
-	requestModel := firstRule.RequestModel
-	if requestModel == "" {
-		requestModel = "tingly/cc-default"
-	}
-
 	// Use the model token from config (tingly-box- prefixed JWT)
 	apiKey := s.config.GetModelToken()
 
-	// Generate OpenCode config with the actual request model
+	// Collect all models from all active OpenCode rules
+	models := make(map[string]interface{})
+	for _, rule := range opencodeRules {
+		requestModel := rule.RequestModel
+		if requestModel == "" {
+			requestModel = "tingly/cc-default"
+		}
+		models[requestModel] = map[string]interface{}{
+			"name": requestModel,
+		}
+	}
+
+	// Generate OpenCode config with all models
 	providerConfig := map[string]interface{}{
 		"tingly-box": map[string]interface{}{
 			"name": "tingly-box",
@@ -242,16 +248,12 @@ func (s *Server) ApplyOpenCodeConfigFromState(c *gin.Context) {
 				"baseURL": configBaseURL,
 				"apiKey":  apiKey,
 			},
-			"models": map[string]interface{}{
-				requestModel: map[string]interface{}{
-					"name": requestModel,
-				},
-			},
+			"models": models,
 		},
 	}
 
 	payload := map[string]interface{}{
-		"$schema": "https://opencode.ai/config.json",
+		"$schema":  "https://opencode.ai/config.json",
 		"provider": providerConfig,
 	}
 
@@ -274,12 +276,12 @@ func (s *Server) ApplyOpenCodeConfigFromState(c *gin.Context) {
 
 // ApplyConfigResponse is the response for ApplyClaudeConfig
 type ApplyConfigResponse struct {
-	Success           bool   `json:"success"`
-	SettingsResult    config.ApplyResult `json:"settingsResult"`
-	OnboardingResult  config.ApplyResult `json:"onboardingResult"`
-	CreatedFiles      []string `json:"createdFiles"`
-	UpdatedFiles      []string `json:"updatedFiles"`
-	BackupPaths       []string `json:"backupPaths"`
+	Success          bool               `json:"success"`
+	SettingsResult   config.ApplyResult `json:"settingsResult"`
+	OnboardingResult config.ApplyResult `json:"onboardingResult"`
+	CreatedFiles     []string           `json:"createdFiles"`
+	UpdatedFiles     []string           `json:"updatedFiles"`
+	BackupPaths      []string           `json:"backupPaths"`
 }
 
 // ApplyOpenCodeConfigResponse is the response for ApplyOpenCodeConfigFromState
@@ -289,11 +291,11 @@ type ApplyOpenCodeConfigResponse struct {
 
 // OpenCodeConfigPreviewResponse is the response for GetOpenCodeConfigPreview
 type OpenCodeConfigPreviewResponse struct {
-	Success    bool     `json:"success"`
-	ConfigJSON string   `json:"configJson"`
-	ScriptWin  string   `json:"scriptWindows"`
-	ScriptUnix string   `json:"scriptUnix"`
-	Message    string   `json:"message,omitempty"`
+	Success    bool   `json:"success"`
+	ConfigJSON string `json:"configJson"`
+	ScriptWin  string `json:"scriptWindows"`
+	ScriptUnix string `json:"scriptUnix"`
+	Message    string `json:"message,omitempty"`
 }
 
 // GetOpenCodeConfigPreview generates OpenCode configuration preview from system state
@@ -354,14 +356,20 @@ func (s *Server) GetOpenCodeConfigPreview(c *gin.Context) {
 	baseURL := fmt.Sprintf("http://%s:%d", s.host, port)
 	configBaseURL := baseURL + "/tingly/opencode"
 
-	// Get the request model from the first active rule
-	requestModel := firstRule.RequestModel
-	if requestModel == "" {
-		requestModel = "tingly/cc-default"
-	}
-
 	// Use the model token from config (tingly-box- prefixed JWT)
 	apiKey := s.config.GetModelToken()
+
+	// Collect all models from all active OpenCode rules
+	models := make(map[string]interface{})
+	for _, rule := range opencodeRules {
+		requestModel := rule.RequestModel
+		if requestModel == "" {
+			requestModel = "tingly/cc-default"
+		}
+		models[requestModel] = map[string]interface{}{
+			"name": requestModel,
+		}
+	}
 
 	// Generate OpenCode config JSON
 	providerConfig := map[string]interface{}{
@@ -372,16 +380,12 @@ func (s *Server) GetOpenCodeConfigPreview(c *gin.Context) {
 				"baseURL": configBaseURL,
 				"apiKey":  apiKey,
 			},
-			"models": map[string]interface{}{
-				requestModel: map[string]interface{}{
-					"name": requestModel,
-				},
-			},
+			"models": models,
 		},
 	}
 
 	configPayload := map[string]interface{}{
-		"$schema": "https://opencode.ai/config.json",
+		"$schema":  "https://opencode.ai/config.json",
 		"provider": providerConfig,
 	}
 
@@ -394,11 +398,21 @@ func (s *Server) GetOpenCodeConfigPreview(c *gin.Context) {
 		return
 	}
 
+	// Marshal models to JSON for the script
+	modelsJSON, err := json.Marshal(models)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, OpenCodeConfigPreviewResponse{
+			Success: false,
+			Message: "Failed to marshal models: " + err.Error(),
+		})
+		return
+	}
+
 	// Generate Windows script
-	scriptWindows := generateOpenCodeScript(configBaseURL, apiKey, requestModel, "windows")
+	scriptWindows := generateOpenCodeScript(configBaseURL, apiKey, string(modelsJSON), "windows")
 
 	// Generate Unix script
-	scriptUnix := generateOpenCodeScript(configBaseURL, apiKey, requestModel, "unix")
+	scriptUnix := generateOpenCodeScript(configBaseURL, apiKey, string(modelsJSON), "unix")
 
 	c.JSON(http.StatusOK, OpenCodeConfigPreviewResponse{
 		Success:    true,
@@ -409,7 +423,8 @@ func (s *Server) GetOpenCodeConfigPreview(c *gin.Context) {
 }
 
 // generateOpenCodeScript generates a setup script for OpenCode configuration
-func generateOpenCodeScript(configBaseURL, apiKey, requestModel, platform string) string {
+// modelsJSON is a JSON string of the models map
+func generateOpenCodeScript(configBaseURL, apiKey, modelsJSON, platform string) string {
 	nodeCode := fmt.Sprintf(`const fs = require("fs");
 const path = require("path");
 const os = require("os");
@@ -423,6 +438,8 @@ if (!fs.existsSync(configDir)) {
     fs.mkdirSync(configDir, { recursive: true });
 }
 
+const models = %s;
+
 const newProvider = {
     "tingly-box": {
         "name": "tingly-box",
@@ -431,11 +448,7 @@ const newProvider = {
             "baseURL": "%s",
             "apiKey": "%s"
         },
-        "models": {
-            "%s": {
-                "name": "%s"
-            }
-        }
+        "models": models
     }
 };
 
@@ -456,7 +469,7 @@ const newConfig = {
 };
 
 fs.writeFileSync(configPath, JSON.stringify(newConfig, null, 2));
-console.log("OpenCode config written to", configPath);`, configBaseURL, apiKey, requestModel, requestModel)
+console.log("OpenCode config written to", configPath);`, modelsJSON, configBaseURL, apiKey)
 
 	if platform == "windows" {
 		return "# PowerShell - Run in PowerShell\nnode -e @\"\n" + nodeCode + "\n\"@"
