@@ -13,13 +13,13 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/data"
+	"github.com/tingly-dev/tingly-box/internal/data/db"
 
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/constant"
-	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/template"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
 )
@@ -52,10 +52,10 @@ type Config struct {
 	ConfigFile string `yaml:"-" json:"-"` // Not serialized to YAML (exported to preserve field)
 	ConfigDir  string `yaml:"-" json:"-"`
 
-	modelManager    *template.ModelListManager
+	modelManager    *data.ModelListManager
 	statsStore      *db.StatsStore
 	usageStore      *db.UsageStore
-	templateManager *template.TemplateManager
+	templateManager *data.TemplateManager
 
 	mu sync.RWMutex
 }
@@ -180,7 +180,7 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 	}
 
 	// Initialize provider model manager
-	providerModelManager, err := template.NewProviderModelManager(configDir)
+	providerModelManager, err := data.NewProviderModelManager(configDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize provider model manager: %w", err)
 	}
@@ -1094,19 +1094,19 @@ func (c *Config) FetchAndSaveProviderModels(uid string) error {
 	return fmt.Errorf("failed to fetch models (template fallback: not available)")
 }
 
-func (c *Config) GetModelManager() *template.ModelListManager {
+func (c *Config) GetModelManager() *data.ModelListManager {
 	return c.modelManager
 }
 
 // SetTemplateManager sets the template manager for provider templates
-func (c *Config) SetTemplateManager(tm *template.TemplateManager) {
+func (c *Config) SetTemplateManager(tm *data.TemplateManager) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.templateManager = tm
 }
 
 // GetTemplateManager returns the template manager
-func (c *Config) GetTemplateManager() *template.TemplateManager {
+func (c *Config) GetTemplateManager() *data.TemplateManager {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.templateManager
