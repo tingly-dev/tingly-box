@@ -11,11 +11,11 @@ import (
 
 // ApplyResult contains the result of applying a configuration
 type ApplyResult struct {
-	Success     bool   `json:"success"`
-	BackupPath  string `json:"backupPath,omitempty"`
-	Message     string `json:"message"`
-	Created     bool   `json:"created,omitempty"`
-	Updated     bool   `json:"updated,omitempty"`
+	Success    bool   `json:"success"`
+	BackupPath string `json:"backupPath,omitempty"`
+	Message    string `json:"message"`
+	Created    bool   `json:"created,omitempty"`
+	Updated    bool   `json:"updated,omitempty"`
 }
 
 // ClaudeSettingsPayload contains the payload for applying Claude settings

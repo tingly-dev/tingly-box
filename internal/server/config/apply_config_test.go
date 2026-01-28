@@ -28,7 +28,7 @@ func TestApplyClaudeSettings_NewFile(t *testing.T) {
 	}
 
 	result, err := ApplyClaudeSettingsFromEnv(map[string]string{
-		"ANTHROPIC_MODEL": "test-model",
+		"ANTHROPIC_MODEL":    "test-model",
 		"ANTHROPIC_BASE_URL": "http://localhost:12580",
 	})
 	if err != nil {
@@ -106,7 +106,7 @@ func TestApplyClaudeSettings_ExistingFile(t *testing.T) {
 	}
 
 	result, err := ApplyClaudeSettingsFromEnv(map[string]string{
-		"ANTHROPIC_MODEL": "test-model",
+		"ANTHROPIC_MODEL":    "test-model",
 		"ANTHROPIC_BASE_URL": "http://localhost:12580",
 	})
 	if err != nil {
@@ -199,8 +199,8 @@ func TestApplyClaudeOnboarding_ExistingFile(t *testing.T) {
 
 	// Create existing .claude.json
 	existingConfig := map[string]interface{}{
-		"someKey":        "preserved",
-		"otherSetting":   123,
+		"someKey":      "preserved",
+		"otherSetting": 123,
 	}
 	existingData, _ := json.MarshalIndent(existingConfig, "", "  ")
 	targetPath := filepath.Join(tempDir, ".claude.json")
