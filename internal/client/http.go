@@ -1,11 +1,15 @@
 package client
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/proxy"
 
@@ -27,8 +31,32 @@ var oauthHookFunctions = map[oauth.ProviderType]HookFunc{
 func antigravityHook(req *http.Request) error {
 	key := req.Header.Get("X-Goog-Api-Key")
 
+	// Rewrite URL path from standard Google format to Antigravity format
+	// Standard: /v1beta/models/{model}:generateContent
+	// Antigravity: /v1internal:generateContent
+	originalPath := req.URL.Path
+	newPath := originalPath
+
+	// Check if this is a generateContent request
+	if strings.Contains(newPath, ":generateContent") {
+		// Extract the operation name (generateContent, streamGenerateContent, etc.)
+		parts := strings.Split(newPath, ":")
+		if len(parts) >= 2 {
+			operation := parts[1]
+			// Rewrite to Antigravity format
+			newPath = fmt.Sprintf("/v1internal:%s", operation)
+		}
+	}
+
+	// Apply the path rewrite if changed
+	if newPath != originalPath {
+		logrus.Debugf("[Antigravity] Rewriting URL path: %s -> %s", originalPath, newPath)
+		req.URL.Path = newPath
+	}
+
+	// Set headers (will be applied after URL rewrite)
 	req.Header = http.Header{}
-	req.Header.Set("User-Agent", "antigravity/1.11.3 Darwin/arm64")
+	req.Header.Set("User-Agent", "antigravity/1.11.5 windows/amd64")
 	req.Header.Set("Content-Type", "application/json")
 	if key != "" {
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
@@ -36,7 +64,7 @@ func antigravityHook(req *http.Request) error {
 	return nil
 }
 
-// claudeCodeHook applies Claude Code OAuth specific request modifications:
+// requestModifier wraps an http.RoundTripper to apply hooks to each request:
 // - Converts X-Api-Key header to Authorization header
 // - Adds required Claude Code specific headers
 // - Adds beta query parameter
@@ -143,6 +171,268 @@ func (t *requestModifier) RoundTrip(req *http.Request) (*http.Response, error) {
 	return t.RoundTripper.RoundTrip(req)
 }
 
+// antigravityRoundTripper wraps an http.RoundTripper to handle Antigravity's
+// custom request/response format
+type antigravityRoundTripper struct {
+	http.RoundTripper
+	project, model string
+	proxyURL       string
+}
+
+// isStreamingRequest checks if the request is for streaming generate content
+func isStreamingRequest(req *http.Request) bool {
+	return strings.Contains(req.URL.Path, ":streamGenerateContent")
+}
+
+// streamingUnwrapReader wraps an io.Reader to unwrap Antigravity's streaming response format
+// Antigravity wraps each SSE event's data in a "response" field, e.g.:
+//
+//	data: {"response": {...actual google response...}}
+//
+// This reader unwraps it to:
+//
+//	data: {...actual google response...}
+type streamingUnwrapReader struct {
+	reader io.ReadCloser
+	buffer []byte
+	err    error
+}
+
+func (r *streamingUnwrapReader) Read(p []byte) (n int, err error) {
+	// Return any buffered data first
+	if len(r.buffer) > 0 {
+		n = copy(p, r.buffer)
+		r.buffer = r.buffer[n:]
+		return n, nil
+	}
+
+	// Return previous error if any
+	if r.err != nil {
+		return 0, r.err
+	}
+
+	// Read data line by line from source
+	buf := make([]byte, 4096)
+	var lineBuffer bytes.Buffer
+
+	for {
+		nn, readErr := r.reader.Read(buf)
+		if nn > 0 {
+			lineBuffer.Write(buf[:nn])
+		}
+		if readErr != nil {
+			if readErr == io.EOF {
+				// Flush remaining buffer at EOF
+				if lineBuffer.Len() > 0 {
+					r.buffer = r.processBuffer(lineBuffer.Bytes())
+					n = copy(p, r.buffer)
+					r.buffer = r.buffer[n:]
+					if len(r.buffer) == 0 {
+						r.err = io.EOF
+					}
+					return n, nil
+				}
+				return 0, io.EOF
+			}
+			r.err = readErr
+			return 0, readErr
+		}
+
+		// Process the buffer to extract complete lines
+		processed := r.processBuffer(lineBuffer.Bytes())
+		if len(processed) > 0 {
+			// Return processed data
+			n = copy(p, processed)
+			r.buffer = processed[n:]
+			return n, nil
+		}
+
+		// Check if we have enough data to work with
+		if lineBuffer.Len() > 40960 {
+			// Buffer too large, return as-is (fallback)
+			n = copy(p, lineBuffer.Bytes())
+			lineBuffer.Next(n)
+			return n, nil
+		}
+	}
+}
+
+func (r *streamingUnwrapReader) processBuffer(data []byte) []byte {
+	// Process SSE format, unwrapping "response" field in data lines
+	lines := bytes.Split(data, []byte("\n"))
+	var result bytes.Buffer
+
+	for i, line := range lines {
+		if bytes.HasPrefix(line, []byte("data:")) {
+			// Extract JSON from data line
+			jsonData := bytes.TrimSpace(line[5:]) // Skip "data:"
+			if len(jsonData) == 0 {
+				result.Write(line)
+			} else {
+				// Try to unwrap the JSON
+				var wrapped map[string]any
+				if err := json.Unmarshal(jsonData, &wrapped); err == nil {
+					if innerResponse, ok := wrapped["response"]; ok {
+						// Unwrap: extract inner "response" field
+						unwrapped, err := json.Marshal(innerResponse)
+						if err == nil {
+							result.Write([]byte("data: "))
+							result.Write(unwrapped)
+						} else {
+							// Failed to marshal, keep original
+							result.Write(line)
+						}
+					} else {
+						// No "response" field, keep original
+						result.Write(line)
+					}
+				} else {
+					// Not valid JSON, keep original
+					result.Write(line)
+				}
+			}
+		} else {
+			result.Write(line)
+		}
+
+		// Add newline back (except for last line if original didn't end with \n)
+		if i < len(lines)-1 || data[len(data)-1] == '\n' {
+			result.WriteByte('\n')
+		}
+	}
+
+	return result.Bytes()
+}
+
+func (r *streamingUnwrapReader) Close() error {
+	return r.reader.Close()
+}
+
+func (t *antigravityRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	key := req.Header.Get("X-Goog-Api-Key")
+	isStreaming := isStreamingRequest(req)
+
+	// Rewrite URL path from standard Google format to Antigravity format
+	originalPath := req.URL.Path
+	newPath := originalPath
+
+	if strings.Contains(newPath, ":generateContent") || strings.Contains(newPath, ":streamGenerateContent") {
+		parts := strings.Split(newPath, ":")
+		if len(parts) >= 2 {
+			operation := parts[1]
+			newPath = fmt.Sprintf("/v1internal:%s", operation)
+		}
+	}
+
+	if newPath != originalPath {
+		logrus.Debugf("[Antigravity] Rewriting URL path: %s -> %s", originalPath, newPath)
+		req.URL.Path = newPath
+	}
+
+	// Read and wrap request body
+	if req.Body != nil && t.project != "" && t.model != "" {
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read request body: %w", err)
+		}
+		req.Body.Close()
+
+		// Parse original body
+		var originalBody map[string]any
+		if err := json.Unmarshal(body, &originalBody); err == nil {
+			// Remove model from original body
+			cleanBody := make(map[string]any)
+			for k, v := range originalBody {
+				if k != "model" {
+					cleanBody[k] = v
+				}
+			}
+
+			// Wrap in Antigravity format
+			wrapped := map[string]any{
+				"project":     t.project,
+				"requestId":   fmt.Sprintf("agent-%s", uuid.New().String()),
+				"request":     cleanBody,
+				"model":       t.model,
+				"userAgent":   "antigravity",
+				"requestType": "agent",
+			}
+
+			wrappedBody, err := json.Marshal(wrapped)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal wrapped body: %w", err)
+			}
+			// Set GetBody to allow retries and redirects
+			req.GetBody = func() (io.ReadCloser, error) {
+				return io.NopCloser(bytes.NewReader(wrappedBody)), nil
+			}
+			req.Body = io.NopCloser(bytes.NewReader(wrappedBody))
+			req.ContentLength = int64(len(wrappedBody))
+		}
+	}
+
+	// Set headers
+	req.Header = http.Header{}
+	req.Header.Set("User-Agent", "antigravity/1.11.5 windows/amd64")
+	req.Header.Set("Content-Type", "application/json")
+	if req.ContentLength > 0 {
+		req.Header.Set("Content-Length", fmt.Sprintf("%d", req.ContentLength))
+	}
+	if key != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
+	}
+
+	logrus.Debugf("[Antigravity] Sending request to %s, Content-Length=%d, isStreaming=%v", req.URL.Path, req.ContentLength, isStreaming)
+
+	// Send request
+	resp, err := t.RoundTripper.RoundTrip(req)
+	if err != nil {
+		logrus.Errorf("[Antigravity] Request failed: %v", err)
+		return nil, err
+	}
+
+	logrus.Debugf("[Antigravity] Response received, status=%d", resp.StatusCode)
+
+	// Unwrap response body
+	// Antigravity wraps the response in a "response" field
+	// For streaming: we need to unwrap each SSE event's data field
+	// For non-streaming: we can unwrap the entire JSON response
+	if resp.Body != nil {
+		if isStreaming {
+			// For streaming responses, wrap the body with streamingUnwrapReader
+			// to unwrap each SSE event's data field on-the-fly
+			resp.Body = &streamingUnwrapReader{reader: resp.Body}
+		} else {
+			// For non-streaming responses, read and unwrap the entire JSON body
+			body, err := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if err != nil {
+				return nil, fmt.Errorf("failed to read response body: %w", err)
+			}
+
+			// Try to unwrap the response
+			var wrappedResponse map[string]any
+			if err := json.Unmarshal(body, &wrappedResponse); err == nil {
+				if innerResponse, ok := wrappedResponse["response"]; ok {
+					// Unwrap: extract the inner "response" field
+					unwrappedBody, err := json.Marshal(innerResponse)
+					if err != nil {
+						return nil, fmt.Errorf("failed to marshal unwrapped response: %w", err)
+					}
+					resp.Body = io.NopCloser(bytes.NewReader(unwrappedBody))
+					resp.ContentLength = int64(len(unwrappedBody))
+				}
+			} else {
+				// If parsing fails, return original body (might not be wrapped)
+				resp.Body = io.NopCloser(bytes.NewReader(body))
+				resp.ContentLength = int64(len(body))
+			}
+		}
+	}
+
+	return resp, nil
+}
+
 // GetOAuthHook returns the hook function for the given provider type
 func GetOAuthHook(providerType oauth.ProviderType) HookFunc {
 	hook, ok := oauthHookFunctions[providerType]
@@ -211,13 +501,43 @@ func CreateHTTPClientForProvider(provider *typ.Provider) *http.Client {
 	}
 
 	if provider.AuthType == typ.AuthTypeOAuth {
-		hook := GetOAuthHook(providerType)
+		// For Antigravity, create a specialized RoundTripper with provider-specific config
+		if providerType == oauth.ProviderAntigravity && provider.OAuthDetail != nil {
+			project, model := "", ""
+			if provider.OAuthDetail.ExtraFields != nil {
+				if p, ok := provider.OAuthDetail.ExtraFields["project"].(string); ok {
+					project = p
+				}
+				if m, ok := provider.OAuthDetail.ExtraFields["model"].(string); ok {
+					model = m
+				}
+			}
+			// Create a separate transport with proxy for Antigravity
+			var antigravityTransport http.RoundTripper = transport
+			if provider.ProxyURL != "" {
+				// Use CreateHTTPClientWithProxy to create a transport with proxy
+				proxyClient := CreateHTTPClientWithProxy(provider.ProxyURL)
+				if proxyClient.Transport != nil {
+					antigravityTransport = proxyClient.Transport
+				}
+			}
 
-		if hook != nil {
-			// Wrap the transport with request modifier for OAuth hooks
-			client.Transport = &requestModifier{
-				RoundTripper: transport,
-				hooks:        []HookFunc{hook},
+			// Use antigravityRoundTripper for both request wrapping and response unwrapping
+			client.Transport = &antigravityRoundTripper{
+				RoundTripper: antigravityTransport,
+				project:      project,
+				model:        model,
+				proxyURL:     provider.ProxyURL,
+			}
+			logrus.Infof("Created Antigravity RoundTripper with project=%s, model=%s, proxy=%s", project, model, provider.ProxyURL)
+		} else {
+			// For other OAuth providers, use the hook-based approach
+			hook := GetOAuthHook(providerType)
+			if hook != nil {
+				client.Transport = &requestModifier{
+					RoundTripper: transport,
+					hooks:        []HookFunc{hook},
+				}
 			}
 		}
 	}

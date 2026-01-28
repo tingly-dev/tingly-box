@@ -12,8 +12,9 @@ export const ApiStyleBadge = ({apiStyle, sx = {}, compact = false}: ApiStyleBadg
     const theme = useTheme();
     const isOpenAI = apiStyle === 'openai';
     const isAnthropic = apiStyle === 'anthropic';
+    const isGoogle = apiStyle === 'google';
 
-    if (!isOpenAI && !isAnthropic) {
+    if (!isOpenAI && !isAnthropic && !isGoogle) {
         return null; // Don't show badge for unknown styles
     }
 
@@ -26,10 +27,18 @@ export const ApiStyleBadge = ({apiStyle, sx = {}, compact = false}: ApiStyleBadg
                 borderColor: alpha(theme.palette.info.main, 0.3),
             };
         } else if (isAnthropic) {
+            // Warm orange, between red and terracotta
             return {
-                backgroundColor: alpha(theme.palette.error.main, 0.1),
-                color: theme.palette.secondary.main,
-                borderColor: alpha(theme.palette.error.main, 0.3),
+                backgroundColor: alpha('#E07A5F', 0.12),
+                color: '#E07A5F',
+                borderColor: alpha('#E07A5F', 0.4),
+            };
+        } else if (isGoogle) {
+            // Google blue
+            return {
+                backgroundColor: alpha('#4285F4', 0.1),
+                color: '#4285F4',
+                borderColor: alpha('#4285F4', 0.3),
             };
         }
         return {
@@ -39,7 +48,7 @@ export const ApiStyleBadge = ({apiStyle, sx = {}, compact = false}: ApiStyleBadg
         };
     };
 
-    const label = isOpenAI ? 'OpenAI' : 'Anthropic';
+    const label = isOpenAI ? 'OpenAI' : isAnthropic ? 'Anthropic' : 'Google';
     const badgeStyles = getBadgeStyles();
 
     return (

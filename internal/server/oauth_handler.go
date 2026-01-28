@@ -593,10 +593,11 @@ func (s *Server) AuthorizeOAuth(c *gin.Context) {
 		// Map OAuth providers to their corresponding base providers
 		// This allows us to reuse proxy configuration from existing API providers
 		providerToBase := map[oauth2.ProviderType]string{
-			oauth2.ProviderCodex:      "openai",
-			oauth2.ProviderOpenAI:     "openai",
-			oauth2.ProviderClaudeCode: "anthropic",
-			oauth2.ProviderGemini:     "google",
+			oauth2.ProviderCodex:       "openai",
+			oauth2.ProviderOpenAI:      "openai",
+			oauth2.ProviderClaudeCode:  "anthropic",
+			oauth2.ProviderGemini:      "google",
+			oauth2.ProviderAntigravity: "google",
 		}
 
 		if baseProvider, ok := providerToBase[providerType]; ok {
@@ -1094,6 +1095,9 @@ func (s *Server) createProviderFromToken(token *oauth2.Token, providerType oauth
 		case oauth2.ProviderGoogle:
 			apiBase = "https://generativelanguage.googleapis.com"
 			apiStyle = protocol.APIStyleOpenAI
+		case oauth2.ProviderAntigravity:
+			apiBase = "https://cloudcode-pa.googleapis.com"
+			apiStyle = protocol.APIStyleGoogle
 		case oauth2.ProviderOpenAI:
 			apiBase = "https://api.openai.com/v1"
 			apiStyle = protocol.APIStyleOpenAI
@@ -1107,11 +1111,6 @@ func (s *Server) createProviderFromToken(token *oauth2.Token, providerType oauth
 			apiBase = "mock"
 			apiStyle = protocol.APIStyleOpenAI
 		}
-	}
-
-	// For providers without ResourceURL, determine APIStyle if not set
-	if apiStyle == "" {
-		apiStyle = protocol.APIStyleOpenAI
 	}
 
 	// Build expires_at string
