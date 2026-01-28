@@ -1,4 +1,4 @@
-import { Box, Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, Tab, Tabs } from '@mui/material';
+import { Box, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Button, Typography, Tab, Tabs } from '@mui/material';
 import React from 'react';
 import CodeBlock from './CodeBlock';
 import { useTranslation } from 'react-i18next';
@@ -18,6 +18,9 @@ interface ClaudeCodeConfigModalProps {
     generateScriptWindows: () => string;
     generateScriptUnix: () => string;
     copyToClipboard: (text: string, label: string) => Promise<void>;
+    // Apply handler
+    onApply?: () => Promise<void>;
+    isApplyLoading?: boolean;
 }
 
 type ScriptTab = 'json' | 'windows' | 'unix';
@@ -33,6 +36,8 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
     generateScriptWindows,
     generateScriptUnix,
     copyToClipboard,
+    onApply,
+    isApplyLoading = false,
 }) => {
     const { t } = useTranslation();
     const [settingsTab, setSettingsTab] = React.useState<ScriptTab>('json');
@@ -188,6 +193,17 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
             </DialogContent>
 
             <DialogActions sx={{ px: 3, pb: 2, pt: 1, justifyContent: 'flex-end' }}>
+                {onApply && (
+                    <Button
+                        onClick={onApply}
+                        variant="contained"
+                        color="primary"
+                        disabled={isApplyLoading}
+                        startIcon={isApplyLoading ? <CircularProgress size={16} color="inherit" /> : null}
+                    >
+                        {isApplyLoading ? 'Applying...' : 'Apply Configurations'}
+                    </Button>
+                )}
                 <Button onClick={onClose} variant="contained" color="primary">
                     {t('common.confirm')}
                 </Button>

@@ -11,7 +11,7 @@ import {
     ToggleButtonGroup,
     Typography
 } from '@mui/material';
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import ClaudeCodeConfigModal from '@/components/ClaudeCodeConfigModal';
@@ -54,6 +54,7 @@ const UseClaudeCodePage: React.FC = () => {
 
     // Claude Code config modal state
     const [configModalOpen, setConfigModalOpen] = React.useState(false);
+    const [isApplyLoading, setIsApplyLoading] = React.useState(false);
 
     const handleAddApiKeyClick = () => {
         navigate('/api-keys?dialog=add');
@@ -200,6 +201,7 @@ const UseClaudeCodePage: React.FC = () => {
         return rule?.request_model || '';
     };
 
+    // Generate settings.json JSON (from backend)
     const generateSettingsConfig = () => {
         const claudeCodeBaseUrl = getClaudeCodeBaseUrl();
 
@@ -409,6 +411,34 @@ console.log("Onboarding config written to", claudeJsonPath);`;
 node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
     };
 
+    // Apply handler - calls backend to generate and write config
+    const handleApply = async () => {
+        try {
+            setIsApplyLoading(true);
+            const result = await api.applyClaudeConfig(configMode);
+
+            if (result.success) {
+                // Build success message from backend response
+                const createdFiles = result.createdFiles || [];
+                const updatedFiles = result.updatedFiles || [];
+                const backupPaths = result.backupPaths || [];
+
+                const allFiles = [...createdFiles, ...updatedFiles];
+                let successMsg = `Configuration files written: ${allFiles.join(', ')}`;
+                if (backupPaths.length > 0) {
+                    successMsg += `\nBackups created: ${backupPaths.join(', ')}`;
+                }
+                showNotification(successMsg, 'success');
+            } else {
+                showNotification(`Failed to apply configurations: ${result.message || 'Unknown error'}`, 'error');
+            }
+        } catch (err) {
+            showNotification('Failed to apply configurations', 'error');
+        } finally {
+            setIsApplyLoading(false);
+        }
+    };
+
     const isLoading = providersLoading || loadingRule;
 
     return (
@@ -550,6 +580,8 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                         generateScriptWindows={generateScriptWindows}
                         generateScriptUnix={generateScriptUnix}
                         copyToClipboard={copyToClipboard}
+                        onApply={handleApply}
+                        isApplyLoading={isApplyLoading}
                     />
                 </CardGrid>
             )}

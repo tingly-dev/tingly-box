@@ -1,4 +1,4 @@
-import { Box, Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, Tab, Tabs } from '@mui/material';
+import { Box, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Button, Typography, Tab, Tabs } from '@mui/material';
 import React from 'react';
 import CodeBlock from './CodeBlock';
 import { useTranslation } from 'react-i18next';
@@ -6,10 +6,15 @@ import { useTranslation } from 'react-i18next';
 interface OpenCodeConfigModalProps {
     open: boolean;
     onClose: () => void;
-    baseUrl: string;
-    token: string;
-    requestModel: string;
+    // Config generators from backend
+    generateConfigJson: () => string;
+    generateScriptWindows: () => string;
+    generateScriptUnix: () => string;
     copyToClipboard: (text: string, label: string) => Promise<void>;
+    // Apply handler
+    onApply?: () => Promise<void>;
+    isApplyLoading?: boolean;
+    isLoading?: boolean;
 }
 
 type ScriptTab = 'json' | 'windows' | 'unix';
@@ -17,148 +22,19 @@ type ScriptTab = 'json' | 'windows' | 'unix';
 const OpenCodeConfigModal: React.FC<OpenCodeConfigModalProps> = ({
     open,
     onClose,
-    baseUrl,
-    token,
-    requestModel,
+    generateConfigJson,
+    generateScriptWindows,
+    generateScriptUnix,
     copyToClipboard,
+    onApply,
+    isApplyLoading = false,
+    isLoading = false,
 }) => {
     const { t } = useTranslation();
     const [configTab, setConfigTab] = React.useState<ScriptTab>('json');
 
-    // Generate OpenCode config JSON
-    const generateConfigJson = () => {
-        const configBaseUrl = baseUrl ? `${baseUrl}/tingly/opencode` : 'http://localhost:12580/tingly/opencode';
-        return JSON.stringify({
-            "$schema": "https://opencode.ai/config.json",
-            "provider": {
-                "tingly-box": {
-                    "name": "tingly-box",
-                    "npm": "@ai-sdk/anthropic",
-                    "options": {
-                        "baseURL": configBaseUrl,
-                        "apiKey": `tingly-box-${token}`
-                    },
-                    "models": {
-                        [requestModel]: {
-                            "name": requestModel
-                        }
-                    }
-                }
-            }
-        }, null, 2);
-    };
-
-    // Generate Windows PowerShell script
-    const generateWindowsScript = () => {
-        const configBaseUrl = baseUrl ? `${baseUrl}/tingly/opencode` : 'http://localhost:12580/tingly/opencode';
-        const nodeCode = `const fs = require("fs");
-const path = require("path");
-const os = require("os");
-
-const homeDir = os.homedir();
-const configDir = path.join(homeDir, ".config", "opencode");
-const configPath = path.join(configDir, "opencode.json");
-
-// Create config directory if it doesn't exist
-if (!fs.existsSync(configDir)) {
-    fs.mkdirSync(configDir, { recursive: true });
-}
-
-const newProvider = {
-    "tingly-box": {
-        "name": "tingly-box",
-        "npm": "@ai-sdk/anthropic",
-        "options": {
-            "baseURL": "${configBaseUrl}",
-            "apiKey": "tingly-box-${token}"
-        },
-        "models": {
-            "${requestModel}": {
-                "name": "${requestModel}"
-            }
-        }
-    }
-};
-
-let existingConfig = {};
-if (fs.existsSync(configPath)) {
-    const content = fs.readFileSync(configPath, "utf-8");
-    existingConfig = JSON.parse(content);
-}
-
-// Merge providers
-const newConfig = {
-    ...existingConfig,
-    "$schema": existingConfig["$schema"] || "https://opencode.ai/config.json",
-    "provider": {
-        ...(existingConfig.provider || {}),
-        ...newProvider
-    }
-};
-
-fs.writeFileSync(configPath, JSON.stringify(newConfig, null, 2));
-console.log("OpenCode config written to", configPath);`;
-
-        return `# PowerShell - Run in PowerShell
-node -e @"
-${nodeCode}
-"@`;
-    };
-
-    // Generate Unix/Linux/macOS script
-    const generateUnixScript = () => {
-        const configBaseUrl = baseUrl ? `${baseUrl}/tingly/opencode` : 'http://localhost:12580/tingly/opencode';
-        const nodeCode = `const fs = require("fs");
-const path = require("path");
-const os = require("os");
-
-const homeDir = os.homedir();
-const configDir = path.join(homeDir, ".config", "opencode");
-const configPath = path.join(configDir, "opencode.json");
-
-// Create config directory if it doesn't exist
-if (!fs.existsSync(configDir)) {
-    fs.mkdirSync(configDir, { recursive: true });
-}
-
-const newProvider = {
-    "tingly-box": {
-        "name": "tingly-box",
-        "npm": "@ai-sdk/anthropic",
-        "options": {
-            "baseURL": "${configBaseUrl}",
-            "apiKey": "tingly-box-${token}"
-        },
-        "models": {
-            "${requestModel}": {
-                "name": "${requestModel}"
-            }
-        }
-    }
-};
-
-let existingConfig = {};
-if (fs.existsSync(configPath)) {
-    const content = fs.readFileSync(configPath, "utf-8");
-    existingConfig = JSON.parse(content);
-}
-
-// Merge providers
-const newConfig = {
-    ...existingConfig,
-    "$schema": existingConfig["$schema"] || "https://opencode.ai/config.json",
-    "provider": {
-        ...(existingConfig.provider || {}),
-        ...newProvider
-    }
-};
-
-fs.writeFileSync(configPath, JSON.stringify(newConfig, null, 2));
-console.log("OpenCode config written to", configPath);`;
-
-        return `# Bash - Run in terminal
-node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
-    };
+    // Show loading indicator
+    const showLoading = isLoading || !generateConfigJson() || generateConfigJson() === '// Loading...';
 
     return (
         <Dialog
@@ -219,6 +95,12 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                             </Tabs>
                         </Box>
                         <Box>
+                            {showLoading ? (
+                                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 300 }}>
+                                    <CircularProgress />
+                                </Box>
+                            ) : (
+                                <>
                             {configTab === 'json' && (
                                 <CodeBlock
                                     code={generateConfigJson()}
@@ -232,7 +114,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                             )}
                             {configTab === 'windows' && (
                                 <CodeBlock
-                                    code={generateWindowsScript()}
+                                    code={generateScriptWindows()}
                                     language="js"
                                     filename="PowerShell script to setup opencode.json"
                                     wrap={true}
@@ -243,7 +125,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                             )}
                             {configTab === 'unix' && (
                                 <CodeBlock
-                                    code={generateUnixScript()}
+                                    code={generateScriptUnix()}
                                     language="js"
                                     filename="Bash script to setup opencode.json"
                                     wrap={true}
@@ -252,12 +134,25 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                                     minHeight={300}
                                 />
                             )}
+                                </>
+                            )}
                         </Box>
                     </Box>
                 </Box>
             </DialogContent>
 
             <DialogActions sx={{ px: 3, pb: 2, pt: 1, justifyContent: 'flex-end' }}>
+                {onApply && (
+                    <Button
+                        onClick={onApply}
+                        variant="contained"
+                        color="primary"
+                        disabled={isApplyLoading}
+                        startIcon={isApplyLoading ? <CircularProgress size={16} color="inherit" /> : null}
+                    >
+                        {isApplyLoading ? 'Applying...' : 'Apply Configuration'}
+                    </Button>
+                )}
                 <Button onClick={onClose} variant="contained" color="primary">
                     Done
                 </Button>
