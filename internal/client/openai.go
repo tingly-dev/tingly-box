@@ -2,7 +2,12 @@ package client
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
@@ -10,6 +15,7 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -133,4 +139,139 @@ func (c *OpenAIClient) applyRecordMode() {
 // GetProvider returns the provider for this client
 func (c *OpenAIClient) GetProvider() *typ.Provider {
 	return c.provider
+}
+
+// ListModels returns the list of available models from the OpenAI-compatible API
+func (c *OpenAIClient) ListModels(ctx context.Context) ([]string, error) {
+	// Special handling for Codex (ChatGPT OAuth) providers
+	// The ChatGPT OAuth token cannot access OpenAI's /models endpoint
+	// because it's a ChatGPT web interface token, not an OpenAI API token.
+	// It lacks the required api.model.read scope.
+	// Return ErrModelsEndpointNotSupported to signal the caller to use template fallback.
+	if c.provider.OAuthDetail != nil && c.provider.OAuthDetail.ProviderType == "codex" {
+		return nil, &ErrModelsEndpointNotSupported{
+			Provider: c.provider.Name,
+			Reason:   "ChatGPT OAuth token cannot access /models endpoint",
+		}
+	}
+	// Also handle legacy ChatGPT backend API providers
+	if c.provider.APIBase == protocol.ChatGPTBackendAPIBase {
+		return nil, &ErrModelsEndpointNotSupported{
+			Provider: c.provider.Name,
+			Reason:   "ChatGPT backend API does not support /models endpoint",
+		}
+	}
+
+	// Construct the models endpoint URL
+	// For Anthropic-style providers, ensure they have a version suffix
+	apiBase := strings.TrimSuffix(c.provider.APIBase, "/")
+	if c.provider.APIStyle == protocol.APIStyleAnthropic {
+		// Check if already has version suffix like /v1, /v2, etc.
+		matches := strings.Split(apiBase, "/")
+		if len(matches) > 0 {
+			last := matches[len(matches)-1]
+			// If no version suffix, add v1
+			if !strings.HasPrefix(last, "v") {
+				apiBase = apiBase + "/v1"
+			}
+		} else {
+			// If split failed, just add v1
+			apiBase = apiBase + "/v1"
+		}
+	}
+
+	modelsURL := apiBase + "/models"
+
+	// Create HTTP request
+	req, err := http.NewRequestWithContext(ctx, "GET", modelsURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+
+	// Set headers based on provider style and auth type
+	accessToken := c.provider.GetAccessToken()
+	if c.provider.APIStyle == protocol.APIStyleAnthropic {
+		// Add OAuth custom headers if applicable
+		if c.provider.AuthType == typ.AuthTypeOAuth && c.provider.OAuthDetail != nil {
+			req.Header.Set("Authorization", "Bearer "+accessToken)
+			req.Header.Set("anthropic-version", "2023-06-01")
+		} else {
+			req.Header.Set("x-api-key", accessToken)
+			req.Header.Set("anthropic-version", "2023-06-01")
+		}
+	} else {
+		req.Header.Set("Authorization", "Bearer "+accessToken)
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	// Create HTTP client with timeout
+	httpClient := c.httpClient
+	if httpClient == nil {
+		httpClient = http.DefaultClient
+	}
+	// Create a client with timeout for model fetching
+	httpClientWithTimeout := &http.Client{
+		Timeout:   time.Duration(constant.ModelFetchTimeout) * time.Second,
+		Transport: httpClient.Transport,
+	}
+
+	resp, err := httpClientWithTimeout.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("HTTP request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("provider returned status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	// Parse response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	// Parse JSON response based on OpenAI-compatible format
+	var modelsResponse struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+		Error *struct {
+			Message string `json:"message"`
+			Type    string `json:"type"`
+		} `json:"error"`
+	}
+
+	if err := json.Unmarshal(body, &modelsResponse); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON response: %w", err)
+	}
+
+	// Check for API error
+	if modelsResponse.Error != nil {
+		return nil, fmt.Errorf("API error: %s (type: %s)", modelsResponse.Error.Message, modelsResponse.Error.Type)
+	}
+
+	// Extract model IDs
+	var models []string
+	for _, model := range modelsResponse.Data {
+		// since some providers are special, we should process their model list
+		if model.ID != "" {
+			switch apiBase {
+			case "https://generativelanguage.googleapis.com/v1beta/openai":
+				modelID := strings.TrimPrefix(model.ID, "models/")
+				models = append(models, modelID)
+			default:
+				models = append(models, model.ID)
+
+			}
+		}
+	}
+
+	if len(models) == 0 {
+		return nil, fmt.Errorf("no models found in provider response")
+	}
+
+	return models, nil
 }

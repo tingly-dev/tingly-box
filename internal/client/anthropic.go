@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -135,4 +136,23 @@ func (c *AnthropicClient) applyRecordMode() {
 // GetProvider returns the provider for this client
 func (c *AnthropicClient) GetProvider() *typ.Provider {
 	return c.provider
+}
+
+// ListModels returns the list of available models from the Anthropic API
+func (c *AnthropicClient) ListModels(ctx context.Context) ([]string, error) {
+	models, err := c.client.Models.List(ctx, anthropic.ModelListParams{})
+	if err != nil {
+		return nil, err
+	}
+
+	var result []string
+	for _, model := range models.Data {
+		result = append(result, model.ID)
+	}
+
+	if len(result) == 0 {
+		return nil, fmt.Errorf("no models found in provider response")
+	}
+
+	return result, nil
 }
