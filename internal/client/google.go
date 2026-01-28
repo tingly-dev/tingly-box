@@ -106,3 +106,15 @@ func (c *GoogleClient) applyRecordMode() {
 func (c *GoogleClient) GetProvider() *typ.Provider {
 	return c.provider
 }
+
+// ListModels returns the list of available models from the Google Gemini API
+// Note: Google genai SDK doesn't have a direct ListModels method, so we return
+// ErrModelsEndpointNotSupported to signal the caller to use template fallback.
+func (c *GoogleClient) ListModels(ctx context.Context) ([]string, error) {
+	// Google genai SDK doesn't provide a models list endpoint
+	// The caller should use template fallback instead
+	return nil, &ErrModelsEndpointNotSupported{
+		Provider: c.provider.Name,
+		Reason:   "Google genai SDK does not support listing models via API",
+	}
+}
