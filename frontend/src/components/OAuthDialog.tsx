@@ -57,7 +57,7 @@ const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
         description: 'Access Antigravity services via Google OAuth',
         icon: <Google size={32}/>,
         color: '#7B1FA2',
-        enabled: false,
+        enabled: true,
     },
     {
         id: 'qwen_code',
