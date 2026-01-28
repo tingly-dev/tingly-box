@@ -42,24 +42,22 @@ func defaultNewOpenAIClient(provider *typ.Provider) (*OpenAIClient, error) {
 	}
 
 	// Create HTTP client with proper hook configuration
-	var httpClient *http.Client
+	// CreateHTTPClientForProvider handles both OAuth and API key providers,
+	// applies appropriate hooks, and uses shared transport pool
+	httpClient := CreateHTTPClientForProvider(provider)
+
+	// Log what we're using
 	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
-		// Use CreateHTTPClientForProvider which applies OAuth hooks and uses shared transport
-		httpClient = CreateHTTPClientForProvider(provider)
 		providerType := oauth.ProviderType(provider.OAuthDetail.ProviderType)
 		if providerType == oauth.ProviderCodex {
 			logrus.Infof("[Codex] Using hook-based transport for ChatGPT backend API path rewriting")
 		} else {
 			logrus.Infof("Using shared transport for OAuth provider type: %s", providerType)
 		}
-	} else {
-		// For non-OAuth providers, use simple proxy client
-		if provider.ProxyURL != "" {
-			httpClient = CreateHTTPClientWithProxy(provider.ProxyURL)
-			logrus.Infof("Using proxy for OpenAI client: %s", provider.ProxyURL)
-		} else {
-			httpClient = http.DefaultClient
-		}
+	}
+
+	if provider.ProxyURL != "" {
+		logrus.Infof("Using proxy for OpenAI client: %s", provider.ProxyURL)
 	}
 
 	options = append(options, option.WithHTTPClient(httpClient))

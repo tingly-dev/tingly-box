@@ -24,6 +24,14 @@ var oauthHookFunctions = map[oauth.ProviderType]HookFunc{
 	oauth.ProviderCodex:       codexHook,
 }
 
+// providerHookFunctions defines custom hooks for API key providers based on API base URL
+// These hooks handle URL path rewriting and other provider-specific modifications
+// for providers that use API key authentication (not OAuth)
+var providerHookFunctions = map[string]HookFunc{
+	"https://api.minimaxi.com/v1": minimaxHook,
+	"https://api.minimax.io/v1":   minimaxHook,
+}
+
 func antigravityHook(req *http.Request) error {
 	key := req.Header.Get("X-Goog-Api-Key")
 
@@ -127,6 +135,28 @@ func codexHook(req *http.Request) error {
 	return nil
 }
 
+// minimaxHook applies Minimax provider specific request modifications:
+// - Rewrites URL paths from /chat/completions to /text/chatcompletion_v2
+// Minimax API documentation: https://platform.minimaxi.com/docs/api-reference/text-chat
+func minimaxHook(req *http.Request) error {
+	// Only process requests to minimax domains
+	if !strings.Contains(req.URL.Host, "minimax.") {
+		return nil
+	}
+
+	originalPath := req.URL.Path
+
+	// Pattern: Rewrite /chat/completions to /text/chatcompletion_v2
+	// Example: https://api.minimaxi.com/v1/chat/completions → https://api.minimaxi.com/v1/text/chatcompletion_v2
+	if strings.HasSuffix(originalPath, "/chat/completions") {
+		newPath := strings.Replace(originalPath, "/chat/completions", "/text/chatcompletion_v2", 1)
+		logrus.Debugf("[Minimax] Rewriting URL path: %s -> %s", originalPath, newPath)
+		req.URL.Path = newPath
+	}
+
+	return nil
+}
+
 // requestModifier wraps an http.RoundTripper to apply hooks to each request
 type requestModifier struct {
 	http.RoundTripper
@@ -150,6 +180,45 @@ func GetOAuthHook(providerType oauth.ProviderType) HookFunc {
 		return nil
 	}
 	return hook
+}
+
+// GetProviderHook returns the hook function for the given provider ID
+// Provider IDs are from provider_templates.json (e.g., "minimax", "minimax-intl")
+func GetProviderHook(providerID string) HookFunc {
+	hook, ok := providerHookFunctions[providerID]
+	if !ok {
+		return nil
+	}
+	return hook
+}
+
+// GetProviderHookByAPIBase returns the hook function for the given API base URL
+// This matches the API base against known provider patterns and returns the appropriate hook
+func GetProviderHookByAPIBase(apiBase string) HookFunc {
+	// Normalize API base
+	apiBase = strings.ToLower(strings.TrimSuffix(apiBase, "/"))
+
+	// Match API base to provider ID
+	for providerID, hook := range providerHookFunctions {
+		if getProviderAPIBase(providerID) == apiBase {
+			return hook
+		}
+	}
+
+	return nil
+}
+
+// getProviderAPIBase returns the expected API base for a given provider ID
+// This maps provider template IDs to their API base URLs
+func getProviderAPIBase(providerID string) string {
+	switch providerID {
+	case "minimax":
+		return "https://api.minimaxi.com/v1"
+	case "minimax-intl":
+		return "https://api.minimax.io/v1"
+	default:
+		return ""
+	}
 }
 
 // CreateHTTPClientWithProxy creates an HTTP client with proxy support
@@ -194,9 +263,10 @@ func CreateHTTPClientWithProxy(proxyURL string) *http.Client {
 }
 
 // CreateHTTPClientForProvider creates an HTTP client configured for the given provider
-// It handles proxy and OAuth hooks if applicable
+// Uses transport pool for connection reuse and applies OAuth/provider-specific hooks
 //
-// Returns a configured http.Client
+// For OAuth providers: applies OAuth hooks (e.g., Claude Code headers)
+// For API key providers: applies provider-specific hooks (e.g., Minimax URL rewriting)
 func CreateHTTPClientForProvider(provider *typ.Provider) *http.Client {
 	var providerType oauth.ProviderType
 	if provider.OAuthDetail != nil {
@@ -210,15 +280,21 @@ func CreateHTTPClientForProvider(provider *typ.Provider) *http.Client {
 		Transport: transport,
 	}
 
-	if provider.AuthType == typ.AuthTypeOAuth {
-		hook := GetOAuthHook(providerType)
+	var hook HookFunc
 
-		if hook != nil {
-			// Wrap the transport with request modifier for OAuth hooks
-			client.Transport = &requestModifier{
-				RoundTripper: transport,
-				hooks:        []HookFunc{hook},
-			}
+	// For OAuth providers, get OAuth hook
+	if provider.AuthType == typ.AuthTypeOAuth {
+		hook = GetOAuthHook(providerType)
+	} else {
+		// For API key providers, get provider-specific hook by API base
+		hook = GetProviderHookByAPIBase(provider.APIBase)
+	}
+
+	// Apply the hook if found
+	if hook != nil {
+		client.Transport = &requestModifier{
+			RoundTripper: transport,
+			hooks:        []HookFunc{hook},
 		}
 	}
 

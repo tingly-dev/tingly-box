@@ -38,8 +38,9 @@ func defaultNewAnthropicClient(provider *typ.Provider) (*AnthropicClient, error)
 	}
 
 	// Create base HTTP client
+	// CreateHTTPClientForProvider handles both OAuth and API key providers,
+	// applies appropriate hooks, and uses shared transport pool
 	var httpClient *http.Client
-	// Add proxy and/or custom headers if configured
 	if provider.ProxyURL != "" || provider.AuthType == typ.AuthTypeOAuth {
 		httpClient = CreateHTTPClientForProvider(provider)
 
