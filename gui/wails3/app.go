@@ -9,6 +9,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 
 	assets "github.com/tingly-dev/tingly-box/internal"
+	"github.com/tingly-dev/tingly-box/internal/command"
 	"github.com/tingly-dev/tingly-box/pkg/fs"
 )
 
@@ -95,5 +96,50 @@ func newApp(port int, debug bool) *application.App {
 			EncryptionKey: [32]byte([]byte("Ml!Zjj@Lfw#Wqq$Wxb%Mjy^&*()_+1234567890-=")[:32]),
 		},
 	})
+	return app
+}
+
+// newAppWithServerManager creates a new full GUI app with a pre-configured ServerManager
+func newAppWithServerManager(appManager *command.AppManager, serverManager *command.ServerManager, debug bool) *application.App {
+	// Create UI service with existing serverManager
+	tinglyService = services2.NewTinglyServiceWithServerManager(appManager, serverManager)
+
+	// Create a new Wails application by providing the necessary options.
+	embdHandler := application.AssetFileServerFS(assets.GUIDistAssets)
+	app := application.New(application.Options{
+		Name:        AppName,
+		Description: AppDescription,
+		Services: []application.Service{
+			application.NewService(&services2.GreetService{}),
+			application.NewService(tinglyService),
+		},
+		Assets: application.AssetOptions{
+			Handler: embdHandler,
+		},
+		Mac: application.MacOptions{
+			ApplicationShouldTerminateAfterLastWindowClosed: false,
+		},
+		Windows: application.WindowsOptions{},
+		SingleInstance: &application.SingleInstanceOptions{
+			UniqueID: "tingly-box.single-instance",
+			OnSecondInstanceLaunch: func(data application.SecondInstanceData) {
+				if WindowMain != nil {
+					WindowMain.EmitEvent("secondInstanceLaunched", data)
+					WindowMain.Restore()
+					WindowMain.Focus()
+				}
+			},
+			AdditionalData: map[string]string{
+				"launchtime": time.Now().Local().String(),
+			},
+			ExitCode:      0,
+			EncryptionKey: [32]byte([]byte("Ml!Zjj@Lfw#Wqq$Wxb%Mjy^&*()_+1234567890-=")[:32]),
+		},
+	})
+
+	// IMPORTANT: Set up windows and systray after creating the app
+	useWindows(app)
+	useSystray(app)
+
 	return app
 }

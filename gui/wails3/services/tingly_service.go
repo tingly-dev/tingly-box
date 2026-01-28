@@ -59,6 +59,20 @@ func NewTinglyService(configDir string, port int, debug bool) (*TinglyService, e
 	return res, nil
 }
 
+// NewTinglyServiceWithServerManager creates a new UI service instance with a pre-configured ServerManager
+func NewTinglyServiceWithServerManager(appManager *command.AppManager, serverManager *command.ServerManager) *TinglyService {
+	res := &TinglyService{
+		appManager:    appManager,
+		serverManager: serverManager,
+		shutdownChan:  make(chan struct{}),
+		isRunning:     false,
+	}
+
+	log.Printf("config file: %s\n", appManager.AppConfig().GetGlobalConfig().ConfigFile)
+
+	return res
+}
+
 // Start starts the UI service synchronously and returns any error
 func (s *TinglyService) Start(ctx context.Context) error {
 	go func() {

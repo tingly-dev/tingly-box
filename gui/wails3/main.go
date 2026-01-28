@@ -1,11 +1,12 @@
 package main
 
 import (
-	"fmt"
 	"log"
+	"os"
 
-	"github.com/tingly-dev/tingly-box/gui/wails3/internal/flags"
-	"github.com/tingly-dev/tingly-box/pkg/network"
+	appcommand "github.com/tingly-dev/tingly-box/gui/wails3/command"
+	"github.com/tingly-dev/tingly-box/internal/command"
+	"github.com/tingly-dev/tingly-box/pkg/fs"
 )
 
 func init() {
@@ -15,47 +16,31 @@ func init() {
 	// application.RegisterEvent[string]("time")
 }
 
-// main function serves as the application's entry point. It initializes the application, creates a window,
-// and starts a goroutine that emits a time-based event every second. It subsequently runs the application and
-// logs any error that might occur.
+// main function serves as the application's entry point. It uses cobra commands
+// to handle CLI arguments and launches the appropriate GUI mode.
 func main() {
-	// Get port from flag
-	port := flags.GetPort()
-	if port <= 0 || port > 65535 {
-		log.Fatalf("Invalid port number: %d. Port must be between 1 and 65535.", port)
-	}
-
-	// Check if port is available before starting the app
-	available, info := network.IsPortAvailableWithInfo("localhost", port)
-	log.Printf("[Port Check] Port %d: available=%v, info=%s", port, available, info)
-
-	if !available {
-		// Create a minimal error-only app
-		runErrorApp(fmt.Sprintf("Port %d is already in use.\n\nPlease close the application using this port or use a different port with --port.\n\nDetails: %s", port, info))
-		return
-	}
-
-	log.Printf("[Port Check] Port %d is available, starting application...", port)
-
-	app := newApp(port, flags.GetDebug())
-	useWindows(app)
-	useSystray(app)
-
-	// Create a goroutine that emits an event containing the current time every second.
-	// The frontend can listen to this event and update the UI accordingly.
-	// go func() {
-	// 	for {
-	// 		now := time.Now().Format(time.RFC1123)
-	// 		app.Event.Emit("time", now)
-	// 		time.Sleep(time.Second)
-	// 	}
-	// }()
-
-	// Run the application. This blocks until the application has been exited.
-	err := app.Run()
-
-	// If an error occurred while running the application, log it and exit.
+	// Create AppManager
+	home, err := fs.GetUserPath()
 	if err != nil {
+		log.Fatalf("Failed to get user home directory: %v", err)
+	}
+	configDir := home + "/.tingly-box"
+	appManager, err := command.NewAppManager(configDir)
+	if err != nil {
+		log.Fatalf("Failed to create app manager: %v", err)
+	}
+
+	// Create root command with app launcher
+	launcher := NewAppLauncher()
+	rootCmd := appcommand.RootCommand(appManager, launcher)
+
+	// Default to "gui" subcommand if no args provided
+	if len(os.Args) == 1 {
+		rootCmd.SetArgs([]string{"gui"})
+	}
+
+	// Execute the command
+	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)
 	}
 }
