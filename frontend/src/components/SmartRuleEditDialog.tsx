@@ -84,8 +84,6 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
     // Reset form when smartRouting changes
     useEffect(() => {
         if (smartRouting) {
-            console.log('SmartRuleEditDialog: Loading rule:', smartRouting.uuid, smartRouting.description);
-            console.log('SmartRuleEditDialog: ops:', smartRouting.ops);
             setDescription(smartRouting.description || '');
             // Deep copy ops to avoid mutating the original
             setOps(JSON.parse(JSON.stringify(smartRouting.ops || [])));
@@ -103,10 +101,6 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
             description,
             ops,
         };
-
-        console.log('SmartRuleEditDialog: Saving rule:', updated.uuid, updated.description);
-        console.log('SmartRuleEditDialog: ops after edit:', updated.ops);
-
         onSave(updated);
     };
 
