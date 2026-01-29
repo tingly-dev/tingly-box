@@ -16,13 +16,13 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/constant"
-	"github.com/tingly-dev/tingly-box/internal/db"
+	"github.com/tingly-dev/tingly-box/internal/data"
+	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server/background"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
 	servertls "github.com/tingly-dev/tingly-box/internal/server/tls"
-	"github.com/tingly-dev/tingly-box/internal/template"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
 	"github.com/tingly-dev/tingly-box/pkg/network"
@@ -64,7 +64,7 @@ type Server struct {
 	callbackServersMu sync.RWMutex
 
 	// template manager for provider templates
-	templateManager *template.TemplateManager
+	templateManager *data.TemplateManager
 
 	// probe cache for model endpoint capabilities
 	probeCache *ProbeCache
@@ -81,6 +81,7 @@ type Server struct {
 	enableAdaptor bool
 	openBrowser   bool
 	host          string
+	debug         bool
 
 	// https options
 	httpsEnabled    bool
@@ -186,6 +187,13 @@ func WithExperimentalFeatures(features map[string]bool) ServerOption {
 	}
 }
 
+// WithDebug enables or disables debug mode for the server
+func WithDebug(enabled bool) ServerOption {
+	return func(s *Server) {
+		s.debug = enabled
+	}
+}
+
 // IsFeatureEnabled checks if a specific feature is enabled
 func (s *Server) IsFeatureEnabled(feature string) bool {
 	return s.experimentalFeatures[feature]
@@ -204,6 +212,13 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Apply all options (defaults + provided)
 	for _, opt := range allOpts {
 		opt(server)
+	}
+
+	// Set gin mode based on debug flag
+	if server.debug {
+		gin.SetMode(gin.DebugMode)
+	} else {
+		gin.SetMode(gin.ReleaseMode)
 	}
 
 	// Check and generate tokens if needed
@@ -336,7 +351,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.oauthRefresher = tokenRefresher
 
 	// Initialize template manager with GitHub URL for template sync
-	templateManager := template.NewTemplateManager(template.TemplateGitHubURL)
+	templateManager := data.NewTemplateManager(data.TemplateGitHubURL)
 	if err := templateManager.Initialize(context.Background()); err != nil {
 		log.Printf("Failed to fetch from GitHub, using embedded provider templates: %v", err)
 	} else {

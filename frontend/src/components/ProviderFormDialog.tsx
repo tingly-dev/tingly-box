@@ -204,14 +204,11 @@ const ProviderFormDialog = ({
 
     // Handle force add confirmation - skip verification and submit directly
     const handleForceAdd = () => {
-        console.log('handleForceAdd called, onForceAdd:', !!onForceAdd);
         setShowForceAddDialog(false);
         // Call the force-add handler if provided, otherwise fallback to onSubmit
         if (onForceAdd) {
-            console.log('Calling onForceAdd handler');
             onForceAdd();
         } else {
-            console.log('No onForceAdd handler, calling onSubmit with fake event');
             onSubmit(new Event('submit') as any);
         }
     };

@@ -6,22 +6,22 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/tingly-dev/tingly-box/internal/template"
+	"github.com/tingly-dev/tingly-box/internal/data"
 )
 
 // TemplateResponse represents the response for provider template endpoints
 type TemplateResponse struct {
-	Success bool                                  `json:"success"`
-	Data    map[string]*template.ProviderTemplate `json:"data,omitempty"`
-	Message string                                `json:"message,omitempty"`
-	Version string                                `json:"version,omitempty"`
+	Success bool                              `json:"success"`
+	Data    map[string]*data.ProviderTemplate `json:"data,omitempty"`
+	Message string                            `json:"message,omitempty"`
+	Version string                            `json:"version,omitempty"`
 }
 
 // SingleTemplateResponse represents the response for a single templatwe
 type SingleTemplateResponse struct {
-	Success bool                       `json:"success"`
-	Data    *template.ProviderTemplate `json:"data,omitempty"`
-	Message string                     `json:"message,omitempty"`
+	Success bool                   `json:"success"`
+	Data    *data.ProviderTemplate `json:"data,omitempty"`
+	Message string                 `json:"message,omitempty"`
 }
 
 // GetProviderTemplates returns all provider templates

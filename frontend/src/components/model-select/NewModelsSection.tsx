@@ -1,6 +1,5 @@
 import CloseIcon from '@mui/icons-material/Close';
 import { Box, Divider, IconButton, Typography } from '@mui/material';
-import React from 'react';
 import ModelCard from './ModelCard';
 
 export interface NewModelsSectionProps {

@@ -136,7 +136,6 @@ const OAuthAuthorizationDialog = ({
             try {
                 const {oauthApi} = await api.instances();
                 await oauthApi.apiV1OauthCancelPost({session_id: authData.session_id});
-                console.log('[OAuth] Cleaned up session on dialog close:', authData.session_id);
             } catch (error) {
                 console.error('[OAuth] Failed to cleanup session:', error);
             }
@@ -196,8 +195,6 @@ const OAuthAuthorizationDialog = ({
     const pollSessionStatus = async (sessionId: string) => {
         // Dev mode: fast track test sessions
         if (import.meta.env.DEV && sessionId.startsWith('test-')) {
-            console.log('[DEV] Fast tracking test session:', sessionId);
-
             // Test confirm dialog (triggers after 3 seconds)
             if (sessionId === 'test-confirm') {
                 setTimeout(() => {
@@ -572,7 +569,6 @@ const OAuthDialog = ({open, onClose, onSuccess}: OAuthDialogProps) => {
         try {
             const {oauthApi} = await api.instances();
             await oauthApi.apiV1OauthCancelPost({session_id: sessionId});
-            console.log('[OAuth] Cleaned up session:', sessionId);
         } catch (error) {
             console.error('[OAuth] Failed to cleanup session:', error);
         }
@@ -632,9 +628,6 @@ const OAuthDialog = ({open, onClose, onSuccess}: OAuthDialogProps) => {
         setAuthorizing(provider.id);
         setInitError(null); // Clear any previous errors
 
-        console.log('[OAuth] Starting OAuth flow for provider:', provider.id);
-        console.log('[OAuth] Using proxy URL:', proxyUrl || '(none)');
-
         try {
             const {oauthApi} = await api.instances()
             const response = await oauthApi.apiV1OauthAuthorizePost(
@@ -678,7 +671,6 @@ const OAuthDialog = ({open, onClose, onSuccess}: OAuthDialogProps) => {
                 console.error('OAuth authorization failed:', errorMsg);
             }
 
-            console.log('Authorize OAuth for:', provider.id);
         } catch (error: any) {
             // Handle network or other errors
             const errorMsg = error?.response?.data?.error || error?.response?.data?.message || error?.message || 'Failed to initiate OAuth flow';

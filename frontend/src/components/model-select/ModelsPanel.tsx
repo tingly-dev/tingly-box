@@ -130,8 +130,6 @@ export function ModelsPanel({
         window.dispatchEvent(new CustomEvent('tingly_new_models_update', {
             detail: { providerUuid: provider.uuid, diff: data[provider.uuid] }
         }));
-
-        console.log('[Dev Test] Marked models as new:', modelsToMarkAsNew);
     }, [provider.uuid, providerModels]);
 
     return (

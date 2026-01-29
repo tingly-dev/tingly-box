@@ -2,9 +2,8 @@ package client
 
 import (
 	"context"
-	"net/http"
-
 	"iter"
+	"net/http"
 
 	"github.com/sirupsen/logrus"
 	"google.golang.org/genai"

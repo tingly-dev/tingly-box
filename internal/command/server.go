@@ -214,17 +214,17 @@ func startServer(appManager *AppManager, opts options.StartServerOptions) error 
 
 	serverManager := NewServerManager(
 		appConfig,
-		WithUI(opts.EnableUI),
-		WithAdaptor(opts.EnableAdaptor),
-		WithDebug(opts.EnableDebug),
-		WithOpenBrowser(opts.EnableOpenBrowser),
-		WithHost(opts.Host),
-		WithHTTPSEnabled(opts.HTTPS.Enabled),
-		WithHTTPSCertDir(opts.HTTPS.CertDir),
-		WithHTTPSRegenerate(opts.HTTPS.Regenerate),
-		WithRecordMode(obs.RecordMode(opts.RecordMode)),
-		WithRecordDir(opts.RecordDir),
-		WithExperimentalFeatures(opts.ExperimentalFeatures),
+		server.WithDebug(opts.EnableDebug),
+		server.WithUI(opts.EnableUI),
+		server.WithAdaptor(opts.EnableAdaptor),
+		server.WithOpenBrowser(opts.EnableOpenBrowser),
+		server.WithHost(opts.Host),
+		server.WithHTTPSEnabled(opts.HTTPS.Enabled),
+		server.WithHTTPSCertDir(opts.HTTPS.CertDir),
+		server.WithHTTPSRegenerate(opts.HTTPS.Regenerate),
+		server.WithRecordMode(obs.RecordMode(opts.RecordMode)),
+		server.WithRecordDir(opts.RecordDir),
+		server.WithExperimentalFeatures(opts.ExperimentalFeatures),
 	)
 
 	// Setup signal handling for graceful shutdown
