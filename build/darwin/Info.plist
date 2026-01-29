@@ -14,7 +14,7 @@
         <key>CFBundleGetInfoString</key>
             <string>This is a comment</string>
         <key>CFBundleShortVersionString</key>
-            <string>0.1.0</string>
+            <string>0.1</string>
         <key>CFBundleIconFile</key>
             <string>icons</string>
         <key>LSMinimumSystemVersion</key>
@@ -24,19 +24,15 @@
         <key>NSHumanReadableCopyright</key>
             <string>© 2026, Tingly Dev</string>
         <key>NSAppTransportSecurity</key>
-        <dict>
-            <key>NSAllowsLocalNetworking</key>
-            <true/>
-            <key>NSExceptionDomains</key>
             <dict>
-                <key></key>
-                <dict>
-                    <key>NSExceptionAllowsInsecureHTTPLoads</key>
-                    <true/>
-                    <key>NSIncludesSubdomains</key>
-                    <true/>
-                </dict>
+                <key>NSAllowsLocalNetworking</key>
+                <true/>
             </dict>
-        </dict>
+        <key>NSAppSandboxEnabled</key>
+            <true/>
+        <key>LSApplicationCategoryType</key>
+            <string>public.app-category.developer-tools</string>
+        <key>ITSAppUsesNonExemptEncryption</key>
+            <true/>
     </dict>
 </plist>
