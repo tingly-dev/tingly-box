@@ -13,6 +13,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/command"
 	"github.com/tingly-dev/tingly-box/internal/command/options"
 	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/server"
 	"github.com/tingly-dev/tingly-box/pkg/network"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -164,17 +165,17 @@ func (l *appLauncher) StartGUI(appManager *command.AppManager, opts options.Star
 	// Create ServerManager with options
 	serverManager := command.NewServerManager(
 		appManager.AppConfig(),
-		command.WithUI(opts.EnableUI),
-		command.WithAdaptor(opts.EnableAdaptor),
-		command.WithDebug(opts.EnableDebug),
-		command.WithOpenBrowser(opts.EnableOpenBrowser),
-		command.WithHost(opts.Host),
-		command.WithHTTPSEnabled(opts.HTTPS.Enabled),
-		command.WithHTTPSCertDir(opts.HTTPS.CertDir),
-		command.WithHTTPSRegenerate(opts.HTTPS.Regenerate),
-		command.WithRecordMode(recordMode),
-		command.WithRecordDir(opts.RecordDir),
-		command.WithExperimentalFeatures(opts.ExperimentalFeatures),
+		server.WithUI(opts.EnableUI),
+		server.WithAdaptor(opts.EnableAdaptor),
+		server.WithDebug(opts.EnableDebug),
+		server.WithOpenBrowser(opts.EnableOpenBrowser),
+		server.WithHost(opts.Host),
+		server.WithHTTPSEnabled(opts.HTTPS.Enabled),
+		server.WithHTTPSCertDir(opts.HTTPS.CertDir),
+		server.WithHTTPSRegenerate(opts.HTTPS.Regenerate),
+		server.WithRecordMode(recordMode),
+		server.WithRecordDir(opts.RecordDir),
+		server.WithExperimentalFeatures(opts.ExperimentalFeatures),
 	)
 
 	// Create Wails app with ServerManager embedded
@@ -217,17 +218,17 @@ func (l *appLauncher) StartSlim(appManager *command.AppManager, opts options.Sta
 	// Create ServerManager with options
 	serverManager := command.NewServerManager(
 		appManager.AppConfig(),
-		command.WithUI(opts.EnableUI),
-		command.WithAdaptor(opts.EnableAdaptor),
-		command.WithDebug(opts.EnableDebug),
-		command.WithOpenBrowser(opts.EnableOpenBrowser),
-		command.WithHost(opts.Host),
-		command.WithHTTPSEnabled(opts.HTTPS.Enabled),
-		command.WithHTTPSCertDir(opts.HTTPS.CertDir),
-		command.WithHTTPSRegenerate(opts.HTTPS.Regenerate),
-		command.WithRecordMode(recordMode),
-		command.WithRecordDir(opts.RecordDir),
-		command.WithExperimentalFeatures(opts.ExperimentalFeatures),
+		server.WithUI(opts.EnableUI),
+		server.WithAdaptor(opts.EnableAdaptor),
+		server.WithDebug(opts.EnableDebug),
+		server.WithOpenBrowser(opts.EnableOpenBrowser),
+		server.WithHost(opts.Host),
+		server.WithHTTPSEnabled(opts.HTTPS.Enabled),
+		server.WithHTTPSCertDir(opts.HTTPS.CertDir),
+		server.WithHTTPSRegenerate(opts.HTTPS.Regenerate),
+		server.WithRecordMode(recordMode),
+		server.WithRecordDir(opts.RecordDir),
+		server.WithExperimentalFeatures(opts.ExperimentalFeatures),
 	)
 
 	// Create slim Wails app with ServerManager embedded
