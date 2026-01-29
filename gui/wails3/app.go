@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
-	"time"
 
 	services2 "github.com/tingly-dev/tingly-box/gui/wails3/services"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -52,21 +51,21 @@ func newApp(port int, debug bool) *application.App {
 			ApplicationShouldTerminateAfterLastWindowClosed: false,
 		},
 		Windows: application.WindowsOptions{},
-		SingleInstance: &application.SingleInstanceOptions{
-			UniqueID: "tingly-box.single-instance",
-			OnSecondInstanceLaunch: func(data application.SecondInstanceData) {
-				if WindowMain != nil {
-					WindowMain.EmitEvent("secondInstanceLaunched", data)
-					WindowMain.Restore()
-					WindowMain.Focus()
-				}
-			},
-			AdditionalData: map[string]string{
-				"launchtime": time.Now().Local().String(),
-			},
-			ExitCode:      0,
-			EncryptionKey: [32]byte([]byte("Ml!Zjj@Lfw#Wqq$Wxb%Mjy^&*()_+1234567890-=")[:32]),
-		},
+		//SingleInstance: &application.SingleInstanceOptions{
+		//	UniqueID: "tingly-box.single-instance",
+		//	OnSecondInstanceLaunch: func(data application.SecondInstanceData) {
+		//		if WindowMain != nil {
+		//			WindowMain.EmitEvent("secondInstanceLaunched", data)
+		//			WindowMain.Restore()
+		//			WindowMain.Focus()
+		//		}
+		//	},
+		//	AdditionalData: map[string]string{
+		//		"launchtime": time.Now().Local().String(),
+		//	},
+		//	ExitCode:      0,
+		//	EncryptionKey: [32]byte([]byte("Ml!Zjj@Lfw#Wqq$Wxb%Mjy^&*()_+1234567890-=")[:32]),
+		//},
 	})
 	return app
 }
@@ -111,21 +110,21 @@ func newAppWithServerManager(appManager *command.AppManager, serverManager *comm
 			ApplicationShouldTerminateAfterLastWindowClosed: false,
 		},
 		Windows: application.WindowsOptions{},
-		SingleInstance: &application.SingleInstanceOptions{
-			UniqueID: "tingly-box.single-instance",
-			OnSecondInstanceLaunch: func(data application.SecondInstanceData) {
-				if WindowMain != nil {
-					WindowMain.EmitEvent("secondInstanceLaunched", data)
-					WindowMain.Restore()
-					WindowMain.Focus()
-				}
-			},
-			AdditionalData: map[string]string{
-				"launchtime": time.Now().Local().String(),
-			},
-			ExitCode:      0,
-			EncryptionKey: [32]byte([]byte("Ml!Zjj@Lfw#Wqq$Wxb%Mjy^&*()_+1234567890-=")[:32]),
-		},
+		//SingleInstance: &application.SingleInstanceOptions{
+		//	UniqueID: "tingly-box.single-instance",
+		//	OnSecondInstanceLaunch: func(data application.SecondInstanceData) {
+		//		if WindowMain != nil {
+		//			WindowMain.EmitEvent("secondInstanceLaunched", data)
+		//			WindowMain.Restore()
+		//			WindowMain.Focus()
+		//		}
+		//	},
+		//	AdditionalData: map[string]string{
+		//		"launchtime": time.Now().Local().String(),
+		//	},
+		//	ExitCode:      0,
+		//	EncryptionKey: [32]byte([]byte("Ml!Zjj@Lfw#Wqq$Wxb%Mjy^&*()_+1234567890-=")[:32]),
+		//},
 	})
 
 	// IMPORTANT: Set up windows and systray after creating the app
