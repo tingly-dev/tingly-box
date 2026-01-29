@@ -4,7 +4,7 @@
         <key>CFBundlePackageType</key>
             <string>APPL</string>
         <key>CFBundleName</key>
-            <string>Tingly Box</string>
+            <string>TinglyBox</string>
         <key>CFBundleExecutable</key>
             <string>tingly-box</string>
         <key>CFBundleIdentifier</key>
@@ -22,7 +22,7 @@
         <key>NSHighResolutionCapable</key>
             <string>true</string>
         <key>NSHumanReadableCopyright</key>
-            <string>© now, My Company</string>
+            <string>© 2026, Tingly Dev</string>
         <key>NSAppTransportSecurity</key>
         <dict>
             <key>NSAllowsLocalNetworking</key>

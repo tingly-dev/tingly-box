@@ -5,7 +5,7 @@ includes:
 
 vars:
   WAILS_PACKAGE_PATH: ./gui/wails3
-  
+
 tasks:
   build:
     summary: Creates a production build of the application
@@ -19,6 +19,7 @@ tasks:
             ref: .PRODUCTION
       - task: common:generate:icons
     cmds:
+      - echo {{.PRODUCTION}}
       - |
         export cwd=`pwd`
         pwd
@@ -38,7 +39,7 @@ tasks:
       CGO_LDFLAGS: "-mmacosx-version-min=10.15"
       MACOSX_DEPLOYMENT_TARGET: "10.15"
       PRODUCTION: '{{.PRODUCTION | default "false"}}'
-
+  
   build:universal:
     summary: Builds darwin universal binary (arm64 + amd64)
     deps:
@@ -53,7 +54,7 @@ tasks:
     cmds:
       - lipo -create -output "{{.BIN_DIR}}/{{.BIN_NAME}}" "{{.BIN_DIR}}/{{.BIN_NAME}}-amd64" "{{.BIN_DIR}}/{{.BIN_NAME}}-arm64"
       - rm "{{.BIN_DIR}}/{{.BIN_NAME}}-amd64" "{{.BIN_DIR}}/{{.BIN_NAME}}-arm64"
-
+  
   package:
     summary: Packages a production build of the application into a `.app` bundle
     deps:
@@ -62,15 +63,15 @@ tasks:
           PRODUCTION: "true"
     cmds:
       - task: create:app:bundle
-
+  
   package:universal:
     summary: Packages darwin universal binary (arm64 + amd64)
     deps:
       - task: build:universal
     cmds:
       - task: create:app:bundle
-
-
+  
+  
   create:app:bundle:
     summary: Creates an `.app` bundle
     cmds:
