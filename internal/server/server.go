@@ -81,6 +81,7 @@ type Server struct {
 	enableAdaptor bool
 	openBrowser   bool
 	host          string
+	debug         bool
 
 	// https options
 	httpsEnabled    bool
@@ -186,6 +187,13 @@ func WithExperimentalFeatures(features map[string]bool) ServerOption {
 	}
 }
 
+// WithDebug enables or disables debug mode for the server
+func WithDebug(enabled bool) ServerOption {
+	return func(s *Server) {
+		s.debug = enabled
+	}
+}
+
 // IsFeatureEnabled checks if a specific feature is enabled
 func (s *Server) IsFeatureEnabled(feature string) bool {
 	return s.experimentalFeatures[feature]
@@ -204,6 +212,13 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Apply all options (defaults + provided)
 	for _, opt := range allOpts {
 		opt(server)
+	}
+
+	// Set gin mode based on debug flag
+	if server.debug {
+		gin.SetMode(gin.DebugMode)
+	} else {
+		gin.SetMode(gin.ReleaseMode)
 	}
 
 	// Check and generate tokens if needed

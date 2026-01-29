@@ -10,7 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/tingly-dev/tingly-box/internal/config"
-	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server"
 )
 
@@ -18,119 +17,21 @@ const StopTimeout = time.Second
 
 // ServerManager manages the HTTP server lifecycle
 type ServerManager struct {
-	appConfig            *config.AppConfig
-	server               *server.Server
-	host                 string
-	enableUI             bool
-	enableAdaptor        bool
-	enableDebug          bool
-	enableOpenBrowser    bool
-	httpsEnabled         bool
-	httpsCertDir         string
-	httpsRegenerate      bool
-	recordMode           obs.RecordMode
-	recordDir            string
-	experimentalFeatures map[string]bool
-	status               string
+	appConfig  *config.AppConfig
+	server     *server.Server
+	serverOpts []server.ServerOption
+	status     string
 	sync.Mutex
 }
 
-// ServerManagerOption defines a functional option for ServerManager
-type ServerManagerOption func(*ServerManager)
-
-// WithUI enables or disables the UI for the server manager
-func WithUI(enabled bool) ServerManagerOption {
-	return func(sm *ServerManager) {
-		sm.enableUI = enabled
-	}
-}
-
-// WithAdaptor enables or disables the adaptor for the server manager
-func WithAdaptor(enabled bool) ServerManagerOption {
-	return func(sm *ServerManager) {
-		sm.enableAdaptor = enabled
-	}
-}
-
-// WithDebug enables or disables the debug mode for the server manager
-func WithDebug(enabled bool) ServerManagerOption {
-	return func(sm *ServerManager) {
-		sm.enableDebug = enabled
-	}
-}
-
-// WithOpenBrowser enables or disables automatic browser opening
-func WithOpenBrowser(enabled bool) ServerManagerOption {
-	return func(sm *ServerManager) {
-		sm.enableOpenBrowser = enabled
-	}
-}
-
-func WithHost(host string) ServerManagerOption {
-	return func(sm *ServerManager) {
-		sm.host = host
-	}
-}
-
-// WithHTTPSEnabled sets HTTPS enabled flag
-func WithHTTPSEnabled(enabled bool) ServerManagerOption {
-	return func(sm *ServerManager) {
-		sm.httpsEnabled = enabled
-	}
-}
-
-// WithHTTPSCertDir sets HTTPS certificate directory
-func WithHTTPSCertDir(certDir string) ServerManagerOption {
-	return func(sm *ServerManager) {
-		sm.httpsCertDir = certDir
-	}
-}
-
-// WithHTTPSRegenerate sets HTTPS certificate regenerate flag
-func WithHTTPSRegenerate(regenerate bool) ServerManagerOption {
-	return func(sm *ServerManager) {
-		sm.httpsRegenerate = regenerate
-	}
-}
-
-// WithRecordMode sets the record mode for request/response recording
-// mode: empty string = disabled, "all" = record all, "response" = response only
-func WithRecordMode(mode obs.RecordMode) ServerManagerOption {
-	return func(sm *ServerManager) {
-		sm.recordMode = mode
-	}
-}
-
-// WithRecordDir sets the record directory for request/response recording
-func WithRecordDir(dir string) ServerManagerOption {
-	return func(sm *ServerManager) {
-		sm.recordDir = dir
-	}
-}
-
-// WithExperimentalFeatures sets the experimental features for the server manager
-func WithExperimentalFeatures(features map[string]bool) ServerManagerOption {
-	return func(sm *ServerManager) {
-		sm.experimentalFeatures = features
-	}
-}
-
-// NewServerManager creates a new server manager with default options (UI enabled, adapter enabled)
-func NewServerManager(appConfig *config.AppConfig, opts ...ServerManagerOption) *ServerManager {
-	// Default options
+// NewServerManager creates a new server manager.
+// opts are server options passed directly to the underlying server.
+func NewServerManager(appConfig *config.AppConfig, opts ...server.ServerOption) *ServerManager {
 	sm := &ServerManager{
-		appConfig:         appConfig,
-		enableUI:          true, // Default: UI enabled
-		enableAdaptor:     true, // Default: adapter enabled
-		enableOpenBrowser: true, // Default: browser auto-open enabled
+		appConfig:  appConfig,
+		serverOpts: opts,
 	}
-
-	// Apply provided options
-	for _, opt := range opts {
-		opt(sm)
-	}
-
-	sm.Setup(appConfig.GetServerPort())
+	_ = sm.Setup(appConfig.GetServerPort())
 	return sm
 }
 
@@ -158,27 +59,12 @@ func (sm *ServerManager) Setup(port int) error {
 		}
 	}
 
-	if sm.enableDebug {
-		gin.SetMode(gin.DebugMode)
-	} else {
-		gin.SetMode(gin.ReleaseMode)
-	}
-
-	// Create server with UI and adaptor options
-	sm.server = server.NewServer(
-		sm.appConfig.GetGlobalConfig(),
-		server.WithUI(sm.enableUI),
-		server.WithAdaptor(sm.enableAdaptor),
-		server.WithOpenBrowser(sm.enableOpenBrowser),
-		server.WithHost(sm.host),
-		server.WithHTTPSEnabled(sm.httpsEnabled),
-		server.WithHTTPSCertDir(sm.httpsCertDir),
-		server.WithHTTPSRegenerate(sm.httpsRegenerate),
+	// Build server options with version and pass through all provided options
+	opts := append([]server.ServerOption{
 		server.WithVersion(sm.appConfig.GetVersion()),
-		server.WithRecordMode(sm.recordMode),
-		server.WithRecordDir(sm.recordDir),
-		server.WithExperimentalFeatures(sm.experimentalFeatures),
-	)
+	}, sm.serverOpts...)
+
+	sm.server = server.NewServer(sm.appConfig.GetGlobalConfig(), opts...)
 
 	// Set global server instance for web UI control
 	server.SetGlobalServer(sm.server)
@@ -195,12 +81,6 @@ func (sm *ServerManager) Start() error {
 	// Check if already running
 	if sm.IsRunning() {
 		return fmt.Errorf("server is already running")
-	}
-
-	if sm.enableDebug {
-		gin.SetMode(gin.DebugMode)
-	} else {
-		gin.SetMode(gin.ReleaseMode)
 	}
 
 	err := sm.server.Start(sm.appConfig.GetServerPort())
