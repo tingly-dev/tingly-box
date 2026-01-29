@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"time"
 
-	command2 "github.com/tingly-dev/tingly-box/gui/wails3/command"
+	commandgui "github.com/tingly-dev/tingly-box/gui/wails3/command"
 	"github.com/tingly-dev/tingly-box/gui/wails3/services"
 	"github.com/tingly-dev/tingly-box/internal/command"
 	"github.com/tingly-dev/tingly-box/internal/command/options"
@@ -115,6 +115,21 @@ func useSlimSystray(app *application.App, tinglyService *services.TinglyService)
 
 	// Use custom icon
 	SystemTray.SetIcon(slimIcon)
+
+	//// Create a window similar to GUI mode but hidden by default
+	//WindowSlim = app.Window.NewWithOptions(application.WebviewWindowOptions{
+	//	Name:  "window-slim",
+	//	Title: AppName,
+	//	Mac: application.MacWindow{
+	//		Backdrop: application.MacBackdropTranslucent,
+	//		TitleBar: application.MacTitleBarDefault,
+	//	},
+	//	BackgroundColour: application.NewRGB(27, 38, 54),
+	//	URL:              fmt.Sprintf("/?token=%s", tinglyService.GetUserAuthToken()),
+	//	Hidden:           true, // Start hidden
+	//})
+	//
+	//SystemTray.AttachWindow(WindowSlim)
 }
 
 // appLauncher implements the AppLauncher interface
@@ -135,6 +150,10 @@ func (l *appLauncher) StartGUI(appManager *command.AppManager, opts options.Star
 	}
 
 	log.Printf("[Port Check] Port %d is available, starting application...", opts.Port)
+
+	// IMPORTANT: GUI mode should NOT auto-open browser (user uses the GUI window instead)
+	// Only CLI mode defaults to opening the browser
+	opts.EnableOpenBrowser = false
 
 	// Convert RecordMode string to obs.RecordMode
 	var recordMode obs.RecordMode
@@ -185,6 +204,10 @@ func (l *appLauncher) StartSlim(appManager *command.AppManager, opts options.Sta
 
 	log.Printf("[Port Check] Port %d is available, starting slim application...", opts.Port)
 
+	// IMPORTANT: Slim mode should NOT auto-open browser (user opens via systray menu)
+	// Only CLI mode defaults to opening the browser
+	opts.EnableOpenBrowser = false
+
 	// Convert RecordMode string to obs.RecordMode
 	var recordMode obs.RecordMode
 	if opts.RecordMode != "" {
@@ -218,7 +241,7 @@ func (l *appLauncher) StartSlim(appManager *command.AppManager, opts options.Sta
 }
 
 // NewAppLauncher creates a new AppLauncher instance
-func NewAppLauncher() command2.AppLauncher {
+func NewAppLauncher() commandgui.AppLauncher {
 	return &appLauncher{}
 }
 
@@ -228,7 +251,11 @@ func newSlimAppWithServerManager(appManager *command.AppManager, serverManager *
 	// Create UI service with existing serverManager
 	tinglyService := services.NewTinglyServiceWithServerManager(appManager, serverManager)
 
-	// Create a new Wails application for slim version (no embedded UI)
+	// Create embedded assets handler (same as GUI mode)
+	//embdHandler := application.AssetFileServerFS(assets.GUIDistAssets)
+
+	// Create a new Wails application for slim version
+	// Now with embedded UI assets for the local window
 	app := application.New(application.Options{
 		Name:        AppName,
 		Description: AppDescription,
@@ -237,6 +264,27 @@ func newSlimAppWithServerManager(appManager *command.AppManager, serverManager *
 			application.NewService(tinglyService),
 		},
 		// No Assets handler - slim version opens browser instead
+		//Assets: application.AssetOptions{
+		//	Handler: tinglyService.GetGinEngine(),
+		//	Middleware: func(next http.Handler) http.Handler {
+		//		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		//			// Wails internal routes - let Wails handle them
+		//			if strings.HasPrefix(r.URL.Path, "/wails") {
+		//				next.ServeHTTP(w, r)
+		//				return
+		//			}
+		//
+		//			// API routes - forward to Gin engine (via TinglyService)
+		//			if strings.HasPrefix(r.URL.Path, "/api") || strings.HasPrefix(r.URL.Path, "/tingly") {
+		//				tinglyService.ServeHTTP(w, r)
+		//				return
+		//			}
+		//
+		//			// Serve embedded frontend assets
+		//			embdHandler.ServeHTTP(w, r)
+		//		})
+		//	},
+		//},
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: false,
 			ActivationPolicy: application.ActivationPolicyAccessory, // Tray-only: no dock icon, no default window
