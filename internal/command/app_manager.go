@@ -10,6 +10,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/server"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -55,7 +56,7 @@ func (am *AppManager) SaveConfig() error {
 // ============
 
 // SetupServer initializes the server manager with the given port and options.
-func (am *AppManager) SetupServer(port int, opts ...ServerManagerOption) error {
+func (am *AppManager) SetupServer(port int, opts ...server.ServerOption) error {
 	am.serverManager = NewServerManager(am.appConfig, opts...)
 	return am.serverManager.Setup(port)
 }
