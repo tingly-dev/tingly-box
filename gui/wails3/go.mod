@@ -10,6 +10,8 @@ replace github.com/tingly-dev/tingly-box => ../../
 
 require (
 	github.com/gin-gonic/gin v1.11.0
+	github.com/sirupsen/logrus v1.9.3
+	github.com/spf13/cobra v1.10.2
 	github.com/tingly-dev/tingly-box v0.0.0-00010101000000-000000000000
 )
 
@@ -94,8 +96,6 @@ require (
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/quic-go/quic-go v0.59.0 // indirect
-	github.com/sirupsen/logrus v1.9.3 // indirect
-	github.com/spf13/cobra v1.10.2 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.2.0 // indirect
