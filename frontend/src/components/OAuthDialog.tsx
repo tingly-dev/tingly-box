@@ -17,6 +17,7 @@ import {
 import {Claude, Gemini, Google, OpenAI, Qwen} from '@lobehub/icons';
 import {useEffect, useState} from 'react';
 import api from "@/services/api.ts";
+import {getOAuthRedirectPath} from "@/utils/protocol";
 
 interface OAuthProvider {
     id: string;
@@ -630,10 +631,11 @@ const OAuthDialog = ({open, onClose, onSuccess}: OAuthDialogProps) => {
 
         try {
             const {oauthApi} = await api.instances()
+            const redirectUri = await getOAuthRedirectPath();
             const response = await oauthApi.apiV1OauthAuthorizePost(
                 {
                     name: "",
-                    redirect: "",
+                    redirect: redirectUri,
                     user_id: "",
                     provider: provider.id,
                     response_type: 'json',
