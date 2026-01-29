@@ -228,3 +228,49 @@ func (ac *AppConfig) SetOpenBrowser(openBrowser bool) error {
 	defer ac.mu.Unlock()
 	return ac.config.SetOpenBrowser(openBrowser)
 }
+
+// ============
+// GUI Configuration
+// ============
+
+// GetGUIDebug returns the GUI debug setting
+func (ac *AppConfig) GetGUIDebug() bool {
+	ac.mu.RLock()
+	defer ac.mu.RUnlock()
+	return ac.config.GetGUIDebug()
+}
+
+// SetGUIDebug updates the GUI debug setting
+func (ac *AppConfig) SetGUIDebug(debug bool) error {
+	ac.mu.Lock()
+	defer ac.mu.Unlock()
+	return ac.config.SetGUIDebug(debug)
+}
+
+// GetGUIPort returns the GUI port setting (0 means use ServerPort)
+func (ac *AppConfig) GetGUIPort() int {
+	ac.mu.RLock()
+	defer ac.mu.RUnlock()
+	return ac.config.GetGUIPort()
+}
+
+// SetGUIPort updates the GUI port setting
+func (ac *AppConfig) SetGUIPort(port int) error {
+	ac.mu.Lock()
+	defer ac.mu.Unlock()
+	return ac.config.SetGUIPort(port)
+}
+
+// GetGUIVerbose returns the GUI verbose setting
+func (ac *AppConfig) GetGUIVerbose() bool {
+	ac.mu.RLock()
+	defer ac.mu.RUnlock()
+	return ac.config.GetGUIVerbose()
+}
+
+// SetGUIVerbose updates the GUI verbose setting
+func (ac *AppConfig) SetGUIVerbose(verbose bool) error {
+	ac.mu.Lock()
+	defer ac.mu.Unlock()
+	return ac.config.SetGUIVerbose(verbose)
+}

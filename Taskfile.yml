@@ -49,14 +49,19 @@ tasks:
   
   wails:binding:
     cmds:
-      - wails3 generate bindings -ts -f '-buildvcs=false -gcflags=all="-l"' -clean=true ./gui_wails3 -d frontend/src/bindings
+      - |
+        cd ./gui/wails3
+        wails3 generate bindings -ts -f '-buildvcs=false -gcflags=all="-l"' -clean=true ./ -d ../../frontend/src/bindings
   
-  wails:manual:
+  wails:web:
     cmds:
       - cd frontend; pnpm build:dev:wails
       - |
         mkdir -p internal/web_wails3/dist/
         cp -R frontend/dist/* internal/web_wails3/dist/
+  
+  wails:manual:
+    cmds:
       - |
         # Get build info
         VERSION="dev"

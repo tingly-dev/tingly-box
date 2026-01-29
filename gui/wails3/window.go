@@ -13,8 +13,10 @@ const (
 
 var (
 	WindowMain *application.WebviewWindow
+	WindowSlim *application.WebviewWindow
 )
 
+// useWindows creates the main window for full GUI mode
 func useWindows(a *application.App) {
 
 	// Create a new window with the necessary options.

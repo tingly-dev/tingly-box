@@ -20,7 +20,7 @@ It provides a unified OpenAI-compatible endpoint that routes requests to multipl
 AI providers, with flexible configuration and secure credential management.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Default to start command when no subcommand is provided
-		startCmd := command.StartCommand(appConfig)
+		startCmd := command.StartCommand(appManager)
 		startCmd.SetArgs([]string{})
 		if err := startCmd.Execute(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -53,8 +53,9 @@ var (
 	// Global configuration directory flag
 	configDir string
 
-	// Global config instance
-	appConfig *config.AppConfig
+	// Global config and app manager instances
+	appConfig  *config.AppConfig
+	appManager *command.AppManager
 )
 
 func init() {
@@ -86,6 +87,8 @@ func init() {
 	}
 	if appConfig != nil {
 		appConfig.SetVersion(version)
+		// Create AppManager from the AppConfig
+		appManager = command.NewAppManagerWithConfig(appConfig)
 	}
 
 	// Add version command (doesn't need config)
@@ -103,15 +106,15 @@ func init() {
 	}
 	rootCmd.AddCommand(versionCmd)
 
-	// Add subcommands with initialized config
-	rootCmd.AddCommand(command.AddCommand(appConfig))
-	rootCmd.AddCommand(command.ListCommand(appConfig))
-	rootCmd.AddCommand(command.DeleteCommand(appConfig))
-	rootCmd.AddCommand(command.ImportCommand(appConfig))
-	rootCmd.AddCommand(command.StartCommand(appConfig))
-	rootCmd.AddCommand(command.StopCommand(appConfig))
-	rootCmd.AddCommand(command.RestartCommand(appConfig))
-	rootCmd.AddCommand(command.StatusCommand(appConfig))
+	// Add subcommands with initialized appManager
+	rootCmd.AddCommand(command.AddCommand(appManager))
+	rootCmd.AddCommand(command.ListCommand(appManager))
+	rootCmd.AddCommand(command.DeleteCommand(appManager))
+	rootCmd.AddCommand(command.ImportCommand(appManager))
+	rootCmd.AddCommand(command.StartCommand(appManager))
+	rootCmd.AddCommand(command.StopCommand(appManager))
+	rootCmd.AddCommand(command.RestartCommand(appManager))
+	rootCmd.AddCommand(command.StatusCommand(appManager))
 }
 
 func main() {

@@ -5,12 +5,10 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-
-	"github.com/tingly-dev/tingly-box/internal/config"
 )
 
 // DeleteCommand represents the delete provider command
-func DeleteCommand(appConfig *config.AppConfig) *cobra.Command {
+func DeleteCommand(appManager *AppManager) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete",
 		Short: "Delete an AI provider configuration",
@@ -20,7 +18,7 @@ Example: tingly delete openai`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := strings.TrimSpace(args[0])
 
-			if err := appConfig.DeleteProvider(name); err != nil {
+			if err := appManager.DeleteProvider(name); err != nil {
 				return fmt.Errorf("failed to delete provider: %w", err)
 			}
 

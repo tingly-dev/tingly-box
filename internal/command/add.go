@@ -7,21 +7,13 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-
-	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
-// APIStyle represents the API style/version for a provider
-type APIStyle string
-
-const (
-	APIStyleOpenAI    APIStyle = "openai"
-	APIStyleAnthropic APIStyle = "anthropic"
-)
+type APIStyle = protocol.APIStyle
 
 // AddCommand represents the add provider command
-func AddCommand(appConfig *config.AppConfig) *cobra.Command {
+func AddCommand(appManager *AppManager) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add [name] [baseurl] [token] [api_style]",
 		Short: "Add a new AI provider configuration",
@@ -36,7 +28,7 @@ Supported values: openai, anthropic
 Or run the command without arguments for interactive mode.`,
 		Args: cobra.MaximumNArgs(4),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runAdd(appConfig, args)
+			return runAdd(appManager, args)
 		},
 	}
 
@@ -44,11 +36,11 @@ Or run the command without arguments for interactive mode.`,
 }
 
 // runAdd handles the provider addition process with both positional arguments and interactive mode
-func runAdd(appConfig *config.AppConfig, args []string) error {
+func runAdd(appManager *AppManager, args []string) error {
 	reader := bufio.NewReader(os.Stdin)
 
 	var name, apiBase, token string
-	var apiStyle APIStyle = APIStyleOpenAI // default to openai
+	var apiStyle APIStyle = protocol.APIStyleOpenAI // default to openai
 
 	// Extract values from positional arguments if provided
 	if len(args) > 0 {
@@ -64,9 +56,9 @@ func runAdd(appConfig *config.AppConfig, args []string) error {
 		// Validate and set API style
 		switch strings.ToLower(args[3]) {
 		case "openai":
-			apiStyle = APIStyleOpenAI
+			apiStyle = protocol.APIStyleOpenAI
 		case "anthropic":
-			apiStyle = APIStyleAnthropic
+			apiStyle = protocol.APIStyleAnthropic
 		default:
 			return fmt.Errorf("invalid API style '%s'. Supported values: openai, anthropic", args[3])
 		}
@@ -74,7 +66,7 @@ func runAdd(appConfig *config.AppConfig, args []string) error {
 
 	// If we have all required arguments, skip interactive prompts
 	if len(args) >= 3 {
-		return addProviderWithConfirmation(appConfig, reader, name, apiBase, token, apiStyle)
+		return addProviderWithConfirmation(appManager, reader, name, apiBase, token, apiStyle)
 	}
 
 	// Interactive mode for missing values
@@ -103,7 +95,7 @@ func runAdd(appConfig *config.AppConfig, args []string) error {
 	}
 
 	// Check if provider already exists
-	if existingProvider, err := appConfig.GetProviderByName(name); err == nil && existingProvider != nil {
+	if existingProvider, err := appManager.GetProvider(name); err == nil && existingProvider != nil {
 		fmt.Printf("Provider '%s' already exists. Please use a different name or update the existing provider.\n", name)
 		return fmt.Errorf("provider already exists")
 	}
@@ -135,11 +127,11 @@ func runAdd(appConfig *config.AppConfig, args []string) error {
 		}
 	}
 
-	return addProviderWithConfirmation(appConfig, reader, name, apiBase, token, apiStyle)
+	return addProviderWithConfirmation(appManager, reader, name, apiBase, token, apiStyle)
 }
 
 // addProviderWithConfirmation displays summary and adds the provider
-func addProviderWithConfirmation(appConfig *config.AppConfig, reader *bufio.Reader, name, apiBase, token string, apiStyle APIStyle) error {
+func addProviderWithConfirmation(appManager *AppManager, reader *bufio.Reader, name, apiBase, token string, apiStyle APIStyle) error {
 	// Display summary and get confirmation
 	fmt.Println("\n--- Configuration Summary ---")
 	fmt.Printf("Provider Name: %s\n", name)
@@ -158,18 +150,9 @@ func addProviderWithConfirmation(appConfig *config.AppConfig, reader *bufio.Read
 		return nil
 	}
 
-	// Add the provider with API style
-	if err := appConfig.AddProviderByName(name, apiBase, token); err != nil {
+	// Add the provider using AppManager
+	if err := appManager.AddProvider(name, apiBase, token, apiStyle); err != nil {
 		return fmt.Errorf("failed to add provider: %w", err)
-	}
-
-	// Update the provider to set the API style
-	if provider, err := appConfig.GetProviderByName(name); err == nil {
-		provider.APIStyle = protocol.APIStyle(apiStyle)
-		// Save the configuration
-		if saveErr := appConfig.Save(); saveErr != nil {
-			fmt.Printf("Warning: failed to save API style configuration: %v\n", saveErr)
-		}
 	}
 
 	fmt.Printf("Successfully added provider '%s' with API style '%s'\n", name, apiStyle)
@@ -220,7 +203,7 @@ func maskToken(token string) string {
 // promptForAPIStyle prompts the user to select an API style with intelligent defaults
 func promptForAPIStyle(reader *bufio.Reader, name, apiBase string) (APIStyle, error) {
 	// Auto-detect API style based on name or URL
-	var suggestedStyle APIStyle = APIStyleOpenAI
+	var suggestedStyle APIStyle = protocol.APIStyleOpenAI
 	var suggestion string
 
 	lowerName := strings.ToLower(name)
@@ -228,11 +211,11 @@ func promptForAPIStyle(reader *bufio.Reader, name, apiBase string) (APIStyle, er
 
 	if strings.Contains(lowerName, "anthropic") || strings.Contains(lowerName, "claude") ||
 		strings.Contains(lowerURL, "anthropic") || strings.Contains(lowerURL, "claude") {
-		suggestedStyle = APIStyleAnthropic
+		suggestedStyle = protocol.APIStyleAnthropic
 		suggestion = "anthropic"
 	} else if strings.Contains(lowerName, "openai") || strings.Contains(lowerName, "gpt") ||
 		strings.Contains(lowerURL, "openai") {
-		suggestedStyle = APIStyleOpenAI
+		suggestedStyle = protocol.APIStyleOpenAI
 		suggestion = "openai"
 	}
 
@@ -253,9 +236,9 @@ func promptForAPIStyle(reader *bufio.Reader, name, apiBase string) (APIStyle, er
 
 	switch input {
 	case "1", "openai":
-		return APIStyleOpenAI, nil
+		return protocol.APIStyleOpenAI, nil
 	case "2", "anthropic":
-		return APIStyleAnthropic, nil
+		return protocol.APIStyleAnthropic, nil
 	default:
 		fmt.Printf("Invalid choice '%s', using default: %s\n", input, suggestion)
 		return suggestedStyle, nil

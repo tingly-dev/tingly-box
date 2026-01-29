@@ -5,19 +5,17 @@ import (
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
-
-	"github.com/tingly-dev/tingly-box/internal/config"
 )
 
 // ListCommand represents the list providers command
-func ListCommand(appConfig *config.AppConfig) *cobra.Command {
+func ListCommand(appManager *AppManager) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List all configured AI providers",
 		Long: `Display all configured AI providers with their details.
 Shows the provider name, API base URL, API style, and enabled status.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			providers := appConfig.ListProviders()
+			providers := appManager.ListProviders()
 
 			if len(providers) == 0 {
 				fmt.Println("No providers configured. Use 'tingly add' to add a provider.")
