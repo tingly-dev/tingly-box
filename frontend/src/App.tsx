@@ -52,13 +52,10 @@ const AppDialogs = () => {
 
     // Show disconnect alert when health status changes to unhealthy
     useEffect(() => {
-        console.log('[AppDialogs] Health status changed:', { isHealthy, checking, disconnectAlertShown: disconnectAlertShown.current });
         if (!checking && !isHealthy && !disconnectAlertShown.current) {
-            console.log('[AppDialogs] Showing disconnect alert');
             setShowDisconnectAlert(true);
             disconnectAlertShown.current = true;
         } else if (isHealthy && showDisconnectAlert) {
-            console.log('[AppDialogs] Connection restored, closing disconnect alert');
             setShowDisconnectAlert(false);
             disconnectAlertShown.current = false;
         }
@@ -67,22 +64,12 @@ const AppDialogs = () => {
     // Show update alert when showNotification changes from false to true
     // OR when updateTrigger changes (manual refresh)
     useEffect(() => {
-        console.log('[AppDialogs] showNotification/updateTrigger changed:', {
-            showNotification,
-            updateTrigger,
-            currentVersion,
-            latestVersion,
-            lastUpdateTrigger: lastUpdateTrigger.current
-        });
-
         // If this is a manual trigger (updateTrigger increased)
         if (updateTrigger > lastUpdateTrigger.current) {
-            console.log('[AppDialogs] Manual update trigger detected, showing update alert');
             setShowUpdateAlert(true);
             lastUpdateTrigger.current = updateTrigger;
         } else if (showNotification && lastUpdateTrigger.current === 0) {
             // First time showing notification (on mount)
-            console.log('[AppDialogs] Showing update alert (initial notification)');
             setShowUpdateAlert(true);
             lastUpdateTrigger.current = updateTrigger;
         }
@@ -91,11 +78,9 @@ const AppDialogs = () => {
     // Listen for test events
     useEffect(() => {
         const handleTestUpdate = () => {
-            console.log('[AppDialogs] Test: Showing update dialog');
             setShowUpdateAlert(true);
         };
         const handleTestDisconnect = () => {
-            console.log('[AppDialogs] Test: Showing disconnect dialog');
             setShowDisconnectAlert(true);
         };
 
@@ -256,16 +241,13 @@ function App() {
     // Expose test functions to window for debugging
     useEffect(() => {
         (window as any).testShowUpdateDialog = () => {
-            console.log('[Test] Triggering update dialog manually');
             const event = new CustomEvent('test-show-update');
             window.dispatchEvent(event);
         };
         (window as any).testShowDisconnectDialog = () => {
-            console.log('[Test] Triggering disconnect dialog manually');
             const event = new CustomEvent('test-show-disconnect');
             window.dispatchEvent(event);
         };
-        console.log('[App] Test functions available: window.testShowUpdateDialog(), window.testShowDisconnectDialog()');
     }, []);
 
     return (

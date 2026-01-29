@@ -40,7 +40,6 @@ const ForceAddConfirmDialog: React.FC<ForceAddConfirmDialogProps> = ({
     const { t } = useTranslation();
 
     const handleConfirm = () => {
-        console.log('ForceAddConfirmDialog onConfirm called');
         onConfirm();
     };
 

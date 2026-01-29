@@ -42,10 +42,10 @@ func NewTinglyService(configDir string, port int, debug bool) (*TinglyService, e
 
 	serverManager := command.NewServerManager(
 		appManager.AppConfig(),
-		command.WithUI(true),
-		command.WithAdaptor(true),
-		command.WithDebug(debug),
-		command.WithOpenBrowser(false), // GUI doesn't need browser auto-open
+		server.WithDebug(debug),
+		server.WithUI(true),
+		server.WithAdaptor(true),
+		server.WithOpenBrowser(false), // GUI doesn't need browser auto-open
 	)
 
 	res := &TinglyService{

@@ -3,10 +3,9 @@ package server
 import (
 	"context"
 	"fmt"
+	"iter"
 	"net/http"
 	"time"
-
-	"iter"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
