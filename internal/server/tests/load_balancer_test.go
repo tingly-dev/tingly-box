@@ -60,7 +60,6 @@ func TestLoadBalancer_RoundRobin(t *testing.T) {
 				TimeWindow: 300,
 			},
 		},
-		CurrentServiceIndex: 0, // Start with first service
 		LBTactic: typ.Tactic{
 			Type:   loadbalance.TacticRoundRobin,
 			Params: &typ.RoundRobinParams{RequestThreshold: 1},
@@ -789,7 +788,6 @@ func TestLoadBalancerFunctionality(t *testing.T) {
 				TimeWindow: 300,
 			},
 		},
-		CurrentServiceIndex: 0,
 		LBTactic: typ.Tactic{
 			Type:   loadbalance.TacticRoundRobin,
 			Params: typ.DefaultRoundRobinParams(),
@@ -1051,7 +1049,6 @@ func TestLoadBalancer_RoundRobinThreshold2(t *testing.T) {
 				TimeWindow: 300,
 			},
 		},
-		CurrentServiceIndex: 0, // Start with first service
 		LBTactic: typ.Tactic{
 			Type:   loadbalance.TacticRoundRobin,
 			Params: &typ.RoundRobinParams{RequestThreshold: 2}, // Threshold of 2 requests
@@ -1081,7 +1078,7 @@ func TestLoadBalancer_RoundRobinThreshold2(t *testing.T) {
 		// Record usage directly on the service to trigger round-robin logic
 		service.RecordUsage(10, 10)
 
-		t.Logf("Request %d: Selected provider %s (index %d)", i+1, service.Provider, rule.CurrentServiceIndex)
+		t.Logf("Request %d: Selected provider %s (service_id %s)", i+1, service.Provider, rule.CurrentServiceID)
 	}
 
 	// Expected pattern with threshold 2: A, A, B, B, C, C
@@ -1105,15 +1102,15 @@ func TestLoadBalancer_RoundRobinThreshold2(t *testing.T) {
 			providerCounts["provider-A"], providerCounts["provider-B"], providerCounts["provider-C"])
 	}
 
-	// Test that the CurrentServiceIndex is correctly maintained
-	// After 6 requests with threshold 2, the index should be 2 (pointing to provider-C)
-	expectedFinalIndex := 2
-	if rule.CurrentServiceIndex != expectedFinalIndex {
-		t.Errorf("Expected CurrentServiceIndex = %d, got %d", expectedFinalIndex, rule.CurrentServiceIndex)
+	// Test that the CurrentServiceID is correctly maintained
+	// After 6 requests with threshold 2, the ID should be "provider-C:model-C"
+	expectedFinalServiceID := "provider-C:model-C"
+	if rule.CurrentServiceID != expectedFinalServiceID {
+		t.Errorf("Expected CurrentServiceID = %s, got %s", expectedFinalServiceID, rule.CurrentServiceID)
 	}
 
 	t.Logf("✅ Round-robin test passed!")
 	t.Logf("Final distribution: provider-A: %d, provider-B: %d, provider-C: %d",
 		providerCounts["provider-A"], providerCounts["provider-B"], providerCounts["provider-C"])
-	t.Logf("Final CurrentServiceIndex: %d", rule.CurrentServiceIndex)
+	t.Logf("Final CurrentServiceID: %s", rule.CurrentServiceID)
 }

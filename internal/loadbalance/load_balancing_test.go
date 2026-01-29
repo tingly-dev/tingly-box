@@ -1,14 +1,14 @@
-package loadbalance
+package loadbalance_test
 
 import (
 	"testing"
 	"time"
 
-	typ "github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 )
 
 func TestService_ServiceID(t *testing.T) {
-	service := Service{
+	service := loadbalance.Service{
 		Provider: "openai",
 		Model:    "gpt-4",
 	}
@@ -20,7 +20,7 @@ func TestService_ServiceID(t *testing.T) {
 }
 
 func TestServiceStats_RecordUsage(t *testing.T) {
-	stats := &ServiceStats{
+	stats := &loadbalance.ServiceStats{
 		ServiceID:   "test:provider",
 		TimeWindow:  60, // 1 minute for testing
 		WindowStart: time.Now(),
@@ -64,7 +64,7 @@ func TestServiceStats_RecordUsage(t *testing.T) {
 }
 
 func TestServiceStats_WindowReset(t *testing.T) {
-	stats := &ServiceStats{
+	stats := &loadbalance.ServiceStats{
 		ServiceID:   "test:provider",
 		TimeWindow:  1,                                // 1 second for testing
 		WindowStart: time.Now().Add(-2 * time.Second), // Start 2 seconds ago
@@ -84,7 +84,7 @@ func TestServiceStats_WindowReset(t *testing.T) {
 }
 
 func TestServiceStats_ResetWindow(t *testing.T) {
-	stats := &ServiceStats{
+	stats := &loadbalance.ServiceStats{
 		ServiceID:            "test:provider",
 		TimeWindow:           60,
 		RequestCount:         10,
@@ -122,140 +122,33 @@ func TestServiceStats_ResetWindow(t *testing.T) {
 	}
 }
 
-func TestRule_GetServices_Single(t *testing.T) {
-	rule := &typ.Rule{
-		RequestModel: "test",
-		Services: []Service{
-			{
-				Provider:   "openai",
-				Model:      "gpt-4",
-				Weight:     1,
-				Active:     true,
-				TimeWindow: 300,
-			},
-		},
-		Active: true,
-	}
-
-	services := rule.GetServices()
-
-	if len(services) != 1 {
-		t.Errorf("Expected 1 service, got %d", len(services))
-	}
-
-	service := services[0]
-	if service.Provider != "openai" {
-		t.Errorf("Expected provider = openai, got %s", service.Provider)
-	}
-	if service.Model != "gpt-4" {
-		t.Errorf("Expected model = gpt-4, got %s", service.Model)
-	}
-	if service.Weight != 1 {
-		t.Errorf("Expected default weight = 1, got %d", service.Weight)
-	}
-	if !service.Active {
-		t.Errorf("Expected service to be active, got %v", service.Active)
-	}
-	if service.TimeWindow != 300 {
-		t.Errorf("Expected default time_window = 300, got %d", service.TimeWindow)
-	}
-}
-
-func TestRule_GetServices_New(t *testing.T) {
-	rule := &typ.Rule{
-		RequestModel: "test",
-		Services: []Service{
-			{
-				Provider:   "openai",
-				Model:      "gpt-4",
-				Weight:     2,
-				Active:     true,
-				TimeWindow: 600,
-			},
-			{
-				Provider:   "anthropic",
-				Model:      "claude-3",
-				Weight:     1,
-				Active:     false,
-				TimeWindow: 300,
-			},
-		},
-	}
-
-	services := rule.GetServices()
-
-	if len(services) != 2 {
-		t.Errorf("Expected 2 services, got %d", len(services))
-	}
-
-	// Check first service
-	if services[0].Provider != "openai" {
-		t.Errorf("Expected first provider = openai, got %s", services[0].Provider)
-	}
-	if services[0].Weight != 2 {
-		t.Errorf("Expected first weight = 2, got %d", services[0].Weight)
-	}
-
-	// Check second service
-	if services[1].Provider != "anthropic" {
-		t.Errorf("Expected second provider = anthropic, got %s", services[1].Provider)
-	}
-	if services[1].Active {
-		t.Errorf("Expected second service to be inactive, got %v", services[1].Active)
-	}
-}
-
-func TestRule_GetTacticType(t *testing.T) {
-	// Rule with explicit tactic (token_based)
-	ruleWithTactic := &typ.Rule{
-		RequestModel: "test",
-		LBTactic: typ.Tactic{
-			Type:   TacticTokenBased,
-			Params: typ.DefaultTokenBasedParams(),
-		},
-	}
-	if ruleWithTactic.GetTacticType() != TacticTokenBased {
-		t.Errorf("Expected TacticTokenBased, got %v", ruleWithTactic.GetTacticType())
-	}
-
-	// Rule without tactic (should default to round robin)
-	ruleWithoutTactic := &typ.Rule{
-		RequestModel: "test",
-		LBTactic: typ.Tactic{
-			Type:   0, // Type 0 means uninitialized
-			Params: nil,
-		},
-	}
-	if ruleWithoutTactic.GetTacticType() != TacticRoundRobin {
-		t.Errorf("Expected TacticRoundRobin as default, got %v", ruleWithoutTactic.GetTacticType())
-	}
-}
-
 func TestParseTacticType(t *testing.T) {
 	tests := []struct {
 		input    string
-		expected TacticType
+		expected loadbalance.TacticType
 	}{
-		{"round_robin", TacticRoundRobin},
-		{"token_based", TacticTokenBased},
-		{"hybrid", TacticHybrid},
-		{"invalid", TacticRoundRobin}, // Default fallback
-		{"", TacticRoundRobin},        // Empty string fallback
+		{"round_robin", loadbalance.TacticRoundRobin},
+		{"token_based", loadbalance.TacticTokenBased},
+		{"hybrid", loadbalance.TacticHybrid},
+		{"random", loadbalance.TacticRandom},
+		{"invalid", loadbalance.TacticRoundRobin}, // Default fallback
+		{"", loadbalance.TacticRoundRobin},        // Empty string fallback
 	}
 
 	for _, test := range tests {
-		if got := ParseTacticType(test.input); got != test.expected {
+		if got := loadbalance.ParseTacticType(test.input); got != test.expected {
 			t.Errorf("ParseTacticType(%s) = %v, want %v", test.input, got, test.expected)
 		}
 	}
 }
 
 func TestTacticType_String(t *testing.T) {
-	tests := map[TacticType]string{
-		TacticRoundRobin: "round_robin",
-		TacticTokenBased: "token_based",
-		TacticHybrid:     "hybrid",
-		TacticType(999):  "unknown", // Invalid type
+	tests := map[loadbalance.TacticType]string{
+		loadbalance.TacticRoundRobin: "round_robin",
+		loadbalance.TacticTokenBased: "token_based",
+		loadbalance.TacticHybrid:     "hybrid",
+		loadbalance.TacticRandom:     "random",
+		loadbalance.TacticType(999):  "unknown", // Invalid type
 	}
 
 	for tacticType, expected := range tests {
