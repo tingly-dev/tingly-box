@@ -109,56 +109,50 @@ func claudeCodeHook(req *http.Request) error {
 // - Adds required ChatGPT backend API headers
 // - Transforms X-ChatGPT-Account-ID to ChatGPT-Account-ID header
 func codexHook(req *http.Request) error {
-	// Only process requests to chatgpt.com
 	if req.URL.Host != "chatgpt.com" {
 		return nil
 	}
 
 	originalPath := req.URL.Path
-	newPath := req.URL.Path
+	newPath := rewriteCodexPath(originalPath)
 
-	// Pattern 1: Rewrite /backend-api/v1/... to /backend-api/codex/...
-	// Example: /backend-api/v1/chat/completions → /backend-api/codex/chat/completions
-	if strings.HasPrefix(newPath, "/backend-api/v1/") {
-		newPath = strings.Replace(newPath, "/backend-api/v1/", "/backend-api/codex/", 1)
-	}
-
-	// Pattern 2: Rewrite /backend-api/chat/completions to /backend-api/responses
-	// Codex OAuth requires the Responses API, not Chat Completions
-	if strings.HasPrefix(newPath, "/backend-api/chat/completions") {
-		newPath = "/backend-api/responses"
-	}
-
-	// Pattern 3: Rewrite /backend-api/responses to /backend-api/codex/responses
-	// The Responses API may use a different URL structure than chat completions
-	if newPath == "/backend-api/responses" {
-		newPath = "/backend-api/codex/responses"
-	}
-
-	// Pattern 4: Rewrite /v1/... to /codex/... (if base URL doesn't include /backend-api)
-	// Example: /v1/chat/completions → /codex/chat/completions
-	if strings.HasPrefix(newPath, "/v1/") && !strings.Contains(newPath, "/codex/") {
-		newPath = strings.Replace(newPath, "/v1/", "/codex/", 1)
-	}
-
-	// Apply the rewrite if the path was changed
 	if newPath != originalPath {
 		logrus.Debugf("[Codex] Rewriting URL path: %s -> %s", originalPath, newPath)
 		req.URL.Path = newPath
 	}
 
-	// Add required ChatGPT backend API headers
 	req.Header.Set("OpenAI-Beta", "responses=experimental")
 	req.Header.Set("originator", "tingly-box")
 
-	// Transform X-ChatGPT-Account-ID to ChatGPT-Account-ID if present
-	// (The X- prefix header is set by the client setup via option.WithHeader)
 	if accountID := req.Header.Get("X-ChatGPT-Account-ID"); accountID != "" {
 		req.Header.Set("ChatGPT-Account-ID", accountID)
 		req.Header.Del("X-ChatGPT-Account-ID")
 	}
 
 	return nil
+}
+
+func rewriteCodexPath(path string) string {
+	if strings.HasPrefix(path, "/backend-api/") {
+		return rewriteBackendAPIPath(path)
+	}
+	if strings.HasPrefix(path, "/v1/") && !strings.Contains(path, "/codex/") {
+		return strings.Replace(path, "/v1/", "/codex/", 1)
+	}
+	return path
+}
+
+func rewriteBackendAPIPath(path string) string {
+	switch {
+	case strings.HasPrefix(path, "/backend-api/chat/completions"):
+		return "/backend-api/codex/responses"
+	case path == "/backend-api/responses":
+		return "/backend-api/codex/responses"
+	case strings.HasPrefix(path, "/backend-api/v1/"):
+		return strings.Replace(path, "/backend-api/v1/", "/backend-api/codex/", 1)
+	default:
+		return path
+	}
 }
 
 // requestModifier wraps an http.RoundTripper to apply hooks to each request

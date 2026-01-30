@@ -321,13 +321,6 @@ func sendAnthropicStreamEvent(c *gin.Context, eventType string, eventData map[st
 	// Anthropic SSE format: event: <type>\ndata: <json>\n\n
 	c.SSEvent(eventType, string(eventJSON))
 	flusher.Flush()
-
-	// Record event if recorder is available in context
-	if recorder, exists := c.Get("stream_event_recorder"); exists {
-		if recorderWithMethod, ok := recorder.(interface{ RecordRawMapEvent(string, map[string]interface{}) }); ok {
-			recorderWithMethod.RecordRawMapEvent(eventType, eventData)
-		}
-	}
 }
 
 // parseRawJSON parses raw JSON string into map[string]interface{}
@@ -420,14 +413,14 @@ func extractString(v interface{}) string {
 
 // responsesAPIEventSenders defines callbacks for sending Anthropic events in a specific format (v1 or beta)
 type responsesAPIEventSenders struct {
-	SendMessageStart       func(event map[string]interface{}, flusher http.Flusher)
-	SendContentBlockStart  func(index int, blockType string, content map[string]interface{}, flusher http.Flusher)
-	SendContentBlockDelta  func(index int, content map[string]interface{}, flusher http.Flusher)
-	SendContentBlockStop   func(index int, flusher http.Flusher)
-	SendStopEvents         func(state *streamState, flusher http.Flusher)
-	SendMessageDelta       func(state *streamState, stopReason string, flusher http.Flusher)
-	SendMessageStop        func(messageID, model string, state *streamState, stopReason string, flusher http.Flusher)
-	SendErrorEvent         func(event map[string]interface{}, flusher http.Flusher)
+	SendMessageStart      func(event map[string]interface{}, flusher http.Flusher)
+	SendContentBlockStart func(index int, blockType string, content map[string]interface{}, flusher http.Flusher)
+	SendContentBlockDelta func(index int, content map[string]interface{}, flusher http.Flusher)
+	SendContentBlockStop  func(index int, flusher http.Flusher)
+	SendStopEvents        func(state *streamState, flusher http.Flusher)
+	SendMessageDelta      func(state *streamState, stopReason string, flusher http.Flusher)
+	SendMessageStop       func(messageID, model string, state *streamState, stopReason string, flusher http.Flusher)
+	SendErrorEvent        func(event map[string]interface{}, flusher http.Flusher)
 }
 
 // HandleResponsesToAnthropicStreamResponse is the shared core logic for processing OpenAI Responses API streams
