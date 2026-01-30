@@ -505,7 +505,9 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPIStreaming(c *gin.Context, r
 		recorder = r.(*ScenarioRecorder)
 	}
 	streamRec := newStreamRecorder(recorder)
-
+    if streamRec != nil {
+		streamRec.SetupStreamRecorderInContext(c, "stream_event_recorder")
+	}
 	// Check if this is a ChatGPT backend API provider
 	// These providers need special handling because they use custom HTTP implementation
 	if provider.APIBase == protocol.ChatGPTBackendAPIBase {
