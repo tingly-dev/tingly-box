@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -239,13 +240,8 @@ func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.M
 	var inputTokens, outputTokens int
 	var hasUsage bool
 
-	// Create stream assembler (pure assembler, no recorder dependency)
-	assembler := stream.NewAnthropicStreamAssembler()
-
-	// Enable streaming on recorder if provided
-	if recorder != nil {
-		recorder.EnableStreaming()
-	}
+	// Create stream recorder for unified recording
+	streamRec := newStreamRecorder(recorder)
 
 	// Set SSE headers
 	SetupSSEHeaders(c)
@@ -255,19 +251,17 @@ func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.M
 		return
 	}
 
-	flusher, _ := c.Writer.(http.Flusher)
+	// Use gin.Stream for cleaner streaming handling
+	c.Stream(func(w io.Writer) bool {
+		if !streamResp.Next() {
+			return false
+		}
 
-	// Process the stream
-	for streamResp.Next() {
 		event := streamResp.Current()
 		event.Message.Model = anthropic.Model(respModel)
 
-		// Record raw chunk to recorder if provided
-		if recorder != nil {
-			recorder.RecordStreamChunk(event.Type, event)
-			// Assemble the response
-			assembler.RecordV1Event(&event)
-		}
+		// Record event using streamRecorder
+		streamRec.RecordV1Event(&event)
 
 		// Accumulate usage from message_stop event
 		if event.Usage.InputTokens > 0 {
@@ -281,17 +275,11 @@ func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.M
 
 		// Convert the event to JSON and send as SSE
 		c.SSEvent(event.Type, event)
-		flusher.Flush()
-	}
+		return true
+	})
 
-	// Set assembled response on recorder if provided
-	if recorder != nil {
-		// Finish assembling - get the assembled message
-		assembled := assembler.Finish(respModel, inputTokens, outputTokens)
-		if assembled != nil {
-			recorder.SetAssembledResponse(assembled)
-		}
-	}
+	// Finish recording and assemble response
+	streamRec.Finish(respModel, inputTokens, outputTokens)
 
 	// Check for stream errors
 	if err := streamResp.Err(); err != nil {
@@ -300,11 +288,8 @@ func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.M
 			s.trackUsage(c, rule, provider, actualModel, respModel, inputTokens, outputTokens, true, "error", "stream_error")
 		}
 		MarshalAndSendErrorEvent(c, err.Error(), "stream_error", "stream_failed")
-		flusher.Flush()
 		// Record error
-		if recorder != nil {
-			recorder.RecordError(err)
-		}
+		streamRec.RecordError(err)
 		return
 	}
 
@@ -315,12 +300,9 @@ func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.M
 
 	// Send completion event
 	SendFinishEvent(c)
-	flusher.Flush()
 
 	// Record the response after stream completes
-	if recorder != nil {
-		recorder.RecordResponse(provider, actualModel)
-	}
+	streamRec.RecordResponse(provider, actualModel)
 }
 
 // anthropicCountTokensV1 implements standard v1 count_tokens

@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"io"
 	"iter"
 	"net/http"
 	"time"
@@ -225,13 +226,8 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthrop
 	var inputTokens, outputTokens int
 	var hasUsage bool
 
-	// Create stream assembler (pure assembler, no recorder dependency)
-	assembler := stream.NewAnthropicStreamAssembler()
-
-	// Enable streaming on recorder if provided
-	if recorder != nil {
-		recorder.EnableStreaming()
-	}
+	// Create stream recorder for unified recording
+	streamRec := newStreamRecorder(recorder)
 
 	// Set SSE headers
 	SetupSSEHeaders(c)
@@ -241,19 +237,17 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthrop
 		return
 	}
 
-	flusher, _ := c.Writer.(http.Flusher)
+	// Use gin.Stream for cleaner streaming handling
+	c.Stream(func(w io.Writer) bool {
+		if !streamResp.Next() {
+			return false
+		}
 
-	// Process the stream
-	for streamResp.Next() {
 		event := streamResp.Current()
 		event.Message.Model = anthropic.Model(respModel)
 
-		// Record raw chunk to recorder if provided
-		if recorder != nil {
-			recorder.RecordStreamChunk(event.Type, event)
-			// Assemble the response
-			assembler.RecordV1BetaEvent(&event)
-		}
+		// Record event using streamRecorder
+		streamRec.RecordV1BetaEvent(&event)
 
 		// Accumulate usage from message_stop event
 		if event.Usage.InputTokens > 0 {
@@ -267,17 +261,11 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthrop
 
 		// Convert the event to JSON and send as SSE
 		c.SSEvent(event.Type, event)
-		flusher.Flush()
-	}
+		return true
+	})
 
-	// Set assembled response on recorder if provided
-	if recorder != nil {
-		// Finish assembling - get the assembled message
-		assembled := assembler.Finish(respModel, inputTokens, outputTokens)
-		if assembled != nil {
-			recorder.SetAssembledResponse(assembled)
-		}
-	}
+	// Finish recording and assemble response
+	streamRec.Finish(respModel, inputTokens, outputTokens)
 
 	// Check for stream errors
 	if err := streamResp.Err(); err != nil {
@@ -286,11 +274,8 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthrop
 			s.trackUsage(c, rule, provider, actualModel, respModel, inputTokens, outputTokens, true, "error", "stream_error")
 		}
 		MarshalAndSendErrorEvent(c, err.Error(), "stream_error", "stream_failed")
-		flusher.Flush()
 		// Record error
-		if recorder != nil {
-			recorder.RecordError(err)
-		}
+		streamRec.RecordError(err)
 		return
 	}
 
@@ -301,12 +286,9 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthrop
 
 	// Send completion event
 	SendFinishEvent(c)
-	flusher.Flush()
 
 	// Record the response after stream completes
-	if recorder != nil {
-		recorder.RecordResponse(provider, actualModel)
-	}
+	streamRec.RecordResponse(provider, actualModel)
 }
 
 // forwardGoogleRequest forwards request to Google API
@@ -495,6 +477,16 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPINonStreaming(c *gin.Context
 
 // handleAnthropicV1BetaViaResponsesAPIStreaming handles streaming Responses API request
 func (s *Server) handleAnthropicV1BetaViaResponsesAPIStreaming(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, proxyModel string, actualModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule, responsesReq responses.ResponseNewParams) {
+	// Get scenario recorder and set up stream recorder
+	var recorder *ScenarioRecorder
+	if r, exists := c.Get("scenario_recorder"); exists {
+		recorder = r.(*ScenarioRecorder)
+	}
+	streamRec := newStreamRecorder(recorder)
+	if streamRec != nil {
+		streamRec.SetupStreamRecorderInContext(c, "stream_event_recorder")
+	}
+
 	// Check if this is a ChatGPT backend API provider
 	// These providers need special handling because they use custom HTTP implementation
 	if provider.APIBase == protocol.ChatGPTBackendAPIBase {
@@ -521,7 +513,16 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPIStreaming(c *gin.Context, r
 	// For now, we'll track minimal usage since the handler manages it
 	if err != nil {
 		s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "stream_error")
+		if streamRec != nil {
+			streamRec.RecordError(err)
+		}
 		return
+	}
+
+	// Finish recording and assemble response
+	if streamRec != nil {
+		streamRec.Finish(proxyModel, 0, 0) // Usage is tracked internally
+		streamRec.RecordResponse(provider, actualModel)
 	}
 
 	// Success - usage tracking is handled inside the stream handler
