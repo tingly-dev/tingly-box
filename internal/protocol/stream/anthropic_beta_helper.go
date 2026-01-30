@@ -81,7 +81,10 @@ func sendBetaMessageStop(c *gin.Context, messageID, model string, state *streamS
 	sendAnthropicBetaStreamEvent(c, eventTypeMessageStop, event, flusher)
 
 	// Send final simple data with type (without event, aka empty)
-	c.SSEvent("", map[string]interface{}{"type": eventTypeMessageStop})
+	// This matches SendFinishEvent behavior from v1 handler
+	finishEvent := map[string]interface{}{"type": eventTypeMessageStop}
+	finishJSON, _ := json.Marshal(finishEvent)
+	c.SSEvent("", string(finishJSON))
 	flusher.Flush()
 }
 
@@ -94,14 +97,29 @@ func sendAnthropicBetaStreamEvent(c *gin.Context, eventType string, eventData ma
 		return
 	}
 
+	// Check if original request was v1 format for logging purposes
+	originalFormat := "beta"
+	if fmt, exists := c.Get("original_request_format"); exists {
+		if formatStr, ok := fmt.(string); ok {
+			originalFormat = formatStr
+		}
+	}
+
+	// Log the event being sent for debugging (important events and content events)
+	if eventType == "message_start" || eventType == "message_stop" || eventType == "content_block_start" || eventType == "content_block_delta" || eventType == "content_block_stop" || eventType == "error" {
+		logrus.Infof("[BetaStream] Sending SSE event: type=%s, original_format=%s, data=%s", eventType, originalFormat, string(eventJSON))
+	}
+
 	// Anthropic beta SSE format: event: <type>\ndata: <json>\n\n
 	c.SSEvent(eventType, string(eventJSON))
 	flusher.Flush()
 
 	// Record event if recorder is available in context
+	// Check if the recorder has the RecordRawMapEvent method without specific type assertion
 	if recorder, exists := c.Get("stream_event_recorder"); exists {
-		if r, ok := recorder.(StreamEventRecorder); ok {
-			r.RecordRawMapEvent(eventType, eventData)
+		// Use type assertion to check if recorder has the RecordRawMapEvent method
+		if recorderWithMethod, ok := recorder.(interface{ RecordRawMapEvent(string, map[string]interface{}) }); ok {
+			recorderWithMethod.RecordRawMapEvent(eventType, eventData)
 		}
 	}
 }

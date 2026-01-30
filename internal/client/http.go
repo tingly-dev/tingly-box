@@ -123,13 +123,19 @@ func codexHook(req *http.Request) error {
 		newPath = strings.Replace(newPath, "/backend-api/v1/", "/backend-api/codex/", 1)
 	}
 
-	// Pattern 2: Rewrite /backend-api/responses to /backend-api/codex/responses
+	// Pattern 2: Rewrite /backend-api/chat/completions to /backend-api/responses
+	// Codex OAuth requires the Responses API, not Chat Completions
+	if strings.HasPrefix(newPath, "/backend-api/chat/completions") {
+		newPath = "/backend-api/responses"
+	}
+
+	// Pattern 3: Rewrite /backend-api/responses to /backend-api/codex/responses
 	// The Responses API may use a different URL structure than chat completions
 	if newPath == "/backend-api/responses" {
 		newPath = "/backend-api/codex/responses"
 	}
 
-	// Pattern 3: Rewrite /v1/... to /codex/... (if base URL doesn't include /backend-api)
+	// Pattern 4: Rewrite /v1/... to /codex/... (if base URL doesn't include /backend-api)
 	// Example: /v1/chat/completions → /codex/chat/completions
 	if strings.HasPrefix(newPath, "/v1/") && !strings.Contains(newPath, "/codex/") {
 		newPath = strings.Replace(newPath, "/v1/", "/codex/", 1)

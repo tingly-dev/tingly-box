@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
+	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 )
 
@@ -304,9 +305,29 @@ func sendAnthropicStreamEvent(c *gin.Context, eventType string, eventData map[st
 		return
 	}
 
+	// Check if original request was v1 format for logging purposes
+	originalFormat := "v1"
+	if fmt, exists := c.Get("original_request_format"); exists {
+		if formatStr, ok := fmt.(string); ok {
+			originalFormat = formatStr
+		}
+	}
+
+	// Log the event being sent for debugging (important events and content events)
+	if eventType == "message_start" || eventType == "message_stop" || eventType == "content_block_start" || eventType == "content_block_delta" || eventType == "content_block_stop" || eventType == "error" {
+		logrus.Infof("[V1Stream] Sending SSE event: type=%s, original_format=%s, data=%s", eventType, originalFormat, string(eventJSON))
+	}
+
 	// Anthropic SSE format: event: <type>\ndata: <json>\n\n
 	c.SSEvent(eventType, string(eventJSON))
 	flusher.Flush()
+
+	// Record event if recorder is available in context
+	if recorder, exists := c.Get("stream_event_recorder"); exists {
+		if recorderWithMethod, ok := recorder.(interface{ RecordRawMapEvent(string, map[string]interface{}) }); ok {
+			recorderWithMethod.RecordRawMapEvent(eventType, eventData)
+		}
+	}
 }
 
 // parseRawJSON parses raw JSON string into map[string]interface{}
@@ -395,4 +416,363 @@ func extractString(v interface{}) string {
 	default:
 		return fmt.Sprintf("%v", tv)
 	}
+}
+
+// responsesAPIEventSenders defines callbacks for sending Anthropic events in a specific format (v1 or beta)
+type responsesAPIEventSenders struct {
+	SendMessageStart       func(event map[string]interface{}, flusher http.Flusher)
+	SendContentBlockStart  func(index int, blockType string, content map[string]interface{}, flusher http.Flusher)
+	SendContentBlockDelta  func(index int, content map[string]interface{}, flusher http.Flusher)
+	SendContentBlockStop   func(index int, flusher http.Flusher)
+	SendStopEvents         func(state *streamState, flusher http.Flusher)
+	SendMessageDelta       func(state *streamState, stopReason string, flusher http.Flusher)
+	SendMessageStop        func(messageID, model string, state *streamState, stopReason string, flusher http.Flusher)
+	SendErrorEvent         func(event map[string]interface{}, flusher http.Flusher)
+}
+
+// HandleResponsesToAnthropicStreamResponse is the shared core logic for processing OpenAI Responses API streams
+// and converting them to Anthropic format (v1 or beta depending on the senders provided)
+func HandleResponsesToAnthropicStreamResponse(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string, senders responsesAPIEventSenders) error {
+	logrus.Infof("[ResponsesAPI] Starting Responses API to Anthropic streaming response handler, model=%s", responseModel)
+	defer func() {
+		if r := recover(); r != nil {
+			logrus.Errorf("Panic in Responses API to Anthropic streaming handler: %v", r)
+			if c.Writer != nil {
+				c.SSEvent("error", "{\"error\":{\"message\":\"Internal streaming error\",\"type\":\"internal_error\"}}")
+				if flusher, ok := c.Writer.(http.Flusher); ok {
+					flusher.Flush()
+				}
+			}
+		}
+		if stream != nil {
+			if err := stream.Close(); err != nil {
+				logrus.Errorf("Error closing Responses API stream: %v", err)
+			}
+		}
+		logrus.Info("[ResponsesAPI] Finished Responses API to Anthropic streaming response handler")
+	}()
+
+	// Set SSE headers
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("Access-Control-Allow-Origin", "*")
+	c.Header("Access-Control-Allow-Headers", "Cache-Control")
+
+	flusher, ok := c.Writer.(http.Flusher)
+	if !ok {
+		return fmt.Errorf("streaming not supported by this connection")
+	}
+
+	// Generate message ID
+	messageID := fmt.Sprintf("msg_%d", time.Now().Unix())
+
+	// Initialize streaming state
+	state := newStreamState()
+	textBlockIndex := -1
+
+	// Track tool calls by item ID for Responses API
+	type pendingToolCall struct {
+		blockIndex int
+		itemID     string
+		name       string
+		arguments  string
+	}
+	pendingToolCalls := make(map[string]*pendingToolCall) // key: itemID
+
+	// Track if any tool calls were processed during the stream
+	hasToolCalls := false
+
+	// Send message_start event first
+	messageStartEvent := map[string]interface{}{
+		"type": eventTypeMessageStart,
+		"message": map[string]interface{}{
+			"id":            messageID,
+			"type":          "message",
+			"role":          "assistant",
+			"content":       []interface{}{},
+			"model":         responseModel,
+			"stop_reason":   nil,
+			"stop_sequence": nil,
+			"usage": map[string]interface{}{
+				"input_tokens":  0,
+				"output_tokens": 0,
+			},
+		},
+	}
+	senders.SendMessageStart(messageStartEvent, flusher)
+
+	// Process the stream
+	eventCount := 0
+	for stream.Next() {
+		eventCount++
+		currentEvent := stream.Current()
+
+		logrus.Debugf("Processing Responses API event #%d: type=%s", eventCount, currentEvent.Type)
+
+		switch currentEvent.Type {
+		case "response.created", "response.in_progress", "response.queued":
+			continue
+
+		case "response.content_part.added":
+			partAdded := currentEvent.AsResponseContentPartAdded()
+			if partAdded.Part.Type == "output_text" {
+				if textBlockIndex == -1 {
+					textBlockIndex = state.nextBlockIndex
+					state.nextBlockIndex++
+					senders.SendContentBlockStart(textBlockIndex, blockTypeText, map[string]interface{}{"text": ""}, flusher)
+				}
+				if partAdded.Part.Text != "" {
+					senders.SendContentBlockDelta(textBlockIndex, map[string]interface{}{
+						"type": deltaTypeTextDelta,
+						"text": partAdded.Part.Text,
+					}, flusher)
+				}
+			}
+
+		case "response.output_text.delta":
+			if textBlockIndex == -1 {
+				textBlockIndex = state.nextBlockIndex
+				state.nextBlockIndex++
+				senders.SendContentBlockStart(textBlockIndex, blockTypeText, map[string]interface{}{"text": ""}, flusher)
+			}
+			textDelta := currentEvent.AsResponseOutputTextDelta()
+			senders.SendContentBlockDelta(textBlockIndex, map[string]interface{}{
+				"type": deltaTypeTextDelta,
+				"text": textDelta.Delta,
+			}, flusher)
+
+		case "response.output_text.done", "response.content_part.done":
+			if textBlockIndex != -1 {
+				senders.SendContentBlockStop(textBlockIndex, flusher)
+				state.stoppedBlocks[textBlockIndex] = true
+				textBlockIndex = -1
+			}
+
+		case "response.reasoning_text.delta":
+			reasoningDelta := currentEvent.AsResponseReasoningTextDelta()
+			if state.thinkingBlockIndex == -1 {
+				state.thinkingBlockIndex = state.nextBlockIndex
+				state.nextBlockIndex++
+				senders.SendContentBlockStart(state.thinkingBlockIndex, blockTypeThinking, map[string]interface{}{"thinking": ""}, flusher)
+			}
+			senders.SendContentBlockDelta(state.thinkingBlockIndex, map[string]interface{}{
+				"type":     deltaTypeThinkingDelta,
+				"thinking": reasoningDelta.Delta,
+			}, flusher)
+
+		case "response.reasoning_text.done":
+			if state.thinkingBlockIndex != -1 {
+				senders.SendContentBlockStop(state.thinkingBlockIndex, flusher)
+				state.stoppedBlocks[state.thinkingBlockIndex] = true
+				state.thinkingBlockIndex = -1
+			}
+
+		case "response.reasoning_summary_text.delta":
+			summaryDelta := currentEvent.AsResponseReasoningSummaryTextDelta()
+			if textBlockIndex == -1 {
+				textBlockIndex = state.nextBlockIndex
+				state.nextBlockIndex++
+				senders.SendContentBlockStart(textBlockIndex, blockTypeText, map[string]interface{}{"text": ""}, flusher)
+			}
+			senders.SendContentBlockDelta(textBlockIndex, map[string]interface{}{
+				"type": deltaTypeTextDelta,
+				"text": summaryDelta.Delta,
+			}, flusher)
+
+		case "response.reasoning_summary_text.done":
+			if textBlockIndex != -1 {
+				senders.SendContentBlockStop(textBlockIndex, flusher)
+				state.stoppedBlocks[textBlockIndex] = true
+				textBlockIndex = -1
+			}
+
+		case "response.refusal.delta":
+			refusalDelta := currentEvent.AsResponseRefusalDelta()
+			if textBlockIndex == -1 {
+				textBlockIndex = state.nextBlockIndex
+				state.nextBlockIndex++
+				senders.SendContentBlockStart(textBlockIndex, blockTypeText, map[string]interface{}{"text": ""}, flusher)
+			}
+			senders.SendContentBlockDelta(textBlockIndex, map[string]interface{}{
+				"type": deltaTypeTextDelta,
+				"text": refusalDelta.Delta,
+			}, flusher)
+
+		case "response.refusal.done":
+			if textBlockIndex != -1 {
+				senders.SendContentBlockStop(textBlockIndex, flusher)
+				state.stoppedBlocks[textBlockIndex] = true
+				textBlockIndex = -1
+			}
+
+		case "response.output_item.added":
+			itemAdded := currentEvent.AsResponseOutputItemAdded()
+			if itemAdded.Item.Type == "function_call" || itemAdded.Item.Type == "custom_tool_call" || itemAdded.Item.Type == "mcp_call" {
+				itemID := itemAdded.Item.ID
+				blockIndex := state.nextBlockIndex
+				state.nextBlockIndex++
+
+				toolName := ""
+				if itemAdded.Item.Name != "" {
+					toolName = itemAdded.Item.Name
+				}
+
+				pendingToolCalls[itemID] = &pendingToolCall{
+					blockIndex: blockIndex,
+					itemID:     itemID,
+					name:       toolName,
+					arguments:  "",
+				}
+				hasToolCalls = true
+
+				senders.SendContentBlockStart(blockIndex, blockTypeToolUse, map[string]interface{}{
+					"id":   itemID,
+					"name": toolName,
+				}, flusher)
+			}
+
+		case "response.function_call_arguments.delta":
+			argsDelta := currentEvent.AsResponseFunctionCallArgumentsDelta()
+			if toolCall, exists := pendingToolCalls[argsDelta.ItemID]; exists {
+				toolCall.arguments += argsDelta.Delta
+				senders.SendContentBlockDelta(toolCall.blockIndex, map[string]interface{}{
+					"type":         deltaTypeInputJSONDelta,
+					"partial_json": argsDelta.Delta,
+				}, flusher)
+			}
+
+		case "response.function_call_arguments.done":
+			argsDone := currentEvent.AsResponseFunctionCallArgumentsDone()
+			if toolCall, exists := pendingToolCalls[argsDone.ItemID]; exists {
+				if toolCall.name == "" && argsDone.Name != "" {
+					toolCall.name = argsDone.Name
+				}
+				senders.SendContentBlockStop(toolCall.blockIndex, flusher)
+				state.stoppedBlocks[toolCall.blockIndex] = true
+				delete(pendingToolCalls, argsDone.ItemID)
+			}
+
+		case "response.custom_tool_call_input.delta":
+			customDelta := currentEvent.AsResponseCustomToolCallInputDelta()
+			if toolCall, exists := pendingToolCalls[customDelta.ItemID]; exists {
+				toolCall.arguments += customDelta.Delta
+				senders.SendContentBlockDelta(toolCall.blockIndex, map[string]interface{}{
+					"type":         deltaTypeInputJSONDelta,
+					"partial_json": customDelta.Delta,
+				}, flusher)
+			}
+
+		case "response.custom_tool_call_input.done":
+			customDone := currentEvent.AsResponseCustomToolCallInputDone()
+			if toolCall, exists := pendingToolCalls[customDone.ItemID]; exists {
+				senders.SendContentBlockStop(toolCall.blockIndex, flusher)
+				state.stoppedBlocks[toolCall.blockIndex] = true
+				delete(pendingToolCalls, customDone.ItemID)
+			}
+
+		case "response.mcp_call_arguments.delta":
+			mcpDelta := currentEvent.AsResponseMcpCallArgumentsDelta()
+			if toolCall, exists := pendingToolCalls[mcpDelta.ItemID]; exists {
+				toolCall.arguments += mcpDelta.Delta
+				senders.SendContentBlockDelta(toolCall.blockIndex, map[string]interface{}{
+					"type":         deltaTypeInputJSONDelta,
+					"partial_json": mcpDelta.Delta,
+				}, flusher)
+			}
+
+		case "response.mcp_call_arguments.done":
+			mcpDone := currentEvent.AsResponseMcpCallArgumentsDone()
+			if toolCall, exists := pendingToolCalls[mcpDone.ItemID]; exists {
+				senders.SendContentBlockStop(toolCall.blockIndex, flusher)
+				state.stoppedBlocks[toolCall.blockIndex] = true
+				delete(pendingToolCalls, mcpDone.ItemID)
+			}
+
+		case "response.output_item.done":
+			// Handled by respective done events above
+
+		case "response.completed":
+			completed := currentEvent.AsResponseCompleted()
+			state.inputTokens = int64(completed.Response.Usage.InputTokens)
+			state.outputTokens = int64(completed.Response.Usage.OutputTokens)
+
+			logrus.Infof("[ResponsesAPI] Response completed: input_tokens=%d, output_tokens=%d", state.inputTokens, state.outputTokens)
+
+			senders.SendStopEvents(state, flusher)
+
+			stopReason := anthropicStopReasonEndTurn
+			if hasToolCalls || state.thinkingBlockIndex != -1 {
+				stopReason = anthropicStopReasonToolUse
+			}
+
+			senders.SendMessageDelta(state, stopReason, flusher)
+			senders.SendMessageStop(messageID, responseModel, state, stopReason, flusher)
+
+			logrus.Infof("[ResponsesAPI] Sent message_stop event with stop_reason=%s, finishing stream", stopReason)
+			return nil
+
+		case "error", "response.failed", "response.incomplete":
+			logrus.Errorf("Responses API error event: %v", currentEvent)
+			errorEvent := map[string]interface{}{
+				"type": "error",
+				"error": map[string]interface{}{
+					"message": fmt.Sprintf("Responses API error: %v", currentEvent),
+					"type":    "api_error",
+				},
+			}
+			senders.SendErrorEvent(errorEvent, flusher)
+			return fmt.Errorf("Responses API error: %v", currentEvent)
+
+		default:
+			logrus.Debugf("Unhandled Responses API event type: %s", currentEvent.Type)
+		}
+	}
+
+	if err := stream.Err(); err != nil {
+		logrus.Errorf("Responses API stream error: %v", err)
+		errorEvent := map[string]interface{}{
+			"type": "error",
+			"error": map[string]interface{}{
+				"message": err.Error(),
+				"type":    "stream_error",
+				"code":    "stream_failed",
+			},
+		}
+		senders.SendErrorEvent(errorEvent, flusher)
+		return err
+	}
+
+	return nil
+}
+
+// HandleResponsesToAnthropicV1StreamResponse processes OpenAI Responses API streaming events and converts them to Anthropic v1 format
+// This is a thin wrapper that uses the shared core logic with v1 event senders
+func HandleResponsesToAnthropicV1StreamResponse(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) error {
+	return HandleResponsesToAnthropicStreamResponse(c, stream, responseModel, responsesAPIEventSenders{
+		SendMessageStart: func(event map[string]interface{}, flusher http.Flusher) {
+			sendAnthropicStreamEvent(c, eventTypeMessageStart, event, flusher)
+		},
+		SendContentBlockStart: func(index int, blockType string, content map[string]interface{}, flusher http.Flusher) {
+			sendContentBlockStart(c, index, blockType, content, flusher)
+		},
+		SendContentBlockDelta: func(index int, content map[string]interface{}, flusher http.Flusher) {
+			sendContentBlockDelta(c, index, content, flusher)
+		},
+		SendContentBlockStop: func(index int, flusher http.Flusher) {
+			sendContentBlockStop(c, index, flusher)
+		},
+		SendStopEvents: func(state *streamState, flusher http.Flusher) {
+			sendStopEvents(c, state, flusher)
+		},
+		SendMessageDelta: func(state *streamState, stopReason string, flusher http.Flusher) {
+			sendMessageDelta(c, state, stopReason, flusher)
+		},
+		SendMessageStop: func(messageID, model string, state *streamState, stopReason string, flusher http.Flusher) {
+			sendMessageStop(c, messageID, model, state, stopReason, flusher)
+		},
+		SendErrorEvent: func(event map[string]interface{}, flusher http.Flusher) {
+			sendAnthropicStreamEvent(c, "error", event, flusher)
+		},
+	})
 }

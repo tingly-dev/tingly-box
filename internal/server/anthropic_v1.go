@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -160,6 +161,43 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			return
 		}
 
+		// Check if model prefers Responses API (for models like Codex)
+		// This is used for ChatGPT backend API which only supports Responses API
+		useResponsesAPI := selectedService.PreferCompletions()
+		logrus.Infof("[AnthropicV1] Checking Responses API for model=%s, provider=%s, PreferCompletions=%v", actualModel, provider.Name, useResponsesAPI)
+
+		// Also check the probe cache if not already determined
+		if !useResponsesAPI {
+			preferredEndpoint := s.GetPreferredEndpointForModel(provider, actualModel)
+			logrus.Infof("[AnthropicV1] Probe cache preferred endpoint for model=%s: %s", actualModel, preferredEndpoint)
+			useResponsesAPI = preferredEndpoint == "responses"
+		}
+
+		if useResponsesAPI {
+			// Responses API requires Beta format - convert v1 to beta and route to beta handler
+			betaParams, err := convertV1RequestToBeta(&req.MessageNewParams)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, ErrorResponse{
+					Error: ErrorDetail{
+						Message: fmt.Sprintf("Failed to convert request to Beta format: %v", err),
+						Type:    "invalid_request_error",
+					},
+				})
+				return
+			}
+			betaReq := protocol.AnthropicBetaMessagesRequest{
+				Stream:                req.Stream,
+				BetaMessageNewParams:  betaParams,
+			}
+			// Set context flag to indicate original request was v1 format
+			// The beta handler will use this to convert responses back to v1 format
+			c.Set("original_request_format", "v1")
+			logrus.Infof("[AnthropicV1] Converting v1 to beta format for model=%s", actualModel)
+			s.anthropicMessagesV1Beta(c, betaReq, proxyModel, provider, selectedService, rule)
+			return
+		}
+
+		logrus.Infof("[AnthropicV1] Using Chat Completions API for model=%s", actualModel)
 		// Use OpenAI conversion path (default behavior)
 		if isStreaming {
 			// Convert Anthropic request to OpenAI format for streaming
@@ -369,4 +407,22 @@ func (s *Server) anthropicCountTokensV1(c *gin.Context, bodyBytes []byte, rawReq
 func (s *Server) trackUsage(c *gin.Context, rule *typ.Rule, provider *typ.Provider, model, requestModel string, inputTokens, outputTokens int, streamed bool, status, errorCode string) {
 	tracker := s.NewUsageTracker()
 	tracker.RecordUsage(c, rule, provider, model, requestModel, inputTokens, outputTokens, streamed, status, errorCode)
+}
+
+// convertV1RequestToBeta converts Anthropic v1 MessageNewParams to Beta format
+// Since v1 and beta share the same JSON representation, we can marshal v1 to JSON and unmarshal as beta
+func convertV1RequestToBeta(v1Req *anthropic.MessageNewParams) (anthropic.BetaMessageNewParams, error) {
+	// Marshal v1 request to JSON
+	jsonBytes, err := json.Marshal(v1Req)
+	if err != nil {
+		return anthropic.BetaMessageNewParams{}, fmt.Errorf("failed to marshal v1 request: %w", err)
+	}
+
+	// Unmarshal as Beta format
+	var betaReq anthropic.BetaMessageNewParams
+	if err := json.Unmarshal(jsonBytes, &betaReq); err != nil {
+		return anthropic.BetaMessageNewParams{}, fmt.Errorf("failed to unmarshal as beta request: %w", err)
+	}
+
+	return betaReq, nil
 }
