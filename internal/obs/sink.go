@@ -174,8 +174,10 @@ func (r *Sink) RecordWithScenario(provider, model, scenario string, req *RecordR
 		DurationMs: duration.Milliseconds(),
 	}
 
-	// Only include request if mode is "all"
-	if r.mode == RecordModeAll {
+	switch r.mode {
+	case RecordModeAll:
+		entry.Request = req
+	case RecordModeScenario:
 		entry.Request = req
 	}
 
@@ -234,7 +236,7 @@ func (r *Sink) writeEntryWithScenario(scenario string, entry *RecordEntry) {
 	currentHour := time.Now().UTC().Format("2006-01-02-15")
 
 	// Use scenario as the file key
-	fileKey := fmt.Sprintf("scenario:%s", scenario)
+	fileKey := fmt.Sprintf("scenario:%s:%s", scenario, entry.Provider)
 
 	// Get or create file for this scenario
 	rf, exists := r.fileMap[fileKey]
