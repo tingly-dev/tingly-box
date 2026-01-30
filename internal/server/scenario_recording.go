@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 
 	"github.com/tingly-dev/tingly-box/internal/obs"
 )
@@ -148,7 +149,7 @@ func (sr *ScenarioRecorder) GetStreamChunks() []map[string]interface{} {
 
 // RecordResponse records the scenario-level response (tingly-box -> client)
 // This captures the response sent back to the client
-func (sr *ScenarioRecorder) RecordResponse() {
+func (sr *ScenarioRecorder) RecordResponse(provider *typ.Provider, model string) {
 	if sr == nil || sr.sink == nil {
 		return
 	}
@@ -194,17 +195,9 @@ func (sr *ScenarioRecorder) RecordResponse() {
 		}
 	}
 
-	// Extract model from request if available
-	model := ""
-	if sr.req.Body != nil {
-		if m, ok := sr.req.Body["model"].(string); ok {
-			model = m
-		}
-	}
-
 	// Record with scenario-based file naming
 	duration := time.Since(sr.startTime)
-	sr.sink.RecordWithScenario("tingly-box", model, sr.scenario, sr.req, resp, duration, nil)
+	sr.sink.RecordWithScenario(provider.Name, model, sr.scenario, sr.req, resp, duration, nil)
 }
 
 // RecordError records an error for the scenario-level request

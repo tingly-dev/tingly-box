@@ -319,7 +319,7 @@ func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.M
 
 	// Record the response after stream completes
 	if recorder != nil {
-		recorder.RecordResponse()
+		recorder.RecordResponse(provider, actualModel)
 	}
 }
 
