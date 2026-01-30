@@ -317,6 +317,17 @@ func (sr *streamRecorder) RecordRawMapEvent(eventType string, event map[string]i
 	if sr == nil {
 		return
 	}
+
+	// Convert map to BetaRawMessageStreamEventUnion
+	data, err := json.Marshal(event)
+	if err == nil {
+		var betaEvent anthropic.BetaRawMessageStreamEventUnion
+		if err := json.Unmarshal(data, &betaEvent); err == nil {
+			betaEvent.Type = eventType
+			sr.assembler.RecordV1BetaEvent(&betaEvent)
+		}
+	}
+
 	sr.recorder.RecordStreamChunk(eventType, event)
 
 	// Extract usage from message_delta event
