@@ -20,8 +20,13 @@ import {
     TokenApi,
     UsageApi,
 } from '../client';
+import {
+    getApiBaseUrl,
+    getApiProtocol,
+    getDisplayOrigin,
+} from '../utils/protocol';
 
-const API_BASE_URL = window.location.origin || '';
+const DEFAULT_BASE_PATH = getDisplayOrigin().replace(/\/+$/, "");
 
 // Type definition for API instances
 interface ApiInstances {
@@ -49,74 +54,38 @@ const getModelToken = (): string | null => {
     return localStorage.getItem('model_token');
 };
 
+// Get base URL for API calls using centralized protocol utility
+// @deprecated Use getApiBaseUrl from utils/protocol.ts directly
 export const getBaseUrl = async (): Promise<string> => {
-    let basePath = API_BASE_URL || "";
-
-    // Check if we're in GUI mode
-    if (import.meta.env.VITE_PKG_MODE === "gui") {
-        const svc = TinglyService;
-        if (svc) {
-            console.log(svc)
-            try {
-                const port = await svc.GetPort();
-
-                const protocol = window.location.protocol;
-                basePath = `${protocol}//localhost:${port}`;
-                console.log("Using GUI mode base path:", basePath);
-            } catch (err) {
-                console.error('Failed to get port from TinglyService:', err);
-            }
-        }
-    } else {
-        const protocol = window.location.protocol;
-        const host = window.location.host.replace(/\/$/, "")
-        basePath = `${protocol}//${host}`
-    }
-
-    return basePath
+    return getApiBaseUrl();
 }
-
-const DEFAULT_PROTOCOL = window.location.protocol
-const DEFAULT_BASE_PATH = (window.location.origin || `${DEFAULT_PROTOCOL}://localhost:12580`).replace(/\/+$/, "");
 
 // Create API configuration
 const createApiConfig = async () => {
     let token = getUserAuthToken();
 
-    let basePath = await getBaseUrl();
-    console.log("api config", basePath)
-
-    // Check if we're in GUI mode
+    // Get token from GUI if available
     if (import.meta.env.VITE_PKG_MODE === "gui") {
         const svc = TinglyService;
         if (svc) {
             try {
-                // Get token from GUI
                 const guiToken = await svc.GetUserAuthToken();
                 if (guiToken) {
                     token = guiToken;
-                    console.log("Using GUI mode token");
                 }
-
-                // Get port and construct base path
-                const port = await svc.GetPort();
-                // Always use http protocol in GUI mode, not window.location.protocol
-                basePath = `http://localhost:${port}`;
-                console.log("Using GUI mode base path:", basePath);
             } catch (err) {
-                console.error('Failed to get configuration from TinglyService:', err);
+                console.error('Failed to get GUI token:', err);
             }
         }
-    } else {
-        const protocol = window.location.protocol;
-        const host = window.location.host.replace(/\/$/, "")
-        basePath = `${protocol}//${host}`
     }
+
+    const basePath = await getApiBaseUrl();
+    console.log("api config", basePath);
 
     return new Configuration({
         basePath: basePath,
         baseOptions: token ? {
-            headers: {Authorization: `Bearer ${token}`},
+            headers: { Authorization: `Bearer ${token}` },
             validateStatus: (status: number) => status < 500, // Don't reject on 4xx errors
         } : {
             validateStatus: (status: number) => status < 500,
@@ -127,7 +96,6 @@ const createApiConfig = async () => {
 // Create API instances
 const createApiInstances = async () => {
     const config = await createApiConfig();
-    console.log("[API] Creating instances with basePath:", config.basePath);
 
     return {
         historyApi: new HistoryApi(config),
@@ -167,13 +135,13 @@ async function fetchUIAPI(url: string, options: RequestInit = {}): Promise<any> 
         if (response.status === 401) {
             localStorage.removeItem('user_auth_token');
             window.location.href = '/login';
-            return {success: false, error: 'Authentication required'};
+            return { success: false, error: 'Authentication required' };
         }
 
         return await response.json();
     } catch (error) {
         console.error('UI API Error:', error);
-        return {success: false, error: (error as Error).message};
+        return { success: false, error: (error as Error).message };
     }
 }
 
@@ -199,7 +167,7 @@ async function fetchModelAPI(url: string, options: RequestInit = {}): Promise<an
         return await response.json();
     } catch (error) {
         console.error('Model API Error:', error);
-        return {success: false, error: (error as Error).message};
+        return { success: false, error: (error as Error).message };
     }
 }
 
@@ -242,9 +210,9 @@ export const api = {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return {success: false, error: 'Authentication required'};
+                return { success: false, error: 'Authentication required' };
             }
-            return {success: false, error: error.message};
+            return { success: false, error: error.message };
         }
     },
 
@@ -262,9 +230,9 @@ export const api = {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return {success: false, error: 'Authentication required'};
+                return { success: false, error: 'Authentication required' };
             }
-            return {success: false, error: error.message};
+            return { success: false, error: error.message };
         }
     },
 
@@ -283,7 +251,7 @@ export const api = {
             }
             return body;
         } catch (error: any) {
-            return {success: false, error: error.message};
+            return { success: false, error: error.message };
         }
     },
 
@@ -302,7 +270,7 @@ export const api = {
             }
             return body;
         } catch (error: any) {
-            return {success: false, error: error.message};
+            return { success: false, error: error.message };
         }
     },
 
@@ -315,9 +283,9 @@ export const api = {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return {success: false, error: 'Authentication required'};
+                return { success: false, error: 'Authentication required' };
             }
-            return {success: false, error: error.message};
+            return { success: false, error: error.message };
         }
     },
 
@@ -331,9 +299,9 @@ export const api = {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return {success: false, error: 'Authentication required'};
+                return { success: false, error: 'Authentication required' };
             }
-            return {success: false, error: error.message};
+            return { success: false, error: error.message };
         }
     },
 
@@ -354,9 +322,9 @@ export const api = {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return {success: false, error: 'Authentication required'};
+                return { success: false, error: 'Authentication required' };
             }
-            return {success: false, error: error.message};
+            return { success: false, error: error.message };
         }
     },
 
@@ -370,9 +338,9 @@ export const api = {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return {success: false, error: 'Authentication required'};
+                return { success: false, error: 'Authentication required' };
             }
-            return {success: false, error: error.message};
+            return { success: false, error: error.message };
         }
     },
 
@@ -386,9 +354,9 @@ export const api = {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return {success: false, error: 'Authentication required'};
+                return { success: false, error: 'Authentication required' };
             }
-            return {success: false, error: error.message};
+            return { success: false, error: error.message };
         }
     },
 
@@ -402,9 +370,9 @@ export const api = {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return {success: false, error: 'Authentication required'};
+                return { success: false, error: 'Authentication required' };
             }
-            return {success: false, error: error.message};
+            return { success: false, error: error.message };
         }
     },
 
@@ -417,9 +385,9 @@ export const api = {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return {success: false, error: 'Authentication required'};
+                return { success: false, error: 'Authentication required' };
             }
-            return {success: false, error: error.message};
+            return { success: false, error: error.message };
         }
     },
 
@@ -432,24 +400,24 @@ export const api = {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return {success: false, error: 'Authentication required'};
+                return { success: false, error: 'Authentication required' };
             }
-            return {success: false, error: error.message};
+            return { success: false, error: error.message };
         }
     },
 
     generateToken: async (clientId: string): Promise<any> => {
         try {
             const apiInstances = await getApiInstances();
-            const response = await apiInstances.tokenApi.apiV1TokenPost({client_id: clientId});
+            const response = await apiInstances.tokenApi.apiV1TokenPost({ client_id: clientId });
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return {success: false, error: 'Authentication required'};
+                return { success: false, error: 'Authentication required' };
             }
-            return {success: false, error: error.message};
+            return { success: false, error: error.message };
         }
     },
 
@@ -462,9 +430,9 @@ export const api = {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return {success: false, error: 'Authentication required'};
+                return { success: false, error: 'Authentication required' };
             }
-            return {success: false, error: error.message};
+            return { success: false, error: error.message };
         }
     },
 
@@ -479,9 +447,9 @@ export const api = {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return {success: false, error: 'Authentication required'};
+                return { success: false, error: 'Authentication required' };
             }
-            return {success: false, error: error.message};
+            return { success: false, error: error.message };
         }
     },
 
@@ -492,7 +460,7 @@ export const api = {
             const response = await apiInstances.rulesApi.apiV1RuleUuidGet(uuid);
             return response.data;
         } catch (error: any) {
-            return {success: false, error: error.message};
+            return { success: false, error: error.message };
         }
     },
 
@@ -506,9 +474,9 @@ export const api = {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return {success: false, error: 'Authentication required'};
+                return { success: false, error: 'Authentication required' };
             }
-            return {success: false, error: error.message};
+            return { success: false, error: error.message };
         }
     },
 
@@ -522,9 +490,9 @@ export const api = {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return {success: false, error: 'Authentication required'};
+                return { success: false, error: 'Authentication required' };
             }
-            return {success: false, error: error.message};
+            return { success: false, error: error.message };
         }
     },
 
@@ -538,9 +506,9 @@ export const api = {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return {success: false, error: 'Authentication required'};
+                return { success: false, error: 'Authentication required' };
             }
-            return {success: false, error: error.message};
+            return { success: false, error: error.message };
         }
     },
 
@@ -567,7 +535,7 @@ export const api = {
     setScenarioFlag: async (scenario: string, flag: string, value: boolean): Promise<any> => {
         return fetchUIAPI(`/scenario/${scenario}/flag/${flag}`, {
             method: 'PUT',
-            body: JSON.stringify({value}),
+            body: JSON.stringify({ value }),
         });
     },
 
@@ -583,9 +551,9 @@ export const api = {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return {success: false, error: 'Authentication required'};
+                return { success: false, error: 'Authentication required' };
             }
-            return {success: false, error: error.message};
+            return { success: false, error: error.message };
         }
     },
 
@@ -603,9 +571,9 @@ export const api = {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return {success: false, error: 'Authentication required'};
+                return { success: false, error: 'Authentication required' };
             }
-            return {success: false, error: error.message};
+            return { success: false, error: error.message };
         }
     },
 
@@ -629,9 +597,9 @@ export const api = {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return {success: false, error: 'Authentication required'};
+                return { success: false, error: 'Authentication required' };
             }
-            return {success: false, error: error.message};
+            return { success: false, error: error.message };
         }
     },
 
@@ -725,9 +693,9 @@ export const api = {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return {success: false, error: 'Authentication required'};
+                return { success: false, error: 'Authentication required' };
             }
-            return {success: false, error: error.message};
+            return { success: false, error: error.message };
         }
     },
 
@@ -754,9 +722,9 @@ export const api = {
             if (error.response?.status === 401) {
                 localStorage.removeItem('user_auth_token');
                 window.location.href = '/login';
-                return {success: false, error: 'Authentication required'};
+                return { success: false, error: 'Authentication required' };
             }
-            return {success: false, error: error.message};
+            return { success: false, error: error.message };
         }
     },
 
