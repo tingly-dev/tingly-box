@@ -50,9 +50,8 @@ type RecordResponse struct {
 	Headers    map[string]string      `json:"headers"`
 	Body       map[string]interface{} `json:"body,omitempty"`
 	// Streaming support
-	IsStreaming     bool     `json:"is_streaming,omitempty"`
-	StreamedContent string   `json:"streamed_content,omitempty"` // Raw SSE content (deprecated, use StreamChunks)
-	StreamChunks    []string `json:"stream_chunks,omitempty"`    // Parsed SSE data chunks
+	IsStreaming  bool     `json:"is_streaming,omitempty"`
+	StreamChunks []string `json:"-"` // Parsed SSE data chunks
 }
 
 // Sink manages recording of HTTP requests/responses to JSONL files

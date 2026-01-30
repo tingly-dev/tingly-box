@@ -98,7 +98,6 @@ func (r *RecordRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 				respRecord.IsStreaming = true
 				resp.Body = newRecordingReader(resp.Body, r.apiStyle, func(rawContent string, chunks []string, assembledBody map[string]any) {
 					// Populate response record in onClose callback
-					respRecord.StreamedContent = rawContent
 					respRecord.StreamChunks = chunks
 					if assembledBody != nil {
 						respRecord.Body = assembledBody
