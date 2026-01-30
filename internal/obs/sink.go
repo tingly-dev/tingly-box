@@ -247,7 +247,7 @@ func (r *Sink) writeEntryWithScenario(scenario string, entry *RecordEntry) {
 		}
 
 		// Create new file with scenario-based naming
-		filename := filepath.Join(r.baseDir, fmt.Sprintf("%s-%s-%s.jsonl", scenario, entry.Provider, currentHour))
+		filename := filepath.Join(r.baseDir, fmt.Sprintf("%s.%s.%s.jsonl", scenario, entry.Provider, currentHour))
 		file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if err != nil {
 			logrus.Errorf("Failed to open record file %s: %v", filename, err)
