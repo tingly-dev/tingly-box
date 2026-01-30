@@ -50,9 +50,8 @@ type RecordResponse struct {
 	Headers    map[string]string      `json:"headers"`
 	Body       map[string]interface{} `json:"body,omitempty"`
 	// Streaming support
-	IsStreaming     bool     `json:"is_streaming,omitempty"`
-	StreamedContent string   `json:"streamed_content,omitempty"` // Raw SSE content (deprecated, use StreamChunks)
-	StreamChunks    []string `json:"stream_chunks,omitempty"`    // Parsed SSE data chunks
+	IsStreaming  bool     `json:"is_streaming,omitempty"`
+	StreamChunks []string `json:"-"` // Parsed SSE data chunks
 }
 
 // Sink manages recording of HTTP requests/responses to JSONL files
@@ -73,41 +72,33 @@ type recordFile struct {
 // NewSink creates a new record sink
 // mode: empty string = disabled, "all" = record all, "response" = response only
 func NewSink(baseDir string, mode RecordMode) *Sink {
-	// Empty mode means recording is disabled
-	if mode == "" {
-		return &Sink{
-			mode: "",
-		}
-	}
+	switch mode {
+	case "":
+		// Empty mode means recording is disabled
+		return nil
 
-	// Validate mode
-	if mode != RecordModeAll && mode != RecordModeResponse && mode != RecordModeSlim {
-		logrus.Warnf("Invalid record mode '%s', recording disabled", mode)
-		return &Sink{
-			mode: "",
-		}
-	}
-
-	// Check for slim mode (not implemented)
-	if mode == RecordModeSlim {
+	case RecordModeSlim:
+		// Check for slim mode (not implemented)
 		logrus.Warnf("Record mode 'slim' is not implemented yet, please use 'all' or 'response'")
-		return &Sink{
-			mode: "",
-		}
-	}
+		return nil
 
-	// Ensure base directory exists
-	if err := os.MkdirAll(baseDir, 0755); err != nil {
-		logrus.Errorf("Failed to create record directory %s: %v", baseDir, err)
-		return &Sink{
-			mode: "",
-		}
-	}
+	case RecordModeAll, RecordModeResponse, RecordModeScenario:
 
-	return &Sink{
-		mode:    mode,
-		baseDir: baseDir,
-		fileMap: make(map[string]*recordFile),
+		// Ensure base directory exists
+		if err := os.MkdirAll(baseDir, 0755); err != nil {
+			logrus.Errorf("Failed to create record directory %s: %v", baseDir, err)
+			return nil
+		}
+
+		return &Sink{
+			mode:    mode,
+			baseDir: baseDir,
+			fileMap: make(map[string]*recordFile),
+		}
+	default:
+		// Invalid mode
+		logrus.Warnf("Invalid record mode '%s', recording disabled", mode)
+		return nil
 	}
 }
 
@@ -183,8 +174,10 @@ func (r *Sink) RecordWithScenario(provider, model, scenario string, req *RecordR
 		DurationMs: duration.Milliseconds(),
 	}
 
-	// Only include request if mode is "all"
-	if r.mode == RecordModeAll {
+	switch r.mode {
+	case RecordModeAll:
+		entry.Request = req
+	case RecordModeScenario:
 		entry.Request = req
 	}
 
@@ -239,16 +232,11 @@ func (r *Sink) writeEntryWithScenario(scenario string, entry *RecordEntry) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
-	// If scenario is empty, fall back to provider-based naming
-	if scenario == "" {
-		scenario = entry.Provider
-	}
-
 	// Get current hour for file rotation (YYYY-MM-DD-HH)
 	currentHour := time.Now().UTC().Format("2006-01-02-15")
 
 	// Use scenario as the file key
-	fileKey := fmt.Sprintf("scenario:%s", scenario)
+	fileKey := fmt.Sprintf("scenario:%s:%s", scenario, entry.Provider)
 
 	// Get or create file for this scenario
 	rf, exists := r.fileMap[fileKey]
@@ -259,7 +247,7 @@ func (r *Sink) writeEntryWithScenario(scenario string, entry *RecordEntry) {
 		}
 
 		// Create new file with scenario-based naming
-		filename := filepath.Join(r.baseDir, fmt.Sprintf("%s-%s.jsonl", scenario, currentHour))
+		filename := filepath.Join(r.baseDir, fmt.Sprintf("%s.%s.%s.jsonl", scenario, entry.Provider, currentHour))
 		file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if err != nil {
 			logrus.Errorf("Failed to open record file %s: %v", filename, err)

@@ -195,6 +195,16 @@ func (s *Server) accumulateChatGPTBackendStream(reader io.Reader, params respons
 
 // handleChatGPTBackendStreamingRequest handles streaming requests for ChatGPT backend API providers
 func (s *Server) handleChatGPTBackendStreamingRequest(c *gin.Context, provider *typ.Provider, params responses.ResponseNewParams, responseModel, actualModel string, rule *typ.Rule) {
+	// Get scenario recorder and set up stream recorder
+	var recorder *ScenarioRecorder
+	if r, exists := c.Get("scenario_recorder"); exists {
+		recorder = r.(*ScenarioRecorder)
+	}
+	streamRec := newStreamRecorder(recorder)
+	if streamRec != nil {
+		streamRec.SetupStreamRecorderInContext(c, "stream_event_recorder")
+	}
+
 	wrapper := s.clientPool.GetOpenAIClient(provider, params.Model)
 	if wrapper == nil {
 		s.trackUsage(c, rule, provider, actualModel, responseModel, 0, 0, false, "error", "no_client")
@@ -278,7 +288,16 @@ func (s *Server) handleChatGPTBackendStreamingRequest(c *gin.Context, provider *
 	if err != nil {
 		s.trackUsage(c, rule, provider, actualModel, responseModel, 0, 0, false, "error", "stream_error")
 		logrus.Errorf("[ChatGPT] Stream handler error: %v", err)
+		if streamRec != nil {
+			streamRec.RecordError(err)
+		}
 		return
+	}
+
+	// Finish recording and assemble response
+	if streamRec != nil {
+		streamRec.Finish(responseModel, 0, 0) // Usage is tracked internally
+		streamRec.RecordResponse(provider, actualModel)
 	}
 }
 
