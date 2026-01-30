@@ -6,8 +6,8 @@ import RoutingGraph from './RoutingGraph';
 import SmartRoutingGraph from './SmartRoutingGraph';
 import SmartRuleEditDialog from './SmartRuleEditDialog';
 import { api } from '../services/api';
-import type { Provider, ProviderModelsDataByUuid } from '../types/provider';
-import type { ConfigRecord, Rule, SmartRouting } from './RoutingGraphTypes.ts';
+import type { Provider, ProviderModelsDataByUuid, ProviderModelData } from '../types/provider';
+import type { ConfigRecord, Rule, SmartRouting, ConfigProvider } from './RoutingGraphTypes.ts';
 import { v4 as uuidv4 } from 'uuid';
 import GraphSettingsMenu from './GraphSettingsMenu';
 
@@ -18,7 +18,7 @@ export interface RuleCardProps {
     saving: boolean;
     showNotification: (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
     onRuleChange?: (updatedRule: Rule) => void;
-    onProviderModelsChange?: (providerUuid: string, models: any) => void;
+    onProviderModelsChange?: (providerUuid: string, models: ProviderModelData) => void;
     onRefreshProvider?: (providerUuid: string) => void;
     onModelSelectOpen: (ruleUuid: string, configRecord: ConfigRecord, mode: 'edit' | 'add', providerUuid?: string) => void;
     collapsible?: boolean;
@@ -65,7 +65,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     React.useEffect(() => {
         if (rule && providers.length > 0) {
             const services = rule.services || [];
-            const providersList = services.map((service: any) => ({
+            const providersList: ConfigProvider[] = services.map((service) => ({
                 uuid: service.id || service.uuid || uuidv4(),
                 provider: service.provider || '',
                 model: service.model || '',
@@ -76,9 +76,9 @@ export const RuleCard: React.FC<RuleCardProps> = ({
             }));
 
             // Ensure smartRouting services have uuid
-            const smartRouting = (rule.smart_routing || []).map((routing: any) => ({
+            const smartRouting: SmartRouting[] = (rule.smart_routing || []).map((routing: SmartRouting) => ({
                 ...routing,
-                services: (routing.services || []).map((service: any) => ({
+                services: (routing.services || []).map((service: ConfigProvider) => ({
                     ...service,
                     uuid: service.id || service.uuid || uuidv4(),
                 })),
@@ -215,7 +215,6 @@ export const RuleCard: React.FC<RuleCardProps> = ({
             };
 
             const result = await api.updateRule(rule.uuid, ruleData);
-            console.log("update rule: ", result)
             if (result.success) {
                 onRuleChange?.({
                     ...rule,
@@ -311,10 +310,8 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     const handleEditSmartRule = useCallback(async (ruleUuid: string) => {
         if (!configRecord) return;
 
-        console.log('Editing smart rule with UUID:', ruleUuid);
         const smartRule = (configRecord.smartRouting || []).find(r => r.uuid === ruleUuid);
         if (smartRule) {
-            console.log('Found rule:', smartRule.uuid, smartRule.description);
             // Create a deep copy to avoid mutating the original object
             const smartRuleCopy: SmartRouting = JSON.parse(JSON.stringify(smartRule));
             setEditingSmartRule(smartRuleCopy);
@@ -327,15 +324,8 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     const handleSaveSmartRule = useCallback(async (updatedRule: SmartRouting) => {
         if (!configRecord) return;
 
-        console.log('Saving smart rule:', updatedRule.uuid, updatedRule.description);
-        console.log('Existing rules:', configRecord.smartRouting?.map(r => ({ uuid: r.uuid, desc: r.description })));
-
         const updatedSmartRouting = (configRecord.smartRouting || []).map(r => {
-            const shouldUpdate = r.uuid === updatedRule.uuid;
-            if (shouldUpdate) {
-                console.log('Updating rule:', r.uuid, '->', updatedRule.description);
-            }
-            return shouldUpdate ? updatedRule : r;
+            return r.uuid === updatedRule.uuid ? updatedRule : r;
         });
 
         const updated = {
@@ -389,16 +379,10 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     }, [configRecord, rule.uuid, onModelSelectOpen]);
 
     const handleDeleteServiceFromSmartRule = useCallback(async (ruleUuid: string, serviceUuid: string) => {
-        console.log('handleDeleteServiceFromSmartRule called:', { ruleUuid, serviceUuid });
-        if (!configRecord) {
-            console.log('No configRecord, returning');
-            return;
-        }
+        if (!configRecord) return;
 
-        console.log('Current smartRouting:', configRecord.smartRouting);
         const updatedSmartRouting = (configRecord.smartRouting || []).map(rule => {
             if (rule.uuid === ruleUuid && rule.services) {
-                console.log('Found rule, filtering services:', rule.services, 'serviceUuid:', serviceUuid);
                 return {
                     ...rule,
                     services: rule.services.filter(s => s.uuid !== serviceUuid),
@@ -406,7 +390,6 @@ export const RuleCard: React.FC<RuleCardProps> = ({
             }
             return rule;
         });
-        console.log('Updated smartRouting:', updatedSmartRouting);
 
         const updated = {
             ...configRecord,
@@ -417,7 +400,6 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         setConfigRecord(updated);
 
         const success = await autoSave(updated);
-        console.log('autoSave result:', success);
         if (!success) {
             setConfigRecord(previousRecord);
         } else {
