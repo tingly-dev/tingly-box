@@ -302,6 +302,9 @@ func (p *ClientPool) Stats() map[string]interface{} {
 
 // SetRecordSink sets the record sink for the client pool
 func (p *ClientPool) SetRecordSink(sink *obs.Sink) {
+	if sink == nil {
+		return
+	}
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 	p.recordSink = sink
