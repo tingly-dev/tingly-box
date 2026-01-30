@@ -413,7 +413,7 @@ type responsesAPIEventSenders struct {
 // HandleResponsesToAnthropicStreamResponse is the shared core logic for processing OpenAI Responses API streams
 // and converting them to Anthropic format (v1 or beta depending on the senders provided)
 func HandleResponsesToAnthropicStreamResponse(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string, senders responsesAPIEventSenders) error {
-	logrus.Infof("[ResponsesAPI] Starting Responses API to Anthropic streaming response handler, model=%s", responseModel)
+	logrus.Debugf("[ResponsesAPI] Starting Responses API to Anthropic streaming response handler, model=%s", responseModel)
 	defer func() {
 		if r := recover(); r != nil {
 			logrus.Errorf("Panic in Responses API to Anthropic streaming handler: %v", r)
@@ -429,7 +429,7 @@ func HandleResponsesToAnthropicStreamResponse(c *gin.Context, stream *openaistre
 				logrus.Errorf("Error closing Responses API stream: %v", err)
 			}
 		}
-		logrus.Info("[ResponsesAPI] Finished Responses API to Anthropic streaming response handler")
+		logrus.Debug("[ResponsesAPI] Finished Responses API to Anthropic streaming response handler")
 	}()
 
 	// Set SSE headers
@@ -677,7 +677,7 @@ func HandleResponsesToAnthropicStreamResponse(c *gin.Context, stream *openaistre
 			state.inputTokens = int64(completed.Response.Usage.InputTokens)
 			state.outputTokens = int64(completed.Response.Usage.OutputTokens)
 
-			logrus.Infof("[ResponsesAPI] Response completed: input_tokens=%d, output_tokens=%d", state.inputTokens, state.outputTokens)
+			logrus.Debugf("[ResponsesAPI] Response completed: input_tokens=%d, output_tokens=%d", state.inputTokens, state.outputTokens)
 
 			senders.SendStopEvents(state, flusher)
 
@@ -689,7 +689,7 @@ func HandleResponsesToAnthropicStreamResponse(c *gin.Context, stream *openaistre
 			senders.SendMessageDelta(state, stopReason, flusher)
 			senders.SendMessageStop(messageID, responseModel, state, stopReason, flusher)
 
-			logrus.Infof("[ResponsesAPI] Sent message_stop event with stop_reason=%s, finishing stream", stopReason)
+			logrus.Debugf("[ResponsesAPI] Sent message_stop event with stop_reason=%s, finishing stream", stopReason)
 			return nil
 
 		case "error", "response.failed", "response.incomplete":

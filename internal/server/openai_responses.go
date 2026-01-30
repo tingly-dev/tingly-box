@@ -345,7 +345,7 @@ func (s *Server) forwardResponsesStreamRequest(provider *typ.Provider, params re
 	// Note: ChatGPT backend API providers are handled separately in the Anthropic beta handler
 
 	wrapper := s.clientPool.GetOpenAIClient(provider, params.Model)
-	logrus.Infof("provider: %s (responses streaming)", provider.Name)
+	logrus.Debugf("provider: %s (responses streaming)", provider.Name)
 
 	// Make the request using wrapper method with provider timeout
 	timeout := time.Duration(provider.Timeout) * time.Second

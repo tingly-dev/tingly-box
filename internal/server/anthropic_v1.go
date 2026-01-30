@@ -164,7 +164,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 		// Check if model prefers Responses API (for models like Codex)
 		// This is used for ChatGPT backend API which only supports Responses API
 		useResponsesAPI := selectedService.PreferCompletions()
-		logrus.Infof("[AnthropicV1] Checking Responses API for model=%s, provider=%s, PreferCompletions=%v", actualModel, provider.Name, useResponsesAPI)
+		logrus.Debugf("[AnthropicV1] Checking Responses API for model=%s, provider=%s, PreferCompletions=%v", actualModel, provider.Name, useResponsesAPI)
 
 		// Also check the probe cache if not already determined
 		if !useResponsesAPI {
@@ -191,7 +191,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			// The ChatGPT backend streaming handler will use this to send responses in v1 format
 			c.Set("original_request_format", "v1")
 
-			logrus.Infof("[AnthropicV1] Using direct v1->Responses API conversion for model=%s", actualModel)
+			logrus.Debugf("[AnthropicV1] Using direct v1->Responses API conversion for model=%s", actualModel)
 
 			if isStreaming {
 				s.handleAnthropicV1ViaResponsesAPIStreaming(c, req, proxyModel, actualModel, provider, selectedService, rule, responsesReq)
