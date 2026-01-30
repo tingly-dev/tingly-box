@@ -289,16 +289,18 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.errorMW = errorMW
 
 	// Initialize record sink if recording is enabled
-	if server.recordMode != "" {
+	switch server.recordMode {
+	case "":
+		// Recording disabled
+	case obs.RecordModeResponse, obs.RecordModeAll:
 		recordSink := obs.NewSink(server.recordDir, server.recordMode)
 		server.clientPool.SetRecordSink(recordSink)
 		log.Printf("Request recording enabled, mode: %s, directory: %s", server.recordMode, server.recordDir)
-	}
-
-	// Initialize scenario record sink if scenario recording is enabled
-	if server.recordMode != obs.RecordModeResponse {
+	case obs.RecordModeScenario:
 		server.scenarioRecordSink = obs.NewSink(server.recordDir, server.recordMode)
 		log.Printf("Scenario recording enabled, mode: %s, directory: %s", server.recordMode, server.recordDir)
+	default:
+		log.Panicf("Unknown recording mode %s", server.recordMode)
 	}
 
 	// Initialize statistics middleware with server reference
