@@ -62,7 +62,7 @@ func AddStartFlags(cmd *cobra.Command, flags *StartFlags) {
 	cmd.Flags().BoolVar(&flags.HTTPS, "https", false, "Enable HTTPS mode with self-signed certificate (default: false)")
 	cmd.Flags().StringVar(&flags.HTTPSCertDir, "https-cert-dir", "", "Certificate directory for HTTPS (default: ~/.tingly-box/certs/)")
 	cmd.Flags().BoolVar(&flags.HTTPSRegen, "https-regen", false, "Regenerate HTTPS certificate (default: false)")
-	cmd.Flags().StringVar(&flags.RecordMode, "record-mode", "", "Record mode: empty=disabled, 'all'=record request+response, 'response'=response only (default: disabled)")
+	cmd.Flags().StringVar(&flags.RecordMode, "record-mode", "", "Record mode: empty=disabled, 'all'=record request+response, 'scenario'=all but for scenario only, 'response'=response only (default: disabled)")
 	cmd.Flags().StringVar(&flags.RecordDir, "record-dir", "", "Record directory (default: ~/.tingly-box/record/)")
 	cmd.Flags().StringVar(&flags.Expr, "expr", "", "Enable experimental features (comma-separated, e.g., compact,other)")
 }
