@@ -7,8 +7,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 
 	"github.com/tingly-dev/tingly-box/internal/obs"
@@ -233,4 +235,121 @@ func headerToMap(h http.Header) map[string]string {
 		}
 	}
 	return result
+}
+
+// streamRecorder encapsulates recording and assembly logic for streaming responses
+// It provides a unified way to handle both v1 and v1beta Anthropic streaming events
+type streamRecorder struct {
+	recorder     *ScenarioRecorder
+	assembler    *stream.AnthropicStreamAssembler
+	inputTokens  int
+	outputTokens int
+	hasUsage     bool
+}
+
+// newStreamRecorder creates a new streamRecorder
+func newStreamRecorder(recorder *ScenarioRecorder) *streamRecorder {
+	if recorder == nil {
+		return nil
+	}
+	recorder.EnableStreaming()
+	return &streamRecorder{
+		recorder:  recorder,
+		assembler: stream.NewAnthropicStreamAssembler(),
+	}
+}
+
+// RecordV1Event records a v1 stream event
+func (sr *streamRecorder) RecordV1Event(event *anthropic.MessageStreamEventUnion) {
+	if sr == nil {
+		return
+	}
+	sr.recorder.RecordStreamChunk(event.Type, event)
+	sr.assembler.RecordV1Event(event)
+}
+
+// RecordV1BetaEvent records a v1beta stream event
+func (sr *streamRecorder) RecordV1BetaEvent(event *anthropic.BetaRawMessageStreamEventUnion) {
+	if sr == nil {
+		return
+	}
+	sr.recorder.RecordStreamChunk(event.Type, event)
+	sr.assembler.RecordV1BetaEvent(event)
+}
+
+// Finish finishes recording and sets the assembled response
+// For protocol conversion scenarios, it uses the tracked usage information
+func (sr *streamRecorder) Finish(model string, inputTokens, outputTokens int) {
+	if sr == nil {
+		return
+	}
+	// Use tracked usage if provided values are zero and we have tracked usage
+	if inputTokens == 0 && outputTokens == 0 && sr.hasUsage {
+		inputTokens = sr.inputTokens
+		outputTokens = sr.outputTokens
+	}
+	assembled := sr.assembler.Finish(model, inputTokens, outputTokens)
+	if assembled != nil {
+		sr.recorder.SetAssembledResponse(assembled)
+	}
+}
+
+// RecordError records an error
+func (sr *streamRecorder) RecordError(err error) {
+	if sr == nil {
+		return
+	}
+	sr.recorder.RecordError(err)
+}
+
+// RecordResponse records the final response
+func (sr *streamRecorder) RecordResponse(provider *typ.Provider, model string) {
+	if sr == nil {
+		return
+	}
+	sr.recorder.RecordResponse(provider, model)
+}
+
+// RecordRawMapEvent records a raw map-based event (for protocol conversion scenarios)
+// This is used when converting between different API formats (e.g., OpenAI -> Anthropic)
+// It also extracts usage information from message_delta and message_stop events
+func (sr *streamRecorder) RecordRawMapEvent(eventType string, event map[string]interface{}) {
+	if sr == nil {
+		return
+	}
+	sr.recorder.RecordStreamChunk(eventType, event)
+
+	// Extract usage from message_delta event
+	if eventType == "message_delta" {
+		if usage, ok := event["usage"].(map[string]interface{}); ok {
+			if inputTokens, ok := usage["input_tokens"].(float64); ok {
+				sr.inputTokens = int(inputTokens)
+			} else if inputTokens, ok := usage["input_tokens"].(int64); ok {
+				sr.inputTokens = int(inputTokens)
+			}
+			if outputTokens, ok := usage["output_tokens"].(float64); ok {
+				sr.outputTokens = int(outputTokens)
+			} else if outputTokens, ok := usage["output_tokens"].(int64); ok {
+				sr.outputTokens = int(outputTokens)
+			}
+			sr.hasUsage = true
+		}
+	}
+}
+
+// StreamEventRecorder returns the StreamEventRecorder interface for use in protocol packages
+func (sr *streamRecorder) StreamEventRecorder() interface{} {
+	if sr == nil {
+		return nil
+	}
+	return sr
+}
+
+// SetupStreamRecorderInContext sets up the stream recorder in gin context for protocol conversion handlers
+// This allows protocol handlers in the stream package to record events without direct dependency on server package
+func (sr *streamRecorder) SetupStreamRecorderInContext(c *gin.Context, key string) {
+	if sr == nil {
+		return
+	}
+	c.Set(key, sr)
 }
