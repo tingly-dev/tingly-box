@@ -320,10 +320,11 @@ show configuration information including number of providers and server port.`,
 			if serverRunning {
 				fmt.Printf("Running\n")
 				port := appConfig.GetServerPort()
+				scheme := "http"
 				fmt.Printf("Port: %d\n", port)
-				fmt.Printf("OpenAI Style API Endpoint: "+openAIEndpointTpl+"\n", port)
-				fmt.Printf("Anthropic Style API Endpoint: "+anthropicEndpointTpl+"\n", port)
-				fmt.Printf("Web UI: "+webUITpl+"\n", port)
+				fmt.Printf("OpenAI Style API Endpoint: "+openAIEndpointTpl+"\n", scheme, port)
+				fmt.Printf("Anthropic Style API Endpoint: "+anthropicEndpointTpl+"\n", scheme, port)
+				fmt.Printf("Web UI: "+webUITpl+"\n", scheme, port)
 				if globalConfig.HasUserToken() {
 					fmt.Printf("UI Management Key: %s\n", globalConfig.GetUserToken())
 				}

@@ -1,7 +1,6 @@
 package stream
 
 import (
-	"encoding/json"
 	"net/http"
 	"sort"
 
@@ -77,10 +76,7 @@ func sendMessageStop(c *gin.Context, messageID, model string, state *streamState
 	sendAnthropicStreamEvent(c, eventTypeMessageStop, event, flusher)
 
 	// Send final simple data with type (without event, aka empty)
-	// This matches SendFinishEvent behavior from v1 handler
-	finishEvent := map[string]interface{}{"type": eventTypeMessageStop}
-	finishJSON, _ := json.Marshal(finishEvent)
-	c.SSEvent("", string(finishJSON))
+    c.SSEvent("", map[string]interface{}{"type": eventTypeMessageStop})
 	flusher.Flush()
 }
 

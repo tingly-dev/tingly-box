@@ -81,12 +81,12 @@ func sendBetaMessageStop(c *gin.Context, messageID, model string, state *streamS
 	sendAnthropicBetaStreamEvent(c, eventTypeMessageStop, event, flusher)
 
 	// Send final simple data with type (without event, aka empty)
-	// This matches SendFinishEvent behavior from v1 handler
-	c.SSEvent("", eventTypeMessageStop)
+    c.SSEvent("", map[string]interface{}{"type": eventTypeMessageStop})
 	flusher.Flush()
 }
 
 // sendAnthropicBetaStreamEvent helper function to send an event in Anthropic beta SSE format
+// It also records the event if a StreamEventRecorder is available in the context
 func sendAnthropicBetaStreamEvent(c *gin.Context, eventType string, eventData map[string]interface{}, flusher http.Flusher) {
 	eventJSON, err := json.Marshal(eventData)
 	if err != nil {
@@ -97,6 +97,13 @@ func sendAnthropicBetaStreamEvent(c *gin.Context, eventType string, eventData ma
 	// Anthropic beta SSE format: event: <type>\ndata: <json>\n\n
 	c.SSEvent(eventType, string(eventJSON))
 	flusher.Flush()
+
+	// Record event if recorder is available in context
+	if recorder, exists := c.Get("stream_event_recorder"); exists {
+		if r, ok := recorder.(StreamEventRecorder); ok {
+			r.RecordRawMapEvent(eventType, eventData)
+		}
+	}
 }
 
 // sendBetaContentBlockStart sends a content_block_start event for beta

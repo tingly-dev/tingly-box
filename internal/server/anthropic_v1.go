@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,6 +10,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/gin-gonic/gin"
+	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/client"
@@ -174,26 +174,30 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 		}
 
 		if useResponsesAPI {
-			// Responses API requires Beta format - convert v1 to beta and route to beta handler
-			betaParams, err := convertV1RequestToBeta(&req.MessageNewParams)
-			if err != nil {
-				c.JSON(http.StatusBadRequest, ErrorResponse{
-					Error: ErrorDetail{
-						Message: fmt.Sprintf("Failed to convert request to Beta format: %v", err),
-						Type:    "invalid_request_error",
-					},
-				})
-				return
+			// Use Responses API path with direct v1 conversion (no beta intermediate)
+			// Convert Anthropic v1 request to Responses API format directly
+			responsesReq := request.ConvertAnthropicV1ToResponsesRequestWithProvider(&req.MessageNewParams, provider, actualModel)
+
+			// Set the rule and provider in context so middleware can use the same rule
+			if rule != nil {
+				c.Set("rule", rule)
 			}
-			betaReq := protocol.AnthropicBetaMessagesRequest{
-				Stream:                req.Stream,
-				BetaMessageNewParams:  betaParams,
-			}
+
+			// Set provider UUID in context
+			c.Set("provider", provider.UUID)
+			c.Set("model", actualModel)
+
 			// Set context flag to indicate original request was v1 format
-			// The beta handler will use this to convert responses back to v1 format
+			// The ChatGPT backend streaming handler will use this to send responses in v1 format
 			c.Set("original_request_format", "v1")
-			logrus.Infof("[AnthropicV1] Converting v1 to beta format for model=%s", actualModel)
-			s.anthropicMessagesV1Beta(c, betaReq, proxyModel, provider, selectedService, rule)
+
+			logrus.Infof("[AnthropicV1] Using direct v1->Responses API conversion for model=%s", actualModel)
+
+			if isStreaming {
+				s.handleAnthropicV1ViaResponsesAPIStreaming(c, req, proxyModel, actualModel, provider, selectedService, rule, responsesReq)
+			} else {
+				s.handleAnthropicV1ViaResponsesAPINonStreaming(c, req, proxyModel, actualModel, provider, selectedService, rule, responsesReq)
+			}
 			return
 		}
 
@@ -409,20 +413,86 @@ func (s *Server) trackUsage(c *gin.Context, rule *typ.Rule, provider *typ.Provid
 	tracker.RecordUsage(c, rule, provider, model, requestModel, inputTokens, outputTokens, streamed, status, errorCode)
 }
 
-// convertV1RequestToBeta converts Anthropic v1 MessageNewParams to Beta format
-// Since v1 and beta share the same JSON representation, we can marshal v1 to JSON and unmarshal as beta
-func convertV1RequestToBeta(v1Req *anthropic.MessageNewParams) (anthropic.BetaMessageNewParams, error) {
-	// Marshal v1 request to JSON
-	jsonBytes, err := json.Marshal(v1Req)
+// handleAnthropicV1ViaResponsesAPINonStreaming handles non-streaming Responses API request for v1
+// This converts Anthropic v1 request directly to Responses API format, calls the API, and converts back to v1
+func (s *Server) handleAnthropicV1ViaResponsesAPINonStreaming(c *gin.Context, req protocol.AnthropicMessagesRequest, proxyModel string, actualModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule, responsesReq responses.ResponseNewParams) {
+	var response *responses.Response
+	var err error
+
+	// Check if this is a ChatGPT backend API provider
+	if provider.APIBase == protocol.ChatGPTBackendAPIBase {
+		// Use the ChatGPT backend API handler
+		response, err = s.forwardChatGPTBackendRequest(provider, responsesReq)
+	} else {
+		// Use standard OpenAI Responses API
+		response, err = s.forwardResponsesRequest(provider, responsesReq)
+	}
+
 	if err != nil {
-		return anthropic.BetaMessageNewParams{}, fmt.Errorf("failed to marshal v1 request: %w", err)
+		s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "forward_failed")
+		SendForwardingError(c, err)
+		return
 	}
 
-	// Unmarshal as Beta format
-	var betaReq anthropic.BetaMessageNewParams
-	if err := json.Unmarshal(jsonBytes, &betaReq); err != nil {
-		return anthropic.BetaMessageNewParams{}, fmt.Errorf("failed to unmarshal as beta request: %w", err)
+	// Extract usage from response
+	inputTokens := int(response.Usage.InputTokens)
+	outputTokens := int(response.Usage.OutputTokens)
+
+	// Track usage
+	s.trackUsage(c, rule, provider, actualModel, proxyModel, inputTokens, outputTokens, false, "success", "")
+
+	// Convert Responses API response back to Anthropic v1 format
+	anthropicResp := nonstream.ConvertResponsesToAnthropicV1Response(response, proxyModel)
+	c.JSON(http.StatusOK, anthropicResp)
+}
+
+// handleAnthropicV1ViaResponsesAPIStreaming handles streaming Responses API request for v1
+// This converts Anthropic v1 request directly to Responses API format, calls the API, and streams back in v1 format
+func (s *Server) handleAnthropicV1ViaResponsesAPIStreaming(c *gin.Context, req protocol.AnthropicMessagesRequest, proxyModel string, actualModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule, responsesReq responses.ResponseNewParams) {
+	// Get scenario recorder and set up stream recorder
+	var recorder *ScenarioRecorder
+	if r, exists := c.Get("scenario_recorder"); exists {
+		recorder = r.(*ScenarioRecorder)
+	}
+	streamRec := newStreamRecorder(recorder)
+
+	// Check if this is a ChatGPT backend API provider
+	// These providers need special handling because they use custom HTTP implementation
+	if provider.APIBase == protocol.ChatGPTBackendAPIBase {
+		// Use the ChatGPT backend API streaming handler
+		// This handler currently sends the stream in beta format, so we need to adapt it
+		s.handleChatGPTBackendStreamingRequest(c, provider, responsesReq, proxyModel, actualModel, rule)
+		return
 	}
 
-	return betaReq, nil
+	// For standard OpenAI providers, use the OpenAI SDK
+	streamResp, cancel, err := s.forwardResponsesStreamRequest(provider, responsesReq)
+	if err != nil {
+		s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "stream_creation_failed")
+		SendStreamingError(c, err)
+		return
+	}
+	defer cancel()
+
+	// Handle the streaming response
+	// Use the dedicated stream handler to convert Responses API to Anthropic v1 format
+	err = stream.HandleResponsesToAnthropicV1StreamResponse(c, streamResp, proxyModel)
+
+	// Track usage from stream (would be accumulated in handler)
+	if err != nil {
+		s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "stream_error")
+		if streamRec != nil {
+			streamRec.RecordError(err)
+		}
+		return
+	}
+
+	// Finish recording and assemble response
+	if streamRec != nil {
+		streamRec.Finish(proxyModel, 0, 0) // Usage is tracked internally
+		streamRec.RecordResponse(provider, actualModel)
+	}
+
+	// Success - usage tracking is handled inside the stream handler
+	// Note: The handler tracks usage when response.completed event is received
 }

@@ -224,3 +224,80 @@ func ConvertResponsesToAnthropicBetaResponse(responsesResp *responses.Response, 
 
 	return msg
 }
+
+// ConvertResponsesToAnthropicV1Response converts OpenAI Responses API response to Anthropic v1 format
+func ConvertResponsesToAnthropicV1Response(responsesResp *responses.Response, model string) anthropic.Message {
+	// Create the response as JSON first, then unmarshal into Message
+	responseJSON := map[string]interface{}{
+		"id":            responsesResp.ID,
+		"type":          "message",
+		"role":          "assistant",
+		"content":       []map[string]interface{}{},
+		"model":         model,
+		"stop_reason":   "end_turn",
+		"stop_sequence": "",
+		"usage": map[string]interface{}{
+			"input_tokens":  responsesResp.Usage.InputTokens,
+			"output_tokens": responsesResp.Usage.OutputTokens,
+		},
+	}
+
+	// Add content from Responses API response
+	// The Responses API has a different output structure
+	var contentBlocks []anthropic.ContentBlockParamUnion
+
+	// Process the output array from Responses API
+	for _, output := range responsesResp.Output {
+		// Handle text content
+		for _, content := range output.Content {
+			if content.Type == "output_text" {
+				contentBlocks = append(contentBlocks, anthropic.NewTextBlock(content.Text))
+			}
+			// Handle other content types as needed
+		}
+
+		// Handle tool calls (function_call, custom_tool_call, mcp_call)
+		if output.Type == "function_call" || output.Type == "custom_tool_call" || output.Type == "mcp_call" {
+			contentBlocks = append(contentBlocks, anthropic.NewToolUseBlock(
+				output.ID,
+				output.Arguments,
+				output.Name,
+			))
+
+			// If there were tool calls, set stop_reason to tool_use
+			responseJSON["stop_reason"] = "tool_use"
+		}
+	}
+
+	// Handle reasoning content if present
+	for _, output := range responsesResp.Output {
+		for _, content := range output.Content {
+			if content.Type == "reasoning_text" && content.Text != "" {
+				contentBlocks = append(contentBlocks, anthropic.NewThinkingBlock(
+					"thinking-"+uuid.New().String()[0:6],
+					content.Text,
+				))
+			}
+		}
+	}
+
+	// Handle refusal if present
+	for _, output := range responsesResp.Output {
+		for _, content := range output.Content {
+			if content.Type == "refusal" && content.Text != "" {
+				contentBlocks = append(contentBlocks, anthropic.NewTextBlock(content.Text))
+				// Set stop_reason to refusal if present
+				responseJSON["stop_reason"] = "refusal"
+			}
+		}
+	}
+
+	responseJSON["content"] = contentBlocks
+
+	// Marshal and unmarshal to create proper Message struct
+	jsonBytes, _ := json.Marshal(responseJSON)
+	var msg anthropic.Message
+	json.Unmarshal(jsonBytes, &msg)
+
+	return msg
+}

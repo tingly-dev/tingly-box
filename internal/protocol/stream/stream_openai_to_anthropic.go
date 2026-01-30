@@ -305,19 +305,6 @@ func sendAnthropicStreamEvent(c *gin.Context, eventType string, eventData map[st
 		return
 	}
 
-	// Check if original request was v1 format for logging purposes
-	originalFormat := "v1"
-	if fmt, exists := c.Get("original_request_format"); exists {
-		if formatStr, ok := fmt.(string); ok {
-			originalFormat = formatStr
-		}
-	}
-
-	// Log the event being sent for debugging (important events and content events)
-	if eventType == "message_start" || eventType == "message_stop" || eventType == "content_block_start" || eventType == "content_block_delta" || eventType == "content_block_stop" || eventType == "error" {
-		logrus.Infof("[V1Stream] Sending SSE event: type=%s, original_format=%s, data=%s", eventType, originalFormat, string(eventJSON))
-	}
-
 	// Anthropic SSE format: event: <type>\ndata: <json>\n\n
 	c.SSEvent(eventType, string(eventJSON))
 	flusher.Flush()

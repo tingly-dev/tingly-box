@@ -282,14 +282,31 @@ func (s *Server) handleChatGPTBackendStreamingRequest(c *gin.Context, provider *
 			logrus.Errorf("[ChatGPT] Error closing stream: %v", err)
 		}
 	}()
-	// Process the SSE stream using the proper handler that converts to Anthropic Beta format
-	// This handler properly handles function_call events and converts them to the expected format
-	err = streamhandler.HandleResponsesToAnthropicV1BetaStreamResponse(c, sseStream, responseModel)
-	if err != nil {
+
+	// Check if the original request was v1 or beta format
+	// The v1 handler sets this context flag when routing through Responses API
+	originalFormat := "beta"
+	if fmt, exists := c.Get("original_request_format"); exists {
+		if formatStr, ok := fmt.(string); ok {
+			originalFormat = formatStr
+		}
+	}
+
+	// Process the SSE stream using the proper handler based on original request format
+	var streamErr error
+	if originalFormat == "v1" {
+		// Original request was v1 format, send response in v1 format
+		streamErr = streamhandler.HandleResponsesToAnthropicV1StreamResponse(c, sseStream, responseModel)
+	} else {
+		// Original request was beta format, send response in beta format
+		streamErr = streamhandler.HandleResponsesToAnthropicV1BetaStreamResponse(c, sseStream, responseModel)
+	}
+
+	if streamErr != nil {
 		s.trackUsage(c, rule, provider, actualModel, responseModel, 0, 0, false, "error", "stream_error")
-		logrus.Errorf("[ChatGPT] Stream handler error: %v", err)
+		logrus.Errorf("[ChatGPT] Stream handler error: %v", streamErr)
 		if streamRec != nil {
-			streamRec.RecordError(err)
+			streamRec.RecordError(streamErr)
 		}
 		return
 	}
