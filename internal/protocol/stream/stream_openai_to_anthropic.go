@@ -28,6 +28,9 @@ const (
 	// OpenAI extra field names that map to Anthropic content blocks
 	OpenaiFieldReasoningContent = "reasoning_content"
 
+	// OpenAI tool call ID max length (40 characters per OpenAI API spec)
+	maxToolCallIDLength = 40
+
 	// Anthropic event types
 	eventTypeMessageStart      = "message_start"
 	eventTypeContentBlockStart = "content_block_start"
@@ -239,15 +242,18 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompl
 					state.toolIndexToBlockIndex[openaiIndex] = anthropicIndex
 					state.nextBlockIndex++
 
+					// Truncate tool call ID to meet OpenAI's 40 character limit
+					truncatedID := truncateToolCallID(toolCall.ID)
+
 					// Initialize pending tool call
 					state.pendingToolCalls[anthropicIndex] = &pendingToolCall{
-						id:   toolCall.ID,
+						id:   truncatedID,
 						name: toolCall.Function.Name,
 					}
 
 					// Send content_block_start for tool_use
 					sendContentBlockStart(c, anthropicIndex, blockTypeToolUse, map[string]interface{}{
-						"id":   toolCall.ID,
+						"id":   truncatedID,
 						"name": toolCall.Function.Name,
 					}, flusher)
 				}
@@ -398,6 +404,16 @@ func extractString(v interface{}) string {
 	}
 }
 
+// truncateToolCallID ensures tool call ID doesn't exceed OpenAI's 40 character limit
+// OpenAI API requires tool_call.id to be <= 40 characters
+func truncateToolCallID(id string) string {
+	if len(id) <= maxToolCallIDLength {
+		return id
+	}
+	// Truncate to max length and add a suffix to indicate truncation
+	return id[:maxToolCallIDLength-3] + "..."
+}
+
 // responsesAPIEventSenders defines callbacks for sending Anthropic events in a specific format (v1 or beta)
 type responsesAPIEventSenders struct {
 	SendMessageStart      func(event map[string]interface{}, flusher http.Flusher)
@@ -454,7 +470,8 @@ func HandleResponsesToAnthropicStreamResponse(c *gin.Context, stream *openaistre
 	// Track tool calls by item ID for Responses API
 	type pendingToolCall struct {
 		blockIndex int
-		itemID     string
+		itemID     string // original item ID (used as map key)
+		truncatedID string // truncated ID for OpenAI compatibility (sent to client)
 		name       string
 		arguments  string
 	}
@@ -590,6 +607,8 @@ func HandleResponsesToAnthropicStreamResponse(c *gin.Context, stream *openaistre
 			itemAdded := currentEvent.AsResponseOutputItemAdded()
 			if itemAdded.Item.Type == "function_call" || itemAdded.Item.Type == "custom_tool_call" || itemAdded.Item.Type == "mcp_call" {
 				itemID := itemAdded.Item.ID
+				// Truncate tool call ID to meet OpenAI's 40 character limit
+				truncatedID := truncateToolCallID(itemID)
 				blockIndex := state.nextBlockIndex
 				state.nextBlockIndex++
 
@@ -599,15 +618,16 @@ func HandleResponsesToAnthropicStreamResponse(c *gin.Context, stream *openaistre
 				}
 
 				pendingToolCalls[itemID] = &pendingToolCall{
-					blockIndex: blockIndex,
-					itemID:     itemID,
-					name:       toolName,
-					arguments:  "",
+					blockIndex:  blockIndex,
+					itemID:      itemID,
+					truncatedID: truncatedID,
+					name:        toolName,
+					arguments:   "",
 				}
 				hasToolCalls = true
 
 				senders.SendContentBlockStart(blockIndex, blockTypeToolUse, map[string]interface{}{
-					"id":   itemID,
+					"id":   truncatedID,
 					"name": toolName,
 				}, flusher)
 			}

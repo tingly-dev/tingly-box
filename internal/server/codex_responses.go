@@ -125,9 +125,14 @@ func (s *Server) accumulateChatGPTBackendStream(reader io.Reader, params respons
 					for _, content := range item.Content {
 						if content.Type == "output_text" {
 							fullOutput.WriteString(content.Text)
-							logrus.Debugf("[ChatGPT] Accumulated content length: %d", fullOutput.Len())
+							logrus.Debugf("[ChatGPT] Accumulated content length: %d, text: %s", fullOutput.Len(), content.Text)
+						} else if content.Type == "refusal" {
+							logrus.Warnf("[ChatGPT] Refusal content detected: %s", content.Text)
+							fullOutput.WriteString(content.Text)
 						}
 					}
+				} else {
+					logrus.Debugf("[ChatGPT] Skipping output item type: %s, id: %s", item.Type, item.ID)
 				}
 			}
 

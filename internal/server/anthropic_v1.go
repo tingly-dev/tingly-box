@@ -169,7 +169,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 		// Also check the probe cache if not already determined
 		if !useResponsesAPI {
 			preferredEndpoint := s.GetPreferredEndpointForModel(provider, actualModel)
-			logrus.Infof("[AnthropicV1] Probe cache preferred endpoint for model=%s: %s", actualModel, preferredEndpoint)
+			logrus.Debugf("[AnthropicV1] Probe cache preferred endpoint for model=%s: %s", actualModel, preferredEndpoint)
 			useResponsesAPI = preferredEndpoint == "responses"
 		}
 
@@ -201,7 +201,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			return
 		}
 
-		logrus.Infof("[AnthropicV1] Using Chat Completions API for model=%s", actualModel)
+		logrus.Debugf("[AnthropicV1] Using Chat Completions API for model=%s", actualModel)
 		// Use OpenAI conversion path (default behavior)
 		if isStreaming {
 			// Convert Anthropic request to OpenAI format for streaming
