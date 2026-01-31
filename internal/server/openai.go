@@ -512,13 +512,22 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 			contentBuilder.WriteString(choice.Delta.Content)
 		}
 
-		// Build delta map - include all fields, JSON marshaling will handle empty values
-		delta := map[string]interface{}{
-			"role":          choice.Delta.Role,
-			"content":       choice.Delta.Content,
-			"refusal":       choice.Delta.Refusal,
-			"function_call": choice.Delta.FunctionCall,
-			"tool_calls":    choice.Delta.ToolCalls,
+		// Build delta map - only include non-empty fields to avoid validation errors
+		delta := map[string]interface{}{}
+		if choice.Delta.Role != "" {
+			delta["role"] = choice.Delta.Role
+		}
+		if choice.Delta.Content != "" {
+			delta["content"] = choice.Delta.Content
+		}
+		if choice.Delta.Refusal != "" {
+			delta["refusal"] = choice.Delta.Refusal
+		}
+		if choice.Delta.JSON.FunctionCall.Valid() {
+			delta["function_call"] = choice.Delta.FunctionCall
+		}
+		if len(choice.Delta.ToolCalls) > 0 {
+			delta["tool_calls"] = choice.Delta.ToolCalls
 		}
 
 		// Prepare the chunk in OpenAI format
