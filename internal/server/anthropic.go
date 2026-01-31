@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
@@ -381,18 +380,4 @@ func (s *Server) forwardAnthropicRequestRaw(provider *typ.Provider, rawReq map[s
 	}
 
 	return message, nil
-}
-
-// ForwardAnthropicRequest forwards request using Anthropic SDK with proper types
-// This is a public utility function used by other handlers (e.g., openai.go)
-func (s *Server) ForwardAnthropicRequest(provider *typ.Provider, req anthropic.MessageNewParams) (*anthropic.Message, error) {
-	// Empty scenario for backward compatibility with callers that don't specify scenario
-	return s.forwardAnthropicRequestV1(provider, req, "")
-}
-
-// ForwardAnthropicStreamRequest forwards streaming request using Anthropic SDK
-// This is a public utility function used by other handlers (e.g., openai.go)
-func (s *Server) ForwardAnthropicStreamRequest(provider *typ.Provider, req anthropic.MessageNewParams) (*anthropicstream.Stream[anthropic.MessageStreamEventUnion], error) {
-	// Empty scenario for backward compatibility with callers that don't specify scenario
-	return s.forwardAnthropicStreamRequestV1(provider, req, "")
 }

@@ -211,7 +211,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 		}
 
 		if isStreaming {
-			streamResp, err := s.ForwardAnthropicStreamRequest(provider, anthropicReq)
+			streamResp, err := s.forwardAnthropicStreamRequestV1(provider, anthropicReq, scenario)
 			if err != nil {
 				// Track error with no usage
 				s.trackUsage(c, rule, provider, actualModel, responseModel, 0, 0, true, "error", "stream_creation_failed")
@@ -245,7 +245,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 			}
 			return
 		} else {
-			anthropicResp, err := s.ForwardAnthropicRequest(provider, anthropicReq)
+			anthropicResp, err := s.forwardAnthropicRequestV1(provider, anthropicReq, scenario)
 			if err != nil {
 				// Track error with no usage
 				s.trackUsage(c, rule, provider, actualModel, responseModel, 0, 0, false, "error", "forward_failed")
