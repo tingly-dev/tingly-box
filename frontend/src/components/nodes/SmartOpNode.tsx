@@ -52,7 +52,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
 
     // Format op display: e.g., "model: contains" or "user: regex"
     const getOpDisplay = () => {
-        if (!firstOp) return 'No Op';
+        if (!firstOp) return t('rule.smart.noOperation');
         const opLabel = firstOp.operation || 'unknown';
         return `[${firstOp.position}] [${opLabel}]`;
     };
@@ -65,10 +65,10 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
 
     // Full display for tooltip (includes value)
     const getOpDisplayFull = () => {
-        if (!firstOp) return 'No Op';
+        if (!firstOp) return t('rule.smart.noOperation');
         const opLabel = firstOp.operation || 'unknown';
         const valueStr = firstOp.value ? ` ${firstOp.value}` : '';
-        return `${smartRouting.description || 'Untitled Smart Rule'}\n[${firstOp.position}] [${opLabel}]${valueStr}`;
+        return `${smartRouting.description || t('rule.smart.untitledRule')}\n[${firstOp.position}] [${opLabel}]${valueStr}`;
     };
 
     return (
@@ -101,7 +101,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                 {/* Content */}
                 <Box sx={{mt: 1, width: '100%'}}>
                     {/* Value display - show on hover as description */}
-                    <Tooltip title={smartRouting.description || 'Untitled Smart Rule'} arrow>
+                    <Tooltip title={smartRouting.description || t('rule.smart.untitledRule')} arrow>
                         <Typography
                             variant="body2"
                             sx={{
@@ -111,7 +111,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                 mb: 1,
                             }}
                         >
-                            {getOpValue() || 'No value'}
+                            {getOpValue() || t('rule.smart.noValue')}
                         </Typography>
                     </Tooltip>
 
@@ -157,7 +157,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
 
                 {/* Action Buttons - visible on hover */}
                 <ActionButtonsBox className="action-buttons">
-                    <Tooltip title="Delete smart rule">
+                    <Tooltip title={t('rule.smart.deleteTooltip')}>
                         <IconButton
                             size="small"
                             onClick={handleMenuClick}
@@ -187,7 +187,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                     </ListItemText>
                 </MenuItem>
                 <MenuItem onClick={handleMenuClose} sx={{color: 'text.secondary'}}>
-                    <ListItemText>Cancel</ListItemText>
+                    <ListItemText>{t('common.cancel')}</ListItemText>
                 </MenuItem>
             </Menu>
         </StyledSmartNodeWrapper>
