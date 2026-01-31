@@ -1,8 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Box, Typography, IconButton, Card, CardContent } from '@mui/material';
 import { PlayArrow, Delete as DeleteIcon, ChevronRight } from '@mui/icons-material';
-import type { Recording } from '@/types/prompt';
-import { RECORDING_TYPE_LABELS } from '@/types/prompt';
+import type { Recording, RecordingType } from '@/types/prompt';
+
+const RECORDING_TYPE_LABELS: Record<RecordingType, string> = {
+  'code-review': 'Code Review',
+  'debug': 'Debug',
+  'refactor': 'Refactor',
+  'test': 'Test',
+  'custom': 'Custom',
+};
 
 interface RecordingTimelineProps {
   recordings: Recording[];
