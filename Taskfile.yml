@@ -103,6 +103,10 @@ tasks:
     cmds:
       - go run ./cli/tingly-box --verbose start --https --port 12581
   
+  record:
+    cmds:
+      - go run ./cli/tingly-box --verbose start --port 12580 --record-mode=scenario --debug
+  
   cli:build:
     cmds:
       - task: web:dist
