@@ -100,7 +100,7 @@ func (s *Server) anthropicCountTokensViaTiktoken(c *gin.Context, version anthrop
 			SendInvalidRequestBodyError(c, err)
 			return
 		}
-		count, err := token.CountBetaTokensViaTiktoken(string(req.Model), req.Messages, req.System)
+		count, err := token.CountBetaTokensViaTiktoken(&req)
 		if err != nil {
 			SendInvalidRequestBodyError(c, err)
 			return
@@ -114,7 +114,7 @@ func (s *Server) anthropicCountTokensViaTiktoken(c *gin.Context, version anthrop
 			SendInvalidRequestBodyError(c, err)
 			return
 		}
-		count, err := token.CountTokensViaTiktoken(string(req.Model), req.Messages, req.System)
+		count, err := token.CountTokensViaTiktoken(&req)
 		if err != nil {
 			SendInvalidRequestBodyError(c, err)
 			return

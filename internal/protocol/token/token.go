@@ -1,6 +1,7 @@
 package token
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -10,7 +11,6 @@ import (
 
 // EstimateInputTokens estimates input tokens from OpenAI request using tiktoken
 func EstimateInputTokens(req *openai.ChatCompletionNewParams) (int, error) {
-	// Get the encoding for the model (default to O200kBase which is used by GPT-4o and above)
 	enc, err := tokenizer.Get(tokenizer.O200kBase)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get tokenizer: %w", err)
@@ -58,31 +58,42 @@ func EstimateInputTokens(req *openai.ChatCompletionNewParams) (int, error) {
 		}
 	}
 
+	// Count tokens in tools
+	for _, tool := range req.Tools {
+		toolJSON, err := json.Marshal(tool)
+		if err != nil {
+			// If serialization fails, estimate based on tool components
+			if tool.OfFunction != nil {
+				totalTokens += countOrEstimate(string(tool.OfFunction.Type))
+				totalTokens += countOrEstimate(tool.OfFunction.Function.Name)
+				if tool.OfFunction.Function.Description.Valid() {
+					totalTokens += countOrEstimate(tool.OfFunction.Function.Description.Value)
+				}
+			}
+			if tool.OfCustom != nil {
+				totalTokens += countOrEstimate(string(tool.OfCustom.Type))
+			}
+		} else {
+			totalTokens += countOrEstimate(string(toolJSON))
+		}
+	}
+
 	// Add some overhead for the request format
 	totalTokens += 3
 
 	return totalTokens, nil
 }
 
-// EstimateOutputTokens estimates output tokens from accumulated content
-func EstimateOutputTokens(content string) int {
-	enc, err := tokenizer.Get(tokenizer.O200kBase)
-	if err != nil {
-		return len(content) / 4
-	}
-	count, err := enc.Count(content)
-	if err != nil {
-		return len(content) / 4
-	}
-	return count
-}
-
 // CountTokensViaTiktoken approximates token count for OpenAI-style providers using tiktoken
-func CountTokensViaTiktoken(model string, messages []anthropic.MessageParam, system anthropic.MessageCountTokensParamsSystemUnion) (int, error) {
+func CountTokensViaTiktoken(req *anthropic.MessageCountTokensParams) (int, error) {
 	enc, err := tokenizer.Get(tokenizer.O200kBase)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get tokenizer: %w", err)
 	}
+
+	messages := req.Messages
+	system := req.System
+	tools := req.Tools
 
 	// Helper function to count tokens with fallback to character/4 estimate
 	countOrEstimate := func(text string) int {
@@ -120,6 +131,26 @@ func CountTokensViaTiktoken(model string, messages []anthropic.MessageParam, sys
 		}
 	}
 
+	// Count tokens in tools
+	for _, tool := range tools {
+		toolJSON, err := json.Marshal(tool)
+		if err != nil {
+			// If serialization fails, estimate based on tool components
+			if tool.OfTool != nil {
+				totalTokens += countOrEstimate(tool.OfTool.Name)
+				if tool.OfTool.Description.Valid() {
+					totalTokens += countOrEstimate(tool.OfTool.Description.Value)
+				}
+				// InputSchema is complex, count its JSON representation
+				if schemaJSON, err := json.Marshal(tool.OfTool.InputSchema); err == nil {
+					totalTokens += countOrEstimate(string(schemaJSON))
+				}
+			}
+		} else {
+			totalTokens += countOrEstimate(string(toolJSON))
+		}
+	}
+
 	// Add some overhead for the request format (approximately)
 	totalTokens += 3
 
@@ -127,11 +158,16 @@ func CountTokensViaTiktoken(model string, messages []anthropic.MessageParam, sys
 }
 
 // CountBetaTokensViaTiktoken approximates token count for OpenAI-style providers using tiktoken
-func CountBetaTokensViaTiktoken(model string, messages []anthropic.BetaMessageParam, system anthropic.BetaMessageCountTokensParamsSystemUnion) (int, error) {
+func CountBetaTokensViaTiktoken(req *anthropic.BetaMessageCountTokensParams) (int, error) {
+
 	enc, err := tokenizer.Get(tokenizer.O200kBase)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get tokenizer: %w", err)
 	}
+
+	messages := req.Messages
+	system := req.System
+	tools := req.Tools
 
 	// Helper function to count tokens with fallback to character/4 estimate
 	countOrEstimate := func(text string) int {
@@ -169,8 +205,41 @@ func CountBetaTokensViaTiktoken(model string, messages []anthropic.BetaMessagePa
 		}
 	}
 
+	// Count tokens in tools
+	for _, tool := range tools {
+		toolJSON, err := json.Marshal(tool)
+		if err != nil {
+			// If serialization fails, estimate based on tool components
+			if tool.OfTool != nil {
+				totalTokens += countOrEstimate(tool.OfTool.Name)
+				if tool.OfTool.Description.Valid() {
+					totalTokens += countOrEstimate(tool.OfTool.Description.Value)
+				}
+				// InputSchema is complex, count its JSON representation
+				if schemaJSON, err := json.Marshal(tool.OfTool.InputSchema); err == nil {
+					totalTokens += countOrEstimate(string(schemaJSON))
+				}
+			}
+		} else {
+			totalTokens += countOrEstimate(string(toolJSON))
+		}
+	}
+
 	// Add some overhead for the request format (approximately)
 	totalTokens += 3
 
 	return totalTokens, nil
+}
+
+// EstimateOutputTokens estimates output tokens from accumulated content
+func EstimateOutputTokens(content string) int {
+	enc, err := tokenizer.Get(tokenizer.O200kBase)
+	if err != nil {
+		return len(content) / 4
+	}
+	count, err := enc.Count(content)
+	if err != nil {
+		return len(content) / 4
+	}
+	return count
 }
