@@ -312,11 +312,11 @@ export const api = {
         return response.data;
     },
 
-    updateProvider: async (name: string, data: any): Promise<any> => {
+    updateProvider: async (uuid: string, data: any): Promise<any> => {
         try {
             // Note: The generated client has an issue with path parameters
             const apiInstances = await getApiInstances();
-            const response = await apiInstances.providersApi.apiV2ProvidersUuidPut(name, data);
+            const response = await apiInstances.providersApi.apiV2ProvidersUuidPut(uuid, data);
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
@@ -328,11 +328,11 @@ export const api = {
         }
     },
 
-    deleteProvider: async (name: string): Promise<any> => {
+    deleteProvider: async (uuid: string): Promise<any> => {
         try {
             // Note: The generated client has an issue with path parameters
             const apiInstances = await getApiInstances();
-            const response = await apiInstances.providersApi.apiV2ProvidersUuidDelete(name);
+            const response = await apiInstances.providersApi.apiV2ProvidersUuidDelete(uuid);
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
@@ -344,11 +344,11 @@ export const api = {
         }
     },
 
-    toggleProvider: async (name: string): Promise<any> => {
+    toggleProvider: async (uuid: string): Promise<any> => {
         try {
             // Note: The generated client has an issue with path parameters
             const apiInstances = await getApiInstances();
-            const response = await apiInstances.providersApi.apiV2ProvidersUuidTogglePost(name);
+            const response = await apiInstances.providersApi.apiV2ProvidersUuidTogglePost(uuid);
             return response.data
         } catch (error: any) {
             if (error.response?.status === 401) {
@@ -539,11 +539,12 @@ export const api = {
         });
     },
 
-    probeModel: async (provider: string, model: string): Promise<ProbeResponse> => {
+    probeModel: async (uuid: string, model: string): Promise<ProbeResponse> => {
         try {
             const apiInstances = await getApiInstances();
-            const response = await apiInstances.testingApi.apiV1ProbePost({
-                provider: provider,
+            const response = await apiInstances
+                .testingApi.apiV1ProbePost({
+                provider: uuid,
                 model: model
             });
             return response.data;
