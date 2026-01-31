@@ -81,7 +81,7 @@ func sendBetaMessageStop(c *gin.Context, messageID, model string, state *streamS
 	sendAnthropicBetaStreamEvent(c, eventTypeMessageStop, event, flusher)
 
 	// Send final simple data with type (without event, aka empty)
-	c.SSEvent("", map[string]interface{}{"type": eventTypeMessageStop})
+    c.SSEvent("", map[string]interface{}{"type": eventTypeMessageStop})
 	flusher.Flush()
 }
 

@@ -13,7 +13,22 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+const (
+	// OpenAI tool call ID max length (40 characters per OpenAI API spec)
+	maxToolCallIDLength = 40
+)
+
 type handler func(map[string]interface{}) map[string]interface{}
+
+// truncateToolCallID ensures tool call ID doesn't exceed OpenAI's 40 character limit
+// OpenAI API requires tool_call.id to be <= 40 characters
+func truncateToolCallID(id string) string {
+	if len(id) <= maxToolCallIDLength {
+		return id
+	}
+	// Truncate to max length and add a suffix to indicate truncation
+	return id[:maxToolCallIDLength-3] + "..."
+}
 
 // ConvertAnthropicToOpenAIRequestWithProvider converts Anthropic request to OpenAI format
 // and applies provider-specific transformations
@@ -325,9 +340,11 @@ func convertAnthropicUserMessageToOpenAI(msg anthropic.MessageParam) []openai.Ch
 				textContent += block.OfText.Text
 			} else if block.OfToolResult != nil {
 				// Convert tool_result to OpenAI role="tool" message
+				// Truncate tool_call_id to meet OpenAI's 40 character limit
+				truncatedID := truncateToolCallID(block.OfToolResult.ToolUseID)
 				toolMsg := map[string]interface{}{
 					"role":         "tool",
-					"tool_call_id": block.OfToolResult.ToolUseID,
+					"tool_call_id": truncatedID,
 					"content":      convertToolResultContent(block.OfToolResult.Content),
 				}
 				msgBytes, _ := json.Marshal(toolMsg)
@@ -612,9 +629,11 @@ func convertAnthropicBetaUserMessageToOpenAI(msg anthropic.BetaMessageParam) []o
 				textContent += block.OfText.Text
 			} else if block.OfToolResult != nil {
 				// Convert tool_result to OpenAI role="tool" message
+				// Truncate tool_call_id to meet OpenAI's 40 character limit
+				truncatedID := truncateToolCallID(block.OfToolResult.ToolUseID)
 				toolMsg := map[string]interface{}{
 					"role":         "tool",
-					"tool_call_id": block.OfToolResult.ToolUseID,
+					"tool_call_id": truncatedID,
 					"content":      convertBetaToolResultContent(block.OfToolResult.Content),
 				}
 				msgBytes, _ := json.Marshal(toolMsg)

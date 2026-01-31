@@ -268,12 +268,77 @@ func HandleOpenAIToAnthropicV1BetaStreamResponse(c *gin.Context, req *openai.Cha
 	return nil
 }
 
-// HandleResponsesToAnthropicV1BetaStreamResponse processes OpenAI Responses API streaming events and converts them to Anthropic beta format
+// HandleResponsesToAnthropicV1BetaStreamResponse processes OpenAI Responses API streaming events
+// and routes to the appropriate handler (v1 or beta) based on the original request format
 func HandleResponsesToAnthropicV1BetaStreamResponse(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) error {
-	logrus.Info("Starting Responses API to Anthropic beta streaming response handler")
+	// Check if the original request was v1 format
+	originalFormat := "beta"
+	if fmt, exists := c.Get("original_request_format"); exists {
+		if formatStr, ok := fmt.(string); ok {
+			originalFormat = formatStr
+		}
+	}
+
+	if originalFormat == "v1" {
+		return HandleResponsesToAnthropicV1StreamResponse(c, stream, responseModel)
+	}
+	return HandleResponsesToAnthropicBetaStreamResponse(c, stream, responseModel)
+}
+
+// HandleResponsesToAnthropicBetaStreamResponse processes OpenAI Responses API streaming events and converts them to Anthropic beta format
+// This is a thin wrapper that uses the shared core logic with beta event senders
+func HandleResponsesToAnthropicBetaStreamResponse(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) error {
+	return HandleResponsesToAnthropicStreamResponse(c, stream, responseModel, responsesAPIEventSenders{
+		SendMessageStart: func(event map[string]interface{}, flusher http.Flusher) {
+			sendAnthropicBetaStreamEvent(c, eventTypeMessageStart, event, flusher)
+		},
+		SendContentBlockStart: func(index int, blockType string, content map[string]interface{}, flusher http.Flusher) {
+			sendBetaContentBlockStart(c, index, blockType, content, flusher)
+		},
+		SendContentBlockDelta: func(index int, content map[string]interface{}, flusher http.Flusher) {
+			sendBetaContentBlockDelta(c, index, content, flusher)
+		},
+		SendContentBlockStop: func(index int, flusher http.Flusher) {
+			sendBetaContentBlockStop(c, index, flusher)
+		},
+		SendStopEvents: func(state *streamState, flusher http.Flusher) {
+			sendBetaStopEvents(c, state, flusher)
+		},
+		SendMessageDelta: func(state *streamState, stopReason string, flusher http.Flusher) {
+			sendBetaMessageDelta(c, state, stopReason, flusher)
+		},
+		SendMessageStop: func(messageID, model string, state *streamState, stopReason string, flusher http.Flusher) {
+			sendBetaMessageStop(c, messageID, model, state, stopReason, flusher)
+		},
+		SendErrorEvent: func(event map[string]interface{}, flusher http.Flusher) {
+			sendAnthropicBetaStreamEvent(c, "error", event, flusher)
+		},
+	})
+}
+
+// mapOpenAIFinishReasonToAnthropicBeta converts OpenAI finish_reason to Anthropic beta stop_reason
+func mapOpenAIFinishReasonToAnthropicBeta(finishReason string) string {
+	switch finishReason {
+	case string(openai.CompletionChoiceFinishReasonStop):
+		return string(anthropic.BetaStopReasonEndTurn)
+	case string(openai.CompletionChoiceFinishReasonLength):
+		return string(anthropic.BetaStopReasonMaxTokens)
+	case openaiFinishReasonToolCalls:
+		return string(anthropic.BetaStopReasonToolUse)
+	case string(openai.CompletionChoiceFinishReasonContentFilter):
+		return string(anthropic.BetaStopReasonRefusal)
+	default:
+		return string(anthropic.BetaStopReasonEndTurn)
+	}
+}
+
+// HandleResponsesToAnthropicStreamResponse is the shared core logic for processing OpenAI Responses API streams
+// and converting them to Anthropic format (v1 or beta depending on the senders provided)
+func HandleResponsesToAnthropicStreamResponse(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string, senders responsesAPIEventSenders) error {
+	logrus.Debugf("[ResponsesAPI] Starting Responses API to Anthropic streaming response handler, model=%s", responseModel)
 	defer func() {
 		if r := recover(); r != nil {
-			logrus.Errorf("Panic in Responses API to Anthropic beta streaming handler: %v", r)
+			logrus.Errorf("Panic in Responses API to Anthropic streaming handler: %v", r)
 			if c.Writer != nil {
 				c.SSEvent("error", "{\"error\":{\"message\":\"Internal streaming error\",\"type\":\"internal_error\"}}")
 				if flusher, ok := c.Writer.(http.Flusher); ok {
@@ -286,7 +351,7 @@ func HandleResponsesToAnthropicV1BetaStreamResponse(c *gin.Context, stream *open
 				logrus.Errorf("Error closing Responses API stream: %v", err)
 			}
 		}
-		logrus.Info("Finished Responses API to Anthropic beta streaming response handler")
+		logrus.Debug("[ResponsesAPI] Finished Responses API to Anthropic streaming response handler")
 	}()
 
 	// Set SSE headers
@@ -301,7 +366,7 @@ func HandleResponsesToAnthropicV1BetaStreamResponse(c *gin.Context, stream *open
 		return fmt.Errorf("streaming not supported by this connection")
 	}
 
-	// Generate message ID for Anthropic beta format
+	// Generate message ID
 	messageID := fmt.Sprintf("msg_%d", time.Now().Unix())
 
 	// Initialize streaming state
@@ -311,11 +376,15 @@ func HandleResponsesToAnthropicV1BetaStreamResponse(c *gin.Context, stream *open
 	// Track tool calls by item ID for Responses API
 	type pendingToolCall struct {
 		blockIndex int
-		itemID     string
+		itemID     string // original item ID (used as map key)
+		truncatedID string // truncated ID for OpenAI compatibility (sent to client)
 		name       string
 		arguments  string
 	}
 	pendingToolCalls := make(map[string]*pendingToolCall) // key: itemID
+
+	// Track if any tool calls were processed during the stream
+	hasToolCalls := false
 
 	// Send message_start event first
 	messageStartEvent := map[string]interface{}{
@@ -334,38 +403,30 @@ func HandleResponsesToAnthropicV1BetaStreamResponse(c *gin.Context, stream *open
 			},
 		},
 	}
-	sendAnthropicBetaStreamEvent(c, eventTypeMessageStart, messageStartEvent, flusher)
+	senders.SendMessageStart(messageStartEvent, flusher)
 
 	// Process the stream
 	eventCount := 0
 	for stream.Next() {
 		eventCount++
 		currentEvent := stream.Current()
-		fmt.Printf("%v\n", currentEvent)
 
 		logrus.Debugf("Processing Responses API event #%d: type=%s", eventCount, currentEvent.Type)
 
-		// Handle different event types from Responses API
-		// ref: check all event type in libs/openai-go/responses/response.go:13798
 		switch currentEvent.Type {
 		case "response.created", "response.in_progress", "response.queued":
-			// Initial events, can be ignored for content handling
 			continue
 
 		case "response.content_part.added":
-			// Content part is being added - initialize text block for text content
 			partAdded := currentEvent.AsResponseContentPartAdded()
 			if partAdded.Part.Type == "output_text" {
 				if textBlockIndex == -1 {
 					textBlockIndex = state.nextBlockIndex
 					state.nextBlockIndex++
-					sendBetaContentBlockStart(c, textBlockIndex, blockTypeText, map[string]interface{}{
-						"text": "",
-					}, flusher)
+					senders.SendContentBlockStart(textBlockIndex, blockTypeText, map[string]interface{}{"text": ""}, flusher)
 				}
-				// Send initial text from content part (if any)
 				if partAdded.Part.Text != "" {
-					sendBetaContentBlockDelta(c, textBlockIndex, map[string]interface{}{
+					senders.SendContentBlockDelta(textBlockIndex, map[string]interface{}{
 						"type": deltaTypeTextDelta,
 						"text": partAdded.Part.Text,
 					}, flusher)
@@ -373,209 +434,191 @@ func HandleResponsesToAnthropicV1BetaStreamResponse(c *gin.Context, stream *open
 			}
 
 		case "response.output_text.delta":
-			// Text delta is being sent - incremental text content
 			if textBlockIndex == -1 {
-				// Initialize text block if not already done
 				textBlockIndex = state.nextBlockIndex
 				state.nextBlockIndex++
-				sendBetaContentBlockStart(c, textBlockIndex, blockTypeText, map[string]interface{}{
-					"text": "",
-				}, flusher)
+				senders.SendContentBlockStart(textBlockIndex, blockTypeText, map[string]interface{}{"text": ""}, flusher)
 			}
 			textDelta := currentEvent.AsResponseOutputTextDelta()
-			sendBetaContentBlockDelta(c, textBlockIndex, map[string]interface{}{
+			senders.SendContentBlockDelta(textBlockIndex, map[string]interface{}{
 				"type": deltaTypeTextDelta,
 				"text": textDelta.Delta,
 			}, flusher)
 
 		case "response.output_text.done", "response.content_part.done":
-			// Text or content part is done - finalize the text block
 			if textBlockIndex != -1 {
-				sendBetaContentBlockStop(c, textBlockIndex, flusher)
+				senders.SendContentBlockStop(textBlockIndex, flusher)
 				state.stoppedBlocks[textBlockIndex] = true
 				textBlockIndex = -1
 			}
 
 		case "response.reasoning_text.delta":
-			// Reasoning text delta - send as thinking delta
 			reasoningDelta := currentEvent.AsResponseReasoningTextDelta()
 			if state.thinkingBlockIndex == -1 {
 				state.thinkingBlockIndex = state.nextBlockIndex
 				state.nextBlockIndex++
-				sendBetaContentBlockStart(c, state.thinkingBlockIndex, blockTypeThinking, map[string]interface{}{
-					"thinking": "",
-				}, flusher)
+				senders.SendContentBlockStart(state.thinkingBlockIndex, blockTypeThinking, map[string]interface{}{"thinking": ""}, flusher)
 			}
-			sendBetaContentBlockDelta(c, state.thinkingBlockIndex, map[string]interface{}{
+			senders.SendContentBlockDelta(state.thinkingBlockIndex, map[string]interface{}{
 				"type":     deltaTypeThinkingDelta,
 				"thinking": reasoningDelta.Delta,
 			}, flusher)
 
 		case "response.reasoning_text.done":
-			// Reasoning text is done
 			if state.thinkingBlockIndex != -1 {
-				sendBetaContentBlockStop(c, state.thinkingBlockIndex, flusher)
+				senders.SendContentBlockStop(state.thinkingBlockIndex, flusher)
 				state.stoppedBlocks[state.thinkingBlockIndex] = true
 				state.thinkingBlockIndex = -1
 			}
 
 		case "response.reasoning_summary_text.delta":
-			// Reasoning summary text delta - treat as regular text
 			summaryDelta := currentEvent.AsResponseReasoningSummaryTextDelta()
 			if textBlockIndex == -1 {
 				textBlockIndex = state.nextBlockIndex
 				state.nextBlockIndex++
-				sendBetaContentBlockStart(c, textBlockIndex, blockTypeText, map[string]interface{}{
-					"text": "",
-				}, flusher)
+				senders.SendContentBlockStart(textBlockIndex, blockTypeText, map[string]interface{}{"text": ""}, flusher)
 			}
-			sendBetaContentBlockDelta(c, textBlockIndex, map[string]interface{}{
+			senders.SendContentBlockDelta(textBlockIndex, map[string]interface{}{
 				"type": deltaTypeTextDelta,
 				"text": summaryDelta.Delta,
 			}, flusher)
 
 		case "response.reasoning_summary_text.done":
-			// Reasoning summary text is done
 			if textBlockIndex != -1 {
-				sendBetaContentBlockStop(c, textBlockIndex, flusher)
+				senders.SendContentBlockStop(textBlockIndex, flusher)
 				state.stoppedBlocks[textBlockIndex] = true
 				textBlockIndex = -1
 			}
 
 		case "response.refusal.delta":
-			// Refusal delta - send as text content
 			refusalDelta := currentEvent.AsResponseRefusalDelta()
 			if textBlockIndex == -1 {
 				textBlockIndex = state.nextBlockIndex
 				state.nextBlockIndex++
-				sendBetaContentBlockStart(c, textBlockIndex, blockTypeText, map[string]interface{}{
-					"text": "",
-				}, flusher)
+				senders.SendContentBlockStart(textBlockIndex, blockTypeText, map[string]interface{}{"text": ""}, flusher)
 			}
-			sendBetaContentBlockDelta(c, textBlockIndex, map[string]interface{}{
+			senders.SendContentBlockDelta(textBlockIndex, map[string]interface{}{
 				"type": deltaTypeTextDelta,
 				"text": refusalDelta.Delta,
 			}, flusher)
 
 		case "response.refusal.done":
-			// Refusal is done
 			if textBlockIndex != -1 {
-				sendBetaContentBlockStop(c, textBlockIndex, flusher)
+				senders.SendContentBlockStop(textBlockIndex, flusher)
 				state.stoppedBlocks[textBlockIndex] = true
 				textBlockIndex = -1
 			}
 
 		case "response.output_item.added":
-			// Output item is being added - check for tool calls
 			itemAdded := currentEvent.AsResponseOutputItemAdded()
 			if itemAdded.Item.Type == "function_call" || itemAdded.Item.Type == "custom_tool_call" || itemAdded.Item.Type == "mcp_call" {
-				// Initialize tool use block
 				itemID := itemAdded.Item.ID
+				// Truncate tool call ID to meet OpenAI's 40 character limit
+				truncatedID := truncateToolCallID(itemID)
 				blockIndex := state.nextBlockIndex
 				state.nextBlockIndex++
 
-				// Get tool name if available
 				toolName := ""
 				if itemAdded.Item.Name != "" {
 					toolName = itemAdded.Item.Name
 				}
 
 				pendingToolCalls[itemID] = &pendingToolCall{
-					blockIndex: blockIndex,
-					itemID:     itemID,
-					name:       toolName,
-					arguments:  "",
+					blockIndex:  blockIndex,
+					itemID:      itemID,
+					truncatedID: truncatedID,
+					name:        toolName,
+					arguments:   "",
 				}
+				hasToolCalls = true
 
-				sendBetaContentBlockStart(c, blockIndex, blockTypeToolUse, map[string]interface{}{
-					"id":   itemID,
+				senders.SendContentBlockStart(blockIndex, blockTypeToolUse, map[string]interface{}{
+					"id":   truncatedID,
 					"name": toolName,
 				}, flusher)
 			}
 
 		case "response.function_call_arguments.delta":
-			// Function call arguments delta
 			argsDelta := currentEvent.AsResponseFunctionCallArgumentsDelta()
 			if toolCall, exists := pendingToolCalls[argsDelta.ItemID]; exists {
 				toolCall.arguments += argsDelta.Delta
-				sendBetaContentBlockDelta(c, toolCall.blockIndex, map[string]interface{}{
+				senders.SendContentBlockDelta(toolCall.blockIndex, map[string]interface{}{
 					"type":         deltaTypeInputJSONDelta,
 					"partial_json": argsDelta.Delta,
 				}, flusher)
 			}
 
 		case "response.function_call_arguments.done":
-			// Function call arguments are done - finalize tool use block
 			argsDone := currentEvent.AsResponseFunctionCallArgumentsDone()
 			if toolCall, exists := pendingToolCalls[argsDone.ItemID]; exists {
-				// Update with final name and arguments if not already set
 				if toolCall.name == "" && argsDone.Name != "" {
 					toolCall.name = argsDone.Name
 				}
-				sendBetaContentBlockStop(c, toolCall.blockIndex, flusher)
+				senders.SendContentBlockStop(toolCall.blockIndex, flusher)
 				state.stoppedBlocks[toolCall.blockIndex] = true
 				delete(pendingToolCalls, argsDone.ItemID)
 			}
 
 		case "response.custom_tool_call_input.delta":
-			// Custom tool call input delta
 			customDelta := currentEvent.AsResponseCustomToolCallInputDelta()
 			if toolCall, exists := pendingToolCalls[customDelta.ItemID]; exists {
 				toolCall.arguments += customDelta.Delta
-				sendBetaContentBlockDelta(c, toolCall.blockIndex, map[string]interface{}{
+				senders.SendContentBlockDelta(toolCall.blockIndex, map[string]interface{}{
 					"type":         deltaTypeInputJSONDelta,
 					"partial_json": customDelta.Delta,
 				}, flusher)
 			}
 
 		case "response.custom_tool_call_input.done":
-			// Custom tool call input is done - finalize tool use block
 			customDone := currentEvent.AsResponseCustomToolCallInputDone()
 			if toolCall, exists := pendingToolCalls[customDone.ItemID]; exists {
-				sendBetaContentBlockStop(c, toolCall.blockIndex, flusher)
+				senders.SendContentBlockStop(toolCall.blockIndex, flusher)
 				state.stoppedBlocks[toolCall.blockIndex] = true
 				delete(pendingToolCalls, customDone.ItemID)
 			}
 
 		case "response.mcp_call_arguments.delta":
-			// MCP call arguments delta
 			mcpDelta := currentEvent.AsResponseMcpCallArgumentsDelta()
 			if toolCall, exists := pendingToolCalls[mcpDelta.ItemID]; exists {
 				toolCall.arguments += mcpDelta.Delta
-				sendBetaContentBlockDelta(c, toolCall.blockIndex, map[string]interface{}{
+				senders.SendContentBlockDelta(toolCall.blockIndex, map[string]interface{}{
 					"type":         deltaTypeInputJSONDelta,
 					"partial_json": mcpDelta.Delta,
 				}, flusher)
 			}
 
 		case "response.mcp_call_arguments.done":
-			// MCP call arguments are done - finalize tool use block
 			mcpDone := currentEvent.AsResponseMcpCallArgumentsDone()
 			if toolCall, exists := pendingToolCalls[mcpDone.ItemID]; exists {
-				sendBetaContentBlockStop(c, toolCall.blockIndex, flusher)
+				senders.SendContentBlockStop(toolCall.blockIndex, flusher)
 				state.stoppedBlocks[toolCall.blockIndex] = true
 				delete(pendingToolCalls, mcpDone.ItemID)
 			}
 
 		case "response.output_item.done":
-			// Output item is done - handled by respective done events above
+			// Handled by respective done events above
 
 		case "response.completed":
-			// Response is complete - extract usage info
 			completed := currentEvent.AsResponseCompleted()
 			state.inputTokens = int64(completed.Response.Usage.InputTokens)
 			state.outputTokens = int64(completed.Response.Usage.OutputTokens)
 
-			// Ensure all remaining blocks are stopped (in case any missed done events)
-			sendBetaStopEvents(c, state, flusher)
+			logrus.Debugf("[ResponsesAPI] Response completed: input_tokens=%d, output_tokens=%d", state.inputTokens, state.outputTokens)
 
-			// Send final message events
-			sendBetaMessageDelta(c, state, string(anthropic.BetaStopReasonEndTurn), flusher)
-			sendBetaMessageStop(c, messageID, responseModel, state, string(anthropic.BetaStopReasonEndTurn), flusher)
+			senders.SendStopEvents(state, flusher)
+
+			stopReason := anthropicStopReasonEndTurn
+			if hasToolCalls || state.thinkingBlockIndex != -1 {
+				stopReason = anthropicStopReasonToolUse
+			}
+
+			senders.SendMessageDelta(state, stopReason, flusher)
+			senders.SendMessageStop(messageID, responseModel, state, stopReason, flusher)
+
+			logrus.Debugf("[ResponsesAPI] Sent message_stop event with stop_reason=%s, finishing stream", stopReason)
 			return nil
 
 		case "error", "response.failed", "response.incomplete":
-			// Error or failure occurred
 			logrus.Errorf("Responses API error event: %v", currentEvent)
 			errorEvent := map[string]interface{}{
 				"type": "error",
@@ -584,7 +627,7 @@ func HandleResponsesToAnthropicV1BetaStreamResponse(c *gin.Context, stream *open
 					"type":    "api_error",
 				},
 			}
-			sendAnthropicBetaStreamEvent(c, "error", errorEvent, flusher)
+			senders.SendErrorEvent(errorEvent, flusher)
 			return fmt.Errorf("Responses API error: %v", currentEvent)
 
 		default:
@@ -592,7 +635,6 @@ func HandleResponsesToAnthropicV1BetaStreamResponse(c *gin.Context, stream *open
 		}
 	}
 
-	// Check for stream errors
 	if err := stream.Err(); err != nil {
 		logrus.Errorf("Responses API stream error: %v", err)
 		errorEvent := map[string]interface{}{
@@ -603,25 +645,9 @@ func HandleResponsesToAnthropicV1BetaStreamResponse(c *gin.Context, stream *open
 				"code":    "stream_failed",
 			},
 		}
-		sendAnthropicBetaStreamEvent(c, "error", errorEvent, flusher)
+		senders.SendErrorEvent(errorEvent, flusher)
 		return err
 	}
 
 	return nil
-}
-
-// mapOpenAIFinishReasonToAnthropicBeta converts OpenAI finish_reason to Anthropic beta stop_reason
-func mapOpenAIFinishReasonToAnthropicBeta(finishReason string) string {
-	switch finishReason {
-	case string(openai.CompletionChoiceFinishReasonStop):
-		return string(anthropic.BetaStopReasonEndTurn)
-	case string(openai.CompletionChoiceFinishReasonLength):
-		return string(anthropic.BetaStopReasonMaxTokens)
-	case openaiFinishReasonToolCalls:
-		return string(anthropic.BetaStopReasonToolUse)
-	case string(openai.CompletionChoiceFinishReasonContentFilter):
-		return string(anthropic.BetaStopReasonRefusal)
-	default:
-		return string(anthropic.BetaStopReasonEndTurn)
-	}
 }

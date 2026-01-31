@@ -8,37 +8,40 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 )
 
-func TestResponseInput_UnmarshalJSON_String(t *testing.T) {
+// TestResponseNewParamsInputUnion_String tests unmarshaling a string input
+func TestResponseNewParamsInputUnion_String(t *testing.T) {
 	jsonString := `"Hello, world!"`
 
-	var input ResponseInput
+	var input responses.ResponseNewParamsInputUnion
 	if err := json.Unmarshal([]byte(jsonString), &input); err != nil {
-		t.Fatalf("Failed to deserialize string into ResponseInput: %v", err)
+		t.Fatalf("Failed to deserialize string into ResponseNewParamsInputUnion: %v", err)
 	}
 
-	if !input.IsString() {
+	if param.IsOmitted(input.OfString) {
 		t.Fatal("Expected input to be a string")
 	}
 
-	str, ok := input.String()
-	if !ok || str != "Hello, world!" {
+	str := input.OfString.Value
+	if str != "Hello, world!" {
 		t.Fatalf("Expected 'Hello, world!', got '%s'", str)
 	}
 }
 
-func TestResponseInput_UnmarshalJSON_Array(t *testing.T) {
+// TestResponseNewParamsInputUnion_Array tests unmarshaling an array input
+func TestResponseNewParamsInputUnion_Array(t *testing.T) {
 	jsonString := `[{"type": "message", "role": "user", "content": [{"type": "input_text", "text": "Hello"}]}]`
 
-	var input ResponseInput
+	var input responses.ResponseNewParamsInputUnion
 	if err := json.Unmarshal([]byte(jsonString), &input); err != nil {
-		t.Fatalf("Failed to deserialize array into ResponseInput: %v", err)
+		t.Fatalf("Failed to deserialize array into ResponseNewParamsInputUnion: %v", err)
 	}
 
-	if !input.IsArray() {
+	if param.IsOmitted(input.OfInputItemList) {
 		t.Fatal("Expected input to be an array")
 	}
 }
 
+// TestResponseCreateRequest_UnmarshalJSON tests unmarshaling a ResponseCreateRequest
 func TestResponseCreateRequest_UnmarshalJSON(t *testing.T) {
 	jsonString := `{
 		"model": "gpt-4o",
@@ -51,20 +54,25 @@ func TestResponseCreateRequest_UnmarshalJSON(t *testing.T) {
 		t.Fatalf("Failed to deserialize into ResponseCreateRequest: %v", err)
 	}
 
-	if req.Model != "gpt-4o" {
+	if string(req.Model) != "gpt-4o" {
 		t.Fatalf("Expected model 'gpt-4o', got '%s'", req.Model)
 	}
 
-	if req.Stream != true {
+	if !req.Stream {
 		t.Fatal("Expected stream to be true")
 	}
 
-	str, ok := req.Input.String()
-	if !ok || str != "Write a haiku" {
+	if param.IsOmitted(req.Input.OfString) {
+		t.Fatal("Expected input to be a string")
+	}
+
+	str := req.Input.OfString.Value
+	if str != "Write a haiku" {
 		t.Fatalf("Expected input 'Write a haiku', got '%s'", str)
 	}
 }
 
+// TestResponseCreateRequest_UnmarshalJSON_ArrayInput tests unmarshaling a ResponseCreateRequest with array input
 func TestResponseCreateRequest_UnmarshalJSON_ArrayInput(t *testing.T) {
 	jsonString := `{
 		"model": "gpt-4o",
@@ -78,16 +86,17 @@ func TestResponseCreateRequest_UnmarshalJSON_ArrayInput(t *testing.T) {
 		t.Fatalf("Failed to deserialize into ResponseCreateRequest: %v", err)
 	}
 
-	if req.Model != "gpt-4o" {
+	if string(req.Model) != "gpt-4o" {
 		t.Fatalf("Expected model 'gpt-4o', got '%s'", req.Model)
 	}
 
-	if !req.Input.IsArray() {
+	if param.IsOmitted(req.Input.OfInputItemList) {
 		t.Fatal("Expected input to be an array")
 	}
 }
 
-func TestResponseCreateRequest_UnmarshalJSON_WithExtras(t *testing.T) {
+// TestResponseCreateRequest_UnmarshalJSON_WithExtraFields tests unmarshaling with extra fields
+func TestResponseCreateRequest_UnmarshalJSON_WithExtraFields(t *testing.T) {
 	jsonString := `{
 		"model": "gpt-4o",
 		"input": "Hello",
@@ -100,17 +109,22 @@ func TestResponseCreateRequest_UnmarshalJSON_WithExtras(t *testing.T) {
 		t.Fatalf("Failed to deserialize into ResponseCreateRequest: %v", err)
 	}
 
-	if req.Model != "gpt-4o" {
+	if string(req.Model) != "gpt-4o" {
 		t.Fatalf("Expected model 'gpt-4o', got '%s'", req.Model)
 	}
 
-	// Check that extras are captured
-	if req.Extras == nil {
-		t.Fatal("Expected extras to be captured")
+	// Check that temperature was captured (it's a field on ResponseNewParams)
+	if !param.IsOmitted(req.Temperature) {
+		if req.Temperature.Value != 0.7 {
+			t.Fatalf("Expected temperature 0.7, got %v", req.Temperature.Value)
+		}
 	}
 
-	if temp, ok := req.Extras["temperature"].(float64); !ok || temp != 0.7 {
-		t.Fatalf("Expected temperature 0.7, got %v", temp)
+	// Check that max_output_tokens was captured
+	if !param.IsOmitted(req.MaxOutputTokens) {
+		if req.MaxOutputTokens.Value != 1000 {
+			t.Fatalf("Expected max_output_tokens 1000, got %v", req.MaxOutputTokens.Value)
+		}
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/gin-gonic/gin"
+	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/client"
@@ -160,6 +161,47 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			return
 		}
 
+		// Check if model prefers Responses API (for models like Codex)
+		// This is used for ChatGPT backend API which only supports Responses API
+		useResponsesAPI := selectedService.PreferCompletions()
+		logrus.Debugf("[AnthropicV1] Checking Responses API for model=%s, provider=%s, PreferCompletions=%v", actualModel, provider.Name, useResponsesAPI)
+
+		// Also check the probe cache if not already determined
+		if !useResponsesAPI {
+			preferredEndpoint := s.GetPreferredEndpointForModel(provider, actualModel)
+			logrus.Debugf("[AnthropicV1] Probe cache preferred endpoint for model=%s: %s", actualModel, preferredEndpoint)
+			useResponsesAPI = preferredEndpoint == "responses"
+		}
+
+		if useResponsesAPI {
+			// Use Responses API path with direct v1 conversion (no beta intermediate)
+			// Convert Anthropic v1 request to Responses API format directly
+			responsesReq := request.ConvertAnthropicV1ToResponsesRequestWithProvider(&req.MessageNewParams, provider, actualModel)
+
+			// Set the rule and provider in context so middleware can use the same rule
+			if rule != nil {
+				c.Set("rule", rule)
+			}
+
+			// Set provider UUID in context
+			c.Set("provider", provider.UUID)
+			c.Set("model", actualModel)
+
+			// Set context flag to indicate original request was v1 format
+			// The ChatGPT backend streaming handler will use this to send responses in v1 format
+			c.Set("original_request_format", "v1")
+
+			logrus.Debugf("[AnthropicV1] Using direct v1->Responses API conversion for model=%s", actualModel)
+
+			if isStreaming {
+				s.handleAnthropicV1ViaResponsesAPIStreaming(c, req, proxyModel, actualModel, provider, selectedService, rule, responsesReq)
+			} else {
+				s.handleAnthropicV1ViaResponsesAPINonStreaming(c, req, proxyModel, actualModel, provider, selectedService, rule, responsesReq)
+			}
+			return
+		}
+
+		logrus.Debugf("[AnthropicV1] Using Chat Completions API for model=%s", actualModel)
 		// Use OpenAI conversion path (default behavior)
 		if isStreaming {
 			// Convert Anthropic request to OpenAI format for streaming
@@ -369,4 +411,88 @@ func (s *Server) anthropicCountTokensV1(c *gin.Context, bodyBytes []byte, rawReq
 func (s *Server) trackUsage(c *gin.Context, rule *typ.Rule, provider *typ.Provider, model, requestModel string, inputTokens, outputTokens int, streamed bool, status, errorCode string) {
 	tracker := s.NewUsageTracker()
 	tracker.RecordUsage(c, rule, provider, model, requestModel, inputTokens, outputTokens, streamed, status, errorCode)
+}
+
+// handleAnthropicV1ViaResponsesAPINonStreaming handles non-streaming Responses API request for v1
+// This converts Anthropic v1 request directly to Responses API format, calls the API, and converts back to v1
+func (s *Server) handleAnthropicV1ViaResponsesAPINonStreaming(c *gin.Context, req protocol.AnthropicMessagesRequest, proxyModel string, actualModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule, responsesReq responses.ResponseNewParams) {
+	var response *responses.Response
+	var err error
+
+	// Check if this is a ChatGPT backend API provider
+	if provider.APIBase == protocol.ChatGPTBackendAPIBase {
+		// Use the ChatGPT backend API handler
+		response, err = s.forwardChatGPTBackendRequest(provider, responsesReq)
+	} else {
+		// Use standard OpenAI Responses API
+		response, err = s.forwardResponsesRequest(provider, responsesReq)
+	}
+
+	if err != nil {
+		s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "forward_failed")
+		SendForwardingError(c, err)
+		return
+	}
+
+	// Extract usage from response
+	inputTokens := int(response.Usage.InputTokens)
+	outputTokens := int(response.Usage.OutputTokens)
+
+	// Track usage
+	s.trackUsage(c, rule, provider, actualModel, proxyModel, inputTokens, outputTokens, false, "success", "")
+
+	// Convert Responses API response back to Anthropic v1 format
+	anthropicResp := nonstream.ConvertResponsesToAnthropicV1Response(response, proxyModel)
+	c.JSON(http.StatusOK, anthropicResp)
+}
+
+// handleAnthropicV1ViaResponsesAPIStreaming handles streaming Responses API request for v1
+// This converts Anthropic v1 request directly to Responses API format, calls the API, and streams back in v1 format
+func (s *Server) handleAnthropicV1ViaResponsesAPIStreaming(c *gin.Context, req protocol.AnthropicMessagesRequest, proxyModel string, actualModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule, responsesReq responses.ResponseNewParams) {
+	// Get scenario recorder and set up stream recorder
+	var recorder *ScenarioRecorder
+	if r, exists := c.Get("scenario_recorder"); exists {
+		recorder = r.(*ScenarioRecorder)
+	}
+	streamRec := newStreamRecorder(recorder)
+
+	// Check if this is a ChatGPT backend API provider
+	// These providers need special handling because they use custom HTTP implementation
+	if provider.APIBase == protocol.ChatGPTBackendAPIBase {
+		// Use the ChatGPT backend API streaming handler
+		// This handler currently sends the stream in beta format, so we need to adapt it
+		s.handleChatGPTBackendStreamingRequest(c, provider, responsesReq, proxyModel, actualModel, rule)
+		return
+	}
+
+	// For standard OpenAI providers, use the OpenAI SDK
+	streamResp, cancel, err := s.forwardResponsesStreamRequest(provider, responsesReq)
+	if err != nil {
+		s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "stream_creation_failed")
+		SendStreamingError(c, err)
+		return
+	}
+	defer cancel()
+
+	// Handle the streaming response
+	// Use the dedicated stream handler to convert Responses API to Anthropic v1 format
+	err = stream.HandleResponsesToAnthropicV1StreamResponse(c, streamResp, proxyModel)
+
+	// Track usage from stream (would be accumulated in handler)
+	if err != nil {
+		s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "stream_error")
+		if streamRec != nil {
+			streamRec.RecordError(err)
+		}
+		return
+	}
+
+	// Finish recording and assemble response
+	if streamRec != nil {
+		streamRec.Finish(proxyModel, 0, 0) // Usage is tracked internally
+		streamRec.RecordResponse(provider, actualModel)
+	}
+
+	// Success - usage tracking is handled inside the stream handler
+	// Note: The handler tracks usage when response.completed event is received
 }

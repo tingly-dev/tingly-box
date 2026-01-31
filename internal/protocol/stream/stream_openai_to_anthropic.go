@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
+	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 )
 
@@ -26,6 +27,9 @@ const (
 
 	// OpenAI extra field names that map to Anthropic content blocks
 	OpenaiFieldReasoningContent = "reasoning_content"
+
+	// OpenAI tool call ID max length (40 characters per OpenAI API spec)
+	maxToolCallIDLength = 40
 
 	// Anthropic event types
 	eventTypeMessageStart      = "message_start"
@@ -238,15 +242,18 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompl
 					state.toolIndexToBlockIndex[openaiIndex] = anthropicIndex
 					state.nextBlockIndex++
 
+					// Truncate tool call ID to meet OpenAI's 40 character limit
+					truncatedID := truncateToolCallID(toolCall.ID)
+
 					// Initialize pending tool call
 					state.pendingToolCalls[anthropicIndex] = &pendingToolCall{
-						id:   toolCall.ID,
+						id:   truncatedID,
 						name: toolCall.Function.Name,
 					}
 
 					// Send content_block_start for tool_use
 					sendContentBlockStart(c, anthropicIndex, blockTypeToolUse, map[string]interface{}{
-						"id":   toolCall.ID,
+						"id":   truncatedID,
 						"name": toolCall.Function.Name,
 					}, flusher)
 				}
@@ -395,4 +402,57 @@ func extractString(v interface{}) string {
 	default:
 		return fmt.Sprintf("%v", tv)
 	}
+}
+
+// truncateToolCallID ensures tool call ID doesn't exceed OpenAI's 40 character limit
+// OpenAI API requires tool_call.id to be <= 40 characters
+func truncateToolCallID(id string) string {
+	if len(id) <= maxToolCallIDLength {
+		return id
+	}
+	// Truncate to max length and add a suffix to indicate truncation
+	return id[:maxToolCallIDLength-3] + "..."
+}
+
+// responsesAPIEventSenders defines callbacks for sending Anthropic events in a specific format (v1 or beta)
+type responsesAPIEventSenders struct {
+	SendMessageStart      func(event map[string]interface{}, flusher http.Flusher)
+	SendContentBlockStart func(index int, blockType string, content map[string]interface{}, flusher http.Flusher)
+	SendContentBlockDelta func(index int, content map[string]interface{}, flusher http.Flusher)
+	SendContentBlockStop  func(index int, flusher http.Flusher)
+	SendStopEvents        func(state *streamState, flusher http.Flusher)
+	SendMessageDelta      func(state *streamState, stopReason string, flusher http.Flusher)
+	SendMessageStop       func(messageID, model string, state *streamState, stopReason string, flusher http.Flusher)
+	SendErrorEvent        func(event map[string]interface{}, flusher http.Flusher)
+}
+
+// HandleResponsesToAnthropicV1StreamResponse processes OpenAI Responses API streaming events and converts them to Anthropic v1 format
+// This is a thin wrapper that uses the shared core logic with v1 event senders
+func HandleResponsesToAnthropicV1StreamResponse(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) error {
+	return HandleResponsesToAnthropicStreamResponse(c, stream, responseModel, responsesAPIEventSenders{
+		SendMessageStart: func(event map[string]interface{}, flusher http.Flusher) {
+			sendAnthropicStreamEvent(c, eventTypeMessageStart, event, flusher)
+		},
+		SendContentBlockStart: func(index int, blockType string, content map[string]interface{}, flusher http.Flusher) {
+			sendContentBlockStart(c, index, blockType, content, flusher)
+		},
+		SendContentBlockDelta: func(index int, content map[string]interface{}, flusher http.Flusher) {
+			sendContentBlockDelta(c, index, content, flusher)
+		},
+		SendContentBlockStop: func(index int, flusher http.Flusher) {
+			sendContentBlockStop(c, index, flusher)
+		},
+		SendStopEvents: func(state *streamState, flusher http.Flusher) {
+			sendStopEvents(c, state, flusher)
+		},
+		SendMessageDelta: func(state *streamState, stopReason string, flusher http.Flusher) {
+			sendMessageDelta(c, state, stopReason, flusher)
+		},
+		SendMessageStop: func(messageID, model string, state *streamState, stopReason string, flusher http.Flusher) {
+			sendMessageStop(c, messageID, model, state, stopReason, flusher)
+		},
+		SendErrorEvent: func(event map[string]interface{}, flusher http.Flusher) {
+			sendAnthropicStreamEvent(c, "error", event, flusher)
+		},
+	})
 }
