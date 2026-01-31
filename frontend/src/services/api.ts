@@ -16,6 +16,7 @@ import {
     type RuleResponse,
     RulesApi,
     ServerApi,
+    SkillsApi,
     TestingApi,
     TokenApi,
     UsageApi,
@@ -35,6 +36,7 @@ interface ApiInstances {
     providersApi: ProvidersApi;
     rulesApi: RulesApi;
     serverApi: ServerApi;
+    skillsApi: SkillsApi;
     testingApi: TestingApi;
     tokenApi: TokenApi;
     infoApi: InfoApi;
@@ -103,6 +105,7 @@ const createApiInstances = async () => {
         providersApi: new ProvidersApi(config),
         rulesApi: new RulesApi(config),
         serverApi: new ServerApi(config),
+        skillsApi: new SkillsApi(config),
         testingApi: new TestingApi(config),
         tokenApi: new TokenApi(config),
         infoApi: new InfoApi(config),
@@ -748,6 +751,151 @@ export const api = {
         return fetchUIAPI('/config/preview/opencode', {
             method: 'GET',
         });
+    },
+
+    // ============================================
+    // Skill Management API
+    // ============================================
+
+    // Get all skill locations
+    getSkillLocations: async (): Promise<any> => {
+        try {
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.skillsApi.apiV2SkillLocationsGet();
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                localStorage.removeItem('user_auth_token');
+                window.location.href = '/login';
+                return { success: false, error: 'Authentication required' };
+            }
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Add a new skill location
+    addSkillLocation: async (data: {
+        name: string;
+        path: string;
+        ide_source: string;
+    }): Promise<any> => {
+        try {
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.skillsApi.apiV2SkillLocationsPost(data);
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                localStorage.removeItem('user_auth_token');
+                window.location.href = '/login';
+                return { success: false, error: 'Authentication required' };
+            }
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Get a specific skill location
+    getSkillLocation: async (id: string): Promise<any> => {
+        try {
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.skillsApi.apiV2SkillLocationsIdGet(id);
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                localStorage.removeItem('user_auth_token');
+                window.location.href = '/login';
+                return { success: false, error: 'Authentication required' };
+            }
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Remove a skill location
+    removeSkillLocation: async (id: string): Promise<any> => {
+        try {
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.skillsApi.apiV2SkillLocationsIdDelete(id);
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                localStorage.removeItem('user_auth_token');
+                window.location.href = '/login';
+                return { success: false, error: 'Authentication required' };
+            }
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Refresh/scan a skill location
+    refreshSkillLocation: async (id: string): Promise<any> => {
+        try {
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.skillsApi.apiV2SkillLocationsIdRefreshPost(id);
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                localStorage.removeItem('user_auth_token');
+                window.location.href = '/login';
+                return { success: false, error: 'Authentication required' };
+            }
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Discover IDEs with skills
+    discoverIdes: async (): Promise<any> => {
+        try {
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.skillsApi.apiV2SkillLocationsDiscoverGet();
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                localStorage.removeItem('user_auth_token');
+                window.location.href = '/login';
+                return { success: false, error: 'Authentication required' };
+            }
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Import discovered skill locations
+    importSkillLocations: async (locations: any[]): Promise<any> => {
+        try {
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.skillsApi.apiV2SkillLocationsImportPost({ locations });
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                localStorage.removeItem('user_auth_token');
+                window.location.href = '/login';
+                return { success: false, error: 'Authentication required' };
+            }
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Scan all IDE locations for skills (comprehensive scan)
+    scanIdes: async (): Promise<any> => {
+        // TODO: Regenerate swagger client
+        try {
+            const token = getUserAuthToken();
+            const response = await fetch(`${await getApiBaseUrl()}/api/v2/skill-locations/scan`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+            });
+
+            if (response.status === 401) {
+                localStorage.removeItem('user_auth_token');
+                window.location.href = '/login';
+                return { success: false, error: 'Authentication required' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
     },
 };
 

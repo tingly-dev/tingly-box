@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react';
-import { Box, Typography, Grid, Paper, Button } from '@mui/material';
-import { Add as AddIcon } from '@mui/icons-material';
+import { useState, useMemo, useEffect } from 'react';
+import { Box, Typography, Grid, Paper, Button, Alert, IconButton } from '@mui/material';
+import { Add as AddIcon, Search as SearchIcon, Close as CloseIcon, Refresh as RefreshIcon } from '@mui/icons-material';
 import PageLayout from '@/components/PageLayout';
 import {
   SkillSearchBar,
@@ -8,65 +8,80 @@ import {
   SkillLocationPanel,
   AddPathDialog,
 } from '@/components/prompt';
+import AutoDiscoveryDialog from '@/components/prompt/skill/AutoDiscoveryDialog';
+import SkillDetailDialog from '@/components/prompt/skill/SkillDetailDialog';
 import type { Skill, SkillLocation, IDESource } from '@/types/prompt';
 import { useTranslation } from 'react-i18next';
+import api from '@/services/api';
 
-// Mock data - TODO: Replace with actual API calls
-const mockLocations: SkillLocation[] = [
-  {
-    id: '1',
-    name: 'Claude Code Skills',
-    path: '~/.claude-code/skills',
-    ideSource: 'claude-code',
-    skillCount: 3,
-  },
-  {
-    id: '2',
-    name: 'OpenCode Extensions',
-    path: '~/.opencode/extensions',
-    ideSource: 'opencode',
-    skillCount: 2,
-  },
-];
-
-const mockSkills: Skill[] = [
-  {
-    id: '1',
-    name: 'code-review',
-    filename: 'code-review.ts',
-    path: '~/.claude-code/skills/code-review.ts',
-    locationId: '1',
-    fileType: '.ts',
-    description: 'Automated code review skill',
-  },
-  {
-    id: '2',
-    name: 'debug-helper',
-    filename: 'debug-helper.ts',
-    path: '~/.claude-code/skills/debug-helper.ts',
-    locationId: '1',
-    fileType: '.ts',
-    description: 'Debug assistance skill',
-  },
-  {
-    id: '3',
-    name: 'refactor',
-    filename: 'refactor.ts',
-    path: '~/.claude-code/skills/refactor.ts',
-    locationId: '1',
-    fileType: '.ts',
-  },
-];
+// Auto-discovery on first visit
+const SKILL_ONBOARDING_KEY = 'tingly_skill_onboarded';
 
 const SkillPage = () => {
   const { t } = useTranslation();
-  const [loading, setLoading] = useState(false);
-  const [locations, setLocations] = useState<SkillLocation[]>(mockLocations);
-  const [skills, setSkills] = useState<Skill[]>(mockSkills);
+  const [loading, setLoading] = useState(true);
+  const [locations, setLocations] = useState<SkillLocation[]>([]);
+  const [skills, setSkills] = useState<Skill[]>([]);
   const [selectedLocationId, setSelectedLocationId] = useState<string>();
   const [searchQuery, setSearchQuery] = useState('');
   const [ideFilter, setIdeFilter] = useState<IDESource>();
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [discoverDialogOpen, setDiscoverDialogOpen] = useState(false);
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [selectedSkill, setSelectedSkill] = useState<Skill>();
+  const [showOnboardingBanner, setShowOnboardingBanner] = useState(false);
+
+  // Check onboarding status and load locations on mount
+  useEffect(() => {
+    const hasOnboarded = localStorage.getItem(SKILL_ONBOARDING_KEY);
+    loadLocations();
+
+    // Show onboarding banner if not yet onboarded
+    if (!hasOnboarded) {
+      setShowOnboardingBanner(true);
+    }
+  }, []);
+
+  const loadLocations = async () => {
+    setLoading(true);
+    try {
+      const response = await api.getSkillLocations();
+      if (response.success && response.data) {
+        setLocations(response.data);
+      }
+    } catch (error) {
+      console.error('Failed to load skill locations:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadSkillsForLocation = async (locationId: string) => {
+    try {
+      const response = await api.refreshSkillLocation(locationId);
+      if (response.success && response.data) {
+        // Update skills from the scan result
+        if (response.data.skills) {
+          setSkills(response.data.skills);
+          // Also update the location's skill count
+          loadLocations();
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load skills:', error);
+    }
+  };
+
+  const handleAutoDiscover = () => {
+    // Trigger automatic discovery without showing dialog
+    // AutoDiscoverDialog will handle the discovery and auto-import
+    setDiscoverDialogOpen(true);
+  };
+
+  const handleOnboardingComplete = () => {
+    localStorage.setItem(SKILL_ONBOARDING_KEY, 'true');
+    setShowOnboardingBanner(false);
+  };
 
   const selectedLocation = useMemo(
     () => locations.find((l) => l.id === selectedLocationId),
@@ -75,12 +90,12 @@ const SkillPage = () => {
 
   const filteredSkills = useMemo(() => {
     return skills.filter((skill) => {
-      const matchesLocation = !selectedLocationId || skill.locationId === selectedLocationId;
+      const matchesLocation = !selectedLocationId || skill.location_id === selectedLocationId;
       const matchesSearch =
         searchQuery === '' ||
         skill.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         skill.description?.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesIde = !ideFilter || selectedLocation?.ideSource === ideFilter;
+      const matchesIde = !ideFilter || selectedLocation?.ide_source === ideFilter;
 
       return matchesLocation && matchesSearch && matchesIde;
     });
@@ -88,35 +103,61 @@ const SkillPage = () => {
 
   const handleSelectLocation = (location: SkillLocation) => {
     setSelectedLocationId(location.id);
+    // Load skills for the selected location
+    loadSkillsForLocation(location.id);
   };
 
-  const handleRemoveLocation = (locationId: string) => {
-    setLocations(locations.filter((l) => l.id !== locationId));
-    if (selectedLocationId === locationId) {
-      setSelectedLocationId(undefined);
+  const handleRemoveLocation = async (locationId: string) => {
+    try {
+      await api.removeSkillLocation(locationId);
+      setLocations(locations.filter((l) => l.id !== locationId));
+      if (selectedLocationId === locationId) {
+        setSelectedLocationId(undefined);
+        setSkills([]);
+      }
+    } catch (error) {
+      console.error('Failed to remove location:', error);
     }
   };
 
-  const handleRefreshLocation = (locationId: string) => {
-    console.log('Refresh location:', locationId);
-    // TODO: Implement refresh functionality
+  const handleRefreshLocation = async (locationId: string) => {
+    await loadSkillsForLocation(locationId);
   };
 
-  const handleAddLocation = (data: { name: string; path: string; ideSource: IDESource }) => {
-    const newLocation: SkillLocation = {
-      id: Date.now().toString(),
-      name: data.name,
-      path: data.path,
-      ideSource: data.ideSource,
-      skillCount: 0,
-    };
-    setLocations([...locations, newLocation]);
-    setAddDialogOpen(false);
-    // TODO: Trigger scan of new location
+  const handleAddLocation = async (data: { name: string; path: string; ideSource: IDESource }) => {
+    try {
+      const response = await api.addSkillLocation({
+        name: data.name,
+        path: data.path,
+        ide_source: data.ideSource,
+      });
+      if (response.success) {
+        await loadLocations();
+        setAddDialogOpen(false);
+      }
+    } catch (error) {
+      console.error('Failed to add location:', error);
+    }
+  };
+
+  const handleImportDiscovered = async (importedLocations: SkillLocation[]) => {
+    try {
+      const response = await api.importSkillLocations(importedLocations);
+      if (response.success) {
+        await loadLocations();
+      }
+    } catch (error) {
+      console.error('Failed to import locations:', error);
+    }
   };
 
   const handleOpenSkill = (skill: Skill) => {
-    console.log('Open skill:', skill);
+    setSelectedSkill(skill);
+    setDetailDialogOpen(true);
+  };
+
+  const handleOpenInEditor = (skill: Skill) => {
+    console.log('Open skill in editor:', skill);
     // TODO: Implement open in default editor
   };
 
@@ -130,9 +171,62 @@ const SkillPage = () => {
     // TODO: Implement open folder in file manager
   };
 
+  const handleScanAll = async () => {
+    setLoading(true);
+    try {
+      const response = await api.scanIdes();
+      console.log('Scan API response:', response);
+      if (response.success && response.data) {
+        console.log('Scan result data:', response.data);
+        // Store the scan result FIRST (synchronous)
+        (window as any).scanResult = response.data;
+        console.log('Stored scanResult, now opening dialog');
+        // Then show discovered IDEs in the dialog (async state update)
+        setDiscoverDialogOpen(true);
+      }
+    } catch (error) {
+      console.error('Failed to scan IDEs:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <PageLayout loading={loading}>
       <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        {/* Onboarding Banner */}
+        {showOnboardingBanner && (
+          <Alert
+            severity="info"
+            sx={{ mb: 2 }}
+            action={
+              <IconButton
+                aria-label="close"
+                color="inherit"
+                size="small"
+                onClick={handleOnboardingComplete}
+              >
+                <CloseIcon fontSize="inherit" />
+              </IconButton>
+            }
+          >
+            <Box>
+              <Typography variant="body2">
+                First time here? Auto-discover IDE skills from your home directory to get started.
+              </Typography>
+              <Button
+                size="small"
+                variant="contained"
+                startIcon={<SearchIcon />}
+                onClick={handleAutoDiscover}
+                sx={{ mt: 1 }}
+              >
+                Auto-Discover Now
+              </Button>
+            </Box>
+          </Alert>
+        )}
+
         {/* Header */}
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
           <Box>
@@ -143,13 +237,30 @@ const SkillPage = () => {
               Manage skills from your IDE directories
             </Typography>
           </Box>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => setAddDialogOpen(true)}
-          >
-            Add Path
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button
+              variant="outlined"
+              startIcon={<RefreshIcon />}
+              onClick={handleScanAll}
+              disabled={loading}
+            >
+              Scan All
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<SearchIcon />}
+              onClick={() => setDiscoverDialogOpen(true)}
+            >
+              Auto-Discover
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => setAddDialogOpen(true)}
+            >
+              Add Path
+            </Button>
+          </Box>
         </Box>
 
         {/* Search and Filter */}
@@ -193,6 +304,22 @@ const SkillPage = () => {
           open={addDialogOpen}
           onClose={() => setAddDialogOpen(false)}
           onAdd={handleAddLocation}
+        />
+
+        {/* Auto Discovery Dialog */}
+        <AutoDiscoveryDialog
+          open={discoverDialogOpen}
+          onClose={() => setDiscoverDialogOpen(false)}
+          onImport={handleImportDiscovered}
+        />
+
+        {/* Skill Detail Dialog */}
+        <SkillDetailDialog
+          open={detailDialogOpen}
+          skill={selectedSkill}
+          location={selectedLocation}
+          onClose={() => setDetailDialogOpen(false)}
+          onOpen={handleOpenInEditor}
         />
       </Box>
     </PageLayout>
