@@ -9,44 +9,40 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+type anthropicCountTokensVersion int
+
+const (
+	anthropicCountTokensV1 anthropicCountTokensVersion = iota
+	anthropicCountTokensBeta
+)
+
 // anthropicCountTokensV1Beta implements beta count_tokens
-func (s *Server) anthropicCountTokensV1Beta(c *gin.Context, bodyBytes []byte, rawReq map[string]interface{}, model string, provider *typ.Provider, selectedService *loadbalance.Service) {
-	// Use the selected service's model
-	actualModel := selectedService.Model
+func (s *Server) anthropicCountTokensV1Beta(c *gin.Context, provider *typ.Provider, model string) {
+	s.anthropicCountTokens(c, provider, model, anthropicCountTokensBeta)
+}
 
-	// Set provider UUID in context (Service.Provider uses UUID, not name)
+// anthropicCountTokensV1 implements standard v1 count_tokens
+func (s *Server) anthropicCountTokensV1(c *gin.Context, provider *typ.Provider, model string) {
+	s.anthropicCountTokens(c, provider, model, anthropicCountTokensV1)
+}
+
+// anthropicCountTokens unified token counting implementation
+func (s *Server) anthropicCountTokens(c *gin.Context, provider *typ.Provider, model string, version anthropicCountTokensVersion) {
 	c.Set("provider", provider.UUID)
-	c.Set("model", selectedService.Model)
+	c.Set("model", model)
 
-	// Check provider's API style to decide which path to take
 	apiStyle := provider.APIStyle
-
-	// Get or create Anthropic client wrapper from pool
-	wrapper := s.clientPool.GetAnthropicClient(provider, actualModel)
-
-	// Make the request using Anthropic SDK with timeout (provider.Timeout is in seconds)
+	wrapper := s.clientPool.GetAnthropicClient(provider, model)
 	timeout := time.Duration(provider.Timeout) * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	// Parse into BetaMessageCountTokensParams using SDK's JSON unmarshaling
-	var req anthropic.BetaMessageCountTokensParams
-	if err := c.ShouldBindJSON(&req); err != nil {
-		// Log the invalid request for debugging
-		logrus.Debugf("Invalid JSON request received: %v\nBody: %s", err, string(bodyBytes))
-		SendInvalidRequestBodyError(c, err)
-		return
-	}
-
-	req.Model = anthropic.Model(actualModel)
-
-	// If the provider uses Anthropic API style, use the actual count_tokens endpoint
 	switch apiStyle {
 	default:
 		c.JSON(http.StatusBadRequest, ErrorResponse{
@@ -57,14 +53,53 @@ func (s *Server) anthropicCountTokensV1Beta(c *gin.Context, bodyBytes []byte, ra
 		})
 		return
 	case protocol.APIStyleAnthropic:
-		message, err := wrapper.BetaMessagesCountTokens(ctx, req)
+		s.anthropicCountTokensViaAPI(c, ctx, wrapper, model, version)
+	case protocol.APIStyleOpenAI:
+		s.anthropicCountTokensViaTiktoken(c, version)
+	}
+}
+
+func (s *Server) anthropicCountTokensViaAPI(c *gin.Context, ctx context.Context, wrapper interface{}, model string, version anthropicCountTokensVersion) {
+	switch version {
+	case anthropicCountTokensBeta:
+		var req anthropic.BetaMessageCountTokensParams
+		if err := c.ShouldBindJSON(&req); err != nil {
+			logrus.Debugf("Invalid JSON request received: %v", err)
+			SendInvalidRequestBodyError(c, err)
+			return
+		}
+		req.Model = anthropic.Model(model)
+		message, err := wrapper.(*client.AnthropicClient).BetaMessagesCountTokens(ctx, req)
 		if err != nil {
 			SendInvalidRequestBodyError(c, err)
 			return
 		}
-
 		c.JSON(http.StatusOK, message)
-	case protocol.APIStyleOpenAI:
+	case anthropicCountTokensV1:
+		var req anthropic.MessageCountTokensParams
+		if err := c.ShouldBindJSON(&req); err != nil {
+			logrus.Debugf("Invalid JSON request received: %v", err)
+			SendInvalidRequestBodyError(c, err)
+			return
+		}
+		req.Model = anthropic.Model(model)
+		message, err := wrapper.(*client.AnthropicClient).MessagesCountTokens(ctx, req)
+		if err != nil {
+			SendInvalidRequestBodyError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, message)
+	}
+}
+
+func (s *Server) anthropicCountTokensViaTiktoken(c *gin.Context, version anthropicCountTokensVersion) {
+	switch version {
+	case anthropicCountTokensBeta:
+		var req anthropic.BetaMessageCountTokensParams
+		if err := c.ShouldBindJSON(&req); err != nil {
+			SendInvalidRequestBodyError(c, err)
+			return
+		}
 		count, err := token.CountBetaTokensWithTiktoken(string(req.Model), req.Messages, req.System)
 		if err != nil {
 			SendInvalidRequestBodyError(c, err)
@@ -73,58 +108,12 @@ func (s *Server) anthropicCountTokensV1Beta(c *gin.Context, bodyBytes []byte, ra
 		c.JSON(http.StatusOK, anthropic.MessageTokensCount{
 			InputTokens: int64(count),
 		})
-	}
-}
-
-// anthropicCountTokensV1 implements standard v1 count_tokens
-func (s *Server) anthropicCountTokensV1(c *gin.Context, bodyBytes []byte, rawReq map[string]interface{}, model string, provider *typ.Provider, selectedService *loadbalance.Service) {
-	// Use the selected service's model
-	actualModel := selectedService.Model
-
-	// Set provider UUID in context (Service.Provider uses UUID, not name)
-	c.Set("provider", provider.UUID)
-	c.Set("model", selectedService.Model)
-
-	// Check provider's API style to decide which path to take
-	apiStyle := provider.APIStyle
-
-	// Get or create Anthropic client wrapper from pool
-	wrapper := s.clientPool.GetAnthropicClient(provider, actualModel)
-
-	// Make the request using Anthropic SDK with timeout (provider.Timeout is in seconds)
-	timeout := time.Duration(provider.Timeout) * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	// Parse into MessageCountTokensParams using SDK's JSON unmarshaling
-	var req anthropic.MessageCountTokensParams
-	if err := c.ShouldBindJSON(&req); err != nil {
-		// Log the invalid request for debugging
-		logrus.Debugf("Invalid JSON request received: %v\nBody: %s", err, string(bodyBytes))
-		SendInvalidRequestBodyError(c, err)
-		return
-	}
-
-	req.Model = anthropic.Model(actualModel)
-
-	// If the provider uses Anthropic API style, use the actual count_tokens endpoint
-	switch apiStyle {
-	default:
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: fmt.Sprintf("Unsupported API style: %s %s", provider.Name, apiStyle),
-				Type:    "invalid_request_error",
-			},
-		})
-		return
-	case protocol.APIStyleAnthropic:
-		message, err := wrapper.MessagesCountTokens(ctx, req)
-		if err != nil {
+	case anthropicCountTokensV1:
+		var req anthropic.MessageCountTokensParams
+		if err := c.ShouldBindJSON(&req); err != nil {
 			SendInvalidRequestBodyError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, message)
-	case protocol.APIStyleOpenAI:
 		count, err := token.CountTokensWithTiktoken(string(req.Model), req.Messages, req.System.OfTextBlockArray)
 		if err != nil {
 			SendInvalidRequestBodyError(c, err)

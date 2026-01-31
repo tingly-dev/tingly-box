@@ -278,7 +278,7 @@ func (s *Server) AnthropicCountTokens(c *gin.Context) {
 	}
 
 	// Determine provider and model based on request
-	provider, selectedService, _, err := s.DetermineProviderAndModel(model)
+	provider, service, _, err := s.DetermineProviderAndModel(model)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -289,11 +289,12 @@ func (s *Server) AnthropicCountTokens(c *gin.Context) {
 		return
 	}
 
+	useModel := service.Model
 	// Delegate to the appropriate implementation based on beta parameter
 	if beta {
-		s.anthropicCountTokensV1Beta(c, bodyBytes, rawReq, model, provider, selectedService)
+		s.anthropicCountTokensV1Beta(c, provider, useModel)
 	} else {
-		s.anthropicCountTokensV1(c, bodyBytes, rawReq, model, provider, selectedService)
+		s.anthropicCountTokensV1(c, provider, useModel)
 	}
 }
 
