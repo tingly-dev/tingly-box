@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Box, Tooltip, Typography, IconButton } from '@mui/material';
+import { Box, Tooltip, Typography, IconButton, Button, ButtonGroup } from '@mui/material';
 import { ArrowBackIosNew, ArrowForwardIos } from '@mui/icons-material';
 import { LocalizationProvider, DateCalendar } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -12,6 +12,7 @@ interface RecordingCalendarProps {
   recordingCounts: Map<string, number>; // date string -> count
   onDateSelect: (date: Date) => void;
   onMonthChange: (date: Date) => void;
+  onRangeChange?: (days: number | null) => void; // null = single date mode, number = range mode
   sx?: SxProps<Theme>;
 }
 
@@ -30,9 +31,11 @@ const RecordingCalendar: React.FC<RecordingCalendarProps> = ({
   recordingCounts,
   onDateSelect,
   onMonthChange,
+  onRangeChange,
   sx = {},
 }) => {
   const [viewDate, setViewDate] = useState(currentDate);
+  const [rangeMode, setRangeMode] = useState<number | null>(null);
 
   const formatDateKey = (date: Date): string => {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -42,6 +45,21 @@ const RecordingCalendar: React.FC<RecordingCalendarProps> = ({
     return formatDateKey(date1) === formatDateKey(date2);
   };
 
+  const isToday = (date: Date): boolean => {
+    const today = new Date();
+    return isSameDay(date, today);
+  };
+
+  const isInRange = (date: Date): boolean => {
+    if (!rangeMode) return false;
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    const startDate = new Date(today);
+    startDate.setDate(startDate.getDate() - rangeMode);
+    startDate.setHours(0, 0, 0, 0);
+    return date >= startDate && date <= today;
+  };
+
   // Custom PickersDay with activity color
   const CustomDay = (props: PickersDayProps<Date>) => {
     const { day, outsideCurrentMonth, ...other } = props;
@@ -49,11 +67,13 @@ const RecordingCalendar: React.FC<RecordingCalendarProps> = ({
     const count = recordingCounts.get(dateKey) || 0;
     const level = getActivityLevel(count);
     const isSelected = isSameDay(day, selectedDate);
+    const inRange = isInRange(day);
 
     // Color mapping
     const getBgColor = () => {
       if (isSelected) return '#3b82f6';
       if (outsideCurrentMonth) return 'transparent';
+      if (inRange) return '#e0f2fe'; // Light blue for range
       switch (level) {
         case 0: return 'transparent';
         case 1: return '#dcfce7';
@@ -66,6 +86,7 @@ const RecordingCalendar: React.FC<RecordingCalendarProps> = ({
 
     const getTextColor = () => {
       if (isSelected) return '#ffffff';
+      if (inRange) return '#0369a1';
       if (level >= 3) return '#ffffff';
       if (level >= 1) return '#166534';
       return 'inherit';
@@ -87,9 +108,9 @@ const RecordingCalendar: React.FC<RecordingCalendarProps> = ({
           sx={{
             backgroundColor: getBgColor(),
             color: getTextColor(),
-            fontWeight: count > 0 ? 600 : 400,
+            fontWeight: count > 0 || inRange ? 600 : 400,
             '&:hover': {
-              backgroundColor: isSelected ? '#2563eb' : (count > 0 ? '#bbf7d0' : undefined),
+              backgroundColor: isSelected ? '#2563eb' : (count > 0 ? '#bbf7d0' : inRange ? '#bae6fd' : undefined),
             },
           }}
         >
@@ -113,6 +134,17 @@ const RecordingCalendar: React.FC<RecordingCalendarProps> = ({
     onMonthChange(newDate);
   };
 
+  const handleRangeClick = (days: number) => {
+    if (rangeMode === days) {
+      // Toggle off
+      setRangeMode(null);
+      onRangeChange?.(null);
+    } else {
+      setRangeMode(days);
+      onRangeChange?.(days);
+    }
+  };
+
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -122,21 +154,57 @@ const RecordingCalendar: React.FC<RecordingCalendarProps> = ({
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {/* Month header with navigation */}
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <IconButton onClick={handlePrevMonth} size="small">
-              <ArrowBackIosNew fontSize="small" />
-            </IconButton>
-            <Typography sx={{ fontSize: '1rem', fontWeight: 600 }}>
-              {monthNames[viewDate.getMonth()]} {viewDate.getFullYear()}
-            </Typography>
-            <IconButton onClick={handleNextMonth} size="small">
-              <ArrowForwardIos fontSize="small" />
-            </IconButton>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <IconButton onClick={handlePrevMonth} size="small">
+                <ArrowBackIosNew fontSize="small" />
+              </IconButton>
+              <Typography sx={{ fontSize: '1rem', fontWeight: 600, minWidth: 140 }}>
+                {monthNames[viewDate.getMonth()]} {viewDate.getFullYear()}
+              </Typography>
+              <IconButton onClick={handleNextMonth} size="small">
+                <ArrowForwardIos fontSize="small" />
+              </IconButton>
+            </Box>
           </Box>
+
+          {/* Range Buttons */}
+          <ButtonGroup size="small" variant="outlined" sx={{ justifyContent: 'center' }}>
+            <Button
+              onClick={() => handleRangeClick(0)}
+              variant={rangeMode === 0 ? 'contained' : 'outlined'}
+            >
+              Today
+            </Button>
+            <Button
+              onClick={() => handleRangeClick(7)}
+              variant={rangeMode === 7 ? 'contained' : 'outlined'}
+            >
+              7D
+            </Button>
+            <Button
+              onClick={() => handleRangeClick(30)}
+              variant={rangeMode === 30 ? 'contained' : 'outlined'}
+            >
+              30D
+            </Button>
+            <Button
+              onClick={() => handleRangeClick(90)}
+              variant={rangeMode === 90 ? 'contained' : 'outlined'}
+            >
+              90D
+            </Button>
+          </ButtonGroup>
 
           {/* MUI DateCalendar */}
           <DateCalendar
             value={selectedDate}
-            onChange={(newDate) => newDate && onDateSelect(newDate)}
+            onChange={(newDate) => {
+              if (newDate) {
+                setRangeMode(null);
+                onRangeChange?.(null);
+                onDateSelect(newDate);
+              }
+            }}
             views={['day']}
             openTo="day"
             defaultCalendarMonth={viewDate}
@@ -158,7 +226,10 @@ const RecordingCalendar: React.FC<RecordingCalendarProps> = ({
           {/* Legend */}
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <Typography variant="caption" color="text.secondary">
-              {selectedDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+              {rangeMode
+                ? `Last ${rangeMode} days`
+                : selectedDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+              }
             </Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
               <Typography variant="caption" color="text.secondary">

@@ -58,11 +58,11 @@ const UserPage = () => {
   const [loading, setLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [calendarDate, setCalendarDate] = useState(new Date());
+  const [rangeMode, setRangeMode] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [userFilter, setUserFilter] = useState<string>();
   const [projectFilter, setProjectFilter] = useState<string>();
   const [typeFilter, setTypeFilter] = useState<RecordingType>();
-  const [dateRange, setDateRange] = useState<[Date | null, Date | null]>();
   const [recordings, setRecordings] = useState<Recording[]>(mockRecordings);
 
   // Get unique users and projects from recordings
@@ -84,13 +84,25 @@ const UserPage = () => {
     return counts;
   }, [recordings]);
 
-  // Filter recordings based on selected date and filters
+
+  // Filter recordings based on selected date/range and filters
   const filteredRecordings = useMemo(() => {
     return recordings.filter((recording) => {
-      const matchesDate =
-        recording.timestamp.getDate() === selectedDate.getDate() &&
-        recording.timestamp.getMonth() === selectedDate.getMonth() &&
-        recording.timestamp.getFullYear() === selectedDate.getFullYear();
+      // Date range or single date filter
+      let matchesDate = true;
+      if (rangeMode !== null) {
+        const today = new Date();
+        today.setHours(23, 59, 59, 999);
+        const startDate = new Date(today);
+        startDate.setDate(startDate.getDate() - rangeMode);
+        startDate.setHours(0, 0, 0, 0);
+        matchesDate = recording.timestamp >= startDate && recording.timestamp <= today;
+      } else {
+        matchesDate =
+          recording.timestamp.getDate() === selectedDate.getDate() &&
+          recording.timestamp.getMonth() === selectedDate.getMonth() &&
+          recording.timestamp.getFullYear() === selectedDate.getFullYear();
+      }
 
       const matchesSearch = searchQuery === '' ||
         recording.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -102,10 +114,14 @@ const UserPage = () => {
 
       return matchesDate && matchesSearch && matchesUser && matchesProject && matchesType;
     });
-  }, [recordings, selectedDate, searchQuery, userFilter, projectFilter, typeFilter]);
+  }, [recordings, selectedDate, rangeMode, searchQuery, userFilter, projectFilter, typeFilter]);
 
   const handleDateSelect = (date: Date) => {
     setSelectedDate(date);
+  };
+
+  const handleRangeChange = (days: number | null) => {
+    setRangeMode(days);
   };
 
   const handlePlay = (recording: Recording) => {
@@ -122,6 +138,14 @@ const UserPage = () => {
     console.log('Delete recording:', recording);
     // TODO: Implement delete with confirmation
     setRecordings(recordings.filter((r) => r.id !== recording.id));
+  };
+
+  // Get date label for header
+  const getDateLabel = () => {
+    if (rangeMode !== null) {
+      return `Last ${rangeMode} days`;
+    }
+    return selectedDate.toLocaleDateString();
   };
 
   return (
@@ -169,6 +193,7 @@ const UserPage = () => {
                   recordingCounts={recordingCounts}
                   onDateSelect={handleDateSelect}
                   onMonthChange={setCalendarDate}
+                  onRangeChange={handleRangeChange}
                 />
               </Box>
             </Paper>
@@ -177,7 +202,7 @@ const UserPage = () => {
             <Paper sx={{ height: '100%', p: 2, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                 <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                  {selectedDate.toLocaleDateString()}
+                  {getDateLabel()}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
                   {filteredRecordings.length} recording{filteredRecordings.length !== 1 ? 's' : ''}
