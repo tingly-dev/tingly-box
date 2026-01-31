@@ -6,3 +6,5 @@ export { default as SkillLocationList } from './skill/SkillLocationList';
 export { default as SkillLocationPanel } from './skill/SkillLocationPanel';
 export { default as SkillCard } from './skill/SkillCard';
 export { default as AddPathDialog } from './skill/AddPathDialog';
+export { default as AutoDiscoveryDialog } from './skill/AutoDiscoveryDialog';
+export { default as SkillDetailDialog } from './skill/SkillDetailDialog';

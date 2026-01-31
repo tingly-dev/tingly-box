@@ -2,20 +2,31 @@ import { Box, TextField, FormControl, InputLabel, Select, MenuItem } from '@mui/
 import { Search } from '@mui/icons-material';
 import type { IDESource } from '@/types/prompt';
 
+// Minimal list for filter dropdown (backend provides full data)
+const IDE_FILTER_OPTIONS: { value: IDESource; label: string; icon: string }[] = [
+  { value: 'claude_code', label: 'Claude Code', icon: '🎨' },
+  { value: 'opencode', label: 'OpenCode', icon: '💻' },
+  { value: 'vscode', label: 'VS Code', icon: '💡' },
+  { value: 'cursor', label: 'Cursor', icon: '🎯' },
+  { value: 'codex', label: 'Codex', icon: '📜' },
+  { value: 'antigravity', label: 'Antigravity', icon: '🔄' },
+  { value: 'amp', label: 'Amp', icon: '⚡' },
+  { value: 'kilo_code', label: 'Kilo Code', icon: '🪜' },
+  { value: 'roo_code', label: 'Roo Code', icon: '🦘' },
+  { value: 'goose', label: 'Goose', icon: '🪿' },
+  { value: 'gemini_cli', label: 'Gemini CLI', icon: '💎' },
+  { value: 'github_copilot', label: 'GitHub Copilot', icon: '🐙' },
+  { value: 'clawdbot', label: 'Clawdbot', icon: '🦞' },
+  { value: 'droid', label: 'Droid', icon: '🤖' },
+  { value: 'windsurf', label: 'Windsurf', icon: '🌊' },
+];
+
 interface SkillSearchBarProps {
   searchQuery: string;
   onSearchChange: (value: string) => void;
   ideFilter?: IDESource;
   onIdeFilterChange: (value?: IDESource) => void;
 }
-
-const IDE_OPTIONS: { value: IDESource; label: string }[] = [
-  { value: 'claude-code', label: 'Claude Code' },
-  { value: 'opencode', label: 'OpenCode' },
-  { value: 'vscode', label: 'VS Code' },
-  { value: 'cursor', label: 'Cursor' },
-  { value: 'custom', label: 'Custom' },
-];
 
 const SkillSearchBar: React.FC<SkillSearchBarProps> = ({
   searchQuery,
@@ -46,9 +57,12 @@ const SkillSearchBar: React.FC<SkillSearchBarProps> = ({
           onChange={(e) => onIdeFilterChange((e.target.value || undefined) as IDESource | undefined)}
         >
           <MenuItem value="">All IDEs</MenuItem>
-          {IDE_OPTIONS.map((option) => (
+          {IDE_FILTER_OPTIONS.map((option) => (
             <MenuItem key={option.value} value={option.value}>
-              {option.label}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <span>{option.icon}</span>
+                <span>{option.label}</span>
+              </Box>
             </MenuItem>
           ))}
         </Select>

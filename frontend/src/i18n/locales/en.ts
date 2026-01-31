@@ -403,6 +403,9 @@ export default {
       "title": "Skills",
       "subtitle": "Manage skills from your IDE directories",
       "addPath": "Add Path",
+      "autoDiscover": "Auto-Discover",
+      "refreshAll": "Refresh All",
+      "adapterConfig": "Adapter Configuration",
       "locations": "Locations",
       "selectLocation": "Select a location to view skills",
       "noLocations": "No skill locations added",
@@ -423,6 +426,17 @@ export default {
         "opencode": "OpenCode",
         "vscode": "VS Code",
         "cursor": "Cursor",
+        "codex": "Codex",
+        "antigravity": "Antigravity",
+        "amp": "Amp",
+        "kilo-code": "Kilo Code",
+        "roo-code": "Roo Code",
+        "goose": "Goose",
+        "gemini-cli": "Gemini CLI",
+        "github-copilot": "GitHub Copilot",
+        "clawdbot": "Clawdbot",
+        "droid": "Droid",
+        "windsurf": "Windsurf",
         "custom": "Custom"
       },
       "dialog": {
@@ -434,6 +448,33 @@ export default {
         "ideSourceLabel": "IDE Source",
         "cancel": "Cancel",
         "add": "Add"
+      },
+      "discoveryDialog": {
+        "title": "Discover IDE Skills",
+        "description": "Scan your home directory for supported IDEs and import their skills.",
+        "scanning": "Scanning for installed IDEs...",
+        "foundIdes": "Found {{count}} IDE(s)",
+        "foundWithSkills": "Found {{ides}} IDE(s) with {{skills}} skill(s)",
+        "noIdesFound": "No supported IDEs found. Add skill paths manually.",
+        "selectToImport": "Select IDEs to import skills from",
+        "selectAll": "Select All",
+        "deselectAll": "Deselect All",
+        "importSelected": "Import Selected ({{count}})",
+        "importButton": "Import Selected"
+      },
+      "detailDialog": {
+        "title": "Skill Details",
+        "path": "Path",
+        "fileType": "File Type",
+        "size": "Size",
+        "modified": "Last Modified",
+        "contentHash": "Content Hash",
+        "description": "Description",
+        "preview": "Preview",
+        "openInEditor": "Open in Editor",
+        "unknownSize": "Unknown",
+        "unknownDate": "Unknown",
+        "loadError": "Failed to load skill content"
       }
     },
     "command": {

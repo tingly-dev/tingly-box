@@ -43,7 +43,7 @@ const SkillCard: React.FC<SkillCardProps> = ({ skill, onOpen }) => {
         {/* File Icon and Name */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
           <Box sx={{ fontSize: '1.5rem' }}>
-            {getFileIcon(skill.fileType)}
+            {getFileIcon(skill.file_type)}
           </Box>
           <Typography
             variant="body1"
@@ -62,7 +62,7 @@ const SkillCard: React.FC<SkillCardProps> = ({ skill, onOpen }) => {
         {/* File Type Badge */}
         <Box sx={{ mb: 1 }}>
           <Chip
-            label={skill.fileType}
+            label={skill.file_type}
             size="small"
             variant="outlined"
             sx={{ fontSize: '0.7rem' }}

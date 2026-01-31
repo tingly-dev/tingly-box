@@ -1,7 +1,6 @@
 import { Box, List, ListItem, ListItemButton, ListItemText, Badge, IconButton, Typography } from '@mui/material';
 import { Delete as DeleteIcon, Refresh } from '@mui/icons-material';
 import type { SkillLocation } from '@/types/prompt';
-import { IDE_SOURCE_ICONS } from '@/types/prompt';
 
 interface SkillLocationListProps {
   locations: SkillLocation[];
@@ -58,12 +57,12 @@ const SkillLocationList: React.FC<SkillLocationListProps> = ({
                 }}
               >
                 <Badge
-                  badgeContent={location.skillCount}
+                  badgeContent={location.skill_count}
                   color="primary"
                   sx={{ mr: 1 }}
                 >
                   <Box sx={{ fontSize: '1.5rem' }}>
-                    {location.icon || IDE_SOURCE_ICONS[location.ideSource]}
+                    {location.icon || '📂'}
                   </Box>
                 </Badge>
                 <ListItemText
