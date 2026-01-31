@@ -27,13 +27,13 @@ func (s *Server) ExtractRequestContext(req interface{}) (*smartrouting.RequestCo
 
 // SelectServiceFromSmartRouting selects a service from matched smart routing services
 // Creates a temporary rule with the matched services and uses the configured load balancing tactic
-func (s *Server) SelectServiceFromSmartRouting(matchedServices []loadbalance.Service, rule *typ.Rule) (*loadbalance.Service, error) {
+func (s *Server) SelectServiceFromSmartRouting(matchedServices []*loadbalance.Service, rule *typ.Rule) (*loadbalance.Service, error) {
 	if len(matchedServices) == 0 {
 		return nil, nil
 	}
 
 	// Filter active services
-	var activeServices []loadbalance.Service
+	var activeServices []*loadbalance.Service
 	for _, service := range matchedServices {
 		if service.Active {
 			activeServices = append(activeServices, service)
@@ -46,7 +46,7 @@ func (s *Server) SelectServiceFromSmartRouting(matchedServices []loadbalance.Ser
 
 	// For single service, return it directly
 	if len(activeServices) == 1 {
-		return &activeServices[0], nil
+		return activeServices[0], nil
 	}
 
 	// Create a temporary rule with the matched services for load balancing

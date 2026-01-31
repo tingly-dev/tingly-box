@@ -1213,7 +1213,7 @@ func init() {
 			RequestModel:  "tingly-claude",
 			ResponseModel: "",
 			Description:   "Default proxy rule in tingly-box for general use with Anthropic",
-			Services:      []loadbalance.Service{}, // Empty services initially
+			Services:      []*loadbalance.Service{}, // Empty services initially
 			LBTactic: typ.Tactic{ // Initialize with default round-robin tactic
 				Type:   loadbalance.TacticRoundRobin,
 				Params: typ.DefaultRoundRobinParams(),
@@ -1226,7 +1226,7 @@ func init() {
 			RequestModel:  "tingly-gpt",
 			ResponseModel: "",
 			Description:   "Default proxy rule in tingly-box for general use with OpenAI",
-			Services:      []loadbalance.Service{}, // Empty services initially
+			Services:      []*loadbalance.Service{}, // Empty services initially
 			LBTactic: typ.Tactic{ // Initialize with default round-robin tactic
 				Type:   loadbalance.TacticRoundRobin,
 				Params: typ.DefaultRoundRobinParams(),
@@ -1239,7 +1239,7 @@ func init() {
 			RequestModel:  "tingly/cc",
 			ResponseModel: "",
 			Description:   "Default proxy rule for Claude Code",
-			Services:      []loadbalance.Service{}, // Empty services initially
+			Services:      []*loadbalance.Service{}, // Empty services initially
 			LBTactic: typ.Tactic{ // Initialize with default round-robin tactic
 				Type:   loadbalance.TacticRoundRobin,
 				Params: typ.DefaultRoundRobinParams(),
@@ -1252,7 +1252,7 @@ func init() {
 			RequestModel:  "tingly/cc-haiku",
 			ResponseModel: "",
 			Description:   "Claude Code - Haiku model - small / cheap / for background and summary task",
-			Services:      []loadbalance.Service{},
+			Services:      []*loadbalance.Service{},
 			LBTactic: typ.Tactic{
 				Type:   loadbalance.TacticRoundRobin,
 				Params: typ.DefaultRoundRobinParams(),
@@ -1265,7 +1265,7 @@ func init() {
 			RequestModel:  "tingly/cc-sonnet",
 			ResponseModel: "",
 			Description:   "Claude Code - Sonnet model - medium / for general task",
-			Services:      []loadbalance.Service{},
+			Services:      []*loadbalance.Service{},
 			LBTactic: typ.Tactic{
 				Type:   loadbalance.TacticRoundRobin,
 				Params: typ.DefaultRoundRobinParams(),
@@ -1278,7 +1278,7 @@ func init() {
 			RequestModel:  "tingly/cc-opus",
 			ResponseModel: "",
 			Description:   "Claude Code - Opus model - large / expensive / for high level task",
-			Services:      []loadbalance.Service{},
+			Services:      []*loadbalance.Service{},
 			LBTactic: typ.Tactic{
 				Type:   loadbalance.TacticRoundRobin,
 				Params: typ.DefaultRoundRobinParams(),
@@ -1291,7 +1291,7 @@ func init() {
 			RequestModel:  "tingly/cc-default",
 			ResponseModel: "",
 			Description:   "Claude Code - Default model - for general task",
-			Services:      []loadbalance.Service{},
+			Services:      []*loadbalance.Service{},
 			LBTactic: typ.Tactic{
 				Type:   loadbalance.TacticRoundRobin,
 				Params: typ.DefaultRoundRobinParams(),
@@ -1304,7 +1304,7 @@ func init() {
 			RequestModel:  "tingly-opencode",
 			ResponseModel: "",
 			Description:   "Default proxy rule for OpenCode - AI coding assistant",
-			Services:      []loadbalance.Service{},
+			Services:      []*loadbalance.Service{},
 			LBTactic: typ.Tactic{
 				Type:   loadbalance.TacticRoundRobin,
 				Params: typ.DefaultRoundRobinParams(),

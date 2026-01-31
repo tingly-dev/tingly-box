@@ -52,7 +52,7 @@ func (s *Server) OpenAIListModels(c *gin.Context) {
 		if len(services) > 0 {
 			providerDesc := make([]string, 0, len(services))
 			for i := range services {
-				svc := &services[i]
+				svc := services[i]
 				if svc.Active {
 					provider, err := cfg.GetProviderByUUID(svc.Provider)
 					if err == nil {

@@ -238,7 +238,7 @@ func migrate20260110(c *Config) {
 		}
 
 		// Copy services from fallback rule
-		rule.Services = make([]loadbalance.Service, len(fallbackRule.Services))
+		rule.Services = make([]*loadbalance.Service, len(fallbackRule.Services))
 		copy(rule.Services, fallbackRule.Services)
 		needsSave = true
 	}

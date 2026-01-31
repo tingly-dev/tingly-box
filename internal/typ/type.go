@@ -116,13 +116,13 @@ func (p *Provider) IsOAuthExpired() bool {
 
 // Rule represents a request/response configuration with load balancing support
 type Rule struct {
-	UUID                string                `json:"uuid"`
-	Scenario            RuleScenario          `json:"scenario,required" yaml:"scenario"` // openai, anthropic, claude_code; defaults to openai
-	RequestModel        string                `json:"request_model" yaml:"request_model"`
-	ResponseModel       string                `json:"response_model" yaml:"response_model"`
-	Description         string                `json:"description"`
-	Services            []loadbalance.Service `json:"services" yaml:"services"`
-	CurrentServiceIndex int                   `json:"current_service_index" yaml:"current_service_index"`
+	UUID                string                 `json:"uuid"`
+	Scenario            RuleScenario           `json:"scenario,required" yaml:"scenario"` // openai, anthropic, claude_code; defaults to openai
+	RequestModel        string                 `json:"request_model" yaml:"request_model"`
+	ResponseModel       string                 `json:"response_model" yaml:"response_model"`
+	Description         string                 `json:"description"`
+	Services            []*loadbalance.Service `json:"services" yaml:"services"`
+	CurrentServiceIndex int                    `json:"current_service_index" yaml:"current_service_index"`
 	// Unified Tactic Configuration
 	LBTactic Tactic `json:"lb_tactic" yaml:"lb_tactic"`
 	Active   bool   `json:"active" yaml:"active"`
@@ -155,9 +155,9 @@ func (r *Rule) ToJSON() interface{} {
 }
 
 // GetServices returns the services to use for this rule
-func (r *Rule) GetServices() []loadbalance.Service {
+func (r *Rule) GetServices() []*loadbalance.Service {
 	if r.Services == nil {
-		r.Services = []loadbalance.Service{}
+		r.Services = []*loadbalance.Service{}
 	}
 	return r.Services
 }
@@ -191,7 +191,7 @@ func (r *Rule) GetActiveServices() []*loadbalance.Service {
 	for i := range r.Services {
 		if r.Services[i].Active {
 			r.Services[i].InitializeStats()
-			activeServices = append(activeServices, &r.Services[i])
+			activeServices = append(activeServices, r.Services[i])
 		}
 	}
 	return activeServices

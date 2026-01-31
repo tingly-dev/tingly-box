@@ -194,17 +194,17 @@ type ExportMetadata struct {
 
 // ExportRuleData represents the rule export data
 type ExportRuleData struct {
-	Type          string                `json:"type"`
-	UUID          string                `json:"uuid"`
-	Scenario      string                `json:"scenario"`
-	RequestModel  string                `json:"request_model"`
-	ResponseModel string                `json:"response_model"`
-	Description   string                `json:"description"`
-	Services      []loadbalance.Service `json:"services"`
-	LBTactic      typ.Tactic            `json:"lb_tactic"`
-	Active        bool                  `json:"active"`
-	SmartEnabled  bool                  `json:"smart_enabled"`
-	SmartRouting  []interface{}         `json:"smart_routing"`
+	Type          string                 `json:"type"`
+	UUID          string                 `json:"uuid"`
+	Scenario      string                 `json:"scenario"`
+	RequestModel  string                 `json:"request_model"`
+	ResponseModel string                 `json:"response_model"`
+	Description   string                 `json:"description"`
+	Services      []*loadbalance.Service `json:"services"`
+	LBTactic      typ.Tactic             `json:"lb_tactic"`
+	Active        bool                   `json:"active"`
+	SmartEnabled  bool                   `json:"smart_enabled"`
+	SmartRouting  []interface{}          `json:"smart_routing"`
 }
 
 // ExportProviderData represents the provider export data
