@@ -148,7 +148,7 @@ type RuleSummaryResponse struct {
 
 // ProbeRequest represents the request to probe/test a provider and model
 type ProbeRequest struct {
-	Provider string `json:"provider" binding:"required" description:"Provider name to test against" example:"openai"`
+	Provider string `json:"provider" binding:"required" description:"Provider UUID to test against" example:"550e8400-e29b-41d4-a716-446655440000"`
 	Model    string `json:"model" binding:"required" description:"Model name to test against" example:"gpt-4-latest"`
 }
 
