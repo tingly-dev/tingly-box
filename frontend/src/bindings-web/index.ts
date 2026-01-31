@@ -30,4 +30,19 @@ export const GreetService = {
     }
 };
 
+// Mock Events for web mode (systray not available in web)
+export const Events = {
+    On: (eventName: string, callback: (event: any) => void) => {
+        console.warn(`[Mock] Events.On called for event: ${eventName} - no-op in web mode`);
+        return () => {}; // Return no-op cleanup function
+    },
+    Off: (eventName: string) => {
+        console.warn(`[Mock] Events.Off called for event: ${eventName} - no-op in web mode`);
+    },
+    Emit: (eventName: string, data?: any) => {
+        console.warn(`[Mock] Events.Emit called for event: ${eventName} - no-op in web mode`);
+        return Promise.resolve(false);
+    }
+};
+
 export default TinglyService;
