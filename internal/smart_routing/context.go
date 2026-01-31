@@ -187,3 +187,79 @@ func hasImageInAnthropicContent(content []anthropic.ContentBlockParamUnion) bool
 	}
 	return false
 }
+
+// ExtractContextFromBetaRequest extracts RequestContext from an Anthropic beta messages request
+func ExtractContextFromBetaRequest(req *anthropic.BetaMessageNewParams) *RequestContext {
+	ctx := &RequestContext{
+		Model:           string(req.Model),
+		ThinkingEnabled: req.Thinking.OfEnabled != nil,
+	}
+
+	// Extract system messages
+	if req.System != nil {
+		for _, s := range req.System {
+			if s.Text != "" {
+				ctx.SystemMessages = append(ctx.SystemMessages, s.Text)
+			}
+		}
+	}
+
+	// Extract messages and tool uses
+	if req.Messages != nil {
+		for _, msg := range req.Messages {
+			ctx.LatestRole = string(msg.Role)
+
+			// Only process user messages
+			if string(msg.Role) != "user" {
+				continue
+			}
+
+			contentStr, toolUses := extractBetaContent(msg.Content)
+			hasImage := hasImageInBetaContent(msg.Content)
+
+			if contentStr != "" {
+				ctx.UserMessages = append(ctx.UserMessages, contentStr)
+			}
+			if hasImage {
+				ctx.LatestContentType = "image"
+			}
+
+			ctx.ToolUses = append(ctx.ToolUses, toolUses...)
+		}
+	}
+
+	// Estimate tokens from all content
+	allContent := strings.Join(append(ctx.SystemMessages, ctx.UserMessages...), "\n")
+	ctx.EstimatedTokens = EstimateTokens(allContent)
+
+	return ctx
+}
+
+// extractBetaContent extracts string content and tool uses from Beta content blocks
+func extractBetaContent(content []anthropic.BetaContentBlockParamUnion) (string, []string) {
+	var parts []string
+	var tools []string
+
+	for _, blockUnion := range content {
+		switch {
+		case blockUnion.OfText != nil:
+			parts = append(parts, blockUnion.OfText.Text)
+		case blockUnion.OfImage != nil:
+			parts = append(parts, "[image]")
+		case blockUnion.OfToolUse != nil:
+			tools = append(tools, blockUnion.OfToolUse.Name)
+		}
+	}
+
+	return strings.Join(parts, "\n"), tools
+}
+
+// hasImageInBetaContent checks if content contains image
+func hasImageInBetaContent(content []anthropic.BetaContentBlockParamUnion) bool {
+	for _, blockUnion := range content {
+		if blockUnion.OfImage != nil {
+			return true
+		}
+	}
+	return false
+}
