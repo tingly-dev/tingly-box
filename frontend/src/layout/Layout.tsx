@@ -171,7 +171,7 @@ const Layout = ({ children }: LayoutProps) => {
     ];
 
     const drawerContent = (
-        <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {/* Logo Section */}
             <Box
                 component="a"
@@ -190,6 +190,7 @@ const Layout = ({ children }: LayoutProps) => {
                     '&:hover': {
                         opacity: 0.8,
                     },
+                    flexShrink: 0,
                 }}
             >
                 <Box
@@ -214,7 +215,7 @@ const Layout = ({ children }: LayoutProps) => {
             </Box>
 
             {/* Navigation Menu */}
-            <List sx={{ flex: 1, py: 2 }}>
+            <List sx={{ flex: 1, py: 2, overflowY: 'auto', overflowX: 'hidden', '&::-webkit-scrollbar': { width: 6 }, '&::-webkit-scrollbar-track': { backgroundColor: 'transparent' }, '&::-webkit-scrollbar-thumb': { backgroundColor: 'grey.300', borderRadius: 1, '&:hover': { backgroundColor: 'grey.400' } } }}>
                 {menuGroups.map((group) => {
                     const isDashboardGroup = group.key === 'dashboard';
                     const isHomeGroup = group.key === 'scenario';
@@ -340,6 +341,7 @@ const Layout = ({ children }: LayoutProps) => {
                     borderTop: '1px solid',
                     borderBottom: '1px solid',
                     borderColor: 'divider',
+                    flexShrink: 0,
                 }}
             >
                 {/* Connection Status */}
@@ -412,6 +414,7 @@ const Layout = ({ children }: LayoutProps) => {
                     display: 'flex',
                     flexDirection: 'column',
                     gap: 1,
+                    flexShrink: 0,
                 }}
             >
                 <Typography
