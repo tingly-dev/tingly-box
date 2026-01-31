@@ -27,6 +27,11 @@ const System = lazy(() => import('./pages/System'));
 const UsageDashboardPage = lazy(() => import('./pages/UsageDashboardPage'));
 const ModelTestPage = lazy(() => import('./pages/ModelTestPage'));
 
+// Prompt pages
+const UserPage = lazy(() => import('./pages/prompt/UserPage'));
+const SkillPage = lazy(() => import('./pages/prompt/SkillPage'));
+const CommandPage = lazy(() => import('./pages/prompt/CommandPage'));
+
 // Loading fallback component
 const PageLoader = () => (
     <Box
@@ -242,6 +247,10 @@ function AppContent() {
                                         <Route path="/logs" element={<Logs/>}/>
                                         <Route path="/dashboard" element={<UsageDashboardPage/>}/>
                                         <Route path="/model-test/:providerUuid" element={<ModelTestPage/>}/>
+                                        {/* Prompt routes */}
+                                        <Route path="/prompt/user" element={<UserPage/>}/>
+                                        <Route path="/prompt/skill" element={<SkillPage/>}/>
+                                        <Route path="/prompt/command" element={<CommandPage/>}/>
                                     </Routes>
                                 </Suspense>
                             </Layout>
