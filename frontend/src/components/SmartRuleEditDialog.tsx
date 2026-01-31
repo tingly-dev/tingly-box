@@ -37,7 +37,7 @@ const POSITION_OPTIONS = [
 const OPERATION_OPTIONS: Record<string, Array<{ value: string; label: string; description: string; valueType: 'string' | 'int' | 'bool' }>> = {
     model: [
         { value: 'contains', label: 'Contains', description: 'Model name contains the value', valueType: 'string' },
-        { value: 'glob', label: 'Glob', description: 'Model name matches glob pattern', valueType: 'string' },
+        // { value: 'glob', label: 'Glob', description: 'Model name matches glob pattern', valueType: 'string' },
         { value: 'equals', label: 'Equals', description: 'Model name equals the value', valueType: 'string' },
     ],
     thinking: [
@@ -46,13 +46,13 @@ const OPERATION_OPTIONS: Record<string, Array<{ value: string; label: string; de
     ],
     system: [
         { value: 'any_contains', label: 'Any Contains', description: 'Any system messages contain the value', valueType: 'string' },
-        { value: 'regex', label: 'Regex', description: 'Any system messages match regex pattern', valueType: 'string' },
+        // { value: 'regex', label: 'Regex', description: 'Any system messages match regex pattern', valueType: 'string' },
     ],
     user: [
         { value: 'any_contains', label: 'Any Contains', description: 'Any user messages contain the value', valueType: 'string' },
         { value: 'contains', label: 'Contains', description: 'Latest message is user role and it contains the value', valueType: 'string' },
-        { value: 'regex', label: 'Regex', description: 'Combined user messages match regex pattern', valueType: 'string' },
-        { value: 'type', label: 'Type', description: 'Latest message is user role and check its content type (e.g., image)', valueType: 'string' },
+        // { value: 'regex', label: 'Regex', description: 'Combined user messages match regex pattern', valueType: 'string' },
+        // { value: 'type', label: 'Type', description: 'Latest message is user role and check its content type (e.g., image)', valueType: 'string' },
     ],
     tool_use: [
         { value: 'is', label: 'Is', description: 'Latest message is tool use and its name is the value', valueType: 'string' },
@@ -107,8 +107,8 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
     const handleAddOp = () => {
         const newOp: SmartOp = {
             uuid: uuidv4(),
-            position: 'model',
-            operation: 'contains',
+            position: '',
+            operation: '',
             value: '',
             meta: {
                 description: '',
@@ -126,8 +126,17 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
         const updatedOps = [...ops];
         updatedOps[index] = { ...updatedOps[index], [field]: value };
 
-        // Update operation-specific metadata
-        if (field === 'position' || field === 'operation') {
+        // When position changes, clear operation and value, reset metadata
+        if (field === 'position') {
+            updatedOps[index].operation = '';
+            updatedOps[index].value = '';
+            updatedOps[index].meta = {
+                description: '',
+                type: 'string',
+            };
+        }
+        // Update operation-specific metadata when operation is set
+        else if (field === 'operation') {
             const position = updatedOps[index].position;
             const operation = updatedOps[index].operation;
             const opDef = OPERATION_OPTIONS[position]?.find(op => op.value === operation);
@@ -222,10 +231,13 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
                                                     <FormControl size="small" sx={{ minWidth: 120 }}>
                                                         <InputLabel>Position</InputLabel>
                                                         <Select
-                                                            value={op.position}
+                                                            value={op.position || ''}
                                                             label="Position"
                                                             onChange={(e) => handleOpChange(index, 'position', e.target.value)}
                                                         >
+                                                            <MenuItem value="">
+                                                                <em>Select...</em>
+                                                            </MenuItem>
                                                             {POSITION_OPTIONS.map((opt) => (
                                                                 <MenuItem key={opt.value} value={opt.value}>
                                                                     {opt.label}
@@ -238,11 +250,14 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
                                                     <FormControl size="small" sx={{ minWidth: 150 }}>
                                                         <InputLabel>Operation</InputLabel>
                                                         <Select
-                                                            value={op.operation}
+                                                            value={op.operation || ''}
                                                             label="Operation"
                                                             onChange={(e) => handleOpChange(index, 'operation', e.target.value)}
                                                             disabled={!op.position}
                                                         >
+                                                            <MenuItem value="">
+                                                                <em>Select...</em>
+                                                            </MenuItem>
                                                             {OPERATION_OPTIONS[op.position]?.map((opt) => (
                                                                 <MenuItem key={opt.value} value={opt.value}>
                                                                     {opt.label}
