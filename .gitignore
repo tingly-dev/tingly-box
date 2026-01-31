@@ -77,4 +77,4 @@ go.work
 /CLAUDE.md
 /.claude/
 /frontend/openapitools.json
-/openapitools.json
+openapitools.json
