@@ -375,11 +375,11 @@ func HandleResponsesToAnthropicStreamResponse(c *gin.Context, stream *openaistre
 
 	// Track tool calls by item ID for Responses API
 	type pendingToolCall struct {
-		blockIndex int
-		itemID     string // original item ID (used as map key)
+		blockIndex  int
+		itemID      string // original item ID (used as map key)
 		truncatedID string // truncated ID for OpenAI compatibility (sent to client)
-		name       string
-		arguments  string
+		name        string
+		arguments   string
 	}
 	pendingToolCalls := make(map[string]*pendingToolCall) // key: itemID
 
