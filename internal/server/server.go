@@ -364,6 +364,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Set template manager in config for model fetching fallback
 	server.config.SetTemplateManager(templateManager)
 
+		log.Printf("Failed to initialize skill manager: %v", err)
 	// Initialize probe cache with 24-hour TTL
 	server.probeCache = NewProbeCache(24 * time.Hour)
 	// Start background cleanup task for expired cache entries
