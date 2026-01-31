@@ -88,7 +88,7 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 		})
 		return
 	}
-	provider, selectedService, rule, err = s.DetermineProviderAndModelWithScenario(scenarioType, responseModel)
+	provider, selectedService, rule, err = s.DetermineProviderAndModelWithScenario(scenarioType, responseModel, nil)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{

@@ -93,6 +93,7 @@ const StyledCard = styled(Card, {
     filter: active ? 'none' : 'grayscale(0.3)',
     border: active ? 'none' : '2px dashed',
     borderColor: active ? 'transparent' : theme.palette.text.disabled,
+    marginTop: "3px",
     position: 'relative',
     ...(active ? {} : {
         '&::before': {

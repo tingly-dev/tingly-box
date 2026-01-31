@@ -245,7 +245,7 @@ func (ss *StatsStore) HydrateRules(rules []typ.Rule) error {
 	for i := range rules {
 		rule := &rules[i]
 		for j := range rule.Services {
-			service := &rule.Services[j]
+			service := rule.Services[j]
 			key := ss.ServiceKey(service.Provider, service.Model)
 
 			if record, ok := statsMap[key]; ok {

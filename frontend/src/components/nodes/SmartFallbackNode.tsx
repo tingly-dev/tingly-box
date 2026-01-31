@@ -78,22 +78,6 @@ export const SmartFallbackNode: React.FC<DefaultNodeProps> = ({
                     </Box>
                 </Box>
 
-                {/* Action Buttons - visible on hover */}
-                <ActionButtonsBox className="action-buttons">
-                    <Tooltip title="Add provider">
-                        <IconButton
-                            size="small"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onAddProvider();
-                            }}
-                            disabled={!active}
-                            sx={{ p: 0.5, backgroundColor: 'background.paper' }}
-                        >
-                            <AddIcon sx={{ fontSize: '1rem' }} />
-                        </IconButton>
-                    </Tooltip>
-                </ActionButtonsBox>
             </StyledSmartNodeWarning>
         </StyledSmartNodeWrapper>
     );

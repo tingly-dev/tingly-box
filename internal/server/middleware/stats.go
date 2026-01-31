@@ -223,7 +223,7 @@ func (sm *StatsMiddleware) RecordUsage(serviceID string, inputTokens, outputToke
 
 		// Look through the services to find the matching one
 		for i := range rule.Services {
-			service := &rule.Services[i]
+			service := rule.Services[i]
 			if service.Active && service.Provider == provider && service.Model == model {
 				// Found the service, record usage in its embedded stats
 				service.RecordUsage(inputTokens, outputTokens)
@@ -240,7 +240,7 @@ func (sm *StatsMiddleware) RecordUsage(serviceID string, inputTokens, outputToke
 func (sm *StatsMiddleware) RecordUsageOnRule(rule *typ.Rule, provider, model string, inputTokens, outputTokens int) {
 	// Look through the services in the specific rule to find the matching one
 	for i := range rule.Services {
-		service := &rule.Services[i]
+		service := rule.Services[i]
 		if service.Active && service.Provider == provider && service.Model == model {
 			// Found the service, record usage in its embedded stats
 			service.RecordUsage(inputTokens, outputTokens)
