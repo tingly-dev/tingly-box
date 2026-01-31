@@ -1,7 +1,14 @@
 import { Box, TextField, FormControl, InputLabel, Select, MenuItem, Chip } from '@mui/material';
 import { Search } from '@mui/icons-material';
 import type { RecordingType } from '@/types/prompt';
-import { RECORDING_TYPE_LABELS } from '@/types/prompt';
+
+const RECORDING_TYPE_LABELS: Record<RecordingType, string> = {
+  'code-review': 'Code Review',
+  'debug': 'Debug',
+  'refactor': 'Refactor',
+  'test': 'Test',
+  'custom': 'Custom',
+};
 
 interface FilterBarProps {
   searchQuery: string;
