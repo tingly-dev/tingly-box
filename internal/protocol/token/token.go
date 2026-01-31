@@ -90,8 +90,8 @@ func EstimateOutputTokens(content string) int {
 	return count
 }
 
-// CountTokensWithTiktoken approximates token count for OpenAI-style providers using tiktoken
-func CountTokensWithTiktoken(model string, messages []anthropic.MessageParam, system []anthropic.TextBlockParam) (int, error) {
+// CountTokensViaTiktoken approximates token count for OpenAI-style providers using tiktoken
+func CountTokensViaTiktoken(model string, messages []anthropic.MessageParam, system anthropic.MessageCountTokensParamsSystemUnion) (int, error) {
 	// Get the encoding for the model (default to O200kBase which is used by GPT-4o and above)
 	enc, err := tokenizer.Get(tokenizer.O200kBase)
 	if err != nil {
@@ -101,11 +101,19 @@ func CountTokensWithTiktoken(model string, messages []anthropic.MessageParam, sy
 	totalTokens := 0
 
 	// Count tokens in system messages
-	for _, sys := range system {
+	for _, sys := range system.OfTextBlockArray {
 		count, err := enc.Count(sys.Text)
 		if err != nil {
 			// If counting fails, estimate with character count / 4
 			count = len(sys.Text) / 4
+		}
+		totalTokens += count
+	}
+	if system.OfString.Valid() {
+		count, err := enc.Count(system.OfString.String())
+		if err != nil {
+			// If counting fails, estimate with character count / 4
+			count = len(system.OfString.String()) / 4
 		}
 		totalTokens += count
 	}
@@ -150,8 +158,8 @@ func CountTokensWithTiktoken(model string, messages []anthropic.MessageParam, sy
 	return totalTokens, nil
 }
 
-// CountBetaTokensWithTiktoken approximates token count for OpenAI-style providers using tiktoken
-func CountBetaTokensWithTiktoken(model string, messages []anthropic.BetaMessageParam, system anthropic.BetaMessageCountTokensParamsSystemUnion) (int, error) {
+// CountBetaTokensViaTiktoken approximates token count for OpenAI-style providers using tiktoken
+func CountBetaTokensViaTiktoken(model string, messages []anthropic.BetaMessageParam, system anthropic.BetaMessageCountTokensParamsSystemUnion) (int, error) {
 	// Get the encoding for the model (default to O200kBase which is used by GPT-4o and above)
 	enc, err := tokenizer.Get(tokenizer.O200kBase)
 	if err != nil {
@@ -176,6 +184,14 @@ func CountBetaTokensWithTiktoken(model string, messages []anthropic.BetaMessageP
 		if err != nil {
 			// If counting fails, estimate with character count / 4
 			count = len(sys.Text) / 4
+		}
+		totalTokens += count
+	}
+	if system.OfString.Valid() {
+		count, err := enc.Count(system.OfString.String())
+		if err != nil {
+			// If counting fails, estimate with character count / 4
+			count = len(system.OfString.String()) / 4
 		}
 		totalTokens += count
 	}
