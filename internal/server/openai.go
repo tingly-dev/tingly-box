@@ -152,7 +152,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 		})
 		return
 	}
-	provider, selectedService, rule, err = s.DetermineProviderAndModelWithScenario(scenarioType, req.Model)
+	provider, selectedService, rule, err = s.DetermineProviderAndModelWithScenario(scenarioType, req.Model, &req.ChatCompletionNewParams)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{

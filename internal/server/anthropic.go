@@ -69,6 +69,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 	var betaMessages protocol.AnthropicBetaMessagesRequest
 	var messages protocol.AnthropicMessagesRequest
 	var model string
+	var reqParams interface{} // For smart routing context extraction
 	if beta {
 		if err := json.Unmarshal(bodyBytes, &betaMessages); err != nil {
 			logrus.Debugf("Failed to unmarshal request body: %v", err)
@@ -85,6 +86,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 			return
 		}
 		model = string(betaMessages.Model)
+		reqParams = &betaMessages.BetaMessageNewParams
 	} else {
 		if err := json.Unmarshal(bodyBytes, &messages); err != nil {
 			logrus.Debugf("Failed to unmarshal request body: %v", err)
@@ -101,6 +103,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 			return
 		}
 		model = string(messages.Model)
+		reqParams = &messages.MessageNewParams
 	}
 
 	if model == "" {
@@ -135,7 +138,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		})
 		return
 	}
-	provider, selectedService, rule, err = s.DetermineProviderAndModelWithScenario(scenarioType, model)
+	provider, selectedService, rule, err = s.DetermineProviderAndModelWithScenario(scenarioType, model, reqParams)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
