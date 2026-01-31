@@ -14,6 +14,7 @@ import {
     Error as ErrorIcon,
     Error as VersionIcon,
     Code as CodeIcon,
+    Psychology as PromptIcon,
 } from '@mui/icons-material';
 import LockIcon from '@mui/icons-material/Lock';
 import {
@@ -70,6 +71,7 @@ const Layout = ({ children }: LayoutProps) => {
     const [mobileOpen, setMobileOpen] = useState(false);
     const [homeMenuOpen, setHomeMenuOpen] = useState(true);
     const [credentialMenuOpen, setCredentialMenuOpen] = useState(true);
+    const [promptMenuOpen, setPromptMenuOpen] = useState(true);
     const [systemMenuOpen, setSystemMenuOpen] = useState(false);
     const [easterEggAnchorEl, setEasterEggAnchorEl] = useState<HTMLElement | null>(null);
 
@@ -156,6 +158,28 @@ const Layout = ({ children }: LayoutProps) => {
             ],
         },
         {
+            key: 'prompt',
+            label: 'Prompt',
+            icon: <PromptIcon sx={{ fontSize: 20 }} />,
+            items: [
+                {
+                    path: '/prompt/user',
+                    label: 'User',
+                    icon: <PromptIcon sx={{ fontSize: 20 }} />,
+                },
+                {
+                    path: '/prompt/skill',
+                    label: 'Skill',
+                    icon: <PromptIcon sx={{ fontSize: 20 }} />,
+                },
+                {
+                    path: '/prompt/command',
+                    label: 'Command',
+                    icon: <PromptIcon sx={{ fontSize: 20 }} />,
+                },
+            ],
+        },
+        {
             key: 'system',
             label: 'System',
             path: '/system',
@@ -220,6 +244,7 @@ const Layout = ({ children }: LayoutProps) => {
                     const isDashboardGroup = group.key === 'dashboard';
                     const isHomeGroup = group.key === 'scenario';
                     const isCredentialGroup = group.key === 'credential';
+                    const isPromptGroup = group.key === 'prompt';
                     const isSystemGroup = group.key === 'system';
                     const isStandalone = group.standalone;
 
@@ -234,6 +259,9 @@ const Layout = ({ children }: LayoutProps) => {
                         } else if (isCredentialGroup) {
                             isOpen = credentialMenuOpen;
                             setIsOpen = setCredentialMenuOpen;
+                        } else if (isPromptGroup) {
+                            isOpen = promptMenuOpen;
+                            setIsOpen = setPromptMenuOpen;
                         } else if (isSystemGroup) {
                             isOpen = systemMenuOpen;
                             setIsOpen = setSystemMenuOpen;
