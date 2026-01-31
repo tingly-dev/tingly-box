@@ -1,7 +1,7 @@
 import CssBaseline from '@mui/material/CssBaseline';
 import { ThemeProvider } from '@mui/material/styles';
 import { CircularProgress, Box, Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, IconButton } from '@mui/material';
-import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider } from './contexts/AuthContext';
@@ -12,6 +12,7 @@ import theme from './theme';
 import { CloudUpload, Refresh, Error as ErrorIcon, AppRegistration as NPM, GitHub } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import Logs from "@/pages/Logs.tsx";
+import { Events } from '@/bindings';
 
 // Lazy load pages for code splitting
 const Login = lazy(() => import('./pages/Login'));
@@ -202,6 +203,21 @@ const AppDialogs = () => {
 };
 
 function AppContent() {
+    const navigate = useNavigate();
+
+    // Listen for systray navigation events
+    useEffect(() => {
+        const off = Events.On('systray-navigate', (event: any) => {
+            const path = event.data || event;
+            console.log('[Systray] Navigate to:', path);
+            navigate(path);
+        });
+
+        return () => {
+            off?.();
+        };
+    }, [navigate]);
+
     return (
         <Suspense fallback={<PageLoader/>}>
             <Routes>
