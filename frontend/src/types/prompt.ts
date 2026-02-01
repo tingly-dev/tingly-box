@@ -33,19 +33,33 @@ export interface RecordingCalendarDay {
 }
 
 export type IDESource =
-  | 'claude-code'
+  | 'claude_code'
   | 'opencode'
   | 'vscode'
   | 'cursor'
+  | 'codex'
+  | 'antigravity'
+  | 'amp'
+  | 'kilo_code'
+  | 'roo_code'
+  | 'goose'
+  | 'gemini_cli'
+  | 'github_copilot'
+  | 'clawdbot'
+  | 'droid'
+  | 'windsurf'
   | 'custom';
 
 export interface SkillLocation {
   id: string;
   name: string;              // Display name
   path: string;              // Full file system path
-  ideSource: IDESource;
-  skillCount: number;
+  ide_source: IDESource;     // Backend uses snake_case
+  skill_count: number;       // Backend uses snake_case
   icon?: string;
+  is_auto_discovered?: boolean;  // Backend uses snake_case
+  is_installed?: boolean;    // Backend uses snake_case
+  last_scanned_at?: Date;    // Backend uses snake_case
 }
 
 export interface Skill {
@@ -53,9 +67,13 @@ export interface Skill {
   name: string;              // From filename
   filename: string;          // Full filename with extension
   path: string;              // Full file path
-  locationId: string;
-  fileType: string;          // File extension
+  location_id: string;       // Backend uses snake_case
+  file_type: string;         // Backend uses snake_case
   description?: string;
+  content_hash?: string;     // Backend uses snake_case
+  size?: number;
+  modified_at?: Date;        // Backend uses snake_case
+  content?: string;          // File content
 }
 
 export interface SkillFilter {
@@ -69,21 +87,3 @@ export interface RecordingFilter {
   projectFilter?: string;
   typeFilter?: RecordingType;
 }
-
-// IDE Source Icon Mapping
-export const IDE_SOURCE_ICONS: Record<IDESource, string> = {
-  'claude-code': '🎨',
-  'opencode': '💻',
-  'vscode': '💡',
-  'cursor': '🎯',
-  'custom': '📂',
-};
-
-// Recording Type Labels
-export const RECORDING_TYPE_LABELS: Record<RecordingType, string> = {
-  'code-review': 'Code Review',
-  'debug': 'Debug',
-  'refactor': 'Refactor',
-  'test': 'Test',
-  'custom': 'Custom',
-};

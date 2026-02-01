@@ -897,6 +897,35 @@ export const api = {
             return { success: false, error: error.message };
         }
     },
+
+    // Get skill content with file content
+    getSkillContent: async (locationId: string, skillId: string, skillPath?: string): Promise<any> => {
+        try {
+            const token = getUserAuthToken();
+            const params = new URLSearchParams({
+                location_id: locationId,
+                ...(skillId && { skill_id: skillId }),
+                ...(skillPath && { skill_path: skillPath }),
+            });
+            const response = await fetch(`${await getApiBaseUrl()}/api/v2/skill-content?${params}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+            });
+
+            if (response.status === 401) {
+                localStorage.removeItem('user_auth_token');
+                window.location.href = '/login';
+                return { success: false, error: 'Authentication required' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
 };
 
 export default api;
