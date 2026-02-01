@@ -1,306 +1,290 @@
 import {
-  Box,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-  Typography,
-  Chip,
-  CircularProgress,
-  Paper,
-  Divider,
-  IconButton,
-  Tooltip,
+    CheckCircle,
+    Close,
+    ContentCopy,
+    Description,
+    ErrorOutline,
+} from '@mui/icons-material';
+import {
+    Alert,
+    Box,
+    Button,
+    CircularProgress,
+    Dialog,
+    DialogContent,
+    DialogTitle,
+    IconButton,
+    Paper,
+    Stack,
+    Typography,
 } from '@mui/material';
-import { Close, OpenInNew } from '@mui/icons-material';
 import { useState, useEffect } from 'react';
-import type { Skill, SkillLocation } from '@/types/prompt';
+import { type Skill, type SkillLocation } from '@/types/prompt';
+import { getIdeSourceIcon } from '@/constants/ideSources';
+import { api } from '@/services/api';
 
 interface SkillDetailDialogProps {
-  open: boolean;
-  skill?: Skill;
-  location?: SkillLocation;
-  onClose: () => void;
-  onOpen: (skill: Skill) => void;
+    open: boolean;
+    skill: Skill | null;
+    location: SkillLocation | null;
+    onClose: () => void;
 }
 
-const formatFileSize = (bytes?: number): string => {
-  if (!bytes) return 'Unknown';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-};
+const SkillDetailDialog = ({ open, skill, location, onClose }: SkillDetailDialogProps) => {
+    const [loading, setLoading] = useState(false);
+    const [content, setContent] = useState<string>('');
+    const [copied, setCopied] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
-const formatDate = (date?: Date): string => {
-  if (!date) return 'Unknown';
-  return new Date(date).toLocaleString();
-};
+    useEffect(() => {
+        if (open && skill && location) {
+            loadSkillContent();
+        }
+        // Reset copied state when dialog closes
+        if (!open) {
+            setCopied(false);
+            setError(null);
+        }
+    }, [open, skill, location]);
 
-// TODO: Replace with actual backend API call
-const mockGetSkillContent = async (skillPath: string): Promise<string> => {
-  // Simulate API delay
-  await new Promise((resolve) => setTimeout(resolve, 500));
+    const loadSkillContent = async () => {
+        if (!skill || !location) return;
 
-  // Mock content preview
-  return `// Skill: ${skillPath.split('/').pop()}
-// This is a preview of the skill content
-// In the real implementation, this would be fetched from the backend
+        setLoading(true);
+        setError(null);
 
-export default function handler(req, res) {
-  // Your skill logic here
-  return { success: true };
-}`;
-};
+        try {
+            const result = await api.getSkillContent(
+                location.id,
+                skill.id,
+                skill.path
+            );
+            if (result.success && result.data) {
+                setContent(result.data.content || '');
+            } else {
+                setError(result.error || 'Failed to load skill content');
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Unknown error occurred');
+        } finally {
+            setLoading(false);
+        }
+    };
 
-const getLanguageFromFileType = (fileType: string): string => {
-  const langMap: Record<string, string> = {
-    '.ts': 'typescript',
-    '.tsx': 'typescript',
-    '.js': 'javascript',
-    '.jsx': 'javascript',
-    '.py': 'python',
-    '.go': 'go',
-    '.rs': 'rust',
-    '.md': 'markdown',
-    '.json': 'json',
-    '.yaml': 'yaml',
-    '.yml': 'yaml',
-    '.sh': 'bash',
-  };
-  return langMap[fileType] || 'text';
-};
+    const handleCopy = () => {
+        navigator.clipboard.writeText(content);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
 
-const SkillDetailDialog: React.FC<SkillDetailDialogProps> = ({
-  open,
-  skill,
-  location,
-  onClose,
-  onOpen,
-}) => {
-  const [loading, setLoading] = useState(false);
-  const [content, setContent] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+    const handleClose = () => {
+        setContent('');
+        setError(null);
+        setCopied(false);
+        onClose();
+    };
 
-  // Load content when skill changes
-  useEffect(() => {
-    if (!skill || !open) {
-      setContent(null);
-      setError(null);
-      return;
-    }
+    const formatFileSize = (bytes?: number): string => {
+        if (!bytes) return '-';
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    };
 
-    // Only show preview for text-based files
-    const textExtensions = ['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.rs', '.md', '.json', '.yaml', '.yml', '.sh', '.txt'];
-    if (!textExtensions.includes(skill.file_type)) {
-      setContent(null);
-      return;
-    }
+    const formatDate = (dateStr?: string): string => {
+        if (!dateStr) return 'Unknown';
+        try {
+            return new Date(dateStr).toLocaleString();
+        } catch {
+            return 'Invalid date';
+        }
+    };
 
-    setLoading(true);
-    setError(null);
+    if (!skill || !location) return null;
 
-    mockGetSkillContent(skill.path)
-      .then((data) => {
-        setContent(data);
-      })
-      .catch((err) => {
-        setError(err.message || 'Failed to load skill content');
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, [skill, open]);
+    const icon = location.icon || getIdeSourceIcon(location.ide_source);
 
-  const handleOpen = () => {
-    if (skill) {
-      onOpen(skill);
-      onClose();
-    }
-  };
-
-  const canPreview = skill && ['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.rs', '.md', '.json', '.yaml', '.yml', '.sh', '.txt'].includes(skill.file_type);
-
-  return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      {skill && (
-        <>
-          <DialogTitle>
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Chip
-                  label={skill.file_type}
-                  size="small"
-                  color="primary"
-                  variant="filled"
-                  sx={{ fontSize: '0.7rem' }}
-                />
-                <Typography variant="h6" component="span">
-                  {skill.name}
-                </Typography>
-              </Box>
-              <IconButton onClick={onClose} size="small">
-                <Close />
-              </IconButton>
-            </Box>
-          </DialogTitle>
-
-          <DialogContent>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {/* Basic Info */}
-              <Box
-                sx={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: 2,
-                  alignItems: 'center',
-                }}
-              >
-                {location && (
-                  <Chip
-                    label={location.name}
-                    size="small"
-                    variant="outlined"
-                  />
-                )}
-                {skill.size && (
-                  <Typography variant="caption" color="text.secondary">
-                    {formatFileSize(skill.size)}
-                  </Typography>
-                )}
-                {skill.modified_at && (
-                  <Typography variant="caption" color="text.secondary">
-                    Modified: {formatDate(skill.modified_at)}
-                  </Typography>
-                )}
-              </Box>
-
-              {/* Path */}
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  Path
-                </Typography>
-                <Typography
-                  variant="body2"
-                  sx={{
-                    fontFamily: 'monospace',
-                    wordBreak: 'break-all',
-                  }}
-                >
-                  {skill.path}
-                </Typography>
-              </Box>
-
-              {/* Description */}
-              {skill.description && (
-                <Box>
-                  <Typography variant="caption" color="text.secondary">
-                    Description
-                  </Typography>
-                  <Typography variant="body2">{skill.description}</Typography>
-                </Box>
-              )}
-
-              {/* Content Hash */}
-              {skill.content_hash && (
-                <Box>
-                  <Typography variant="caption" color="text.secondary">
-                    Content Hash (SHA256)
-                  </Typography>
-                  <Typography
-                    variant="caption"
+    return (
+        <Dialog
+            open={open}
+            onClose={handleClose}
+            maxWidth="lg"
+            fullWidth
+            PaperProps={{
+                sx: { height: '80vh' },
+            }}
+        >
+            <DialogTitle>
+                <Box
                     sx={{
-                      fontFamily: 'monospace',
-                      wordBreak: 'break-all',
-                      display: 'block',
-                    }}
-                  >
-                    {skill.content_hash}
-                  </Typography>
-                </Box>
-              )}
-
-              {/* Preview */}
-              {canPreview && (
-                <Box>
-                  <Divider sx={{ my: 2 }} />
-                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                    Preview
-                  </Typography>
-                  {loading ? (
-                    <Box
-                      sx={{
                         display: 'flex',
-                        justifyContent: 'center',
-                        py: 4,
-                      }}
-                    >
-                      <CircularProgress size={32} />
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                    }}
+                >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                        <Description fontSize="small" color="action" />
+                        <Box sx={{ minWidth: 0 }}>
+                            <Typography variant="h6" noWrap>
+                                {skill.name}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" noWrap>
+                                {skill.filename}
+                            </Typography>
+                        </Box>
                     </Box>
-                  ) : error ? (
-                    <Paper
-                      variant="outlined"
-                      sx={{
-                        p: 2,
-                        bgcolor: 'error.50',
-                        borderColor: 'error.200',
-                      }}
+                    <IconButton
+                        aria-label="close"
+                        onClick={handleClose}
+                        size="small"
+                        disabled={loading}
                     >
-                      <Typography variant="body2" color="error">
-                        {error}
-                      </Typography>
-                    </Paper>
-                  ) : content ? (
-                    <Paper
-                      variant="outlined"
-                      sx={{
-                        p: 2,
-                        bgcolor: 'grey.50',
-                        maxHeight: 300,
-                        overflow: 'auto',
-                      }}
-                    >
-                      <Typography
-                        variant="body2"
-                        component="pre"
-                        sx={{
-                          fontFamily: 'monospace',
-                          fontSize: '0.75rem',
-                          whiteSpace: 'pre-wrap',
-                          m: 0,
-                        }}
-                      >
-                        {content}
-                      </Typography>
-                    </Paper>
-                  ) : null}
+                        <Close />
+                    </IconButton>
                 </Box>
-              )}
-            </Box>
-          </DialogContent>
+            </DialogTitle>
+            <DialogContent sx={{ p: 0 }}>
+                <Stack spacing={0} sx={{ height: '100%' }}>
+                    {/* Metadata Bar */}
+                    <Box
+                        sx={{
+                            px: 3,
+                            py: 2,
+                            borderBottom: 1,
+                            borderColor: 'divider',
+                            bgcolor: 'action.hover',
+                        }}
+                    >
+                        <Stack direction="row" spacing={3} alignItems="center" flexWrap="wrap">
+                            <Stack direction="row" spacing={1} alignItems="center">
+                                <Typography sx={{ fontSize: 16 }}>{icon}</Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    {location.name}
+                                </Typography>
+                            </Stack>
+                            <Typography variant="body2" color="text.secondary">
+                                Size: {formatFileSize(skill.size)}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                Modified: {formatDate(skill.modified_at as string)}
+                            </Typography>
+                        </Stack>
+                    </Box>
 
-          <DialogActions>
-            <Button onClick={onClose}>Close</Button>
-            <Tooltip title="Open in default editor">
-              <Button
-                onClick={handleOpen}
-                variant="contained"
-                startIcon={<OpenInNew />}
-              >
-                Open in Editor
-              </Button>
-            </Tooltip>
-          </DialogActions>
-        </>
-      )}
-    </Dialog>
-  );
+                    {/* Content Area */}
+                    <Box sx={{ flex: 1, overflow: 'auto', p: 0 }}>
+                        {loading ? (
+                            <Box
+                                sx={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    height: '100%',
+                                }}
+                            >
+                                <CircularProgress size={40} sx={{ mb: 2 }} />
+                                <Typography variant="body2" color="text.secondary">
+                                    Loading skill content...
+                                </Typography>
+                            </Box>
+                        ) : error ? (
+                            <Box
+                                sx={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    height: '100%',
+                                    px: 3,
+                                }}
+                            >
+                                <ErrorOutline
+                                    sx={{ fontSize: 48, color: 'error.main', mb: 2 }}
+                                />
+                                <Typography variant="body2" color="error" align="center">
+                                    {error}
+                                </Typography>
+                                <Button
+                                    variant="outlined"
+                                    onClick={loadSkillContent}
+                                    sx={{ mt: 2 }}
+                                    size="small"
+                                >
+                                    Retry
+                                </Button>
+                            </Box>
+                        ) : content ? (
+                            <Box sx={{ p: 3 }}>
+                                <Paper
+                                    elevation={0}
+                                    sx={{
+                                        p: 3,
+                                        bgcolor: 'background.default',
+                                        fontFamily: 'monospace',
+                                        fontSize: '0.875rem',
+                                        whiteSpace: 'pre-wrap',
+                                        wordBreak: 'break-word',
+                                        border: 1,
+                                        borderColor: 'divider',
+                                    }}
+                                >
+                                    {content}
+                                </Paper>
+                            </Box>
+                        ) : (
+                            <Box
+                                sx={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    height: '100%',
+                                }}
+                            >
+                                <Typography variant="body2" color="text.secondary">
+                                    No content available
+                                </Typography>
+                            </Box>
+                        )}
+                    </Box>
+
+                    {/* Action Bar */}
+                    {!loading && content && (
+                        <Box
+                            sx={{
+                                px: 3,
+                                py: 2,
+                                borderTop: 1,
+                                borderColor: 'divider',
+                                bgcolor: 'action.hover',
+                                display: 'flex',
+                                justifyContent: 'flex-end',
+                            }}
+                        >
+                            {copied && (
+                                <Alert
+                                    severity="success"
+                                    icon={<CheckCircle fontSize="inherit" />}
+                                    sx={{ mr: 2, py: 0 }}
+                                >
+                                    Copied to clipboard!
+                                </Alert>
+                            )}
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                startIcon={<ContentCopy />}
+                                onClick={handleCopy}
+                            >
+                                Copy Content
+                            </Button>
+                        </Box>
+                    )}
+                </Stack>
+            </DialogContent>
+        </Dialog>
+    );
 };
 
 export default SkillDetailDialog;

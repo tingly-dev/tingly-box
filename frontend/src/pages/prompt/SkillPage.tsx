@@ -1,361 +1,725 @@
-import { useState, useMemo, useEffect } from 'react';
-import { Box, Typography, Grid, Paper, Button, Alert, IconButton } from '@mui/material';
-import { Add as AddIcon, Search as SearchIcon, Close as CloseIcon, Refresh as RefreshIcon } from '@mui/icons-material';
-import PageLayout from '@/components/PageLayout';
 import {
-  SkillSearchBar,
-  SkillLocationList,
-  SkillLocationPanel,
-  SkillDetailPanel,
-  AddPathDialog,
-} from '@/components/prompt';
+    Add,
+    AutoFixHigh,
+    ContentCopy,
+    Delete,
+    Description,
+    Edit,
+    FolderOpen,
+    Refresh,
+    Search,
+} from '@mui/icons-material';
+import {
+    Alert,
+    Box,
+    Button,
+    CircularProgress,
+    Divider,
+    IconButton,
+    InputAdornment,
+    List,
+    ListItem,
+    ListItemButton,
+    ListItemText,
+    Paper,
+    Stack,
+    TextField,
+    Typography,
+    Chip as MuiChip,
+} from '@mui/material';
+import { useEffect, useState } from 'react';
+import { type SkillLocation, type Skill, type IDESource } from '@/types/prompt';
+import { PageLayout } from '@/components/PageLayout';
+import UnifiedCard from '@/components/UnifiedCard';
+import { getIdeSourceLabel } from '@/constants/ideSources';
+import { api } from '@/services/api';
+import AddSkillLocationDialog from '@/components/prompt/skill/AddSkillLocationDialog';
 import AutoDiscoveryDialog from '@/components/prompt/skill/AutoDiscoveryDialog';
-import type { Skill, SkillLocation, IDESource } from '@/types/prompt';
-import { useTranslation } from 'react-i18next';
-import api from '@/services/api';
 
-// Auto-discovery on first visit
-const SKILL_ONBOARDING_KEY = 'tingly_skill_onboarded';
+interface AddSkillLocationData {
+    name: string;
+    path: string;
+    ide_source: IDESource;
+}
 
 const SkillPage = () => {
-  const { t } = useTranslation();
-  const [loading, setLoading] = useState(true);
-  const [locations, setLocations] = useState<SkillLocation[]>([]);
-  const [skills, setSkills] = useState<Skill[]>([]);
-  const [selectedLocationId, setSelectedLocationId] = useState<string>();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [ideFilter, setIdeFilter] = useState<IDESource>();
-  const [addDialogOpen, setAddDialogOpen] = useState(false);
-  const [discoverDialogOpen, setDiscoverDialogOpen] = useState(false);
-  const [selectedSkill, setSelectedSkill] = useState<Skill>();
-  const [showOnboardingBanner, setShowOnboardingBanner] = useState(false);
+    const [locations, setLocations] = useState<SkillLocation[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [notification, setNotification] = useState<{
+        open: boolean;
+        message: string;
+        severity: 'success' | 'error';
+    }>({ open: false, message: '', severity: 'success' });
 
-  // Check onboarding status and load locations on mount
-  useEffect(() => {
-    const hasOnboarded = localStorage.getItem(SKILL_ONBOARDING_KEY);
-    loadLocations();
+    // Location list state
+    const [locationSearch, setLocationSearch] = useState('');
+    const [selectedLocation, setSelectedLocation] = useState<SkillLocation | null>(null);
 
-    // Show onboarding banner if not yet onboarded
-    if (!hasOnboarded) {
-      setShowOnboardingBanner(true);
-    }
-  }, []);
+    // Skill list state
+    const [skills, setSkills] = useState<Skill[]>([]);
+    const [skillsLoading, setSkillsLoading] = useState(false);
+    const [skillSearch, setSkillSearch] = useState('');
+    const [selectedSkill, setSelectedSkill] = useState<Skill | null>(null);
 
-  const loadLocations = async (showLoading = true) => {
-    if (showLoading) {
-      setLoading(true);
-    }
-    try {
-      const response = await api.getSkillLocations();
-      if (response.success && response.data) {
-        setLocations(response.data);
-      }
-    } catch (error) {
-      console.error('Failed to load skill locations:', error);
-    } finally {
-      if (showLoading) {
+    // Skill detail state
+    const [skillContent, setSkillContent] = useState<string>('');
+    const [contentLoading, setContentLoading] = useState(false);
+
+    // Dialog states
+    const [addDialogOpen, setAddDialogOpen] = useState(false);
+    const [addDialogMode, setAddDialogMode] = useState<'add' | 'edit'>('add');
+    const [editLocation, setEditLocation] = useState<SkillLocation | null>(null);
+    const [discoveryDialogOpen, setDiscoveryDialogOpen] = useState(false);
+
+    useEffect(() => {
+        loadLocations();
+    }, []);
+
+    // Load skills when location is selected
+    useEffect(() => {
+        if (selectedLocation) {
+            loadSkills(selectedLocation);
+        } else {
+            setSkills([]);
+            setSelectedSkill(null);
+            setSkillContent('');
+        }
+    }, [selectedLocation]);
+
+    // Load skill content when skill is selected
+    useEffect(() => {
+        if (selectedSkill && selectedLocation) {
+            loadSkillContent(selectedSkill);
+        } else {
+            setSkillContent('');
+        }
+    }, [selectedSkill]);
+
+    const showNotification = (message: string, severity: 'success' | 'error') => {
+        setNotification({ open: true, message, severity });
+    };
+
+    const loadLocations = async () => {
+        setLoading(true);
+        const result = await api.getSkillLocations();
+        if (result.success) {
+            setLocations(result.data || []);
+        } else {
+            showNotification(`Failed to load locations: ${result.error}`, 'error');
+        }
         setLoading(false);
-      }
-    }
-  };
+    };
 
-  const loadSkillsForLocation = async (locationId: string) => {
-    try {
-      const response = await api.refreshSkillLocation(locationId);
-      if (response.success && response.data) {
-        // Update skills from the scan result
-        if (response.data.skills) {
-          setSkills(response.data.skills);
-          // Update the location's skill count directly without re-fetching
-          setLocations((prev) =>
-            prev.map((loc) =>
-              loc.id === locationId
-                ? { ...loc, skill_count: response.data.skills?.length || 0 }
-                : loc
-            )
-          );
+    const loadSkills = async (location: SkillLocation) => {
+        setSkillsLoading(true);
+        const result = await api.refreshSkillLocation(location.id);
+        if (result.success && result.data) {
+            setSkills(result.data.skills || []);
+        } else {
+            showNotification(`Failed to load skills: ${result.error}`, 'error');
         }
-      }
-    } catch (error) {
-      console.error('Failed to load skills:', error);
-    }
-  };
+        setSkillsLoading(false);
+    };
 
-  const handleAutoDiscover = () => {
-    // Trigger automatic discovery without showing dialog
-    // AutoDiscoverDialog will handle the discovery and auto-import
-    setDiscoverDialogOpen(true);
-  };
+    const loadSkillContent = async (skill: Skill) => {
+        if (!selectedLocation) return;
 
-  const handleOnboardingComplete = () => {
-    localStorage.setItem(SKILL_ONBOARDING_KEY, 'true');
-    setShowOnboardingBanner(false);
-  };
-
-  const selectedLocation = useMemo(
-    () => locations.find((l) => l.id === selectedLocationId),
-    [selectedLocationId, locations]
-  );
-
-  // For skill detail, use the skill's location if available, otherwise use selected location
-  const skillLocation = useMemo(
-    () => {
-      if (selectedSkill) {
-        return locations.find((l) => l.id === selectedSkill.location_id) || selectedLocation;
-      }
-      return selectedLocation;
-    },
-    [selectedSkill, selectedLocation, locations]
-  );
-
-  const filteredSkills = useMemo(() => {
-    return skills.filter((skill) => {
-      // If a location is selected, only show skills from that location
-      const matchesLocation = !selectedLocationId || skill.location_id === selectedLocationId;
-
-      // Search query filter
-      const matchesSearch =
-        searchQuery === '' ||
-        skill.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        skill.description?.toLowerCase().includes(searchQuery.toLowerCase());
-
-      // If an IDE filter is set and no location is selected, filter by IDE
-      const matchesIde = !ideFilter || !selectedLocationId;
-      if (ideFilter && !selectedLocationId) {
-        // Find the location for this skill and check its IDE
-        const skillLocation = locations.find((l) => l.id === skill.location_id);
-        const matchesIdeFilter = skillLocation?.ide_source === ideFilter;
-        if (!matchesIdeFilter) {
-          return false;
+        setContentLoading(true);
+        const result = await api.getSkillContent(
+            selectedLocation.id,
+            skill.id,
+            skill.path
+        );
+        if (result.success && result.data) {
+            setSkillContent(result.data.content || '');
+        } else {
+            showNotification(`Failed to load skill content: ${result.error}`, 'error');
         }
-      }
+        setContentLoading(false);
+    };
 
-      return matchesLocation && matchesSearch;
-    });
-  }, [skills, selectedLocationId, searchQuery, ideFilter, locations]);
+    const handleAddClick = () => {
+        setAddDialogMode('add');
+        setEditLocation(null);
+        setAddDialogOpen(true);
+    };
 
-  const handleSelectLocation = (location: SkillLocation) => {
-    setSelectedLocationId(location.id);
-    // Load skills for the selected location
-    loadSkillsForLocation(location.id);
-  };
+    const handleEditClick = (location: SkillLocation, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setAddDialogMode('edit');
+        setEditLocation(location);
+        setAddDialogOpen(true);
+    };
 
-  const handleRemoveLocation = async (locationId: string) => {
-    try {
-      await api.removeSkillLocation(locationId);
-      setLocations(locations.filter((l) => l.id !== locationId));
-      if (selectedLocationId === locationId) {
-        setSelectedLocationId(undefined);
-        setSkills([]);
-      }
-    } catch (error) {
-      console.error('Failed to remove location:', error);
-    }
-  };
+    const handleDeleteClick = (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!confirm('Are you sure you want to delete this location?')) {
+            return;
+        }
 
-  const handleRefreshLocation = async (locationId: string) => {
-    await loadSkillsForLocation(locationId);
-  };
-
-  const handleAddLocation = async (data: { name: string; path: string; ideSource: IDESource }) => {
-    try {
-      const response = await api.addSkillLocation({
-        name: data.name,
-        path: data.path,
-        ide_source: data.ideSource,
-      });
-      if (response.success) {
-        await loadLocations(false);
-        setAddDialogOpen(false);
-      }
-    } catch (error) {
-      console.error('Failed to add location:', error);
-    }
-  };
-
-  const handleImportDiscovered = async (importedLocations: SkillLocation[]) => {
-    try {
-      const response = await api.importSkillLocations(importedLocations);
-      if (response.success) {
-        await loadLocations(false);
-      }
-    } catch (error) {
-      console.error('Failed to import locations:', error);
-    }
-  };
-
-  const handleOpenSkill = (skill: Skill) => {
-    setSelectedSkill(skill);
-  };
-
-  const handleOpenInEditor = (skill: Skill) => {
-    console.log('Open skill in editor:', skill);
-    // TODO: Implement open in default editor
-  };
-
-  const handleOpenAll = () => {
-    console.log('Open all skills in location:', selectedLocationId);
-    // TODO: Implement open all
-  };
-
-  const handleOpenFolder = () => {
-    console.log('Open folder:', selectedLocation?.path);
-    // TODO: Implement open folder in file manager
-  };
-
-  const handleScanAll = async () => {
-    setLoading(true);
-    try {
-      const response = await api.scanIdes();
-      console.log('Scan API response:', response);
-      if (response.success && response.data) {
-        console.log('Scan result data:', response.data);
-        // Store the scan result FIRST (synchronous)
-        (window as any).scanResult = response.data;
-        console.log('Stored scanResult, now opening dialog');
-        // Then show discovered IDEs in the dialog (async state update)
-        setDiscoverDialogOpen(true);
-      }
-    } catch (error) {
-      console.error('Failed to scan IDEs:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <PageLayout loading={loading}>
-      <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-        {/* Onboarding Banner */}
-        {showOnboardingBanner && (
-          <Alert
-            severity="info"
-            sx={{ mb: 2 }}
-            action={
-              <IconButton
-                aria-label="close"
-                color="inherit"
-                size="small"
-                onClick={handleOnboardingComplete}
-              >
-                <CloseIcon fontSize="inherit" />
-              </IconButton>
+        api.removeSkillLocation(id).then((result) => {
+            if (result.success) {
+                showNotification('Location deleted successfully!', 'success');
+                if (selectedLocation?.id === id) {
+                    setSelectedLocation(null);
+                }
+                loadLocations();
+            } else {
+                showNotification(`Failed to delete location: ${result.error}`, 'error');
             }
-          >
-            <Box>
-              <Typography variant="body2">
-                First time here? Auto-discover IDE skills from your home directory to get started.
-              </Typography>
-              <Button
-                size="small"
-                variant="contained"
-                startIcon={<SearchIcon />}
-                onClick={handleAutoDiscover}
-                sx={{ mt: 1 }}
-              >
-                Auto-Discover Now
-              </Button>
+        });
+    };
+
+    const handleRefreshClick = (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        api.refreshSkillLocation(id).then((result) => {
+            if (result.success) {
+                showNotification('Location refreshed successfully!', 'success');
+                loadLocations();
+            } else {
+                showNotification(`Failed to refresh location: ${result.error}`, 'error');
+            }
+        });
+    };
+
+    const handleAddSubmit = async (data: AddSkillLocationData) => {
+        if (addDialogMode === 'add') {
+            const result = await api.addSkillLocation({
+                name: data.name,
+                path: data.path,
+                ide_source: data.ide_source,
+            });
+            if (result.success) {
+                showNotification('Location added successfully!', 'success');
+                loadLocations();
+            } else {
+                showNotification(`Failed to add location: ${result.error}`, 'error');
+            }
+        } else if (editLocation) {
+            const deleteResult = await api.removeSkillLocation(editLocation.id);
+            if (deleteResult.success) {
+                const addResult = await api.addSkillLocation({
+                    name: data.name,
+                    path: data.path,
+                    ide_source: data.ide_source,
+                });
+                if (addResult.success) {
+                    showNotification('Location updated successfully!', 'success');
+                    loadLocations();
+                } else {
+                    showNotification(`Failed to update location: ${addResult.error}`, 'error');
+                }
+            } else {
+                showNotification(`Failed to update location: ${deleteResult.error}`, 'error');
+            }
+        }
+    };
+
+    const handleImportLocations = async (locs: SkillLocation[]) => {
+        const result = await api.importSkillLocations(locs);
+        if (result.success) {
+            showNotification(
+                `Imported ${result.data?.length || 0} location(s) successfully!`,
+                'success'
+            );
+            loadLocations();
+        } else {
+            showNotification(`Failed to import locations: ${result.error}`, 'error');
+        }
+    };
+
+    const handleCopyContent = () => {
+        navigator.clipboard.writeText(skillContent);
+        showNotification('Copied to clipboard!', 'success');
+    };
+
+    // Filter locations
+    const filteredLocations = locations.filter((location) => {
+        const matchesSearch =
+            locationSearch === '' ||
+            location.name.toLowerCase().includes(locationSearch.toLowerCase()) ||
+            location.path.toLowerCase().includes(locationSearch.toLowerCase());
+        return matchesSearch;
+    });
+
+    // Filter skills
+    const filteredSkills = skills.filter((skill) => {
+        const matchesSearch =
+            skillSearch === '' ||
+            skill.name.toLowerCase().includes(skillSearch.toLowerCase()) ||
+            skill.filename.toLowerCase().includes(skillSearch.toLowerCase());
+        return matchesSearch;
+    });
+
+    const formatFileSize = (bytes?: number): string => {
+        if (!bytes) return '-';
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    };
+
+    return (
+        <PageLayout loading={loading} notification={notification}>
+            {/* Header */}
+            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Box>
+                    <Typography variant="h4" sx={{ fontWeight: 600, mb: 0.5 }}>
+                        Skill Management
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                        Manage your AI skill locations from various IDEs and tools
+                    </Typography>
+                </Box>
+                <Stack direction="row" spacing={1}>
+                    <Button
+                        variant="outlined"
+                        startIcon={<AutoFixHigh />}
+                        onClick={() => setDiscoveryDialogOpen(true)}
+                        size="small"
+                    >
+                        Auto Discover
+                    </Button>
+                    <Button
+                        variant="contained"
+                        startIcon={<Add />}
+                        onClick={handleAddClick}
+                        size="small"
+                    >
+                        Add Location
+                    </Button>
+                </Stack>
             </Box>
-          </Alert>
-        )}
 
-        {/* Header */}
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-          <Box>
-            <Typography variant="h3" sx={{ fontWeight: 600, mb: 1 }}>
-              Skills
-            </Typography>
-            <Typography variant="body1" color="text.secondary">
-              Manage skills from your IDE directories
-            </Typography>
-          </Box>
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <Button
-              variant="outlined"
-              startIcon={<RefreshIcon />}
-              onClick={handleScanAll}
-              disabled={loading}
-            >
-              Scan All
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<SearchIcon />}
-              onClick={() => setDiscoverDialogOpen(true)}
-            >
-              Auto-Discover
-            </Button>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => setAddDialogOpen(true)}
-            >
-              Add Path
-            </Button>
-          </Box>
-        </Box>
+            {/* Empty State */}
+            {locations.length === 0 && !loading && (
+                <UnifiedCard
+                    title="No Skill Locations"
+                    subtitle="Get started by discovering or adding your first skill location"
+                    size="large"
+                >
+                    <Box textAlign="center" py={3}>
+                        <Alert severity="info" sx={{ mb: 2, display: 'inline-block', textAlign: 'left' }}>
+                            <Typography variant="body2">
+                                <strong>About Skills</strong><br />
+                                Skills are reusable AI prompts stored as markdown files in your IDE
+                                configuration directories. Tingly Box can discover and manage these
+                                skills from multiple sources.
+                            </Typography>
+                        </Alert>
+                        <Stack direction="row" spacing={2} justifyContent="center" sx={{ mt: 2 }}>
+                            <Button
+                                variant="outlined"
+                                onClick={() => setDiscoveryDialogOpen(true)}
+                            >
+                                Auto Discover
+                            </Button>
+                            <Button variant="contained" onClick={handleAddClick}>
+                                Add Location Manually
+                            </Button>
+                        </Stack>
+                    </Box>
+                </UnifiedCard>
+            )}
 
-        {/* Search and Filter */}
-        <Paper sx={{ p: 2, mb: 2 }}>
-          <SkillSearchBar
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            ideFilter={ideFilter}
-            onIdeFilterChange={setIdeFilter}
-          />
-        </Paper>
+            {/* Three-Column Layout */}
+            {locations.length > 0 && (
+                <Stack direction="row" spacing={1} sx={{ height: 'calc(100vh - 180px)' }}>
+                    {/* Column 1: Locations List */}
+                    <Paper
+                        sx={{
+                            width: 300,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            border: 1,
+                            borderColor: 'divider',
+                            borderRadius: 2,
+                            overflow: 'hidden',
+                        }}
+                    >
+                        <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+                                Locations ({locations.length})
+                            </Typography>
+                            <TextField
+                                placeholder="Search..."
+                                value={locationSearch}
+                                onChange={(e) => setLocationSearch(e.target.value)}
+                                size="small"
+                                fullWidth
+                                InputProps={{
+                                    startAdornment: (
+                                        <InputAdornment position="start">
+                                            <Search fontSize="small" />
+                                        </InputAdornment>
+                                    ),
+                                }}
+                            />
+                        </Box>
+                        <List sx={{ flex: 1, overflow: 'auto', p: 0 }}>
+                            {filteredLocations.map((location) => {
+                                const isSelected = selectedLocation?.id === location.id;
+                                return (
+                                    <ListItem
+                                        key={location.id}
+                                        disablePadding
+                                        divider
+                                        sx={{
+                                            bgcolor: isSelected ? 'primary.50' : 'transparent',
+                                        }}
+                                    >
+                                        <ListItemButton
+                                            onClick={() => setSelectedLocation(location)}
+                                            dense
+                                            sx={{ py: 1.5 }}
+                                        >
+                                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, flex: 1, minWidth: 0 }}>
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                    <MuiChip
+                                                        label={getIdeSourceLabel(location.ide_source)}
+                                                        size="small"
+                                                        variant="outlined"
+                                                    />
+                                                    <Typography
+                                                        variant="subtitle2"
+                                                        sx={{ fontWeight: 500 }}
+                                                    >
+                                                        {location.name}
+                                                    </Typography>
+                                                </Box>
+                                                <Typography
+                                                    variant="caption"
+                                                    color="text.secondary"
+                                                    sx={{
+                                                        overflow: 'hidden',
+                                                        textOverflow: 'ellipsis',
+                                                        whiteSpace: 'nowrap',
+                                                        display: 'block',
+                                                    }}
+                                                >
+                                                    {location.path}
+                                                </Typography>
+                                            </Box>
+                                            <Stack direction="row" spacing={0.25} alignItems="center">
+                                                <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5 }}>
+                                                    {location.skill_count}
+                                                </Typography>
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={(e) => handleRefreshClick(location.id, e)}
+                                                    disabled={skillsLoading}
+                                                >
+                                                    <Refresh fontSize="small" />
+                                                </IconButton>
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={(e) => handleEditClick(location, e)}
+                                                >
+                                                    <Edit fontSize="small" />
+                                                </IconButton>
+                                                <IconButton
+                                                    size="small"
+                                                    color="error"
+                                                    onClick={(e) => handleDeleteClick(location.id, e)}
+                                                >
+                                                    <Delete fontSize="small" />
+                                                </IconButton>
+                                            </Stack>
+                                        </ListItemButton>
+                                    </ListItem>
+                                );
+                            })}
+                        </List>
+                    </Paper>
 
-        {/* Triple Panel Layout */}
-        <Grid container spacing={2} sx={{ flex: 1, overflow: 'hidden' }}>
-          <Grid item xs={12} md={3} sx={{ height: '100%' }}>
-            <Paper sx={{ height: '100%', p: 2, overflow: 'hidden' }}>
-              <SkillLocationList
-                locations={locations}
-                selectedLocationId={selectedLocationId}
-                onSelectLocation={handleSelectLocation}
-                onRemoveLocation={handleRemoveLocation}
-                onRefreshLocation={handleRefreshLocation}
-              />
-            </Paper>
-          </Grid>
-          <Grid item xs={12} md={5} sx={{ height: '100%' }}>
-            <Paper sx={{ height: '100%', p: 2, overflow: 'hidden' }}>
-              <SkillLocationPanel
-                location={selectedLocation}
-                skills={filteredSkills}
-                onOpenSkill={handleOpenSkill}
-                onOpenAll={handleOpenAll}
-                onOpenFolder={handleOpenFolder}
-              />
-            </Paper>
-          </Grid>
-          <Grid item xs={12} md={4} sx={{ height: '100%' }}>
-            <Paper sx={{ height: '100%', p: 2, overflow: 'hidden' }}>
-              <SkillDetailPanel
-                skill={selectedSkill}
-                location={selectedLocation}
-                onOpen={handleOpenInEditor}
-              />
-            </Paper>
-          </Grid>
-        </Grid>
+                    {/* Column 2: Skills List */}
+                    <Paper
+                        sx={{
+                            width: 320,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            border: 1,
+                            borderColor: 'divider',
+                            borderRadius: 2,
+                            overflow: 'hidden',
+                        }}
+                    >
+                        <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+                                {selectedLocation ? selectedLocation.name : 'Skills'}
+                                {selectedLocation && ` (${skills.length})`}
+                            </Typography>
+                            <TextField
+                                placeholder="Search skills..."
+                                value={skillSearch}
+                                onChange={(e) => setSkillSearch(e.target.value)}
+                                size="small"
+                                fullWidth
+                                disabled={!selectedLocation}
+                                InputProps={{
+                                    startAdornment: (
+                                        <InputAdornment position="start">
+                                            <Search fontSize="small" />
+                                        </InputAdornment>
+                                    ),
+                                }}
+                            />
+                        </Box>
+                        <Box sx={{ flex: 1, overflow: 'auto' }}>
+                            {!selectedLocation ? (
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        height: '100%',
+                                        p: 3,
+                                        textAlign: 'center',
+                                    }}
+                                >
+                                    <FolderOpen
+                                        sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }}
+                                    />
+                                    <Typography variant="body2" color="text.secondary">
+                                        Select a location to view skills
+                                    </Typography>
+                                </Box>
+                            ) : skillsLoading ? (
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        height: '100%',
+                                    }}
+                                >
+                                    <CircularProgress size={32} />
+                                </Box>
+                            ) : filteredSkills.length === 0 ? (
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        height: '100%',
+                                        p: 3,
+                                        textAlign: 'center',
+                                    }}
+                                >
+                                    <Description
+                                        sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }}
+                                    />
+                                    <Typography variant="body2" color="text.secondary">
+                                        {skillSearch
+                                            ? 'No skills match your search'
+                                            : 'No skills found in this location'}
+                                    </Typography>
+                                </Box>
+                            ) : (
+                                <List sx={{ p: 0 }}>
+                                    {filteredSkills.map((skill) => {
+                                        const isSelected = selectedSkill?.id === skill.id;
+                                        return (
+                                            <ListItem
+                                                key={skill.id}
+                                                disablePadding
+                                                divider
+                                                sx={{
+                                                    bgcolor: isSelected
+                                                        ? 'action.selected'
+                                                        : 'transparent',
+                                                }}
+                                            >
+                                                <ListItemButton
+                                                    onClick={() => setSelectedSkill(skill)}
+                                                    dense
+                                                >
+                                                    <Description
+                                                        fontSize="small"
+                                                        sx={{ mr: 1.5, color: 'action.active' }}
+                                                    />
+                                                    <ListItemText
+                                                        primary={
+                                                            <Typography
+                                                                variant="subtitle2"
+                                                                sx={{ fontWeight: 500 }}
+                                                            >
+                                                                {skill.name}
+                                                            </Typography>
+                                                        }
+                                                        secondary={
+                                                            <Typography
+                                                                variant="caption"
+                                                                color="text.secondary"
+                                                            >
+                                                                {skill.filename} • {formatFileSize(skill.size)}
+                                                            </Typography>
+                                                        }
+                                                    />
+                                                </ListItemButton>
+                                            </ListItem>
+                                        );
+                                    })}
+                                </List>
+                            )}
+                        </Box>
+                    </Paper>
 
-        {/* Add Path Dialog */}
-        <AddPathDialog
-          open={addDialogOpen}
-          onClose={() => setAddDialogOpen(false)}
-          onAdd={handleAddLocation}
-        />
+                    {/* Column 3: Skill Detail */}
+                    <Paper
+                        sx={{
+                            flex: 1,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            border: 1,
+                            borderColor: 'divider',
+                            borderRadius: 2,
+                            overflow: 'hidden',
+                        }}
+                    >
+                        <Box
+                            sx={{
+                                p: 2,
+                                borderBottom: 1,
+                                borderColor: 'divider',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                            }}
+                        >
+                            <Box sx={{ minWidth: 0, flex: 1 }}>
+                                <Typography
+                                    variant="subtitle1"
+                                    sx={{
+                                        fontWeight: 600,
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap',
+                                    }}
+                                >
+                                    {selectedSkill ? selectedSkill.name : 'Skill Details'}
+                                </Typography>
+                                {selectedSkill && (
+                                    <Typography
+                                        variant="caption"
+                                        color="text.secondary"
+                                        sx={{
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            whiteSpace: 'nowrap',
+                                            display: 'block',
+                                        }}
+                                    >
+                                        {selectedSkill.filename}
+                                    </Typography>
+                                )}
+                            </Box>
+                            {skillContent && (
+                                <IconButton
+                                    size="small"
+                                    onClick={handleCopyContent}
+                                    disabled={contentLoading}
+                                >
+                                    <ContentCopy fontSize="small" />
+                                </IconButton>
+                            )}
+                        </Box>
+                        <Box sx={{ flex: 1, overflow: 'auto', bgcolor: 'background.default' }}>
+                            {!selectedSkill ? (
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        height: '100%',
+                                        p: 3,
+                                        textAlign: 'center',
+                                    }}
+                                >
+                                    <Description
+                                        sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }}
+                                    />
+                                    <Typography variant="body2" color="text.secondary">
+                                        Select a skill to view its content
+                                    </Typography>
+                                </Box>
+                            ) : contentLoading ? (
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        height: '100%',
+                                    }}
+                                >
+                                    <CircularProgress size={32} />
+                                </Box>
+                            ) : skillContent ? (
+                                <Box
+                                    sx={{
+                                        p: 2,
+                                        fontFamily: 'monospace',
+                                        fontSize: '0.875rem',
+                                        whiteSpace: 'pre-wrap',
+                                        wordBreak: 'break-word',
+                                        lineHeight: 1.6,
+                                    }}
+                                >
+                                    {skillContent}
+                                </Box>
+                            ) : (
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        height: '100%',
+                                        p: 3,
+                                        textAlign: 'center',
+                                    }}
+                                >
+                                    <Alert severity="info">
+                                        <Typography variant="body2">
+                                            No content available for this skill
+                                        </Typography>
+                                    </Alert>
+                                </Box>
+                            )}
+                        </Box>
+                    </Paper>
+                </Stack>
+            )}
 
-        {/* Auto Discovery Dialog */}
-        <AutoDiscoveryDialog
-          open={discoverDialogOpen}
-          onClose={() => setDiscoverDialogOpen(false)}
-          onImport={handleImportDiscovered}
-        />
-      </Box>
-    </PageLayout>
-  );
+            {/* Add/Edit Location Dialog */}
+            <AddSkillLocationDialog
+                open={addDialogOpen}
+                onClose={() => setAddDialogOpen(false)}
+                onSubmit={handleAddSubmit}
+                initialData={
+                    editLocation
+                        ? {
+                              name: editLocation.name,
+                              path: editLocation.path,
+                              ide_source: editLocation.ide_source,
+                          }
+                        : undefined
+                }
+                mode={addDialogMode}
+            />
+
+            {/* Auto Discovery Dialog */}
+            <AutoDiscoveryDialog
+                open={discoveryDialogOpen}
+                onClose={() => setDiscoveryDialogOpen(false)}
+                onImport={handleImportLocations}
+            />
+        </PageLayout>
+    );
 };
 
 export default SkillPage;

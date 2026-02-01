@@ -1,314 +1,381 @@
 import {
-  Box,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-  Typography,
-  CircularProgress,
-  Checkbox,
-  ListItem,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-  Divider,
-  Alert,
+    CheckCircle,
+    Close,
+    Download,
+    Search,
+    WarningAmber,
+} from '@mui/icons-material';
+import {
+    Alert,
+    Box,
+    Button,
+    Card,
+    CardContent,
+    Checkbox,
+    CircularProgress,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    IconButton,
+    LinearProgress,
+    Stack,
+    TextField,
+    Typography,
 } from '@mui/material';
 import { useState, useEffect } from 'react';
-import { Search, CheckCircle } from '@mui/icons-material';
-import type { SkillLocation } from '@/types/prompt';
-import api from '@/services/api';
-import React from "react";
-
-interface DiscoveredIDE {
-  key: string;
-  displayName: string;
-  icon: string;
-  skillsCount: number;
-  path: string;
-  isInstalled: boolean;
-  location: SkillLocation;
-}
+import { type SkillLocation, type DiscoveryResult } from '@/types/prompt';
+import { getIdeSourceIcon } from '@/constants/ideSources';
+import { api } from '@/services/api';
 
 interface AutoDiscoveryDialogProps {
-  open: boolean;
-  onClose: () => void;
-  onImport: (locations: SkillLocation[]) => void;
-  autoImport?: boolean;  // If true, automatically import all discovered IDEs without showing dialog
+    open: boolean;
+    onClose: () => void;
+    onImport: (locations: SkillLocation[]) => Promise<void>;
 }
 
-const AutoDiscoveryDialog: React.FC<AutoDiscoveryDialogProps> = ({
-  open,
-  onClose,
-  onImport,
-  autoImport = false,
-}) => {
-  const [scanning, setScanning] = useState(false);
-  const [discoveredIdes, setDiscoveredIdes] = useState<DiscoveredIDE[]>([]);
-  const [selectedIdes, setSelectedIdes] = useState<Set<string>>(new Set());
-  const [error, setError] = useState<string | null>(null);
+interface DiscoveredLocation extends SkillLocation {
+    selected: boolean;
+}
 
-  // Debug state changes
-  useEffect(() => {
-    console.log('discoveredIdes state changed:', discoveredIdes);
-    console.log('discoveredIdes.length:', discoveredIdes.length);
-  }, [discoveredIdes]);
+const AutoDiscoveryDialog = ({ open, onClose, onImport }: AutoDiscoveryDialogProps) => {
+    const [discovering, setDiscovering] = useState(false);
+    const [importing, setImporting] = useState(false);
+    const [discoveryResult, setDiscoveryResult] = useState<DiscoveryResult | null>(null);
+    const [discoveredLocations, setDiscoveredLocations] = useState<DiscoveredLocation[]>([]);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [error, setError] = useState<string | null>(null);
+    const [selectAll, setSelectAll] = useState(false);
 
-  // Trigger handleOpen when dialog opens
-  useEffect(() => {
-    if (open) {
-      handleOpen();
-    }
-    // Only run when open changes, not on handleOpen changes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-
-  // Reset state when dialog opens
-  const handleOpen = async () => {
-    console.log('AutoDiscoveryDialog handleOpen called');
-    console.log('scanResult exists?', !!(window as any).scanResult);
-    if ((window as any).scanResult) {
-      console.log('scanResult:', (window as any).scanResult);
-    }
-
-    setScanning(true);
-    setDiscoveredIdes([]);
-    setSelectedIdes(new Set());
-    setError(null);
-
-    try {
-      let result: any;
-
-      // Check if there's a pre-existing scan result from "Scan All" button
-      if ((window as any).scanResult) {
-        result = (window as any).scanResult;
-        // Clear the stored result after using it
-        delete (window as any).scanResult;
-        setScanning(false); // No need to scan again
-        console.log('Using stored scanResult');
-      } else {
-        // Perform new scan
-        console.log('No stored scanResult, calling discoverIdes API');
-        const response = await api.discoverIdes();
-        console.log('discoverIdes response:', response);
-        if (!response.success || !response.data) {
-          setError('Failed to discover IDEs');
-          setScanning(false);
-          return;
+    useEffect(() => {
+        if (open) {
+            handleDiscover();
+        } else {
+            // Reset state when dialog closes
+            setDiscoveryResult(null);
+            setDiscoveredLocations([]);
+            setSearchQuery('');
+            setError(null);
+            setSelectAll(false);
         }
-        result = response.data;
-      }
+    }, [open]);
 
-      console.log('Result locations:', result.locations);
-      console.log('Result locations count:', result.locations?.length);
+    useEffect(() => {
+        const allSelected =
+            discoveredLocations.length > 0 &&
+            discoveredLocations.every((loc) => loc.selected);
+        setSelectAll(allSelected);
+    }, [discoveredLocations]);
 
-      // Convert discovered locations to DiscoveredIDE format using backend data
-      const ides: DiscoveredIDE[] = result.locations.map((loc: SkillLocation) => ({
-        key: loc.ide_source,
-        displayName: loc.name.replace(' Skills', ''), // Remove " Skills" suffix for cleaner display
-        icon: loc.icon || '📂',
-        skillsCount: loc.skill_count || 0,
-        path: loc.path,
-        isInstalled: loc.is_installed ?? true,
-        location: loc,
-      }));
-      console.log('Mapped ides:', ides);
-      console.log('Setting discoveredIdes with count:', ides.length);
-      setDiscoveredIdes(ides);
+    const handleDiscover = async () => {
+        setDiscovering(true);
+        setError(null);
+        setDiscoveryResult(null);
+        setDiscoveredLocations([]);
 
-      // Auto-import mode: automatically import all discovered IDEs
-      if (autoImport && ides.length > 0) {
-        setSelectedIdes(new Set(result.locations.map((l: SkillLocation) => l.id)));
-        // Trigger import after a short delay for UX
-        setTimeout(() => {
-          handleImport();
-        }, 500);
-      } else {
-        // Manual selection mode: auto-select all discovered IDEs
-        setSelectedIdes(new Set(result.locations.map((l: SkillLocation) => l.id)));
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to scan for IDEs');
-    } finally {
-      setScanning(false);
-    }
-  };
+        try {
+            const result = await api.discoverIdes();
+            if (result.success && result.data) {
+                setDiscoveryResult(result.data);
+                // Initialize all locations as selected
+                const locations = result.data.locations.map((loc: SkillLocation) => ({
+                    ...loc,
+                    selected: true,
+                }));
+                setDiscoveredLocations(locations);
+            } else {
+                setError(result.error || 'Failed to discover IDEs');
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Unknown error occurred');
+        } finally {
+            setDiscovering(false);
+        }
+    };
 
-  const handleToggleIde = (locationId: string) => {
-    const newSelected = new Set(selectedIdes);
-    if (newSelected.has(locationId)) {
-      newSelected.delete(locationId);
-    } else {
-      newSelected.add(locationId);
-    }
-    setSelectedIdes(newSelected);
-  };
+    const handleToggleSelect = (id: string) => {
+        setDiscoveredLocations((prev) =>
+            prev.map((loc) =>
+                loc.id === id ? { ...loc, selected: !loc.selected } : loc
+            )
+        );
+    };
 
-  const handleToggleAll = () => {
-    if (selectedIdes.size === discoveredIdes.length) {
-      setSelectedIdes(new Set());
-    } else {
-      setSelectedIdes(new Set(discoveredIdes.map((ide) => ide.location.id)));
-    }
-  };
+    const handleToggleSelectAll = () => {
+        const newValue = !selectAll;
+        setSelectAll(newValue);
+        setDiscoveredLocations((prev) =>
+            prev.map((loc) => ({ ...loc, selected: newValue }))
+        );
+    };
 
-  const handleImport = () => {
-    const locationsToImport = discoveredIdes
-      .filter((ide) => selectedIdes.has(ide.location.id))
-      .map((ide) => ide.location);
-    onImport(locationsToImport);
-    handleClose();
-  };
+    const handleImport = async () => {
+        const selectedLocations = discoveredLocations
+            .filter((loc) => loc.selected)
+            .map(({ selected, ...loc }) => loc);
 
-  const handleClose = () => {
-    onClose();
-  };
+        if (selectedLocations.length === 0) {
+            setError('Please select at least one location to import');
+            return;
+        }
 
-  const allSelected =
-    discoveredIdes.length > 0 && selectedIdes.size === discoveredIdes.length;
-  const someSelected = selectedIdes.size > 0 && !allSelected;
+        setImporting(true);
+        setError(null);
 
-  return (
-    <Dialog
-      open={open}
-      onClose={handleClose}
-      maxWidth="sm"
-      fullWidth
-    >
-      <DialogTitle>Discover IDE Skills</DialogTitle>
-      <DialogContent>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-          {/* Instructions */}
-          <Typography variant="body2" color="text.secondary">
-            Scan your home directory for supported IDEs and import their skills.
-          </Typography>
+        try {
+            await onImport(selectedLocations);
+            handleClose();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to import locations');
+        } finally {
+            setImporting(false);
+        }
+    };
 
-          {/* Scanning State */}
-          {scanning && (
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 2,
-                py: 4,
-              }}
-            >
-              <CircularProgress size={48} />
-              <Typography variant="body1" color="text.secondary">
-                Scanning for installed IDEs...
-              </Typography>
-            </Box>
-          )}
+    const handleClose = () => {
+        if (!discovering && !importing) {
+            onClose();
+        }
+    };
 
-          {/* Error State */}
-          {error && !scanning && (
-            <Alert severity="error">{error}</Alert>
-          )}
+    const filteredLocations = discoveredLocations.filter((loc) =>
+        loc.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        loc.path.toLowerCase().includes(searchQuery.toLowerCase())
+    );
 
-          {/* No IDEs Found */}
-          {!scanning && discoveredIdes.length === 0 && (
-            <Alert severity="info">
-              No supported IDEs found. Add skill paths manually.
-            </Alert>
-          )}
+    const selectedCount = discoveredLocations.filter((loc) => loc.selected).length;
 
-          {/* Discovered IDEs List */}
-          {!scanning && discoveredIdes.length > 0 && (
-            <Box>
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  mb: 1,
-                }}
-              >
-                <Typography variant="body2" color="text.secondary">
-                  Found {discoveredIdes.length} IDE(s)
-                </Typography>
-                <Button
-                  size="small"
-                  onClick={handleToggleAll}
-                  disabled={discoveredIdes.length === 0}
+    return (
+        <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
+            <DialogTitle>
+                <Box
+                    sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                    }}
                 >
-                  {allSelected ? 'Deselect All' : 'Select All'}
-                </Button>
-              </Box>
-
-              <Box
-                sx={{
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  borderRadius: 2,
-                  overflow: 'hidden',
-                }}
-              >
-                {discoveredIdes.map((ide, index) => (
-                  <React.Fragment key={ide.key}>
-                    <ListItem disablePadding>
-                      <ListItemButton
-                        dense
-                        onClick={() => handleToggleIde(ide.location.id)}
-                      >
-                        <ListItemIcon>
-                          <Checkbox
-                            edge="start"
-                            checked={selectedIdes.has(ide.location.id)}
-                            tabIndex={-1}
-                            disableRipple
-                          />
-                        </ListItemIcon>
-                        <Box
-                          sx={{ fontSize: '1.5rem', mr: 1, ml: -1 }}
+                    <Typography variant="h6">Auto Discover Skills</Typography>
+                    <IconButton
+                        aria-label="close"
+                        onClick={handleClose}
+                        size="small"
+                        disabled={discovering || importing}
+                    >
+                        <Close />
+                    </IconButton>
+                </Box>
+            </DialogTitle>
+            <DialogContent sx={{ pb: 1 }}>
+                <Stack spacing={2}>
+                    {/* Discovery Summary */}
+                    {discoveryResult && (
+                        <Alert
+                            severity={
+                                discoveryResult.locations.length > 0 ? 'success' : 'info'
+                            }
+                            icon={<CheckCircle fontSize="inherit" />}
                         >
-                          {ide.icon}
-                        </Box>
-                        <ListItemText
-                          primary={
-                            <Box
-                              sx={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 1,
-                              }}
+                            <Typography variant="body2">
+                                <strong>Discovery Complete</strong>
+                                <br />
+                                Scanned {discoveryResult.total_ides_scanned} IDE(s), found{' '}
+                                {discoveryResult.ides_found.length} installed, discovered{' '}
+                                {discoveryResult.locations.length} skill location(s) with{' '}
+                                {discoveryResult.skills_found} total skill(s).
+                            </Typography>
+                        </Alert>
+                    )}
+
+                    {/* Error Alert */}
+                    {error && (
+                        <Alert
+                            severity="error"
+                            icon={<WarningAmber fontSize="inherit" />}
+                            onClose={() => setError(null)}
+                        >
+                            {error}
+                        </Alert>
+                    )}
+
+                    {/* Search and Filter */}
+                    {!discovering && discoveryResult && (
+                        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                            <TextField
+                                placeholder="Search locations..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                InputProps={{
+                                    startAdornment: (
+                                        <Search sx={{ mr: 1, color: 'text.secondary' }} />
+                                    ),
+                                }}
+                                size="small"
+                                fullWidth
+                            />
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={handleDiscover}
+                                disabled={discovering}
                             >
-                              <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                                {ide.displayName}
-                              </Typography>
-                              {ide.isInstalled && (
-                                <CheckCircle color="success" sx={{ fontSize: 16 }} />
-                              )}
+                                Refresh
+                            </Button>
+                        </Box>
+                    )}
+
+                    {/* Progress */}
+                    {discovering && (
+                        <Box sx={{ textAlign: 'center', py: 3 }}>
+                            <CircularProgress size={40} sx={{ mb: 2 }} />
+                            <Typography variant="body2" color="text.secondary">
+                                Scanning home directory for IDE installations...
+                            </Typography>
+                            <LinearProgress sx={{ mt: 2 }} />
+                        </Box>
+                    )}
+
+                    {/* Location List */}
+                    {!discovering && filteredLocations.length > 0 && (
+                        <Box>
+                            <Box
+                                sx={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    mb: 1,
+                                }}
+                            >
+                                <Typography variant="subtitle2" color="text.secondary">
+                                    {selectedCount} of {filteredLocations.length} selected
+                                </Typography>
+                                <Button
+                                    size="small"
+                                    onClick={handleToggleSelectAll}
+                                    disabled={filteredLocations.length === 0}
+                                >
+                                    {selectAll ? 'Deselect All' : 'Select All'}
+                                </Button>
                             </Box>
-                          }
-                          secondary={`${ide.skillsCount} skill(s) • ${ide.path}`}
-                        />
-                      </ListItemButton>
-                    </ListItem>
-                    {index < discoveredIdes.length - 1 && <Divider />}
-                  </React.Fragment>
-                ))}
-              </Box>
-            </Box>
-          )}
-        </Box>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={handleClose} disabled={scanning}>
-          Cancel
-        </Button>
-        <Button
-          onClick={handleImport}
-          variant="contained"
-          disabled={scanning || selectedIdes.size === 0}
-          startIcon={<Search />}
-        >
-          Import Selected ({selectedIdes.size})
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
+                            <Stack spacing={1.5}>
+                                {filteredLocations.map((location) => (
+                                    <Card
+                                        key={location.id}
+                                        sx={{
+                                            border: 1,
+                                            borderColor: location.selected
+                                                ? 'primary.main'
+                                                : 'divider',
+                                            bgcolor: location.selected
+                                                ? 'primary.50'
+                                                : 'background.paper',
+                                        }}
+                                    >
+                                        <CardContent
+                                            sx={{
+                                                py: 1.5,
+                                                px: 2,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: 2,
+                                            }}
+                                        >
+                                            <Checkbox
+                                                checked={location.selected}
+                                                onChange={() => handleToggleSelect(location.id)}
+                                            />
+                                            <Box
+                                                sx={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: 1,
+                                                    flex: 1,
+                                                    minWidth: 0,
+                                                }}
+                                            >
+                                                <Typography sx={{ fontSize: 20 }}>
+                                                    {location.icon || getIdeSourceIcon(location.ide_source)}
+                                                </Typography>
+                                                <Box sx={{ minWidth: 0, flex: 1 }}>
+                                                    <Typography
+                                                        variant="subtitle2"
+                                                        sx={{ fontWeight: 600 }}
+                                                    >
+                                                        {location.name}
+                                                    </Typography>
+                                                    <Typography
+                                                        variant="caption"
+                                                        color="text.secondary"
+                                                        sx={{
+                                                            overflow: 'hidden',
+                                                            textOverflow: 'ellipsis',
+                                                            whiteSpace: 'nowrap',
+                                                            display: 'block',
+                                                        }}
+                                                    >
+                                                        {location.path}
+                                                    </Typography>
+                                                </Box>
+                                            </Box>
+                                            <Typography
+                                                variant="caption"
+                                                color="text.secondary"
+                                                sx={{ whiteSpace: 'nowrap' }}
+                                            >
+                                                {location.skill_count} skill
+                                                {location.skill_count !== 1 ? 's' : ''}
+                                            </Typography>
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                            </Stack>
+                        </Box>
+                    )}
+
+                    {/* No Results */}
+                    {!discovering && !error && filteredLocations.length === 0 && searchQuery && (
+                        <Box sx={{ textAlign: 'center', py: 3 }}>
+                            <Typography variant="body2" color="text.secondary">
+                                No locations match your search.
+                            </Typography>
+                        </Box>
+                    )}
+
+                    {!discovering && !error && discoveryResult && discoveryResult.locations.length === 0 && (
+                        <Box sx={{ textAlign: 'center', py: 3 }}>
+                            <Alert severity="info">
+                                <Typography variant="body2">
+                                    No skill locations were discovered. This could mean:
+                                    <br />
+                                    • No supported IDEs are installed
+                                    <br />
+                                    • No skill directories exist in the default locations
+                                    <br />
+                                    • Try adding a location manually
+                                </Typography>
+                            </Alert>
+                        </Box>
+                    )}
+                </Stack>
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2 }}>
+                <Button onClick={handleClose} size="small" disabled={discovering || importing}>
+                    Cancel
+                </Button>
+                <Button
+                    variant="contained"
+                    size="small"
+                    onClick={handleImport}
+                    disabled={discovering || importing || selectedCount === 0}
+                    startIcon={importing ? <CircularProgress size={16} /> : <Download />}
+                >
+                    {importing
+                        ? `Importing (${selectedCount})...`
+                        : `Import ${selectedCount} Location${selectedCount !== 1 ? 's' : ''}`}
+                </Button>
+            </DialogActions>
+        </Dialog>
+    );
 };
 
 export default AutoDiscoveryDialog;
