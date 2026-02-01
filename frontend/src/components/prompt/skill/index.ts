@@ -1,7 +1,6 @@
-export { default as SkillSearchBar } from './SkillSearchBar';
-export { default as SkillLocationList } from './SkillLocationList';
-export { default as SkillLocationPanel } from './SkillLocationPanel';
-export { default as SkillCard } from './SkillCard';
-export { default as AddPathDialog } from './AddPathDialog';
+export { default as SkillFilterBar } from './SkillFilterBar';
+export { default as SkillLocationCard } from './SkillLocationCard';
+export { default as AddSkillLocationDialog } from './AddSkillLocationDialog';
 export { default as AutoDiscoveryDialog } from './AutoDiscoveryDialog';
+export { default as SkillListDialog } from './SkillListDialog';
 export { default as SkillDetailDialog } from './SkillDetailDialog';

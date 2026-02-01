@@ -1,10 +1,11 @@
 export { default as RecordingCalendar } from './user/RecordingCalendar';
 export { default as FilterBar } from './user/FilterBar';
 export { default as RecordingTimeline } from './user/RecordingTimeline';
-export { default as SkillSearchBar } from './skill/SkillSearchBar';
-export { default as SkillLocationList } from './skill/SkillLocationList';
-export { default as SkillLocationPanel } from './skill/SkillLocationPanel';
-export { default as SkillCard } from './skill/SkillCard';
-export { default as AddPathDialog } from './skill/AddPathDialog';
-export { default as AutoDiscoveryDialog } from './skill/AutoDiscoveryDialog';
-export { default as SkillDetailDialog } from './skill/SkillDetailDialog';
+export {
+    SkillFilterBar,
+    SkillLocationCard,
+    AddSkillLocationDialog,
+    AutoDiscoveryDialog,
+    SkillListDialog,
+    SkillDetailDialog,
+} from './skill';

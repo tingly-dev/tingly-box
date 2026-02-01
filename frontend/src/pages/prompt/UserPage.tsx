@@ -1,5 +1,11 @@
 import { useState, useMemo } from 'react';
-import { Box, Typography, Grid, Paper } from '@mui/material';
+import {
+  Box,
+  Typography,
+  Paper,
+  Stack,
+} from '@mui/material';
+import { Description, FolderOpen } from '@mui/icons-material';
 import PageLayout from '@/components/PageLayout';
 import { RecordingCalendar, FilterBar, RecordingTimeline } from '@/components/prompt';
 import type { Recording, RecordingType } from '@/types/prompt';
@@ -64,6 +70,7 @@ const UserPage = () => {
   const [projectFilter, setProjectFilter] = useState<string>();
   const [typeFilter, setTypeFilter] = useState<RecordingType>();
   const [recordings, setRecordings] = useState<Recording[]>(mockRecordings);
+  const [selectedRecording, setSelectedRecording] = useState<Recording | null>(null);
 
   // Get unique users and projects from recordings
   const { users, projects } = useMemo(() => {
@@ -179,66 +186,172 @@ const UserPage = () => {
           />
         </Paper>
 
-        {/* Dual Panel Layout */}
-        <Grid container spacing={2} sx={{ flex: 1, overflow: 'hidden' }}>
-          <Grid item xs={12} md={4} sx={{ height: '100%' }}>
-            <Paper sx={{ height: '100%', p: 2, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+        {/* Three-Column Layout */}
+        <Stack direction="row" spacing={1} sx={{ height: 'calc(100vh - 220px)' }}>
+          {/* Column 1: Calendar */}
+          <Paper
+            sx={{
+              width: 320,
+              display: 'flex',
+              flexDirection: 'column',
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 2,
+              overflow: 'hidden',
+            }}
+          >
+            <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                 Calendar
               </Typography>
-              <Box sx={{ flex: 1, overflow: 'auto' }}>
-                <RecordingCalendar
-                  currentDate={calendarDate}
-                  selectedDate={selectedDate}
-                  recordingCounts={recordingCounts}
-                  onDateSelect={handleDateSelect}
-                  onMonthChange={setCalendarDate}
-                  onRangeChange={handleRangeChange}
-                />
-              </Box>
-            </Paper>
-          </Grid>
-          <Grid item xs={12} md={8} sx={{ height: '100%' }}>
-            <Paper sx={{ height: '100%', p: 2, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                  {getDateLabel()}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {filteredRecordings.length} recording{filteredRecordings.length !== 1 ? 's' : ''}
-                </Typography>
-              </Box>
-              <Box
-                sx={{
-                  flex: 1,
-                  overflow: 'auto',
-                  '&::-webkit-scrollbar': {
-                    width: 8,
-                    height: 8,
-                  },
-                  '&::-webkit-scrollbar-track': {
-                    backgroundColor: 'grey.100',
-                    borderRadius: 1,
-                  },
-                  '&::-webkit-scrollbar-thumb': {
-                    backgroundColor: 'grey.300',
-                    borderRadius: 1,
-                    '&:hover': {
-                      backgroundColor: 'grey.400',
-                    },
-                  },
-                }}
-              >
+            </Box>
+            <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
+              <RecordingCalendar
+                currentDate={calendarDate}
+                selectedDate={selectedDate}
+                recordingCounts={recordingCounts}
+                onDateSelect={handleDateSelect}
+                onMonthChange={setCalendarDate}
+                onRangeChange={handleRangeChange}
+              />
+            </Box>
+          </Paper>
+
+          {/* Column 2: Recordings List */}
+          <Paper
+            sx={{
+              width: 380,
+              display: 'flex',
+              flexDirection: 'column',
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 2,
+              overflow: 'hidden',
+            }}
+          >
+            <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                {getDateLabel()} ({filteredRecordings.length})
+              </Typography>
+            </Box>
+            <Box sx={{ flex: 1, overflow: 'auto' }}>
+              {filteredRecordings.length === 0 ? (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: '100%',
+                    p: 3,
+                    textAlign: 'center',
+                  }}
+                >
+                  <FolderOpen
+                    sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }}
+                  />
+                  <Typography variant="body2" color="text.secondary">
+                    No recordings found
+                  </Typography>
+                </Box>
+              ) : (
                 <RecordingTimeline
                   recordings={filteredRecordings}
                   onPlay={handlePlay}
                   onViewDetails={handleViewDetails}
                   onDelete={handleDelete}
+                  onSelectRecording={setSelectedRecording}
+                  selectedRecording={selectedRecording}
                 />
-              </Box>
-            </Paper>
-          </Grid>
-        </Grid>
+              )}
+            </Box>
+          </Paper>
+
+          {/* Column 3: Recording Detail */}
+          <Paper
+            sx={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 2,
+              overflow: 'hidden',
+            }}
+          >
+            <Box
+              sx={{
+                p: 2,
+                borderBottom: 1,
+                borderColor: 'divider',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <Typography
+                variant="subtitle1"
+                sx={{
+                  fontWeight: 600,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {selectedRecording ? selectedRecording.summary : 'Recording Details'}
+              </Typography>
+            </Box>
+            <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
+              {!selectedRecording ? (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: '100%',
+                    p: 3,
+                    textAlign: 'center',
+                  }}
+                >
+                  <Description
+                    sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }}
+                  />
+                  <Typography variant="body2" color="text.secondary">
+                    Select a recording to view its details
+                  </Typography>
+                </Box>
+              ) : (
+                <Box>
+                  <Typography variant="h6" sx={{ mb: 2 }}>
+                    {selectedRecording.summary}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    User: {selectedRecording.user.name}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    Project: {selectedRecording.project}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    Type: {selectedRecording.type}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    Duration: {selectedRecording.duration}s
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    Model: {selectedRecording.model}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    Time: {selectedRecording.timestamp.toLocaleString()}
+                  </Typography>
+                  <Typography variant="body1" sx={{ mt: 2 }}>
+                    {selectedRecording.content}
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+          </Paper>
+        </Stack>
       </Box>
     </PageLayout>
   );
