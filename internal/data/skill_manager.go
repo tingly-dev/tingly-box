@@ -131,7 +131,7 @@ func (sm *SkillManager) AddLocation(name, path string, ideSource typ.IDESource) 
 		SkillCount: 0,
 	}
 
-	// Get icon from IDE adapters
+	// Get icon and grouping strategy from IDE adapters
 	adapters, err := DefaultIDEAdapters()
 	if err != nil {
 		// Continue without icon if config fails to load
@@ -140,6 +140,7 @@ func (sm *SkillManager) AddLocation(name, path string, ideSource typ.IDESource) 
 	for _, adapter := range adapters {
 		if adapter.Key == ideSource {
 			location.Icon = adapter.Icon
+			location.GroupingStrategy = adapter.GroupingStrategy
 			break
 		}
 	}
@@ -505,6 +506,7 @@ func (sm *SkillManager) DiscoverIdes() (*typ.DiscoveryResult, error) {
 			IDESource:        adapter.Key,
 			SkillCount:       skillsCount,
 			Icon:             adapter.Icon,
+			GroupingStrategy: adapter.GroupingStrategy,
 			IsAutoDiscovered: true,
 			IsInstalled:      true,
 			LastScannedAt:    time.Now(),
@@ -562,6 +564,7 @@ func (sm *SkillManager) ScanIdes() (*typ.DiscoveryResult, error) {
 			IDESource:        adapter.Key,
 			SkillCount:       skillsCount,
 			Icon:             adapter.Icon,
+			GroupingStrategy: adapter.GroupingStrategy,
 			IsAutoDiscovered: true,
 			IsInstalled:      true,
 			LastScannedAt:    time.Now(),
