@@ -1,27 +1,9 @@
-import {
-    Delete as DeleteIcon,
-    Edit as EditIcon,
-    SmartToy as SmartToyIcon,
-} from '@mui/icons-material';
-import {
-    Box,
-    IconButton,
-    ListItemIcon,
-    ListItemText,
-    Menu,
-    MenuItem,
-    Tooltip,
-    Typography,
-} from '@mui/material';
-import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import type { SmartRouting } from '../RoutingGraphTypes.ts';
-import {
-    ActionButtonsBox,
-    SMART_NODE_STYLES,
-    StyledSmartNodePrimary,
-    StyledSmartNodeWrapper,
-} from './styles.tsx';
+import {Delete as DeleteIcon,} from '@mui/icons-material';
+import {Box, IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Tooltip, Typography,} from '@mui/material';
+import React, {useState} from 'react';
+import {useTranslation} from 'react-i18next';
+import type {SmartRouting} from '../RoutingGraphTypes.ts';
+import {ActionButtonsBox, StyledSmartNodePrimary, StyledSmartNodeWrapper,} from './styles.tsx';
 
 // Smart node internal dimensions
 const SMART_NODE_INTERNAL_STYLES = {
@@ -38,13 +20,13 @@ export interface SmartNodeProps {
 }
 
 export const SmartOpNode: React.FC<SmartNodeProps> = ({
-    smartRouting,
-    index,
-    active,
-    onEdit,
-    onDelete,
-}) => {
-    const { t } = useTranslation();
+                                                          smartRouting,
+                                                          index,
+                                                          active,
+                                                          onEdit,
+                                                          onDelete,
+                                                      }) => {
+    const {t} = useTranslation();
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const menuOpen = Boolean(anchorEl);
 
@@ -70,16 +52,23 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
 
     // Format op display: e.g., "model: contains" or "user: regex"
     const getOpDisplay = () => {
-        if (!firstOp) return 'No Op';
+        if (!firstOp) return t('rule.smart.noOperation');
         const opLabel = firstOp.operation || 'unknown';
-        return `${firstOp.position}: ${opLabel} : ${firstOp.value || ''}`;
+        return `[${firstOp.position}] [${opLabel}]`;
     };
 
-    // Full display for tooltip
+    // Get value for second line
+    const getOpValue = () => {
+        if (!firstOp?.value) return '';
+        return firstOp.value;
+    };
+
+    // Full display for tooltip (includes value)
     const getOpDisplayFull = () => {
-        if (!firstOp) return 'No Op';
+        if (!firstOp) return t('rule.smart.noOperation');
         const opLabel = firstOp.operation || 'unknown';
-        return `${firstOp.position}: ${opLabel} : ${firstOp.value || ''}`;
+        const valueStr = firstOp.value ? ` ${firstOp.value}` : '';
+        return `${smartRouting.description || t('rule.smart.untitledRule')}\n[${firstOp.position}] [${opLabel}]${valueStr}`;
     };
 
     return (
@@ -110,19 +99,21 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                     </Box>
                 )}
                 {/* Content */}
-                <Box sx={{ mt: 1, width: '100%' }}>
-                    {/* Description */}
-                    <Typography
-                        variant="body2"
-                        sx={{
-                            fontWeight: 600,
-                            color: 'text.primary',
-                            fontSize: '0.85rem',
-                            mb: 1,
-                        }}
-                    >
-                        {smartRouting.description || 'Untitled Smart Rule'}
-                    </Typography>
+                <Box sx={{mt: 1, width: '100%'}}>
+                    {/* Value display - show on hover as description */}
+                    <Tooltip title={smartRouting.description || t('rule.smart.untitledRule')} arrow>
+                        <Typography
+                            variant="body2"
+                            sx={{
+                                fontWeight: 600,
+                                color: 'text.primary',
+                                fontSize: '0.85rem',
+                                mb: 1,
+                            }}
+                        >
+                            {getOpValue() || t('rule.smart.noValue')}
+                        </Typography>
+                    </Tooltip>
 
                     {/* Summary Info */}
                     <Box
@@ -166,13 +157,13 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
 
                 {/* Action Buttons - visible on hover */}
                 <ActionButtonsBox className="action-buttons">
-                    <Tooltip title="Delete smart rule">
+                    <Tooltip title={t('rule.smart.deleteTooltip')}>
                         <IconButton
                             size="small"
                             onClick={handleMenuClick}
-                            sx={{ p: 0.5, backgroundColor: 'background.paper' }}
+                            sx={{p: 0.5, backgroundColor: 'background.paper'}}
                         >
-                            <DeleteIcon sx={{ fontSize: '1rem', color: 'error.main' }} />
+                            <DeleteIcon sx={{fontSize: '1rem', color: 'error.main'}}/>
                         </IconButton>
                     </Tooltip>
                 </ActionButtonsBox>
@@ -184,19 +175,19 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                 open={menuOpen}
                 onClose={handleMenuClose}
                 onClick={(e) => e.stopPropagation()}
-                transformOrigin={{ horizontal: 'right', vertical: 'top' }}
-                anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+                transformOrigin={{horizontal: 'right', vertical: 'top'}}
+                anchorOrigin={{horizontal: 'right', vertical: 'bottom'}}
             >
                 <MenuItem onClick={handleDelete} disabled={!active}>
                     <ListItemIcon>
-                        <DeleteIcon color="error" />
+                        <DeleteIcon color="error"/>
                     </ListItemIcon>
-                    <ListItemText sx={{ color: 'error.main' }}>
+                    <ListItemText sx={{color: 'error.main'}}>
                         {t('rule.menu.deleteSmartRule')}
                     </ListItemText>
                 </MenuItem>
-                <MenuItem onClick={handleMenuClose} sx={{ color: 'text.secondary' }}>
-                    <ListItemText>Cancel</ListItemText>
+                <MenuItem onClick={handleMenuClose} sx={{color: 'text.secondary'}}>
+                    <ListItemText>{t('common.cancel')}</ListItemText>
                 </MenuItem>
             </Menu>
         </StyledSmartNodeWrapper>

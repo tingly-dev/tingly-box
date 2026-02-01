@@ -169,7 +169,7 @@ func (api *LoadBalancerAPI) GetServiceStats(c *gin.Context) {
 	var foundService *loadbalance.Service
 	for _, service := range services {
 		if service.ServiceID() == serviceId {
-			foundService = &service
+			foundService = service
 			break
 		}
 	}
@@ -204,7 +204,7 @@ func (api *LoadBalancerAPI) ClearServiceStats(c *gin.Context) {
 	var foundService *loadbalance.Service
 	for _, service := range services {
 		if service.ServiceID() == serviceId {
-			foundService = &service
+			foundService = service
 			break
 		}
 	}

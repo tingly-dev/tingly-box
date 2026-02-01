@@ -31,7 +31,7 @@ func NewRouter(rules []SmartRouting) (*Router, error) {
 
 // EvaluateRequest evaluates a request against smart routing rules
 // Returns the matched services and true if a rule matched, otherwise empty and false
-func (r *Router) EvaluateRequest(ctx *RequestContext) ([]loadbalance.Service, bool) {
+func (r *Router) EvaluateRequest(ctx *RequestContext) ([]*loadbalance.Service, bool) {
 	for _, rule := range r.rules {
 		if r.evaluateRule(ctx, &rule) {
 			return rule.Services, true

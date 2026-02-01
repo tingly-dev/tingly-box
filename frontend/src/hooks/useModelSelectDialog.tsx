@@ -126,7 +126,7 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
                 ...currentConfigRecord,
                 smartRouting: (currentConfigRecord.smartRouting || []).map((rule, index) => {
                     if (index === smartRuleIndex) {
-                        const newService = { uuid: uuidv4(), provider: option.provider.uuid, model: option.model || '' };
+                        const newService = { uuid: uuidv4(), provider: option.provider.uuid, model: option.model || '', active: true };
                         return {
                             ...rule,
                             services: [

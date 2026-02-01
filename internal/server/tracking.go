@@ -66,7 +66,7 @@ func (t *UsageTracker) RecordUsage(
 func (t *UsageTracker) recordOnService(rule *typ.Rule, provider *typ.Provider, model string, inputTokens, outputTokens int) {
 	// Find the matching service in the rule and update its stats
 	for i := range rule.Services {
-		service := &rule.Services[i]
+		service := rule.Services[i]
 		if service.Active && service.Provider == provider.UUID && service.Model == model {
 			service.RecordUsage(inputTokens, outputTokens)
 

@@ -62,7 +62,7 @@ func (lb *LoadBalancer) SelectService(rule *typ.Rule) (*loadbalance.Service, err
 	}
 
 	// Filter active services
-	var activeServices []loadbalance.Service
+	var activeServices []*loadbalance.Service
 	for _, service := range services {
 		if service.Active {
 			activeServices = append(activeServices, service)
@@ -75,7 +75,7 @@ func (lb *LoadBalancer) SelectService(rule *typ.Rule) (*loadbalance.Service, err
 
 	// For single service rules, return it directly
 	if len(activeServices) == 1 {
-		return &activeServices[0], nil
+		return activeServices[0], nil
 	}
 
 	// Always instantiate tactic from rule's params to ensure correct parameters
@@ -86,7 +86,7 @@ func (lb *LoadBalancer) SelectService(rule *typ.Rule) (*loadbalance.Service, err
 	selectedService := actualTactic.SelectService(rule)
 	if selectedService == nil {
 		// Fallback to first active service
-		return &activeServices[0], nil
+		return activeServices[0], nil
 	}
 
 	return selectedService, nil
@@ -136,7 +136,7 @@ func (lb *LoadBalancer) GetServiceStats(provider, model string) *loadbalance.Ser
 		}
 
 		for i := range rule.Services {
-			service := &rule.Services[i]
+			service := rule.Services[i]
 			if service.Active && service.Provider == provider && service.Model == model {
 				// Return a copy of the service's stats
 				statsCopy := service.Stats.GetStats()
@@ -161,7 +161,7 @@ func (lb *LoadBalancer) GetAllServiceStats() map[string]*loadbalance.ServiceStat
 				continue
 			}
 			for i := range rule.Services {
-				service := &rule.Services[i]
+				service := rule.Services[i]
 				if service.Active {
 					// Stats are global per provider:model, not per-rule
 					store := lb.config.GetStatsStore()
@@ -208,7 +208,7 @@ func (lb *LoadBalancer) ClearAllStats() {
 		for ruleIdx, rule := range rules {
 			modified := false
 			for i := range rule.Services {
-				stats := &rule.Services[i].Stats
+				stats := rule.Services[i].Stats
 				if stats.RequestCount > 0 || stats.WindowRequestCount > 0 {
 					stats.RequestCount = 0
 					stats.WindowRequestCount = 0

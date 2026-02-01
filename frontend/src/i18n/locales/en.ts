@@ -244,7 +244,8 @@ export default {
     },
     "menu": {
       "refreshModels": "Refresh Models",
-      "deleteProvider": "Delete Provider"
+      "deleteProvider": "Delete Provider",
+      "deleteSmartRule": "Delete Smart Rule"
     },
     "tooltips": {
       "addProviderFirst": "Add a provider to enable request forwarding",
@@ -274,6 +275,12 @@ export default {
       "clickToActivate": "Click to activate",
       "clickToDeactivate": "Click to deactivate",
       "cannotToggle": "Cannot toggle"
+    },
+    "smart": {
+      "untitledRule": "Untitled Smart Rule",
+      "noOperation": "No Operation",
+      "noValue": "No value",
+      "deleteTooltip": "Delete smart rule"
     }
   },
   "system": {

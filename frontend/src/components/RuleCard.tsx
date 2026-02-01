@@ -149,41 +149,6 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         }
     }, [configRecord]);
 
-    const handleRefreshModels = useCallback(async (providerUuid: string) => {
-        if (!providerUuid) return;
-
-        if (onRefreshProvider) {
-            onRefreshProvider(providerUuid);
-            return;
-        }
-
-        try {
-            const result = await api.updateProviderModelsByUUID(providerUuid);
-            if (result.success && result.data && onProviderModelsChange) {
-                onProviderModelsChange(providerUuid, result.data);
-                showNotification(`Models refreshed successfully!`, 'success');
-            } else {
-                showNotification(`Failed to refresh models`, 'error');
-            }
-        } catch (error) {
-            console.error('Error refreshing models:', error);
-            showNotification(`Error refreshing models`, 'error');
-        }
-    }, [onRefreshProvider, onProviderModelsChange, showNotification]);
-
-    const handleFetchModels = useCallback(async (providerUuid: string) => {
-        if (!providerUuid || providerModelsByUuid[providerUuid]) return;
-
-        try {
-            const result = await api.getProviderModelsByUUID(providerUuid);
-            if (result.success && result.data && onProviderModelsChange) {
-                onProviderModelsChange(providerUuid, result.data);
-            }
-        } catch (error) {
-            console.error(`Failed to fetch models for provider ${providerUuid}:`, error);
-        }
-    }, [providerModelsByUuid, onProviderModelsChange]);
-
     const autoSave = useCallback(async (newConfigRecord: ConfigRecord) => {
         if (!newConfigRecord.requestModel) return false;
 
@@ -495,7 +460,6 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 response_model: rule.response_model,
                 description: rule.description,
                 services: rule.services || [],
-                lb_tactic: rule.lb_tactic,
                 active: rule.active,
                 smart_enabled: rule.smart_enabled,
                 smart_routing: rule.smart_routing || [],

@@ -64,9 +64,9 @@ func (o *SmartOp) Bool() (bool, error) {
 
 // SmartRouting represents a smart routing rule block
 type SmartRouting struct {
-	Description string                `json:"description" yaml:"description"`
-	Ops         []SmartOp             `json:"ops" yaml:"ops"`
-	Services    []loadbalance.Service `json:"services" yaml:"services"`
+	Description string                 `json:"description" yaml:"description"`
+	Ops         []SmartOp              `json:"ops" yaml:"ops"`
+	Services    []*loadbalance.Service `json:"services" yaml:"services"`
 }
 
 // IsValid checks if the position is valid

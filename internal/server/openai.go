@@ -52,7 +52,7 @@ func (s *Server) OpenAIListModels(c *gin.Context) {
 		if len(services) > 0 {
 			providerDesc := make([]string, 0, len(services))
 			for i := range services {
-				svc := &services[i]
+				svc := services[i]
 				if svc.Active {
 					provider, err := cfg.GetProviderByUUID(svc.Provider)
 					if err == nil {
@@ -152,7 +152,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 		})
 		return
 	}
-	provider, selectedService, rule, err = s.DetermineProviderAndModelWithScenario(scenarioType, req.Model)
+	provider, selectedService, rule, err = s.DetermineProviderAndModelWithScenario(scenarioType, req.Model, &req.ChatCompletionNewParams)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{

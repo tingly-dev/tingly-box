@@ -146,11 +146,11 @@ export const GraphSettingsMenu: React.FC<GraphSettingsMenuProps> = ({
                     </MenuItem>
                 )}
 
-                {/*/!* Toggle Smart Routing *!/*/}
-                {/*<MenuItem onClick={handleToggleSmartRouting}>*/}
-                {/*    <SmartIcon fontSize="small" sx={{ mr: 1 }} />*/}
-                {/*    {smartEnabled ? 'Convert To Direct Routing' : 'Convert To Smart Routing'}*/}
-                {/*</MenuItem>*/}
+                {/* Toggle Smart Routing */}
+                <MenuItem onClick={handleToggleSmartRouting}>
+                    <SmartIcon fontSize="small" sx={{ mr: 1 }} />
+                    {smartEnabled ? 'Convert To Direct Routing' : 'Convert To Smart Routing'}
+                </MenuItem>
             </Menu>
         </>
     );
