@@ -1,26 +1,10 @@
 import { Box, Card, CardContent, Typography, Chip } from '@mui/material';
-import { Description as FileIcon } from '@mui/icons-material';
 import type { Skill } from '@/types/prompt';
 
 interface SkillCardProps {
   skill: Skill;
   onOpen: () => void;
 }
-
-const getFileIcon = (fileType: string): string => {
-  const iconMap: Record<string, string> = {
-    '.ts': '📘',
-    '.js': '📒',
-    '.tsx': '⚛️',
-    '.jsx': '⚛️',
-    '.py': '🐍',
-    '.go': '🐹',
-    '.rs': '🦀',
-    '.md': '📝',
-    '.json': '📋',
-  };
-  return iconMap[fileType] || '📄';
-};
 
 const SkillCard: React.FC<SkillCardProps> = ({ skill, onOpen }) => {
   return (
@@ -40,11 +24,15 @@ const SkillCard: React.FC<SkillCardProps> = ({ skill, onOpen }) => {
       }}
     >
       <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-        {/* File Icon and Name */}
+        {/* File Type Chip and Name */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-          <Box sx={{ fontSize: '1.5rem' }}>
-            {getFileIcon(skill.file_type)}
-          </Box>
+          <Chip
+            label={skill.file_type}
+            size="small"
+            variant="filled"
+            color="primary"
+            sx={{ fontSize: '0.7rem', fontWeight: 500 }}
+          />
           <Typography
             variant="body1"
             sx={{
@@ -57,16 +45,6 @@ const SkillCard: React.FC<SkillCardProps> = ({ skill, onOpen }) => {
           >
             {skill.name}
           </Typography>
-        </Box>
-
-        {/* File Type Badge */}
-        <Box sx={{ mb: 1 }}>
-          <Chip
-            label={skill.file_type}
-            size="small"
-            variant="outlined"
-            sx={{ fontSize: '0.7rem' }}
-          />
         </Box>
 
         {/* Description */}

@@ -13,7 +13,7 @@ import {
   IconButton,
   Tooltip,
 } from '@mui/material';
-import { Close, OpenInNew, Description } from '@mui/icons-material';
+import { Close, OpenInNew } from '@mui/icons-material';
 import { useState, useEffect } from 'react';
 import type { Skill, SkillLocation } from '@/types/prompt';
 
@@ -134,7 +134,13 @@ const SkillDetailDialog: React.FC<SkillDetailDialogProps> = ({
               }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Description color="primary" />
+                <Chip
+                  label={skill.file_type}
+                  size="small"
+                  color="primary"
+                  variant="filled"
+                  sx={{ fontSize: '0.7rem' }}
+                />
                 <Typography variant="h6" component="span">
                   {skill.name}
                 </Typography>
@@ -156,12 +162,6 @@ const SkillDetailDialog: React.FC<SkillDetailDialogProps> = ({
                   alignItems: 'center',
                 }}
               >
-                <Chip
-                  label={skill.file_type}
-                  size="small"
-                  color="primary"
-                  variant="outlined"
-                />
                 {location && (
                   <Chip
                     label={location.name}

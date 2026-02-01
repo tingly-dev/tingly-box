@@ -6,10 +6,10 @@ import {
   SkillSearchBar,
   SkillLocationList,
   SkillLocationPanel,
+  SkillDetailPanel,
   AddPathDialog,
 } from '@/components/prompt';
 import AutoDiscoveryDialog from '@/components/prompt/skill/AutoDiscoveryDialog';
-import SkillDetailDialog from '@/components/prompt/skill/SkillDetailDialog';
 import type { Skill, SkillLocation, IDESource } from '@/types/prompt';
 import { useTranslation } from 'react-i18next';
 import api from '@/services/api';
@@ -27,7 +27,6 @@ const SkillPage = () => {
   const [ideFilter, setIdeFilter] = useState<IDESource>();
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [discoverDialogOpen, setDiscoverDialogOpen] = useState(false);
-  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [selectedSkill, setSelectedSkill] = useState<Skill>();
   const [showOnboardingBanner, setShowOnboardingBanner] = useState(false);
 
@@ -42,8 +41,10 @@ const SkillPage = () => {
     }
   }, []);
 
-  const loadLocations = async () => {
-    setLoading(true);
+  const loadLocations = async (showLoading = true) => {
+    if (showLoading) {
+      setLoading(true);
+    }
     try {
       const response = await api.getSkillLocations();
       if (response.success && response.data) {
@@ -52,7 +53,9 @@ const SkillPage = () => {
     } catch (error) {
       console.error('Failed to load skill locations:', error);
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   };
 
@@ -63,8 +66,14 @@ const SkillPage = () => {
         // Update skills from the scan result
         if (response.data.skills) {
           setSkills(response.data.skills);
-          // Also update the location's skill count
-          loadLocations();
+          // Update the location's skill count directly without re-fetching
+          setLocations((prev) =>
+            prev.map((loc) =>
+              loc.id === locationId
+                ? { ...loc, skill_count: response.data.skills?.length || 0 }
+                : loc
+            )
+          );
         }
       }
     } catch (error) {
@@ -85,21 +94,45 @@ const SkillPage = () => {
 
   const selectedLocation = useMemo(
     () => locations.find((l) => l.id === selectedLocationId),
-    [locations, selectedLocationId]
+    [selectedLocationId, locations]
+  );
+
+  // For skill detail, use the skill's location if available, otherwise use selected location
+  const skillLocation = useMemo(
+    () => {
+      if (selectedSkill) {
+        return locations.find((l) => l.id === selectedSkill.location_id) || selectedLocation;
+      }
+      return selectedLocation;
+    },
+    [selectedSkill, selectedLocation, locations]
   );
 
   const filteredSkills = useMemo(() => {
     return skills.filter((skill) => {
+      // If a location is selected, only show skills from that location
       const matchesLocation = !selectedLocationId || skill.location_id === selectedLocationId;
+
+      // Search query filter
       const matchesSearch =
         searchQuery === '' ||
         skill.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         skill.description?.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesIde = !ideFilter || selectedLocation?.ide_source === ideFilter;
 
-      return matchesLocation && matchesSearch && matchesIde;
+      // If an IDE filter is set and no location is selected, filter by IDE
+      const matchesIde = !ideFilter || !selectedLocationId;
+      if (ideFilter && !selectedLocationId) {
+        // Find the location for this skill and check its IDE
+        const skillLocation = locations.find((l) => l.id === skill.location_id);
+        const matchesIdeFilter = skillLocation?.ide_source === ideFilter;
+        if (!matchesIdeFilter) {
+          return false;
+        }
+      }
+
+      return matchesLocation && matchesSearch;
     });
-  }, [skills, selectedLocationId, searchQuery, ideFilter, selectedLocation]);
+  }, [skills, selectedLocationId, searchQuery, ideFilter, locations]);
 
   const handleSelectLocation = (location: SkillLocation) => {
     setSelectedLocationId(location.id);
@@ -132,7 +165,7 @@ const SkillPage = () => {
         ide_source: data.ideSource,
       });
       if (response.success) {
-        await loadLocations();
+        await loadLocations(false);
         setAddDialogOpen(false);
       }
     } catch (error) {
@@ -144,7 +177,7 @@ const SkillPage = () => {
     try {
       const response = await api.importSkillLocations(importedLocations);
       if (response.success) {
-        await loadLocations();
+        await loadLocations(false);
       }
     } catch (error) {
       console.error('Failed to import locations:', error);
@@ -153,7 +186,6 @@ const SkillPage = () => {
 
   const handleOpenSkill = (skill: Skill) => {
     setSelectedSkill(skill);
-    setDetailDialogOpen(true);
   };
 
   const handleOpenInEditor = (skill: Skill) => {
@@ -273,9 +305,9 @@ const SkillPage = () => {
           />
         </Paper>
 
-        {/* Dual Panel Layout */}
+        {/* Triple Panel Layout */}
         <Grid container spacing={2} sx={{ flex: 1, overflow: 'hidden' }}>
-          <Grid item xs={12} md={4} sx={{ height: '100%' }}>
+          <Grid item xs={12} md={3} sx={{ height: '100%' }}>
             <Paper sx={{ height: '100%', p: 2, overflow: 'hidden' }}>
               <SkillLocationList
                 locations={locations}
@@ -286,7 +318,7 @@ const SkillPage = () => {
               />
             </Paper>
           </Grid>
-          <Grid item xs={12} md={8} sx={{ height: '100%' }}>
+          <Grid item xs={12} md={5} sx={{ height: '100%' }}>
             <Paper sx={{ height: '100%', p: 2, overflow: 'hidden' }}>
               <SkillLocationPanel
                 location={selectedLocation}
@@ -294,6 +326,15 @@ const SkillPage = () => {
                 onOpenSkill={handleOpenSkill}
                 onOpenAll={handleOpenAll}
                 onOpenFolder={handleOpenFolder}
+              />
+            </Paper>
+          </Grid>
+          <Grid item xs={12} md={4} sx={{ height: '100%' }}>
+            <Paper sx={{ height: '100%', p: 2, overflow: 'hidden' }}>
+              <SkillDetailPanel
+                skill={selectedSkill}
+                location={selectedLocation}
+                onOpen={handleOpenInEditor}
               />
             </Paper>
           </Grid>
@@ -311,15 +352,6 @@ const SkillPage = () => {
           open={discoverDialogOpen}
           onClose={() => setDiscoverDialogOpen(false)}
           onImport={handleImportDiscovered}
-        />
-
-        {/* Skill Detail Dialog */}
-        <SkillDetailDialog
-          open={detailDialogOpen}
-          skill={selectedSkill}
-          location={selectedLocation}
-          onClose={() => setDetailDialogOpen(false)}
-          onOpen={handleOpenInEditor}
         />
       </Box>
     </PageLayout>
