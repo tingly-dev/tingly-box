@@ -1,5 +1,6 @@
 import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
+import ExperimentalFeatures from "@/components/ExperimentalFeatures.tsx";
 import { Add as AddIcon, ContentCopy as CopyIcon, Key as KeyIcon } from '@mui/icons-material';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import { Box, Button, IconButton, Stack, Tooltip } from '@mui/material';
@@ -263,7 +264,11 @@ const UseOpenCodePage: React.FC = () => {
                         }
                     >
                         {header}
+
+                        {/* Experimental Features - collapsible section */}
+                        <ExperimentalFeatures scenario="opencode" />
                     </UnifiedCard>
+
                     <TemplatePage
                         title={
                             <Tooltip title="Use as model name in your API requests to forward">

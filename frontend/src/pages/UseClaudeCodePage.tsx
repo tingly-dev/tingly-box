@@ -1,5 +1,6 @@
 import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
+import ExperimentalFeatures from "@/components/ExperimentalFeatures.tsx";
 import {
     Box,
     Button,
@@ -21,6 +22,7 @@ import TemplatePage from '@/components/TemplatePage.tsx';
 import { FEATURE_FLAGS, isFeatureEnabled } from '../constants/featureFlags';
 import { useFunctionPanelData } from '../hooks/useFunctionPanelData';
 import { api, getBaseUrl } from '../services/api';
+import {ToggleButtonGroupStyle, ToggleButtonStyle} from "@/styles/style.tsx";
 
 type ConfigMode = 'unified' | 'separate' | 'smart';
 
@@ -495,31 +497,13 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                                         exclusive
                                         size="small"
                                         onChange={(_, value) => value && handleConfigModeChange(value)}
-                                        sx={{
-                                            bgcolor: 'action.hover',
-                                            '& .MuiToggleButton-root': {
-                                                color: 'text.primary',
-                                                padding: '4px 12px',
-                                                fontSize: '0.875rem',
-                                                '&:hover': {
-                                                    bgcolor: 'action.selected',
-                                                },
-                                            },
-                                        }}
+                                        sx={ToggleButtonGroupStyle}
                                     >
                                         {CONFIG_MODES.filter(m => m.enabled).map((mode) => (
                                             <ToggleButton
                                                 key={mode.value}
                                                 value={mode.value}
-                                                sx={{
-                                                    '&.Mui-selected': {
-                                                        bgcolor: 'primary.main',
-                                                        color: 'white',
-                                                        '&:hover': {
-                                                            bgcolor: 'primary.dark',
-                                                        },
-                                                    },
-                                                }}
+                                                sx={ToggleButtonStyle}
                                             >
                                                 {mode.label}
                                             </ToggleButton>
@@ -528,6 +512,9 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                                 </Box>
                             </>
                         )}
+
+                        {/* Experimental Features - collapsible section */}
+                        <ExperimentalFeatures scenario="claude_code" />
                     </UnifiedCard>
 
                     <TemplatePage
