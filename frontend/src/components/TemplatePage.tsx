@@ -1,4 +1,6 @@
 import React, { useCallback, useState } from 'react';
+import { Add as AddIcon, Key as KeyIcon } from '@mui/icons-material';
+import { Button, Stack, Tooltip } from '@mui/material';
 import ApiKeyModal from '@/components/ApiKeyModal';
 import RuleCard from './RuleCard.tsx';
 import UnifiedCard from '@/components/UnifiedCard';
@@ -21,6 +23,11 @@ export interface TabTemplatePageProps {
     onRuleDelete?: (ruleUuid: string) => void;
     allowToggleRule?: boolean;
     newlyCreatedRuleUuids?: Set<string>;
+    // Unified action buttons props
+    scenario?: string;
+    onAddApiKeyClick?: () => void;
+    onCreateRule?: () => void;
+    // Allow custom rightAction for backward compatibility
     rightAction?: React.ReactNode;
 }
 
@@ -38,7 +45,10 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
     onRuleDelete,
     allowToggleRule = true,
     newlyCreatedRuleUuids,
-    rightAction,
+    scenario,
+    onAddApiKeyClick,
+    onCreateRule,
+    rightAction: customRightAction,
 }) => {
     const [providerModelsByUuid, setProviderModelsByUuid] = useState<ProviderModelsDataByUuid>({});
     const [refreshingProviders, setRefreshingProviders] = useState<string[]>([]);
@@ -99,6 +109,38 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
     ) => {
         openModelSelect({ ruleUuid, configRecord, providerUuid, mode });
     }, [openModelSelect]);
+
+    // Generate unified rightAction if not provided
+    const rightAction = customRightAction ?? (
+        (onAddApiKeyClick || onCreateRule) ? (
+            <Stack direction="row" spacing={1}>
+                {onAddApiKeyClick && (
+                    <Tooltip title="Add new API Key">
+                        <Button
+                            variant="outlined"
+                            startIcon={<KeyIcon />}
+                            onClick={onAddApiKeyClick}
+                            size="small"
+                        >
+                            New Key
+                        </Button>
+                    </Tooltip>
+                )}
+                {onCreateRule && (
+                    <Tooltip title="Create new routing rule">
+                        <Button
+                            variant="contained"
+                            startIcon={<AddIcon />}
+                            onClick={onCreateRule}
+                            size="small"
+                        >
+                            New Rule
+                        </Button>
+                    </Tooltip>
+                )}
+            </Stack>
+        ) : null
+    );
 
     if (!providers.length || !rules?.length) {
         return null;

@@ -547,11 +547,11 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                                 After changing the mode, you will need to reapply the configuration to Claude Code for the changes to take effect.
                             </Typography>
                         </DialogContent>
-                        <DialogActions sx={{ px: 3, pb: 2 }}>
+                        <DialogActions sx={{ px: 3, pb: 2, gap: 1, justifyContent: 'flex-end' }}>
                             <Button onClick={cancelModeChange} color="inherit">
                                 Cancel
                             </Button>
-                            <Button onClick={confirmModeChange} variant="contained" color="primary">
+                            <Button onClick={confirmModeChange} variant="contained">
                                 Confirm
                             </Button>
                         </DialogActions>

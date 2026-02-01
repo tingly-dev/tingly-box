@@ -1,8 +1,8 @@
 import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
-import { Add as AddIcon, ContentCopy as CopyIcon, Key as KeyIcon } from '@mui/icons-material';
+import { ContentCopy as CopyIcon } from '@mui/icons-material';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import { Box, Button, IconButton, Stack, Tooltip } from '@mui/material';
+import { Box, IconButton, Tooltip } from '@mui/material';
 import React, { useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
@@ -60,7 +60,7 @@ const UseAnthropicPage: React.FC = () => {
             };
             const result = await api.createRule('', newRuleData);
             if (result.success && result.data?.uuid) {
-                // Add the new rule UUID to the set so it auto-expands
+                // Add the new rule UUID to the set so it auto-expands and scrolls into view
                 setNewlyCreatedRuleUuids(prev => new Set(prev).add(result.data.uuid));
                 showNotification('Routing rule created successfully!', 'success');
                 // Reload rules
@@ -160,30 +160,7 @@ const UseAnthropicPage: React.FC = () => {
                                 Models and Forwarding Rules
                             </Tooltip>
                         }
-                        rightAction={
-                            <Stack direction="row" spacing={1}>
-                                <Tooltip title="Add new API Key">
-                                    <Button
-                                        variant="outlined"
-                                        startIcon={<KeyIcon />}
-                                        onClick={handleAddApiKeyClick}
-                                        size="small"
-                                    >
-                                        Add API Key
-                                    </Button>
-                                </Tooltip>
-                                <Tooltip title="Create new routing rule">
-                                    <Button
-                                        variant="contained"
-                                        startIcon={<AddIcon />}
-                                        onClick={handleCreateRule}
-                                        size="small"
-                                    >
-                                        New Rule
-                                    </Button>
-                                </Tooltip>
-                            </Stack>
-                        }
+                        scenario={scenario}
                         rules={rules}
                         collapsible={true}
                         showTokenModal={showTokenModal}
@@ -195,6 +172,8 @@ const UseAnthropicPage: React.FC = () => {
                         newlyCreatedRuleUuids={newlyCreatedRuleUuids}
                         allowDeleteRule={true}
                         onRuleDelete={handleRuleDelete}
+                        onAddApiKeyClick={handleAddApiKeyClick}
+                        onCreateRule={handleCreateRule}
                     />
                 </CardGrid>
             )}

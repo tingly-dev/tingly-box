@@ -8,6 +8,7 @@ import OAuthDetailDialog from '@/components/OAuthDetailDialog.tsx';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '../services/api';
 import OAuthTable from '@/components/OAuthTable.tsx';
+import EmptyStateGuide from '@/components/EmptyStateGuide';
 
 interface OAuthEditFormData {
     name: string;
@@ -209,19 +210,14 @@ const OAuthPage = () => {
                     subtitle="Get started by adding your first OAuth provider"
                     size="large"
                 >
-                    <Box textAlign="center" py={3}>
-                        <Typography color="text.secondary" gutterBottom>
-                            Configure OAuth providers like Claude Code, Gemini CLI, Qwen, etc.
-                        </Typography>
-                        <Button
-                            variant="contained"
-                            startIcon={<VpnKey />}
-                            onClick={handleAddOAuthClick}
-                            sx={{ mt: 2 }}
-                        >
-                            Add OAuth Provider
-                        </Button>
-                    </Box>
+                    <EmptyStateGuide
+                        title="No OAuth Providers Configured"
+                        description="Configure OAuth providers like Claude Code, Gemini CLI, Qwen, etc."
+                        showOAuthButton={false}
+                        showHeroIcon={false}
+                        primaryButtonLabel="Add OAuth Provider"
+                        onAddApiKeyClick={handleAddOAuthClick}
+                    />
                 </UnifiedCard>
             )}
 

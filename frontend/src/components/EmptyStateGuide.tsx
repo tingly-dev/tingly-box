@@ -5,6 +5,9 @@ interface EmptyStateGuideProps {
     title?: string;
     description?: string;
     showOAuthButton?: boolean;
+    showHeroIcon?: boolean;
+    primaryButtonLabel?: string;
+    secondaryButtonLabel?: string;
     onAddApiKeyClick?: () => void;
     onAddOAuthClick?: () => void;
 }
@@ -13,31 +16,36 @@ const EmptyStateGuide: React.FC<EmptyStateGuideProps> = ({
     title = "No API Keys Configured",
     description = "Get started by adding your first API key or OAuth provider to access AI services",
     showOAuthButton = true,
+    showHeroIcon = true,
+    primaryButtonLabel = "Add API Key",
+    secondaryButtonLabel = "Add OAuth",
     onAddApiKeyClick,
     onAddOAuthClick,
 }) => {
     return (
         <Box textAlign="center" py={8} width="100%">
-            <Button
-                variant="contained"
-                startIcon={<Add />}
-                onClick={onAddApiKeyClick}
-                size="large"
-                sx={{
-                    backgroundColor: 'primary.main',
-                    color: 'white',
-                    width: 80,
-                    height: 80,
-                    borderRadius: 2,
-                    mb: 3,
-                    '&:hover': {
-                        backgroundColor: 'primary.dark',
-                        transform: 'scale(1.05)',
-                    },
-                }}
-            >
-                <Add sx={{ fontSize: 40 }} />
-            </Button>
+            {showHeroIcon && (
+                <Button
+                    variant="contained"
+                    startIcon={<Add />}
+                    onClick={onAddApiKeyClick}
+                    size="large"
+                    sx={{
+                        backgroundColor: 'primary.main',
+                        color: 'white',
+                        width: 80,
+                        height: 80,
+                        borderRadius: 2,
+                        mb: 3,
+                        '&:hover': {
+                            backgroundColor: 'primary.dark',
+                            transform: 'scale(1.05)',
+                        },
+                    }}
+                >
+                    <Add sx={{ fontSize: 40 }} />
+                </Button>
+            )}
             <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>
                 {title}
             </Typography>
@@ -51,7 +59,7 @@ const EmptyStateGuide: React.FC<EmptyStateGuideProps> = ({
                     onClick={onAddApiKeyClick}
                     size="large"
                 >
-                    Add API Key
+                    {primaryButtonLabel}
                 </Button>
                 {showOAuthButton && onAddOAuthClick && (
                     <Button
@@ -60,7 +68,7 @@ const EmptyStateGuide: React.FC<EmptyStateGuideProps> = ({
                         onClick={onAddOAuthClick}
                         size="large"
                     >
-                        Add OAuth
+                        {secondaryButtonLabel}
                     </Button>
                 )}
             </Stack>
