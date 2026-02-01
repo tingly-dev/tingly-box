@@ -3,7 +3,7 @@ import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ExperimentalFeatures from "@/components/ExperimentalFeatures.tsx";
 import InfoIcon from '@mui/icons-material/Info';
 import { Box, Button, Divider, Tooltip, IconButton, Typography } from '@mui/material';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
 import PageLayout from '@/components/PageLayout';
@@ -24,6 +24,8 @@ const UseOpenCodePage: React.FC = () => {
         loading: providersLoading,
         notification,
     } = useFunctionPanelData();
+    const headerRef = useRef<HTMLDivElement>(null);
+    const [headerHeight, setHeaderHeight] = useState<number>(0);
     const [baseUrl, setBaseUrl] = useState<string>('');
     const [rules, setRules] = useState<any[]>([]);
     const [loadingRule, setLoadingRule] = useState(true);
@@ -36,6 +38,42 @@ const UseOpenCodePage: React.FC = () => {
     const [scriptUnix, setScriptUnix] = useState('');
     const [isConfigLoading, setIsConfigLoading] = useState(false);
     const navigate = useNavigate();
+
+    // Measure header height
+    useEffect(() => {
+        if (providers.length === 0) {
+            return;
+        }
+
+        const timeoutId = setTimeout(() => {
+            if (!headerRef.current) {
+                return;
+            }
+
+            const updateHeight = () => {
+                if (headerRef.current) {
+                    const height = headerRef.current.offsetHeight || 0;
+                    setHeaderHeight(height);
+                }
+            };
+
+            updateHeight();
+
+            const resizeObserver = new ResizeObserver(() => {
+                updateHeight();
+            });
+
+            resizeObserver.observe(headerRef.current);
+
+            return () => {
+                resizeObserver.disconnect();
+            };
+        }, 200);
+
+        return () => {
+            clearTimeout(timeoutId);
+        };
+    }, [providers.length]);
 
     const handleAddOAuthClick = () => {
         navigate('/oauth?dialog=add');
@@ -178,6 +216,7 @@ const UseOpenCodePage: React.FC = () => {
             ) : (
                 <CardGrid>
                     <UnifiedCard
+                        ref={headerRef}
                         title={
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <span>OpenCode SDK Configuration</span>
@@ -220,6 +259,7 @@ const UseOpenCodePage: React.FC = () => {
                         allowDeleteRule={true}
                         onRuleDelete={handleRuleDelete}
                         showAddApiKeyButton={false}
+                        headerHeight={headerHeight}
                     />
 
                     {/* OpenCode Config Modal */}

@@ -16,7 +16,7 @@ import {
 } from '@mui/material';
 import InfoOutlined from '@mui/icons-material/InfoOutlined';
 import InfoIcon from '@mui/icons-material/Info';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import ClaudeCodeConfigModal from '@/components/ClaudeCodeConfigModal';
@@ -42,6 +42,8 @@ const CONFIG_MODES: { value: ConfigMode; label: string; description: string; ena
 const UseClaudeCodePage: React.FC = () => {
     const { t } = useTranslation();
     const navigate = useNavigate();
+    const headerRef = useRef<HTMLDivElement>(null);
+    const [headerHeight, setHeaderHeight] = useState<number>(0);
     const {
         showTokenModal,
         setShowTokenModal,
@@ -62,6 +64,44 @@ const UseClaudeCodePage: React.FC = () => {
     // Claude Code config modal state
     const [configModalOpen, setConfigModalOpen] = React.useState(false);
     const [isApplyLoading, setIsApplyLoading] = React.useState(false);
+
+    // Measure header height
+    useEffect(() => {
+        if (providers.length === 0) {
+            return;
+        }
+
+        // Add more delay to ensure DOM is fully rendered
+        const timeoutId = setTimeout(() => {
+            if (!headerRef.current) {
+                return;
+            }
+
+            const updateHeight = () => {
+                if (headerRef.current) {
+                    const height = headerRef.current.offsetHeight || 0;
+                    setHeaderHeight(height);
+                }
+            };
+
+            updateHeight();
+
+            // Use ResizeObserver to detect size changes
+            const resizeObserver = new ResizeObserver(() => {
+                updateHeight();
+            });
+
+            resizeObserver.observe(headerRef.current);
+
+            return () => {
+                resizeObserver.disconnect();
+            };
+        }, 200);
+
+        return () => {
+            clearTimeout(timeoutId);
+        };
+    }, [providers.length, configMode]);
 
     const handleAddApiKeyClick = () => {
         navigate('/api-keys?dialog=add');
@@ -471,6 +511,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
             ) : (
                 <CardGrid>
                     <UnifiedCard
+                        ref={headerRef}
                         title={
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <span>Use Claude Code</span>
@@ -562,6 +603,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                         collapsible={true}
                         showAddApiKeyButton={false}
                         showCreateRuleButton={false}
+                        headerHeight={headerHeight}
                     />
 
                     {/* Confirmation dialog for mode change */}

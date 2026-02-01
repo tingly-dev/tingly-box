@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { ContentCopy as CopyIcon } from '@mui/icons-material';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import { Box, IconButton, Tooltip } from '@mui/material';
@@ -25,11 +25,49 @@ const UseOpenAIPage: React.FC = () => {
         loading: providersLoading,
         notification,
     } = useFunctionPanelData();
+    const headerRef = useRef<HTMLDivElement>(null);
+    const [headerHeight, setHeaderHeight] = useState<number>(0);
     const [baseUrl, setBaseUrl] = useState<string>('');
     const [rules, setRules] = useState<any[]>([]);
     const [loadingRule, setLoadingRule] = useState(true);
     const [newlyCreatedRuleUuids, setNewlyCreatedRuleUuids] = useState<Set<string>>(new Set());
     const navigate = useNavigate();
+
+    // Measure header height
+    useEffect(() => {
+        if (providers.length === 0) {
+            return;
+        }
+
+        const timeoutId = setTimeout(() => {
+            if (!headerRef.current) {
+                return;
+            }
+
+            const updateHeight = () => {
+                if (headerRef.current) {
+                    const height = headerRef.current.offsetHeight || 0;
+                    setHeaderHeight(height);
+                }
+            };
+
+            updateHeight();
+
+            const resizeObserver = new ResizeObserver(() => {
+                updateHeight();
+            });
+
+            resizeObserver.observe(headerRef.current);
+
+            return () => {
+                resizeObserver.disconnect();
+            };
+        }, 200);
+
+        return () => {
+            clearTimeout(timeoutId);
+        };
+    }, [providers.length]);
 
     const handleAddOAuthClick = () => {
         navigate('/oauth?dialog=add');
@@ -124,7 +162,7 @@ const UseOpenAIPage: React.FC = () => {
                 </CardGrid>
             ) : (
                 <CardGrid>
-                    <UnifiedCard title="OpenAI SDK Configuration" size="full">
+                    <UnifiedCard ref={headerRef} title="OpenAI SDK Configuration" size="full">
                         {header}
                     </UnifiedCard>
                     <TemplatePage
@@ -141,6 +179,7 @@ const UseOpenAIPage: React.FC = () => {
                         newlyCreatedRuleUuids={newlyCreatedRuleUuids}
                         allowDeleteRule={true}
                         onRuleDelete={handleRuleDelete}
+                        headerHeight={headerHeight}
                     />
                 </CardGrid>
             )}

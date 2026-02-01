@@ -31,6 +31,8 @@ export interface TabTemplatePageProps {
     showCreateRuleButton?: boolean;
     // Allow custom rightAction for backward compatibility
     rightAction?: React.ReactNode;
+    // Header height from parent component for calculating available space
+    headerHeight?: number;
 }
 
 const TemplatePage: React.FC<TabTemplatePageProps> = ({
@@ -51,6 +53,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
     showAddApiKeyButton = true,
     showCreateRuleButton = true,
     rightAction: customRightAction,
+    headerHeight = 0,
 }) => {
     const navigate = useNavigate();
     const [providerModelsByUuid, setProviderModelsByUuid] = useState<ProviderModelsDataByUuid>({});
@@ -211,7 +214,9 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
                 <Box
                     ref={scrollContainerRef}
                     sx={{
-                        maxHeight: 'calc(80vh - 120px)',
+                        maxHeight: headerHeight > 0
+                            ? `calc(80vh - ${headerHeight + 0}px)`
+                            : 'calc(80vh - 180px)',
                         overflowY: 'auto',
                         '&::-webkit-scrollbar': {
                             width: '8px',
