@@ -50,6 +50,14 @@ export type IDESource =
   | 'windsurf'
   | 'custom';
 
+export type GroupingMode = 'flat' | 'auto' | 'pattern';
+
+export interface GroupingStrategy {
+  mode: GroupingMode;
+  group_pattern?: string;
+  min_files_for_split?: number;
+}
+
 export interface SkillLocation {
   id: string;
   name: string;              // Display name
@@ -60,6 +68,7 @@ export interface SkillLocation {
   is_auto_discovered?: boolean;  // Backend uses snake_case
   is_installed?: boolean;    // Backend uses snake_case
   last_scanned_at?: Date;    // Backend uses snake_case
+  grouping_strategy?: GroupingStrategy;  // Backend uses snake_case
 }
 
 export interface Skill {

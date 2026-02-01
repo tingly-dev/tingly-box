@@ -6,16 +6,20 @@ import {
     Delete,
     Description,
     Edit,
+    ExpandLess,
+    ExpandMore,
     FolderOpen,
     Refresh,
     Search,
     Visibility,
+    ViewList,
 } from '@mui/icons-material';
 import {
     Alert,
     Box,
     Button,
     CircularProgress,
+    Collapse,
     Divider,
     IconButton,
     InputAdornment,
@@ -63,11 +67,13 @@ const SkillPage = () => {
     const [skillsLoading, setSkillsLoading] = useState(false);
     const [skillSearch, setSkillSearch] = useState('');
     const [selectedSkill, setSelectedSkill] = useState<Skill | null>(null);
+    const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+    const [isGroupedMode, setIsGroupedMode] = useState(true);
 
     // Skill detail state
     const [skillContent, setSkillContent] = useState<string>('');
     const [contentLoading, setContentLoading] = useState(false);
-    const [viewMode, setViewMode] = useState<'markdown' | 'raw'>('markdown');
+    const [viewMode, setViewMode] = useState<'markdown' | 'raw'>('raw');
 
     // Dialog states
     const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -83,6 +89,8 @@ const SkillPage = () => {
     useEffect(() => {
         if (selectedLocation) {
             loadSkills(selectedLocation);
+            // Reset expanded groups for new location, but auto-expand first group
+            setExpandedGroups(new Set());
         } else {
             setSkills([]);
             setSelectedSkill(null);
@@ -96,7 +104,7 @@ const SkillPage = () => {
             loadSkillContent(selectedSkill);
         } else {
             setSkillContent('');
-            setViewMode('markdown');
+            setViewMode('raw');
         }
     }, [selectedSkill]);
 
@@ -246,6 +254,13 @@ const SkillPage = () => {
         showNotification('Copied to clipboard!', 'success');
     };
 
+    const handleCopyPath = () => {
+        if (selectedSkill) {
+            navigator.clipboard.writeText(selectedSkill.path);
+            showNotification('Path copied to clipboard!', 'success');
+        }
+    };
+
     // Filter locations
     const filteredLocations = locations.filter((location) => {
         const matchesSearch =
@@ -286,14 +301,263 @@ const SkillPage = () => {
         if (parts.length > 1) {
             const parentDir = parts[parts.length - 2];
             const fileName = parts[parts.length - 1];
-            // Remove file extension from filename
-            const nameWithoutExt = fileName.includes('.')
-                ? fileName.substring(0, fileName.lastIndexOf('.'))
-                : fileName;
-            return `${parentDir}/${nameWithoutExt}`;
+            return `${parentDir}/${fileName}`;
         }
-        // Otherwise just use the skill name
-        return skill.name;
+        // Otherwise just use the filename
+        return relativePath;
+    };
+
+    // Get a two-level display name (last two levels) for flat mode
+    const getTwoLevelDisplayName = (skill: Skill, location: SkillLocation): string => {
+        const relativePath = getRelativePath(skill, location);
+        const parts = relativePath.split('/');
+
+        // Get last two levels: file and its parent
+        if (parts.length >= 2) {
+            const parentDir = parts[parts.length - 2];
+            const fileName = parts[parts.length - 1];
+            return `${parentDir}/${fileName}`;
+        }
+        // Single level
+        return relativePath;
+    };
+
+    // Helper: Find prefix in path that contains the pattern
+    // Pattern examples:
+    // - "/skills/" -> find "/skills/" in path, prefix is everything up to and including the match
+    // - "skills" -> find "skills" in path, prefix is everything up to and including the match
+    const getGroupKeyFromPattern = (pattern: string, pathParts: string[]): { groupKey: string; matched: boolean } => {
+        // Build path string and find pattern
+        const pathStr = pathParts.join('/');
+        const patternIndex = pathStr.indexOf(pattern);
+
+        if (patternIndex === -1) {
+            return { groupKey: '', matched: false };
+        }
+
+        // Extract prefix: everything before and including the matched pattern
+        const matchEnd = patternIndex + pattern.length;
+        const prefix = pathStr.substring(0, matchEnd);
+
+        // Remove trailing slash if present (except for root)
+        const groupKey = prefix.endsWith('/') && prefix.length > 1 ? prefix.slice(0, -1) : prefix;
+
+        return { groupKey, matched: true };
+    };
+
+    // Group skills based on location's grouping strategy
+    const groupSkillsIntelligently = (skills: Skill[], location: SkillLocation | null): Array<{ groupKey: string; groupLabel: string; skills: Skill[]; level: number }> => {
+        if (!location) return [{ groupKey: '', groupLabel: '(root)', skills, level: 0 }];
+
+        // Get grouping strategy from location, default to auto mode
+        const strategy = location.grouping_strategy || { mode: 'auto' as const, min_files_for_split: 5 };
+        const mode = strategy.mode || 'auto';
+        const minFilesForSplit = strategy.min_files_for_split || 5;
+
+        const result: Array<{ groupKey: string; groupLabel: string; skills: Skill[]; level: number }> = [];
+
+        // FLAT MODE: No grouping, just list all files
+        if (mode === 'flat') {
+            return [{ groupKey: '', groupLabel: 'All Skills', skills, level: 0 }];
+        }
+
+        // PATTERN MODE: Group by finding pattern in path
+        // Pattern examples:
+        // - "/skills/" -> any path containing "/skills/" gets grouped to "skills"
+        // - "skills" -> any path containing "skills" gets grouped to "skills" (or "xxx/skills")
+        if (mode === 'pattern' && strategy.group_pattern) {
+            const pattern = strategy.group_pattern;
+
+            // Group files by matching the pattern
+            const patternGroups: Record<string, Skill[]> = {};
+            const otherFiles: Skill[] = [];
+
+            for (const skill of skills) {
+                const relativePath = getRelativePath(skill, location);
+                const parts = relativePath.split('/');
+
+                const { groupKey, matched } = getGroupKeyFromPattern(pattern, parts);
+
+                if (matched && groupKey) {
+                    if (!patternGroups[groupKey]) {
+                        patternGroups[groupKey] = [];
+                    }
+                    patternGroups[groupKey].push(skill);
+                } else {
+                    otherFiles.push(skill);
+                }
+            }
+
+            // Add pattern-matched groups
+            for (const [groupKey, groupSkills] of Object.entries(patternGroups)) {
+                // Split further if too many files
+                if (groupSkills.length > minFilesForSplit && shouldSplitIntoSubGroups(groupSkills, location)) {
+                    const subGroups = splitIntoSubGroups(groupSkills, location, groupKey);
+                    result.push(...subGroups);
+                } else {
+                    result.push({
+                        groupKey,
+                        groupLabel: groupKey,
+                        skills: groupSkills,
+                        level: 1,
+                    });
+                }
+            }
+
+            // Add other files
+            if (otherFiles.length > 0) {
+                result.push({
+                    groupKey: '',
+                    groupLabel: '(other)',
+                    skills: otherFiles,
+                    level: 0,
+                });
+            }
+
+            // Sort groups
+            result.sort((a, b) => {
+                if (a.groupKey === '') return 1;
+                if (b.groupKey === '') return -1;
+                return a.groupKey.localeCompare(b.groupKey);
+            });
+
+            return result;
+        }
+
+        // AUTO MODE: Automatic grouping based on file count and structure
+        const firstLevelGroups: Record<string, Skill[]> = {};
+        const rootFiles: Skill[] = [];
+
+        for (const skill of skills) {
+            const relativePath = getRelativePath(skill, location);
+            const parts = relativePath.split('/');
+
+            if (parts.length === 1) {
+                rootFiles.push(skill);
+            } else {
+                const firstLevelDir = parts[0];
+                if (!firstLevelGroups[firstLevelDir]) {
+                    firstLevelGroups[firstLevelDir] = [];
+                }
+                firstLevelGroups[firstLevelDir].push(skill);
+            }
+        }
+
+        // Add root files group
+        if (rootFiles.length > 0) {
+            result.push({
+                groupKey: '',
+                groupLabel: '(root)',
+                skills: rootFiles,
+                level: 0,
+            });
+        }
+
+        // Process each first-level directory
+        for (const [dirName, dirSkills] of Object.entries(firstLevelGroups)) {
+            if (dirSkills.length > minFilesForSplit && shouldSplitIntoSubGroups(dirSkills, location)) {
+                const subGroups = splitIntoSubGroups(dirSkills, location, dirName);
+                result.push(...subGroups);
+            } else {
+                result.push({
+                    groupKey: dirName,
+                    groupLabel: dirName,
+                    skills: dirSkills,
+                    level: 1,
+                });
+            }
+        }
+
+        // Sort groups
+        result.sort((a, b) => {
+            if (a.level !== b.level) return a.level - b.level;
+            if (a.groupKey === '') return 1;
+            if (b.groupKey === '') return -1;
+            return a.groupKey.localeCompare(b.groupKey);
+        });
+
+        return result;
+    };
+
+    // Helper: Check if a group should be split into sub-groups
+    const shouldSplitIntoSubGroups = (groupSkills: Skill[], location: SkillLocation): boolean => {
+        const subGroups: Record<string, Skill[]> = {};
+        for (const skill of groupSkills) {
+            const relativePath = getRelativePath(skill, location);
+            const parts = relativePath.split('/');
+            if (parts.length >= 2) {
+                const secondLevelDir = parts[1];
+                if (!subGroups[secondLevelDir]) {
+                    subGroups[secondLevelDir] = [];
+                }
+                subGroups[secondLevelDir].push(skill);
+            }
+        }
+        return Object.keys(subGroups).length >= 2;
+    };
+
+    // Helper: Split a group into sub-groups based on second-level directory
+    const splitIntoSubGroups = (groupSkills: Skill[], location: SkillLocation, parentDir: string): Array<{ groupKey: string; groupLabel: string; skills: Skill[]; level: number }> => {
+        const subGroups: Record<string, Skill[]> = {};
+        const rootFiles: Skill[] = [];
+
+        for (const skill of groupSkills) {
+            const relativePath = getRelativePath(skill, location);
+            const parts = relativePath.split('/');
+
+            if (parts.length >= 2) {
+                const secondLevelDir = parts[1];
+                const key = `${parentDir}/${secondLevelDir}`;
+                if (!subGroups[key]) {
+                    subGroups[key] = [];
+                }
+                subGroups[key].push(skill);
+            } else {
+                rootFiles.push(skill);
+            }
+        }
+
+        const result: Array<{ groupKey: string; groupLabel: string; skills: Skill[]; level: number }> = [];
+
+        // Add root files in this directory
+        if (rootFiles.length > 0) {
+            result.push({
+                groupKey: parentDir,
+                groupLabel: parentDir,
+                skills: rootFiles,
+                level: 1,
+            });
+        }
+
+        // Add sub-groups
+        for (const [subKey, subSkills] of Object.entries(subGroups)) {
+            result.push({
+                groupKey: subKey,
+                groupLabel: subKey,
+                skills: subSkills,
+                level: 2,
+            });
+        }
+
+        return result;
+    };
+
+    const toggleGroup = (groupKey: string) => {
+        setExpandedGroups(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(groupKey)) {
+                newSet.delete(groupKey);
+            } else {
+                newSet.add(groupKey);
+            }
+            return newSet;
+        });
+    };
+
+    const isGroupExpanded = (groupKey: string) => {
+        // Auto-expand if it's the only group or if search is active
+        if (skillSearch !== '') return true;
+        return expandedGroups.has(groupKey);
     };
 
     return (
@@ -481,10 +745,20 @@ const SkillPage = () => {
                         }}
                     >
                         <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-                            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-                                {selectedLocation ? selectedLocation.name : 'Skills'}
-                                {selectedLocation && ` (${skills.length})`}
-                            </Typography>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                                    {selectedLocation ? selectedLocation.name : 'Skills'}
+                                    {selectedLocation && ` (${skills.length})`}
+                                </Typography>
+                                <IconButton
+                                    size="small"
+                                    onClick={() => setIsGroupedMode(!isGroupedMode)}
+                                    disabled={!selectedLocation}
+                                    title={isGroupedMode ? 'Switch to flat view' : 'Switch to grouped view'}
+                                >
+                                    {isGroupedMode ? <ViewList fontSize="small" /> : <Description fontSize="small" />}
+                                </IconButton>
+                            </Box>
                             <TextField
                                 placeholder="Search skills..."
                                 value={skillSearch}
@@ -555,59 +829,167 @@ const SkillPage = () => {
                                     </Typography>
                                 </Box>
                             ) : (
-                                <List sx={{ p: 0 }}>
-                                    {filteredSkills.map((skill) => {
-                                        const isSelected = selectedSkill?.id === skill.id;
-                                        const relativePath = selectedLocation ? getRelativePath(skill, selectedLocation) : skill.filename;
-                                        const displayName = selectedLocation ? getSkillDisplayName(skill, selectedLocation) : skill.name;
-                                        return (
-                                            <ListItem
-                                                key={skill.id}
-                                                disablePadding
-                                                divider
-                                                sx={{
-                                                    bgcolor: isSelected
-                                                        ? 'action.selected'
-                                                        : 'transparent',
-                                                }}
-                                            >
-                                                <ListItemButton
-                                                    onClick={() => setSelectedSkill(skill)}
-                                                    dense
-                                                >
-                                                    <Description
-                                                        fontSize="small"
-                                                        sx={{ mr: 1.5, color: 'action.active' }}
-                                                    />
-                                                    <ListItemText
-                                                        primary={
-                                                            <Typography
-                                                                variant="subtitle2"
-                                                                sx={{ fontWeight: 500 }}
+                                <Box sx={{ flex: 1, overflow: 'auto' }}>
+                                    {isGroupedMode ? (
+                                        // Grouped mode
+                                        (() => {
+                                            const skillGroups = groupSkillsIntelligently(filteredSkills, selectedLocation);
+
+                                            return skillGroups.map((group) => {
+                                                const isExpanded = isGroupExpanded(group.groupKey);
+                                                const groupLabel = group.groupLabel;
+
+                                                return (
+                                                    <Box key={group.groupKey}>
+                                                        {/* Group Header */}
+                                                        <ListItem
+                                                            disablePadding
+                                                            sx={{ borderBottom: 1, borderColor: 'divider' }}
+                                                        >
+                                                            <ListItemButton
+                                                                onClick={() => toggleGroup(group.groupKey)}
+                                                                dense
+                                                                sx={{ py: 0.75, px: 2 }}
                                                             >
-                                                                {displayName}
-                                                            </Typography>
-                                                        }
-                                                        secondary={
-                                                            <Typography
-                                                                variant="caption"
-                                                                color="text.secondary"
-                                                                sx={{
-                                                                    overflow: 'hidden',
-                                                                    textOverflow: 'ellipsis',
-                                                                    whiteSpace: 'nowrap',
-                                                                    display: 'block',
-                                                                }}
-                                                            >
-                                                                {relativePath}
-                                                            </Typography>
-                                                        }
-                                                    />
-                                                </ListItemButton>
-                                            </ListItem>
-                                        );
-                                    })}
-                                </List>
+                                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
+                                                                    {isExpanded ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
+                                                                    <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                                                                        {groupLabel}
+                                                                    </Typography>
+                                                                    <MuiChip
+                                                                        label={group.skills.length}
+                                                                        size="small"
+                                                                        sx={{ height: 18, fontSize: '0.65rem' }}
+                                                                    />
+                                                                </Box>
+                                                            </ListItemButton>
+                                                        </ListItem>
+
+                                                        {/* Group Content */}
+                                                        <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                                                            <List sx={{ p: 0 }}>
+                                                                {group.skills.map((skill) => {
+                                                                    const isSelected = selectedSkill?.id === skill.id;
+                                                                    const relativePath = selectedLocation ? getRelativePath(skill, selectedLocation) : skill.filename;
+                                                                    // Display path: remove group prefix if exists
+                                                                    const displayPath = group.groupKey && relativePath.startsWith(group.groupKey + '/')
+                                                                        ? relativePath.substring(group.groupKey.length + 1)
+                                                                        : relativePath;
+                                                                    // Get two-level display name
+                                                                    const twoLevelName = getTwoLevelDisplayName(skill, selectedLocation || { path: '', ide_source: 'custom' as const, name: '' });
+                                                                    return (
+                                                                        <ListItem
+                                                                            key={skill.id}
+                                                                            disablePadding
+                                                                            divider
+                                                                            sx={{
+                                                                                bgcolor: isSelected
+                                                                                    ? 'action.selected'
+                                                                                    : 'transparent',
+                                                                                pl: 2,
+                                                                            }}
+                                                                        >
+                                                                            <ListItemButton
+                                                                                onClick={() => setSelectedSkill(skill)}
+                                                                                dense
+                                                                                sx={{ py: 1 }}
+                                                                            >
+                                                                                <Description
+                                                                                    fontSize="small"
+                                                                                    sx={{ mr: 1.5, color: 'action.active' }}
+                                                                                />
+                                                                                <ListItemText
+                                                                                    primary={
+                                                                                        <Typography
+                                                                                            variant="subtitle2"
+                                                                                            sx={{ fontWeight: 500 }}
+                                                                                        >
+                                                                                            {twoLevelName}
+                                                                                        </Typography>
+                                                                                    }
+                                                                                    secondary={
+                                                                                        <Typography
+                                                                                            variant="caption"
+                                                                                            color="text.secondary"
+                                                                                            sx={{
+                                                                                                overflow: 'hidden',
+                                                                                                textOverflow: 'ellipsis',
+                                                                                                whiteSpace: 'nowrap',
+                                                                                                display: 'block',
+                                                                                            }}
+                                                                                        >
+                                                                                            {displayPath}
+                                                                                        </Typography>
+                                                                                    }
+                                                                                />
+                                                                            </ListItemButton>
+                                                                        </ListItem>
+                                                                    );
+                                                                })}
+                                                            </List>
+                                                        </Collapse>
+                                                    </Box>
+                                                );
+                                            });
+                                        })()
+                                    ) : (
+                                        // Flat mode
+                                        <List sx={{ p: 0 }}>
+                                            {filteredSkills.map((skill) => {
+                                                const isSelected = selectedSkill?.id === skill.id;
+                                                const twoLevelName = selectedLocation ? getTwoLevelDisplayName(skill, selectedLocation) : skill.filename;
+                                                const relativePath = selectedLocation ? getRelativePath(skill, selectedLocation) : skill.filename;
+                                                return (
+                                                    <ListItem
+                                                        key={skill.id}
+                                                        disablePadding
+                                                        divider
+                                                        sx={{
+                                                            bgcolor: isSelected
+                                                                ? 'action.selected'
+                                                                : 'transparent',
+                                                        }}
+                                                    >
+                                                        <ListItemButton
+                                                            onClick={() => setSelectedSkill(skill)}
+                                                            dense
+                                                            sx={{ py: 1 }}
+                                                        >
+                                                            <Description
+                                                                fontSize="small"
+                                                                sx={{ mr: 1.5, color: 'action.active' }}
+                                                            />
+                                                            <ListItemText
+                                                                primary={
+                                                                    <Typography
+                                                                        variant="subtitle2"
+                                                                        sx={{ fontWeight: 500 }}
+                                                                    >
+                                                                        {twoLevelName}
+                                                                    </Typography>
+                                                                }
+                                                                secondary={
+                                                                    <Typography
+                                                                        variant="caption"
+                                                                        color="text.secondary"
+                                                                        sx={{
+                                                                            overflow: 'hidden',
+                                                                            textOverflow: 'ellipsis',
+                                                                            whiteSpace: 'nowrap',
+                                                                            display: 'block',
+                                                                        }}
+                                                                    >
+                                                                        {relativePath}
+                                                                    </Typography>
+                                                                }
+                                                            />
+                                                        </ListItemButton>
+                                                    </ListItem>
+                                                );
+                                            })}
+                                        </List>
+                                    )}
+                                </Box>
                             )}
                         </Box>
                     </Paper>
@@ -644,10 +1026,10 @@ const SkillPage = () => {
                                         whiteSpace: 'nowrap',
                                     }}
                                 >
-                                    {selectedSkill && selectedLocation ? getSkillDisplayName(selectedSkill, selectedLocation) : (selectedSkill ? selectedSkill.name : 'Skill Details')}
+                                    {selectedSkill && selectedLocation ? getTwoLevelDisplayName(selectedSkill, selectedLocation) : (selectedSkill ? selectedSkill.name : 'Skill Details')}
                                 </Typography>
                                 {selectedSkill && (
-                                    <>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
                                         <Typography
                                             variant="caption"
                                             color="text.secondary"
@@ -660,19 +1042,29 @@ const SkillPage = () => {
                                         >
                                             {selectedSkill.path}
                                         </Typography>
-                                        <Typography
-                                            variant="caption"
-                                            color="text.secondary"
-                                            sx={{
-                                                overflow: 'hidden',
-                                                textOverflow: 'ellipsis',
-                                                whiteSpace: 'nowrap',
-                                                display: 'block',
-                                            }}
+                                        <IconButton
+                                            size="small"
+                                            onClick={handleCopyPath}
+                                            sx={{ ml: -0.5 }}
+                                            title="Copy path"
                                         >
-                                            {formatFileSize(selectedSkill.size)}
-                                        </Typography>
-                                    </>
+                                            <ContentCopy fontSize="small" />
+                                        </IconButton>
+                                    </Box>
+                                )}
+                                {selectedSkill && (
+                                    <Typography
+                                        variant="caption"
+                                        color="text.secondary"
+                                        sx={{
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            whiteSpace: 'nowrap',
+                                            display: 'block',
+                                        }}
+                                    >
+                                        {formatFileSize(selectedSkill.size)}
+                                    </Typography>
                                 )}
                             </Box>
                             <Stack direction="row" spacing={0.5} alignItems="center">
@@ -700,6 +1092,7 @@ const SkillPage = () => {
                                             size="small"
                                             onClick={handleCopyContent}
                                             disabled={contentLoading}
+                                            title="Copy content"
                                         >
                                             <ContentCopy fontSize="small" />
                                         </IconButton>
