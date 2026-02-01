@@ -250,11 +250,12 @@ func (s *Server) ImportSkillLocations(c *gin.Context) {
 func (s *Server) GetSkillContent(c *gin.Context) {
 	locationID := c.Query("location_id")
 	skillID := c.Query("skill_id")
+	skillPath := c.Query("skill_path")
 
-	if locationID == "" || skillID == "" {
+	if locationID == "" || (skillID == "" && skillPath == "") {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"error":   "Both location_id and skill_id are required",
+			"error":   "location_id and either skill_id or skill_path are required",
 		})
 		return
 	}
@@ -267,8 +268,7 @@ func (s *Server) GetSkillContent(c *gin.Context) {
 		return
 	}
 
-	// Scan location to get skills
-	result, err := s.skillManager.ScanLocation(locationID)
+	skill, err := s.skillManager.GetSkillContent(locationID, skillID, skillPath)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -277,20 +277,9 @@ func (s *Server) GetSkillContent(c *gin.Context) {
 		return
 	}
 
-	// Find the requested skill
-	for _, skill := range result.Skills {
-		if skill.ID == skillID {
-			c.JSON(http.StatusOK, gin.H{
-				"success": true,
-				"data":    skill,
-			})
-			return
-		}
-	}
-
-	c.JSON(http.StatusNotFound, gin.H{
-		"success": false,
-		"error":   "Skill not found",
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    skill,
 	})
 }
 
