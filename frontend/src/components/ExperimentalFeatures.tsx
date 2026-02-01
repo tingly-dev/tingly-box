@@ -8,6 +8,7 @@ import {
 import { Science } from '@mui/icons-material';
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
+import {ToggleButtonGroupStyle, ToggleButtonStyle} from "@/styles/style.tsx";
 
 export interface ExperimentalFeaturesProps {
     scenario: string;
@@ -67,7 +68,7 @@ const ExperimentalFeatures: React.FC<ExperimentalFeaturesProps> = ({ scenario })
     }
 
     return (
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 2, gap: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', py: 2, gap: 2 }}>
             {/* Label */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Science sx={{ fontSize: '1rem', color: 'text.secondary' }} />
@@ -82,27 +83,13 @@ const ExperimentalFeatures: React.FC<ExperimentalFeaturesProps> = ({ scenario })
                     <Tooltip key={feature.key} title={feature.description} arrow>
                         <ButtonGroup
                             size="small"
-                            sx={{
-                                bgcolor: 'action.hover',
-                                '& .MuiButton-root': {
-                                    padding: '4px 12px',
-                                    fontSize: '0.75rem',
-                                    textTransform: 'none',
-                                    minWidth: 40,
-                                },
-                            }}
+                            sx={ToggleButtonGroupStyle}
                         >
                         <Button
                             variant={features[feature.key] ? 'outlined' : 'contained'}
                             onClick={() => setFeature(feature.key, false)}
                             sx={{
-                                ...(features[feature.key] === false && {
-                                    bgcolor: 'primary.main',
-                                    color: 'white',
-                                    '&:hover': {
-                                        bgcolor: 'primary.dark',
-                                    },
-                                }),
+                                ...(features[feature.key] === false && ToggleButtonStyle),
                             }}
                         >
                             Off
@@ -111,13 +98,7 @@ const ExperimentalFeatures: React.FC<ExperimentalFeaturesProps> = ({ scenario })
                             variant={features[feature.key] ? 'contained' : 'outlined'}
                             onClick={() => setFeature(feature.key, true)}
                             sx={{
-                                ...(features[feature.key] === true && {
-                                    bgcolor: 'primary.main',
-                                    color: 'white',
-                                    '&:hover': {
-                                        bgcolor: 'primary.dark',
-                                    },
-                                }),
+                                ...(features[feature.key] === true && ToggleButtonStyle),
                             }}
                         >
                             {feature.label}

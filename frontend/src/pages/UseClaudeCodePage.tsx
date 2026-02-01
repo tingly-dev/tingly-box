@@ -509,12 +509,14 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                                             </ToggleButton>
                                         ))}
                                     </ToggleButtonGroup>
+
+                                    {/* Experimental Features - collapsible section */}
+                                    <ExperimentalFeatures scenario="claude_code" />
                                 </Box>
                             </>
                         )}
 
-                        {/* Experimental Features - collapsible section */}
-                        <ExperimentalFeatures scenario="claude_code" />
+
                     </UnifiedCard>
 
                     <TemplatePage
