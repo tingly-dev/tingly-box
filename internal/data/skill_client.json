@@ -1,0 +1,156 @@
+{
+  "version": "1.0",
+  "adapters": [
+    {
+      "key": "claude-code",
+      "display_name": "Claude Code",
+      "relative_detect_dir": ".claude",
+      "icon": "🎨",
+      "supports_symlink": true,
+      "scan_patterns": [
+        "skills/**/*.md",
+        "**/SKILL.md"
+      ]
+    },
+    {
+      "key": "opencode",
+      "display_name": "OpenCode",
+      "relative_detect_dir": ".config/opencode",
+      "icon": "💻",
+      "supports_symlink": true,
+      "scan_patterns": [
+        "skill/**/*.md"
+      ]
+    },
+    {
+      "key": "vscode",
+      "display_name": "VS Code",
+      "relative_detect_dir": ".vscode",
+      "icon": "💡",
+      "supports_symlink": true,
+      "scan_patterns": [
+        "**/*.md"
+      ]
+    },
+    {
+      "key": "cursor",
+      "display_name": "Cursor",
+      "relative_detect_dir": ".cursor",
+      "icon": "🎯",
+      "supports_symlink": false,
+      "scan_patterns": [
+        "skills/**/*.md"
+      ]
+    },
+    {
+      "key": "codex",
+      "display_name": "Codex",
+      "relative_detect_dir": ".codex",
+      "icon": "📜",
+      "supports_symlink": true,
+      "scan_patterns": [
+        "skills/**/*.md"
+      ]
+    },
+    {
+      "key": "antigravity",
+      "display_name": "Antigravity",
+      "relative_detect_dir": ".gemini/antigravity",
+      "icon": "🔄",
+      "supports_symlink": true,
+      "scan_patterns": [
+        "skills/**/*.md"
+      ]
+    },
+    {
+      "key": "amp",
+      "display_name": "Amp",
+      "relative_detect_dir": ".config/agents",
+      "icon": "⚡",
+      "supports_symlink": true,
+      "scan_patterns": [
+        "skills/**/*.md"
+      ]
+    },
+    {
+      "key": "kilo-code",
+      "display_name": "Kilo Code",
+      "relative_detect_dir": ".kilocode",
+      "icon": "🪜",
+      "supports_symlink": true,
+      "scan_patterns": [
+        "skills/**/*.md"
+      ]
+    },
+    {
+      "key": "roo-code",
+      "display_name": "Roo Code",
+      "relative_detect_dir": ".roo",
+      "icon": "🦘",
+      "supports_symlink": true,
+      "scan_patterns": [
+        "skills/**/*.md"
+      ]
+    },
+    {
+      "key": "goose",
+      "display_name": "Goose",
+      "relative_detect_dir": ".config/goose",
+      "icon": "🪿",
+      "supports_symlink": true,
+      "scan_patterns": [
+        "skills/**/*.md"
+      ]
+    },
+    {
+      "key": "gemini-cli",
+      "display_name": "Gemini CLI",
+      "relative_detect_dir": ".gemini",
+      "icon": "💎",
+      "supports_symlink": true,
+      "scan_patterns": [
+        "skills/**/*.md"
+      ]
+    },
+    {
+      "key": "github-copilot",
+      "display_name": "GitHub Copilot",
+      "relative_detect_dir": ".copilot",
+      "icon": "🐙",
+      "supports_symlink": true,
+      "scan_patterns": [
+        "skills/**/*.md"
+      ]
+    },
+    {
+      "key": "clawdbot",
+      "display_name": "Clawdbot",
+      "relative_detect_dir": ".clawdbot",
+      "icon": "🦞",
+      "supports_symlink": true,
+      "scan_patterns": [
+        "skills/**/*.md"
+      ]
+    },
+    {
+      "key": "droid",
+      "display_name": "Droid",
+      "relative_detect_dir": ".factory",
+      "icon": "🤖",
+      "supports_symlink": true,
+      "scan_patterns": [
+        "skills/**/*.md"
+      ]
+    },
+    {
+      "key": "windsurf",
+      "display_name": "Windsurf",
+      "relative_detect_dir": ".codeium/windsurf",
+      "icon": "🌊",
+      "supports_symlink": true,
+      "scan_patterns": [
+        "skills/**/*.md"
+      ]
+    }
+  ]
+}
