@@ -1,0 +1,131 @@
+{
+  "version": "1.0",
+  "adapters": [
+    {
+      "key": "claude_code",
+      "display_name": "Claude Code",
+      "relative_skills_dir": ".claude/skills",
+      "relative_detect_dir": ".claude",
+      "icon": "🎨",
+      "supports_symlink": true,
+      "scan_patterns": ["skills/**/*.md", "**/SKILL.md"]
+    },
+    {
+      "key": "opencode",
+      "display_name": "OpenCode",
+      "relative_skills_dir": ".config/opencode/skill",
+      "relative_detect_dir": ".config/opencode",
+      "icon": "💻",
+      "supports_symlink": true,
+      "scan_patterns": ["**/*.md"]
+    },
+    {
+      "key": "cursor",
+      "display_name": "Cursor",
+      "relative_skills_dir": ".cursor/skills",
+      "relative_detect_dir": ".cursor",
+      "icon": "🎯",
+      "supports_symlink": false,
+      "scan_patterns": ["**/*.md"]
+    },
+    {
+      "key": "codex",
+      "display_name": "Codex",
+      "relative_skills_dir": ".codex/skills",
+      "relative_detect_dir": ".codex",
+      "icon": "📜",
+      "supports_symlink": true,
+      "scan_patterns": ["**/*.md"]
+    },
+    {
+      "key": "antigravity",
+      "display_name": "Antigravity",
+      "relative_skills_dir": ".gemini/antigravity/skills",
+      "relative_detect_dir": ".gemini/antigravity",
+      "icon": "🔄",
+      "supports_symlink": true,
+      "scan_patterns": ["**/*.md"]
+    },
+    {
+      "key": "amp",
+      "display_name": "Amp",
+      "relative_skills_dir": ".config/agents/skills",
+      "relative_detect_dir": ".config/agents",
+      "icon": "⚡",
+      "supports_symlink": true,
+      "scan_patterns": ["**/*.md"]
+    },
+    {
+      "key": "kilo_code",
+      "display_name": "Kilo Code",
+      "relative_skills_dir": ".kilocode/skills",
+      "relative_detect_dir": ".kilocode",
+      "icon": "🪜",
+      "supports_symlink": true,
+      "scan_patterns": ["**/*.md"]
+    },
+    {
+      "key": "roo_code",
+      "display_name": "Roo Code",
+      "relative_skills_dir": ".roo/skills",
+      "relative_detect_dir": ".roo",
+      "icon": "🦘",
+      "supports_symlink": true,
+      "scan_patterns": ["**/*.md"]
+    },
+    {
+      "key": "goose",
+      "display_name": "Goose",
+      "relative_skills_dir": ".config/goose/skills",
+      "relative_detect_dir": ".config/goose",
+      "icon": "🪿",
+      "supports_symlink": true,
+      "scan_patterns": ["**/*.md"]
+    },
+    {
+      "key": "gemini_cli",
+      "display_name": "Gemini CLI",
+      "relative_skills_dir": ".gemini/skills",
+      "relative_detect_dir": ".gemini",
+      "icon": "💎",
+      "supports_symlink": true,
+      "scan_patterns": ["**/*.md"]
+    },
+    {
+      "key": "github_copilot",
+      "display_name": "GitHub Copilot",
+      "relative_skills_dir": ".copilot/skills",
+      "relative_detect_dir": ".copilot",
+      "icon": "🐙",
+      "supports_symlink": true,
+      "scan_patterns": ["**/*.md"]
+    },
+    {
+      "key": "clawdbot",
+      "display_name": "Clawdbot",
+      "relative_skills_dir": ".clawdbot/skills",
+      "relative_detect_dir": ".clawdbot",
+      "icon": "🦞",
+      "supports_symlink": true,
+      "scan_patterns": ["**/*.md"]
+    },
+    {
+      "key": "droid",
+      "display_name": "Droid",
+      "relative_skills_dir": ".factory/skills",
+      "relative_detect_dir": ".factory",
+      "icon": "🤖",
+      "supports_symlink": true,
+      "scan_patterns": ["**/*.md"]
+    },
+    {
+      "key": "windsurf",
+      "display_name": "Windsurf",
+      "relative_skills_dir": ".codeium/windsurf/skills",
+      "relative_detect_dir": ".codeium/windsurf",
+      "icon": "🌊",
+      "supports_symlink": true,
+      "scan_patterns": ["**/*.md"]
+    }
+  ]
+}
