@@ -21,6 +21,7 @@ export interface TabTemplatePageProps {
     onRuleDelete?: (ruleUuid: string) => void;
     allowToggleRule?: boolean;
     newlyCreatedRuleUuids?: Set<string>;
+    rightAction?: React.ReactNode;
 }
 
 const TemplatePage: React.FC<TabTemplatePageProps> = ({
@@ -37,6 +38,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
     onRuleDelete,
     allowToggleRule = true,
     newlyCreatedRuleUuids,
+    rightAction,
 }) => {
     const [providerModelsByUuid, setProviderModelsByUuid] = useState<ProviderModelsDataByUuid>({});
     const [refreshingProviders, setRefreshingProviders] = useState<string[]>([]);
@@ -104,7 +106,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
 
     return (
         <>
-            <UnifiedCard size="full" title={title}>
+            <UnifiedCard size="full" title={title} rightAction={rightAction}>
             {rules.map((rule) => (
                 rule && rule.uuid &&
                     <RuleCard

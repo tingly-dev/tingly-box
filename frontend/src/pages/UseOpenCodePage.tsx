@@ -231,6 +231,29 @@ const UseOpenCodePage: React.FC = () => {
                         title="OpenCode SDK Configuration"
                         size="full"
                         rightAction={
+                            <Button
+                                onClick={handleOpenConfigModal}
+                                variant="contained"
+                                size="small"
+                                sx={{ fontSize: '0.875rem' }}
+                            >
+                                Config OpenCode
+                            </Button>
+                        }
+                    >
+                        {header}
+
+                        {/* Experimental Features - collapsible section */}
+                        <ExperimentalFeatures scenario="opencode" />
+                    </UnifiedCard>
+
+                    <TemplatePage
+                        title={
+                            <Tooltip title="Use as model name in your API requests to forward">
+                                Models and Forwarding Rules
+                            </Tooltip>
+                        }
+                        rightAction={
                             <Stack direction="row" spacing={1}>
                                 <Tooltip title="Add new API Key">
                                     <Button
@@ -252,28 +275,7 @@ const UseOpenCodePage: React.FC = () => {
                                         New Rule
                                     </Button>
                                 </Tooltip>
-                                <Button
-                                    onClick={handleOpenConfigModal}
-                                    variant="contained"
-                                    size="small"
-                                    sx={{ fontSize: '0.875rem' }}
-                                >
-                                    Config OpenCode
-                                </Button>
                             </Stack>
-                        }
-                    >
-                        {header}
-
-                        {/* Experimental Features - collapsible section */}
-                        <ExperimentalFeatures scenario="opencode" />
-                    </UnifiedCard>
-
-                    <TemplatePage
-                        title={
-                            <Tooltip title="Use as model name in your API requests to forward">
-                                Models and Forwarding Rules
-                            </Tooltip>
                         }
                         rules={rules}
                         collapsible={true}

@@ -151,6 +151,15 @@ const UseAnthropicPage: React.FC = () => {
                     <UnifiedCard
                         title="Anthropic SDK Configuration"
                         size="full"
+                    >
+                        {header}
+                    </UnifiedCard>
+                    <TemplatePage
+                        title={
+                            <Tooltip title="Use as model name in your API requests to forward">
+                                Models and Forwarding Rules
+                            </Tooltip>
+                        }
                         rightAction={
                             <Stack direction="row" spacing={1}>
                                 <Tooltip title="Add new API Key">
@@ -174,15 +183,6 @@ const UseAnthropicPage: React.FC = () => {
                                     </Button>
                                 </Tooltip>
                             </Stack>
-                        }
-                    >
-                        {header}
-                    </UnifiedCard>
-                    <TemplatePage
-                        title={
-                            <Tooltip title="Use as model name in your API requests to forward">
-                                Models and Forwarding Rules
-                            </Tooltip>
                         }
                         rules={rules}
                         collapsible={true}
