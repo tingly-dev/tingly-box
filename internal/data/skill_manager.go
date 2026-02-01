@@ -26,6 +26,18 @@ const (
 	SkillClientConfigFile = "skill_client.json"
 )
 
+// DefaultIDEAdapters returns the list of supported IDE adapters from embedded config
+func DefaultIDEAdapters() ([]typ.IDEAdapter, error) {
+	var config struct {
+		Version  string           `json:"version"`
+		Adapters []typ.IDEAdapter `json:"adapters"`
+	}
+	if err := json.Unmarshal(defaultSkillClientConfig, &config); err != nil {
+		return nil, fmt.Errorf("failed to parse embedded config: %w", err)
+	}
+	return config.Adapters, nil
+}
+
 // SkillManager manages skill locations
 type SkillManager struct {
 	configDir string
@@ -120,7 +132,11 @@ func (sm *SkillManager) AddLocation(name, path string, ideSource typ.IDESource) 
 	}
 
 	// Get icon from IDE adapters
-	adapters := typ.DefaultIDEAdapters()
+	adapters, err := DefaultIDEAdapters()
+	if err != nil {
+		// Continue without icon if config fails to load
+		adapters = []typ.IDEAdapter{}
+	}
 	for _, adapter := range adapters {
 		if adapter.Key == ideSource {
 			location.Icon = adapter.Icon
@@ -227,7 +243,10 @@ func (sm *SkillManager) ScanLocation(locationID string) (*typ.ScanResult, error)
 	// Get scan patterns from IDE adapter
 	adapters, err := sm.loadClientConfig()
 	if err != nil {
-		adapters = typ.DefaultIDEAdapters()
+		adapters, err = DefaultIDEAdapters()
+		if err != nil {
+			adapters = []typ.IDEAdapter{}
+		}
 	}
 
 	var patterns []string
