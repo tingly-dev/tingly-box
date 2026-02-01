@@ -120,6 +120,14 @@ const SkillPage = () => {
         const result = await api.refreshSkillLocation(location.id);
         if (result.success && result.data) {
             setSkills(result.data.skills || []);
+            // Update the location's skill count in the locations list
+            setLocations(prev =>
+                prev.map(loc =>
+                    loc.id === location.id
+                        ? { ...loc, skill_count: result.data.skills?.length || 0 }
+                        : loc
+                )
+            );
         } else {
             showNotification(`Failed to load skills: ${result.error}`, 'error');
         }
@@ -269,6 +277,23 @@ const SkillPage = () => {
             return skill.path.substring(basePath.length);
         }
         return skill.filename;
+    };
+
+    const getSkillDisplayName = (skill: Skill, location: SkillLocation): string => {
+        const relativePath = getRelativePath(skill, location);
+        const parts = relativePath.split('/');
+        // If file is in a subdirectory, include parent directory
+        if (parts.length > 1) {
+            const parentDir = parts[parts.length - 2];
+            const fileName = parts[parts.length - 1];
+            // Remove file extension from filename
+            const nameWithoutExt = fileName.includes('.')
+                ? fileName.substring(0, fileName.lastIndexOf('.'))
+                : fileName;
+            return `${parentDir}/${nameWithoutExt}`;
+        }
+        // Otherwise just use the skill name
+        return skill.name;
     };
 
     return (
@@ -534,6 +559,7 @@ const SkillPage = () => {
                                     {filteredSkills.map((skill) => {
                                         const isSelected = selectedSkill?.id === skill.id;
                                         const relativePath = selectedLocation ? getRelativePath(skill, selectedLocation) : skill.filename;
+                                        const displayName = selectedLocation ? getSkillDisplayName(skill, selectedLocation) : skill.name;
                                         return (
                                             <ListItem
                                                 key={skill.id}
@@ -559,7 +585,7 @@ const SkillPage = () => {
                                                                 variant="subtitle2"
                                                                 sx={{ fontWeight: 500 }}
                                                             >
-                                                                {skill.name}
+                                                                {displayName}
                                                             </Typography>
                                                         }
                                                         secondary={
@@ -618,7 +644,7 @@ const SkillPage = () => {
                                         whiteSpace: 'nowrap',
                                     }}
                                 >
-                                    {selectedSkill ? selectedSkill.name : 'Skill Details'}
+                                    {selectedSkill && selectedLocation ? getSkillDisplayName(selectedSkill, selectedLocation) : (selectedSkill ? selectedSkill.name : 'Skill Details')}
                                 </Typography>
                                 {selectedSkill && (
                                     <>
