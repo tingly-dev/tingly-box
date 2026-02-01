@@ -263,6 +263,14 @@ const SkillPage = () => {
         return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
     };
 
+    const getRelativePath = (skill: Skill, location: SkillLocation): string => {
+        const basePath = location.path.endsWith('/') ? location.path : location.path + '/';
+        if (skill.path.startsWith(basePath)) {
+            return skill.path.substring(basePath.length);
+        }
+        return skill.filename;
+    };
+
     return (
         <PageLayout loading={loading} notification={notification}>
             {/* Header */}
@@ -378,19 +386,12 @@ const SkillPage = () => {
                                             sx={{ py: 1.5 }}
                                         >
                                             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, flex: 1, minWidth: 0 }}>
-                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                    <MuiChip
-                                                        label={getIdeSourceLabel(location.ide_source)}
-                                                        size="small"
-                                                        variant="outlined"
-                                                    />
-                                                    <Typography
-                                                        variant="subtitle2"
-                                                        sx={{ fontWeight: 500 }}
-                                                    >
-                                                        {location.name}
-                                                    </Typography>
-                                                </Box>
+                                                <Typography
+                                                    variant="subtitle2"
+                                                    sx={{ fontWeight: 500 }}
+                                                >
+                                                    {location.name}
+                                                </Typography>
                                                 <Typography
                                                     variant="caption"
                                                     color="text.secondary"
@@ -403,6 +404,12 @@ const SkillPage = () => {
                                                 >
                                                     {location.path}
                                                 </Typography>
+                                                <MuiChip
+                                                    label={getIdeSourceLabel(location.ide_source)}
+                                                    size="small"
+                                                    variant="outlined"
+                                                    sx={{ alignSelf: 'flex-start', height: 20, fontSize: '0.7rem' }}
+                                                />
                                             </Box>
                                             <Stack direction="row" spacing={0.25} alignItems="center">
                                                 <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5 }}>
@@ -526,6 +533,7 @@ const SkillPage = () => {
                                 <List sx={{ p: 0 }}>
                                     {filteredSkills.map((skill) => {
                                         const isSelected = selectedSkill?.id === skill.id;
+                                        const relativePath = selectedLocation ? getRelativePath(skill, selectedLocation) : skill.filename;
                                         return (
                                             <ListItem
                                                 key={skill.id}
@@ -558,8 +566,14 @@ const SkillPage = () => {
                                                             <Typography
                                                                 variant="caption"
                                                                 color="text.secondary"
+                                                                sx={{
+                                                                    overflow: 'hidden',
+                                                                    textOverflow: 'ellipsis',
+                                                                    whiteSpace: 'nowrap',
+                                                                    display: 'block',
+                                                                }}
                                                             >
-                                                                {skill.filename} • {formatFileSize(skill.size)}
+                                                                {relativePath}
                                                             </Typography>
                                                         }
                                                     />
@@ -591,7 +605,7 @@ const SkillPage = () => {
                                 borderColor: 'divider',
                                 display: 'flex',
                                 justifyContent: 'space-between',
-                                alignItems: 'center',
+                                alignItems: 'flex-start',
                             }}
                         >
                             <Box sx={{ minWidth: 0, flex: 1 }}>
@@ -607,18 +621,32 @@ const SkillPage = () => {
                                     {selectedSkill ? selectedSkill.name : 'Skill Details'}
                                 </Typography>
                                 {selectedSkill && (
-                                    <Typography
-                                        variant="caption"
-                                        color="text.secondary"
-                                        sx={{
-                                            overflow: 'hidden',
-                                            textOverflow: 'ellipsis',
-                                            whiteSpace: 'nowrap',
-                                            display: 'block',
-                                        }}
-                                    >
-                                        {selectedSkill.filename}
-                                    </Typography>
+                                    <>
+                                        <Typography
+                                            variant="caption"
+                                            color="text.secondary"
+                                            sx={{
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap',
+                                                display: 'block',
+                                            }}
+                                        >
+                                            {selectedSkill.path}
+                                        </Typography>
+                                        <Typography
+                                            variant="caption"
+                                            color="text.secondary"
+                                            sx={{
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap',
+                                                display: 'block',
+                                            }}
+                                        >
+                                            {formatFileSize(selectedSkill.size)}
+                                        </Typography>
+                                    </>
                                 )}
                             </Box>
                             <Stack direction="row" spacing={0.5} alignItems="center">
