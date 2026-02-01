@@ -1,6 +1,7 @@
 import {
     Add,
     AutoFixHigh,
+    Code,
     ContentCopy,
     Delete,
     Description,
@@ -8,6 +9,7 @@ import {
     FolderOpen,
     Refresh,
     Search,
+    Visibility,
 } from '@mui/icons-material';
 import {
     Alert,
@@ -28,6 +30,7 @@ import {
     Chip as MuiChip,
 } from '@mui/material';
 import { useEffect, useState } from 'react';
+import XMarkdown from '@ant-design/x-markdown';
 import { type SkillLocation, type Skill, type IDESource } from '@/types/prompt';
 import { PageLayout } from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
@@ -64,6 +67,7 @@ const SkillPage = () => {
     // Skill detail state
     const [skillContent, setSkillContent] = useState<string>('');
     const [contentLoading, setContentLoading] = useState(false);
+    const [viewMode, setViewMode] = useState<'markdown' | 'raw'>('markdown');
 
     // Dialog states
     const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -92,6 +96,7 @@ const SkillPage = () => {
             loadSkillContent(selectedSkill);
         } else {
             setSkillContent('');
+            setViewMode('markdown');
         }
     }, [selectedSkill]);
 
@@ -616,15 +621,37 @@ const SkillPage = () => {
                                     </Typography>
                                 )}
                             </Box>
-                            {skillContent && (
-                                <IconButton
-                                    size="small"
-                                    onClick={handleCopyContent}
-                                    disabled={contentLoading}
-                                >
-                                    <ContentCopy fontSize="small" />
-                                </IconButton>
-                            )}
+                            <Stack direction="row" spacing={0.5} alignItems="center">
+                                {skillContent && (
+                                    <>
+                                        <Button
+                                            size="small"
+                                            variant={viewMode === 'markdown' ? 'contained' : 'outlined'}
+                                            startIcon={<Visibility />}
+                                            onClick={() => setViewMode('markdown')}
+                                            sx={{ minWidth: 32, px: 1 }}
+                                        >
+                                            Markdown
+                                        </Button>
+                                        <Button
+                                            size="small"
+                                            variant={viewMode === 'raw' ? 'contained' : 'outlined'}
+                                            startIcon={<Code />}
+                                            onClick={() => setViewMode('raw')}
+                                            sx={{ minWidth: 32, px: 1 }}
+                                        >
+                                            Raw
+                                        </Button>
+                                        <IconButton
+                                            size="small"
+                                            onClick={handleCopyContent}
+                                            disabled={contentLoading}
+                                        >
+                                            <ContentCopy fontSize="small" />
+                                        </IconButton>
+                                    </>
+                                )}
+                            </Stack>
                         </Box>
                         <Box sx={{ flex: 1, overflow: 'auto', bgcolor: 'background.default' }}>
                             {!selectedSkill ? (
@@ -659,17 +686,47 @@ const SkillPage = () => {
                                     <CircularProgress size={32} />
                                 </Box>
                             ) : skillContent ? (
-                                <Box
-                                    sx={{
-                                        p: 2,
-                                        fontFamily: 'monospace',
-                                        fontSize: '0.875rem',
-                                        whiteSpace: 'pre-wrap',
-                                        wordBreak: 'break-word',
-                                        lineHeight: 1.6,
-                                    }}
-                                >
-                                    {skillContent}
+                                <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                                    {viewMode === 'markdown' ? (
+                                        <Box
+                                            sx={{
+                                                flex: 1,
+                                                overflow: 'auto',
+                                                '& .ant-md': {
+                                                    bgcolor: 'background.paper',
+                                                    p: 2,
+                                                    minHeight: '100%',
+                                                },
+                                                '& .ant-markdown': {
+                                                    fontSize: '0.875rem',
+                                                    lineHeight: 1.6,
+                                                },
+                                            }}
+                                        >
+                                            <XMarkdown
+                                                style={{
+                                                    height: '100%',
+                                                }}
+                                            >
+                                                {skillContent}
+                                            </XMarkdown>
+                                        </Box>
+                                    ) : (
+                                        <Box
+                                            sx={{
+                                                p: 2,
+                                                fontFamily: 'monospace',
+                                                fontSize: '0.875rem',
+                                                whiteSpace: 'pre-wrap',
+                                                wordBreak: 'break-word',
+                                                lineHeight: 1.6,
+                                                flex: 1,
+                                                overflow: 'auto',
+                                            }}
+                                        >
+                                            {skillContent}
+                                        </Box>
+                                    )}
                                 </Box>
                             ) : (
                                 <Box
