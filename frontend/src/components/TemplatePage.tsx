@@ -1,6 +1,6 @@
 import React, { useCallback, useState, useRef, useEffect } from 'react';
 import { Add as AddIcon, Key as KeyIcon } from '@mui/icons-material';
-import { Button, Stack, Tooltip } from '@mui/material';
+import { Button, Stack, Tooltip, Box } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import ApiKeyModal from '@/components/ApiKeyModal';
@@ -55,6 +55,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
     const navigate = useNavigate();
     const [providerModelsByUuid, setProviderModelsByUuid] = useState<ProviderModelsDataByUuid>({});
     const [refreshingProviders, setRefreshingProviders] = useState<string[]>([]);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
     const lastRuleRef = useRef<HTMLDivElement>(null);
     const [newRuleUuid, setNewRuleUuid] = useState<string | null>(null);
 
@@ -179,14 +180,26 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
         ) : null
     );
 
-    // Scroll to new rule when it's created
+    // Scroll to new rule when it's created (within the scrollable container)
     useEffect(() => {
-        if (newRuleUuid && lastRuleRef.current) {
-            lastRuleRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (newRuleUuid && lastRuleRef.current && scrollContainerRef.current) {
+            const container = scrollContainerRef.current;
+            const target = lastRuleRef.current;
+            const containerRect = container.getBoundingClientRect();
+            const targetRect = target.getBoundingClientRect();
+
+            // Calculate the scroll position to show the target at the top of the container
+            const scrollTop = target.offsetTop - container.offsetTop;
+
+            container.scrollTo({
+                top: scrollTop,
+                behavior: 'smooth'
+            });
+
             // Clear the new rule UUID after scrolling
             setNewRuleUuid(null);
         }
-    }, [newRuleUuid, rules]);
+    }, [newRuleUuid]);
 
     if (!providers.length || !rules?.length) {
         return null;
@@ -195,36 +208,57 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
     return (
         <>
             <UnifiedCard size="full" title={title} rightAction={rightAction}>
-            {rules.map((rule, index) => {
-                const isNewRule = rule.uuid === newRuleUuid;
-                const isLastRule = index === rules.length - 1;
-                const shouldAttachRef = isNewRule || (isLastRule && !newRuleUuid);
+                <Box
+                    ref={scrollContainerRef}
+                    sx={{
+                        maxHeight: 'calc(80vh - 200px)',
+                        overflowY: 'auto',
+                        '&::-webkit-scrollbar': {
+                            width: '8px',
+                        },
+                        '&::-webkit-scrollbar-track': {
+                            backgroundColor: 'transparent',
+                        },
+                        '&::-webkit-scrollbar-thumb': {
+                            backgroundColor: 'rgba(0, 0, 0, 0.2)',
+                            borderRadius: '4px',
+                            '&:hover': {
+                                backgroundColor: 'rgba(0, 0, 0, 0.3)',
+                            },
+                        },
+                    }}
+                >
+                    {rules.map((rule, index) => {
+                        const isNewRule = rule.uuid === newRuleUuid;
+                        const isLastRule = index === rules.length - 1;
+                        const shouldAttachRef = isNewRule || (isLastRule && !newRuleUuid);
 
-                return (
-                    <div key={rule.uuid} ref={shouldAttachRef ? lastRuleRef : null}>
-                        {rule && rule.uuid && (
-                            <RuleCard
-                                rule={rule}
-                                providers={providers}
-                                providerModelsByUuid={providerModelsByUuid}
-                                saving={refreshingProviders.length > 0}
-                                showNotification={showNotification}
-                                onRuleChange={handleRuleChange}
-                                onProviderModelsChange={handleProviderModelsChange}
-                                onRefreshProvider={handleRefreshModels}
-                                collapsible={collapsible}
-                                initiallyExpanded={
-                                    collapsible
-                                }
-                                onModelSelectOpen={openModelSelectDialog}
-                                allowDeleteRule={allowDeleteRule}
-                                onRuleDelete={onRuleDelete}
-                                allowToggleRule={allowToggleRule}
-                            />
-                        )}
-                    </div>
-                );
-            })}
+                        return (
+                            <div key={rule.uuid} ref={shouldAttachRef ? lastRuleRef : null}>
+                                {rule && rule.uuid && (
+                                    <RuleCard
+                                        rule={rule}
+                                        providers={providers}
+                                        providerModelsByUuid={providerModelsByUuid}
+                                        saving={refreshingProviders.length > 0}
+                                        showNotification={showNotification}
+                                        onRuleChange={handleRuleChange}
+                                        onProviderModelsChange={handleProviderModelsChange}
+                                        onRefreshProvider={handleRefreshModels}
+                                        collapsible={collapsible}
+                                        initiallyExpanded={
+                                            collapsible
+                                        }
+                                        onModelSelectOpen={openModelSelectDialog}
+                                        allowDeleteRule={allowDeleteRule}
+                                        onRuleDelete={onRuleDelete}
+                                        allowToggleRule={allowToggleRule}
+                                    />
+                                )}
+                            </div>
+                        );
+                    })}
+                </Box>
             </UnifiedCard>
 
             <ModelSelectDialog open={modelSelectDialogOpen} onClose={() => {}} />
