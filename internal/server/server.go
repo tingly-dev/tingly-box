@@ -73,8 +73,11 @@ type Server struct {
 	capabilityStore *db.ModelCapabilityStore
 
 	// recording sinks
-	recordSink         *obs.Sink
-	scenarioRecordSink *obs.Sink // Scenario-level recording sink (client -> tingly-box traffic)
+	recordSink *obs.Sink
+
+	// scenario-specific recording sinks (created on-demand when recording flag is enabled)
+	scenarioRecordSinks map[typ.RuleScenario]*obs.Sink
+	scenarioRecordSinksMu sync.RWMutex
 
 	// options
 	enableUI      bool
@@ -199,6 +202,34 @@ func (s *Server) IsFeatureEnabled(feature string) bool {
 	return s.experimentalFeatures[feature]
 }
 
+// GetOrCreateScenarioSink gets or creates a recording sink for the specified scenario
+// The sink is created on-demand and cached for subsequent use
+func (s *Server) GetOrCreateScenarioSink(scenario typ.RuleScenario) *obs.Sink {
+	s.scenarioRecordSinksMu.Lock()
+	defer s.scenarioRecordSinksMu.Unlock()
+
+	// Return existing sink if already created
+	if sink, exists := s.scenarioRecordSinks[scenario]; exists {
+		return sink
+	}
+
+	// Only create sink if scenario recording mode is enabled
+	if s.recordMode != obs.RecordModeScenario {
+		return nil
+	}
+
+	// Create new sink for this scenario
+	sink := obs.NewSink(s.recordDir, s.recordMode)
+	if sink == nil {
+		logrus.Warnf("Failed to create scenario recording sink for %s", scenario)
+		return nil
+	}
+
+	s.scenarioRecordSinks[scenario] = sink
+	log.Printf("Created scenario recording sink for %s, directory: %s", scenario, s.recordDir)
+	return sink
+}
+
 // NewServer creates a new HTTP server instance with functional options
 func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Start with default options
@@ -287,6 +318,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.logger = memoryLogger
 	server.clientPool = client.NewClientPool() // Initialize client pool
 	server.errorMW = errorMW
+	server.scenarioRecordSinks = make(map[typ.RuleScenario]*obs.Sink)
 
 	// Initialize record sink if recording is enabled
 	switch server.recordMode {
@@ -297,8 +329,8 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 		server.clientPool.SetRecordSink(recordSink)
 		log.Printf("Request recording enabled, mode: %s, directory: %s", server.recordMode, server.recordDir)
 	case obs.RecordModeScenario:
-		server.scenarioRecordSink = obs.NewSink(server.recordDir, server.recordMode)
-		log.Printf("Scenario recording enabled, mode: %s, directory: %s", server.recordMode, server.recordDir)
+		// Scenario recording is now on-demand, created when scenario flag is enabled
+		log.Printf("Scenario recording mode enabled, sinks will be created on-demand per scenario")
 	default:
 		log.Panicf("Unknown recording mode %s", server.recordMode)
 	}
@@ -859,6 +891,17 @@ func (s *Server) Stop(ctx context.Context) error {
 		s.watcher.Stop()
 		log.Println("Configuration watcher stopped")
 	}
+
+	// Close all scenario recording sinks
+	s.scenarioRecordSinksMu.Lock()
+	for scenario, sink := range s.scenarioRecordSinks {
+		if sink != nil {
+			sink.Close()
+			log.Printf("Closed scenario recording sink for %s", scenario)
+		}
+	}
+	s.scenarioRecordSinks = make(map[typ.RuleScenario]*obs.Sink)
+	s.scenarioRecordSinksMu.Unlock()
 
 	fmt.Println("Shutting down server...")
 	return s.httpServer.Shutdown(ctx)
