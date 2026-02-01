@@ -1,13 +1,10 @@
 import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ExperimentalFeatures from "@/components/ExperimentalFeatures.tsx";
-import { ContentCopy as CopyIcon } from '@mui/icons-material';
-import VisibilityIcon from '@mui/icons-material/Visibility';
-import { Box, Button, Divider, IconButton, Tooltip } from '@mui/material';
+import InfoIcon from '@mui/icons-material/Info';
+import { Box, Button, Divider, Tooltip, IconButton, Typography } from '@mui/material';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ApiConfigRow } from '@/components/ApiConfigRow';
-import { BaseUrlRow } from '@/components/BaseUrlRow';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from '@/components/TemplatePage.tsx';
@@ -153,31 +150,7 @@ const UseOpenCodePage: React.FC = () => {
         }
     };
 
-    const header = (
-        <Box sx={{ p: 2 }}>
-            <BaseUrlRow
-                label="Base URL"
-                path="/tingly/opencode"
-                baseUrl={baseUrl}
-                urlLabel="OpenCode Base URL"
-                onCopy={(url) => copyToClipboard(url, 'OpenCode Base URL')}
-            />
-            <ApiConfigRow label="API Key" showEllipsis={true}>
-                <Box sx={{ display: 'flex', gap: 0.5, ml: 'auto' }}>
-                    <Tooltip title="View Token">
-                        <IconButton onClick={() => setShowTokenModal(true)} size="small">
-                            <VisibilityIcon />
-                        </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Copy Token">
-                        <IconButton onClick={() => copyToClipboard(token, 'API Key')} size="small">
-                            <CopyIcon fontSize="small" />
-                        </IconButton>
-                    </Tooltip>
-                </Box>
-            </ApiConfigRow>
-        </Box>
-    );
+    const header = null;
 
     const isLoading = providersLoading || loadingRule;
 
@@ -185,7 +158,14 @@ const UseOpenCodePage: React.FC = () => {
         <PageLayout loading={isLoading}>
             {!providers.length ? (
                 <CardGrid>
-                    <UnifiedCard title="OpenCode SDK Configuration" size="full">
+                    <UnifiedCard
+                        title={
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <span>OpenCode SDK Configuration</span>
+                            </Box>
+                        }
+                        size="full"
+                    >
                         <EmptyStateGuide
                             title="No Providers Configured"
                             description="Add an API key or OAuth provider to get started"
@@ -197,7 +177,16 @@ const UseOpenCodePage: React.FC = () => {
             ) : (
                 <CardGrid>
                     <UnifiedCard
-                        title="OpenCode SDK Configuration"
+                        title={
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <span>OpenCode SDK Configuration</span>
+                                <Tooltip title={`Base URL: ${baseUrl}/tingly/opencode`}>
+                                    <IconButton size="small" sx={{ ml: 0.5 }}>
+                                        <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                                    </IconButton>
+                                </Tooltip>
+                            </Box>
+                        }
                         size="full"
                         rightAction={
                             <Button

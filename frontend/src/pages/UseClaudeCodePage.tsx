@@ -11,9 +11,11 @@ import {
     ToggleButton,
     ToggleButtonGroup,
     Tooltip,
-    Typography
+    Typography,
+    IconButton
 } from '@mui/material';
 import InfoOutlined from '@mui/icons-material/InfoOutlined';
+import InfoIcon from '@mui/icons-material/Info';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -449,7 +451,14 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
         <PageLayout loading={isLoading}>
             {!providers.length ? (
                 <CardGrid>
-                    <UnifiedCard title="Use Claude Code" size="full">
+                    <UnifiedCard
+                        title={
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <span>Use Claude Code</span>
+                            </Box>
+                        }
+                        size="full"
+                    >
                         <EmptyStateGuide
                             title="No Providers Configured"
                             description="Add an API key or OAuth provider to get started"
@@ -461,7 +470,16 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
             ) : (
                 <CardGrid>
                     <UnifiedCard
-                        title="Use Claude Code"
+                        title={
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <span>Use Claude Code</span>
+                                <Tooltip title={`Base URL: ${baseUrl}/tingly/claude_code`}>
+                                    <IconButton size="small" sx={{ ml: 0.5 }}>
+                                        <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                                    </IconButton>
+                                </Tooltip>
+                            </Box>
+                        }
                         size="full"
                         rightAction={
                             <Button
