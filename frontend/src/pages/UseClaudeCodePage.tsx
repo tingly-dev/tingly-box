@@ -467,10 +467,11 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                                 variant="contained"
                                 color="primary"
                                 size="small"
-                                sx={{ fontSize: '0.875rem' }}
                             >
                                 {t('claudeCode.modal.showGuide')}
                             </Button>
+
+                            
                         }
                     >
                         <Box sx={{ mb: 2 }}>
@@ -520,6 +521,8 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                     </UnifiedCard>
 
                     <TemplatePage
+                        title="Models and Forwarding Rules"
+                        scenario="claude_code"
                         rules={rules}
                         showTokenModal={showTokenModal}
                         setShowTokenModal={setShowTokenModal}
@@ -529,6 +532,8 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                         onRulesChange={setRules}
                         allowToggleRule={false}
                         collapsible={true}
+                        showAddApiKeyButton={false}
+                        showCreateRuleButton={false}
                     />
 
                     {/* Confirmation dialog for mode change */}

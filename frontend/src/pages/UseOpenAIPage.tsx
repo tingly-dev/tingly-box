@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ContentCopy as CopyIcon } from '@mui/icons-material';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import { Box, IconButton, Stack, Tooltip } from '@mui/material';
+import { Box, IconButton, Tooltip } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { BaseUrlRow } from '@/components/BaseUrlRow';
 import TemplatePage from '@/components/TemplatePage.tsx';
@@ -12,9 +12,7 @@ import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import { useFunctionPanelData } from '../hooks/useFunctionPanelData';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
-import { v4 as uuidv4 } from 'uuid';
 
-const ruleId = "built-in-openai";
 const scenario = "openai";
 
 const UseOpenAIPage: React.FC = () => {
@@ -26,15 +24,11 @@ const UseOpenAIPage: React.FC = () => {
         providers,
         loading: providersLoading,
     } = useFunctionPanelData();
-    const [baseUrl, setBaseUrl] = React.useState<string>('');
-    const [rules, setRules] = React.useState<any[]>([]);
-    const [loadingRule, setLoadingRule] = React.useState(true);
-    const [newlyCreatedRuleUuids, setNewlyCreatedRuleUuids] = React.useState<Set<string>>(new Set());
+    const [baseUrl, setBaseUrl] = useState<string>('');
+    const [rules, setRules] = useState<any[]>([]);
+    const [loadingRule, setLoadingRule] = useState(true);
+    const [newlyCreatedRuleUuids, setNewlyCreatedRuleUuids] = useState<Set<string>>(new Set());
     const navigate = useNavigate();
-
-    const handleAddApiKeyClick = () => {
-        navigate('/api-keys?dialog=add');
-    };
 
     const handleAddOAuthClick = () => {
         navigate('/oauth?dialog=add');
@@ -49,38 +43,18 @@ const UseOpenAIPage: React.FC = () => {
         }
     };
 
-    const handleCreateRule = async () => {
-        try {
-            const newRuleData = {
-                scenario: scenario,
-                request_model: `model-${uuidv4().slice(0, 8)}`,
-                response_model: '',
-                active: true,
-                services: []
-            };
-            const result = await api.createRule('', newRuleData);
-            if (result.success && result.data?.uuid) {
-                // Add the new rule UUID to the set so it auto-expands and scrolls into view
-                setNewlyCreatedRuleUuids(prev => new Set(prev).add(result.data.uuid));
-                showNotification('Routing rule created successfully!', 'success');
-                // Reload rules
-                const rulesResult = await api.getRules(scenario);
-                if (rulesResult.success) {
-                    const ruleData = Array.isArray(rulesResult.data) ? rulesResult.data : [];
-                    setRules(ruleData);
-                }
-            } else {
-                showNotification(`Failed to create rule: ${result.error || 'Unknown error'}`, 'error');
-            }
-        } catch (error) {
-            console.error('Error creating rule:', error);
-            showNotification('Failed to create routing rule', 'error');
-        }
-    };
-
     const handleRuleDelete = useCallback((deletedRuleUuid: string) => {
         setRules((prevRules) => prevRules.filter(r => r.uuid !== deletedRuleUuid));
     }, []);
+
+    const handleRulesChange = useCallback((updatedRules: any[]) => {
+        setRules(updatedRules);
+        // If a new rule was added (length increased), add it to newlyCreatedRuleUuids
+        if (updatedRules.length > rules.length) {
+            const newRule = updatedRules[updatedRules.length - 1];
+            setNewlyCreatedRuleUuids(prev => new Set(prev).add(newRule.uuid));
+        }
+    }, [rules.length]);
 
     useEffect(() => {
         let isMounted = true;
@@ -142,25 +116,18 @@ const UseOpenAIPage: React.FC = () => {
                         <EmptyStateGuide
                             title="No Providers Configured"
                             description="Add an API key or OAuth provider to get started"
-                            onAddApiKeyClick={handleAddApiKeyClick}
+                            onAddApiKeyClick={() => navigate('/api-keys?dialog=add')}
                             onAddOAuthClick={handleAddOAuthClick}
                         />
                     </UnifiedCard>
                 </CardGrid>
             ) : (
                 <CardGrid>
-                    <UnifiedCard
-                        title="OpenAI SDK Configuration"
-                        size="full"
-                    >
+                    <UnifiedCard title="OpenAI SDK Configuration" size="full">
                         {header}
                     </UnifiedCard>
                     <TemplatePage
-                        title={
-                            <Tooltip title="Use as model name in your API requests to forward">
-                                Models and Forwarding Rules
-                            </Tooltip>
-                        }
+                        title="Models and Forwarding Rules"
                         scenario={scenario}
                         rules={rules}
                         collapsible={true}
@@ -169,12 +136,10 @@ const UseOpenAIPage: React.FC = () => {
                         token={token}
                         showNotification={showNotification}
                         providers={providers}
-                        onRulesChange={setRules}
+                        onRulesChange={handleRulesChange}
                         newlyCreatedRuleUuids={newlyCreatedRuleUuids}
                         allowDeleteRule={true}
                         onRuleDelete={handleRuleDelete}
-                        onAddApiKeyClick={handleAddApiKeyClick}
-                        onCreateRule={handleCreateRule}
                     />
                 </CardGrid>
             )}

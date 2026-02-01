@@ -1,6 +1,8 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useRef, useEffect } from 'react';
 import { Add as AddIcon, Key as KeyIcon } from '@mui/icons-material';
 import { Button, Stack, Tooltip } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
+import { v4 as uuidv4 } from 'uuid';
 import ApiKeyModal from '@/components/ApiKeyModal';
 import RuleCard from './RuleCard.tsx';
 import UnifiedCard from '@/components/UnifiedCard';
@@ -25,8 +27,8 @@ export interface TabTemplatePageProps {
     newlyCreatedRuleUuids?: Set<string>;
     // Unified action buttons props
     scenario?: string;
-    onAddApiKeyClick?: () => void;
-    onCreateRule?: () => void;
+    showAddApiKeyButton?: boolean;
+    showCreateRuleButton?: boolean;
     // Allow custom rightAction for backward compatibility
     rightAction?: React.ReactNode;
 }
@@ -46,12 +48,15 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
     allowToggleRule = true,
     newlyCreatedRuleUuids,
     scenario,
-    onAddApiKeyClick,
-    onCreateRule,
+    showAddApiKeyButton = true,
+    showCreateRuleButton = true,
     rightAction: customRightAction,
 }) => {
+    const navigate = useNavigate();
     const [providerModelsByUuid, setProviderModelsByUuid] = useState<ProviderModelsDataByUuid>({});
     const [refreshingProviders, setRefreshingProviders] = useState<string[]>([]);
+    const lastRuleRef = useRef<HTMLDivElement>(null);
+    const [newRuleUuid, setNewRuleUuid] = useState<string | null>(null);
 
     const handleRuleChange = useCallback((updatedRule: Rule) => {
         if (onRulesChange) {
@@ -92,6 +97,38 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
         }
     }, [showNotification]);
 
+    // Unified action handlers
+    const handleAddApiKeyClick = useCallback(() => {
+        navigate('/api-keys?dialog=add');
+    }, [navigate]);
+
+    const handleCreateRule = useCallback(async () => {
+        if (!scenario) return;
+
+        try {
+            const newRuleData = {
+                scenario: scenario,
+                request_model: `model-${uuidv4().slice(0, 8)}`,
+                response_model: '',
+                active: true,
+                services: []
+            };
+            const result = await api.createRule('', newRuleData);
+            if (result.success && result.data?.uuid) {
+                // Set new rule UUID for scrolling
+                setNewRuleUuid(result.data.uuid);
+                // Trigger parent to reload rules and add to newlyCreatedRuleUuids
+                onRulesChange?.([...rules, result.data]);
+                showNotification('Routing rule created successfully!', 'success');
+            } else {
+                showNotification(`Failed to create rule: ${result.error || 'Unknown error'}`, 'error');
+            }
+        } catch (error) {
+            console.error('Error creating rule:', error);
+            showNotification('Failed to create routing rule', 'error');
+        }
+    }, [scenario, rules, onRulesChange, showNotification]);
+
     // Use the model select dialog hook
     const { openModelSelect, ModelSelectDialog, isOpen: modelSelectDialogOpen } = useModelSelectDialog({
         providers,
@@ -112,26 +149,26 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
 
     // Generate unified rightAction if not provided
     const rightAction = customRightAction ?? (
-        (onAddApiKeyClick || onCreateRule) ? (
+        (showAddApiKeyButton || showCreateRuleButton) ? (
             <Stack direction="row" spacing={1}>
-                {onAddApiKeyClick && (
+                {showAddApiKeyButton && (
                     <Tooltip title="Add new API Key">
                         <Button
                             variant="outlined"
                             startIcon={<KeyIcon />}
-                            onClick={onAddApiKeyClick}
+                            onClick={handleAddApiKeyClick}
                             size="small"
                         >
                             New Key
                         </Button>
                     </Tooltip>
                 )}
-                {onCreateRule && (
+                {showCreateRuleButton && (
                     <Tooltip title="Create new routing rule">
                         <Button
                             variant="contained"
                             startIcon={<AddIcon />}
-                            onClick={onCreateRule}
+                            onClick={handleCreateRule}
                             size="small"
                         >
                             New Rule
@@ -142,6 +179,15 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
         ) : null
     );
 
+    // Scroll to new rule when it's created
+    useEffect(() => {
+        if (newRuleUuid && lastRuleRef.current) {
+            lastRuleRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            // Clear the new rule UUID after scrolling
+            setNewRuleUuid(null);
+        }
+    }, [newRuleUuid, rules]);
+
     if (!providers.length || !rules?.length) {
         return null;
     }
@@ -149,28 +195,36 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
     return (
         <>
             <UnifiedCard size="full" title={title} rightAction={rightAction}>
-            {rules.map((rule) => (
-                rule && rule.uuid &&
-                    <RuleCard
-                        key={rule.uuid}
-                        rule={rule}
-                        providers={providers}
-                        providerModelsByUuid={providerModelsByUuid}
-                        saving={refreshingProviders.length > 0}
-                        showNotification={showNotification}
-                        onRuleChange={handleRuleChange}
-                        onProviderModelsChange={handleProviderModelsChange}
-                        onRefreshProvider={handleRefreshModels}
-                        collapsible={collapsible}
-                        initiallyExpanded={
-                            collapsible
-                        }
-                        onModelSelectOpen={openModelSelectDialog}
-                        allowDeleteRule={allowDeleteRule}
-                        onRuleDelete={onRuleDelete}
-                        allowToggleRule={allowToggleRule}
-                    />
-            ))}
+            {rules.map((rule, index) => {
+                const isNewRule = rule.uuid === newRuleUuid;
+                const isLastRule = index === rules.length - 1;
+                const shouldAttachRef = isNewRule || (isLastRule && !newRuleUuid);
+
+                return (
+                    <div key={rule.uuid} ref={shouldAttachRef ? lastRuleRef : null}>
+                        {rule && rule.uuid && (
+                            <RuleCard
+                                rule={rule}
+                                providers={providers}
+                                providerModelsByUuid={providerModelsByUuid}
+                                saving={refreshingProviders.length > 0}
+                                showNotification={showNotification}
+                                onRuleChange={handleRuleChange}
+                                onProviderModelsChange={handleProviderModelsChange}
+                                onRefreshProvider={handleRefreshModels}
+                                collapsible={collapsible}
+                                initiallyExpanded={
+                                    collapsible
+                                }
+                                onModelSelectOpen={openModelSelectDialog}
+                                allowDeleteRule={allowDeleteRule}
+                                onRuleDelete={onRuleDelete}
+                                allowToggleRule={allowToggleRule}
+                            />
+                        )}
+                    </div>
+                );
+            })}
             </UnifiedCard>
 
             <ModelSelectDialog open={modelSelectDialogOpen} onClose={() => {}} />
