@@ -76,10 +76,8 @@ func ResolveStartOptions(cmd *cobra.Command, flags StartFlags, appConfig *config
 		resolvedDebug = appConfig.GetDebug()
 	}
 
+	// Directly use CLI flag value for browser (no Changed() check needed)
 	resolvedOpenBrowser := flags.EnableOpenBrowser
-	if !cmd.Flags().Changed("browser") {
-		resolvedOpenBrowser = appConfig.GetOpenBrowser()
-	}
 
 	resolvedPort := flags.Port
 	if resolvedPort == 0 {
