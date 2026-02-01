@@ -22,6 +22,7 @@ const UseOpenCodePage: React.FC = () => {
         showNotification,
         providers,
         loading: providersLoading,
+        notification,
     } = useFunctionPanelData();
     const [baseUrl, setBaseUrl] = useState<string>('');
     const [rules, setRules] = useState<any[]>([]);
@@ -155,7 +156,7 @@ const UseOpenCodePage: React.FC = () => {
     const isLoading = providersLoading || loadingRule;
 
     return (
-        <PageLayout loading={isLoading}>
+        <PageLayout loading={isLoading} notification={notification}>
             {!providers.length ? (
                 <CardGrid>
                     <UnifiedCard

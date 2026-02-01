@@ -192,6 +192,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                     smart_enabled: ruleData.smart_enabled,
                     smart_routing: ruleData.smart_routing,
                 });
+                showNotification('Configuration saved successfully', 'success');
                 return true;
             } else {
                 showNotification(`Failed to save: ${result.error || 'Unknown error'}`, 'error');

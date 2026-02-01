@@ -49,6 +49,7 @@ const UseClaudeCodePage: React.FC = () => {
         showNotification,
         providers,
         loading: providersLoading,
+        notification,
     } = useFunctionPanelData();
     const [baseUrl, setBaseUrl] = React.useState<string>('');
     const [rules, setRules] = React.useState<any[]>([]);
@@ -448,7 +449,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
     const isLoading = providersLoading || loadingRule;
 
     return (
-        <PageLayout loading={isLoading}>
+        <PageLayout loading={isLoading} notification={notification}>
             {!providers.length ? (
                 <CardGrid>
                     <UnifiedCard

@@ -23,6 +23,7 @@ const UseAnthropicPage: React.FC = () => {
         showNotification,
         providers,
         loading: providersLoading,
+        notification,
     } = useFunctionPanelData();
     const [baseUrl, setBaseUrl] = useState<string>('');
     const [rules, setRules] = useState<any[]>([]);
@@ -109,7 +110,7 @@ const UseAnthropicPage: React.FC = () => {
     const isLoading = providersLoading || loadingRule;
 
     return (
-        <PageLayout loading={isLoading}>
+        <PageLayout loading={isLoading} notification={notification}>
             {!providers.length ? (
                 <CardGrid>
                     <UnifiedCard title="Anthropic SDK Configuration" size="full">
