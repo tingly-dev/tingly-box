@@ -200,8 +200,6 @@ const UseOpenCodePage: React.FC = () => {
                     >
                         {header}
 
-                        <Divider></Divider>
-                        
                         {/* Experimental Features - collapsible section */}
                         <ExperimentalFeatures scenario="opencode" />
                     </UnifiedCard>

@@ -3,7 +3,6 @@ export const ToggleButtonGroupStyle = {
     '& .MuiToggleButton-root': {
         color: 'text.primary',
         padding: '4px 12px',
-        fontSize: '0.875rem',
         // textTransform: 'none' as const,
         '&:hover': {
             bgcolor: 'action.selected',

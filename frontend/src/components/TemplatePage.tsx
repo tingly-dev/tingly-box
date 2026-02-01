@@ -211,7 +211,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
                 <Box
                     ref={scrollContainerRef}
                     sx={{
-                        maxHeight: 'calc(80vh - 200px)',
+                        maxHeight: 'calc(80vh - 120px)',
                         overflowY: 'auto',
                         '&::-webkit-scrollbar': {
                             width: '8px',

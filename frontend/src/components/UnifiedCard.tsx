@@ -146,7 +146,7 @@ export const UnifiedCard = ({
         }}
       >
         {title && (
-          <Box sx={{ mb: 2, flexShrink: 0 }}>
+          <Box sx={{ mb: 1, flexShrink: 0 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: subtitle ? 1 : 0 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
                 <Typography variant="h4" sx={{ fontWeight: 600, color: 'text.primary' }}>
@@ -166,7 +166,7 @@ export const UnifiedCard = ({
           </Box>
         )}
         {message && (
-          <Box sx={{ mb: 2, flexShrink: 0 }}>
+          <Box sx={{ mb: 1, flexShrink: 0 }}>
             <Alert
               severity={message.type}
               onClose={onClearMessage}
