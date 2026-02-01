@@ -4,9 +4,14 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
+
+type ScenarioFlagUpdateRequest struct {
+	Value bool `json:"value"`
+}
 
 // ScenarioUpdateRequest represents the request to update a scenario
 type ScenarioUpdateRequest struct {
@@ -201,17 +206,17 @@ func (s *Server) SetScenarioFlag(c *gin.Context) {
 		return
 	}
 
-	var request struct {
-		Value bool `json:"value" binding:"required"`
-	}
-
+	request := new(ScenarioFlagUpdateRequest)
 	if err := c.ShouldBindJSON(&request); err != nil {
+		logrus.Printf("[ERROR] SetScenarioFlag ShouldBindJSON failed: %v, scenario=%s, flag=%s", err, scenario, flag)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"error":   err.Error(),
 		})
 		return
 	}
+
+	logrus.Printf("[DEBUG] SetScenarioFlag success: scenario=%s, flag=%s, value=%v", scenario, flag, request.Value)
 
 	cfg := s.config
 	if cfg == nil {
