@@ -286,82 +286,76 @@ func scanDirectoryForSkills(dirPath string, patterns []string) ([]typ.Skill, err
 	// Track files we've already added to avoid duplicates
 	seenFiles := make(map[string]bool)
 
-	// Walk through all files recursively
-	err := filepath.Walk(dirPath, func(fullPath string, info os.FileInfo, err error) error {
+	// Use doublestar.FilepathGlob for each pattern (works with OS filesystem directly)
+	for _, pattern := range patterns {
+		// doublestar.FilepathGlob works with the OS filesystem
+		// The pattern should include the base path
+		globPattern := filepath.Join(dirPath, pattern)
+
+		matches, err := doublestar.FilepathGlob(globPattern)
 		if err != nil {
-			// Skip files we can't access
-			return nil
+			// Invalid pattern, skip it
+			continue
 		}
 
-		// Skip directories
-		if info.IsDir() {
-			// Skip hidden directories (like .git)
-			if len(info.Name()) > 0 && info.Name()[0] == '.' && info.Name() != ".git" {
-				return filepath.SkipDir
+		for _, fullPath := range matches {
+			// Skip if we've already seen this file
+			if seenFiles[fullPath] {
+				continue
 			}
-			return nil
-		}
 
-		// Skip hidden files
-		if len(info.Name()) > 0 && info.Name()[0] == '.' {
-			return nil
-		}
-
-		// Skip if we've already seen this file
-		if seenFiles[fullPath] {
-			return nil
-		}
-
-		// Get relative path from base directory for pattern matching
-		relPath, err := filepath.Rel(dirPath, fullPath)
-		if err != nil {
-			return nil
-		}
-
-		// Convert path separators to forward slashes for glob matching
-		// (doublestar uses / as separator)
-		relPath = filepath.ToSlash(relPath)
-
-		// Check if file matches any of the patterns using doublestar
-		matched := false
-		for _, pattern := range patterns {
-			// doublestar.Match supports ** and other glob patterns
-			if ok, _ := doublestar.Match(pattern, relPath); ok {
-				matched = true
-				break
+			// Skip hidden files and files in hidden directories
+			// Check all path components for dot directories
+			relPath, err := filepath.Rel(dirPath, fullPath)
+			if err == nil {
+				// Split path and check each component
+				components := filepath.SplitList(relPath)
+				isHidden := false
+				for _, comp := range components {
+					if len(comp) > 0 && comp[0] == '.' {
+						isHidden = true
+						break
+					}
+				}
+				if isHidden {
+					continue
+				}
 			}
+
+			// Get file info
+			info, err := os.Stat(fullPath)
+			if err != nil {
+				// File no longer accessible, skip
+				continue
+			}
+
+			// Skip directories
+			if info.IsDir() {
+				continue
+			}
+
+			seenFiles[fullPath] = true
+
+			ext := filepath.Ext(info.Name())
+			nameWithoutExt := info.Name()[:len(info.Name())-len(ext)]
+
+			// Generate stable ID from file path (SHA256 hash, truncated to 16 chars for brevity)
+			hash := sha256.Sum256([]byte(fullPath))
+			stableID := hex.EncodeToString(hash[:])[:16]
+
+			skill := typ.Skill{
+				ID:         stableID,
+				Name:       nameWithoutExt,
+				Filename:   info.Name(),
+				Path:       fullPath,
+				LocationID: "", // Set by caller
+				FileType:   ext,
+				Size:       info.Size(),
+				ModifiedAt: info.ModTime(),
+			}
+
+			skills = append(skills, skill)
 		}
-
-		if !matched {
-			return nil
-		}
-
-		seenFiles[fullPath] = true
-
-		ext := filepath.Ext(info.Name())
-		nameWithoutExt := info.Name()[:len(info.Name())-len(ext)]
-
-		// Generate stable ID from file path (SHA256 hash, truncated to 16 chars for brevity)
-		hash := sha256.Sum256([]byte(fullPath))
-		stableID := hex.EncodeToString(hash[:])[:16]
-
-		skill := typ.Skill{
-			ID:         stableID,
-			Name:       nameWithoutExt,
-			Filename:   info.Name(),
-			Path:       fullPath,
-			LocationID: "", // Set by caller
-			FileType:   ext,
-			Size:       info.Size(),
-			ModifiedAt: info.ModTime(),
-		}
-
-		skills = append(skills, skill)
-		return nil
-	})
-
-	if err != nil {
-		return nil, err
 	}
 
 	return skills, nil
