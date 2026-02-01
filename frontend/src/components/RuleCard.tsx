@@ -1,5 +1,5 @@
 import { Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Typography } from '@mui/material';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import type { ProbeResponse } from '../client';
 import Probe from './ProbeModal.tsx';
 import RoutingGraph from './RoutingGraph';
@@ -26,6 +26,7 @@ export interface RuleCardProps {
     allowDeleteRule?: boolean;
     onRuleDelete?: (ruleUuid: string) => void;
     allowToggleRule?: boolean;
+    onToggleExpanded?: () => void;
 }
 
 export const RuleCard: React.FC<RuleCardProps> = ({
@@ -43,9 +44,21 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     allowDeleteRule = false,
     onRuleDelete,
     allowToggleRule = true,
+    onToggleExpanded,
 }) => {
     const [configRecord, setConfigRecord] = useState<ConfigRecord | null>(null);
     const [expanded, setExpanded] = useState(initiallyExpanded);
+
+    // Sync expanded state with initiallyExpanded prop
+    useEffect(() => {
+        setExpanded(initiallyExpanded);
+    }, [initiallyExpanded]);
+
+    // Handle toggle with callback
+    const handleToggleExpanded = useCallback(() => {
+        setExpanded(prev => !prev);
+        onToggleExpanded?.();
+    }, [onToggleExpanded]);
 
     // Probe state
     const [isProbing, setIsProbing] = useState(false);
@@ -538,7 +551,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                         collapsible={collapsible}
                         allowToggleRule={allowToggleRule}
                         expanded={expanded}
-                        onToggleExpanded={() => setExpanded(!expanded)}
+                        onToggleExpanded={handleToggleExpanded}
                         extraActions={extraActions}
                         onUpdateRecord={handleUpdateRecord}
                         onAddSmartRule={handleAddSmartRule}
@@ -561,7 +574,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                         allowToggleRule={allowToggleRule}
                         onUpdateRecord={handleUpdateRecord}
                         onDeleteProvider={handleDeleteProvider}
-                        onToggleExpanded={() => setExpanded(!expanded)}
+                        onToggleExpanded={handleToggleExpanded}
                         onProviderNodeClick={handleProviderNodeClick}
                         onAddProviderButtonClick={handleAddProviderButtonClick}
                         extraActions={extraActions}

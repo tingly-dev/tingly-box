@@ -1,5 +1,5 @@
 import React, { useCallback, useState, useRef, useEffect } from 'react';
-import { Add as AddIcon, Key as KeyIcon } from '@mui/icons-material';
+import { Add as AddIcon, Key as KeyIcon, ExpandMore as ExpandMoreIcon, UnfoldMore as UnfoldMoreIcon } from '@mui/icons-material';
 import { Button, Stack, Tooltip, Box } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
@@ -29,6 +29,7 @@ export interface TabTemplatePageProps {
     scenario?: string;
     showAddApiKeyButton?: boolean;
     showCreateRuleButton?: boolean;
+    showExpandCollapseButton?: boolean;
     // Allow custom rightAction for backward compatibility
     rightAction?: React.ReactNode;
     // Header height from parent component for calculating available space
@@ -52,6 +53,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
     scenario,
     showAddApiKeyButton = true,
     showCreateRuleButton = true,
+    showExpandCollapseButton = true,
     rightAction: customRightAction,
     headerHeight = 0,
 }) => {
@@ -61,6 +63,8 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const lastRuleRef = useRef<HTMLDivElement>(null);
     const [newRuleUuid, setNewRuleUuid] = useState<string | null>(null);
+    const [allExpanded, setAllExpanded] = useState<boolean>(true);
+    const [expandedStates, setExpandedStates] = useState<Record<string, boolean>>({});
 
     const handleRuleChange = useCallback((updatedRule: Rule) => {
         if (onRulesChange) {
@@ -151,36 +155,86 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
         openModelSelect({ ruleUuid, configRecord, providerUuid, mode });
     }, [openModelSelect]);
 
+    // Handle expand/collapse all
+    const handleToggleExpandAll = useCallback(() => {
+        const newState = !allExpanded;
+        setAllExpanded(newState);
+        const newStates: Record<string, boolean> = {};
+        rules.forEach(rule => {
+            newStates[rule.uuid] = newState;
+        });
+        setExpandedStates(newStates);
+    }, [allExpanded, rules]);
+
+    // Handle individual rule expand/collapse
+    const handleRuleExpandToggle = useCallback((ruleUuid: string) => {
+        setExpandedStates(prev => {
+            const newStates = { ...prev, [ruleUuid]: !prev[ruleUuid] };
+            // Check if all rules have the same expanded state
+            const states = Object.values(newStates);
+            const allSame = states.every(s => s === states[0]);
+            if (allSame) {
+                setAllExpanded(states[0]);
+            }
+            return newStates;
+        });
+    }, []);
+
+    // Initialize expanded states when rules change
+    useEffect(() => {
+        if (collapsible) {
+            const initialStates: Record<string, boolean> = {};
+            rules.forEach(rule => {
+                if (!(rule.uuid in expandedStates)) {
+                    initialStates[rule.uuid] = allExpanded;
+                }
+            });
+            if (Object.keys(initialStates).length > 0) {
+                setExpandedStates(prev => ({ ...prev, ...initialStates }));
+            }
+        }
+    }, [rules, collapsible, allExpanded]);
+
     // Generate unified rightAction if not provided
     const rightAction = customRightAction ?? (
-        (showAddApiKeyButton || showCreateRuleButton) ? (
-            <Stack direction="row" spacing={1}>
-                {showAddApiKeyButton && (
-                    <Tooltip title="Add new API Key">
-                        <Button
-                            variant="outlined"
-                            startIcon={<KeyIcon />}
-                            onClick={handleAddApiKeyClick}
-                            size="small"
-                        >
-                            New Key
-                        </Button>
-                    </Tooltip>
-                )}
-                {showCreateRuleButton && (
-                    <Tooltip title="Create new routing rule">
-                        <Button
-                            variant="contained"
-                            startIcon={<AddIcon />}
-                            onClick={handleCreateRule}
-                            size="small"
-                        >
-                            New Rule
-                        </Button>
-                    </Tooltip>
-                )}
-            </Stack>
-        ) : null
+        <Stack direction="row" spacing={1}>
+            {showExpandCollapseButton && collapsible && (
+                <Tooltip title={allExpanded ? "Collapse all rules" : "Expand all rules"}>
+                    <Button
+                        variant="outlined"
+                        startIcon={allExpanded ? <UnfoldMoreIcon /> : <ExpandMoreIcon />}
+                        onClick={handleToggleExpandAll}
+                        size="small"
+                    >
+                        {allExpanded ? "Collapse" : "Expand"}
+                    </Button>
+                </Tooltip>
+            )}
+            {showAddApiKeyButton && (
+                <Tooltip title="Add new API Key">
+                    <Button
+                        variant="outlined"
+                        startIcon={<KeyIcon />}
+                        onClick={handleAddApiKeyClick}
+                        size="small"
+                    >
+                        New Key
+                    </Button>
+                </Tooltip>
+            )}
+            {showCreateRuleButton && (
+                <Tooltip title="Create new routing rule">
+                    <Button
+                        variant="contained"
+                        startIcon={<AddIcon />}
+                        onClick={handleCreateRule}
+                        size="small"
+                    >
+                        New Rule
+                    </Button>
+                </Tooltip>
+            )}
+        </Stack>
     );
 
     // Scroll to new rule when it's created (within the scrollable container)
@@ -251,13 +305,12 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
                                         onProviderModelsChange={handleProviderModelsChange}
                                         onRefreshProvider={handleRefreshModels}
                                         collapsible={collapsible}
-                                        initiallyExpanded={
-                                            collapsible
-                                        }
+                                        initiallyExpanded={expandedStates[rule.uuid] ?? collapsible}
                                         onModelSelectOpen={openModelSelectDialog}
                                         allowDeleteRule={allowDeleteRule}
                                         onRuleDelete={onRuleDelete}
                                         allowToggleRule={allowToggleRule}
+                                        onToggleExpanded={() => handleRuleExpandToggle(rule.uuid)}
                                     />
                                 )}
                             </div>
