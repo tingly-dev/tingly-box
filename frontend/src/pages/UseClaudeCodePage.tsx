@@ -10,8 +10,10 @@ import {
     DialogTitle,
     ToggleButton,
     ToggleButtonGroup,
+    Tooltip,
     Typography
 } from '@mui/material';
+import InfoOutlined from '@mui/icons-material/InfoOutlined';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -470,53 +472,60 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                             >
                                 {t('claudeCode.modal.showGuide')}
                             </Button>
-
-                            
                         }
                     >
-                        <Box sx={{ mb: 2 }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                                Configure Claude Code to use Tingly Box as your AI model proxy
-                            </Typography>
-                            {CONFIG_MODES.filter(m => m.enabled).map((mode) => (
-                                <Box key={mode.value} sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                                    <Typography variant="body2" color="text.secondary">
-                                        <Box component="span" sx={{ fontWeight: 600, color: 'primary.main' }}>
-                                            {mode.label}:
-                                        </Box> {mode.description}
-                                    </Typography>
-                                </Box>
-                            ))}
+                        {/* Mode selection row */}
+                        <Box sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            py: 2,
+                            gap: 3,
+                            borderBottom: '1px solid',
+                            borderColor: 'divider'
+                        }}>
+                            {/* Label with info tooltip */}
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
+                                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                    Mode
+                                </Typography>
+                                <Tooltip
+                                    title={
+                                        <>
+                                            Unified: Single model for all requests
+                                            <br />
+                                            Separate: Distinct models for each variant
+                                        </>
+                                    }
+                                    arrow
+                                >
+                                    <InfoOutlined sx={{ fontSize: '1rem', color: 'text.secondary', cursor: 'help' }} />
+                                </Tooltip>
+                            </Box>
+
+                            {/* Toggle buttons */}
+                            <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                                <ToggleButtonGroup
+                                    value={configMode}
+                                    exclusive
+                                    size="small"
+                                    onChange={(_, value) => value && handleConfigModeChange(value)}
+                                    sx={ToggleButtonGroupStyle}
+                                >
+                                    {CONFIG_MODES.filter(m => m.enabled).map((mode) => (
+                                        <ToggleButton
+                                            key={mode.value}
+                                            value={mode.value}
+                                            sx={ToggleButtonStyle}
+                                        >
+                                            {mode.label}
+                                        </ToggleButton>
+                                    ))}
+                                </ToggleButtonGroup>
+                            </Box>
                         </Box>
 
-                        {/* Mode switch - controlled by feature flag */}
-                        {isFeatureEnabled(FEATURE_FLAGS.CLAUDE_CODE_MODE_SWITCH) && (
-                            <>
-                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 2 }}>
-                                    <ToggleButtonGroup
-                                        value={configMode}
-                                        exclusive
-                                        size="small"
-                                        onChange={(_, value) => value && handleConfigModeChange(value)}
-                                        sx={ToggleButtonGroupStyle}
-                                    >
-                                        {CONFIG_MODES.filter(m => m.enabled).map((mode) => (
-                                            <ToggleButton
-                                                key={mode.value}
-                                                value={mode.value}
-                                                sx={ToggleButtonStyle}
-                                            >
-                                                {mode.label}
-                                            </ToggleButton>
-                                        ))}
-                                    </ToggleButtonGroup>
-
-                                    {/* Experimental Features - collapsible section */}
-                                    <ExperimentalFeatures scenario="claude_code" />
-                                </Box>
-                            </>
-                        )}
-
+                        {/* Experimental Features row */}
+                        <ExperimentalFeatures scenario="claude_code" />
 
                     </UnifiedCard>
 

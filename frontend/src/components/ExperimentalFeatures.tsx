@@ -1,7 +1,7 @@
 import {
     Box,
-    Button,
-    ButtonGroup,
+    ToggleButton,
+    ToggleButtonGroup,
     Tooltip,
     Typography,
 } from '@mui/material';
@@ -68,42 +68,35 @@ const ExperimentalFeatures: React.FC<ExperimentalFeaturesProps> = ({ scenario })
     }
 
     return (
-        <Box sx={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', py: 2, gap: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', py: 2, gap: 3 }}>
             {/* Label */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Science sx={{ fontSize: '1rem', color: 'text.secondary' }} />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                     Experimental
                 </Typography>
+                <Tooltip title="Experimental Features Control" arrow>
+                    <Science sx={{ fontSize: '1rem', color: 'text.secondary' }} />
+                </Tooltip>
             </Box>
 
             {/* Feature toggles */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
                 {FEATURES.map((feature) => (
                     <Tooltip key={feature.key} title={feature.description} arrow>
-                        <ButtonGroup
+                        <ToggleButtonGroup
                             size="small"
                             sx={ToggleButtonGroupStyle}
+                            exclusive
+                            value={features[feature.key] ? 'on' : 'off'}
+                            onChange={() => setFeature(feature.key, !features[feature.key])}
                         >
-                        <Button
-                            variant={features[feature.key] ? 'outlined' : 'contained'}
-                            onClick={() => setFeature(feature.key, false)}
-                            sx={{
-                                ...(features[feature.key] === false && ToggleButtonStyle),
-                            }}
-                        >
-                            Off
-                        </Button>
-                        <Button
-                            variant={features[feature.key] ? 'contained' : 'outlined'}
-                            onClick={() => setFeature(feature.key, true)}
-                            sx={{
-                                ...(features[feature.key] === true && ToggleButtonStyle),
-                            }}
-                        >
-                            {feature.label}
-                        </Button>
-                    </ButtonGroup>
+                            <ToggleButton value="off" sx={ToggleButtonStyle}>
+                                Off
+                            </ToggleButton>
+                            <ToggleButton value="on" sx={ToggleButtonStyle}>
+                                {feature.label}
+                            </ToggleButton>
+                        </ToggleButtonGroup>
                     </Tooltip>
                 ))}
             </Box>

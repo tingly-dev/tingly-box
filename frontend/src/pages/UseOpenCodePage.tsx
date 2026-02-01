@@ -3,7 +3,7 @@ import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ExperimentalFeatures from "@/components/ExperimentalFeatures.tsx";
 import { ContentCopy as CopyIcon } from '@mui/icons-material';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import { Box, Button, IconButton, Tooltip } from '@mui/material';
+import { Box, Button, Divider, IconButton, Tooltip } from '@mui/material';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ApiConfigRow } from '@/components/ApiConfigRow';
@@ -211,6 +211,8 @@ const UseOpenCodePage: React.FC = () => {
                     >
                         {header}
 
+                        <Divider></Divider>
+                        
                         {/* Experimental Features - collapsible section */}
                         <ExperimentalFeatures scenario="opencode" />
                     </UnifiedCard>
