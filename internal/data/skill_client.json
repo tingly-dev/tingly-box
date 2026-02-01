@@ -29,7 +29,7 @@
       "icon": "💡",
       "supports_symlink": true,
       "scan_patterns": [
-        "**/*.md"
+        "**/SKILL.md"
       ]
     },
     {
