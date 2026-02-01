@@ -370,7 +370,7 @@ func resolvePath(homeDir, path string) string {
 }
 
 // loadClientConfig loads IDE client scanning configuration
-// First uses embedded default config, then appends user's custom config
+// First uses embedded default config, then merges user's custom config
 func (sm *SkillManager) loadClientConfig() ([]typ.IDEAdapter, error) {
 	// Parse embedded default config first
 	var defaultConfig struct {
@@ -404,8 +404,7 @@ func (sm *SkillManager) loadClientConfig() ([]typ.IDEAdapter, error) {
 		return nil, fmt.Errorf("failed to parse user config: %w", err)
 	}
 
-	// Merge: append user's adapters after default ones
-	// User can override existing adapters by using the same key
+	// Merge: user can override existing adapters by using the same key
 	userAdapterMap := make(map[string]typ.IDEAdapter)
 	for _, adapter := range userConfig.Adapters {
 		userAdapterMap[string(adapter.Key)] = adapter
