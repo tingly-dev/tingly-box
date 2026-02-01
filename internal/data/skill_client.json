@@ -10,7 +10,12 @@
       "scan_patterns": [
         "skills/**/*.md",
         "**/SKILL.md"
-      ]
+      ],
+      "grouping_strategy": {
+        "mode": "pattern",
+        "group_pattern": "skills",
+        "min_files_for_split": 5
+      }
     },
     {
       "key": "opencode",
@@ -20,7 +25,12 @@
       "supports_symlink": true,
       "scan_patterns": [
         "skill/**/*.md"
-      ]
+      ],
+      "grouping_strategy": {
+        "mode": "pattern",
+        "group_pattern": "skills",
+        "min_files_for_split": 5
+      }
     },
     {
       "key": "vscode",
@@ -30,7 +40,10 @@
       "supports_symlink": true,
       "scan_patterns": [
         "**/SKILL.md"
-      ]
+      ],
+      "grouping_strategy": {
+        "mode": "flat"
+      }
     },
     {
       "key": "cursor",
@@ -40,7 +53,12 @@
       "supports_symlink": false,
       "scan_patterns": [
         "skills/**/*.md"
-      ]
+      ],
+      "grouping_strategy": {
+        "mode": "pattern",
+        "group_pattern": "skills",
+        "min_files_for_split": 5
+      }
     },
     {
       "key": "codex",
@@ -50,7 +68,11 @@
       "supports_symlink": true,
       "scan_patterns": [
         "skills/**/*.md"
-      ]
+      ],
+      "grouping_strategy": {
+        "mode": "auto",
+        "min_files_for_split": 5
+      }
     },
     {
       "key": "antigravity",
@@ -60,7 +82,11 @@
       "supports_symlink": true,
       "scan_patterns": [
         "skills/**/*.md"
-      ]
+      ],
+      "grouping_strategy": {
+        "mode": "auto",
+        "min_files_for_split": 5
+      }
     },
     {
       "key": "amp",
@@ -70,7 +96,11 @@
       "supports_symlink": true,
       "scan_patterns": [
         "skills/**/*.md"
-      ]
+      ],
+      "grouping_strategy": {
+        "mode": "auto",
+        "min_files_for_split": 5
+      }
     },
     {
       "key": "kilo-code",
@@ -80,7 +110,11 @@
       "supports_symlink": true,
       "scan_patterns": [
         "skills/**/*.md"
-      ]
+      ],
+      "grouping_strategy": {
+        "mode": "auto",
+        "min_files_for_split": 5
+      }
     },
     {
       "key": "roo-code",
@@ -90,7 +124,11 @@
       "supports_symlink": true,
       "scan_patterns": [
         "skills/**/*.md"
-      ]
+      ],
+      "grouping_strategy": {
+        "mode": "auto",
+        "min_files_for_split": 5
+      }
     },
     {
       "key": "goose",
@@ -100,7 +138,11 @@
       "supports_symlink": true,
       "scan_patterns": [
         "skills/**/*.md"
-      ]
+      ],
+      "grouping_strategy": {
+        "mode": "auto",
+        "min_files_for_split": 5
+      }
     },
     {
       "key": "gemini-cli",
@@ -110,7 +152,11 @@
       "supports_symlink": true,
       "scan_patterns": [
         "skills/**/*.md"
-      ]
+      ],
+      "grouping_strategy": {
+        "mode": "auto",
+        "min_files_for_split": 5
+      }
     },
     {
       "key": "github-copilot",
@@ -120,7 +166,11 @@
       "supports_symlink": true,
       "scan_patterns": [
         "skills/**/*.md"
-      ]
+      ],
+      "grouping_strategy": {
+        "mode": "auto",
+        "min_files_for_split": 5
+      }
     },
     {
       "key": "clawdbot",
@@ -130,7 +180,11 @@
       "supports_symlink": true,
       "scan_patterns": [
         "skills/**/*.md"
-      ]
+      ],
+      "grouping_strategy": {
+        "mode": "auto",
+        "min_files_for_split": 5
+      }
     },
     {
       "key": "droid",
@@ -140,7 +194,11 @@
       "supports_symlink": true,
       "scan_patterns": [
         "skills/**/*.md"
-      ]
+      ],
+      "grouping_strategy": {
+        "mode": "auto",
+        "min_files_for_split": 5
+      }
     },
     {
       "key": "windsurf",
@@ -150,7 +208,11 @@
       "supports_symlink": true,
       "scan_patterns": [
         "skills/**/*.md"
-      ]
+      ],
+      "grouping_strategy": {
+        "mode": "auto",
+        "min_files_for_split": 5
+      }
     }
   ]
 }

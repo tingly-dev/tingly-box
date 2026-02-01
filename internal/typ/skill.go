@@ -37,6 +37,19 @@ type IDEAdapter struct {
 	// Patterns are relative to the detected IDE base directory (relative_detect_dir).
 	// If empty, defaults to ["**/*.md"]
 	ScanPatterns []string `json:"scan_patterns,omitempty"`
+	// GroupingStrategy defines how skills should be grouped in the UI
+	GroupingStrategy *GroupingStrategy `json:"grouping_strategy,omitempty"`
+}
+
+// GroupingStrategy defines how skills should be grouped in the UI
+type GroupingStrategy struct {
+	// Mode: "flat" (no grouping), "auto" (automatic based on file count), "pattern" (by pattern)
+	Mode string `json:"mode"`
+	// GroupPattern: pattern for grouping when mode="pattern", e.g., "skills" groups by skills directory
+	// The pattern is searched in the file path, and everything up to (and including) the match becomes the group key
+	GroupPattern string `json:"group_pattern,omitempty"`
+	// MinFilesForSplit: minimum files before splitting a group (only for auto mode)
+	MinFilesForSplit int `json:"min_files_for_split,omitempty"`
 }
 
 // SkillLocation represents a skill location (directory)
@@ -50,6 +63,8 @@ type SkillLocation struct {
 	IsAutoDiscovered bool      `json:"is_auto_discovered,omitempty"`
 	IsInstalled      bool      `json:"is_installed,omitempty"`
 	LastScannedAt    time.Time `json:"last_scanned_at,omitempty"`
+	// GroupingStrategy: optional override for this specific location
+	GroupingStrategy *GroupingStrategy `json:"grouping_strategy,omitempty"`
 }
 
 // Skill represents a single skill file
