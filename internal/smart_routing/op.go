@@ -48,54 +48,56 @@ var Operations = []SmartOp{
 		},
 	},
 
-	// System message operations
+	// Context system message operations
 	{
-		Position:  PositionSystem,
-		Operation: OpSystemAnyContains,
+		Position:  PositionContextSystem,
+		Operation: OpContextSystemContains,
 		Meta: SmartOpMeta{
 			Description: "Any system messages contain the value",
 			Type:        ValueTypeString,
 		},
 	},
 	{
-		Position:  PositionSystem,
-		Operation: OpSystemRegex,
+		Position:  PositionContextSystem,
+		Operation: OpContextSystemRegex,
 		Meta: SmartOpMeta{
 			Description: "Any system messages match regex pattern",
 			Type:        ValueTypeString,
 		},
 	},
 
-	// User message operations
+	// Context user message operations
 	{
-		Position:  PositionUser,
-		Operation: OpUserAnyContains,
+		Position:  PositionContextUser,
+		Operation: OpContextUserContains,
 		Meta: SmartOpMeta{
 			Description: "Any user messages contain the value",
 			Type:        ValueTypeString,
 		},
 	},
 	{
-		Position:  PositionUser,
-		Operation: OpUserContains,
-		Meta: SmartOpMeta{
-			Description: "Lastest message is `user` role and it contains the value",
-			Type:        ValueTypeString,
-		},
-	},
-	{
-		Position:  PositionUser,
-		Operation: OpUserRegex,
+		Position:  PositionContextUser,
+		Operation: OpContextUserRegex,
 		Meta: SmartOpMeta{
 			Description: "Combined user messages match regex pattern",
 			Type:        ValueTypeString,
 		},
 	},
+
+	// Latest user message operations
 	{
-		Position:  PositionUser,
-		Operation: OpUserRequestType,
+		Position:  PositionLatestUser,
+		Operation: OpLatestUserContains,
 		Meta: SmartOpMeta{
-			Description: "Lastest message is `user` role and check its content type (e.g., 'image')",
+			Description: "Latest user message contains the value",
+			Type:        ValueTypeString,
+		},
+	},
+	{
+		Position:  PositionLatestUser,
+		Operation: OpLatestUserRequestType,
+		Meta: SmartOpMeta{
+			Description: "Latest user message content type (e.g., 'image')",
 			Type:        ValueTypeString,
 		},
 	},
@@ -155,12 +157,13 @@ var Operations = []SmartOp{
 }
 
 const (
-	PositionModel    SmartOpPosition = "model"    // Request model name
-	PositionThinking SmartOpPosition = "thinking" // Thinking mode enabled
-	PositionSystem   SmartOpPosition = "system"   // System message content
-	PositionUser     SmartOpPosition = "user"     // User message content
-	PositionToolUse  SmartOpPosition = "tool_use" // Tool use/name
-	PositionToken    SmartOpPosition = "token"    // Token count
+	PositionModel         SmartOpPosition = "model"          // Request model name
+	PositionThinking      SmartOpPosition = "thinking"       // Thinking mode enabled
+	PositionContextSystem SmartOpPosition = "context_system" // System message content in context
+	PositionContextUser   SmartOpPosition = "context_user"   // User message content in context
+	PositionLatestUser    SmartOpPosition = "latest_user"    // Latest user message
+	PositionToolUse       SmartOpPosition = "tool_use"       // Tool use/name
+	PositionToken         SmartOpPosition = "token"          // Token count
 )
 
 const (
@@ -173,15 +176,17 @@ const (
 	OpThinkingEnabled  SmartOpOperation = "enabled"  // Thinking mode is enabled
 	OpThinkingDisabled SmartOpOperation = "disabled" // Thinking mode is disabled
 
-	// System message operations
-	OpSystemAnyContains SmartOpOperation = "any_contains" // Any system messages contain the value
-	OpSystemRegex       SmartOpOperation = "regex"        // Any system messages match regex pattern
+	// Context system message operations
+	OpContextSystemContains SmartOpOperation = "contains" // Any system messages contain the value
+	OpContextSystemRegex    SmartOpOperation = "regex"    // Any system messages match regex pattern
 
-	// User message operations
-	OpUserAnyContains SmartOpOperation = "any_contains" // Any user messages contain the value
-	OpUserContains    SmartOpOperation = "contains"     // Latest message is `user` role and it contains the value
-	OpUserRegex       SmartOpOperation = "regex"        // Combined user messages match regex pattern
-	OpUserRequestType SmartOpOperation = "type"         // Latest message is `user` role and check its content type
+	// Context user message operations
+	OpContextUserContains SmartOpOperation = "contains" // Any user messages contain the value
+	OpContextUserRegex    SmartOpOperation = "regex"    // Combined user messages match regex pattern
+
+	// Latest user message operations
+	OpLatestUserContains    SmartOpOperation = "contains" // Latest user message contains the value
+	OpLatestUserRequestType SmartOpOperation = "type"     // Latest user message content type
 
 	// Tool use operations
 	OpToolUseEquals   SmartOpOperation = "equals"   // Latest message is `tool use` and its name equals the value

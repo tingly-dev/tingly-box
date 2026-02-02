@@ -22,7 +22,7 @@ func TestSmartRouting_Integration_OpenAI(t *testing.T) {
 					Value:     "gpt",
 				},
 			},
-			Services: []loadbalance.Service{
+			Services: []*loadbalance.Service{
 				{
 					Provider: "openai-provider",
 					Model:    "gpt-4",
@@ -69,7 +69,7 @@ func TestSmartRouting_Integration_Anthropic(t *testing.T) {
 					Value:     "true",
 				},
 			},
-			Services: []loadbalance.Service{
+			Services: []*loadbalance.Service{
 				{
 					Provider: "thinking-provider",
 					Model:    "claude-3-5-sonnet-20241022",
@@ -87,7 +87,7 @@ func TestSmartRouting_Integration_Anthropic(t *testing.T) {
 					Value:     "haiku",
 				},
 			},
-			Services: []loadbalance.Service{
+			Services: []*loadbalance.Service{
 				{
 					Provider: "haiku-provider",
 					Model:    "claude-3-5-haiku-20241022",
@@ -195,7 +195,7 @@ func TestValidateSmartOp(t *testing.T) {
 			name: "invalid position",
 			op: SmartOp{
 				Position:  SmartOpPosition("invalid"),
-				Operation: "any_contains",
+				Operation: "contains",
 				Value:     "test",
 			},
 			wantErr: true,
@@ -238,7 +238,7 @@ func TestValidateSmartRouting(t *testing.T) {
 						Value:     "haiku",
 					},
 				},
-				Services: []loadbalance.Service{
+				Services: []*loadbalance.Service{
 					{
 						Provider: "provider-1",
 						Model:    "gpt-4",
@@ -260,7 +260,7 @@ func TestValidateSmartRouting(t *testing.T) {
 						Value:     "haiku",
 					},
 				},
-				Services: []loadbalance.Service{
+				Services: []*loadbalance.Service{
 					{
 						Provider: "provider-1",
 						Model:    "gpt-4",
@@ -276,7 +276,7 @@ func TestValidateSmartRouting(t *testing.T) {
 			rule: SmartRouting{
 				Description: "Test rule",
 				Ops:         []SmartOp{},
-				Services: []loadbalance.Service{
+				Services: []*loadbalance.Service{
 					{
 						Provider: "provider-1",
 						Model:    "gpt-4",
@@ -298,7 +298,7 @@ func TestValidateSmartRouting(t *testing.T) {
 						Value:     "haiku",
 					},
 				},
-				Services: []loadbalance.Service{},
+				Services: []*loadbalance.Service{},
 			},
 			wantErr: true,
 		},
@@ -332,7 +332,7 @@ func TestNewRouter(t *testing.T) {
 							Value:     "haiku",
 						},
 					},
-					Services: []loadbalance.Service{
+					Services: []*loadbalance.Service{
 						{
 							Provider: "provider-1",
 							Model:    "gpt-4",
@@ -376,7 +376,7 @@ func TestRouter_EvaluateRequest(t *testing.T) {
 					Value:     "haiku",
 				},
 			},
-			Services: []loadbalance.Service{
+			Services: []*loadbalance.Service{
 				{
 					Provider: "haiku-provider",
 					Model:    "claude-3-5-haiku-20241022",

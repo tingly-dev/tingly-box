@@ -72,7 +72,7 @@ type SmartRouting struct {
 // IsValid checks if the position is valid
 func (p SmartOpPosition) IsValid() bool {
 	switch p {
-	case PositionModel, PositionThinking, PositionSystem, PositionUser, PositionToolUse, PositionToken:
+	case PositionModel, PositionThinking, PositionContextSystem, PositionContextUser, PositionLatestUser, PositionToolUse, PositionToken:
 		return true
 	default:
 		return false
