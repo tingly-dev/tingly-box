@@ -572,13 +572,14 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                                     sx={ToggleButtonGroupStyle}
                                 >
                                     {CONFIG_MODES.filter(m => m.enabled).map((mode) => (
-                                        <ToggleButton
-                                            key={mode.value}
-                                            value={mode.value}
-                                            sx={ToggleButtonStyle}
-                                        >
-                                            {mode.label}
-                                        </ToggleButton>
+                                        <Tooltip key={mode.value} title={mode.description} arrow>
+                                            <ToggleButton
+                                                value={mode.value}
+                                                sx={ToggleButtonStyle}
+                                            >
+                                                {mode.label}
+                                            </ToggleButton>
+                                        </Tooltip>
                                     ))}
                                 </ToggleButtonGroup>
                             </Box>
