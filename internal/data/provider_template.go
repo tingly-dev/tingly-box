@@ -13,6 +13,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -31,16 +33,25 @@ const TemplateGitHubURL = "https://raw.githubusercontent.com/tingly-dev/tingly-b
 
 // CapabilitySchema defines the structure for capability schemas like web_search
 type CapabilitySchema struct {
-	BuiltIn      bool         `json:"built_in"`
-	ToolType     string       `json:"tool_type,omitempty"`
-	ToolName     string       `json:"tool_name,omitempty"`
-	DocURL       string       `json:"doc_url,omitempty"`
-	ResultFormat ResultFormat `json:"result_format,omitempty"`
+	BuiltIn       bool          `json:"built_in"`
+	ToolType      string        `json:"tool_type,omitempty"`
+	ToolName      string        `json:"tool_name,omitempty"`
+	DocURL        string        `json:"doc_url,omitempty"`
+	RequestFormat RequestFormat `json:"request_format,omitempty"`
+	ResultFormat  ResultFormat  `json:"result_format,omitempty"`
+}
+
+// RequestFormat describes how to format tool requests for a specific provider
+type RequestFormat struct {
+	Type        string                 `json:"type"`                  // e.g., "openai_tool_extension"
+	Description string                 `json:"description,omitempty"`
+	Structure   map[string]interface{} `json:"structure,omitempty"` // The tool structure to use
 }
 
 // ResultFormat describes how to format tool results
 type ResultFormat struct {
 	Type        string                 `json:"type"`
+	Field       string                 `json:"field,omitempty"` // Field name for top-level results (e.g., "web_search")
 	Description string                 `json:"description,omitempty"`
 	Structure   map[string]interface{} `json:"structure,omitempty"`
 }
@@ -217,14 +228,19 @@ func (tm *TemplateManager) FetchFromGitHub(ctx context.Context) (*ProviderTempla
 		for k, v := range tm.templates {
 			providers[k] = v
 		}
+		schemas := make(map[string]*CapabilitySchema, len(tm.capabilitySchemas))
+		for k, v := range tm.capabilitySchemas {
+			schemas[k] = v
+		}
 		version := tm.version
 		lastUpdated := tm.lastUpdated
 		tm.mu.RUnlock()
 
 		return &ProviderTemplateRegistry{
-			Providers:   providers,
-			Version:     version,
-			LastUpdated: lastUpdated.Format(time.RFC3339),
+			Providers:         providers,
+			CapabilitySchemas: schemas,
+			Version:           version,
+			LastUpdated:       lastUpdated.Format(time.RFC3339),
 		}, nil
 	}
 
@@ -340,6 +356,7 @@ func (tm *TemplateManager) Initialize(ctx context.Context) error {
 	if err := tm.loadEmbeddedTemplates(); err != nil {
 		return err
 	}
+	logrus.Debugf("[Initialize] Embedded loaded: providers=%d, schemas=%d", len(tm.templates), len(tm.capabilitySchemas))
 
 	switch tm.sourcePreference {
 	case PreferenceEmbedded:
@@ -365,8 +382,10 @@ func (tm *TemplateManager) Initialize(ctx context.Context) error {
 			cachedRegistry, err := tm.loadCache()
 			if err == nil && cachedRegistry != nil {
 				// Cache hit - use cached templates
+				logrus.Debugf("[Initialize] Cache hit: providers=%d, schemas=%d", len(cachedRegistry.Providers), len(cachedRegistry.CapabilitySchemas))
 				tm.mu.Lock()
 				tm.templates = cachedRegistry.Providers
+				tm.capabilitySchemas = cachedRegistry.CapabilitySchemas
 				tm.lastUpdated = time.Now()
 				tm.version = cachedRegistry.Version
 				tm.mu.Unlock()
@@ -380,6 +399,7 @@ func (tm *TemplateManager) Initialize(ctx context.Context) error {
 			registry, err := tm.FetchFromGitHub(ctx)
 			if err == nil {
 				// GitHub fetch successful - save to cache
+				logrus.Debugf("[Initialize] GitHub fetch successful: providers=%d, schemas=%d", len(registry.Providers), len(registry.CapabilitySchemas))
 				_ = tm.saveCache(registry) // Ignore save errors, we have the data
 
 				tm.sourceMu.Lock()
@@ -456,6 +476,8 @@ func (tm *TemplateManager) findTemplateByProvider(provider *typ.Provider) *Provi
 	tm.mu.RLock()
 	defer tm.mu.RUnlock()
 
+	logrus.Debugf("[findTemplate] Looking for template: name=%s, api_base=%s, api_style=%s", provider.Name, provider.APIBase, provider.APIStyle)
+
 	// OAuth providers: match by OAuthProvider only, no fallback
 	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
 		oauthProviderType := provider.OAuthDetail.ProviderType
@@ -475,15 +497,33 @@ func (tm *TemplateManager) findTemplateByProvider(provider *typ.Provider) *Provi
 	// Determine which base URL field to match based on APIStyle
 	switch provider.APIStyle {
 	case protocol.APIStyleAnthropic:
-		return tm.searchTemplates(func(tmpl *ProviderTemplate) bool {
-			return tmpl.BaseURLAnthropic == apiBase
+		logrus.Debugf("[findTemplate] Searching for Anthropic template matching: %s", apiBase)
+		result := tm.searchTemplates(func(tmpl *ProviderTemplate) bool {
+			match := tmpl.BaseURLAnthropic == apiBase
+			if match {
+				logrus.Debugf("[findTemplate] FOUND matching Anthropic template: %s", tmpl.ID)
+			}
+			return match
 		})
+		if result == nil {
+			logrus.Warnf("[findTemplate] No Anthropic template match for api_base=%s", apiBase)
+		}
+		return result
 	case protocol.APIStyleOpenAI:
 		fallthrough
 	default:
-		return tm.searchTemplates(func(tmpl *ProviderTemplate) bool {
-			return tmpl.BaseURLOpenAI == apiBase
+		logrus.Debugf("[findTemplate] Searching for OpenAI template matching: %s", apiBase)
+		result := tm.searchTemplates(func(tmpl *ProviderTemplate) bool {
+			match := tmpl.BaseURLOpenAI == apiBase
+			if match {
+				logrus.Debugf("[findTemplate] FOUND matching OpenAI template: %s", tmpl.ID)
+			}
+			return match
 		})
+		if result == nil {
+			logrus.Warnf("[findTemplate] No OpenAI template match for api_base=%s", apiBase)
+		}
+		return result
 	}
 }
 
@@ -631,12 +671,18 @@ func (tm *TemplateManager) GetMaxTokensForModelByProvider(provider *typ.Provider
 // Returns nil if the provider doesn't have web_search_schema defined or the schema doesn't exist
 func (tm *TemplateManager) GetWebSearchSchemaForProvider(provider *typ.Provider) *CapabilitySchema {
 	if tm == nil || provider == nil {
+		logrus.Warnf("[GetWebSearchSchema] nil manager or provider")
 		return nil
 	}
 
 	// Find matching template
 	tmpl := tm.findTemplateByProvider(provider)
-	if tmpl == nil || tmpl.WebSearchSchema == "" {
+	if tmpl == nil {
+		logrus.Warnf("[GetWebSearchSchema] No template found for provider: name=%s, api_base=%s, api_style=%s", provider.Name, provider.APIBase, provider.APIStyle)
+		return nil
+	}
+	logrus.Debugf("[GetWebSearchSchema] Template found: id=%s, web_search_schema='%s'", tmpl.ID, tmpl.WebSearchSchema)
+	if tmpl.WebSearchSchema == "" {
 		return nil
 	}
 
@@ -654,6 +700,7 @@ func (tm *TemplateManager) GetWebSearchSchemaForProvider(provider *typ.Provider)
 		return schema
 	}
 
+	logrus.Warnf("[GetWebSearchSchema] Schema '%s' not found in registry", tmpl.WebSearchSchema)
 	return nil
 }
 
@@ -666,4 +713,20 @@ func (tm *TemplateManager) ProviderHasBuiltInWebSearch(provider *typ.Provider) b
 
 	schema := tm.GetWebSearchSchemaForProvider(provider)
 	return schema != nil && schema.BuiltIn
+}
+
+// GetOpenAIBaseURLForProvider returns the OpenAI base URL from the template for a provider
+// This is used when we need to route a request to the OpenAI endpoint instead of the current API style
+// Returns empty string if no OpenAI endpoint is available
+func (tm *TemplateManager) GetOpenAIBaseURLForProvider(provider *typ.Provider) string {
+	if tm == nil || provider == nil {
+		return ""
+	}
+
+	tmpl := tm.findTemplateByProvider(provider)
+	if tmpl == nil {
+		return ""
+	}
+
+	return tmpl.BaseURLOpenAI
 }
