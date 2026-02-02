@@ -42,6 +42,19 @@
               "refer": "ref_1"
             }
           ]
+        },
+        "field": "web_search"
+      },
+      "tool_name": "web_search",
+      "request_format": {
+        "type": "openai_tool_extension",
+        "description": "GLM uses OpenAI tools format with special web_search type",
+        "structure": {
+          "type": "web_search",
+          "web_search": {
+            "enable": true,
+            "search_result": true
+          }
         }
       }
     }
@@ -329,7 +342,6 @@
       "pricing_doc": "https://docs.x.ai/docs/models?cluster=us-east-1#models-and-pricing",
       "base_url_openai": "https://api.x.ai/v1/",
       "base_url_anthropic": "https://api.x.ai/v1",
-
       "models": [
         "grok-4-1-fast-reasoning",
         "grok-4-1-fast-non-reasoning",
@@ -342,7 +354,6 @@
         "grok-2-vision-1212",
         "grok-2-image-1212"
       ],
-
       "model_limits": {
         "grok-4-1-fast-reasoning": 2000000,
         "grok-4-1-fast-non-reasoning": 2000000,
