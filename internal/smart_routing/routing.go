@@ -58,10 +58,12 @@ func (r *Router) evaluateOp(ctx *RequestContext, op *SmartOp) bool {
 		return r.evaluateModelOp(ctx, op)
 	case PositionThinking:
 		return r.evaluateThinkingOp(ctx, op)
-	case PositionSystem:
-		return r.evaluateSystemOp(ctx, op)
-	case PositionUser:
-		return r.evaluateUserOp(ctx, op)
+	case PositionContextSystem:
+		return r.evaluateContextSystemOp(ctx, op)
+	case PositionContextUser:
+		return r.evaluateContextUserOp(ctx, op)
+	case PositionLatestUser:
+		return r.evaluateLatestUserOp(ctx, op)
 	case PositionToolUse:
 		return r.evaluateToolUseOp(ctx, op)
 	case PositionToken:
@@ -230,8 +232,8 @@ func (r *Router) evaluateThinkingOp(ctx *RequestContext, op *SmartOp) bool {
 	}
 }
 
-// evaluateSystemOp evaluates operations on the system message field
-func (r *Router) evaluateSystemOp(ctx *RequestContext, op *SmartOp) bool {
+// evaluateContextSystemOp evaluates operations on the context system message field
+func (r *Router) evaluateContextSystemOp(ctx *RequestContext, op *SmartOp) bool {
 	combined := ctx.CombineMessages(ctx.SystemMessages)
 	value, err := op.String()
 	if err != nil {
@@ -240,9 +242,9 @@ func (r *Router) evaluateSystemOp(ctx *RequestContext, op *SmartOp) bool {
 	}
 
 	switch op.Operation {
-	case OpSystemAnyContains:
+	case OpContextSystemContains:
 		return strings.Contains(combined, value)
-	case OpSystemRegex:
+	case OpContextSystemRegex:
 		// Basic regex support - can be extended with regexp package
 		matched, err := stringsMatch(combined, value, true)
 		if err != nil {
@@ -254,8 +256,8 @@ func (r *Router) evaluateSystemOp(ctx *RequestContext, op *SmartOp) bool {
 	}
 }
 
-// evaluateUserOp evaluates operations on the user message field
-func (r *Router) evaluateUserOp(ctx *RequestContext, op *SmartOp) bool {
+// evaluateContextUserOp evaluates operations on the context user message field
+func (r *Router) evaluateContextUserOp(ctx *RequestContext, op *SmartOp) bool {
 	combined := ctx.CombineMessages(ctx.UserMessages)
 	value, err := op.String()
 	if err != nil {
@@ -264,22 +266,36 @@ func (r *Router) evaluateUserOp(ctx *RequestContext, op *SmartOp) bool {
 	}
 
 	switch op.Operation {
-	case OpUserAnyContains:
+	case OpContextUserContains:
 		return strings.Contains(combined, value)
-	case OpUserContains:
+	case OpContextUserRegex:
+		matched, err := stringsMatch(combined, value, true)
+		if err != nil {
+			return false
+		}
+		return matched
+	default:
+		return false
+	}
+}
+
+// evaluateLatestUserOp evaluates operations on the latest user message field
+func (r *Router) evaluateLatestUserOp(ctx *RequestContext, op *SmartOp) bool {
+	value, err := op.String()
+	if err != nil {
+		log.Printf("[smart_routing] invalid latest user value '%s': %v", op.Value, err)
+		return false
+	}
+
+	switch op.Operation {
+	case OpLatestUserContains:
 		// Check if latest role is user
 		if ctx.LatestRole != "user" {
 			return false
 		}
 		latest := ctx.GetLatestUserMessage()
 		return strings.Contains(latest, value)
-	case OpUserRegex:
-		matched, err := stringsMatch(combined, value, true)
-		if err != nil {
-			return false
-		}
-		return matched
-	case OpUserRequestType:
+	case OpLatestUserRequestType:
 		return ctx.LatestContentType == value
 	default:
 		return false
