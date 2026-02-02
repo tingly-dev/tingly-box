@@ -16,7 +16,7 @@ import { Events } from '@/bindings';
 
 // Lazy load pages for code splitting
 const Login = lazy(() => import('./pages/Login'));
-const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Dashboard = lazy(() => import('./pages/./Guiding'));
 const UseOpenAIPage = lazy(() => import('./pages/UseOpenAIPage'));
 const UseAnthropicPage = lazy(() => import('./pages/UseAnthropicPage'));
 const UseClaudeCodePage = lazy(() => import('./pages/UseClaudeCodePage'));

@@ -22,7 +22,7 @@ interface CardGroup {
     cards: NavCard[];
 }
 
-const Dashboard = () => {
+const Guiding = () => {
     const navigate = useNavigate();
     const { t } = useTranslation();
     const { skillUser, skillIde } = useFeatureFlags();
@@ -302,4 +302,4 @@ const Dashboard = () => {
     );
 };
 
-export default Dashboard;
+export default Guiding;
