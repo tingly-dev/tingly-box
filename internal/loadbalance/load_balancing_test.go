@@ -9,12 +9,12 @@ import (
 
 // mockRule is a minimal mock of typ.Rule for testing
 type mockRule struct {
-	services []loadbalance.Service
+	services []*loadbalance.Service
 }
 
-func (m *mockRule) GetServices() []loadbalance.Service {
+func (m *mockRule) GetServices() []*loadbalance.Service {
 	if m.services == nil {
-		return []loadbalance.Service{}
+		return []*loadbalance.Service{}
 	}
 	return m.services
 }

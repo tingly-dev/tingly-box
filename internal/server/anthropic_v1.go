@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -18,6 +20,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
+	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -539,7 +542,7 @@ func (s *Server) handleInterceptedAnthropicToolCalls(provider *typ.Provider, ori
 	followUpReq.Messages = newMessages
 
 	// Forward to provider for final response
-	finalResponse, err := s.forwardAnthropicRequestV1(provider, followUpReq)
+	finalResponse, err := s.forwardAnthropicRequestV1(provider, followUpReq, scenario)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get final response after tool execution: %w", err)
 	}

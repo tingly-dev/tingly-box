@@ -115,7 +115,7 @@ func (rs *RuleStateStore) HydrateRules(rules []typ.Rule) error {
 
 		// Find the service with matching provider:model and set it as current
 		for j := range rule.Services {
-			svc := &rule.Services[j]
+			svc := rule.Services[j]
 			svcID := svc.Provider + ":" + svc.Model
 			if svcID == serviceID {
 				rule.SetCurrentServiceID(serviceID)

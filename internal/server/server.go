@@ -26,6 +26,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
 	"github.com/tingly-dev/tingly-box/pkg/network"
+	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 	oauth2 "github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
