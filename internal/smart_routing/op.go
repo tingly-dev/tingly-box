@@ -103,7 +103,7 @@ var Operations = []SmartOp{
 	// Tool use operations
 	{
 		Position:  PositionToolUse,
-		Operation: OpToolUseIs,
+		Operation: OpToolUseEquals,
 		Meta: SmartOpMeta{
 			Description: "Latest message is `tool use` and it is name is the value",
 			Type:        ValueTypeString,
@@ -184,7 +184,7 @@ const (
 	OpUserRequestType SmartOpOperation = "type"         // Latest message is `user` role and check its content type
 
 	// Tool use operations
-	OpToolUseIs       SmartOpOperation = "is"       // Latest message is `tool use` and its name is the value
+	OpToolUseEquals   SmartOpOperation = "equals"   // Latest message is `tool use` and its name equals the value
 	OpToolUseContains SmartOpOperation = "contains" // Latest message is `tool use` and its name or arguments contains the value
 
 	// Token operations

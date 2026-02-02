@@ -296,7 +296,7 @@ func (r *Router) evaluateToolUseOp(ctx *RequestContext, op *SmartOp) bool {
 
 	// Check if any tool use matches
 	for _, toolUse := range ctx.ToolUses {
-		if op.Operation == OpToolUseIs && toolUse == value {
+		if op.Operation == OpToolUseEquals && toolUse == value {
 			return true
 		}
 	}
