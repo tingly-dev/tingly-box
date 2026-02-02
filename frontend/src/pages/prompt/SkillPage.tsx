@@ -268,6 +268,14 @@ const SkillPage = () => {
             location.name.toLowerCase().includes(locationSearch.toLowerCase()) ||
             location.path.toLowerCase().includes(locationSearch.toLowerCase());
         return matchesSearch;
+    }).sort((a, b) => {
+        // Stable sort: first by IDE source, then by name
+        const aSource = getIdeSourceLabel(a.ide_source);
+        const bSource = getIdeSourceLabel(b.ide_source);
+        if (aSource !== bSource) {
+            return aSource.localeCompare(bSource);
+        }
+        return a.name.localeCompare(b.name);
     });
 
     // Filter skills
