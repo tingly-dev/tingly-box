@@ -7,6 +7,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider } from './contexts/AuthContext';
 import { VersionProvider, useVersion } from './contexts/VersionContext';
 import { HealthProvider, useHealth } from './contexts/HealthContext';
+import { FeatureFlagsProvider } from './contexts/FeatureFlagsContext';
 import Layout from './layout/Layout';
 import theme from './theme';
 import { CloudUpload, Refresh, Error as ErrorIcon, AppRegistration as NPM, GitHub } from '@mui/icons-material';
@@ -282,8 +283,10 @@ function App() {
                 <HealthProvider>
                     <VersionProvider>
                         <AuthProvider>
-                            <AppContent/>
-                            <AppDialogs/>
+                            <FeatureFlagsProvider>
+                                <AppContent/>
+                                <AppDialogs/>
+                            </FeatureFlagsProvider>
                         </AuthProvider>
                     </VersionProvider>
                 </HealthProvider>

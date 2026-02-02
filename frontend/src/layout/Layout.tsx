@@ -32,11 +32,12 @@ import {
     Popover,
 } from '@mui/material';
 import type { ReactNode } from 'react';
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useHealth } from '../contexts/HealthContext';
 import { useVersion as useAppVersion } from '../contexts/VersionContext';
+import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import VerifiedIcon from '@mui/icons-material/Verified';
 import OpenAI from '@lobehub/icons/es/OpenAI';
 import Anthropic from '@lobehub/icons/es/Anthropic';
@@ -68,6 +69,7 @@ const Layout = ({ children }: LayoutProps) => {
     const location = useLocation();
     const { isHealthy, checking, checkHealth } = useHealth();
     const { hasUpdate, checking: checkingVersion, checkForUpdates, currentVersion, latestVersion } = useAppVersion();
+    const { skillUser, skillIde } = useFeatureFlags();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [homeMenuOpen, setHomeMenuOpen] = useState(true);
     const [credentialMenuOpen, setCredentialMenuOpen] = useState(true);
@@ -98,6 +100,34 @@ const Layout = ({ children }: LayoutProps) => {
     const isGroupActive = (items: MenuItem[]) => {
         return items.some(item => isActive(item.path));
     };
+
+    // Build prompt menu items based on feature flags
+    const promptMenuItems = useMemo(() => {
+        const items: MenuItem[] = [];
+        if (skillUser) {
+            items.push({
+                path: '/prompt/user',
+                label: 'User',
+                icon: <PromptIcon sx={{ fontSize: 20 }} />,
+            });
+        }
+        if (skillIde) {
+            items.push({
+                path: '/prompt/skill',
+                label: 'Skill',
+                icon: <PromptIcon sx={{ fontSize: 20 }} />,
+            });
+        }
+        // Command is always available if either skill feature is enabled
+        if (skillUser || skillIde) {
+            items.push({
+                path: '/prompt/command',
+                label: 'Command',
+                icon: <PromptIcon sx={{ fontSize: 20 }} />,
+            });
+        }
+        return items;
+    }, [skillUser, skillIde]);
 
     const menuGroups: MenuGroup[] = [
         {
@@ -157,28 +187,12 @@ const Layout = ({ children }: LayoutProps) => {
                 },
             ],
         },
-        {
-            key: 'prompt',
+        ...(promptMenuItems.length > 0 ? [{
+            key: 'prompt' as const,
             label: 'Prompt',
             icon: <PromptIcon sx={{ fontSize: 20 }} />,
-            items: [
-                {
-                    path: '/prompt/user',
-                    label: 'User',
-                    icon: <PromptIcon sx={{ fontSize: 20 }} />,
-                },
-                {
-                    path: '/prompt/skill',
-                    label: 'Skill',
-                    icon: <PromptIcon sx={{ fontSize: 20 }} />,
-                },
-                {
-                    path: '/prompt/command',
-                    label: 'Command',
-                    icon: <PromptIcon sx={{ fontSize: 20 }} />,
-                },
-            ],
-        },
+            items: promptMenuItems,
+        }] : []),
         {
             key: 'system',
             label: 'System',
