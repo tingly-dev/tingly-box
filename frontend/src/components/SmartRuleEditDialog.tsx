@@ -21,10 +21,11 @@ import type { SmartRouting, SmartOp } from './RoutingGraphTypes';
 // Position options with descriptions
 const POSITION_OPTIONS = [
     // { value: 'model', label: 'Model', description: 'Request model name' },
+    { value: 'context_system', label: 'System Prompt', description: 'System prompt message in context' },
+    // { value: 'context_user', label: 'User Context', description: 'User messages in context' },
+    { value: 'latest_user', label: 'Latest User', description: 'Latest user message' },
+    // { value: 'tool_use', label: 'Tool Name', description: 'Tool name' },
     { value: 'thinking', label: 'Thinking', description: 'Thinking mode enabled / disable' },
-    { value: 'system', label: 'System Prompt', description: 'System prompt message' },
-    { value: 'user', label: 'User Prompt', description: 'User prompt message' },
-    { value: 'tool_use', label: 'Tool Name', description: 'Tool name' },
     { value: 'token', label: 'Token Count', description: 'Token count' },
 ] as const;
 
@@ -39,15 +40,17 @@ const OPERATION_OPTIONS: Record<string, Array<{ value: string; label: string; de
         { value: 'enabled', label: 'Enabled', description: 'Thinking mode is enabled', valueType: 'bool' },
         { value: 'disabled', label: 'Disabled', description: 'Thinking mode is disabled', valueType: 'bool' },
     ],
-    system: [
-        { value: 'any_contains', label: 'Any Contains', description: 'Any system messages contain the value', valueType: 'string' },
+    context_system: [
+        { value: 'contains', label: 'Contains', description: 'Any system messages contain the value', valueType: 'string' },
         // { value: 'regex', label: 'Regex', description: 'Any system messages match regex pattern', valueType: 'string' },
     ],
-    user: [
-        { value: 'any_contains', label: 'Any Contains', description: 'Any user messages contain the value', valueType: 'string' },
-        { value: 'contains', label: 'Contains', description: 'Latest message is user role and it contains the value', valueType: 'string' },
+    context_user: [
+        { value: 'contains', label: 'Contains', description: 'Any user messages contain the value', valueType: 'string' },
         // { value: 'regex', label: 'Regex', description: 'Combined user messages match regex pattern', valueType: 'string' },
-        // { value: 'type', label: 'Type', description: 'Latest message is user role and check its content type (e.g., image)', valueType: 'string' },
+    ],
+    latest_user: [
+        { value: 'contains', label: 'Contains', description: 'Latest user message contains the value', valueType: 'string' },
+        // { value: 'type', label: 'Type', description: 'Latest user message content type (e.g., image)', valueType: 'string' },
     ],
     tool_use: [
         { value: 'equals', label: 'Equals', description: 'Latest message is tool use and its name equals the value', valueType: 'string' },
