@@ -1,4 +1,4 @@
-import { WarningAmber, Close, Star } from '@mui/icons-material';
+import { WarningAmber, Close } from '@mui/icons-material';
 import {
     Alert,
     Autocomplete,
@@ -19,10 +19,9 @@ import {
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getProvidersByStyle, serviceProviders } from '../services/serviceProviders';
-import api from '../services/api';
+import { api } from '../services/api';
 import { OpenAI } from '@lobehub/icons';
 import { Anthropic } from '@lobehub/icons';
-import ForceAddConfirmDialog from './ForceAddConfirmDialog';
 
 export interface EnhancedProviderFormData {
     name: string;
@@ -73,11 +72,6 @@ const ProviderFormDialog = ({
         modelsCount?: number;
     } | null>(null);
     const [styleChangedWarning, setStyleChangedWarning] = useState(false);
-    const [showForceAddDialog, setShowForceAddDialog] = useState(false);
-    const [forceAddError, setForceAddError] = useState<{
-        message: string;
-        details?: string;
-    } | null>(null);
 
     // Sync noApiKey state with data.noKeyRequired prop
     useEffect(() => {
@@ -150,14 +144,16 @@ const ProviderFormDialog = ({
             )
 
             if (result.success && result.data) {
+                // Check if the provider validation actually succeeded
+                const isValid = result.data.valid !== false;
                 setVerificationResult({
-                    success: true,
+                    success: isValid,
                     message: result.data.message,
-                    details: t('providerDialog.verification.testResult', { result: result.data.test_result }),
+                    details: isValid ? t('providerDialog.verification.testResult', { result: result.data.test_result }) : undefined,
                     responseTime: result.data.response_time_ms,
                     modelsCount: result.data.models_count,
                 });
-                return true;
+                return isValid;
             } else {
                 setVerificationResult({
                     success: false,
@@ -188,35 +184,13 @@ const ProviderFormDialog = ({
         if (shouldVerify) {
             const verified = await handleVerify();
             if (!verified) {
-                // Verification failed, show force-add dialog
-                setForceAddError({
-                    message: verificationResult?.message || t('providerDialog.verification.failed'),
-                    details: verificationResult?.details,
-                });
-                setShowForceAddDialog(true);
+                // Verification failed - user can click "Add Anyway" button to proceed
                 return;
             }
         }
 
         // Call the original onSubmit
         onSubmit(e);
-    };
-
-    // Handle force add confirmation - skip verification and submit directly
-    const handleForceAdd = () => {
-        setShowForceAddDialog(false);
-        // Call the force-add handler if provided, otherwise fallback to onSubmit
-        if (onForceAdd) {
-            onForceAdd();
-        } else {
-            onSubmit(new Event('submit') as any);
-        }
-    };
-
-    // Handle force add cancellation
-    const handleForceAddCancel = () => {
-        setShowForceAddDialog(false);
-        setForceAddError(null);
     };
 
     return (
@@ -541,6 +515,19 @@ const ProviderFormDialog = ({
                 </DialogContent>
                 {data.apiStyle && (
                     <DialogActions sx={{ px: 3, pb: 2, gap: 1, justifyContent: 'flex-end' }}>
+                        {/* Add Anyway button - skip verification */}
+                        {mode === 'add' && (
+                            <Button
+                                type="button"
+                                variant="outlined"
+                                color="warning"
+                                size="small"
+                                onClick={() => onForceAdd?.()}
+                                title="Skip connectivity check and add anyway. The provider may not work correctly if the connection fails."
+                            >
+                                Add Anyway
+                            </Button>
+                        )}
                         <Button type="submit" variant="contained" size="small" disabled={verifying}>
                             {verifying ? (
                                 <>
@@ -554,18 +541,6 @@ const ProviderFormDialog = ({
                     </DialogActions>
                 )}
             </form>
-            <ForceAddConfirmDialog
-                open={showForceAddDialog}
-                error={forceAddError}
-                providerInfo={{
-                    name: data.name,
-                    apiBase: data.apiBase,
-                    apiStyle: data.apiStyle,
-                    hasToken: !!data.token && !noApiKey,
-                }}
-                onConfirm={handleForceAdd}
-                onCancel={handleForceAddCancel}
-            />
         </Dialog>
     );
 };
