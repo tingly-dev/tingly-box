@@ -1,7 +1,6 @@
 import {
     AccountCircle as AccountIcon,
     Dashboard as DashboardIcon,
-    Key as KeyIcon,
     Menu as MenuIcon,
     Settings as SystemIcon,
     Description as LogsIcon,
@@ -54,7 +53,7 @@ const drawerWidth = 260;
 interface MenuItem {
     path: string;
     label: string;
-    icon: ReactNode;
+    icon?: ReactNode;
 }
 
 interface MenuGroup {
@@ -74,7 +73,6 @@ const Layout = ({ children }: LayoutProps) => {
     const { skillUser, skillIde } = useFeatureFlags();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [homeMenuOpen, setHomeMenuOpen] = useState(true);
-    const [credentialMenuOpen, setCredentialMenuOpen] = useState(true);
     const [promptMenuOpen, setPromptMenuOpen] = useState(true);
     const [systemMenuOpen, setSystemMenuOpen] = useState(false);
     const [easterEggAnchorEl, setEasterEggAnchorEl] = useState<HTMLElement | null>(null);
@@ -174,18 +172,14 @@ const Layout = ({ children }: LayoutProps) => {
         },
         {
             key: 'credential',
-            label: t('layout.nav.credential'),
+            label: t('layout.nav.credential', { defaultValue: 'Credentials' }),
             icon: <LockIcon sx={{ fontSize: 20 }} />,
+            standalone: true,
             items: [
                 {
-                    path: '/api-keys',
-                    label: t('layout.nav.apiKeys', { defaultValue: 'API Keys' }),
-                    icon: <KeyIcon sx={{ fontSize: 20 }} />,
-                },
-                {
-                    path: '/oauth',
-                    label: t('layout.nav.oauth', { defaultValue: 'OAuth' }),
-                    icon: <VerifiedIcon sx={{ fontSize: 20 }} />,
+                    path: '/credentials',
+                    label: t('layout.nav.credentials', { defaultValue: 'All Credentials' }),
+                    icon: <LockIcon sx={{ fontSize: 20 }} />,
                 },
             ],
         },
@@ -272,9 +266,6 @@ const Layout = ({ children }: LayoutProps) => {
                         if (isHomeGroup) {
                             isOpen = homeMenuOpen;
                             setIsOpen = setHomeMenuOpen;
-                        } else if (isCredentialGroup) {
-                            isOpen = credentialMenuOpen;
-                            setIsOpen = setCredentialMenuOpen;
                         } else if (isPromptGroup) {
                             isOpen = promptMenuOpen;
                             setIsOpen = setPromptMenuOpen;
