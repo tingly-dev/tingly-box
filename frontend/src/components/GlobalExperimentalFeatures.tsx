@@ -16,7 +16,7 @@ const FEATURES = [
 ] as const;
 
 const SKILL_FEATURES = [
-    { key: 'skill_user', label: 'User Prompt', description: 'Enable User Prompt feature for managing user recordings and templates', icon: 'skill' as const },
+    // { key: 'skill_user', label: 'User Prompt', description: 'Enable User Prompt feature for managing user recordings and templates', icon: 'skill' as const },
     { key: 'skill_ide', label: 'IDE Skills', description: 'Enable IDE Skills feature for managing code snippets and skills from IDEs', icon: 'skill' as const },
 ] as const;
 
@@ -71,40 +71,40 @@ const GlobalExperimentalFeatures: React.FC = () => {
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            {/* Experimental Features */}
-            <Box sx={{ display: 'flex', alignItems: 'center', py: 2, gap: 3 }}>
-                {/* Label */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
-                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                        Experimental
-                    </Typography>
-                    <Tooltip title="Global Experimental Features - Apply to All Scenarios" arrow>
-                        <Public sx={{ fontSize: '1rem', color: 'text.secondary' }} />
-                    </Tooltip>
-                </Box>
+            {/*/!* Experimental Features *!/*/}
+            {/*<Box sx={{ display: 'flex', alignItems: 'center', py: 2, gap: 3 }}>*/}
+            {/*    /!* Label *!/*/}
+            {/*    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>*/}
+            {/*        <Typography variant="body2" sx={{ color: 'text.secondary' }}>*/}
+            {/*            Experimental*/}
+            {/*        </Typography>*/}
+            {/*        <Tooltip title="Global Experimental Features - Apply to All Scenarios" arrow>*/}
+            {/*            <Public sx={{ fontSize: '1rem', color: 'text.secondary' }} />*/}
+            {/*        </Tooltip>*/}
+            {/*    </Box>*/}
 
-                {/* Feature toggles */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
-                    {FEATURES.map((feature) => (
-                        <Tooltip key={feature.key} title={feature.description} arrow>
-                            <ToggleButtonGroup
-                                size="small"
-                                sx={ToggleButtonGroupStyle}
-                                exclusive
-                                value={features[feature.key] ? 'on' : 'off'}
-                                onChange={() => setFeature(feature.key, !features[feature.key])}
-                            >
-                                <ToggleButton value="off" sx={ToggleButtonStyle}>
-                                    Off
-                                </ToggleButton>
-                                <ToggleButton value="on" sx={ToggleButtonStyle}>
-                                    {feature.label}
-                                </ToggleButton>
-                            </ToggleButtonGroup>
-                        </Tooltip>
-                    ))}
-                </Box>
-            </Box>
+            {/*    /!* Feature toggles *!/*/}
+            {/*    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>*/}
+            {/*        {FEATURES.map((feature) => (*/}
+            {/*            <Tooltip key={feature.key} title={feature.description} arrow>*/}
+            {/*                <ToggleButtonGroup*/}
+            {/*                    size="small"*/}
+            {/*                    sx={ToggleButtonGroupStyle}*/}
+            {/*                    exclusive*/}
+            {/*                    value={features[feature.key] ? 'on' : 'off'}*/}
+            {/*                    onChange={() => setFeature(feature.key, !features[feature.key])}*/}
+            {/*                >*/}
+            {/*                    <ToggleButton value="off" sx={ToggleButtonStyle}>*/}
+            {/*                        Off*/}
+            {/*                    </ToggleButton>*/}
+            {/*                    <ToggleButton value="on" sx={ToggleButtonStyle}>*/}
+            {/*                        {feature.label}*/}
+            {/*                    </ToggleButton>*/}
+            {/*                </ToggleButtonGroup>*/}
+            {/*            </Tooltip>*/}
+            {/*        ))}*/}
+            {/*    </Box>*/}
+            {/*</Box>*/}
 
             {/* Skill Features */}
             <Box sx={{ display: 'flex', alignItems: 'center', py: 2, gap: 3 }}>

@@ -15,6 +15,8 @@ import {
     Error as VersionIcon,
     Code as CodeIcon,
     Psychology as PromptIcon,
+    Bolt as SkillIcon,
+    Send as UserPromptIcon,
 } from '@mui/icons-material';
 import LockIcon from '@mui/icons-material/Lock';
 import {
@@ -107,25 +109,25 @@ const Layout = ({ children }: LayoutProps) => {
         if (skillUser) {
             items.push({
                 path: '/prompt/user',
-                label: 'User',
-                icon: <PromptIcon sx={{ fontSize: 20 }} />,
+                label: 'User Request',
+                icon: <UserPromptIcon sx={{ fontSize: 20 }} />,
             });
         }
         if (skillIde) {
             items.push({
                 path: '/prompt/skill',
-                label: 'Skill',
-                icon: <PromptIcon sx={{ fontSize: 20 }} />,
+                label: 'Skills',
+                icon: <SkillIcon sx={{ fontSize: 20 }} />,
             });
         }
-        // Command is always available if either skill feature is enabled
-        if (skillUser || skillIde) {
-            items.push({
-                path: '/prompt/command',
-                label: 'Command',
-                icon: <PromptIcon sx={{ fontSize: 20 }} />,
-            });
-        }
+        // // Command is always available if either skill feature is enabled
+        // if (skillUser || skillIde) {
+        //     items.push({
+        //         path: '/prompt/command',
+        //         label: 'Command',
+        //         icon: <PromptIcon sx={{ fontSize: 20 }} />,
+        //     });
+        // }
         return items;
     }, [skillUser, skillIde]);
 
