@@ -63,7 +63,7 @@ const getLocalMidnight = (date: Date): Date => {
     return d;
 };
 
-export default function UsageDashboardPage() {
+export default function DashboardPage() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [autoRefresh, setAutoRefresh] = useState(true);

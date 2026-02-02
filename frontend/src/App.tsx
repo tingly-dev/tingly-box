@@ -25,7 +25,7 @@ const ApiKeyPage = lazy(() => import('./pages/ApiKeyPage'));
 const OAuthPage = lazy(() => import('./pages/OAuthPage'));
 const CredentialPage = lazy(() => import('./pages/CredentialPage'));
 const System = lazy(() => import('./pages/System'));
-const UsageDashboardPage = lazy(() => import('./pages/UsageDashboardPage'));
+const UsageDashboardPage = lazy(() => import('./pages/./DashboardPage'));
 const ModelTestPage = lazy(() => import('./pages/ModelTestPage'));
 
 // Prompt pages
