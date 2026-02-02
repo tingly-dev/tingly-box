@@ -287,7 +287,7 @@ const Layout = ({ children }: LayoutProps) => {
                     return (
                         <React.Fragment key={group.key}>
                             {/* Group Header */}
-                            <ListItem key={`header-${group.key}`} disablePadding sx={{ mb: isStandalone ? 0 : 1 }}>
+                            <ListItem key={`header-${group.key}`} disablePadding sx={{ mb: isStandalone ? 1 : 0.5 }}>
                                 <ListItemButton
                                     component={RouterLink}
                                     to={group.path || group.items[0].path}
@@ -299,21 +299,29 @@ const Layout = ({ children }: LayoutProps) => {
                                         }
                                     }}
                                     sx={{
-                                        mx: 2,
-                                        borderRadius: 2,
-                                        color: isGroupActive(group.items) ? 'primary.main' : 'text.primary',
-                                        bgcolor: isGroupActive(group.items) ? 'primary.50' : 'transparent',
+                                        mx: 1.5,
+                                        borderRadius: 1.5,
+                                        color: 'text.primary',
+                                        bgcolor: 'action.hover',
+                                        '&:hover': {
+                                            bgcolor: 'action.selected',
+                                        },
                                     }}
                                 >
                                     <ListItemIcon
-                                        sx={{ color: isGroupActive(group.items) ? 'primary.main' : 'text.secondary' }}
+                                        sx={{
+                                            color: 'text.secondary',
+                                            minWidth: 40,
+                                        }}
                                     >
                                         {group.icon}
                                     </ListItemIcon>
                                     <ListItemText
                                         primary={group.label || group.items[0].label}
                                         primaryTypographyProps={{
-                                            fontWeight: isGroupActive(group.items) ? 600 : 400,
+                                            fontWeight: 600,
+                                            fontSize: '0.9rem',
+                                            letterSpacing: 0.15,
                                         }}
                                     />
                                     {!isStandalone && (
@@ -336,35 +344,36 @@ const Layout = ({ children }: LayoutProps) => {
                                 <Collapse in={isOpen} timeout="auto" unmountOnExit>
                                     <List sx={{ pl: 0, py: 0 }}>
                                         {group.items.map((item) => (
-                                            <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
+                                            <ListItem key={item.path} disablePadding sx={{ mb: 0.25 }}>
                                                 <ListItemButton
                                                     component={RouterLink}
                                                     to={item.path}
                                                     onClick={handleDrawerToggle}
                                                     className={isActive(item.path) ? 'nav-item-active' : ''}
                                                     sx={{
-                                                        mx: 2,
-                                                        borderRadius: 2,
-                                                        pl: 5,
-                                                        pr: 3,
-                                                        color: isActive(item.path) ? 'primary.main' : 'text.primary',
-                                                        bgcolor: isActive(item.path) ? 'primary.50' : 'transparent',
+                                                        mx: 2.5,
+                                                        borderRadius: 1.5,
+                                                        pl: 3.5,
+                                                        pr: 2.5,
+                                                        py: 0.75,
+                                                        color: 'text.secondary',
+                                                        bgcolor: 'transparent',
                                                         '&:hover': {
-                                                            backgroundColor: isActive(item.path) ? 'primary.50' : 'action.hover',
+                                                            backgroundColor: 'action.hover',
                                                         },
                                                         '& .MuiListItemIcon-root': {
-                                                            color: isActive(item.path) ? 'primary.main' : 'text.secondary',
+                                                            color: 'text.secondary',
                                                         },
                                                     }}
                                                 >
-                                                    <ListItemIcon sx={{ minWidth: 32 }}>
+                                                    <ListItemIcon sx={{ minWidth: 28 }}>
                                                         {item.icon}
                                                     </ListItemIcon>
                                                     <ListItemText
                                                         primary={item.label}
                                                         primaryTypographyProps={{
-                                                            fontWeight: isActive(item.path) ? 600 : 400,
-                                                            fontSize: '0.875rem',
+                                                            fontWeight: 400,
+                                                            fontSize: '0.85rem',
                                                         }}
                                                     />
                                                 </ListItemButton>
