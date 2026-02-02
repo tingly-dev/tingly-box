@@ -17,6 +17,7 @@ import {
     Select,
     Stack,
     TextField,
+    Tooltip,
     Typography,
 } from '@mui/material';
 import React, { useEffect, useState } from 'react';
@@ -25,12 +26,12 @@ import type { SmartRouting, SmartOp } from './RoutingGraphTypes';
 
 // Position options with descriptions
 const POSITION_OPTIONS = [
-    { value: 'model', label: 'Model', description: 'Request model name' },
-    { value: 'thinking', label: 'Thinking', description: 'Thinking mode enabled' },
-    { value: 'system', label: 'System', description: 'System message content' },
-    { value: 'user', label: 'User', description: 'User message content' },
-    { value: 'tool_use', label: 'Tool Use', description: 'Tool use/name' },
-    { value: 'token', label: 'Token', description: 'Token count' },
+    // { value: 'model', label: 'Model', description: 'Request model name' },
+    { value: 'thinking', label: 'Thinking', description: 'Thinking mode enabled / disable' },
+    { value: 'system', label: 'System Prompt', description: 'System prompt message' },
+    { value: 'user', label: 'User Prompt', description: 'User prompt message' },
+    { value: 'tool_use', label: 'Tool Name', description: 'Tool name' },
+    { value: 'token', label: 'Token Count', description: 'Token count' },
 ] as const;
 
 // Operation options grouped by position
@@ -55,7 +56,7 @@ const OPERATION_OPTIONS: Record<string, Array<{ value: string; label: string; de
         // { value: 'type', label: 'Type', description: 'Latest message is user role and check its content type (e.g., image)', valueType: 'string' },
     ],
     tool_use: [
-        { value: 'is', label: 'Is', description: 'Latest message is tool use and its name is the value', valueType: 'string' },
+        { value: 'equals', label: 'Equals', description: 'Latest message is tool use and its name equals the value', valueType: 'string' },
     ],
     token: [
         { value: 'ge', label: 'Greater or Equal', description: 'Token count >= value', valueType: 'int' },
@@ -240,7 +241,9 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
                                                             </MenuItem>
                                                             {POSITION_OPTIONS.map((opt) => (
                                                                 <MenuItem key={opt.value} value={opt.value}>
-                                                                    {opt.label}
+                                                                    <Tooltip title={opt.description} placement="right">
+                                                                        <span style={{ width: '100%' }}>{opt.label}</span>
+                                                                    </Tooltip>
                                                                 </MenuItem>
                                                             ))}
                                                         </Select>
@@ -260,7 +263,9 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
                                                             </MenuItem>
                                                             {OPERATION_OPTIONS[op.position]?.map((opt) => (
                                                                 <MenuItem key={opt.value} value={opt.value}>
-                                                                    {opt.label}
+                                                                    <Tooltip title={opt.description} placement="right">
+                                                                        <span style={{ width: '100%' }}>{opt.label}</span>
+                                                                    </Tooltip>
                                                                 </MenuItem>
                                                             ))}
                                                         </Select>
