@@ -8,6 +8,15 @@ export const API_STYLES = {
   ANTHROPIC: 'anthropic',
 } as const;
 
+// Scenarios
+export const SCENARIOS = {
+  OPENAI: 'openai',
+  ANTHROPIC: 'anthropic',
+  CLAUDE_CODE: 'claude_code',
+  OPENCODE: 'opencode',
+  GLOBAL: '_global', // Global flags that apply to all scenarios
+} as const;
+
 // Notification types
 export const NOTIFICATION_TYPES = {
   SUCCESS: 'success',

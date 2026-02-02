@@ -97,15 +97,15 @@ tasks:
     aliases:
       - start
     cmds:
-      - go run ./cli/tingly-box --verbose start --debug --port 12580
+      - go run ./cli/tingly-box --verbose start --debug --port 12580 --browser=false
     
   https:
     cmds:
-      - go run ./cli/tingly-box --verbose start --https --port 12581
+      - go run ./cli/tingly-box --verbose start --https --port 12581 --browser=false
   
   record:
     cmds:
-      - go run ./cli/tingly-box --verbose start --port 12580 --record-mode=scenario --debug
+      - go run ./cli/tingly-box --verbose start --port 12580 --record-mode=scenario --debug --browser=false
   
   cli:build:
     cmds:

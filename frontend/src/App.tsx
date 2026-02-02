@@ -7,6 +7,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider } from './contexts/AuthContext';
 import { VersionProvider, useVersion } from './contexts/VersionContext';
 import { HealthProvider, useHealth } from './contexts/HealthContext';
+import { FeatureFlagsProvider } from './contexts/FeatureFlagsContext';
 import Layout from './layout/Layout';
 import theme from './theme';
 import { CloudUpload, Refresh, Error as ErrorIcon, AppRegistration as NPM, GitHub } from '@mui/icons-material';
@@ -26,6 +27,11 @@ const OAuthPage = lazy(() => import('./pages/OAuthPage'));
 const System = lazy(() => import('./pages/System'));
 const UsageDashboardPage = lazy(() => import('./pages/UsageDashboardPage'));
 const ModelTestPage = lazy(() => import('./pages/ModelTestPage'));
+
+// Prompt pages
+const UserPage = lazy(() => import('./pages/prompt/UserPage'));
+const SkillPage = lazy(() => import('./pages/prompt/SkillPage'));
+const CommandPage = lazy(() => import('./pages/prompt/CommandPage'));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -242,6 +248,10 @@ function AppContent() {
                                         <Route path="/logs" element={<Logs/>}/>
                                         <Route path="/dashboard" element={<UsageDashboardPage/>}/>
                                         <Route path="/model-test/:providerUuid" element={<ModelTestPage/>}/>
+                                        {/* Prompt routes */}
+                                        <Route path="/prompt/user" element={<UserPage/>}/>
+                                        <Route path="/prompt/skill" element={<SkillPage/>}/>
+                                        <Route path="/prompt/command" element={<CommandPage/>}/>
                                     </Routes>
                                 </Suspense>
                             </Layout>
@@ -273,8 +283,10 @@ function App() {
                 <HealthProvider>
                     <VersionProvider>
                         <AuthProvider>
-                            <AppContent/>
-                            <AppDialogs/>
+                            <FeatureFlagsProvider>
+                                <AppContent/>
+                                <AppDialogs/>
+                            </FeatureFlagsProvider>
                         </AuthProvider>
                     </VersionProvider>
                 </HealthProvider>

@@ -14,6 +14,9 @@ import {
     Error as ErrorIcon,
     Error as VersionIcon,
     Code as CodeIcon,
+    Psychology as PromptIcon,
+    Bolt as SkillIcon,
+    Send as UserPromptIcon,
 } from '@mui/icons-material';
 import LockIcon from '@mui/icons-material/Lock';
 import {
@@ -31,11 +34,12 @@ import {
     Popover,
 } from '@mui/material';
 import type { ReactNode } from 'react';
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useHealth } from '../contexts/HealthContext';
 import { useVersion as useAppVersion } from '../contexts/VersionContext';
+import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import VerifiedIcon from '@mui/icons-material/Verified';
 import OpenAI from '@lobehub/icons/es/OpenAI';
 import Anthropic from '@lobehub/icons/es/Anthropic';
@@ -67,9 +71,11 @@ const Layout = ({ children }: LayoutProps) => {
     const location = useLocation();
     const { isHealthy, checking, checkHealth } = useHealth();
     const { hasUpdate, checking: checkingVersion, checkForUpdates, currentVersion, latestVersion } = useAppVersion();
+    const { skillUser, skillIde } = useFeatureFlags();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [homeMenuOpen, setHomeMenuOpen] = useState(true);
     const [credentialMenuOpen, setCredentialMenuOpen] = useState(true);
+    const [promptMenuOpen, setPromptMenuOpen] = useState(true);
     const [systemMenuOpen, setSystemMenuOpen] = useState(false);
     const [easterEggAnchorEl, setEasterEggAnchorEl] = useState<HTMLElement | null>(null);
 
@@ -96,6 +102,34 @@ const Layout = ({ children }: LayoutProps) => {
     const isGroupActive = (items: MenuItem[]) => {
         return items.some(item => isActive(item.path));
     };
+
+    // Build prompt menu items based on feature flags
+    const promptMenuItems = useMemo(() => {
+        const items: MenuItem[] = [];
+        if (skillUser) {
+            items.push({
+                path: '/prompt/user',
+                label: 'User Request',
+                icon: <UserPromptIcon sx={{ fontSize: 20 }} />,
+            });
+        }
+        if (skillIde) {
+            items.push({
+                path: '/prompt/skill',
+                label: 'Skills',
+                icon: <SkillIcon sx={{ fontSize: 20 }} />,
+            });
+        }
+        // // Command is always available if either skill feature is enabled
+        // if (skillUser || skillIde) {
+        //     items.push({
+        //         path: '/prompt/command',
+        //         label: 'Command',
+        //         icon: <PromptIcon sx={{ fontSize: 20 }} />,
+        //     });
+        // }
+        return items;
+    }, [skillUser, skillIde]);
 
     const menuGroups: MenuGroup[] = [
         {
@@ -155,6 +189,12 @@ const Layout = ({ children }: LayoutProps) => {
                 },
             ],
         },
+        ...(promptMenuItems.length > 0 ? [{
+            key: 'prompt' as const,
+            label: 'Prompt',
+            icon: <PromptIcon sx={{ fontSize: 20 }} />,
+            items: promptMenuItems,
+        }] : []),
         {
             key: 'system',
             label: 'System',
@@ -171,7 +211,7 @@ const Layout = ({ children }: LayoutProps) => {
     ];
 
     const drawerContent = (
-        <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {/* Logo Section */}
             <Box
                 component="a"
@@ -190,6 +230,7 @@ const Layout = ({ children }: LayoutProps) => {
                     '&:hover': {
                         opacity: 0.8,
                     },
+                    flexShrink: 0,
                 }}
             >
                 <Box
@@ -214,11 +255,12 @@ const Layout = ({ children }: LayoutProps) => {
             </Box>
 
             {/* Navigation Menu */}
-            <List sx={{ flex: 1, py: 2 }}>
+            <List sx={{ flex: 1, py: 2, overflowY: 'auto', overflowX: 'hidden', '&::-webkit-scrollbar': { width: 6 }, '&::-webkit-scrollbar-track': { backgroundColor: 'transparent' }, '&::-webkit-scrollbar-thumb': { backgroundColor: 'grey.300', borderRadius: 1, '&:hover': { backgroundColor: 'grey.400' } } }}>
                 {menuGroups.map((group) => {
                     const isDashboardGroup = group.key === 'dashboard';
                     const isHomeGroup = group.key === 'scenario';
                     const isCredentialGroup = group.key === 'credential';
+                    const isPromptGroup = group.key === 'prompt';
                     const isSystemGroup = group.key === 'system';
                     const isStandalone = group.standalone;
 
@@ -233,6 +275,9 @@ const Layout = ({ children }: LayoutProps) => {
                         } else if (isCredentialGroup) {
                             isOpen = credentialMenuOpen;
                             setIsOpen = setCredentialMenuOpen;
+                        } else if (isPromptGroup) {
+                            isOpen = promptMenuOpen;
+                            setIsOpen = setPromptMenuOpen;
                         } else if (isSystemGroup) {
                             isOpen = systemMenuOpen;
                             setIsOpen = setSystemMenuOpen;
@@ -242,7 +287,7 @@ const Layout = ({ children }: LayoutProps) => {
                     return (
                         <React.Fragment key={group.key}>
                             {/* Group Header */}
-                            <ListItem key={`header-${group.key}`} disablePadding sx={{ mb: isStandalone ? 0 : 1 }}>
+                            <ListItem key={`header-${group.key}`} disablePadding sx={{ mb: isStandalone ? 1 : 0.5 }}>
                                 <ListItemButton
                                     component={RouterLink}
                                     to={group.path || group.items[0].path}
@@ -254,21 +299,29 @@ const Layout = ({ children }: LayoutProps) => {
                                         }
                                     }}
                                     sx={{
-                                        mx: 2,
-                                        borderRadius: 2,
-                                        color: isGroupActive(group.items) ? 'primary.main' : 'text.primary',
-                                        bgcolor: isGroupActive(group.items) ? 'primary.50' : 'transparent',
+                                        mx: 1.5,
+                                        borderRadius: 1.5,
+                                        color: 'text.primary',
+                                        bgcolor: 'action.hover',
+                                        '&:hover': {
+                                            bgcolor: 'action.selected',
+                                        },
                                     }}
                                 >
                                     <ListItemIcon
-                                        sx={{ color: isGroupActive(group.items) ? 'primary.main' : 'text.secondary' }}
+                                        sx={{
+                                            color: 'text.secondary',
+                                            minWidth: 40,
+                                        }}
                                     >
                                         {group.icon}
                                     </ListItemIcon>
                                     <ListItemText
                                         primary={group.label || group.items[0].label}
                                         primaryTypographyProps={{
-                                            fontWeight: isGroupActive(group.items) ? 600 : 400,
+                                            fontWeight: 600,
+                                            fontSize: '0.9rem',
+                                            letterSpacing: 0.15,
                                         }}
                                     />
                                     {!isStandalone && (
@@ -291,35 +344,36 @@ const Layout = ({ children }: LayoutProps) => {
                                 <Collapse in={isOpen} timeout="auto" unmountOnExit>
                                     <List sx={{ pl: 0, py: 0 }}>
                                         {group.items.map((item) => (
-                                            <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
+                                            <ListItem key={item.path} disablePadding sx={{ mb: 0.25 }}>
                                                 <ListItemButton
                                                     component={RouterLink}
                                                     to={item.path}
                                                     onClick={handleDrawerToggle}
                                                     className={isActive(item.path) ? 'nav-item-active' : ''}
                                                     sx={{
-                                                        mx: 2,
-                                                        borderRadius: 2,
-                                                        pl: 5,
-                                                        pr: 3,
-                                                        color: isActive(item.path) ? 'primary.main' : 'text.primary',
-                                                        bgcolor: isActive(item.path) ? 'primary.50' : 'transparent',
+                                                        mx: 2.5,
+                                                        borderRadius: 1.5,
+                                                        pl: 3.5,
+                                                        pr: 2.5,
+                                                        py: 0.75,
+                                                        color: 'text.secondary',
+                                                        bgcolor: 'transparent',
                                                         '&:hover': {
-                                                            backgroundColor: isActive(item.path) ? 'primary.50' : 'action.hover',
+                                                            backgroundColor: 'action.hover',
                                                         },
                                                         '& .MuiListItemIcon-root': {
-                                                            color: isActive(item.path) ? 'primary.main' : 'text.secondary',
+                                                            color: 'text.secondary',
                                                         },
                                                     }}
                                                 >
-                                                    <ListItemIcon sx={{ minWidth: 32 }}>
+                                                    <ListItemIcon sx={{ minWidth: 28 }}>
                                                         {item.icon}
                                                     </ListItemIcon>
                                                     <ListItemText
                                                         primary={item.label}
                                                         primaryTypographyProps={{
-                                                            fontWeight: isActive(item.path) ? 600 : 400,
-                                                            fontSize: '0.875rem',
+                                                            fontWeight: 400,
+                                                            fontSize: '0.85rem',
                                                         }}
                                                     />
                                                 </ListItemButton>
@@ -340,6 +394,7 @@ const Layout = ({ children }: LayoutProps) => {
                     borderTop: '1px solid',
                     borderBottom: '1px solid',
                     borderColor: 'divider',
+                    flexShrink: 0,
                 }}
             >
                 {/* Connection Status */}
@@ -412,6 +467,7 @@ const Layout = ({ children }: LayoutProps) => {
                     display: 'flex',
                     flexDirection: 'column',
                     gap: 1,
+                    flexShrink: 0,
                 }}
             >
                 <Typography

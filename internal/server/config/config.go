@@ -971,6 +971,16 @@ func (c *Config) GetScenarioFlag(scenario typ.RuleScenario, flagName string) boo
 		return flags.SmartCompact
 	case "recording":
 		return flags.Recording
+	case "skill_user":
+		if val, ok := config.Extensions["skill_user"].(bool); ok {
+			return val
+		}
+		return false
+	case "skill_ide":
+		if val, ok := config.Extensions["skill_ide"].(bool); ok {
+			return val
+		}
+		return false
 	default:
 		return false
 	}
@@ -993,8 +1003,9 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 	if config == nil {
 		// Create new scenario config
 		newConfig := typ.ScenarioConfig{
-			Scenario: scenario,
-			Flags:    typ.ScenarioFlags{},
+			Scenario:   scenario,
+			Flags:      typ.ScenarioFlags{},
+			Extensions: make(map[string]interface{}),
 		}
 		c.Scenarios = append(c.Scenarios, newConfig)
 		config = &c.Scenarios[len(c.Scenarios)-1]
@@ -1012,6 +1023,18 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 		config.Flags.SmartCompact = value
 	case "recording":
 		config.Flags.Recording = value
+	case "skill_user":
+		// Store in Extensions
+		if config.Extensions == nil {
+			config.Extensions = make(map[string]interface{})
+		}
+		config.Extensions["skill_user"] = value
+	case "skill_ide":
+		// Store in Extensions
+		if config.Extensions == nil {
+			config.Extensions = make(map[string]interface{})
+		}
+		config.Extensions["skill_ide"] = value
 	default:
 		return fmt.Errorf("unknown flag name: %s", flagName)
 	}

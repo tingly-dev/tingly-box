@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import CardGrid from '@/components/CardGrid';
 import { PageLayout } from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
+import GlobalExperimentalFeatures from '@/components/GlobalExperimentalFeatures';
 import { api, getBaseUrl } from '../services/api';
 import { useVersion } from '../contexts/VersionContext';
 
@@ -253,6 +254,19 @@ const System = () => {
                                 tingly-dev/tingly-box
                             </Link>
                         </Typography>
+                    </Stack>
+                </UnifiedCard>
+
+                {/* Global Experimental Features */}
+                <UnifiedCard
+                    title="Global Experimental Features"
+                    size="full"
+                >
+                    <Stack spacing={1}>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                            These experimental features apply globally to all scenarios. Individual scenarios can override these settings.
+                        </Typography>
+                        <GlobalExperimentalFeatures />
                     </Stack>
                 </UnifiedCard>
 

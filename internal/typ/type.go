@@ -16,6 +16,7 @@ const (
 	ScenarioAnthropic  RuleScenario = "anthropic"
 	ScenarioClaudeCode RuleScenario = "claude_code"
 	ScenarioOpenCode   RuleScenario = "opencode"
+	ScenarioGlobal     RuleScenario = "_global" // Global flags that apply to all scenarios
 )
 
 // ScenarioFlags represents configuration flags for a scenario
