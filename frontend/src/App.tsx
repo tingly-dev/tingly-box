@@ -12,7 +12,6 @@ import Layout from './layout/Layout';
 import theme from './theme';
 import { CloudUpload, Refresh, Error as ErrorIcon, AppRegistration as NPM, GitHub } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
-import Logs from "@/pages/Logs.tsx";
 import { Events } from '@/bindings';
 
 // Lazy load pages for code splitting
@@ -250,7 +249,7 @@ function AppContent() {
                                         <Route path="/oauth" element={<Navigate to="/credentials" replace/>}/>
                                         {/* Other routes */}
                                         <Route path="/system" element={<System/>}/>
-                                        <Route path="/logs" element={<Logs/>}/>
+                                        <Route path="/logs" element={<Navigate to="/system" replace/>}/>
                                         <Route path="/dashboard" element={<UsageDashboardPage/>}/>
                                         <Route path="/model-test/:providerUuid" element={<ModelTestPage/>}/>
                                         {/* Prompt routes */}

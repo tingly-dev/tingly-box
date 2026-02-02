@@ -3,7 +3,6 @@ import {
     Dashboard as DashboardIcon,
     Menu as MenuIcon,
     Settings as SystemIcon,
-    Description as LogsIcon,
     ExpandLess,
     ExpandMore,
     BarChart as BarChartIcon,
@@ -192,13 +191,13 @@ const Layout = ({ children }: LayoutProps) => {
         {
             key: 'system',
             label: 'System',
-            path: '/system',
             icon: <SystemIcon sx={{ fontSize: 20 }} />,
+            standalone: true,
             items: [
                 {
-                    path: '/logs',
-                    label: 'Logs',
-                    icon: <LogsIcon sx={{ fontSize: 18 }} />,
+                    path: '/system',
+                    label: 'System',
+                    icon: <SystemIcon sx={{ fontSize: 20 }} />,
                 },
             ],
         },
