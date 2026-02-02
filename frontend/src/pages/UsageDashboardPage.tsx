@@ -39,7 +39,8 @@ const TIME_RANGE_CONFIG: Record<TimeRange, { label: string; days: number; interv
     '90d': { label: '90 Days', days: 90, interval: 'day' },
 };
 
-// Format date to local ISO string (with timezone offset instead of Z)
+// Format date to local ISO string (with timezone offset)
+// Backend stores local time, so we send local time with timezone offset
 const toLocalISOString = (date: Date): string => {
     const tzOffset = -date.getTimezoneOffset();
     const sign = tzOffset >= 0 ? '+' : '-';
@@ -51,6 +52,12 @@ const toLocalISOString = (date: Date): string => {
         ':' + pad(date.getMinutes()) +
         ':' + pad(date.getSeconds()) +
         sign + pad(tzOffset / 60) + ':' + pad(tzOffset % 60);
+};
+
+// Create a Date at local midnight (00:00:00 local time)
+const getLocalMidnight = (date: Date): Date => {
+    const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    return d;
 };
 
 export default function UsageDashboardPage() {
@@ -68,10 +75,29 @@ export default function UsageDashboardPage() {
             // Build query params based on time range
             const now = new Date();
             const config = TIME_RANGE_CONFIG[range];
-            const startTime = new Date(now.getTime() - config.days * 24 * 60 * 60 * 1000);
+
+            // Calculate start time based on today 00:00:00 LOCAL time
+            // For multi-day mode, start from (config.days - 1) days ago at 00:00:00
+            // For 'today' mode, start from today 00:00:00
+            const todayStart = getLocalMidnight(now);
+
+            const startTime = new Date(todayStart);
+            let endTime: Date;
+
+            if (range === 'today') {
+                // For today: from today 00:00:00 to now
+                endTime = now;
+            } else {
+                // For multi-day mode: from (N-1) days ago 00:00:00 to tomorrow 00:00:00
+                // This ensures we get complete data for today
+                startTime.setDate(startTime.getDate() - (config.days - 1));
+                endTime = new Date(todayStart);
+                endTime.setDate(endTime.getDate() + 1); // Next day at 00:00:00
+            }
+
             const params: Record<string, string> = {
                 start_time: toLocalISOString(startTime),
-                end_time: toLocalISOString(now),
+                end_time: toLocalISOString(endTime),
             };
             if (provider && provider !== 'all') {
                 params.provider = provider;

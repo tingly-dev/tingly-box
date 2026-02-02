@@ -63,7 +63,7 @@ export const formatTimeLabel = (timestamp: string, isDayMode: boolean): string =
     return `${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:00`;
 };
 
-export const formatTooltipTime = (timestamp: string): string => {
+export const formatTooltipTime = (timestamp: string, isDayMode: boolean): string => {
     if (!timestamp) return timestamp;
 
     let date: Date;
@@ -79,19 +79,25 @@ export const formatTooltipTime = (timestamp: string): string => {
         return timestamp;
     }
 
-    return date.toLocaleDateString('en-US', {
+    const options: Intl.DateTimeFormatOptions = {
         month: 'short',
         day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-    });
+    };
+
+    // Only show time in hour mode, not in day mode
+    if (!isDayMode) {
+        options.hour = '2-digit';
+        options.minute = '2-digit';
+    }
+
+    return date.toLocaleDateString('en-US', options);
 };
 
 export const formatChartData = (data: TimeSeriesData[], isDayMode: boolean): ChartDataPoint[] => {
     return data.map((item) => ({
         timestamp: item.timestamp,
         time: formatTimeLabel(item.timestamp, isDayMode),
-        timeFull: formatTooltipTime(item.timestamp),
+        timeFull: formatTooltipTime(item.timestamp, isDayMode),
         inputTokens: item.input_tokens,
         outputTokens: item.output_tokens,
     }));
