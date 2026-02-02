@@ -7,6 +7,7 @@ import {
 import {
     Box,
     CircularProgress,
+    Chip,
     Dialog,
     DialogContent,
     DialogTitle,
@@ -22,7 +23,7 @@ import {
 } from '@mui/material';
 import { useState, useEffect } from 'react';
 import { type SkillLocation, type Skill, type ScanResult } from '@/types/prompt';
-import { getIdeSourceIcon } from '@/constants/ideSources';
+import { getIdeSourceLabel } from '@/constants/ideSources';
 import { api } from '@/services/api';
 
 interface SkillListDialogProps {
@@ -106,7 +107,7 @@ const SkillListDialog = ({ open, location, onClose, onSkillClick }: SkillListDia
 
     if (!location) return null;
 
-    const icon = location.icon || getIdeSourceIcon(location.ide_source);
+    const sourceLabel = getIdeSourceLabel(location.ide_source);
 
     return (
         <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
@@ -119,7 +120,12 @@ const SkillListDialog = ({ open, location, onClose, onSkillClick }: SkillListDia
                     }}
                 >
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography sx={{ fontSize: 20 }}>{icon}</Typography>
+                        <Chip
+                            size="small"
+                            label={sourceLabel}
+                            variant="outlined"
+                            sx={{ height: 24, fontSize: '0.75rem' }}
+                        />
                         <Box>
                             <Typography variant="h6">{location.name}</Typography>
                             <Typography variant="caption" color="text.secondary">

@@ -12,6 +12,7 @@ import {
     Card,
     CardContent,
     Checkbox,
+    Chip,
     CircularProgress,
     Dialog,
     DialogActions,
@@ -25,7 +26,7 @@ import {
 } from '@mui/material';
 import { useState, useEffect } from 'react';
 import { type SkillLocation, type DiscoveryResult } from '@/types/prompt';
-import { getIdeSourceIcon } from '@/constants/ideSources';
+import { getIdeSourceLabel } from '@/constants/ideSources';
 import { api } from '@/services/api';
 
 interface AutoDiscoveryDialogProps {
@@ -293,9 +294,12 @@ const AutoDiscoveryDialog = ({ open, onClose, onImport }: AutoDiscoveryDialogPro
                                                     minWidth: 0,
                                                 }}
                                             >
-                                                <Typography sx={{ fontSize: 20 }}>
-                                                    {location.icon || getIdeSourceIcon(location.ide_source)}
-                                                </Typography>
+                                                <Chip
+                                                    size="small"
+                                                    label={getIdeSourceLabel(location.ide_source)}
+                                                    variant="outlined"
+                                                    sx={{ height: 24, fontSize: '0.75rem' }}
+                                                />
                                                 <Box sx={{ minWidth: 0, flex: 1 }}>
                                                     <Typography
                                                         variant="subtitle2"

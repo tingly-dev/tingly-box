@@ -9,6 +9,7 @@ import {
     Alert,
     Box,
     Button,
+    Chip,
     CircularProgress,
     Dialog,
     DialogContent,
@@ -20,7 +21,7 @@ import {
 } from '@mui/material';
 import { useState, useEffect } from 'react';
 import { type Skill, type SkillLocation } from '@/types/prompt';
-import { getIdeSourceIcon } from '@/constants/ideSources';
+import { getIdeSourceLabel } from '@/constants/ideSources';
 import { api } from '@/services/api';
 
 interface SkillDetailDialogProps {
@@ -102,7 +103,7 @@ const SkillDetailDialog = ({ open, skill, location, onClose }: SkillDetailDialog
 
     if (!skill || !location) return null;
 
-    const icon = location.icon || getIdeSourceIcon(location.ide_source);
+    const sourceLabel = getIdeSourceLabel(location.ide_source);
 
     return (
         <Dialog
@@ -157,7 +158,12 @@ const SkillDetailDialog = ({ open, skill, location, onClose }: SkillDetailDialog
                     >
                         <Stack direction="row" spacing={3} alignItems="center" flexWrap="wrap">
                             <Stack direction="row" spacing={1} alignItems="center">
-                                <Typography sx={{ fontSize: 16 }}>{icon}</Typography>
+                                <Chip
+                                    size="small"
+                                    label={sourceLabel}
+                                    variant="outlined"
+                                    sx={{ height: 24, fontSize: '0.75rem' }}
+                                />
                                 <Typography variant="body2" color="text.secondary">
                                     {location.name}
                                 </Typography>

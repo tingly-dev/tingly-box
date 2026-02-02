@@ -16,7 +16,7 @@ import {
     Typography,
 } from '@mui/material';
 import { type SkillLocation } from '@/types/prompt';
-import { getIdeSourceIcon } from '@/constants/ideSources';
+import { getIdeSourceLabel } from '@/constants/ideSources';
 
 interface SkillLocationCardProps {
     location: SkillLocation;
@@ -33,7 +33,7 @@ const SkillLocationCard = ({
     onDelete,
     onViewSkills,
 }: SkillLocationCardProps) => {
-    const icon = location.icon || getIdeSourceIcon(location.ide_source);
+    const sourceLabel = getIdeSourceLabel(location.ide_source);
     const lastScanned = location.last_scanned_at
         ? new Date(location.last_scanned_at).toLocaleString()
         : 'Never';
@@ -64,7 +64,12 @@ const SkillLocationCard = ({
                     }}
                 >
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, minWidth: 0 }}>
-                        <Typography sx={{ fontSize: 24 }}>{icon}</Typography>
+                        <Chip
+                            size="small"
+                            label={sourceLabel}
+                            variant="outlined"
+                            sx={{ height: 24, fontSize: '0.75rem' }}
+                        />
                         <Box sx={{ minWidth: 0, flex: 1 }}>
                             <Typography
                                 variant="h6"

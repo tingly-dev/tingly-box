@@ -68,10 +68,7 @@ const SkillFilterBar = ({
                     <MenuItem value="">All Sources</MenuItem>
                     {(Object.keys(IDE_SOURCES) as Array<keyof typeof IDE_SOURCES>).map((key) => (
                         <MenuItem key={key} value={key}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <span>{IDE_SOURCES[key].icon}</span>
-                                <span>{IDE_SOURCES[key].name}</span>
-                            </Box>
+                            {IDE_SOURCES[key].name}
                         </MenuItem>
                     ))}
                 </Select>
