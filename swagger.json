@@ -234,6 +234,40 @@
         }
       }
     },
+    "/api/v1/oauth/cancel": {
+      "post": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Cancel an in-progress OAuth session and cleanup resources",
+        "description": "Cancel an in-progress OAuth session and cleanup resources",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "request",
+            "in": "body",
+            "description": "Request body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/OAuthCancelRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/OAuthMessageResponse"
+            }
+          }
+        }
+      }
+    },
     "/api/v1/oauth/refresh": {
       "post": {
         "tags": [
@@ -872,6 +906,15 @@
             "description": "Path parameter 'flag'",
             "required": true,
             "type": "string"
+          },
+          {
+            "name": "request",
+            "in": "body",
+            "description": "Request body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ScenarioFlagUpdateRequest"
+            }
           }
         ],
         "responses": {
@@ -1706,9 +1749,309 @@
           }
         }
       }
+    },
+    "/api/v2/skill-content": {
+      "get": {
+        "tags": [
+          "skills"
+        ],
+        "summary": "Get skill file content",
+        "description": "Get skill file content",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/SkillContentResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/skill-locations": {
+      "get": {
+        "tags": [
+          "skills"
+        ],
+        "summary": "Get all skill locations",
+        "description": "Get all skill locations",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/SkillLocationsResponse"
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "skills"
+        ],
+        "summary": "Add a new skill location",
+        "description": "Add a new skill location",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "request",
+            "in": "body",
+            "description": "Request body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/AddSkillLocationRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/AddSkillLocationResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/skill-locations/discover": {
+      "get": {
+        "tags": [
+          "skills"
+        ],
+        "summary": "Discover IDEs with skills in home directory",
+        "description": "Discover IDEs with skills in home directory",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/DiscoverIdesResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/skill-locations/import": {
+      "post": {
+        "tags": [
+          "skills"
+        ],
+        "summary": "Import discovered skill locations",
+        "description": "Import discovered skill locations",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "request",
+            "in": "body",
+            "description": "Request body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ImportSkillLocationsRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ImportSkillLocationsResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/skill-locations/scan": {
+      "post": {
+        "tags": [
+          "skills"
+        ],
+        "summary": "Scan all IDE locations and return discovered skills",
+        "description": "Scan all IDE locations and return discovered skills",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ScanIdesResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/skill-locations/{id}": {
+      "get": {
+        "tags": [
+          "skills"
+        ],
+        "summary": "Get a specific skill location",
+        "description": "Get a specific skill location",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/SkillLocationResponse"
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "skills"
+        ],
+        "summary": "Remove a skill location",
+        "description": "Remove a skill location",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/RemoveSkillLocationResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/skill-locations/{id}/refresh": {
+      "post": {
+        "tags": [
+          "skills"
+        ],
+        "summary": "Refresh/scan a skill location for updated skills",
+        "description": "Refresh/scan a skill location for updated skills",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/RefreshSkillLocationResponse"
+            }
+          }
+        }
+      }
     }
   },
   "definitions": {
+    "AddSkillLocationRequest": {
+      "type": "object",
+      "properties": {
+        "ide_source": {
+          "type": "string",
+          "description": "IDE/source type",
+          "example": "claude_code"
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name for the location",
+          "example": "Claude Code Skills"
+        },
+        "path": {
+          "type": "string",
+          "description": "Full file system path to the skills directory",
+          "example": "/Users/user/.claude/skills"
+        }
+      },
+      "required": [
+        "name",
+        "path",
+        "ide_source"
+      ]
+    },
+    "AddSkillLocationResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "description": "Field data",
+          "$ref": "#/definitions/SkillLocation"
+        },
+        "message": {
+          "type": "string",
+          "description": "Field message",
+          "example": "Skill location added successfully"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "message"
+      ]
+    },
     "AggregatedStat": {
       "type": "object",
       "properties": {
@@ -2075,6 +2418,58 @@
         "message"
       ]
     },
+    "DiscoverIdesResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "description": "Field data",
+          "$ref": "#/definitions/DiscoveryResult"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success"
+      ]
+    },
+    "DiscoveryResult": {
+      "type": "object",
+      "properties": {
+        "ides_found": {
+          "type": "array",
+          "description": "Field ides_found",
+          "items": {
+            "type": "string"
+          }
+        },
+        "locations": {
+          "type": "array",
+          "description": "Field locations",
+          "items": {
+            "$ref": "#/definitions/SkillLocation"
+          }
+        },
+        "skills_found": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field skills_found"
+        },
+        "total_ides_scanned": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field total_ides_scanned"
+        }
+      },
+      "required": [
+        "total_ides_scanned",
+        "ides_found",
+        "skills_found",
+        "locations"
+      ]
+    },
     "EndpointProbeStatus": {
       "type": "object",
       "properties": {
@@ -2139,6 +2534,27 @@
         "client_id"
       ]
     },
+    "GroupingStrategy": {
+      "type": "object",
+      "properties": {
+        "group_pattern": {
+          "type": "string",
+          "description": "Field group_pattern"
+        },
+        "min_files_for_split": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field min_files_for_split"
+        },
+        "mode": {
+          "type": "string",
+          "description": "Field mode"
+        }
+      },
+      "required": [
+        "mode"
+      ]
+    },
     "HealthInfoResponse": {
       "type": "object",
       "properties": {
@@ -2182,6 +2598,47 @@
         "data"
       ]
     },
+    "ImportSkillLocationsRequest": {
+      "type": "object",
+      "properties": {
+        "locations": {
+          "type": "array",
+          "description": "Array of skill locations to import",
+          "items": {
+            "$ref": "#/definitions/SkillLocation"
+          }
+        }
+      },
+      "required": [
+        "locations"
+      ]
+    },
+    "ImportSkillLocationsResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "array",
+          "description": "Field data",
+          "items": {
+            "$ref": "#/definitions/SkillLocation"
+          }
+        },
+        "message": {
+          "type": "string",
+          "description": "Field message",
+          "example": "Imported 5 skill locations"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "message"
+      ]
+    },
     "LatestVersionInfo": {
       "type": "object",
       "properties": {
@@ -2204,13 +2661,19 @@
           "type": "string",
           "description": "Field release_url",
           "example": "https://github.com/tingly-dev/tingly-box/releases/tag/v0.260130.1200"
+        },
+        "should_notify": {
+          "type": "boolean",
+          "description": "Field should_notify",
+          "example": true
         }
       },
       "required": [
         "current_version",
         "latest_version",
         "has_update",
-        "release_url"
+        "release_url",
+        "should_notify"
       ]
     },
     "LatestVersionResponse": {
@@ -2391,6 +2854,11 @@
           "description": "OAuth provider type",
           "example": "anthropic"
         },
+        "proxy_url": {
+          "type": "string",
+          "description": "HTTP/SOCKS proxy URL (e.g., http://127.0.0.1:7890 or socks5://127.0.0.1:1080)",
+          "example": "http://proxy.example.com:8080"
+        },
         "redirect": {
           "type": "string",
           "description": "URL to redirect after OAuth completion",
@@ -2480,6 +2948,19 @@
       "required": [
         "success",
         "data"
+      ]
+    },
+    "OAuthCancelRequest": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "description": "Session ID to cancel",
+          "example": "abc123def456"
+        }
+      },
+      "required": [
+        "session_id"
       ]
     },
     "OAuthDetail": {
@@ -2842,8 +3323,8 @@
         },
         "provider": {
           "type": "string",
-          "description": "Provider name to test against",
-          "example": "openai"
+          "description": "Provider UUID to test against",
+          "example": "550e8400-e29b-41d4-a716-446655440000"
         }
       },
       "required": [
@@ -2862,7 +3343,12 @@
         "messages": {
           "type": "array",
           "description": "Field messages",
-          "items": {}
+          "items": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object"
+            }
+          }
         },
         "model": {
           "type": "string",
@@ -3267,6 +3753,48 @@
         "data"
       ]
     },
+    "RefreshSkillLocationResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "description": "Field data",
+          "$ref": "#/definitions/ScanResult"
+        },
+        "message": {
+          "type": "string",
+          "description": "Field message",
+          "example": "Skill location refreshed successfully"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "message"
+      ]
+    },
+    "RemoveSkillLocationResponse": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string",
+          "description": "Field message",
+          "example": "Skill location removed successfully"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "message"
+      ]
+    },
     "Rule": {
       "type": "object",
       "properties": {
@@ -3371,6 +3899,47 @@
         "data"
       ]
     },
+    "ScanIdesResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "description": "Field data",
+          "$ref": "#/definitions/DiscoveryResult"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success"
+      ]
+    },
+    "ScanResult": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "string",
+          "description": "Field error"
+        },
+        "location_id": {
+          "type": "string",
+          "description": "Field location_id"
+        },
+        "skills": {
+          "type": "array",
+          "description": "Field skills",
+          "items": {
+            "$ref": "#/definitions/Skill"
+          }
+        }
+      },
+      "required": [
+        "location_id",
+        "skills"
+      ]
+    },
     "ScenarioConfig": {
       "type": "object",
       "properties": {
@@ -3432,9 +4001,25 @@
         "data"
       ]
     },
+    "ScenarioFlagUpdateRequest": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean",
+          "description": "Field value"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
     "ScenarioFlags": {
       "type": "object",
       "properties": {
+        "recording": {
+          "type": "boolean",
+          "description": "Field recording"
+        },
         "separate": {
           "type": "boolean",
           "description": "Field separate"
@@ -3442,6 +4027,10 @@
         "smart": {
           "type": "boolean",
           "description": "Field smart"
+        },
+        "smart_compact": {
+          "type": "boolean",
+          "description": "Field smart_compact"
         },
         "unified": {
           "type": "boolean",
@@ -3651,6 +4240,174 @@
         "window_input_tokens",
         "window_output_tokens",
         "time_window"
+      ]
+    },
+    "Skill": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "string",
+          "description": "Field content"
+        },
+        "content_hash": {
+          "type": "string",
+          "description": "Field content_hash"
+        },
+        "description": {
+          "type": "string",
+          "description": "Field description"
+        },
+        "file_type": {
+          "type": "string",
+          "description": "Field file_type"
+        },
+        "filename": {
+          "type": "string",
+          "description": "Field filename"
+        },
+        "id": {
+          "type": "string",
+          "description": "Field id"
+        },
+        "location_id": {
+          "type": "string",
+          "description": "Field location_id"
+        },
+        "modified_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Field modified_at"
+        },
+        "name": {
+          "type": "string",
+          "description": "Field name"
+        },
+        "path": {
+          "type": "string",
+          "description": "Field path"
+        },
+        "size": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field size"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "filename",
+        "path",
+        "location_id",
+        "file_type"
+      ]
+    },
+    "SkillContentResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "description": "Field data",
+          "$ref": "#/definitions/Skill"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success"
+      ]
+    },
+    "SkillLocation": {
+      "type": "object",
+      "properties": {
+        "grouping_strategy": {
+          "description": "Field grouping_strategy",
+          "$ref": "#/definitions/GroupingStrategy"
+        },
+        "icon": {
+          "type": "string",
+          "description": "Field icon"
+        },
+        "id": {
+          "type": "string",
+          "description": "Field id"
+        },
+        "ide_source": {
+          "type": "string",
+          "description": "Field ide_source"
+        },
+        "is_auto_discovered": {
+          "type": "boolean",
+          "description": "Field is_auto_discovered"
+        },
+        "is_installed": {
+          "type": "boolean",
+          "description": "Field is_installed"
+        },
+        "last_scanned_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Field last_scanned_at"
+        },
+        "name": {
+          "type": "string",
+          "description": "Field name"
+        },
+        "path": {
+          "type": "string",
+          "description": "Field path"
+        },
+        "skill_count": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Field skill_count"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "path",
+        "ide_source",
+        "skill_count"
+      ]
+    },
+    "SkillLocationResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "description": "Field data",
+          "$ref": "#/definitions/SkillLocation"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success"
+      ]
+    },
+    "SkillLocationsResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "array",
+          "description": "Field data",
+          "items": {
+            "$ref": "#/definitions/SkillLocation"
+          }
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success",
+          "example": true
+        }
+      },
+      "required": [
+        "success",
+        "data"
       ]
     },
     "SmartOp": {
@@ -4160,7 +4917,7 @@
               "type": "array",
               "description": "Field smart_routing",
               "items": {
-                "type": "SmartRouting"
+                "type": "object"
               }
             },
             "uuid": {
@@ -4442,28 +5199,20 @@
   },
   "tags": [
     {
-      "name": "rules",
-      "description": "Operations related to rules"
-    },
-    {
       "name": "scenarios",
       "description": "Operations related to scenarios"
     },
     {
-      "name": "models",
-      "description": "Operations related to models"
+      "name": "history",
+      "description": "Operations related to history"
     },
     {
       "name": "testing",
       "description": "Operations related to testing"
     },
     {
-      "name": "token",
-      "description": "Operations related to token"
-    },
-    {
-      "name": "providers",
-      "description": "Operations related to providers"
+      "name": "usage",
+      "description": "Operations related to usage"
     },
     {
       "name": "info",
@@ -4474,16 +5223,28 @@
       "description": "Operations related to server"
     },
     {
-      "name": "history",
-      "description": "Operations related to history"
+      "name": "rules",
+      "description": "Operations related to rules"
+    },
+    {
+      "name": "models",
+      "description": "Operations related to models"
+    },
+    {
+      "name": "token",
+      "description": "Operations related to token"
+    },
+    {
+      "name": "providers",
+      "description": "Operations related to providers"
+    },
+    {
+      "name": "skills",
+      "description": "Operations related to skills"
     },
     {
       "name": "oauth",
       "description": "Operations related to oauth"
-    },
-    {
-      "name": "usage",
-      "description": "Operations related to usage"
     },
     {
       "name": "logs",
