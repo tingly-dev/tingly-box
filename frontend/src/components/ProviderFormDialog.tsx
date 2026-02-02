@@ -525,17 +525,17 @@ const ProviderFormDialog = ({
                 </DialogContent>
                 {data.apiStyle && (
                     <DialogActions sx={{ px: 3, pb: 2, gap: 1, justifyContent: 'flex-end' }}>
-                        {/* Add Anyway button - skip verification */}
-                        {mode === 'add' && (
+                        {/* Add/Save Anyway button - skip verification */}
+                        {(mode === 'add' || mode === 'edit') && (
                             <Button
                                 type="button"
                                 variant="outlined"
                                 color="warning"
                                 size="small"
                                 onClick={() => onForceAdd?.()}
-                                title="Skip connectivity check and add anyway. The provider may not work correctly if the connection fails."
+                                title="Skip connectivity check and save anyway. The provider may not work correctly if the connection fails."
                             >
-                                Add Anyway
+                                {mode === 'add' ? 'Add Anyway' : 'Save Anyway'}
                             </Button>
                         )}
                         <Button type="submit" variant="contained" size="small" disabled={verifying}>
