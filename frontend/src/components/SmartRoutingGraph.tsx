@@ -331,7 +331,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                                     value={record.requestModel}
                                                     editable={active}
                                                     onUpdate={(value) => {
-                                                        console.log('Update request model:', value);
+                                                        onUpdateRecord?.('requestModel', value);
                                                     }}
                                                 />
                                             </NodeContainer>
