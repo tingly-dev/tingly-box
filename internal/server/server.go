@@ -76,7 +76,7 @@ type Server struct {
 	recordSink *obs.Sink
 
 	// scenario-specific recording sinks (created on-demand when recording flag is enabled)
-	scenarioRecordSinks map[typ.RuleScenario]*obs.Sink
+	scenarioRecordSinks   map[typ.RuleScenario]*obs.Sink
 	scenarioRecordSinksMu sync.RWMutex
 
 	// options
@@ -213,13 +213,8 @@ func (s *Server) GetOrCreateScenarioSink(scenario typ.RuleScenario) *obs.Sink {
 		return sink
 	}
 
-	// Only create sink if scenario recording mode is enabled
-	if s.recordMode != obs.RecordModeScenario {
-		return nil
-	}
-
 	// Create new sink for this scenario
-	sink := obs.NewSink(s.recordDir, s.recordMode)
+	sink := obs.NewSink(s.recordDir, obs.RecordModeScenario)
 	if sink == nil {
 		logrus.Warnf("Failed to create scenario recording sink for %s", scenario)
 		return nil
