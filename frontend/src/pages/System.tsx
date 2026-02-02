@@ -1,5 +1,5 @@
-import { Cancel, CheckCircle, Key, PlayArrow, Refresh as RefreshIcon, RestartAlt, Stop } from '@mui/icons-material';
-import { Box, Button, IconButton, Stack, Typography, Link, Tabs, Tab } from '@mui/material';
+import { Cancel, CheckCircle, CloudUpload, PlayArrow, Refresh as RefreshIcon, RestartAlt, Stop } from '@mui/icons-material';
+import { Box, Button, CircularProgress, IconButton, Stack, Typography, Link, Tabs, Tab, Alert, AlertTitle } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import CardGrid from '@/components/CardGrid';
@@ -9,10 +9,12 @@ import GlobalExperimentalFeatures from '@/components/GlobalExperimentalFeatures'
 import RequestLog from '@/components/RequestLog';
 import { api, getBaseUrl } from '../services/api';
 import { useVersion } from '../contexts/VersionContext';
+import { useHealth } from '../contexts/HealthContext';
 
 const System = () => {
     const { t } = useTranslation();
-    const { currentVersion } = useVersion();
+    const { currentVersion, hasUpdate, latestVersion, checkingVersion, checkForUpdates } = useVersion();
+    const { isHealthy, checking, checkHealth } = useHealth();
     const [serverStatus, setServerStatus] = useState<any>(null);
     const [baseUrl, setBaseUrl] = useState<string>("");
     const [providersStatus, setProvidersStatus] = useState<any>(null);
@@ -147,97 +149,61 @@ const System = () => {
 
             {currentTab === 0 ? (
                 <CardGrid>
-                    {/* Server Status - Consolidated */}
+                    {/* Server Status - Minimal Design */}
                     <UnifiedCard
-                        title={t('system.pageTitle')}
+                        title="Server Status"
                         size="full"
-                        // rightAction={
-                        //     <Stack direction="row" spacing={1}>
-                        //         <Button
-                        //             variant="outlined"
-                        //             size="small"
-                        //             startIcon={<Key />}
-                        //             onClick={handleGenerateToken}
-                        //             title="Generate Token"
-                        //         >
-                        //             Token
-                        //         </Button>
-                        //         <Button
-                        //             variant="contained"
-                        //             color="success"
-                        //             size="small"
-                        //             startIcon={<PlayArrow />}
-                        //             onClick={handleStartServer}
-                        //             disabled={serverStatus?.server_running}
-                        //             title="Start Server"
-                        //         >
-                        //             Start
-                        //         </Button>
-                        //         <Button
-                        //             variant="contained"
-                        //             color="error"
-                        //             size="small"
-                        //             startIcon={<Stop />}
-                        //             onClick={handleStopServer}
-                        //             disabled={!serverStatus?.server_running}
-                        //             title="Stop Server"
-                        //         >
-                        //             Stop
-                        //         </Button>
-                        //         <Button
-                        //             variant="contained"
-                        //             size="small"
-                        //             startIcon={<RestartAlt />}
-                        //             onClick={handleRestartServer}
-                        //             title="Restart Server"
-                        //         >
-                        //             Restart
-                        //         </Button>
-                        //         <IconButton onClick={loadServerStatus} size="small" title="Refresh Status">
-                        //             <RefreshIcon />
-                        //         </IconButton>
-                        //     </Stack>
-                        // }
+                        rightAction={
+                            <IconButton
+                                onClick={() => { loadServerStatus(); checkHealth(); }}
+                                size="small"
+                                aria-label="Refresh status"
+                            >
+                                {checking ? <CircularProgress size={16} /> : <RefreshIcon />}
+                            </IconButton>
+                        }
                     >
                         {serverStatus ? (
-                            <Stack spacing={3}>
-                                {/* Status Information */}
-                                <Stack spacing={1}>
-                                    <Stack direction="row" alignItems="center" spacing={1}>
-                                        {serverStatus.server_running ? (
-                                            <CheckCircle color="success" />
-                                        ) : (
-                                            <Cancel color="error" />
-                                        )}
-                                        <Typography variant="h6">
-                                            Status: {serverStatus.server_running ? t('system.status.running') : t('system.status.stopped')}
+                            <Stack spacing={2}>
+                                {/* Status Row */}
+                                <Stack direction="row" alignItems="center" spacing={2}>
+                                    {serverStatus.server_running ? (
+                                        <CheckCircle color="success" />
+                                    ) : (
+                                        <Cancel color="error" />
+                                    )}
+                                    <Typography variant="h6" fontWeight={500}>
+                                        {serverStatus.server_running ? t('system.status.running') : t('system.status.stopped')}
+                                    </Typography>
+                                    {isHealthy && (
+                                        <Typography variant="body2" color="success.main">
+                                            · Connected
                                         </Typography>
-                                    </Stack>
+                                    )}
+                                </Stack>
+
+                                {/* Details */}
+                                <Stack spacing={1} pl={5}>
                                     <Typography variant="body2" color="text.secondary">
-                                        <strong>Server:</strong> {baseUrl}
+                                        Server: {baseUrl}
                                     </Typography>
                                     <Typography variant="body2" color="text.secondary">
-                                        <strong>Keys:</strong> {serverStatus.providers_enabled}/{serverStatus.providers_total}
+                                        Keys: {serverStatus.providers_enabled}/{serverStatus.providers_total}
                                     </Typography>
                                     {serverStatus.uptime && (
                                         <Typography variant="body2" color="text.secondary">
-                                            <strong>Uptime:</strong> {serverStatus.uptime}
+                                            Uptime: {serverStatus.uptime}
                                         </Typography>
                                     )}
                                     {serverStatus.last_updated && (
                                         <Typography variant="body2" color="text.secondary">
-                                            <strong>Last Updated:</strong> {serverStatus.last_updated}
+                                            Last updated: {serverStatus.last_updated}
                                         </Typography>
                                     )}
-                                    {/* {serverStatus.request_count !== undefined && (
-                                        <Typography variant="body2" color="text.secondary">
-                                            <strong>Total Requests:</strong> {serverStatus.request_count}
-                                        </Typography>
-                                    )} */}
                                 </Stack>
                             </Stack>
                         ) : (
-                            <div>{t('system.status.loading')}</div>
+                            <Typography color="text.secondary">{t('system.status.loading')}</Typography>
                         )}
                     </UnifiedCard>
 
@@ -246,11 +212,34 @@ const System = () => {
                         title="About"
                         size="medium"
                         width="100%"
+                        rightAction={
+                            <IconButton onClick={() => checkForUpdates(true)} size="small" aria-label="Check for updates" title="Check for updates">
+                                {checkingVersion ? <CircularProgress size={16} /> : <RefreshIcon />}
+                            </IconButton>
+                        }
                     >
                         <Stack spacing={1.5}>
-                            <Typography variant="body2" color="text.secondary">
-                                <strong>Version:</strong> {currentVersion || 'N/A'}
-                            </Typography>
+                            {/* Version Update Alert */}
+                            {hasUpdate && (
+                                <Alert severity="info" icon={<CloudUpload fontSize="inherit" />} sx={{ mb: 1 }}>
+                                    <AlertTitle>Update Available</AlertTitle>
+                                    New version {latestVersion} is available! You are on {currentVersion}.
+                                </Alert>
+                            )}
+
+                            <Stack direction="row" alignItems="center" justifyContent="space-between">
+                                <Typography variant="body2" color="text.secondary">
+                                    <strong>Version:</strong> {currentVersion || 'N/A'}
+                                </Typography>
+                                {hasUpdate && (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'info.main' }}>
+                                        <CloudUpload sx={{ fontSize: 16 }} />
+                                        <Typography variant="caption" color="info.main">
+                                            {latestVersion} available
+                                        </Typography>
+                                    </Box>
+                                )}
+                            </Stack>
                             <Typography variant="body2" color="text.secondary">
                                 <strong>License:</strong> MPL v2.0
                             </Typography>
