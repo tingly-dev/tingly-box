@@ -97,10 +97,16 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
     const handleSave = () => {
         if (!smartRouting) return;
 
+        // Trim string values before saving
+        const cleanedOps = ops.map(op => ({
+            ...op,
+            value: op.meta?.type === 'string' ? op.value?.trim() ?? '' : op.value,
+        }));
+
         const updated: SmartRouting = {
             ...smartRouting,
             description,
-            ops,
+            ops: cleanedOps,
         };
         onSave(updated);
     };
@@ -121,6 +127,21 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
 
     const handleRemoveOp = (index: number) => {
         setOps(ops.filter((_, i) => i !== index));
+    };
+
+    // Format number with thousand separators for display
+    const formatNumberWithCommas = (value: string): string => {
+        if (!value) return '';
+        const numStr = value.replace(/,/g, '');
+        if (!/^\d*$/.test(numStr)) return value;
+        const num = parseInt(numStr, 10);
+        if (isNaN(num)) return '';
+        return num.toLocaleString('en-US');
+    };
+
+    // Parse number input (remove commas) for storage
+    const parseNumberInput = (value: string): string => {
+        return value.replace(/,/g, '');
     };
 
     const handleOpChange = (index: number, field: keyof SmartOp, value: any) => {
@@ -146,10 +167,34 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
                     description: opDef.description,
                     type: opDef.valueType,
                 };
+                // Clear value when operation changes
+                updatedOps[index].value = '';
             }
         }
 
         setOps(updatedOps);
+    };
+
+    const handleValueChange = (index: number, inputValue: string) => {
+        const updatedOps = [...ops];
+        const op = updatedOps[index];
+
+        if (op.meta?.type === 'int') {
+            // For int type, store the raw number (without commas)
+            updatedOps[index].value = parseNumberInput(inputValue);
+        } else {
+            // For string type, store as-is
+            updatedOps[index].value = inputValue;
+        }
+
+        setOps(updatedOps);
+    };
+
+    const getDisplayValue = (op: SmartOp): string => {
+        if (op.meta?.type === 'int') {
+            return formatNumberWithCommas(op.value || '');
+        }
+        return op.value || '';
     };
 
     const isValid = ops.length > 0 && ops.every(op => {
@@ -271,21 +316,21 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
                                                         </Select>
                                                     </FormControl>
 
-                                                    {/* Value Input */}
-                                                    <TextField
-                                                        size="small"
-                                                        label="Value"
-                                                        value={op.value || ''}
-                                                        onChange={(e) => handleOpChange(index, 'value', e.target.value)}
-                                                        placeholder={
-                                                            op.meta?.type === 'int' ? '123' :
-                                                            op.meta?.type === 'bool' ? 'auto-detected' :
-                                                            'enter value'
-                                                        }
-                                                        disabled={op.meta?.type === 'bool'}
-                                                        sx={{ flex: 1 }}
-                                                        type={op.meta?.type === 'int' ? 'number' : 'text'}
-                                                    />
+                                                    {/* Value Input - only show for string and int types */}
+                                                    {op.meta?.type !== 'bool' && (
+                                                        <TextField
+                                                            size="small"
+                                                            label="Value"
+                                                            value={getDisplayValue(op)}
+                                                            onChange={(e) => handleValueChange(index, e.target.value)}
+                                                            placeholder={
+                                                                op.meta?.type === 'int' ? '1,234' :
+                                                                'enter value'
+                                                            }
+                                                            sx={{ flex: 1 }}
+                                                            type={op.meta?.type === 'int' ? 'text' : 'text'}
+                                                        />
+                                                    )}
 
                                                     {/* Delete Button */}
                                                     <IconButton
