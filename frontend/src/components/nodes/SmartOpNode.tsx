@@ -57,18 +57,27 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
         return `[${firstOp.position}] [${opLabel}]`;
     };
 
-    // Get value for second line
+    // Get value for second line - truncated if too long
     const getOpValue = () => {
         if (!firstOp?.value) return '';
         return firstOp.value;
     };
 
-    // Full display for tooltip (includes value)
+    // Truncate value for display (max 20 chars)
+    const getTruncatedValue = () => {
+        const value = getOpValue();
+        if (value.length > 20) {
+            return value.slice(0, 20) + '...';
+        }
+        return value;
+    };
+
+    // Full display for tooltip (includes operation and value)
     const getOpDisplayFull = () => {
         if (!firstOp) return t('rule.smart.noOperation');
         const opLabel = firstOp.operation || 'unknown';
-        const valueStr = firstOp.value ? ` ${firstOp.value}` : '';
-        return `${smartRouting.description || t('rule.smart.untitledRule')}\n[${firstOp.position}] [${opLabel}]${valueStr}`;
+        const valueStr = firstOp.value ? `: ${firstOp.value}` : '';
+        return `[${firstOp.position}] [${opLabel}]${valueStr}`;
     };
 
     return (
@@ -100,8 +109,8 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                 )}
                 {/* Content */}
                 <Box sx={{mt: 1, width: '100%'}}>
-                    {/* Value display - show on hover as description */}
-                    <Tooltip title={smartRouting.description || t('rule.smart.untitledRule')} arrow>
+                    {/* Value display - show truncated with operation details on hover */}
+                    <Tooltip title={getOpDisplayFull()} arrow>
                         <Typography
                             variant="body2"
                             sx={{
@@ -109,9 +118,12 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                 color: 'text.primary',
                                 fontSize: '0.85rem',
                                 mb: 1,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
                             }}
                         >
-                            {getOpValue() || t('rule.smart.noValue')}
+                            {getTruncatedValue() || t('rule.smart.noValue')}
                         </Typography>
                     </Tooltip>
 
