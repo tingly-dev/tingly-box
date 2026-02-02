@@ -123,10 +123,15 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
             };
             const result = await api.createRule('', newRuleData);
             if (result.success && result.data?.uuid) {
-                // Set new rule UUID for scrolling
-                setNewRuleUuid(result.data.uuid);
-                // Trigger parent to reload rules and add to newlyCreatedRuleUuids
+                // Trigger parent to reload rules first
                 onRulesChange?.([...rules, result.data]);
+                // Set new rule UUID for scrolling after DOM is fully updated
+                // Use double RAF to ensure parent component has re-rendered
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        setNewRuleUuid(result.data.uuid);
+                    });
+                });
                 showNotification('Routing rule created successfully!', 'success');
             } else {
                 showNotification(`Failed to create rule: ${result.error || 'Unknown error'}`, 'error');
