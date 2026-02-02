@@ -464,7 +464,7 @@ const ProviderFormDialog = ({
                                 {/* Verification Result */}
                                 {verificationResult && (
                                     <Alert
-                                        severity={verificationResult.success ? 'success' : 'error'}
+                                        severity={verificationResult.success ? 'success' : 'warning'}
                                         sx={{ mt: 1 }}
                                         action={
                                             <IconButton
@@ -485,6 +485,16 @@ const ProviderFormDialog = ({
                                                 <Typography variant="caption" display="block">
                                                     {verificationResult.details}
                                                 </Typography>
+                                            )}
+                                            {!verificationResult.success && (
+                                                <>
+                                                <Typography variant="caption" display="block" sx={{ mt: 0.5, color: 'text.secondary' }}>
+                                                    {t('providerDialog.forceAdd.message')}
+                                                </Typography>
+                                                <Typography variant="caption" display="block" sx={{ mt: 0.5, color: 'text.secondary' }}>
+                                                    {t('providerDialog.forceAdd.explanation')}
+                                                </Typography>
+                                                </>
                                             )}
                                             {verificationResult.responseTime && (
                                                 <Typography variant="caption" display="block">
