@@ -25,7 +25,7 @@ export const ApiConfigRow: React.FC<ApiConfigRowProps> = ({
     isMonospace = true,
     showEllipsis = false
 }) => (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, maxWidth: 700 }}>
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0, maxWidth: 700 }}>
         <Typography
             variant="body2"
             color="text.secondary"

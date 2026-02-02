@@ -1,6 +1,7 @@
 import { Alert, Box, Card, CardContent, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import type { ReactNode } from 'react';
+import React, { forwardRef } from 'react';
 
 interface UnifiedCardProps {
   title?: string | ReactNode;
@@ -102,7 +103,7 @@ const cardVariants = {
   },
 };
 
-export const UnifiedCard = ({
+export const UnifiedCard = forwardRef<HTMLDivElement, UnifiedCardProps>(({
   title,
   subtitle,
   children,
@@ -115,9 +116,10 @@ export const UnifiedCard = ({
   leftAction,
   rightAction,
   sx = {},
-}: UnifiedCardProps) => {
+}, ref) => {
   return (
     <Card
+      ref={ref}
       sx={{
         ...getCardDimensions(size, width, height),
         ...cardVariants[variant],
@@ -146,7 +148,7 @@ export const UnifiedCard = ({
         }}
       >
         {title && (
-          <Box sx={{ mb: 2, flexShrink: 0 }}>
+          <Box sx={{ mb: 1, flexShrink: 0 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: subtitle ? 1 : 0 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
                 <Typography variant="h4" sx={{ fontWeight: 600, color: 'text.primary' }}>
@@ -166,7 +168,7 @@ export const UnifiedCard = ({
           </Box>
         )}
         {message && (
-          <Box sx={{ mb: 2, flexShrink: 0 }}>
+          <Box sx={{ mb: 1, flexShrink: 0 }}>
             <Alert
               severity={message.type}
               onClose={onClearMessage}
@@ -188,6 +190,8 @@ export const UnifiedCard = ({
       </CardContent>
     </Card>
   );
-};
+});
+
+UnifiedCard.displayName = 'UnifiedCard';
 
 export default UnifiedCard;
