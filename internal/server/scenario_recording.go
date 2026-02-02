@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -169,6 +170,19 @@ func (sr *ScenarioRecorder) RecordResponse(provider *typ.Provider, model string)
 	// If this was a streaming response, use the assembled response
 	if sr.isStreaming && sr.assembledResponse != nil {
 		bodyJSON = sr.assembledResponse
+	} else if sr.isStreaming && len(sr.streamChunks) > 0 {
+		// Fallback for streaming: if no assembled response but we have chunks,
+		// create a minimal response with the chunks
+		bodyJSON = map[string]interface{}{
+			"id":             fmt.Sprintf("msg_%d", sr.startTime.Unix()),
+			"type":           "message",
+			"role":           "assistant",
+			"content":        []interface{}{},
+			"model":          model,
+			"_stream_chunks": len(sr.streamChunks),
+			"_note":          "Assembled response not available, using fallback",
+		}
+		logrus.Debugf("ScenarioRecorder: using fallback in RecordResponse, chunks=%d", len(sr.streamChunks))
 	} else {
 		// Try to get response body if it was captured
 		if responseBody, exists := sr.c.Get("response_body"); exists {
@@ -283,6 +297,7 @@ func (sr *streamRecorder) RecordV1BetaEvent(event *anthropic.BetaRawMessageStrea
 
 // Finish finishes recording and sets the assembled response
 // For protocol conversion scenarios, it uses the tracked usage information
+// If the assembler returns nil, it creates a fallback response from collected chunks
 func (sr *streamRecorder) Finish(model string, inputTokens, outputTokens int) {
 	if sr == nil {
 		return
@@ -295,6 +310,24 @@ func (sr *streamRecorder) Finish(model string, inputTokens, outputTokens int) {
 	assembled := sr.assembler.Finish(model, inputTokens, outputTokens)
 	if assembled != nil {
 		sr.recorder.SetAssembledResponse(assembled)
+	} else {
+		// Fallback: if assembler returned nil but we have chunks, create a minimal response
+		if len(sr.recorder.streamChunks) > 0 {
+			fallbackResp := map[string]interface{}{
+				"id":          fmt.Sprintf("msg_%d", sr.recorder.startTime.Unix()),
+				"type":        "message",
+				"role":        "assistant",
+				"content":     []interface{}{},
+				"model":       model,
+				"stop_reason": sr.recorder.c.Query("stop_reason"),
+				"usage": map[string]interface{}{
+					"input_tokens":  inputTokens,
+					"output_tokens": outputTokens,
+				},
+			}
+			sr.recorder.SetAssembledResponse(fallbackResp)
+			logrus.Debugf("StreamRecorder: using fallback response, chunks=%d", len(sr.recorder.streamChunks))
+		}
 	}
 }
 

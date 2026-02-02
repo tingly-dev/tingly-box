@@ -91,6 +91,9 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			if err != nil {
 				s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "forward_failed")
 				SendForwardingError(c, err)
+				if recorder != nil {
+					recorder.RecordError(err)
+				}
 				return
 			}
 
@@ -101,12 +104,21 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 
 			// FIXME: now we use req model as resp model
 			anthropicResp.Model = anthropic.Model(proxyModel)
+
+			// Record response if scenario recording is enabled
+			if recorder != nil {
+				recorder.SetAssembledResponse(anthropicResp)
+				recorder.RecordResponse(provider, actualModel)
+			}
 			c.JSON(http.StatusOK, anthropicResp)
 		}
 		return
 	case protocol.APIStyleGoogle:
 		if !s.enableAdaptor {
 			SendAdapterDisabledError(c, provider.Name)
+			if recorder != nil {
+				recorder.RecordError(fmt.Errorf("adapter disabled for provider: %s", provider.Name))
+			}
 			return
 		}
 
@@ -118,6 +130,9 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			streamResp, err := s.forwardGoogleStreamRequest(provider, model, googleReq, cfg)
 			if err != nil {
 				SendStreamingError(c, err)
+				if recorder != nil {
+					recorder.RecordError(err)
+				}
 				return
 			}
 
@@ -125,6 +140,9 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			err = stream.HandleGoogleToAnthropicBetaStreamResponse(c, streamResp, proxyModel)
 			if err != nil {
 				SendInternalError(c, err.Error())
+				if recorder != nil {
+					recorder.RecordError(err)
+				}
 			}
 
 			// Track usage from stream (would be accumulated in handler)
@@ -135,6 +153,9 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			resp, err := s.forwardGoogleRequest(provider, model, googleReq, cfg)
 			if err != nil {
 				SendForwardingError(c, err)
+				if recorder != nil {
+					recorder.RecordError(err)
+				}
 				return
 			}
 
@@ -150,12 +171,20 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			}
 			s.trackUsage(c, rule, provider, actualModel, proxyModel, inputTokens, outputTokens, false, "success", "")
 
+			// Record response if scenario recording is enabled
+			if recorder != nil {
+				recorder.SetAssembledResponse(anthropicResp)
+				recorder.RecordResponse(provider, actualModel)
+			}
 			c.JSON(http.StatusOK, anthropicResp)
 		}
 	case protocol.APIStyleOpenAI:
 		// Check if adaptor is enabled
 		if !s.enableAdaptor {
 			SendAdapterDisabledError(c, provider.Name)
+			if recorder != nil {
+				recorder.RecordError(fmt.Errorf("adapter disabled for provider: %s", provider.Name))
+			}
 			return
 		}
 
@@ -239,15 +268,32 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 				resp, err := s.forwardOpenAIRequest(provider, openaiReq)
 				if err != nil {
 					SendForwardingError(c, err)
+					if recorder != nil {
+						recorder.RecordError(err)
+					}
 					return
 				}
 				// Convert OpenAI response back to Anthropic beta format
 				anthropicResp := nonstream.ConvertOpenAIToAnthropicBetaResponse(resp, proxyModel)
+
+				// Track usage from response
+				inputTokens := int(resp.Usage.PromptTokens)
+				outputTokens := int(resp.Usage.CompletionTokens)
+				s.trackUsage(c, rule, provider, actualModel, proxyModel, inputTokens, outputTokens, false, "success", "")
+
+				// Record response if scenario recording is enabled
+				if recorder != nil {
+					recorder.SetAssembledResponse(anthropicResp)
+					recorder.RecordResponse(provider, actualModel)
+				}
 				c.JSON(http.StatusOK, anthropicResp)
 			}
 		}
 	default:
 		c.JSON(http.StatusBadRequest, "tingly-box: invalid api style")
+		if recorder != nil {
+			recorder.RecordError(fmt.Errorf("invalid api style: %s", apiStyle))
+		}
 	}
 }
 
@@ -405,6 +451,12 @@ func (s *Server) handleAnthropicV1BetaViaChatCompletions(c *gin.Context, req pro
 
 // handleAnthropicV1BetaViaResponsesAPINonStreaming handles non-streaming Responses API request
 func (s *Server) handleAnthropicV1BetaViaResponsesAPINonStreaming(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, proxyModel string, actualModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule, responsesReq responses.ResponseNewParams) {
+	// Get scenario recorder if exists
+	var recorder *ScenarioRecorder
+	if r, exists := c.Get("scenario_recorder"); exists {
+		recorder = r.(*ScenarioRecorder)
+	}
+
 	var response *responses.Response
 	var err error
 
@@ -420,6 +472,9 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPINonStreaming(c *gin.Context
 	if err != nil {
 		s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "forward_failed")
 		SendForwardingError(c, err)
+		if recorder != nil {
+			recorder.RecordError(err)
+		}
 		return
 	}
 
@@ -432,6 +487,12 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPINonStreaming(c *gin.Context
 
 	// Convert Responses API response back to Anthropic beta format
 	anthropicResp := nonstream.ConvertResponsesToAnthropicBetaResponse(response, proxyModel)
+
+	// Record response if scenario recording is enabled
+	if recorder != nil {
+		recorder.SetAssembledResponse(anthropicResp)
+		recorder.RecordResponse(provider, actualModel)
+	}
 	c.JSON(http.StatusOK, anthropicResp)
 }
 
@@ -460,6 +521,9 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPIStreaming(c *gin.Context, r
 	if err != nil {
 		s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "stream_creation_failed")
 		SendStreamingError(c, err)
+		if streamRec != nil {
+			streamRec.RecordError(err)
+		}
 		return
 	}
 	defer cancel()
