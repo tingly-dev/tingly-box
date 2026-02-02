@@ -192,21 +192,20 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
                 </Box>
             </DialogContent>
 
-            <DialogActions sx={{ px: 3, pb: 2, pt: 1, justifyContent: 'flex-end' }}>
+            <DialogActions sx={{ px: 3, pb: 2, pt: 1, gap: 1, justifyContent: 'flex-end' }}>
+                <Button onClick={onClose} color="inherit">
+                    {t('common.cancel')}
+                </Button>
                 {onApply && (
                     <Button
                         onClick={onApply}
                         variant="contained"
-                        color="primary"
                         disabled={isApplyLoading}
                         startIcon={isApplyLoading ? <CircularProgress size={16} color="inherit" /> : null}
                     >
                         {isApplyLoading ? 'Applying...' : 'Apply Configurations'}
                     </Button>
                 )}
-                <Button onClick={onClose} variant="contained" color="primary">
-                    {t('common.confirm')}
-                </Button>
             </DialogActions>
         </Dialog>
     );

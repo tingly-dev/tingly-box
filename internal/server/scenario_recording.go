@@ -19,7 +19,11 @@ import (
 // RecordScenarioRequest records the scenario-level request (client -> tingly-box)
 // This captures the original request from the client before any transformation
 func (s *Server) RecordScenarioRequest(c *gin.Context, scenario string) *ScenarioRecorder {
-	if s.scenarioRecordSink == nil {
+	scenarioType := typ.RuleScenario(scenario)
+
+	// Get or create sink for this scenario (on-demand)
+	sink := s.GetOrCreateScenarioSink(scenarioType)
+	if sink == nil {
 		return nil
 	}
 
@@ -50,7 +54,7 @@ func (s *Server) RecordScenarioRequest(c *gin.Context, scenario string) *Scenari
 	}
 
 	return &ScenarioRecorder{
-		sink:      s.scenarioRecordSink,
+		sink:      sink,
 		scenario:  scenario,
 		req:       req,
 		startTime: time.Now(),

@@ -73,8 +73,11 @@ type Server struct {
 	capabilityStore *db.ModelCapabilityStore
 
 	// recording sinks
-	recordSink         *obs.Sink
-	scenarioRecordSink *obs.Sink // Scenario-level recording sink (client -> tingly-box traffic)
+	recordSink *obs.Sink
+
+	// scenario-specific recording sinks (created on-demand when recording flag is enabled)
+	scenarioRecordSinks   map[typ.RuleScenario]*obs.Sink
+	scenarioRecordSinksMu sync.RWMutex
 
 	// options
 	enableUI      bool
@@ -199,6 +202,29 @@ func (s *Server) IsFeatureEnabled(feature string) bool {
 	return s.experimentalFeatures[feature]
 }
 
+// GetOrCreateScenarioSink gets or creates a recording sink for the specified scenario
+// The sink is created on-demand and cached for subsequent use
+func (s *Server) GetOrCreateScenarioSink(scenario typ.RuleScenario) *obs.Sink {
+	s.scenarioRecordSinksMu.Lock()
+	defer s.scenarioRecordSinksMu.Unlock()
+
+	// Return existing sink if already created
+	if sink, exists := s.scenarioRecordSinks[scenario]; exists {
+		return sink
+	}
+
+	// Create new sink for this scenario
+	sink := obs.NewSink(s.recordDir, obs.RecordModeScenario)
+	if sink == nil {
+		logrus.Warnf("Failed to create scenario recording sink for %s", scenario)
+		return nil
+	}
+
+	s.scenarioRecordSinks[scenario] = sink
+	logrus.Debugf("Created scenario recording sink for %s, directory: %s", scenario, s.recordDir)
+	return sink
+}
+
 // NewServer creates a new HTTP server instance with functional options
 func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Start with default options
@@ -228,39 +254,39 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 		log.Println("No user token found in global config, generating new user token...")
 		apiKey, err := jwtManager.GenerateAPIKey("user")
 		if err != nil {
-			log.Printf("Failed to generate user API key: %v", err)
+			logrus.Debugf("Failed to generate user API key: %v", err)
 		} else {
 			if err := cfg.SetUserToken(apiKey); err != nil {
-				log.Printf("Failed to save generated user token: %v", err)
+				logrus.Debugf("Failed to save generated user token: %v", err)
 			} else {
-				log.Printf("Generated and saved new user API token: %s", apiKey)
+				logrus.Debugf("Generated and saved new user API token: %s", apiKey)
 			}
 		}
 	} else {
-		log.Printf("Using existing user token from global config")
+		logrus.Debugf("Using existing user token from global config")
 	}
 
 	if !cfg.HasModelToken() {
 		log.Println("No model token found in global config, generating new model token...")
 		apiKey, err := jwtManager.GenerateAPIKey("model")
 		if err != nil {
-			log.Printf("Failed to generate model API key: %v", err)
+			logrus.Debugf("Failed to generate model API key: %v", err)
 		} else {
 			apiKey = "tingly-box-" + apiKey
 			if err := cfg.SetModelToken(apiKey); err != nil {
-				log.Printf("Failed to save generated model token: %v", err)
+				logrus.Debugf("Failed to save generated model token: %v", err)
 			} else {
-				log.Printf("Generated and saved new model API token: %s", apiKey)
+				logrus.Debugf("Generated and saved new model API token: %s", apiKey)
 			}
 		}
 	} else {
-		log.Printf("Using existing model token from global config")
+		logrus.Debugf("Using existing model token from global config")
 	}
 
 	// Initialize memory logger
 	memoryLogger, err := obs.NewMemoryLogger()
 	if err != nil {
-		log.Printf("Warning: Failed to initialize memory logger: %v", err)
+		logrus.Debugf("Warning: Failed to initialize memory logger: %v", err)
 		memoryLogger = nil
 	}
 
@@ -273,12 +299,12 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	filterExpr := cfg.GetErrorLogFilterExpression()
 	if filterExpr != "" {
 		if err := errorMW.SetFilterExpression(filterExpr); err != nil {
-			log.Printf("Warning: Failed to set error log filter expression '%s': %v, using default", filterExpr, err)
+			logrus.Debugf("Warning: Failed to set error log filter expression '%s': %v, using default", filterExpr, err)
 		} else {
-			log.Printf("ErrorLog middleware initialized with filter: %s, logging to: %s", filterExpr, errorLogPath)
+			logrus.Debugf("ErrorLog middleware initialized with filter: %s, logging to: %s", filterExpr, errorLogPath)
 		}
 	} else {
-		log.Printf("ErrorLog middleware initialized with default filter, logging to: %s", errorLogPath)
+		logrus.Debugf("ErrorLog middleware initialized with default filter, logging to: %s", errorLogPath)
 	}
 
 	// Create server struct first with applied options
@@ -287,6 +313,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.logger = memoryLogger
 	server.clientPool = client.NewClientPool() // Initialize client pool
 	server.errorMW = errorMW
+	server.scenarioRecordSinks = make(map[typ.RuleScenario]*obs.Sink)
 
 	// Initialize record sink if recording is enabled
 	switch server.recordMode {
@@ -295,10 +322,10 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	case obs.RecordModeResponse, obs.RecordModeAll:
 		recordSink := obs.NewSink(server.recordDir, server.recordMode)
 		server.clientPool.SetRecordSink(recordSink)
-		log.Printf("Request recording enabled, mode: %s, directory: %s", server.recordMode, server.recordDir)
+		logrus.Debugf("Request recording enabled, mode: %s, directory: %s", server.recordMode, server.recordDir)
 	case obs.RecordModeScenario:
-		server.scenarioRecordSink = obs.NewSink(server.recordDir, server.recordMode)
-		log.Printf("Scenario recording enabled, mode: %s, directory: %s", server.recordMode, server.recordDir)
+		// Scenario recording is now on-demand, created when scenario flag is enabled
+		logrus.Debugf("Scenario recording mode enabled, sinks will be created on-demand per scenario")
 	default:
 		log.Panicf("Unknown recording mode %s", server.recordMode)
 	}
@@ -355,9 +382,9 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize template manager with GitHub URL for template sync
 	templateManager := data.NewTemplateManager(data.TemplateGitHubURL)
 	if err := templateManager.Initialize(context.Background()); err != nil {
-		log.Printf("Failed to fetch from GitHub, using embedded provider templates: %v", err)
+		logrus.Debugf("Failed to fetch from GitHub, using embedded provider templates: %v", err)
 	} else {
-		log.Printf("Provider templates initialized (version: %s)", templateManager.GetVersion())
+		logrus.Debugf("Provider templates initialized (version: %s)", templateManager.GetVersion())
 	}
 	server.templateManager = templateManager
 
@@ -368,16 +395,16 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.probeCache = NewProbeCache(24 * time.Hour)
 	// Start background cleanup task for expired cache entries
 	server.probeCache.StartCleanupTask(1 * time.Hour)
-	log.Printf("Probe cache initialized with TTL: 24h")
+	logrus.Debugf("Probe cache initialized with TTL: 24h")
 
 	// Initialize model capability store
 	capabilityStore, err := db.NewModelCapabilityStore(cfg.ConfigDir)
 	if err != nil {
-		log.Printf("Failed to initialize model capability store: %v", err)
+		logrus.Debugf("Failed to initialize model capability store: %v", err)
 		// Continue without capability store - will use in-memory cache only
 	} else {
 		server.capabilityStore = capabilityStore
-		log.Printf("Model capability store initialized")
+		logrus.Debugf("Model capability store initialized")
 	}
 
 	// Setup middleware
@@ -399,7 +426,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 func (s *Server) setupConfigWatcher() {
 	watcher, err := config.NewConfigWatcher(s.config)
 	if err != nil {
-		log.Printf("Failed to create config watcher: %v", err)
+		logrus.Debugf("Failed to create config watcher: %v", err)
 		return
 	}
 
@@ -444,14 +471,14 @@ func (s *Server) startDynamicCallbackServer(sessionID string, port int) error {
 			return
 		}
 
-		log.Printf("[OAuth] Callback received: %s %s", r.Method, r.URL.Path)
-		log.Printf("[OAuth] Query params: %v", r.URL.Query())
+		logrus.Debugf("[OAuth] Callback received: %s %s", r.Method, r.URL.Path)
+		logrus.Debugf("[OAuth] Query params: %v", r.URL.Query())
 
 		// Delegate to the OAuth callback handler
 		// We need to directly call the oauth manager since gin won't work here
 		token, err := s.oauthManager.HandleCallback(r.Context(), r)
 		if err != nil {
-			log.Printf("[OAuth] Callback error: %v", err)
+			logrus.Debugf("[OAuth] Callback error: %v", err)
 			w.Header().Set("Content-Type", "text/html")
 			w.WriteHeader(http.StatusBadRequest)
 			fmt.Fprintf(w, "<html><body><h1>OAuth Error</h1><p>%s</p></body></html>", err.Error())
@@ -461,7 +488,7 @@ func (s *Server) startDynamicCallbackServer(sessionID string, port int) error {
 		// Use createProviderFromToken to create the provider
 		providerUUID, err := s.createProviderFromToken(token, token.Provider, "", token.SessionID)
 		if err != nil {
-			log.Printf("[OAuth] Failed to create provider: %v", err)
+			logrus.Debugf("[OAuth] Failed to create provider: %v", err)
 			w.Header().Set("Content-Type", "text/html")
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "<html><body><h1>OAuth Error</h1><p>Failed to create provider: %v</p></body></html>", err)
@@ -473,7 +500,7 @@ func (s *Server) startDynamicCallbackServer(sessionID string, port int) error {
 			_ = s.oauthManager.UpdateSessionStatus(token.SessionID, oauth2.SessionStatusSuccess, providerUUID, "")
 		}
 
-		log.Printf("[OAuth] Callback successful for provider %s, created provider %s", token.Provider, providerUUID)
+		logrus.Debugf("[OAuth] Callback successful for provider %s, created provider %s", token.Provider, providerUUID)
 
 		// Stop the dynamic callback server after successful callback
 		go func() {
@@ -515,7 +542,7 @@ func (s *Server) startDynamicCallbackServer(sessionID string, port int) error {
 	// Store the callback server reference
 	s.callbackServers[sessionID] = callbackServer
 
-	log.Printf("[OAuth] Started dynamic callback server on port %d for session %s", port, sessionID)
+	logrus.Debugf("[OAuth] Started dynamic callback server on port %d for session %s", port, sessionID)
 
 	// Auto-shutdown after 5 minutes
 	go func() {
@@ -541,7 +568,7 @@ func (s *Server) stopDynamicCallbackServer(sessionID string) {
 	defer cancel()
 
 	if err := callbackServer.Stop(ctx); err != nil {
-		log.Printf("[OAuth] Error stopping callback server for session %s: %v", sessionID, err)
+		logrus.Debugf("[OAuth] Error stopping callback server for session %s: %v", sessionID, err)
 	}
 
 	// Remove from map
@@ -550,7 +577,7 @@ func (s *Server) stopDynamicCallbackServer(sessionID string) {
 	// Reset proxy URL after OAuth flow completes
 	s.oauthManager.ResetProxyURL()
 
-	log.Printf("[OAuth] Stopped dynamic callback server for session %s", sessionID)
+	logrus.Debugf("[OAuth] Stopped dynamic callback server for session %s", sessionID)
 }
 
 // setupMiddleware configures server middleware
@@ -705,7 +732,7 @@ func (s *Server) Start(port int) error {
 	// Start configuration watcher
 	if s.watcher != nil {
 		if err := s.watcher.Start(); err != nil {
-			log.Printf("Failed to start config watcher: %v", err)
+			logrus.Debugf("Failed to start config watcher: %v", err)
 		} else {
 			log.Println("Configuration hot-reload enabled")
 		}
@@ -728,7 +755,7 @@ func (s *Server) Start(port int) error {
 			return fmt.Errorf("failed to setup HTTPS certificates: %w", err)
 		}
 
-		log.Printf("HTTPS enabled, using certificates from: %s", certDir)
+		logrus.Debugf("HTTPS enabled, using certificates from: %s", certDir)
 	}
 
 	addr := fmt.Sprintf("%s:%d", s.host, port)
@@ -859,6 +886,17 @@ func (s *Server) Stop(ctx context.Context) error {
 		s.watcher.Stop()
 		log.Println("Configuration watcher stopped")
 	}
+
+	// Close all scenario recording sinks
+	s.scenarioRecordSinksMu.Lock()
+	for scenario, sink := range s.scenarioRecordSinks {
+		if sink != nil {
+			sink.Close()
+			logrus.Debugf("Closed scenario recording sink for %s", scenario)
+		}
+	}
+	s.scenarioRecordSinks = make(map[typ.RuleScenario]*obs.Sink)
+	s.scenarioRecordSinksMu.Unlock()
 
 	fmt.Println("Shutting down server...")
 	return s.httpServer.Shutdown(ctx)

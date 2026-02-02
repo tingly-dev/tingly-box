@@ -13,7 +13,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
-	"github.com/tingly-dev/tingly-box/internal/feature"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/smart_compact"
@@ -40,13 +39,17 @@ type (
 // This is the entry point that delegates to the appropriate implementation (v1 or beta)
 func (s *Server) AnthropicMessages(c *gin.Context) {
 	scenario := c.Param("scenario")
+	scenarioType := typ.RuleScenario(scenario)
 
-	// Start scenario-level recording (client -> tingly-box traffic)
-	recorder := s.RecordScenarioRequest(c, scenario)
-	if recorder != nil {
-		// Store recorder in context for use in handlers
-		c.Set("scenario_recorder", recorder)
-		// Note: RecordResponse will be called by handler after stream completes
+	// Start scenario-level recording (client -> tingly-box traffic) only if enabled
+	var recorder *ScenarioRecorder
+	if s.ApplyRecording(scenarioType) {
+		recorder = s.RecordScenarioRequest(c, scenario)
+		if recorder != nil {
+			// Store recorder in context for use in handlers
+			c.Set("scenario_recorder", recorder)
+			// Note: RecordResponse will be called by handler after stream completes
+		}
 	}
 
 	// Check if beta parameter is set to true
@@ -127,8 +130,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		rule            *typ.Rule
 	)
 
-	// Convert string to RuleScenario and validate
-	scenarioType := typ.RuleScenario(scenario)
+	// Validate scenario
 	if !isValidRuleScenario(scenarioType) {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -151,16 +153,16 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 
 	// Delegate to the appropriate implementation based on beta parameter
 	if beta {
-		// Apply compact transformation only if the compact feature is enabled
-		if s.IsFeatureEnabled(feature.FeatureCompact) {
+		// Apply compact transformation only if the compact feature is enabled for this scenario
+		if s.ApplySmartCompact(scenarioType) {
 			tf := smart_compact.NewCompactTransformer(2)
 			tf.HandleV1Beta(&betaMessages.BetaMessageNewParams)
 			logrus.Infoln("smart compact triggered")
 		}
 		s.anthropicMessagesV1Beta(c, betaMessages, model, provider, selectedService, rule)
 	} else {
-		// Apply compact transformation only if the compact feature is enabled
-		if s.IsFeatureEnabled(feature.FeatureCompact) {
+		// Apply compact transformation only if the compact feature is enabled for this scenario
+		if s.ApplySmartCompact(scenarioType) {
 			tf := smart_compact.NewCompactTransformer(2)
 			tf.HandleV1(&messages.MessageNewParams)
 			logrus.Infoln("smart compact triggered")

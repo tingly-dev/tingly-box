@@ -1258,10 +1258,12 @@ func (rm *RouteManager) getSwaggerType(goType reflect.Type) Schema {
 		if elemType.Kind() == reflect.Ptr {
 			elemType = elemType.Elem()
 		}
-		// Just return basic array type, nested structs will be handled at higher level
+		// Get the proper schema for the element type
+		// This handles type aliases correctly (e.g., IDESource which is "type IDESource string")
+		elemSchema := rm.getSwaggerType(elemType)
 		return Schema{
 			Type:  "array",
-			Items: &Schema{Type: elemType.Name()},
+			Items: &elemSchema,
 		}
 	case reflect.Map:
 		// Get key and value types

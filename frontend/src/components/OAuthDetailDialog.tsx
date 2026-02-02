@@ -305,8 +305,8 @@ const OAuthDetailDialog = ({ open, provider, onClose, onSubmit }: OAuthDetailDia
                         )}
                     </Stack>
                 </DialogContent>
-                <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Button onClick={onClose}>Cancel</Button>
+                <DialogActions sx={{ px: 3, pb: 2, gap: 1, justifyContent: 'flex-end' }}>
+                    <Button onClick={onClose} color="inherit">Cancel</Button>
                     <Button
                         type="submit"
                         variant="contained"

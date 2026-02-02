@@ -51,7 +51,7 @@ const RULE_GRAPH_STYLES = {
     // Header
     header: {
         paddingX: 16,  // spacing(2)
-        paddingY: 8,   // spacing(1)
+        paddingY: 6,   // spacing(0.75) - reduced from 8 for smaller height
     },
     // Graph container
     graphContainer: {
@@ -227,7 +227,7 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                 onClick={collapsible ? onToggleExpanded : undefined}
             >
                 {/* Left side */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1, minWidth: 0 }}>
                     <Tooltip title={record.requestModel
                         ? `Use "${record.requestModel}" as model name in your API requests. (click to copy)`
                         : 'No model specified'}>
@@ -280,8 +280,28 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                             borderColor: !record.active ? 'error.main' : undefined,
                             color: !record.active ? 'error.main' : undefined,
                             fontWeight: !record.active ? 600 : undefined,
+                            flexShrink: 0,
                         }}
                     />
+                    {/* Rule Description - moved to top bar with auto-truncate, after active badge */}
+                    {record.description && (
+                        <Tooltip title={record.description} arrow>
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    color: 'text.secondary',
+                                    fontSize: '0.75rem',
+                                    fontStyle: 'italic',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    maxWidth: '400px',
+                                }}
+                            >
+                                {record.description}
+                            </Typography>
+                        </Tooltip>
+                    )}
                     {record.active && record.providers.length === 0 && (
                         <Tooltip title="No providers configured - add a provider to enable request forwarding">
                             <WarningIcon
@@ -326,28 +346,6 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                         >
                             <ExpandMoreIcon />
                         </IconButton>
-                    )}
-                </Box>
-                <Box
-                    onClick={(e) => e.stopPropagation()}
-                    sx={{
-                        width: '100%',
-                        flexBasis: '100%',
-                        mt: 0.5,
-                        minHeight: '18px',
-                    }}
-                >
-                    {record.description && (
-                        <Typography
-                            variant="body2"
-                            sx={{
-                                color: 'text.secondary',
-                                fontSize: '0.8rem',
-                                fontStyle: 'italic',
-                            }}
-                        >
-                            {record.description}
-                        </Typography>
                     )}
                 </Box>
             </SummarySection>

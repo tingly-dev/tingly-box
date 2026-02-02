@@ -311,8 +311,10 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
                     </Box>
                 </Stack>
             </DialogContent>
-            <DialogActions>
-                <Button onClick={onCancel}>Cancel</Button>
+            <DialogActions sx={{ px: 3, pb: 2, gap: 1, justifyContent: 'flex-end' }}>
+                <Button onClick={onCancel} color="inherit">
+                    Cancel
+                </Button>
                 <Button
                     onClick={handleSave}
                     variant="contained"

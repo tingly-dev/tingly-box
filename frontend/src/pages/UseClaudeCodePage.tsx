@@ -1,5 +1,6 @@
 import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
+import ExperimentalFeatures from "@/components/ExperimentalFeatures.tsx";
 import {
     Box,
     Button,
@@ -9,9 +10,13 @@ import {
     DialogTitle,
     ToggleButton,
     ToggleButtonGroup,
-    Typography
+    Tooltip,
+    Typography,
+    IconButton
 } from '@mui/material';
-import React, { useEffect, useState } from 'react';
+import InfoOutlined from '@mui/icons-material/InfoOutlined';
+import InfoIcon from '@mui/icons-material/Info';
+import React, { useEffect, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import ClaudeCodeConfigModal from '@/components/ClaudeCodeConfigModal';
@@ -21,6 +26,7 @@ import TemplatePage from '@/components/TemplatePage.tsx';
 import { FEATURE_FLAGS, isFeatureEnabled } from '../constants/featureFlags';
 import { useFunctionPanelData } from '../hooks/useFunctionPanelData';
 import { api, getBaseUrl } from '../services/api';
+import {ToggleButtonGroupStyle, ToggleButtonStyle} from "@/styles/style.tsx";
 
 type ConfigMode = 'unified' | 'separate' | 'smart';
 
@@ -36,6 +42,8 @@ const CONFIG_MODES: { value: ConfigMode; label: string; description: string; ena
 const UseClaudeCodePage: React.FC = () => {
     const { t } = useTranslation();
     const navigate = useNavigate();
+    const headerRef = useRef<HTMLDivElement>(null);
+    const [headerHeight, setHeaderHeight] = useState<number>(0);
     const {
         showTokenModal,
         setShowTokenModal,
@@ -43,6 +51,7 @@ const UseClaudeCodePage: React.FC = () => {
         showNotification,
         providers,
         loading: providersLoading,
+        notification,
     } = useFunctionPanelData();
     const [baseUrl, setBaseUrl] = React.useState<string>('');
     const [rules, setRules] = React.useState<any[]>([]);
@@ -55,6 +64,44 @@ const UseClaudeCodePage: React.FC = () => {
     // Claude Code config modal state
     const [configModalOpen, setConfigModalOpen] = React.useState(false);
     const [isApplyLoading, setIsApplyLoading] = React.useState(false);
+
+    // Measure header height
+    useEffect(() => {
+        if (providers.length === 0) {
+            return;
+        }
+
+        // Add more delay to ensure DOM is fully rendered
+        const timeoutId = setTimeout(() => {
+            if (!headerRef.current) {
+                return;
+            }
+
+            const updateHeight = () => {
+                if (headerRef.current) {
+                    const height = headerRef.current.offsetHeight || 0;
+                    setHeaderHeight(height);
+                }
+            };
+
+            updateHeight();
+
+            // Use ResizeObserver to detect size changes
+            const resizeObserver = new ResizeObserver(() => {
+                updateHeight();
+            });
+
+            resizeObserver.observe(headerRef.current);
+
+            return () => {
+                resizeObserver.disconnect();
+            };
+        }, 200);
+
+        return () => {
+            clearTimeout(timeoutId);
+        };
+    }, [providers.length, configMode]);
 
     const handleAddApiKeyClick = () => {
         navigate('/api-keys?dialog=add');
@@ -442,10 +489,17 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
     const isLoading = providersLoading || loadingRule;
 
     return (
-        <PageLayout loading={isLoading}>
+        <PageLayout loading={isLoading} notification={notification}>
             {!providers.length ? (
                 <CardGrid>
-                    <UnifiedCard title="Use Claude Code" size="full">
+                    <UnifiedCard
+                        title={
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <span>Use Claude Code</span>
+                            </Box>
+                        }
+                        size="full"
+                    >
                         <EmptyStateGuide
                             title="No Providers Configured"
                             description="Add an API key or OAuth provider to get started"
@@ -457,7 +511,17 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
             ) : (
                 <CardGrid>
                     <UnifiedCard
-                        title="Use Claude Code"
+                        ref={headerRef}
+                        title={
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <span>Use Claude Code</span>
+                                <Tooltip title={`Base URL: ${baseUrl}/tingly/claude_code`}>
+                                    <IconButton size="small" sx={{ ml: 0.5 }}>
+                                        <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                                    </IconButton>
+                                </Tooltip>
+                            </Box>
+                        }
                         size="full"
                         rightAction={
                             <Button
@@ -465,72 +529,70 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                                 variant="contained"
                                 color="primary"
                                 size="small"
-                                sx={{ fontSize: '0.875rem' }}
                             >
                                 {t('claudeCode.modal.showGuide')}
                             </Button>
                         }
                     >
-                        <Box sx={{ mb: 2 }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                                Configure Claude Code to use Tingly Box as your AI model proxy
-                            </Typography>
-                            {CONFIG_MODES.filter(m => m.enabled).map((mode) => (
-                                <Box key={mode.value} sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                                    <Typography variant="body2" color="text.secondary">
-                                        <Box component="span" sx={{ fontWeight: 600, color: 'primary.main' }}>
-                                            {mode.label}:
-                                        </Box> {mode.description}
-                                    </Typography>
-                                </Box>
-                            ))}
-                        </Box>
+                        {/* Mode selection row */}
+                        <Box sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            py: 2,
+                            gap: 3,
+                            borderBottom: '1px solid',
+                            borderColor: 'divider'
+                        }}>
+                            {/* Label with info tooltip */}
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
+                                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                    Mode
+                                </Typography>
+                                <Tooltip
+                                    title={
+                                        <>
+                                            Unified: Single model for all requests
+                                            <br />
+                                            Separate: Distinct models for each variant
+                                        </>
+                                    }
+                                    arrow
+                                >
+                                    <InfoOutlined sx={{ fontSize: '1rem', color: 'text.secondary', cursor: 'help' }} />
+                                </Tooltip>
+                            </Box>
 
-                        {/* Mode switch - controlled by feature flag */}
-                        {isFeatureEnabled(FEATURE_FLAGS.CLAUDE_CODE_MODE_SWITCH) && (
-                            <>
-                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 2 }}>
-                                    <ToggleButtonGroup
-                                        value={configMode}
-                                        exclusive
-                                        size="small"
-                                        onChange={(_, value) => value && handleConfigModeChange(value)}
-                                        sx={{
-                                            bgcolor: 'action.hover',
-                                            '& .MuiToggleButton-root': {
-                                                color: 'text.primary',
-                                                padding: '4px 12px',
-                                                fontSize: '0.875rem',
-                                                '&:hover': {
-                                                    bgcolor: 'action.selected',
-                                                },
-                                            },
-                                        }}
-                                    >
-                                        {CONFIG_MODES.filter(m => m.enabled).map((mode) => (
+                            {/* Toggle buttons */}
+                            <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                                <ToggleButtonGroup
+                                    value={configMode}
+                                    exclusive
+                                    size="small"
+                                    onChange={(_, value) => value && handleConfigModeChange(value)}
+                                    sx={ToggleButtonGroupStyle}
+                                >
+                                    {CONFIG_MODES.filter(m => m.enabled).map((mode) => (
+                                        <Tooltip key={mode.value} title={mode.description} arrow>
                                             <ToggleButton
-                                                key={mode.value}
                                                 value={mode.value}
-                                                sx={{
-                                                    '&.Mui-selected': {
-                                                        bgcolor: 'primary.main',
-                                                        color: 'white',
-                                                        '&:hover': {
-                                                            bgcolor: 'primary.dark',
-                                                        },
-                                                    },
-                                                }}
+                                                sx={ToggleButtonStyle}
                                             >
                                                 {mode.label}
                                             </ToggleButton>
-                                        ))}
-                                    </ToggleButtonGroup>
-                                </Box>
-                            </>
-                        )}
+                                        </Tooltip>
+                                    ))}
+                                </ToggleButtonGroup>
+                            </Box>
+                        </Box>
+
+                        {/* Experimental Features row */}
+                        <ExperimentalFeatures scenario="claude_code" />
+
                     </UnifiedCard>
 
                     <TemplatePage
+                        title="Models and Forwarding Rules"
+                        scenario="claude_code"
                         rules={rules}
                         showTokenModal={showTokenModal}
                         setShowTokenModal={setShowTokenModal}
@@ -540,6 +602,9 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                         onRulesChange={setRules}
                         allowToggleRule={false}
                         collapsible={true}
+                        showAddApiKeyButton={false}
+                        showCreateRuleButton={false}
+                        headerHeight={headerHeight}
                     />
 
                     {/* Confirmation dialog for mode change */}
@@ -558,11 +623,11 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                                 After changing the mode, you will need to reapply the configuration to Claude Code for the changes to take effect.
                             </Typography>
                         </DialogContent>
-                        <DialogActions sx={{ px: 3, pb: 2 }}>
+                        <DialogActions sx={{ px: 3, pb: 2, gap: 1, justifyContent: 'flex-end' }}>
                             <Button onClick={cancelModeChange} color="inherit">
                                 Cancel
                             </Button>
-                            <Button onClick={confirmModeChange} variant="contained" color="primary">
+                            <Button onClick={confirmModeChange} variant="contained">
                                 Confirm
                             </Button>
                         </DialogActions>

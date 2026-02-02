@@ -967,6 +967,10 @@ func (c *Config) GetScenarioFlag(scenario typ.RuleScenario, flagName string) boo
 		return flags.Separate
 	case "smart":
 		return flags.Smart
+	case "smart_compact":
+		return flags.SmartCompact
+	case "recording":
+		return flags.Recording
 	default:
 		return false
 	}
@@ -1004,6 +1008,10 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 		config.Flags.Separate = value
 	case "smart":
 		config.Flags.Smart = value
+	case "smart_compact":
+		config.Flags.SmartCompact = value
+	case "recording":
+		config.Flags.Recording = value
 	default:
 		return fmt.Errorf("unknown flag name: %s", flagName)
 	}

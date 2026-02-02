@@ -538,6 +538,7 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 	apiV1.PUT("/scenario/:scenario/flag/:flag", s.SetScenarioFlag,
 		swagger.WithDescription("Set a specific flag value for a scenario"),
 		swagger.WithTags("scenarios"),
+		swagger.WithRequestModel(ScenarioFlagUpdateRequest{}),
 		swagger.WithResponseModel(ScenarioFlagResponse{}),
 	)
 

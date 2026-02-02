@@ -17,7 +17,7 @@ const System = () => {
     const [rules, setRules] = useState<any>({});
     const [providers, setProviders] = useState<any[]>([]);
     const [providerModels, setProviderModels] = useState<any>({});
-    const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [notification, setNotification] = useState<{ open: boolean; message?: string; severity?: 'success' | 'error' | 'info' | 'warning' }>({ open: false });
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -80,12 +80,12 @@ const System = () => {
         if (port) {
             const result = await api.startServer(parseInt(port));
             if (result.success) {
-                setMessage({ type: 'success', text: result.message });
+                setNotification({ open: true, message: result.message, severity: 'success' });
                 setTimeout(() => {
                     loadServerStatus();
                 }, 1000);
             } else {
-                setMessage({ type: 'error', text: result.error });
+                setNotification({ open: true, message: result.error, severity: 'error' });
             }
         }
     };
@@ -94,12 +94,12 @@ const System = () => {
         if (confirm(t('system.confirmations.stopServer'))) {
             const result = await api.stopServer();
             if (result.success) {
-                setMessage({ type: 'success', text: result.message });
+                setNotification({ open: true, message: result.message, severity: 'success' });
                 setTimeout(() => {
                     loadServerStatus();
                 }, 1000);
             } else {
-                setMessage({ type: 'error', text: result.error });
+                setNotification({ open: true, message: result.error, severity: 'error' });
             }
         }
     };
@@ -109,12 +109,12 @@ const System = () => {
         if (port) {
             const result = await api.restartServer(parseInt(port));
             if (result.success) {
-                setMessage({ type: 'success', text: result.message });
+                setNotification({ open: true, message: result.message, severity: 'success' });
                 setTimeout(() => {
                     loadServerStatus();
                 }, 1000);
             } else {
-                setMessage({ type: 'error', text: result.error });
+                setNotification({ open: true, message: result.error, severity: 'error' });
             }
         }
     };
@@ -126,15 +126,15 @@ const System = () => {
             if (result.success) {
                 localStorage.setItem('model_auth_token', result.data.token)
                 // navigator.clipboard.writeText(result.data.token);
-                // setMessage({ type: 'success', text: 'Token copied to clipboard!' });
+                // setNotification({ open: true, message: 'Token copied to clipboard!', severity: 'success' });
             } else {
-                setMessage({ type: 'error', text: result.error });
+                setNotification({ open: true, message: result.error, severity: 'error' });
             }
         }
     };
 
     return (
-        <PageLayout loading={loading}>
+        <PageLayout loading={loading} notification={notification}>
             <CardGrid>
                 {/* Server Status - Consolidated */}
                 <UnifiedCard

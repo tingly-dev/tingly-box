@@ -1,13 +1,16 @@
 import { Add } from '@mui/icons-material';
-import { Alert, Box, Button, Snackbar, Stack, Typography } from '@mui/material';
+import { Alert, Button, Snackbar } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { PageLayout } from '@/components/PageLayout';
 import ProviderFormDialog from '@/components/ProviderFormDialog.tsx';
-import { type ProviderFormData } from '@/components/ProviderFormDialog.tsx';
+import { type EnhancedProviderFormData } from '@/components/ProviderFormDialog.tsx';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '../services/api';
 import ApiKeyTable from '@/components/ApiKeyTable.tsx';
+import EmptyStateGuide from '@/components/EmptyStateGuide';
+
+type ProviderFormData = EnhancedProviderFormData;
 
 const ApiKeyPage = () => {
     const [searchParams, setSearchParams] = useSearchParams();
@@ -237,19 +240,14 @@ const ApiKeyPage = () => {
                     subtitle="Get started by adding your first API key"
                     size="large"
                 >
-                    <Box textAlign="center" py={3}>
-                        <Typography color="text.secondary" gutterBottom>
-                            Configure API keys to access AI services like OpenAI, Anthropic, etc.
-                        </Typography>
-                        <Button
-                            variant="contained"
-                            startIcon={<Add />}
-                            onClick={handleAddClick}
-                            sx={{ mt: 2 }}
-                        >
-                            Add API Key
-                        </Button>
-                    </Box>
+                    <EmptyStateGuide
+                        title="No API Keys Configured"
+                        description="Configure API keys to access AI services like OpenAI, Anthropic, etc."
+                        showOAuthButton={false}
+                        showHeroIcon={false}
+                        primaryButtonLabel="Add API Key"
+                        onAddApiKeyClick={handleAddClick}
+                    />
                 </UnifiedCard>
             )}
 

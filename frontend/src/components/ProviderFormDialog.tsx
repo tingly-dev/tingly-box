@@ -540,7 +540,7 @@ const ProviderFormDialog = ({
                     </Stack>
                 </DialogContent>
                 {data.apiStyle && (
-                    <DialogActions sx={{ px: 3, pb: 2 }}>
+                    <DialogActions sx={{ px: 3, pb: 2, gap: 1, justifyContent: 'flex-end' }}>
                         <Button type="submit" variant="contained" size="small" disabled={verifying}>
                             {verifying ? (
                                 <>

@@ -42,7 +42,7 @@ const RULE_GRAPH_STYLES = {
     },
     header: {
         paddingX: 16,
-        paddingY: 8,
+        paddingY: 6,   // spacing(0.75) - reduced from 8 for smaller height
     },
     graphContainer: {
         paddingX: 16,
@@ -180,7 +180,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                 onClick={collapsible ? onToggleExpanded : undefined}
             >
                 {/* Left side */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1, minWidth: 0 }}>
                     <Tooltip title={record.requestModel
                         ? `Use "${record.requestModel}" as model name in your API requests. (click to copy)`
                         : 'No model specified'}>
@@ -221,6 +221,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                             borderColor: !active ? 'error.main' : undefined,
                             color: !active ? 'error.main' : undefined,
                             fontWeight: !active ? 600 : undefined,
+                            flexShrink: 0,
                         }}
                     />
                     <Chip
@@ -233,6 +234,25 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                             color: active ? 'inherit' : 'text.disabled',
                         }}
                     />
+                    {/* Rule Description - moved to top bar with auto-truncate, after Rules chip */}
+                    {record.description && (
+                        <Tooltip title={record.description} arrow>
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    color: 'text.secondary',
+                                    fontSize: '0.75rem',
+                                    fontStyle: 'italic',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    maxWidth: '400px',
+                                }}
+                            >
+                                {record.description}
+                            </Typography>
+                        </Tooltip>
+                    )}
                     {active && record.providers.length === 0 && (
                         <Tooltip title="No fallback providers - please add fallback providers to confirm rule works">
                             <WarningIcon
@@ -279,29 +299,6 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                         >
                             <ExpandMoreIcon />
                         </IconButton>
-                    )}
-                </Box>
-                {/* Description - Full width below */}
-                <Box
-                    onClick={(e) => e.stopPropagation()}
-                    sx={{
-                        width: '100%',
-                        flexBasis: '100%',
-                        mt: 0.5,
-                        minHeight: '18px',
-                    }}
-                >
-                    {record.description && (
-                        <Typography
-                            variant="body2"
-                            sx={{
-                                color: 'text.secondary',
-                                fontSize: '0.8rem',
-                                fontStyle: 'italic',
-                            }}
-                        >
-                            {record.description}
-                        </Typography>
                     )}
                 </Box>
             </SummarySection>

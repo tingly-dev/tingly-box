@@ -23,6 +23,10 @@ type ScenarioFlags struct {
 	Unified  bool `json:"unified" yaml:"unified"`   // Single configuration for all models
 	Separate bool `json:"separate" yaml:"separate"` // Separate configuration for each model
 	Smart    bool `json:"smart" yaml:"smart"`       // Smart mode with automatic optimization
+
+	// Experimental feature flags (scenario-based opt-in)
+	SmartCompact bool `json:"smart_compact,omitempty" yaml:"smart_compact,omitempty"` // Enable smart compact (remove thinking blocks)
+	Recording    bool `json:"recording,omitempty" yaml:"recording,omitempty"`         // Enable scenario recording
 }
 
 // ScenarioConfig represents configuration for a specific scenario
