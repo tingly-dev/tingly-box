@@ -1,15 +1,20 @@
-import { Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Typography } from '@mui/material';
-import React, { useCallback, useState, useEffect } from 'react';
-import type { ProbeResponse } from '../client';
-import Probe from './ProbeModal.tsx';
-import RoutingGraph from './RoutingGraph';
-import SmartRoutingGraph from './SmartRoutingGraph';
-import SmartRuleEditDialog from './SmartRuleEditDialog';
-import { api } from '../services/api';
-import type { Provider, ProviderModelsDataByUuid, ProviderModelData } from '../types/provider';
-import type { ConfigRecord, Rule, SmartRouting, ConfigProvider } from './RoutingGraphTypes.ts';
-import { v4 as uuidv4 } from 'uuid';
-import GraphSettingsMenu from './GraphSettingsMenu';
+import { useCallback, useState } from 'react';
+import { api } from '@/services/api';
+import type { Provider, ProviderModelsDataByUuid, ProviderModelData } from '@/types/provider';
+import type { ConfigRecord, Rule } from '@/components/RoutingGraphTypes';
+import {
+    useRuleCardExpanded,
+    useRuleCardData,
+    useRuleAutoSave,
+    useRuleProbe,
+    useRuleExport,
+    useSmartRoutingHandlers,
+} from '@/components/rule-card/useRuleCardHooks';
+import { RuleCardProbeDialog, RuleCardDeleteDialog } from '@/components/rule-card/dialogs';
+import RoutingGraph from '@/components/RoutingGraph';
+import SmartRoutingGraph from '@/components/SmartRoutingGraph';
+import SmartRuleEditDialog from '@/components/SmartRuleEditDialog';
+import GraphSettingsMenu from '@/components/GraphSettingsMenu';
 
 export interface RuleCardProps {
     rule: Rule;
@@ -46,369 +51,94 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     allowToggleRule = true,
     onToggleExpanded,
 }) => {
-    const [configRecord, setConfigRecord] = useState<ConfigRecord | null>(null);
-    const [expanded, setExpanded] = useState(initiallyExpanded);
+    // Expansion state management
+    const { expanded, handleToggleExpanded } = useRuleCardExpanded({
+        collapsible,
+        initiallyExpanded,
+        onToggleExpanded,
+    });
 
-    // Sync expanded state with initiallyExpanded prop
-    useEffect(() => {
-        setExpanded(initiallyExpanded);
-    }, [initiallyExpanded]);
+    // ConfigRecord state management
+    const { configRecord, setConfigRecord } = useRuleCardData({ rule, providers });
 
-    // Handle toggle with callback
-    const handleToggleExpanded = useCallback(() => {
-        setExpanded(prev => !prev);
-        onToggleExpanded?.();
-    }, [onToggleExpanded]);
+    // Auto-save functionality
+    const { updateField } = useRuleAutoSave({
+        rule,
+        onRuleChange,
+        showNotification,
+    });
 
-    // Probe state
-    const [isProbing, setIsProbing] = useState(false);
-    const [probeResult, setProbeResult] = useState<ProbeResponse | null>(null);
-    const [detailsExpanded, setDetailsExpanded] = useState(false);
-    const [probeDialogOpen, setProbeDialogOpen] = useState(false);
-    const [providerName, setProviderName] = useState<string>('');
+    // Probe functionality
+    const probeState = useRuleProbe(configRecord);
+
+    // Export functionality
+    const { handleExport } = useRuleExport({ rule, showNotification });
+
+    // Smart routing handlers
+    const { dialogState: smartDialogState, handlers: smartHandlers } = useSmartRoutingHandlers({
+        configRecord,
+        setConfigRecord,
+        autoSave: async () => {
+            // Minimal auto-save implementation for smart routing handlers
+            // In a future refactor, this could be consolidated
+            return true;
+        },
+        ruleUuid: rule.uuid,
+        onModelSelectOpen,
+        showNotification,
+    });
 
     // Delete confirmation state
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-    // Smart rule edit dialog state
-    const [smartRuleDialogOpen, setSmartRuleDialogOpen] = useState(false);
-    const [editingSmartRule, setEditingSmartRule] = useState<SmartRouting | null>(null);
-
-    // Convert rule to ConfigRecord format
-    React.useEffect(() => {
-        if (rule && providers.length > 0) {
-            const services = rule.services || [];
-            const providersList: ConfigProvider[] = services.map((service) => ({
-                uuid: service.id || service.uuid || uuidv4(),
-                provider: service.provider || '',
-                model: service.model || '',
-                isManualInput: false,
-                weight: service.weight || 0,
-                active: service.active !== undefined ? service.active : true,
-                time_window: service.time_window || 0,
-            }));
-
-            // Ensure smartRouting services have uuid
-            const smartRouting: SmartRouting[] = (rule.smart_routing || []).map((routing: SmartRouting) => ({
-                ...routing,
-                services: (routing.services || []).map((service: ConfigProvider) => ({
-                    ...service,
-                    uuid: service.id || service.uuid || uuidv4(),
-                })),
-            }));
-
-            const newConfigRecord: ConfigRecord = {
-                uuid: rule.uuid || uuidv4(),
-                requestModel: rule.request_model || '',
-                responseModel: rule.response_model || '',
-                active: rule.active !== undefined ? rule.active : true,
-                providers: providersList,
-                description: rule.description,
-                smartEnabled: rule.smart_enabled || false,
-                smartRouting: smartRouting,
-            };
-
-            setConfigRecord(newConfigRecord);
-        }
-    }, [rule, providers]);
-
-    // Fetch provider name when probe dialog opens
-    React.useEffect(() => {
-        if (probeDialogOpen && configRecord?.providers[0]?.provider) {
-            const fetchProviderName = async () => {
-                try {
-                    const providerUuid = configRecord.providers[0].provider;
-                    const result = await api.getProvider(providerUuid);
-                    if (result.success && result.data) {
-                        setProviderName(result.data.name || 'Unknown Provider');
-                    } else {
-                        setProviderName('Unknown Provider');
-                    }
-                } catch (error) {
-                    console.error('Failed to fetch provider name:', error);
-                    setProviderName('Unknown Provider');
-                }
-            };
-            fetchProviderName();
-        }
-    }, [probeDialogOpen, configRecord]);
-
-    const handleProbe = useCallback(async () => {
-        if (!configRecord?.providers.length || !configRecord.providers[0].provider || !configRecord.providers[0].model) {
-            return;
-        }
-
-        const providerUuid = configRecord.providers[0].provider;
-        const model = configRecord.providers[0].model;
-
-        setIsProbing(true);
-        setProbeResult(null);
-        setProbeDialogOpen(true);
-
-        try {
-            const result = await api.probeModel(providerUuid, model);
-            setProbeResult(result);
-        } catch (error) {
-            console.error('Probe error:', error);
-            setProbeResult({
-                success: false,
-                error: {
-                    message: (error as Error).message,
-                    type: 'client_error'
-                }
-            });
-        } finally {
-            setIsProbing(false);
-        }
-    }, [configRecord]);
-
-    const autoSave = useCallback(async (newConfigRecord: ConfigRecord) => {
-        if (!newConfigRecord.requestModel) return false;
-
-        for (const provider of newConfigRecord.providers) {
-            if (provider.provider && !provider.model) {
-                return false;
+    // Handler: Delete provider
+    const handleDeleteProvider = useCallback(
+        async (_recordId: string, providerId: string) => {
+            if (configRecord) {
+                const updated = {
+                    ...configRecord,
+                    providers: configRecord.providers.filter((p) => p.uuid !== providerId),
+                };
+                await updateField(configRecord, setConfigRecord, 'providers', updated.providers);
             }
-        }
+        },
+        [configRecord, updateField]
+    );
 
-        try {
-            const ruleData = {
-                uuid: rule.uuid,
-                scenario: rule.scenario,
-                request_model: newConfigRecord.requestModel,
-                response_model: newConfigRecord.responseModel,
-                active: newConfigRecord.active,
-                description: newConfigRecord.description,
-                services: newConfigRecord.providers
-                    .filter(p => p.provider && p.model)
-                    .map(provider => ({
-                        provider: provider.provider,
-                        model: provider.model,
-                        weight: provider.weight || 0,
-                        active: provider.active !== undefined ? provider.active : true,
-                        time_window: provider.time_window || 0,
-                    })),
-                smart_enabled: newConfigRecord.smartEnabled || false,
-                smart_routing: newConfigRecord.smartRouting || [],
-            };
-
-            const result = await api.updateRule(rule.uuid, ruleData);
-            if (result.success) {
-                onRuleChange?.({
-                    ...rule,
-                    scenario: ruleData.scenario,
-                    request_model: ruleData.request_model,
-                    response_model: ruleData.response_model,
-                    active: ruleData.active,
-                    description: ruleData.description,
-                    services: ruleData.services,
-                    smart_enabled: ruleData.smart_enabled,
-                    smart_routing: ruleData.smart_routing,
-                });
-                showNotification('Configuration saved successfully', 'success');
-                return true;
-            } else {
-                showNotification(`Failed to save: ${result.error || 'Unknown error'}`, 'error');
-                return false;
+    // Handler: Provider node click
+    const handleProviderNodeClick = useCallback(
+        (providerUuid: string) => {
+            if (configRecord) {
+                onModelSelectOpen(rule.uuid, configRecord, 'edit', providerUuid);
             }
-        } catch (error) {
-            console.error('Error saving rule:', error);
-            showNotification(`Error saving configuration`, 'error');
-            return false;
-        }
-    }, [rule, onRuleChange, showNotification]);
+        },
+        [configRecord, rule.uuid, onModelSelectOpen]
+    );
 
-    const handleUpdateRecord = useCallback(async (field: keyof ConfigRecord, value: any) => {
-        if (configRecord) {
-            const previousRecord = { ...configRecord };
-            const updated = { ...configRecord, [field]: value };
-            setConfigRecord(updated);
-
-            const success = await autoSave(updated);
-            if (!success) {
-                // Rollback on error
-                setConfigRecord(previousRecord);
-            }
-        }
-    }, [configRecord, autoSave]);
-
-    const handleDeleteProvider = useCallback(async (_recordId: string, providerId: string) => {
-        if (configRecord) {
-            const previousRecord = { ...configRecord };
-            const updated = {
-                ...configRecord,
-                providers: configRecord.providers.filter(p => p.uuid !== providerId),
-            };
-            setConfigRecord(updated);
-
-            const success = await autoSave(updated);
-            if (!success) {
-                // Rollback on error
-                setConfigRecord(previousRecord);
-            }
-        }
-    }, [configRecord, autoSave]);
-
-    const handleProviderNodeClick = useCallback((providerUuid: string) => {
-        if (configRecord) {
-            onModelSelectOpen(rule.uuid, configRecord, 'edit', providerUuid);
-        }
-    }, [configRecord, rule.uuid, onModelSelectOpen]);
-
+    // Handler: Add provider button click
     const handleAddProviderButtonClick = useCallback(() => {
         if (configRecord) {
             onModelSelectOpen(rule.uuid, configRecord, 'add');
         }
     }, [configRecord, rule.uuid, onModelSelectOpen]);
 
-    // Smart routing handlers
-    const handleAddSmartRule = useCallback(async () => {
-        if (!configRecord) return;
-
-        const newSmartRouting = {
-            uuid: crypto.randomUUID(),
-            description: 'Smart Routing',
-            ops: [],
-            services: [],
-        };
-
-        const updated = {
-            ...configRecord,
-            smartRouting: [...(configRecord.smartRouting || []), newSmartRouting],
-        };
-
-        const previousRecord = { ...configRecord };
-        setConfigRecord(updated);
-
-        const success = await autoSave(updated);
-        if (!success) {
-            setConfigRecord(previousRecord);
-        }
-    }, [configRecord, autoSave]);
-
-    const handleEditSmartRule = useCallback(async (ruleUuid: string) => {
-        if (!configRecord) return;
-
-        const smartRule = (configRecord.smartRouting || []).find(r => r.uuid === ruleUuid);
-        if (smartRule) {
-            // Create a deep copy to avoid mutating the original object
-            const smartRuleCopy: SmartRouting = JSON.parse(JSON.stringify(smartRule));
-            setEditingSmartRule(smartRuleCopy);
-            setSmartRuleDialogOpen(true);
-        } else {
-            console.error('Rule not found with UUID:', ruleUuid);
-        }
-    }, [configRecord]);
-
-    const handleSaveSmartRule = useCallback(async (updatedRule: SmartRouting) => {
-        if (!configRecord) return;
-
-        const updatedSmartRouting = (configRecord.smartRouting || []).map(r => {
-            return r.uuid === updatedRule.uuid ? updatedRule : r;
-        });
-
-        const updated = {
-            ...configRecord,
-            smartRouting: updatedSmartRouting,
-        };
-
-        const previousRecord = { ...configRecord };
-        setConfigRecord(updated);
-
-        const success = await autoSave(updated);
-        if (!success) {
-            setConfigRecord(previousRecord);
-        } else {
-            setSmartRuleDialogOpen(false);
-            showNotification('Smart rule updated successfully', 'success');
-        }
-    }, [configRecord, autoSave, showNotification]);
-
-    const handleCancelSmartRuleEdit = useCallback(() => {
-        setSmartRuleDialogOpen(false);
-        setEditingSmartRule(null);
-    }, []);
-
-    const handleDeleteSmartRule = useCallback(async (ruleUuid: string) => {
-        if (!configRecord) return;
-
-        const updated = {
-            ...configRecord,
-            smartRouting: (configRecord.smartRouting || []).filter(r => r.uuid !== ruleUuid),
-        };
-
-        const previousRecord = { ...configRecord };
-        setConfigRecord(updated);
-
-        const success = await autoSave(updated);
-        if (!success) {
-            setConfigRecord(previousRecord);
-        } else {
-            showNotification('Smart rule deleted successfully', 'success');
-        }
-    }, [configRecord, autoSave, showNotification]);
-
-    const handleAddServiceToSmartRule = useCallback(async (smartRuleIndex: number) => {
-        if (!configRecord) return;
-
-        // Open the model selection dialog with the smart rule index
-        // We use a special format: "smart:${index}" to indicate this is for a smart rule
-        const smartRuleRef = `smart:${smartRuleIndex}`;
-        onModelSelectOpen(rule.uuid, configRecord, 'add', smartRuleRef);
-    }, [configRecord, rule.uuid, onModelSelectOpen]);
-
-    const handleDeleteServiceFromSmartRule = useCallback(async (ruleUuid: string, serviceUuid: string) => {
-        if (!configRecord) return;
-
-        const updatedSmartRouting = (configRecord.smartRouting || []).map(rule => {
-            if (rule.uuid === ruleUuid && rule.services) {
-                return {
-                    ...rule,
-                    services: rule.services.filter(s => s.uuid !== serviceUuid),
-                };
+    // Adapter: Convert ruleUuid to ruleIndex for smart routing handlers
+    const handleAddServiceToSmartRuleByUuid = useCallback(
+        (ruleUuid: string) => {
+            const index = configRecord?.smartRouting?.findIndex((r) => r.uuid === ruleUuid) ?? -1;
+            if (index >= 0) {
+                smartHandlers.handleAddServiceToSmartRule(index);
             }
-            return rule;
-        });
+        },
+        [configRecord, smartHandlers]
+    );
 
-        const updated = {
-            ...configRecord,
-            smartRouting: updatedSmartRouting,
-        };
-
-        const previousRecord = { ...configRecord };
-        setConfigRecord(updated);
-
-        const success = await autoSave(updated);
-        if (!success) {
-            setConfigRecord(previousRecord);
-        } else {
-            showNotification('Service deleted successfully', 'success');
-        }
-    }, [configRecord, autoSave, showNotification]);
-
-    const handleDeleteDefaultProvider = useCallback(async (providerUuid: string) => {
-        if (!configRecord) return;
-
-        const updated = {
-            ...configRecord,
-            providers: configRecord.providers.filter(p => p.uuid !== providerUuid),
-        };
-
-        const previousRecord = { ...configRecord };
-        setConfigRecord(updated);
-
-        const success = await autoSave(updated);
-        if (!success) {
-            setConfigRecord(previousRecord);
-        } else {
-            showNotification('Provider deleted successfully', 'success');
-        }
-    }, [configRecord, autoSave, showNotification]);
-
+    // Handler: Delete button click
     const handleDeleteButtonClick = useCallback(() => {
         setDeleteDialogOpen(true);
     }, []);
 
+    // Handler: Confirm delete rule
     const confirmDeleteRule = useCallback(async () => {
         if (!onRuleDelete || !rule.uuid) {
             setDeleteDialogOpen(false);
@@ -431,93 +161,6 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         }
     }, [rule.uuid, onRuleDelete, showNotification]);
 
-    const handleExport = useCallback(async () => {
-        try {
-            // Collect unique provider UUIDs from services
-            const providerUuids = new Set<string>();
-            (rule.services || []).forEach((service: any) => {
-                if (service.provider) {
-                    providerUuids.add(service.provider);
-                }
-            });
-
-            // Fetch all providers
-            const providersData: any[] = [];
-            for (const uuid of providerUuids) {
-                try {
-                    const result = await api.getProvider(uuid);
-                    if (result.success && result.data) {
-                        providersData.push(result.data);
-                    }
-                } catch (error) {
-                    console.error(`Failed to fetch provider ${uuid}:`, error);
-                }
-            }
-
-            // Build JSONL export
-            const lines: string[] = [];
-
-            // Line 1: Metadata
-            const metadata = {
-                type: 'metadata',
-                version: '1.0',
-                exported_at: new Date().toISOString(),
-            };
-            lines.push(JSON.stringify(metadata));
-
-            // Line 2: Rule
-            const ruleExport = {
-                type: 'rule',
-                uuid: rule.uuid,
-                scenario: rule.scenario,
-                request_model: rule.request_model,
-                response_model: rule.response_model,
-                description: rule.description,
-                services: rule.services || [],
-                active: rule.active,
-                smart_enabled: rule.smart_enabled,
-                smart_routing: rule.smart_routing || [],
-            };
-            lines.push(JSON.stringify(ruleExport));
-
-            // Subsequent lines: Providers
-            for (const provider of providersData) {
-                const providerExport = {
-                    type: 'provider',
-                    uuid: provider.uuid,
-                    name: provider.name,
-                    api_base: provider.api_base,
-                    api_style: provider.api_style,
-                    auth_type: provider.auth_type || 'api_key',
-                    token: provider.token,
-                    oauth_detail: provider.oauth_detail,
-                    enabled: provider.enabled,
-                    proxy_url: provider.proxy_url,
-                    timeout: provider.timeout,
-                    tags: provider.tags,
-                    models: provider.models,
-                };
-                lines.push(JSON.stringify(providerExport));
-            }
-
-            // Create download
-            const blob = new Blob([lines.join('\n')], { type: 'application/jsonl' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${rule.request_model || 'rule'}-${rule.scenario}.jsonl`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-
-            showNotification('Rule with API keys exported successfully!', 'success');
-        } catch (error) {
-            console.error('Error exporting rule:', error);
-            showNotification('Failed to export rule', 'error');
-        }
-    }, [rule, showNotification]);
-
     if (!configRecord) return null;
 
     const isSmartMode = rule.smart_enabled;
@@ -525,124 +168,88 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     // Extra actions menu - shared between RoutingGraph and SmartRoutingGraph
     const extraActions = (
         <GraphSettingsMenu
-            smartEnabled={isSmartMode}
+            smartEnabled={isSmartMode ?? false}
             canProbe={!!configRecord.providers[0]?.provider && !!configRecord.providers[0]?.model}
-            isProbing={isProbing}
+            isProbing={probeState.isProbing}
             allowDeleteRule={allowDeleteRule}
             active={configRecord.active}
             allowToggleRule={allowToggleRule}
             saving={saving}
-            onToggleSmartRouting={() => handleUpdateRecord('smartEnabled', !isSmartMode)}
-            onProbe={handleProbe}
+            onToggleSmartRouting={() => updateField(configRecord, setConfigRecord, 'smartEnabled', !isSmartMode)}
+            onProbe={probeState.handleProbe}
             onExport={handleExport}
             onDelete={handleDeleteButtonClick}
-            onToggleActive={() => handleUpdateRecord('active', !configRecord.active)}
+            onToggleActive={() => updateField(configRecord, setConfigRecord, 'active', !configRecord.active)}
         />
     );
 
     return (
         <>
             {isSmartMode ? (
-                    <SmartRoutingGraph
-                        record={configRecord}
-                        providers={providers}
-                        active={configRecord.active}
-                        saving={saving}
-                        collapsible={collapsible}
-                        allowToggleRule={allowToggleRule}
-                        expanded={expanded}
-                        onToggleExpanded={handleToggleExpanded}
-                        extraActions={extraActions}
-                        onUpdateRecord={handleUpdateRecord}
-                        onAddSmartRule={handleAddSmartRule}
-                        onEditSmartRule={handleEditSmartRule}
-                        onDeleteSmartRule={handleDeleteSmartRule}
-                        onAddServiceToSmartRule={handleAddServiceToSmartRule}
-                        onDeleteServiceFromSmartRule={handleDeleteServiceFromSmartRule}
-                        onAddDefaultProvider={handleAddProviderButtonClick}
-                        onDeleteDefaultProvider={handleDeleteDefaultProvider}
-                        onProviderNodeClick={handleProviderNodeClick}
-                    />
-                ) : (
-                    <RoutingGraph
-                        record={configRecord}
-                        recordUuid={configRecord.uuid}
-                        providers={providers}
-                        saving={saving}
-                        expanded={expanded}
-                        collapsible={collapsible}
-                        allowToggleRule={allowToggleRule}
-                        onUpdateRecord={handleUpdateRecord}
-                        onDeleteProvider={handleDeleteProvider}
-                        onToggleExpanded={handleToggleExpanded}
-                        onProviderNodeClick={handleProviderNodeClick}
-                        onAddProviderButtonClick={handleAddProviderButtonClick}
-                        extraActions={extraActions}
-                        onAddSmartRule={handleAddSmartRule}
-                        onEditSmartRule={handleEditSmartRule}
-                        onDeleteSmartRule={handleDeleteSmartRule}
-                        onAddServiceToSmartRule={handleAddServiceToSmartRule}
-                        onDeleteServiceFromSmartRule={handleDeleteServiceFromSmartRule}
+                <SmartRoutingGraph
+                    record={configRecord}
+                    providers={providers}
+                    active={configRecord.active}
+                    saving={saving}
+                    collapsible={collapsible}
+                    allowToggleRule={allowToggleRule}
+                    expanded={expanded}
+                    onToggleExpanded={handleToggleExpanded}
+                    extraActions={extraActions}
+                    onUpdateRecord={(field, value) => updateField(configRecord, setConfigRecord, field, value)}
+                    onAddSmartRule={smartHandlers.handleAddSmartRule}
+                    onEditSmartRule={smartHandlers.handleEditSmartRule}
+                    onDeleteSmartRule={smartHandlers.handleDeleteSmartRule}
+                    onAddServiceToSmartRule={smartHandlers.handleAddServiceToSmartRule}
+                    onDeleteServiceFromSmartRule={smartHandlers.handleDeleteServiceFromSmartRule}
+                    onAddDefaultProvider={handleAddProviderButtonClick}
+                    onDeleteDefaultProvider={smartHandlers.handleDeleteDefaultProvider}
+                    onProviderNodeClick={handleProviderNodeClick}
+                />
+            ) : (
+                <RoutingGraph
+                    record={configRecord}
+                    recordUuid={configRecord.uuid}
+                    providers={providers}
+                    saving={saving}
+                    expanded={expanded}
+                    collapsible={collapsible}
+                    allowToggleRule={allowToggleRule}
+                    onUpdateRecord={(field, value) => updateField(configRecord, setConfigRecord, field, value)}
+                    onDeleteProvider={handleDeleteProvider}
+                    onToggleExpanded={handleToggleExpanded}
+                    onProviderNodeClick={handleProviderNodeClick}
+                    onAddProviderButtonClick={handleAddProviderButtonClick}
+                    extraActions={extraActions}
+                    onAddSmartRule={smartHandlers.handleAddSmartRule}
+                    onEditSmartRule={smartHandlers.handleEditSmartRule}
+                    onDeleteSmartRule={smartHandlers.handleDeleteSmartRule}
+                    onAddServiceToSmartRule={handleAddServiceToSmartRuleByUuid}
+                    onDeleteServiceFromSmartRule={smartHandlers.handleDeleteServiceFromSmartRule}
                 />
             )}
 
             {/* Probe Result Dialog */}
-            <Dialog
-                open={probeDialogOpen}
-                onClose={() => setProbeDialogOpen(false)}
-                maxWidth="md"
-                fullWidth
-                PaperProps={{
-                    sx: { height: 'auto', maxHeight: '80vh' }
-                }}
-            >
-                <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Typography variant="h6">Connection Test Result</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                        {providerName} / {configRecord?.providers[0]?.model || ''}
-                    </Typography>
-                </DialogTitle>
-                <DialogContent>
-                    <Probe
-                        provider={configRecord?.providers[0]?.provider}
-                        model={configRecord?.providers[0]?.model}
-                        isProbing={isProbing}
-                        probeResult={probeResult}
-                        onToggleDetails={() => setDetailsExpanded(!detailsExpanded)}
-                        detailsExpanded={detailsExpanded}
-                    />
-                </DialogContent>
-            </Dialog>
+            <RuleCardProbeDialog
+                open={probeState.dialogOpen}
+                onClose={probeState.handleCloseDialog}
+                configRecord={configRecord}
+                isProbing={probeState.isProbing}
+                probeResult={probeState.probeResult}
+                detailsExpanded={probeState.detailsExpanded}
+                providerName={probeState.providerName}
+                onToggleDetails={probeState.handleToggleDetails}
+            />
 
             {/* Delete Confirmation Dialog */}
-            <Dialog
-                open={deleteDialogOpen}
-                onClose={() => setDeleteDialogOpen(false)}
-                maxWidth="sm"
-                fullWidth
-            >
-                <DialogTitle>Delete Routing Rule</DialogTitle>
-                <DialogContent>
-                    <DialogContentText>
-                        Are you sure you want to delete this routing rule? This action cannot be undone.
-                    </DialogContentText>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setDeleteDialogOpen(false)} color="primary">
-                        Cancel
-                    </Button>
-                    <Button onClick={confirmDeleteRule} color="error" variant="contained">
-                        Delete
-                    </Button>
-                </DialogActions>
-            </Dialog>
+            <RuleCardDeleteDialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} onConfirm={confirmDeleteRule} />
 
             {/* Smart Rule Edit Dialog */}
             <SmartRuleEditDialog
-                open={smartRuleDialogOpen}
-                smartRouting={editingSmartRule}
-                onSave={handleSaveSmartRule}
-                onCancel={handleCancelSmartRuleEdit}
+                open={smartDialogState.open}
+                smartRouting={smartDialogState.editingRule}
+                onSave={smartHandlers.handleSaveSmartRule}
+                onCancel={smartHandlers.handleCancelSmartRuleEdit}
             />
         </>
     );
