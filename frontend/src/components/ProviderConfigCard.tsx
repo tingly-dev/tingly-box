@@ -118,7 +118,7 @@ export const ProviderConfigCard: React.FC<ProviderConfigCardProps> = ({
             {/* API Key Row - Optional but shown by default */}
             {showApiKeyRow && (
                 <Box sx={{ px: 2, pb: hasDivider ? 2 : 2 }}>
-                    <ApiConfigRow label="API Key" showEllipsis={true}>
+                    <ApiConfigRow label="API Key" value={token}>
                         <Box sx={{ display: 'flex', gap: 0.5, ml: 'auto' }}>
                             <Tooltip title="View Token">
                                 <IconButton onClick={onShowTokenModal} size="small">

@@ -11,15 +11,22 @@ interface ApiConfigRowProps {
     value?: string;
     onCopy?: () => void;
     children?: React.ReactNode;
-    showEllipsis?: boolean;
 }
+
+const maskValue = (value: string): string => {
+    if (value.length <= 16) return value;
+    const start = value.slice(0, 12);
+    const end = value.slice(-12);
+    const res = `${start}${'*'.repeat(8)}${end}`;
+    console.log(res)
+    return res
+};
 
 export const ApiConfigRow: React.FC<ApiConfigRowProps> = ({
     label,
     value,
     onCopy,
     children,
-    showEllipsis = false
 }) => (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0, maxWidth: 700 }}>
         <Typography
@@ -53,7 +60,7 @@ export const ApiConfigRow: React.FC<ApiConfigRowProps> = ({
             }}
             title={`Click to copy ${label}`}
         >
-            {showEllipsis ? '•••••••••••••••••••••••••••••' : value}
+            {value ? maskValue(value) : value}
         </Typography>
         <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0, ml: 'auto' }}>
             {children}
