@@ -55,6 +55,7 @@ type Config struct {
 	modelManager    *data.ModelListManager
 	statsStore      *db.StatsStore
 	usageStore      *db.UsageStore
+	ruleStateStore  *db.RuleStateStore // Persists current_service_index to SQLite
 	templateManager *data.TemplateManager
 
 	mu sync.RWMutex
@@ -114,6 +115,13 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 		return nil, fmt.Errorf("failed to initialize usage store: %w", err)
 	}
 	cfg.usageStore = usageStore
+
+	// Initialize rule state store (for persisting current_service_index)
+	ruleStateStore, err := db.NewRuleStateStore(configDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize rule state store: %w", err)
+	}
+	cfg.ruleStateStore = ruleStateStore
 
 	// Load existing cfg if exists
 	if err := cfg.load(); err != nil {
@@ -231,13 +239,30 @@ func (c *Config) Save() error {
 	return nil
 }
 
-// RefreshStatsFromStore hydrates service stats from the SQLite store.
+// RefreshStatsFromStore hydrates service stats and rule state from the SQLite store.
 func (c *Config) RefreshStatsFromStore() error {
-	if c.statsStore == nil {
-		return nil
+	if c.statsStore != nil {
+		if err := c.statsStore.HydrateRules(c.Rules); err != nil {
+			return err
+		}
 	}
 
-	return c.statsStore.HydrateRules(c.Rules)
+	// Hydrate current_service_index from rule state store
+	if c.ruleStateStore != nil {
+		if err := c.ruleStateStore.HydrateRules(c.Rules); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// SaveCurrentServiceID persists the current service ID for a rule to SQLite
+func (c *Config) SaveCurrentServiceID(ruleUUID string, serviceID string) error {
+	if c.ruleStateStore == nil {
+		return nil
+	}
+	return c.ruleStateStore.SetServiceID(ruleUUID, serviceID)
 }
 
 // AddRule updates the default Rule

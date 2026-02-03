@@ -44,7 +44,7 @@ func TestLoadBalancer_RoundRobin(t *testing.T) {
 		Scenario:     typ.ScenarioOpenAI,
 		RequestModel: "test",
 		UUID:         uuid.New().String(),
-		Services: []loadbalance.Service{
+		Services: []*loadbalance.Service{
 			{
 				Provider:   "provider1",
 				Model:      "model1",
@@ -60,7 +60,6 @@ func TestLoadBalancer_RoundRobin(t *testing.T) {
 				TimeWindow: 300,
 			},
 		},
-		CurrentServiceIndex: 0, // Start with first service
 		LBTactic: typ.Tactic{
 			Type:   loadbalance.TacticRoundRobin,
 			Params: &typ.RoundRobinParams{RequestThreshold: 1},
@@ -143,7 +142,7 @@ func TestLoadBalancer_EnabledFilter(t *testing.T) {
 		Scenario:     typ.ScenarioOpenAI,
 		RequestModel: "test",
 		UUID:         uuid.New().String(),
-		Services: []loadbalance.Service{
+		Services: []*loadbalance.Service{
 			{
 				Provider:   "enabled1",
 				Model:      "model1",
@@ -213,7 +212,7 @@ func TestLoadBalancer_RecordUsage(t *testing.T) {
 		Scenario:     typ.ScenarioOpenAI,
 		RequestModel: "test-model",
 		UUID:         uuid.New().String(),
-		Services: []loadbalance.Service{
+		Services: []*loadbalance.Service{
 			{
 				Provider:   "test-provider",
 				Model:      "test-model",
@@ -271,7 +270,7 @@ func TestLoadBalancer_ValidateRule(t *testing.T) {
 		Scenario:     typ.ScenarioOpenAI,
 		RequestModel: "test",
 		UUID:         uuid.New().String(),
-		Services: []loadbalance.Service{
+		Services: []*loadbalance.Service{
 			{
 				Provider:   "provider1",
 				Model:      "model1",
@@ -291,7 +290,7 @@ func TestLoadBalancer_ValidateRule(t *testing.T) {
 	invalidRule1 := &typ.Rule{
 		Scenario:     typ.ScenarioOpenAI,
 		RequestModel: "test",
-		Services:     []loadbalance.Service{},
+		Services:     []*loadbalance.Service{},
 		Active:       true,
 	}
 
@@ -303,7 +302,7 @@ func TestLoadBalancer_ValidateRule(t *testing.T) {
 	invalidRule2 := &typ.Rule{
 		Scenario:     typ.ScenarioOpenAI,
 		RequestModel: "test",
-		Services: []loadbalance.Service{
+		Services: []*loadbalance.Service{
 			{
 				Provider:   "provider1",
 				Model:      "model1",
@@ -342,7 +341,7 @@ func TestLoadBalancer_GetRuleSummary(t *testing.T) {
 			Type:   loadbalance.TacticHybrid,
 			Params: typ.DefaultHybridParams(),
 		},
-		Services: []loadbalance.Service{
+		Services: []*loadbalance.Service{
 			{
 				Provider:   "provider1",
 				Model:      "model1",
@@ -425,7 +424,7 @@ func TestLoadBalancerAPI_RuleManagement(t *testing.T) {
 		Scenario:     typ.ScenarioOpenAI,
 		RequestModel: ruleName,
 		UUID:         ruleUUID,
-		Services: []loadbalance.Service{
+		Services: []*loadbalance.Service{
 			{
 				Provider:   "openai",
 				Model:      "gpt-3.5-turbo",
@@ -593,7 +592,7 @@ func TestLoadBalancerAPI_CurrentService(t *testing.T) {
 		Scenario:     typ.ScenarioOpenAI,
 		RequestModel: ruleName,
 		UUID:         uuid.New().String(),
-		Services: []loadbalance.Service{
+		Services: []*loadbalance.Service{
 			{
 				Provider:   "openai",
 				Model:      "gpt-4",
@@ -685,7 +684,7 @@ func TestLoadBalancerAPI_Authentication(t *testing.T) {
 		Scenario:     typ.ScenarioOpenAI,
 		RequestModel: ruleName,
 		UUID:         ruleUUID,
-		Services: []loadbalance.Service{
+		Services: []*loadbalance.Service{
 			{
 				Provider:   "openai",
 				Model:      "gpt-3.5-turbo",
@@ -773,7 +772,7 @@ func TestLoadBalancerFunctionality(t *testing.T) {
 		Scenario:     typ.ScenarioOpenAI,
 		RequestModel: "tingly",
 		UUID:         uuid.New().String(),
-		Services: []loadbalance.Service{
+		Services: []*loadbalance.Service{
 			{
 				Provider:   "openai",
 				Model:      "gpt-3.5-turbo",
@@ -789,7 +788,6 @@ func TestLoadBalancerFunctionality(t *testing.T) {
 				TimeWindow: 300,
 			},
 		},
-		CurrentServiceIndex: 0,
 		LBTactic: typ.Tactic{
 			Type:   loadbalance.TacticRoundRobin,
 			Params: typ.DefaultRoundRobinParams(),
@@ -864,7 +862,7 @@ func TestLoadBalancer_WeightedRandom(t *testing.T) {
 	rule := &typ.Rule{
 		Scenario:     typ.ScenarioOpenAI,
 		RequestModel: "test",
-		Services: []loadbalance.Service{
+		Services: []*loadbalance.Service{
 			{
 				Provider:   "provider1",
 				Model:      "model1",
@@ -955,7 +953,7 @@ func TestLoadBalancer_WithMockProvider(t *testing.T) {
 		Scenario:     typ.ScenarioOpenAI,
 		RequestModel: "gpt-3.5-turbo",
 		UUID:         uuid.New().String(),
-		Services: []loadbalance.Service{
+		Services: []*loadbalance.Service{
 			{
 				Provider:   "mock-provider",
 				Model:      "gpt-3.5-turbo",
@@ -1028,7 +1026,7 @@ func TestLoadBalancer_RoundRobinThreshold2(t *testing.T) {
 		Scenario:     typ.ScenarioOpenAI,
 		RequestModel: "test",
 		UUID:         uuid.New().String(),
-		Services: []loadbalance.Service{
+		Services: []*loadbalance.Service{
 			{
 				Provider:   "provider-A",
 				Model:      "model-A",
@@ -1051,7 +1049,6 @@ func TestLoadBalancer_RoundRobinThreshold2(t *testing.T) {
 				TimeWindow: 300,
 			},
 		},
-		CurrentServiceIndex: 0, // Start with first service
 		LBTactic: typ.Tactic{
 			Type:   loadbalance.TacticRoundRobin,
 			Params: &typ.RoundRobinParams{RequestThreshold: 2}, // Threshold of 2 requests
@@ -1081,7 +1078,7 @@ func TestLoadBalancer_RoundRobinThreshold2(t *testing.T) {
 		// Record usage directly on the service to trigger round-robin logic
 		service.RecordUsage(10, 10)
 
-		t.Logf("Request %d: Selected provider %s (index %d)", i+1, service.Provider, rule.CurrentServiceIndex)
+		t.Logf("Request %d: Selected provider %s (service_id %s)", i+1, service.Provider, rule.CurrentServiceID)
 	}
 
 	// Expected pattern with threshold 2: A, A, B, B, C, C
@@ -1105,15 +1102,15 @@ func TestLoadBalancer_RoundRobinThreshold2(t *testing.T) {
 			providerCounts["provider-A"], providerCounts["provider-B"], providerCounts["provider-C"])
 	}
 
-	// Test that the CurrentServiceIndex is correctly maintained
-	// After 6 requests with threshold 2, the index should be 2 (pointing to provider-C)
-	expectedFinalIndex := 2
-	if rule.CurrentServiceIndex != expectedFinalIndex {
-		t.Errorf("Expected CurrentServiceIndex = %d, got %d", expectedFinalIndex, rule.CurrentServiceIndex)
+	// Test that the CurrentServiceID is correctly maintained
+	// After 6 requests with threshold 2, the ID should be "provider-C:model-C"
+	expectedFinalServiceID := "provider-C:model-C"
+	if rule.CurrentServiceID != expectedFinalServiceID {
+		t.Errorf("Expected CurrentServiceID = %s, got %s", expectedFinalServiceID, rule.CurrentServiceID)
 	}
 
 	t.Logf("✅ Round-robin test passed!")
 	t.Logf("Final distribution: provider-A: %d, provider-B: %d, provider-C: %d",
 		providerCounts["provider-A"], providerCounts["provider-B"], providerCounts["provider-C"])
-	t.Logf("Final CurrentServiceIndex: %d", rule.CurrentServiceIndex)
+	t.Logf("Final CurrentServiceID: %s", rule.CurrentServiceID)
 }
