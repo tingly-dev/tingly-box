@@ -6,8 +6,6 @@ import {
     ExpandMore as ExpandMoreIcon,
     Info as InfoIcon,
     Warning as WarningIcon,
-    Block as BlockIcon,
-    SignalCellularAlt as SignalIcon,
 } from '@mui/icons-material';
 import {
     Box,
@@ -266,23 +264,6 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                         }}
                         />
                     )}
-                    {/* Active/Inactive Status Badge - Read only, use settings menu to toggle */}
-                    <Chip
-                        label={record.active ? "Active" : "Inactive"}
-                        size="small"
-                        color={record.active ? "success" : "default"}
-                        variant={record.active ? "filled" : "outlined"}
-                        icon={record.active ? <SignalIcon fontSize="small" /> : <BlockIcon fontSize="small" />}
-                        sx={{
-                            opacity: record.active ? 1 : 0.7,
-                            minWidth: 75,
-                            cursor: 'default',
-                            borderColor: !record.active ? 'error.main' : undefined,
-                            color: !record.active ? 'error.main' : undefined,
-                            fontWeight: !record.active ? 600 : undefined,
-                            flexShrink: 0,
-                        }}
-                    />
                     {/* Rule Description - moved to top bar with auto-truncate, after active badge */}
                     {record.description && (
                         <Tooltip title={record.description} arrow>
