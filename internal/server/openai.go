@@ -192,17 +192,6 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 		})
 		return
 	case protocol.APIStyleAnthropic:
-		// Check if adaptor is enabled
-		if !s.enableAdaptor {
-			c.JSON(http.StatusUnprocessableEntity, ErrorResponse{
-				Error: ErrorDetail{
-					Message: fmt.Sprintf("Request format adaptation is disabled. Cannot send OpenAI request to Anthropic-style provider '%s'. Use --adapter flag to enable format conversion.", provider.Name),
-					Type:    "adapter_disabled",
-				},
-			})
-			return
-		}
-
 		anthropicReq := request.ConvertOpenAIToAnthropicRequest(&req.ChatCompletionNewParams, int64(maxAllowed))
 
 		// 🔥 REQUIRED: forward tool_choice

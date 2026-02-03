@@ -216,7 +216,6 @@ func startServer(appManager *AppManager, opts options.StartServerOptions) error 
 		appConfig,
 		server.WithDebug(opts.EnableDebug),
 		server.WithUI(opts.EnableUI),
-		server.WithAdaptor(opts.EnableAdaptor),
 		server.WithOpenBrowser(opts.EnableOpenBrowser),
 		server.WithHost(opts.Host),
 		server.WithHTTPSEnabled(opts.HTTPS.Enabled),

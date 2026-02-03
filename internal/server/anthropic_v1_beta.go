@@ -114,13 +114,6 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 		}
 		return
 	case protocol.APIStyleGoogle:
-		if !s.enableAdaptor {
-			SendAdapterDisabledError(c, provider.Name)
-			if recorder != nil {
-				recorder.RecordError(fmt.Errorf("adapter disabled for provider: %s", provider.Name))
-			}
-			return
-		}
 
 		// Convert Anthropic beta request to Google format
 		model, googleReq, cfg := request.ConvertAnthropicBetaToGoogleRequest(&req.BetaMessageNewParams, 0)
@@ -179,15 +172,6 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			c.JSON(http.StatusOK, anthropicResp)
 		}
 	case protocol.APIStyleOpenAI:
-		// Check if adaptor is enabled
-		if !s.enableAdaptor {
-			SendAdapterDisabledError(c, provider.Name)
-			if recorder != nil {
-				recorder.RecordError(fmt.Errorf("adapter disabled for provider: %s", provider.Name))
-			}
-			return
-		}
-
 		// Check if model prefers Responses API (for models like Codex)
 		// This is used for ChatGPT backend API which only supports Responses API
 		useResponsesAPI := selectedService.PreferCompletions()
