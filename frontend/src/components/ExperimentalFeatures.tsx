@@ -1,14 +1,14 @@
 import {
     Box,
-    ToggleButton,
-    ToggleButtonGroup,
+    FormControlLabel,
+    Switch,
     Tooltip,
     Typography,
 } from '@mui/material';
 import { Science } from '@mui/icons-material';
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
-import {ToggleButtonGroupStyle, ToggleButtonStyle} from "@/styles/style.tsx";
+import { switchControlLabelStyle } from '@/styles/toggleStyles';
 
 export interface ExperimentalFeaturesProps {
     scenario: string;
@@ -71,7 +71,7 @@ const ExperimentalFeatures: React.FC<ExperimentalFeaturesProps> = ({ scenario })
         <Box sx={{ display: 'flex', alignItems: 'center', py: 2, gap: 3 }}>
             {/* Label */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
-                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                <Typography variant="subtitle2" sx={{ color: 'text.secondary' }}>
                     Experimental
                 </Typography>
                 <Tooltip title="Experimental Features Control" arrow>
@@ -79,24 +79,22 @@ const ExperimentalFeatures: React.FC<ExperimentalFeaturesProps> = ({ scenario })
                 </Tooltip>
             </Box>
 
-            {/* Feature toggles */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
+            {/* Feature toggles using Switch */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
                 {FEATURES.map((feature) => (
                     <Tooltip key={feature.key} title={feature.description} arrow>
-                        <ToggleButtonGroup
-                            size="small"
-                            sx={ToggleButtonGroupStyle}
-                            exclusive
-                            value={features[feature.key] ? 'on' : 'off'}
-                            onChange={() => setFeature(feature.key, !features[feature.key])}
-                        >
-                            <ToggleButton value="off" sx={ToggleButtonStyle}>
-                                Off
-                            </ToggleButton>
-                            <ToggleButton value="on" sx={ToggleButtonStyle}>
-                                {feature.label}
-                            </ToggleButton>
-                        </ToggleButtonGroup>
+                        <FormControlLabel
+                            control={
+                                <Switch
+                                    size="small"
+                                    checked={features[feature.key] || false}
+                                    onChange={(e) => setFeature(feature.key, e.target.checked)}
+                                    color="primary"
+                                />
+                            }
+                            label={feature.label}
+                            sx={switchControlLabelStyle}
+                        />
                     </Tooltip>
                 ))}
             </Box>

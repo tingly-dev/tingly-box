@@ -14,6 +14,9 @@ import {
     MenuItem,
     ToggleButton,
     ToggleButtonGroup,
+    Paper,
+    Divider,
+    alpha,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CallMadeIcon from '@mui/icons-material/CallMade';
@@ -23,6 +26,7 @@ import StreamIcon from '@mui/icons-material/Stream';
 import SpeedIcon from '@mui/icons-material/Speed';
 import { StatCard, TokenUsageChart, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable } from '@/components/dashboard';
 import type { TimeSeriesData, AggregatedStat } from '@/components/dashboard';
+import { toggleButtonGroupStyle, toggleButtonStyle, switchControlLabelStyle } from '@/styles/toggleStyles';
 import api from '../services/api';
 
 interface Provider {
@@ -60,7 +64,7 @@ const getLocalMidnight = (date: Date): Date => {
     return d;
 };
 
-export default function UsageDashboardPage() {
+export default function DashboardPage() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [autoRefresh, setAutoRefresh] = useState(true);
@@ -190,67 +194,109 @@ export default function UsageDashboardPage() {
     }
 
     return (
-        <Box sx={{ p: 3 }}>
-            {/* Header */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h5" sx={{ fontWeight: 600 }}>
+        <Box
+            sx={{
+                px: { xs: 3, sm: 4, md: 5 },
+                py: { xs: 4, sm: 5, md: 6 },
+                maxWidth: 1400,
+                mx: 'auto',
+                minHeight: '100vh',
+                backgroundColor: 'background.default',
+            }}
+        >
+            {/* Header with Filters */}
+            <Paper
+                sx={{
+                    p: { xs: 2, sm: 2.5 },
+                    mb: 4,
+                    borderRadius: 2.5,
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: 2,
+                }}
+            >
+                <Typography variant="h4" sx={{ fontWeight: 700, fontSize: '1.5rem', letterSpacing: '-0.02em' }}>
                     Usage Dashboard
                 </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <FormControlLabel
-                        control={
-                            <Switch
-                                size="small"
-                                checked={autoRefresh}
-                                onChange={(e) => setAutoRefresh(e.target.checked)}
-                            />
-                        }
-                        label={<Typography variant="body2">Auto Refresh</Typography>}
-                    />
-                    <Tooltip title="Refresh">
-                        <IconButton onClick={handleRefresh} disabled={refreshing}>
-                            {refreshing ? <CircularProgress size={20} /> : <RefreshIcon />}
-                        </IconButton>
-                    </Tooltip>
-                </Box>
-            </Box>
 
-            {/* Filters Row */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3, flexWrap: 'wrap' }}>
-                {/* Time Range Selector */}
-                <ToggleButtonGroup
-                    value={timeRange}
-                    exclusive
-                    onChange={(_, value) => value && setTimeRange(value)}
-                    size="small"
-                >
-                    {Object.entries(TIME_RANGE_CONFIG).map(([key, config]) => (
-                        <ToggleButton key={key} value={key} sx={{ px: 2 }}>
-                            {config.label}
-                        </ToggleButton>
-                    ))}
-                </ToggleButtonGroup>
-
-                {/* Provider Selector */}
-                <FormControl size="small" sx={{ minWidth: 150 }}>
-                    <InputLabel>Provider</InputLabel>
-                    <Select
-                        value={selectedProvider}
-                        label="Provider"
-                        onChange={(e) => setSelectedProvider(e.target.value)}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                    {/* Time Range Selector */}
+                    <ToggleButtonGroup
+                        value={timeRange}
+                        exclusive
+                        onChange={(_, value) => value && setTimeRange(value)}
+                        size="small"
+                        sx={toggleButtonGroupStyle}
                     >
-                        <MenuItem value="all">All Providers</MenuItem>
-                        {providers.map((p) => (
-                            <MenuItem key={p.uuid} value={p.uuid}>
-                                {p.name}
-                            </MenuItem>
+                        {Object.entries(TIME_RANGE_CONFIG).map(([key, config]) => (
+                            <ToggleButton key={key} value={key} sx={toggleButtonStyle}>
+                                {config.label}
+                            </ToggleButton>
                         ))}
-                    </Select>
-                </FormControl>
-            </Box>
+                    </ToggleButtonGroup>
+
+                    {/* Provider Selector */}
+                    <FormControl size="small" sx={{ minWidth: 150 }}>
+                        <InputLabel sx={{ fontWeight: 500 }}>Provider</InputLabel>
+                        <Select
+                            value={selectedProvider}
+                            label="Provider"
+                            onChange={(e) => setSelectedProvider(e.target.value)}
+                            sx={{
+                                borderRadius: 2,
+                                '& .MuiOutlinedInput-input': { py: 1 },
+                            }}
+                        >
+                            <MenuItem value="all">All Providers</MenuItem>
+                            {providers.map((p) => (
+                                <MenuItem key={p.uuid} value={p.uuid}>
+                                    {p.name}
+                                </MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+
+                    <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+
+                    {/* Auto Refresh & Refresh */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <FormControlLabel
+                            control={
+                                <Switch
+                                    size="small"
+                                    checked={autoRefresh}
+                                    onChange={(e) => setAutoRefresh(e.target.checked)}
+                                    color="primary"
+                                />
+                            }
+                            label={<Typography variant="body2">Auto</Typography>}
+                            sx={switchControlLabelStyle}
+                        />
+                        <Tooltip title="Refresh data">
+                            <IconButton
+                                size="small"
+                                onClick={handleRefresh}
+                                disabled={refreshing}
+                                sx={{
+                                    backgroundColor: 'action.hover',
+                                    '&:hover': { backgroundColor: 'action.selected' },
+                                    '&:disabled': { backgroundColor: 'transparent' },
+                                }}
+                            >
+                                {refreshing ? <CircularProgress size={18} /> : <RefreshIcon />}
+                            </IconButton>
+                        </Tooltip>
+                    </Box>
+                </Box>
+            </Paper>
 
             {/* Stats Cards - Row 1 */}
-            <Grid container spacing={2} sx={{ mb: 2 }}>
+            <Grid container spacing={2.5} sx={{ mb: 4 }}>
                 <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                     <StatCard
                         title="Total Requests"
@@ -290,7 +336,7 @@ export default function UsageDashboardPage() {
             </Grid>
 
             {/* Charts */}
-            <Grid container spacing={3} sx={{ mb: 3 }}>
+            <Grid container spacing={2.5} sx={{ mb: 4 }}>
                 <Grid size={{ xs: 12, md: 6 }}>
                     {timeRange === 'today' ? (
                         <HourlyTokenHistoryChart data={timeSeries} />

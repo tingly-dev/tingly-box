@@ -11,26 +11,29 @@ interface ApiConfigRowProps {
     value?: string;
     onCopy?: () => void;
     children?: React.ReactNode;
-    isClickable?: boolean;
-    isMonospace?: boolean;
-    showEllipsis?: boolean;
 }
+
+const maskValue = (value: string): string => {
+    if (value.length <= 16) return value;
+    const start = value.slice(0, 12);
+    const end = value.slice(-12);
+    const res = `${start}${'*'.repeat(8)}${end}`;
+    console.log(res)
+    return res
+};
 
 export const ApiConfigRow: React.FC<ApiConfigRowProps> = ({
     label,
     value,
     onCopy,
     children,
-    isClickable = false,
-    isMonospace = true,
-    showEllipsis = false
 }) => (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0, maxWidth: 700 }}>
         <Typography
-            variant="body2"
+            variant="subtitle2"
             color="text.secondary"
             sx={{
-                minWidth: 120,
+                minWidth: 190,
                 flexShrink: 0,
                 fontWeight: 500
             }}
@@ -38,30 +41,28 @@ export const ApiConfigRow: React.FC<ApiConfigRowProps> = ({
             {label}:
         </Typography>
         <Typography
-            variant="body2"
-            onClick={isClickable && onCopy ? onCopy : undefined}
+            variant="subtitle2"
+            onClick={onCopy ? onCopy : undefined}
             sx={{
-                fontFamily: isMonospace ? 'monospace' : 'inherit',
-                fontSize: showEllipsis ? '0.8rem' : '0.75rem',
-                color: isClickable ? 'primary.main' : 'text.secondary',
-                letterSpacing: showEllipsis ? '2px' : 'normal',
+                fontFamily: 'monospace',
+                fontSize: '0.75rem',
+                color: 'primary.main',
                 flex: 1,
                 minWidth: 0,
-                cursor: isClickable ? 'pointer' : 'default',
-                userSelect: showEllipsis ? 'none' : 'auto',
-                '&:hover': isClickable ? {
+                cursor: 'pointer',
+                '&:hover': {
                     textDecoration: 'underline',
                     backgroundColor: 'action.hover'
-                } : {},
-                padding: isClickable ? 1 : 0,
-                borderRadius: isClickable ? 1 : 0,
+                },
+                padding: 1,
+                borderRadius: 1,
                 transition: 'all 0.2s ease-in-out'
             }}
-            title={isClickable ? `Click to copy ${label}` : undefined}
+            title={`Click to copy ${label}`}
         >
-            {showEllipsis ? '••••••••••••••••' : value}
+            {value ? maskValue(value) : value}
         </Typography>
-        <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0, minWidth: 'fit-content', marginLeft: 'auto' }}>
+        <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0, ml: 'auto' }}>
             {children}
         </Stack>
     </Box>

@@ -1,18 +1,12 @@
 import {
     AccountCircle as AccountIcon,
     Dashboard as DashboardIcon,
-    Key as KeyIcon,
     Menu as MenuIcon,
     Settings as SystemIcon,
-    Description as LogsIcon,
     ExpandLess,
     ExpandMore,
     BarChart as BarChartIcon,
     CloudUpload,
-    Refresh,
-    CheckCircle,
-    Error as ErrorIcon,
-    Error as VersionIcon,
     Code as CodeIcon,
     Psychology as PromptIcon,
     Bolt as SkillIcon,
@@ -30,17 +24,14 @@ import {
     ListItemIcon,
     ListItemText,
     Typography,
-    CircularProgress,
     Popover,
 } from '@mui/material';
 import type { ReactNode } from 'react';
 import React, { useState, useMemo } from 'react';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useHealth } from '../contexts/HealthContext';
 import { useVersion as useAppVersion } from '../contexts/VersionContext';
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
-import VerifiedIcon from '@mui/icons-material/Verified';
 import OpenAI from '@lobehub/icons/es/OpenAI';
 import Anthropic from '@lobehub/icons/es/Anthropic';
 import Claude from '@lobehub/icons/es/Claude';
@@ -54,7 +45,7 @@ const drawerWidth = 260;
 interface MenuItem {
     path: string;
     label: string;
-    icon: ReactNode;
+    icon?: ReactNode;
 }
 
 interface MenuGroup {
@@ -69,12 +60,10 @@ interface MenuGroup {
 const Layout = ({ children }: LayoutProps) => {
     const { t } = useTranslation();
     const location = useLocation();
-    const { isHealthy, checking, checkHealth } = useHealth();
-    const { hasUpdate, checking: checkingVersion, checkForUpdates, currentVersion, latestVersion } = useAppVersion();
+    const { hasUpdate, currentVersion } = useAppVersion();
     const { skillUser, skillIde } = useFeatureFlags();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [homeMenuOpen, setHomeMenuOpen] = useState(true);
-    const [credentialMenuOpen, setCredentialMenuOpen] = useState(true);
     const [promptMenuOpen, setPromptMenuOpen] = useState(true);
     const [systemMenuOpen, setSystemMenuOpen] = useState(false);
     const [easterEggAnchorEl, setEasterEggAnchorEl] = useState<HTMLElement | null>(null);
@@ -89,10 +78,6 @@ const Layout = ({ children }: LayoutProps) => {
 
     const handleEasterEggClose = () => {
         setEasterEggAnchorEl(null);
-    };
-
-    const handleCheckUpdates = () => {
-        checkForUpdates(true);
     };
 
     const isActive = (path: string) => {
@@ -174,18 +159,14 @@ const Layout = ({ children }: LayoutProps) => {
         },
         {
             key: 'credential',
-            label: t('layout.nav.credential'),
+            label: t('layout.nav.credential', { defaultValue: 'Credentials' }),
             icon: <LockIcon sx={{ fontSize: 20 }} />,
+            standalone: true,
             items: [
                 {
-                    path: '/api-keys',
-                    label: t('layout.nav.apiKeys', { defaultValue: 'API Keys' }),
-                    icon: <KeyIcon sx={{ fontSize: 20 }} />,
-                },
-                {
-                    path: '/oauth',
-                    label: t('layout.nav.oauth', { defaultValue: 'OAuth' }),
-                    icon: <VerifiedIcon sx={{ fontSize: 20 }} />,
+                    path: '/credentials',
+                    label: t('layout.nav.credentials', { defaultValue: 'All Credentials' }),
+                    icon: <LockIcon sx={{ fontSize: 20 }} />,
                 },
             ],
         },
@@ -198,13 +179,13 @@ const Layout = ({ children }: LayoutProps) => {
         {
             key: 'system',
             label: 'System',
-            path: '/system',
             icon: <SystemIcon sx={{ fontSize: 20 }} />,
+            standalone: true,
             items: [
                 {
-                    path: '/logs',
-                    label: 'Logs',
-                    icon: <LogsIcon sx={{ fontSize: 18 }} />,
+                    path: '/system',
+                    label: 'System',
+                    icon: <SystemIcon sx={{ fontSize: 20 }} />,
                 },
             ],
         },
@@ -249,9 +230,26 @@ const Layout = ({ children }: LayoutProps) => {
                 >
                     T
                 </Box>
-                <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                    {t('layout.appTitle')}
-                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                    <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary', lineHeight: 1.2 }}>
+                        {t('layout.appTitle')}
+                    </Typography>
+                    <Typography
+                        variant="caption"
+                        sx={{
+                            color: 'text.secondary',
+                            fontSize: '0.7rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 0.5,
+                        }}
+                    >
+                        {currentVersion}
+                        {hasUpdate && (
+                            <CloudUpload sx={{ fontSize: 12, color: 'info.main' }} />
+                        )}
+                    </Typography>
+                </Box>
             </Box>
 
             {/* Navigation Menu */}
@@ -272,9 +270,6 @@ const Layout = ({ children }: LayoutProps) => {
                         if (isHomeGroup) {
                             isOpen = homeMenuOpen;
                             setIsOpen = setHomeMenuOpen;
-                        } else if (isCredentialGroup) {
-                            isOpen = credentialMenuOpen;
-                            setIsOpen = setCredentialMenuOpen;
                         } else if (isPromptGroup) {
                             isOpen = promptMenuOpen;
                             setIsOpen = setPromptMenuOpen;
@@ -287,7 +282,7 @@ const Layout = ({ children }: LayoutProps) => {
                     return (
                         <React.Fragment key={group.key}>
                             {/* Group Header */}
-                            <ListItem key={`header-${group.key}`} disablePadding sx={{ mb: isStandalone ? 1 : 0.5 }}>
+                            <ListItem key={`header-${group.key}`} disablePadding sx={{ mb: 0.5 }}>
                                 <ListItemButton
                                     component={RouterLink}
                                     to={group.path || group.items[0].path}
@@ -303,8 +298,18 @@ const Layout = ({ children }: LayoutProps) => {
                                         borderRadius: 1.5,
                                         color: 'text.primary',
                                         bgcolor: 'action.hover',
+                                        transition: 'all 150ms ease-in-out',
                                         '&:hover': {
                                             bgcolor: 'action.selected',
+                                            '& .MuiListItemIcon-root': {
+                                                color: 'primary.main',
+                                            },
+                                        },
+                                        '&:focus-visible': {
+                                            outline: 2,
+                                            outlineColor: 'primary.main',
+                                            outlineOffset: 2,
+                                            borderRadius: 1,
                                         },
                                     }}
                                 >
@@ -318,10 +323,12 @@ const Layout = ({ children }: LayoutProps) => {
                                     </ListItemIcon>
                                     <ListItemText
                                         primary={group.label || group.items[0].label}
-                                        primaryTypographyProps={{
-                                            fontWeight: 600,
-                                            fontSize: '0.9rem',
-                                            letterSpacing: 0.15,
+                                        slotProps={{
+                                            primary: {
+                                                fontWeight: 600,
+                                                fontSize: '0.875rem',
+                                                letterSpacing: 0.15,
+                                            },
                                         }}
                                     />
                                     {!isStandalone && (
@@ -332,6 +339,8 @@ const Layout = ({ children }: LayoutProps) => {
                                                 setIsOpen && setIsOpen(!isOpen);
                                             }}
                                             sx={{ display: 'flex', alignItems: 'center' }}
+                                            aria-expanded={isOpen}
+                                            aria-controls={`${group.key}-menu`}
                                         >
                                             {isOpen ? <ExpandLess /> : <ExpandMore />}
                                         </Box>
@@ -341,28 +350,72 @@ const Layout = ({ children }: LayoutProps) => {
 
                             {/* Group Items - only for non-standalone groups */}
                             {!isStandalone && (
-                                <Collapse in={isOpen} timeout="auto" unmountOnExit>
+                                <Collapse
+                                    in={isOpen}
+                                    timeout={250}
+                                    easing={{
+                                        enter: 'cubic-bezier(0.4, 0, 0.2, 1)',
+                                        exit: 'cubic-bezier(0.4, 0, 0.2, 1)',
+                                    }}
+                                    unmountOnExit
+                                >
                                     <List sx={{ pl: 0, py: 0 }}>
                                         {group.items.map((item) => (
-                                            <ListItem key={item.path} disablePadding sx={{ mb: 0.25 }}>
+                                            <ListItem key={item.path} disablePadding>
                                                 <ListItemButton
                                                     component={RouterLink}
                                                     to={item.path}
                                                     onClick={handleDrawerToggle}
-                                                    className={isActive(item.path) ? 'nav-item-active' : ''}
+                                                    aria-current={isActive(item.path) ? 'page' : undefined}
                                                     sx={{
-                                                        mx: 2.5,
+                                                        mx: 2,
+                                                        mb: 0.5,
                                                         borderRadius: 1.5,
                                                         pl: 3.5,
                                                         pr: 2.5,
-                                                        py: 0.75,
+                                                        py: 1,
                                                         color: 'text.secondary',
-                                                        bgcolor: 'transparent',
+                                                        transition: 'all 150ms ease-in-out',
+                                                        position: 'relative',
+                                                        ...(isActive(item.path) && {
+                                                            backgroundColor: 'primary.main',
+                                                            color: 'primary.contrastText',
+                                                            fontWeight: 600,
+                                                            '&::before': {
+                                                                content: '""',
+                                                                position: 'absolute',
+                                                                left: 0,
+                                                                top: '50%',
+                                                                transform: 'translateY(-50%)',
+                                                                width: 3,
+                                                                height: '70%',
+                                                                backgroundColor: 'primary.light',
+                                                                borderRadius: '0 2px 2px 0',
+                                                                boxShadow: '0 0 8px rgba(37, 99, 235, 0.5)',
+                                                            },
+                                                            '&:hover': {
+                                                                backgroundColor: 'primary.dark',
+                                                            },
+                                                            '& .MuiListItemIcon-root': {
+                                                                color: 'primary.contrastText',
+                                                            },
+                                                            '& .MuiListItemText-primary': {
+                                                                color: 'primary.contrastText',
+                                                                fontWeight: 600,
+                                                            },
+                                                        }),
                                                         '&:hover': {
-                                                            backgroundColor: 'action.hover',
+                                                            backgroundColor: isActive(item.path) ? 'primary.dark' : 'action.hover',
+                                                            transform: 'translateX(2px)',
+                                                        },
+                                                        '&:focus-visible': {
+                                                            outline: 2,
+                                                            outlineColor: 'primary.main',
+                                                            outlineOffset: 2,
+                                                            borderRadius: 1,
                                                         },
                                                         '& .MuiListItemIcon-root': {
-                                                            color: 'text.secondary',
+                                                            color: isActive(item.path) ? 'primary.contrastText' : 'text.secondary',
                                                         },
                                                     }}
                                                 >
@@ -371,9 +424,11 @@ const Layout = ({ children }: LayoutProps) => {
                                                     </ListItemIcon>
                                                     <ListItemText
                                                         primary={item.label}
-                                                        primaryTypographyProps={{
-                                                            fontWeight: 400,
-                                                            fontSize: '0.85rem',
+                                                        slotProps={{
+                                                            primary: {
+                                                                fontWeight: isActive(item.path) ? 600 : 400,
+                                                                fontSize: '0.875rem',
+                                                            },
                                                         }}
                                                     />
                                                 </ListItemButton>
@@ -386,77 +441,6 @@ const Layout = ({ children }: LayoutProps) => {
                     );
                 })}
             </List>
-
-            {/* Status Section - Health & Version */}
-            <Box
-                sx={{
-                    p: 2,
-                    borderTop: '1px solid',
-                    borderBottom: '1px solid',
-                    borderColor: 'divider',
-                    flexShrink: 0,
-                }}
-            >
-                {/* Connection Status */}
-                <Box sx={{ mb: 2 }}>
-                    <Box
-                        sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            mb: 1,
-                        }}
-                    >
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            {checking ? (
-                                <CircularProgress size={16} thickness={2} />
-                            ) : isHealthy ? (
-                                <CheckCircle color="success" sx={{ fontSize: 18 }} />
-                            ) : (
-                                <ErrorIcon color="error" sx={{ fontSize: 18 }} />
-                            )}
-                            <Typography variant="body2" color="text.secondary">
-                                Server: <span/>
-                                {checking ? t('health.checking') : isHealthy ? t('health.connected') : t('health.disconnected')}
-                            </Typography>
-                        </Box>
-                        <IconButton size="small" onClick={checkHealth} disabled={checking}>
-                            <Refresh sx={{ fontSize: 16 }} />
-                        </IconButton>
-                    </Box>
-                </Box>
-
-                {/* Version Status */}
-                <Box>
-                    <Box
-                        sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                        }}
-                    >
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            {hasUpdate? (
-                                <CloudUpload color="info" sx={{ fontSize: 18 }} />
-                            ): <CheckCircle color="success" sx={{ fontSize: 18 }} />}
-                            <Typography variant="body2" color="text.secondary">
-                                Version: <span/>
-                                {hasUpdate
-                                    ? t('update.versionAvailable', { latest: latestVersion, current: currentVersion })
-                                    : currentVersion
-                                }
-                            </Typography>
-                        </Box>
-                        <IconButton size="small" onClick={handleCheckUpdates} disabled={checkingVersion}>
-                            {checkingVersion ? (
-                                <CircularProgress size={16} thickness={2} />
-                            ) : (
-                                <Refresh sx={{ fontSize: 16 }} />
-                            )}
-                        </IconButton>
-                    </Box>
-                </Box>
-            </Box>
 
             {/* Bottom Section - Slogan and User */}
             <Box
@@ -485,6 +469,7 @@ const Layout = ({ children }: LayoutProps) => {
                     <IconButton
                         color="inherit"
                         onClick={handleEasterEgg}
+                        aria-label="About Tingly-Box"
                         sx={{ color: 'text.secondary' }}
                     >
                         <AccountIcon sx={{ fontSize: 24 }} />
@@ -498,25 +483,35 @@ const Layout = ({ children }: LayoutProps) => {
         <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8f9fa' }}>
             {/* Mobile Menu Button */}
             <IconButton
-                color="inherit"
-                aria-label="open drawer"
+                color="primary"
+                aria-label="Open navigation menu"
                 edge="start"
                 onClick={handleDrawerToggle}
                 sx={{
                     position: 'fixed',
-                    top: 16,
-                    left: 16,
+                    top: { xs: 12, sm: 16 },
+                    left: { xs: 12, sm: 16 },
                     zIndex: 1300,
                     display: { sm: 'none' },
                     backgroundColor: 'background.paper',
-                    boxShadow: 1,
+                    boxShadow: 3,
+                    width: 44,
+                    height: 44,
+                    '&:hover': {
+                        backgroundColor: 'action.hover',
+                        transform: 'scale(1.05)',
+                    },
+                    '&:active': {
+                        transform: 'scale(0.95)',
+                    },
+                    transition: 'all 150ms ease-in-out',
                 }}
             >
                 <MenuIcon />
             </IconButton>
 
             {/* Sidebar Drawer */}
-            <Box component="nav" sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}>
+            <Box component="nav" sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }} aria-label="Main navigation">
                 <Drawer
                     variant="temporary"
                     open={mobileOpen}
@@ -616,7 +611,7 @@ const Layout = ({ children }: LayoutProps) => {
                     },
                 }}
             >
-                Hi, I'm Tingly-Box, your Smart AI Proxy
+                Hi, I'm Tingly-Box, Your Smart AI Proxy
             </Popover>
         </Box>
     );

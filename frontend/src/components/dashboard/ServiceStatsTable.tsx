@@ -9,6 +9,7 @@ import {
     TableRow,
     TablePagination,
     Box,
+    alpha,
 } from '@mui/material';
 import { useState } from 'react';
 
@@ -64,41 +65,118 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
         <Paper
             elevation={0}
             sx={{
-                borderRadius: 2,
+                borderRadius: 2.5,
                 border: '1px solid',
                 borderColor: 'divider',
                 overflow: 'hidden',
+                backgroundColor: 'background.paper',
+                boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
             }}
         >
-            <Box sx={{ p: 3, borderBottom: '1px solid', borderColor: 'divider' }}>
+            <Box
+                sx={{
+                    p: 3,
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                }}
+            >
                 <Typography variant="h6" sx={{ fontWeight: 600 }}>
                     Usage by Model
                 </Typography>
             </Box>
-            <TableContainer>
-                <Table>
+            <TableContainer sx={{ maxHeight: 600 }}>
+                <Table stickyHeader>
                     <TableHead>
-                        <TableRow sx={{ backgroundColor: '#fafafa' }}>
+                        <TableRow
+                            sx={{
+                                backgroundColor: alpha('#f1f5f9', 0.8),
+                                '& .MuiTableCell-root': {
+                                    fontWeight: 600,
+                                    fontSize: '0.75rem',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.05em',
+                                    color: 'text.secondary',
+                                    py: 2,
+                                    borderBottom: '2px solid',
+                                    borderColor: 'divider',
+                                },
+                            }}
+                        >
                             <TableCell sx={{ fontWeight: 600 }}>Provider</TableCell>
                             <TableCell sx={{ fontWeight: 600 }}>Model</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 600 }}>Requests</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 600 }}>Input Tokens</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 600 }}>Output Tokens</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 600 }}>
+                                Requests
+                            </TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 600 }}>
+                                Input Tokens
+                            </TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 600 }}>
+                                Output Tokens
+                            </TableCell>
                             {/* <TableCell align="right" sx={{ fontWeight: 600 }}>Avg Latency</TableCell> */}
-                            <TableCell align="right" sx={{ fontWeight: 600 }}>Error Rate</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 600 }}>
+                                Error Rate
+                            </TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
                         {stats.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={6} align="center" sx={{ py: 4, color: 'text.secondary' }}>
-                                    No usage data available
+                                <TableCell colSpan={6} align="center" sx={{ py: 8 }}>
+                                    <Box sx={{ textAlign: 'center' }}>
+                                        <Box
+                                            sx={{
+                                                width: 48,
+                                                height: 48,
+                                                borderRadius: 2,
+                                                backgroundColor: alpha('#64748b', 0.1),
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                mb: 2,
+                                                mx: 'auto',
+                                            }}
+                                        >
+                                            <Box
+                                                sx={{
+                                                    width: 24,
+                                                    height: 24,
+                                                    borderRadius: '50%',
+                                                    backgroundColor: 'text.disabled',
+                                                    opacity: 0.3,
+                                                }}
+                                            />
+                                        </Box>
+                                        <Typography variant="body1" color="text.secondary">
+                                            No usage data available
+                                        </Typography>
+                                        <Typography variant="caption" color="text.disabled" sx={{ mt: 0.5 }}>
+                                            Select a different time range or check back later
+                                        </Typography>
+                                    </Box>
                                 </TableCell>
                             </TableRow>
                         ) : (
                             <>
                                 {visibleStats.map((stat, index) => (
-                                    <TableRow key={index} hover>
+                                    <TableRow
+                                        key={index}
+                                        hover
+                                        sx={{
+                                            transition: 'background-color 0.15s ease',
+                                            '&:hover': {
+                                                backgroundColor: 'action.hover',
+                                            },
+                                            '& .MuiTableCell-root': {
+                                                py: 2,
+                                                borderBottom: '1px solid',
+                                                borderColor: 'divider',
+                                            },
+                                        }}
+                                    >
                                         <TableCell>{stat.provider_name || '-'}</TableCell>
                                         <TableCell>
                                             <Typography
@@ -150,7 +228,13 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
                 page={page}
                 onPageChange={handleChangePage}
                 onRowsPerPageChange={handleChangeRowsPerPage}
-                sx={{ borderBottomLeftRadius: 8, borderBottomRightRadius: 8 }}
+                sx={{
+                    borderTop: '1px solid',
+                    borderColor: 'divider',
+                    '& .MuiTablePagination-toolbar': {
+                        minHeight: 52,
+                    },
+                }}
             />
         </Paper>
     );

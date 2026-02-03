@@ -1,23 +1,17 @@
 import {
     Box,
-    ToggleButton,
-    ToggleButtonGroup,
+    FormControlLabel,
+    Switch,
     Tooltip,
     Typography,
 } from '@mui/material';
-import { Public, Psychology } from '@mui/icons-material';
+import { Psychology } from '@mui/icons-material';
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
-import {ToggleButtonGroupStyle, ToggleButtonStyle} from "@/styles/style.tsx";
-
-const FEATURES = [
-    { key: 'smart_compact', label: 'Smart Compact', description: 'Remove thinking blocks from conversation history to reduce context (applies to all scenarios)', icon: 'science' as const },
-    { key: 'recording', label: 'Recording', description: 'Record scenario-level request/response traffic for debugging (applies to all scenarios)', icon: 'science' as const },
-] as const;
+import { switchControlLabelStyle } from '@/styles/toggleStyles';
 
 const SKILL_FEATURES = [
-    // { key: 'skill_user', label: 'User Prompt', description: 'Enable User Prompt feature for managing user recordings and templates', icon: 'skill' as const },
-    { key: 'skill_ide', label: 'IDE Skills', description: 'Enable IDE Skills feature for managing code snippets and skills from IDEs', icon: 'skill' as const },
+    { key: 'skill_ide', label: 'IDE Skills', description: 'Enable IDE Skills feature for managing code snippets and skills from IDEs' },
 ] as const;
 
 const GlobalExperimentalFeatures: React.FC = () => {
@@ -27,12 +21,11 @@ const GlobalExperimentalFeatures: React.FC = () => {
     const loadFeatures = async () => {
         try {
             setLoading(true);
-            const allFeatures = [...FEATURES, ...SKILL_FEATURES];
             const results = await Promise.all(
-                allFeatures.map(f => api.getScenarioFlag('_global', f.key))
+                SKILL_FEATURES.map(f => api.getScenarioFlag('_global', f.key))
             );
             const newFeatures: Record<string, boolean> = {};
-            allFeatures.forEach((f, i) => {
+            SKILL_FEATURES.forEach((f, i) => {
                 newFeatures[f.key] = results[i]?.data?.value || false;
             });
             setFeatures(newFeatures);
@@ -71,46 +64,11 @@ const GlobalExperimentalFeatures: React.FC = () => {
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            {/*/!* Experimental Features *!/*/}
-            {/*<Box sx={{ display: 'flex', alignItems: 'center', py: 2, gap: 3 }}>*/}
-            {/*    /!* Label *!/*/}
-            {/*    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>*/}
-            {/*        <Typography variant="body2" sx={{ color: 'text.secondary' }}>*/}
-            {/*            Experimental*/}
-            {/*        </Typography>*/}
-            {/*        <Tooltip title="Global Experimental Features - Apply to All Scenarios" arrow>*/}
-            {/*            <Public sx={{ fontSize: '1rem', color: 'text.secondary' }} />*/}
-            {/*        </Tooltip>*/}
-            {/*    </Box>*/}
-
-            {/*    /!* Feature toggles *!/*/}
-            {/*    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>*/}
-            {/*        {FEATURES.map((feature) => (*/}
-            {/*            <Tooltip key={feature.key} title={feature.description} arrow>*/}
-            {/*                <ToggleButtonGroup*/}
-            {/*                    size="small"*/}
-            {/*                    sx={ToggleButtonGroupStyle}*/}
-            {/*                    exclusive*/}
-            {/*                    value={features[feature.key] ? 'on' : 'off'}*/}
-            {/*                    onChange={() => setFeature(feature.key, !features[feature.key])}*/}
-            {/*                >*/}
-            {/*                    <ToggleButton value="off" sx={ToggleButtonStyle}>*/}
-            {/*                        Off*/}
-            {/*                    </ToggleButton>*/}
-            {/*                    <ToggleButton value="on" sx={ToggleButtonStyle}>*/}
-            {/*                        {feature.label}*/}
-            {/*                    </ToggleButton>*/}
-            {/*                </ToggleButtonGroup>*/}
-            {/*            </Tooltip>*/}
-            {/*        ))}*/}
-            {/*    </Box>*/}
-            {/*</Box>*/}
-
             {/* Skill Features */}
             <Box sx={{ display: 'flex', alignItems: 'center', py: 2, gap: 3 }}>
                 {/* Label */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
-                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    <Typography variant="subtitle2" sx={{ color: 'text.secondary' }}>
                         Skills
                     </Typography>
                     <Tooltip title="Skill Features - Enable prompt and skill management features" arrow>
@@ -118,24 +76,22 @@ const GlobalExperimentalFeatures: React.FC = () => {
                     </Tooltip>
                 </Box>
 
-                {/* Skill feature toggles */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
+                {/* Skill feature toggles using Switch */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
                     {SKILL_FEATURES.map((feature) => (
                         <Tooltip key={feature.key} title={feature.description} arrow>
-                            <ToggleButtonGroup
-                                size="small"
-                                sx={ToggleButtonGroupStyle}
-                                exclusive
-                                value={features[feature.key] ? 'on' : 'off'}
-                                onChange={() => setFeature(feature.key, !features[feature.key])}
-                            >
-                                <ToggleButton value="off" sx={ToggleButtonStyle}>
-                                    Off
-                                </ToggleButton>
-                                <ToggleButton value="on" sx={ToggleButtonStyle}>
-                                    {feature.label}
-                                </ToggleButton>
-                            </ToggleButtonGroup>
+                            <FormControlLabel
+                                control={
+                                    <Switch
+                                        size="small"
+                                        checked={features[feature.key] || false}
+                                        onChange={(e) => setFeature(feature.key, e.target.checked)}
+                                        color="primary"
+                                    />
+                                }
+                                label={feature.label}
+                                sx={switchControlLabelStyle}
+                            />
                         </Tooltip>
                     ))}
                 </Box>

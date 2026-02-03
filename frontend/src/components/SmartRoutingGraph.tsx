@@ -4,8 +4,6 @@ import {
     Info as InfoIcon,
     Warning as WarningIcon,
     ExpandMore as ExpandMoreIcon,
-    BlockOutlined as BlockIcon,
-    SignalCellularAlt as SignalIcon,
 } from '@mui/icons-material';
 import {
     Box,
@@ -93,7 +91,7 @@ const StyledCard = styled(Card, {
     filter: active ? 'none' : 'grayscale(0.3)',
     border: active ? 'none' : '2px dashed',
     borderColor: active ? 'transparent' : theme.palette.text.disabled,
-    marginTop: "3px",
+    margin: "3px",
     position: 'relative',
     ...(active ? {} : {
         '&::before': {
@@ -207,23 +205,6 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                             }}
                         />
                     </Tooltip>
-                    {/* Active/Inactive Status Badge - Read only, use settings menu to toggle */}
-                    <Chip
-                        label={active ? "Active" : "Inactive"}
-                        size="small"
-                        color={active ? "success" : "default"}
-                        variant={active ? "filled" : "filled"}
-                        icon={active ? <SignalIcon fontSize="small" /> : <BlockIcon fontSize="small" />}
-                        sx={{
-                            opacity: active ? 1 : 0.7,
-                            minWidth: 75,
-                            cursor: 'default',
-                            borderColor: !active ? 'error.main' : undefined,
-                            color: !active ? 'error.main' : undefined,
-                            fontWeight: !active ? 600 : undefined,
-                            flexShrink: 0,
-                        }}
-                    />
                     <Chip
                         label={`${smartRouting.length} ${smartRouting.length === 1 ? 'Rule' : 'Rules'}`}
                         size="small"
