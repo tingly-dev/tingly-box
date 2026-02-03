@@ -137,7 +137,6 @@ export const BaseUrlRow: React.FC<BaseUrlRowProps> = ({
     return (
         <>
             {renderUrlRow(label, fullUrl, displayUrl)}
-            {legacyUrl && renderUrlRow(legacyLabel, legacyUrl, displayLegacyUrl)}
         </>
     );
 };
