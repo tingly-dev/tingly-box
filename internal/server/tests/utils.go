@@ -270,7 +270,7 @@ func (ts *TestServer) AddTestRule(t *testing.T, requestModel, providerName, mode
 		Scenario:      typ.ScenarioOpenAI,
 		RequestModel:  requestModel,
 		ResponseModel: model,
-		Services: []loadbalance.Service{
+		Services: []*loadbalance.Service{
 			{
 				Provider:   providerName,
 				Model:      model,

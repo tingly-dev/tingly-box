@@ -3,24 +3,22 @@ package loadbalance
 import (
 	"testing"
 	"time"
-
-	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 )
 
 // mockRule is a minimal mock of typ.Rule for testing
 type mockRule struct {
-	services []loadbalance.Service
+	services []Service
 }
 
-func (m *mockRule) GetServices() []loadbalance.Service {
+func (m *mockRule) GetServices() []Service {
 	if m.services == nil {
-		return []loadbalance.Service{}
+		return []Service{}
 	}
 	return m.services
 }
 
 func TestService_ServiceID(t *testing.T) {
-	service := loadbalance.Service{
+	service := Service{
 		Provider: "openai",
 		Model:    "gpt-4",
 	}
@@ -32,7 +30,7 @@ func TestService_ServiceID(t *testing.T) {
 }
 
 func TestServiceStats_RecordUsage(t *testing.T) {
-	stats := &loadbalance.ServiceStats{
+	stats := &ServiceStats{
 		ServiceID:   "test:provider",
 		TimeWindow:  60, // 1 minute for testing
 		WindowStart: time.Now(),
@@ -76,7 +74,7 @@ func TestServiceStats_RecordUsage(t *testing.T) {
 }
 
 func TestServiceStats_WindowReset(t *testing.T) {
-	stats := &loadbalance.ServiceStats{
+	stats := &ServiceStats{
 		ServiceID:   "test:provider",
 		TimeWindow:  1,                                // 1 second for testing
 		WindowStart: time.Now().Add(-2 * time.Second), // Start 2 seconds ago
@@ -96,7 +94,7 @@ func TestServiceStats_WindowReset(t *testing.T) {
 }
 
 func TestServiceStats_ResetWindow(t *testing.T) {
-	stats := &loadbalance.ServiceStats{
+	stats := &ServiceStats{
 		ServiceID:            "test:provider",
 		TimeWindow:           60,
 		RequestCount:         10,
@@ -137,28 +135,28 @@ func TestServiceStats_ResetWindow(t *testing.T) {
 func TestParseTacticType(t *testing.T) {
 	tests := []struct {
 		input    string
-		expected loadbalance.TacticType
+		expected TacticType
 	}{
-		{"round_robin", loadbalance.TacticRoundRobin},
-		{"token_based", loadbalance.TacticTokenBased},
-		{"hybrid", loadbalance.TacticHybrid},
-		{"invalid", loadbalance.TacticRoundRobin}, // Default fallback
-		{"", loadbalance.TacticRoundRobin},        // Empty string fallback
+		{"round_robin", TacticRoundRobin},
+		{"token_based", TacticTokenBased},
+		{"hybrid", TacticHybrid},
+		{"invalid", TacticRoundRobin}, // Default fallback
+		{"", TacticRoundRobin},        // Empty string fallback
 	}
 
 	for _, test := range tests {
-		if got := loadbalance.ParseTacticType(test.input); got != test.expected {
+		if got := ParseTacticType(test.input); got != test.expected {
 			t.Errorf("ParseTacticType(%s) = %v, want %v", test.input, got, test.expected)
 		}
 	}
 }
 
 func TestTacticType_String(t *testing.T) {
-	tests := map[loadbalance.TacticType]string{
-		loadbalance.TacticRoundRobin: "round_robin",
-		loadbalance.TacticTokenBased: "token_based",
-		loadbalance.TacticHybrid:     "hybrid",
-		loadbalance.TacticType(999):  "unknown", // Invalid type
+	tests := map[TacticType]string{
+		TacticRoundRobin: "round_robin",
+		TacticTokenBased: "token_based",
+		TacticHybrid:     "hybrid",
+		TacticType(999):  "unknown", // Invalid type
 	}
 
 	for tacticType, expected := range tests {
@@ -184,7 +182,7 @@ func TestService_PreferCompletions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			service := loadbalance.Service{
+			service := Service{
 				Model: tt.model,
 			}
 			if got := service.PreferCompletions(); got != tt.expected {

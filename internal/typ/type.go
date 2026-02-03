@@ -121,11 +121,11 @@ func (p *Provider) IsOAuthExpired() bool {
 
 // Rule represents a request/response configuration with load balancing support
 type Rule struct {
-	UUID          string                `json:"uuid"`
-	Scenario      RuleScenario          `json:"scenario,required" yaml:"scenario"` // openai, anthropic, claude_code; defaults to openai
-	RequestModel  string                `json:"request_model" yaml:"request_model"`
-	ResponseModel string                `json:"response_model" yaml:"response_model"`
-	Description   string                `json:"description"`
+	UUID          string                 `json:"uuid"`
+	Scenario      RuleScenario           `json:"scenario,required" yaml:"scenario"` // openai, anthropic, claude_code; defaults to openai
+	RequestModel  string                 `json:"request_model" yaml:"request_model"`
+	ResponseModel string                 `json:"response_model" yaml:"response_model"`
+	Description   string                 `json:"description"`
 	Services      []*loadbalance.Service `json:"services" yaml:"services"`
 	// CurrentServiceID is persisted to SQLite, not JSON (provider:model format)
 	// This identifies the current service for round-robin load balancing
@@ -149,12 +149,12 @@ func (r *Rule) ToJSON() interface{} {
 		"scenario":       r.GetScenario(),
 		"request_model":  r.RequestModel,
 		"response_model": r.ResponseModel,
-		"description":           r.Description,
+		"description":    r.Description,
 		"services":       services,
 		"lb_tactic":      r.LBTactic,
 		"active":         r.Active,
-		"smart_enabled":         r.SmartEnabled,
-		"smart_routing":         r.SmartRouting,
+		"smart_enabled":  r.SmartEnabled,
+		"smart_routing":  r.SmartRouting,
 	}
 
 	return jsonRule
@@ -237,8 +237,7 @@ func (r *Rule) GetCurrentService() *loadbalance.Service {
 	// If CurrentServiceID is set, find and return that service
 	if r.CurrentServiceID != "" {
 		for _, svc := range activeServices {
-			svcID := svc.Provider + ":" + svc.Model
-			if svcID == r.CurrentServiceID && svc.Active {
+			if svc.ServiceID() == r.CurrentServiceID && svc.Active {
 				return svc
 			}
 		}

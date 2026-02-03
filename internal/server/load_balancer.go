@@ -108,7 +108,7 @@ func (lb *LoadBalancer) UpdateServiceIndex(rule *typ.Rule, selectedService *load
 	}
 
 	// Set the current service ID (provider:model format)
-	rule.CurrentServiceID = selectedService.Provider + ":" + selectedService.Model
+	rule.CurrentServiceID = selectedService.ServiceID()
 }
 
 // RecordUsage records usage for a service

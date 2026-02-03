@@ -52,8 +52,8 @@ func (s *Server) SelectServiceFromSmartRouting(matchedServices []*loadbalance.Se
 	// Create a temporary rule with the matched services for load balancing
 	tempRule := *rule // Copy the rule
 	tempRule.Services = activeServices
-	// Reset CurrentServiceIndex to 0 since this is a different set of services
-	tempRule.CurrentServiceIndex = 0
+	// Reset CurrentServiceID to "" since this is a different set of services
+	tempRule.CurrentServiceID = ""
 
 	// Use the load balancer to select from the temporary rule
 	selectedService, err := s.loadBalancer.SelectService(&tempRule)

@@ -274,7 +274,7 @@ func (rr *RoundRobinTactic) SelectService(rule *Rule) *loadbalance.Service {
 	var currentIndex int = 0
 	if rule.CurrentServiceID != "" {
 		for i, svc := range activeServices {
-			svcID := svc.Provider + ":" + svc.Model
+			svcID := svc.ServiceID()
 			if svcID == rule.CurrentServiceID {
 				currentIndex = i
 				break
@@ -294,7 +294,7 @@ func (rr *RoundRobinTactic) SelectService(rule *Rule) *loadbalance.Service {
 	nextService := activeServices[nextIndex]
 
 	// Update the rule's current service ID
-	rule.CurrentServiceID = nextService.Provider + ":" + nextService.Model
+	rule.CurrentServiceID = nextService.ServiceID()
 
 	// Reset streak for the new service (set to 1 because we're using it now)
 	globalRoundRobinStreaks.Store(ruleKey, int64(1))
@@ -335,8 +335,7 @@ func (tb *TokenBasedTactic) SelectService(rule *Rule) *loadbalance.Service {
 	var currentService *loadbalance.Service
 	if rule.CurrentServiceID != "" {
 		for _, svc := range activeServices {
-			svcID := svc.Provider + ":" + svc.Model
-			if svcID == rule.CurrentServiceID {
+			if svc.ServiceID() == rule.CurrentServiceID {
 				currentService = svc
 				break
 			}
@@ -412,8 +411,7 @@ func (ht *HybridTactic) SelectService(rule *Rule) *loadbalance.Service {
 	var currentService *loadbalance.Service
 	if rule.CurrentServiceID != "" {
 		for _, svc := range activeServices {
-			svcID := svc.Provider + ":" + svc.Model
-			if svcID == rule.CurrentServiceID {
+			if svc.ServiceID() == rule.CurrentServiceID {
 				currentService = svc
 				break
 			}
