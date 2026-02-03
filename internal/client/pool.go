@@ -203,7 +203,7 @@ func (p *ClientPool) GetGoogleClient(provider *typ.Provider, model string) *Goog
 
 // generateProviderKey creates a unique key for a provider
 func (p *ClientPool) generateProviderKey(provider *typ.Provider, model string) string {
-	return fmt.Sprintf("%s:%s:%s", provider.UUID, model, hashToken(provider.ProxyURL))
+	return fmt.Sprintf("%s:%s:%s", provider.UUID, model, hashToken(provider.Token))
 }
 
 // hashToken creates a secure hash of the token for key generation
