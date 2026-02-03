@@ -27,10 +27,10 @@ export const ApiConfigRow: React.FC<ApiConfigRowProps> = ({
 }) => (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0, maxWidth: 700 }}>
         <Typography
-            variant="body2"
+            variant="subtitle2"
             color="text.secondary"
             sx={{
-                minWidth: 120,
+                minWidth: 190,
                 flexShrink: 0,
                 fontWeight: 500
             }}
@@ -38,7 +38,7 @@ export const ApiConfigRow: React.FC<ApiConfigRowProps> = ({
             {label}:
         </Typography>
         <Typography
-            variant="body2"
+            variant="subtitle2"
             onClick={isClickable && onCopy ? onCopy : undefined}
             sx={{
                 fontFamily: isMonospace ? 'monospace' : 'inherit',

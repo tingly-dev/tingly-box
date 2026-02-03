@@ -1,17 +1,15 @@
-import React, { useCallback, useEffect, useState, useRef } from 'react';
-import { ContentCopy as CopyIcon } from '@mui/icons-material';
-import VisibilityIcon from '@mui/icons-material/Visibility';
-import { Box, IconButton, Tooltip } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
-import { BaseUrlRow } from '@/components/BaseUrlRow';
-import TemplatePage from '@/components/TemplatePage.tsx';
-import PageLayout from '@/components/PageLayout';
-import { api, getBaseUrl } from '../services/api';
-import { ApiConfigRow } from "@/components/ApiConfigRow";
 import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
-import { useFunctionPanelData } from '../hooks/useFunctionPanelData';
+import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
+import { Box } from '@mui/material';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
+import PageLayout from '@/components/PageLayout';
+import TemplatePage from '@/components/TemplatePage.tsx';
+import { useFunctionPanelData } from '../hooks/useFunctionPanelData';
+import { useHeaderHeight } from '../hooks/useHeaderHeight';
+import { api, getBaseUrl } from '../services/api';
 
 const scenario = "openai";
 
@@ -26,48 +24,18 @@ const UseOpenAIPage: React.FC = () => {
         notification,
     } = useFunctionPanelData();
     const headerRef = useRef<HTMLDivElement>(null);
-    const [headerHeight, setHeaderHeight] = useState<number>(0);
     const [baseUrl, setBaseUrl] = useState<string>('');
     const [rules, setRules] = useState<any[]>([]);
     const [loadingRule, setLoadingRule] = useState(true);
     const [newlyCreatedRuleUuids, setNewlyCreatedRuleUuids] = useState<Set<string>>(new Set());
     const navigate = useNavigate();
 
-    // Measure header height
-    useEffect(() => {
-        if (providers.length === 0) {
-            return;
-        }
-
-        const timeoutId = setTimeout(() => {
-            if (!headerRef.current) {
-                return;
-            }
-
-            const updateHeight = () => {
-                if (headerRef.current) {
-                    const height = headerRef.current.offsetHeight || 0;
-                    setHeaderHeight(height);
-                }
-            };
-
-            updateHeight();
-
-            const resizeObserver = new ResizeObserver(() => {
-                updateHeight();
-            });
-
-            resizeObserver.observe(headerRef.current);
-
-            return () => {
-                resizeObserver.disconnect();
-            };
-        }, 200);
-
-        return () => {
-            clearTimeout(timeoutId);
-        };
-    }, [providers.length]);
+    // Use shared hook for header height measurement
+    const headerHeight = useHeaderHeight(
+        headerRef,
+        providers.length > 0,
+        []
+    );
 
     const handleAddOAuthClick = () => {
         navigate('/oauth?dialog=add');
@@ -119,32 +87,6 @@ const UseOpenAIPage: React.FC = () => {
         };
     }, []);
 
-    const header = (
-        <Box sx={{ p: 2 }}>
-            <BaseUrlRow
-                label="Base URL"
-                path="/tingly/openai"
-                baseUrl={baseUrl}
-                onCopy={(url) => copyToClipboard(url, 'OpenAI Base URL')}
-                urlLabel="OpenAI Base URL"
-            />
-            <ApiConfigRow label="API Key" showEllipsis={true}>
-                <Box sx={{ display: 'flex', gap: 0.5, ml: 'auto' }}>
-                    <Tooltip title="View Token">
-                        <IconButton onClick={() => setShowTokenModal(true)} size="small">
-                            <VisibilityIcon />
-                        </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Copy Token">
-                        <IconButton onClick={() => copyToClipboard(token, 'API Key')} size="small">
-                            <CopyIcon fontSize="small" />
-                        </IconButton>
-                    </Tooltip>
-                </Box>
-            </ApiConfigRow>
-        </Box>
-    );
-
     const isLoading = providersLoading || loadingRule;
 
     return (
@@ -162,8 +104,23 @@ const UseOpenAIPage: React.FC = () => {
                 </CardGrid>
             ) : (
                 <CardGrid>
-                    <UnifiedCard ref={headerRef} title="OpenAI SDK Configuration" size="full">
-                        {header}
+                    <UnifiedCard
+                        title={
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <span>OpenAI SDK Configuration</span>
+                            </Box>
+                        }
+                        size="full"
+                    >
+                        <ProviderConfigCard
+                            headerRef={headerRef}
+                            title="OpenAI SDK Configuration"
+                            baseUrlPath="/tingly/openai"
+                            baseUrl={baseUrl}
+                            onCopy={copyToClipboard}
+                            token={token}
+                            onShowTokenModal={() => setShowTokenModal(true)}
+                        />
                     </UnifiedCard>
                     <TemplatePage
                         title="Models and Forwarding Rules"

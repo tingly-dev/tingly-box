@@ -51,12 +51,12 @@ export const BaseUrlRow: React.FC<BaseUrlRowProps> = ({
     const displayLegacyUrl = legacyLabel;
 
     const renderUrlRow = (rowLabel: string, url: string, displayLabel: string) => (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, maxWidth: 700 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0, maxWidth: 700 }}>
             <Typography
-                variant="body2"
+                variant="subtitle2"
                 color="text.secondary"
                 sx={{
-                    minWidth: 120,
+                    minWidth: 190,
                     flexShrink: 0,
                     fontWeight: 500
                 }}
@@ -64,7 +64,7 @@ export const BaseUrlRow: React.FC<BaseUrlRowProps> = ({
                 {rowLabel}:
             </Typography>
             <Typography
-                variant="body2"
+                variant="subtitle2"
                 onClick={() => onCopy(url, displayLabel)}
                 sx={{
                     fontFamily: 'monospace',

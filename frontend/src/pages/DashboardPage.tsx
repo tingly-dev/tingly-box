@@ -26,6 +26,7 @@ import StreamIcon from '@mui/icons-material/Stream';
 import SpeedIcon from '@mui/icons-material/Speed';
 import { StatCard, TokenUsageChart, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable } from '@/components/dashboard';
 import type { TimeSeriesData, AggregatedStat } from '@/components/dashboard';
+import { toggleButtonGroupStyle, toggleButtonStyle, switchControlLabelStyle } from '@/styles/toggleStyles';
 import api from '../services/api';
 
 interface Provider {
@@ -230,35 +231,10 @@ export default function DashboardPage() {
                         exclusive
                         onChange={(_, value) => value && setTimeRange(value)}
                         size="small"
-                        sx={{
-                            backgroundColor: 'action.hover',
-                            borderRadius: 2,
-                            p: 0.5,
-                            '& .MuiToggleButton-root': {
-                                borderRadius: 1.5,
-                                px: 2,
-                                py: 0.75,
-                                fontSize: '0.875rem',
-                                fontWeight: 500,
-                                textTransform: 'none',
-                                border: 'none',
-                                color: 'text.secondary',
-                                transition: 'all 0.2s ease',
-                                '&.Mui-selected': {
-                                    backgroundColor: 'background.paper',
-                                    color: 'primary.main',
-                                    fontWeight: 600,
-                                    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                                },
-                                '&:hover': {
-                                    backgroundColor: 'background.paper',
-                                    color: 'text.primary',
-                                },
-                            },
-                        }}
+                        sx={toggleButtonGroupStyle}
                     >
                         {Object.entries(TIME_RANGE_CONFIG).map(([key, config]) => (
-                            <ToggleButton key={key} value={key}>
+                            <ToggleButton key={key} value={key} sx={toggleButtonStyle}>
                                 {config.label}
                             </ToggleButton>
                         ))}
@@ -295,10 +271,11 @@ export default function DashboardPage() {
                                     size="small"
                                     checked={autoRefresh}
                                     onChange={(e) => setAutoRefresh(e.target.checked)}
+                                    color="primary"
                                 />
                             }
                             label={<Typography variant="body2">Auto</Typography>}
-                            sx={{ mr: 0 }}
+                            sx={switchControlLabelStyle}
                         />
                         <Tooltip title="Refresh data">
                             <IconButton
