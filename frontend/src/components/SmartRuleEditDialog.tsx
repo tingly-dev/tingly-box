@@ -23,7 +23,7 @@ const POSITION_OPTIONS = [
     // { value: 'model', label: 'Model', description: 'Request model name' },
     { value: 'context_system', label: 'System Prompt', description: 'System prompt message in context' },
     // { value: 'context_user', label: 'User Context', description: 'User messages in context' },
-    { value: 'latest_user', label: 'Latest User', description: 'Latest user message' },
+    { value: 'latest_user', label: 'Latest User Message', description: 'Latest user message' },
     // { value: 'tool_use', label: 'Tool Name', description: 'Tool name' },
     { value: 'thinking', label: 'Thinking', description: 'Thinking mode enabled / disable' },
     { value: 'token', label: 'Token Count', description: 'Token count' },
@@ -57,9 +57,9 @@ const OPERATION_OPTIONS: Record<string, Array<{ value: string; label: string; de
     ],
     token: [
         { value: 'ge', label: 'Greater or Equal', description: 'Token count >= value', valueType: 'int' },
-        { value: 'gt', label: 'Greater Than', description: 'Token count > value', valueType: 'int' },
+        // { value: 'gt', label: 'Greater Than', description: 'Token count > value', valueType: 'int' },
         { value: 'le', label: 'Less or Equal', description: 'Token count <= value', valueType: 'int' },
-        { value: 'lt', label: 'Less Than', description: 'Token count < value', valueType: 'int' },
+        // { value: 'lt', label: 'Less Than', description: 'Token count < value', valueType: 'int' },
     ],
 };
 
