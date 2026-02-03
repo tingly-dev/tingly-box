@@ -182,7 +182,7 @@ const CredentialPage = () => {
             api_style: providerFormData.apiStyle,
             token: providerFormData.token,
             no_key_required: (providerFormData as any).noKeyRequired || false,
-            ...(apiKeyDialogMode === 'add' && { proxy_url: (providerFormData as any).proxyUrl || '' }),
+            ...(apiKeyDialogMode === 'add' && { proxy_url: (providerFormData as any).proxyUrl ?? '' }),
             ...(apiKeyDialogMode === 'edit' && { enabled: providerFormData.enabled }),
         };
 
@@ -195,7 +195,7 @@ const CredentialPage = () => {
                 token: providerData.token || undefined,
                 no_key_required: providerData.no_key_required,
                 enabled: providerData.enabled,
-                proxy_url: (providerFormData as any).proxyUrl || undefined,
+                proxy_url: (providerFormData as any).proxyUrl ?? '',
             });
 
         if (result.success) {
@@ -214,7 +214,7 @@ const CredentialPage = () => {
             api_style: providerFormData.apiStyle,
             token: providerFormData.token,
             no_key_required: (providerFormData as any).noKeyRequired || false,
-            ...(apiKeyDialogMode === 'add' && { proxy_url: (providerFormData as any).proxyUrl || '' }),
+            ...(apiKeyDialogMode === 'add' && { proxy_url: (providerFormData as any).proxyUrl ?? '' }),
             ...(apiKeyDialogMode === 'edit' && { enabled: providerFormData.enabled }),
         };
 
@@ -227,7 +227,7 @@ const CredentialPage = () => {
                 token: providerData.token || undefined,
                 no_key_required: providerData.no_key_required,
                 enabled: providerData.enabled,
-                proxy_url: (providerFormData as any).proxyUrl || undefined,
+                proxy_url: (providerFormData as any).proxyUrl ?? '',
             });
 
         if (result.success) {
@@ -522,7 +522,7 @@ const CredentialPage = () => {
                         api_base: data.apiBase,
                         api_style: data.apiStyle,
                         enabled: data.enabled,
-                        proxy_url: data.proxyUrl,
+                        proxy_url: data.proxyUrl ?? '',
                     });
                     if (!result.success) {
                         throw new Error(result.error || 'Failed to update provider');
