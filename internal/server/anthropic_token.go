@@ -2,8 +2,11 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -22,14 +25,73 @@ const (
 	anthropicCountTokensBeta
 )
 
-// anthropicCountTokensV1Beta implements beta count_tokens
-func (s *Server) anthropicCountTokensV1Beta(c *gin.Context, provider *typ.Provider, model string) {
-	s.anthropicCountTokens(c, provider, model, anthropicCountTokensBeta)
-}
+// AnthropicCountTokens handles Anthropic v1 count_tokens endpoint
+// This is the entry point that delegates to the appropriate implementation (v1 or beta)
+func (s *Server) AnthropicCountTokens(c *gin.Context) {
+	// Check if beta parameter is set to true
+	beta := c.Query("beta") == "true"
+	logrus.Debugf("scenario: %s beta: %v", c.Query("scenario"), beta)
 
-// anthropicCountTokensV1 implements standard v1 count_tokens
-func (s *Server) anthropicCountTokensV1(c *gin.Context, provider *typ.Provider, model string) {
-	s.anthropicCountTokens(c, provider, model, anthropicCountTokensV1)
+	// Read the raw request body first for debugging purposes
+	bodyBytes, err := c.GetRawData()
+	if err != nil {
+		logrus.Debugf("Failed to read request body: %v", err)
+	} else {
+		// Store the body back for parsing
+		c.Request.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
+	}
+
+	// Parse the request to check if streaming is requested
+	var rawReq map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &rawReq); err != nil {
+		logrus.Debugf("Invalid JSON in request body: %v", err)
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Invalid JSON: " + err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
+	// Check if streaming is requested
+	isStreaming := false
+	if stream, ok := rawReq["stream"].(bool); ok {
+		isStreaming = stream
+	}
+	logrus.Debugf("Stream requested for AnthropicMessages: %v", isStreaming)
+
+	// Get model from request
+	model := rawReq["model"].(string)
+	if model == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Model is required",
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
+	// Determine provider and model based on request
+	provider, service, _, err := s.DetermineProviderAndModel(model)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
+	useModel := service.Model
+	// Delegate to the appropriate implementation based on beta parameter
+	if beta {
+		s.anthropicCountTokens(c, provider, useModel, anthropicCountTokensBeta)
+	} else {
+		s.anthropicCountTokens(c, provider, useModel, anthropicCountTokensV1)
+	}
 }
 
 // anthropicCountTokens unified token counting implementation
