@@ -34,8 +34,8 @@ const Hero = () => {
                 <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold mb-6">
                     <span className="text-primary">Tingly</span> Box
                 </h1>
-                <p className="text-lg sm:text-xl md:text-2xl text-muted-foreground max-w-2xl mb-10 px-4">
-                    Provider-agnostic AI model proxy with unified API
+                <p className="text-lg sm:text-xl md:text-2xl text-muted-foreground max-w-3xl mb-10 px-4">
+                    Your local AI intelligence layer — an autonomous orchestrator that decides <span className="text-primary font-semibold">which model to call</span>, <span className="text-primary font-semibold">when to compress context</span>, and <span className="text-primary font-semibold">how to route requests</span> for maximum efficiency
                 </p>
                 <div className="flex flex-wrap justify-center gap-3 sm:gap-4 mb-8 sm:mb-10">
                     <MuiButton
@@ -147,7 +147,7 @@ const Features = () => (
             style={{ maxWidth: FULL_WIDTH, width: '100%' }}>
             <div className="px-4 sm:px-6 md:px-8 lg:px-12 py-12 sm:py-16">
                 <h2 className="text-2xl sm:text-3xl font-bold text-center mb-8 sm:mb-12">Features</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                     {features.map((f) => (
                         <Card key={f.title} sx={{
                             backgroundColor: 'var(--card)',

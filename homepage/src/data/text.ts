@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Gauge, Globe, Layers } from "lucide-react";
+import { ArrowLeftRight, Gauge, Globe, Layers, Zap, Shield, LayoutDashboard, BarChart3 } from "lucide-react";
 
 // External image URLs from GitHub repository
 const screenshotBaseUrl = "https://raw.githubusercontent.com/tingly-dev/tingly-box/refs/heads/main/docs/images";
@@ -12,20 +12,24 @@ export const screenshots = [
 ];
 
 export const features = [
-    { icon: Globe, title: "Unified API", description: "Single configuration to connect hundreds of model providers." },
-    { icon: Layers, title: "Load Balancing", description: "Distribute requests across multiple tokens by tactics." },
-    {
-        icon: ArrowLeftRight,
-        title: "Auto API Translation",
-        description: "Automatically translate API parameters among different providers."
-    },
-    { icon: Gauge, title: "High Performance", description: "Additional latency less than 1ms for seamless integration." },
+    { icon: Globe, title: "Unified API", description: "One mixin endpoint to rule them all — use OpenAI, Anthropic, or Google APIs interchangeably." },
+    { icon: Zap, title: "Smart Routing", description: "Intelligently route requests across models and tokens based on cost, speed, or custom policies — not just simple load balancing." },
+    { icon: Layers, title: "Smart Context Compression", description: "(Coming soon) Automatically distill context to its essential parts for sharper relevance, lower cost, and faster responses." },
+    { icon: ArrowLeftRight, title: "Auto API Translation", description: "Seamlessly bridge OpenAI, Anthropic, Google, and other API dialects — no code changes needed." },
+    { icon: Gauge, title: "Blazing Fast", description: "Adds typically < 1ms of overhead — so you get flexibility without latency tax." },
+    { icon: Shield, title: "Flexible Auth", description: "Support for both API keys and OAuth (e.g., Claude.ai) — use your existing quotas anywhere." },
+    { icon: LayoutDashboard, title: "Visual Control Panel", description: "Intuitive UI to manage providers, routes, aliases, and models at a glance." },
+    { icon: BarChart3, title: "Client Side Usage Stats", description: "Track token consumption, latency, cost estimates, and model selection per request — directly from your client." },
 ];
 
 export const faqs = [
     {
-        question: "How does load balancing work?",
-        answer: "Tingly Box automatically distributes requests across multiple API tokens using routing strategies. By default, it uses round-robin with a request threshold of 100 (if not configured)."
+        question: "How does smart routing work?",
+        answer: "Tingly Box intelligently routes requests across multiple API tokens and models using configurable strategies. Unlike simple load balancing, it considers cost, speed, and custom policies to optimize each request. By default, it uses round-robin with a request threshold of 100 (if not configured)."
+    },
+    {
+        question: "Can I use OAuth providers like Claude Code?",
+        answer: "Yes! You can add OAuth providers (like Claude Code) through the Web UI at http://localhost:12580. Once configured, requests route through your OAuth-authorized provider, using your existing quota instead of requiring a separate API key. This works with any OpenAI-compatible tool."
     },
     {
         question: "How do I enable mirrored networking mode in WSL2?",
@@ -37,6 +41,6 @@ export const faqs = [
     },
     {
         question: "Why do I get \"BadRequestError: LLM Provider NOT provided\" when using LiteLLM with model set to \"tingly\"?",
-        answer: "LiteLLM validates the model name and expects it to be a known, supported model. When you set the model name to \"tingly\", LiteLLM treats it as invalid and throws this error. To work around this, configure the local model name as a real model such as \"gpt-3.5-turbo\". This is only to pass LiteLLM’s validation—the actual remote model used by tingly-box does not change."
+        answer: "LiteLLM validates the model name and expects it to be a known, supported model. When you set the model name to \"tingly\", LiteLLM treats it as invalid and throws this error. To work around this, configure the local model name as a real model such as \"gpt-3.5-turbo\". This is only to pass LiteLLM's validation—the actual remote model used by tingly-box does not change."
     }
 ];
