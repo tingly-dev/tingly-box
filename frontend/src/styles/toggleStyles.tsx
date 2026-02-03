@@ -20,8 +20,8 @@ import { SxProps, Theme } from '@mui/material/styles';
 export const toggleButtonGroupStyle: SxProps<Theme> = {
     backgroundColor: 'action.hover',
     borderRadius: 2,
-    p: 0.5,
-    gap: 0.5,
+    // p: 0.5,
+    // gap: 0.5,
     display: 'flex',
     border: '1px solid',
     borderColor: 'divider',
@@ -52,10 +52,13 @@ export const toggleButtonStyle: SxProps<Theme> = {
         backgroundColor: 'background.paper',
         color: 'primary.main',
         fontWeight: 600,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+        border: '1px solid',
+        borderColor: 'primary.light',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.12)',
         '&:hover': {
             backgroundColor: 'background.paper',
             color: 'primary.dark',
+            borderColor: 'primary.main',
         },
     },
     '&.Mui-disabled': {
