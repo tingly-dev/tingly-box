@@ -1,7 +1,7 @@
 import CssBaseline from '@mui/material/CssBaseline';
 import { ThemeProvider } from '@mui/material/styles';
 import { CircularProgress, Box, Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, IconButton } from '@mui/material';
-import { BrowserRouter, Route, Routes, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Route, Routes, useNavigate, Navigate } from 'react-router-dom';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider } from './contexts/AuthContext';
@@ -12,20 +12,20 @@ import Layout from './layout/Layout';
 import theme from './theme';
 import { CloudUpload, Refresh, Error as ErrorIcon, AppRegistration as NPM, GitHub } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
-import Logs from "@/pages/Logs.tsx";
 import { Events } from '@/bindings';
 
 // Lazy load pages for code splitting
 const Login = lazy(() => import('./pages/Login'));
-const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Dashboard = lazy(() => import('./pages/./Guiding'));
 const UseOpenAIPage = lazy(() => import('./pages/UseOpenAIPage'));
 const UseAnthropicPage = lazy(() => import('./pages/UseAnthropicPage'));
 const UseClaudeCodePage = lazy(() => import('./pages/UseClaudeCodePage'));
 const UseOpenCodePage = lazy(() => import('./pages/UseOpenCodePage'));
 const ApiKeyPage = lazy(() => import('./pages/ApiKeyPage'));
 const OAuthPage = lazy(() => import('./pages/OAuthPage'));
+const CredentialPage = lazy(() => import('./pages/CredentialPage'));
 const System = lazy(() => import('./pages/System'));
-const UsageDashboardPage = lazy(() => import('./pages/UsageDashboardPage'));
+const UsageDashboardPage = lazy(() => import('./pages/./DashboardPage'));
 const ModelTestPage = lazy(() => import('./pages/ModelTestPage'));
 
 // Prompt pages
@@ -241,11 +241,15 @@ function AppContent() {
                                         <Route path="/use-anthropic" element={<UseAnthropicPage/>}/>
                                         <Route path="/use-claude-code" element={<UseClaudeCodePage/>}/>
                                         <Route path="/use-opencode" element={<UseOpenCodePage/>}/>
+                                        {/* Credential routes - new unified page */}
+                                        <Route path="/credentials" element={<CredentialPage/>}/>
+                                        <Route path="/credentials/:tab" element={<CredentialPage/>}/>
+                                        {/* Legacy redirects for backward compatibility */}
+                                        <Route path="/api-keys" element={<Navigate to="/credentials" replace/>}/>
+                                        <Route path="/oauth" element={<Navigate to="/credentials" replace/>}/>
                                         {/* Other routes */}
-                                        <Route path="/api-keys" element={<ApiKeyPage/>}/>
-                                        <Route path="/oauth" element={<OAuthPage/>}/>
                                         <Route path="/system" element={<System/>}/>
-                                        <Route path="/logs" element={<Logs/>}/>
+                                        <Route path="/logs" element={<Navigate to="/system" replace/>}/>
                                         <Route path="/dashboard" element={<UsageDashboardPage/>}/>
                                         <Route path="/model-test/:providerUuid" element={<ModelTestPage/>}/>
                                         {/* Prompt routes */}

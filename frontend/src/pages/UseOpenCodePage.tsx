@@ -1,15 +1,17 @@
 import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
-import ExperimentalFeatures from "@/components/ExperimentalFeatures.tsx";
+import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
+import { Box, Button, Tooltip, IconButton } from '@mui/material';
 import InfoIcon from '@mui/icons-material/Info';
-import { Box, Button, Divider, Tooltip, IconButton, Typography } from '@mui/material';
 import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import ExperimentalFeatures from '@/components/ExperimentalFeatures.tsx';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from '@/components/TemplatePage.tsx';
 import OpenCodeConfigModal from '@/components/OpenCodeConfigModal';
 import { useFunctionPanelData } from '../hooks/useFunctionPanelData';
+import { useHeaderHeight } from '../hooks/useHeaderHeight';
 import { api, getBaseUrl } from '../services/api';
 
 const scenario = "opencode";
@@ -25,7 +27,6 @@ const UseOpenCodePage: React.FC = () => {
         notification,
     } = useFunctionPanelData();
     const headerRef = useRef<HTMLDivElement>(null);
-    const [headerHeight, setHeaderHeight] = useState<number>(0);
     const [baseUrl, setBaseUrl] = useState<string>('');
     const [rules, setRules] = useState<any[]>([]);
     const [loadingRule, setLoadingRule] = useState(true);
@@ -39,41 +40,12 @@ const UseOpenCodePage: React.FC = () => {
     const [isConfigLoading, setIsConfigLoading] = useState(false);
     const navigate = useNavigate();
 
-    // Measure header height
-    useEffect(() => {
-        if (providers.length === 0) {
-            return;
-        }
-
-        const timeoutId = setTimeout(() => {
-            if (!headerRef.current) {
-                return;
-            }
-
-            const updateHeight = () => {
-                if (headerRef.current) {
-                    const height = headerRef.current.offsetHeight || 0;
-                    setHeaderHeight(height);
-                }
-            };
-
-            updateHeight();
-
-            const resizeObserver = new ResizeObserver(() => {
-                updateHeight();
-            });
-
-            resizeObserver.observe(headerRef.current);
-
-            return () => {
-                resizeObserver.disconnect();
-            };
-        }, 200);
-
-        return () => {
-            clearTimeout(timeoutId);
-        };
-    }, [providers.length]);
+    // Use shared hook for header height measurement
+    const headerHeight = useHeaderHeight(
+        headerRef,
+        providers.length > 0,
+        []
+    );
 
     const handleAddOAuthClick = () => {
         navigate('/oauth?dialog=add');
@@ -189,8 +161,6 @@ const UseOpenCodePage: React.FC = () => {
         }
     };
 
-    const header = null;
-
     const isLoading = providersLoading || loadingRule;
 
     return (
@@ -238,10 +208,17 @@ const UseOpenCodePage: React.FC = () => {
                             </Button>
                         }
                     >
-                        {header}
-
-                        {/* Experimental Features - collapsible section */}
-                        <ExperimentalFeatures scenario="opencode" />
+                        {/* Use ProviderConfigCard without API key row, then ExperimentalFeatures */}
+                        <ProviderConfigCard
+                            title="OpenCode SDK Configuration"
+                            baseUrlPath="/tingly/opencode"
+                            baseUrl={baseUrl}
+                            onCopy={copyToClipboard}
+                            token={token}
+                            onShowTokenModal={() => setShowTokenModal(true)}
+                            scenario={scenario}
+                            showApiKeyRow={true}
+                        />
                     </UnifiedCard>
 
                     <TemplatePage

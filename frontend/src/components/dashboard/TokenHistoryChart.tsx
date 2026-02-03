@@ -1,4 +1,4 @@
-import { Paper, Typography, Box } from '@mui/material';
+import { Paper, Typography, Box, alpha } from '@mui/material';
 import {
     ComposedChart,
     BarChart,
@@ -162,31 +162,68 @@ const ChartWrapper = ({ title, chartData, children }: ChartWrapperProps) => (
         elevation={0}
         sx={{
             p: 3,
-            borderRadius: 2,
+            borderRadius: 2.5,
             border: '1px solid',
             borderColor: 'divider',
             height: '100%',
+            backgroundColor: 'background.paper',
+            boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
+            display: 'flex',
+            flexDirection: 'column',
         }}
     >
-        <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-            {title}
-        </Typography>
+        <Box sx={{ mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1rem' }}>
+                {title}
+            </Typography>
+        </Box>
         {chartData.length === 0 ? (
             <Box
                 sx={{
-                    height: 300,
+                    flex: 1,
+                    minHeight: 280,
                     display: 'flex',
+                    flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
                     color: 'text.secondary',
                 }}
             >
-                No data available
+                <Box
+                    sx={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: 2,
+                        backgroundColor: alpha('#64748b', 0.1),
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        mb: 2,
+                    }}
+                >
+                    <Box
+                        sx={{
+                            width: 24,
+                            height: 24,
+                            borderRadius: '50%',
+                            backgroundColor: 'text.disabled',
+                            opacity: 0.3,
+                        }}
+                    />
+                </Box>
+                <Typography variant="body1" color="text.secondary">
+                    No data available
+                </Typography>
+                <Typography variant="caption" color="text.disabled" sx={{ mt: 0.5 }}>
+                    Select a different time range or check back later
+                </Typography>
             </Box>
         ) : (
-            <ResponsiveContainer width="100%" height={300}>
-                {children}
-            </ResponsiveContainer>
+            <Box sx={{ flex: 1, minHeight: 280 }}>
+                <ResponsiveContainer width="100%" height={280}>
+                    {children}
+                </ResponsiveContainer>
+            </Box>
         )}
     </Paper>
 );
@@ -425,89 +462,126 @@ export default function TokenHistoryChart({ data, interval = 'hour' }: TokenHist
             elevation={0}
             sx={{
                 p: 3,
-                borderRadius: 2,
+                borderRadius: 2.5,
                 border: '1px solid',
                 borderColor: 'divider',
                 height: '100%',
+                backgroundColor: 'background.paper',
+                boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
+                display: 'flex',
+                flexDirection: 'column',
             }}
         >
-            <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-                Token Usage Over Time
-            </Typography>
+            <Box sx={{ mb: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1rem' }}>
+                    Token Usage Over Time
+                </Typography>
+            </Box>
             {chartData.length === 0 ? (
                 <Box
                     sx={{
-                        height: 300,
+                        flex: 1,
+                        minHeight: 280,
                         display: 'flex',
+                        flexDirection: 'column',
                         alignItems: 'center',
                         justifyContent: 'center',
                         color: 'text.secondary',
                     }}
                 >
-                    No data available
+                    <Box
+                        sx={{
+                            width: 48,
+                            height: 48,
+                            borderRadius: 2,
+                            backgroundColor: alpha('#64748b', 0.1),
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            mb: 2,
+                        }}
+                    >
+                        <Box
+                            sx={{
+                                width: 24,
+                                height: 24,
+                                borderRadius: '50%',
+                                backgroundColor: 'text.disabled',
+                                opacity: 0.3,
+                            }}
+                        />
+                    </Box>
+                    <Typography variant="body1" color="text.secondary">
+                        No data available
+                    </Typography>
+                    <Typography variant="caption" color="text.disabled" sx={{ mt: 0.5 }}>
+                        Select a different time range or check back later
+                    </Typography>
                 </Box>
             ) : (
-                <ResponsiveContainer width="100%" height={300}>
-                    {isDayMode ? (
-                        // Bar chart for day mode
-                        <BarChart data={chartData}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                            <XAxis
-                                dataKey="time"
-                                tick={{ fontSize: 11 }}
-                                tickLine={false}
-                                axisLine={{ stroke: '#e0e0e0' }}
-                                interval={labelInterval}
-                            />
-                            <YAxis
-                                tickFormatter={formatYAxis}
-                                tick={{ fontSize: 11 }}
-                                tickLine={false}
-                                axisLine={{ stroke: '#e0e0e0' }}
-                            />
-                            <Tooltip content={<CustomTooltip />} />
-                            <Legend />
-                            <Bar dataKey="inputTokens" name="Input Tokens" fill="#1976d2" stackId="stack" />
-                            <Bar dataKey="outputTokens" name="Output Tokens" fill="#2e7d32" stackId="stack" />
-                        </BarChart>
-                    ) : (
-                        // Area chart for hour/minute mode
-                        <ComposedChart data={chartData}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                            <XAxis
-                                dataKey="time"
-                                tick={{ fontSize: 11 }}
-                                tickLine={false}
-                                axisLine={{ stroke: '#e0e0e0' }}
-                                interval={labelInterval}
-                            />
-                            <YAxis
-                                tickFormatter={formatYAxis}
-                                tick={{ fontSize: 11 }}
-                                tickLine={false}
-                                axisLine={{ stroke: '#e0e0e0' }}
-                            />
-                            <Tooltip content={<CustomTooltip />} />
-                            <Legend />
-                            <Area
-                                type="monotone"
-                                dataKey="inputTokens"
-                                name="Input Tokens"
-                                stackId="1"
-                                stroke="#1976d2"
-                                fill="#bbdefb"
-                            />
-                            <Area
-                                type="monotone"
-                                dataKey="outputTokens"
-                                name="Output Tokens"
-                                stackId="1"
-                                stroke="#2e7d32"
-                                fill="#c8e6c9"
-                            />
-                        </ComposedChart>
-                    )}
-                </ResponsiveContainer>
+                <Box sx={{ flex: 1, minHeight: 280 }}>
+                    <ResponsiveContainer width="100%" height={280}>
+                        {isDayMode ? (
+                            // Bar chart for day mode
+                            <BarChart data={chartData}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                                <XAxis
+                                    dataKey="time"
+                                    tick={{ fontSize: 11 }}
+                                    tickLine={false}
+                                    axisLine={{ stroke: '#e0e0e0' }}
+                                    interval={labelInterval}
+                                />
+                                <YAxis
+                                    tickFormatter={formatYAxis}
+                                    tick={{ fontSize: 11 }}
+                                    tickLine={false}
+                                    axisLine={{ stroke: '#e0e0e0' }}
+                                />
+                                <Tooltip content={<CustomTooltip />} />
+                                <Legend />
+                                <Bar dataKey="inputTokens" name="Input Tokens" fill="#1976d2" stackId="stack" />
+                                <Bar dataKey="outputTokens" name="Output Tokens" fill="#2e7d32" stackId="stack" />
+                            </BarChart>
+                        ) : (
+                            // Area chart for hour/minute mode
+                            <ComposedChart data={chartData}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                                <XAxis
+                                    dataKey="time"
+                                    tick={{ fontSize: 11 }}
+                                    tickLine={false}
+                                    axisLine={{ stroke: '#e0e0e0' }}
+                                    interval={labelInterval}
+                                />
+                                <YAxis
+                                    tickFormatter={formatYAxis}
+                                    tick={{ fontSize: 11 }}
+                                    tickLine={false}
+                                    axisLine={{ stroke: '#e0e0e0' }}
+                                />
+                                <Tooltip content={<CustomTooltip />} />
+                                <Legend />
+                                <Area
+                                    type="monotone"
+                                    dataKey="inputTokens"
+                                    name="Input Tokens"
+                                    stackId="1"
+                                    stroke="#1976d2"
+                                    fill="#bbdefb"
+                                />
+                                <Area
+                                    type="monotone"
+                                    dataKey="outputTokens"
+                                    name="Output Tokens"
+                                    stackId="1"
+                                    stroke="#2e7d32"
+                                    fill="#c8e6c9"
+                                />
+                            </ComposedChart>
+                        )}
+                    </ResponsiveContainer>
+                </Box>
             )}
         </Paper>
     );

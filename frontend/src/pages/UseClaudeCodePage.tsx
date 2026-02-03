@@ -1,6 +1,6 @@
 import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
-import ExperimentalFeatures from "@/components/ExperimentalFeatures.tsx";
+import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import {
     Box,
     Button,
@@ -16,17 +16,17 @@ import {
 } from '@mui/material';
 import InfoOutlined from '@mui/icons-material/InfoOutlined';
 import InfoIcon from '@mui/icons-material/Info';
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import ClaudeCodeConfigModal from '@/components/ClaudeCodeConfigModal';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from '@/components/TemplatePage.tsx';
-import { FEATURE_FLAGS, isFeatureEnabled } from '../constants/featureFlags';
 import { useFunctionPanelData } from '../hooks/useFunctionPanelData';
+import { useHeaderHeight } from '../hooks/useHeaderHeight';
 import { api, getBaseUrl } from '../services/api';
-import {ToggleButtonGroupStyle, ToggleButtonStyle} from "@/styles/style.tsx";
+import { toggleButtonGroupStyle, toggleButtonStyle } from "@/styles/toggleStyles";
 
 type ConfigMode = 'unified' | 'separate' | 'smart';
 
@@ -43,7 +43,6 @@ const UseClaudeCodePage: React.FC = () => {
     const { t } = useTranslation();
     const navigate = useNavigate();
     const headerRef = useRef<HTMLDivElement>(null);
-    const [headerHeight, setHeaderHeight] = useState<number>(0);
     const {
         showTokenModal,
         setShowTokenModal,
@@ -56,7 +55,6 @@ const UseClaudeCodePage: React.FC = () => {
     const [baseUrl, setBaseUrl] = React.useState<string>('');
     const [rules, setRules] = React.useState<any[]>([]);
     const [loadingRule, setLoadingRule] = React.useState(true);
-    const [isDockerMode, setIsDockerMode] = React.useState(false);
     const [configMode, setConfigMode] = React.useState<ConfigMode>('unified');
     const [pendingMode, setPendingMode] = React.useState<ConfigMode | null>(null);
     const [confirmDialogOpen, setConfirmDialogOpen] = React.useState(false);
@@ -65,43 +63,12 @@ const UseClaudeCodePage: React.FC = () => {
     const [configModalOpen, setConfigModalOpen] = React.useState(false);
     const [isApplyLoading, setIsApplyLoading] = React.useState(false);
 
-    // Measure header height
-    useEffect(() => {
-        if (providers.length === 0) {
-            return;
-        }
-
-        // Add more delay to ensure DOM is fully rendered
-        const timeoutId = setTimeout(() => {
-            if (!headerRef.current) {
-                return;
-            }
-
-            const updateHeight = () => {
-                if (headerRef.current) {
-                    const height = headerRef.current.offsetHeight || 0;
-                    setHeaderHeight(height);
-                }
-            };
-
-            updateHeight();
-
-            // Use ResizeObserver to detect size changes
-            const resizeObserver = new ResizeObserver(() => {
-                updateHeight();
-            });
-
-            resizeObserver.observe(headerRef.current);
-
-            return () => {
-                resizeObserver.disconnect();
-            };
-        }, 200);
-
-        return () => {
-            clearTimeout(timeoutId);
-        };
-    }, [providers.length, configMode]);
+    // Use shared hook for header height measurement
+    const headerHeight = useHeaderHeight(
+        headerRef,
+        providers.length > 0,
+        [configMode]
+    );
 
     const handleAddApiKeyClick = () => {
         navigate('/api-keys?dialog=add');
@@ -230,13 +197,9 @@ const UseClaudeCodePage: React.FC = () => {
         loadScenarioConfig();
     }, []);
 
-    const toDockerUrl = (url: string): string => {
-        return url.replace(/\/\/([^/:]+)(?::(\d+))?/, '//host.docker.internal:$2');
-    };
-
     const getClaudeCodeBaseUrl = () => {
         const url = `${baseUrl}/tingly/claude_code`;
-        return isDockerMode ? toDockerUrl(url) : url;
+        return url;
     };
 
     // Get model name for each variant
@@ -488,6 +451,54 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
 
     const isLoading = providersLoading || loadingRule;
 
+    // Mode selection component
+    const modeSelection = (
+        <Box sx={{
+            display: 'flex',
+            alignItems: 'center',
+            py: 2,
+            gap: 3,
+        }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
+                <Typography variant="subtitle2" sx={{ color: 'text.secondary' }}>
+                    Mode
+                </Typography>
+                <Tooltip
+                    title={
+                        <>
+                            Unified: Single model for all requests
+                            <br />
+                            Separate: Distinct models for each variant
+                        </>
+                    }
+                    arrow
+                >
+                    <InfoOutlined sx={{ fontSize: '1rem', color: 'text.secondary', cursor: 'help' }} />
+                </Tooltip>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                <ToggleButtonGroup
+                    value={configMode}
+                    exclusive
+                    size="small"
+                    onChange={(_, value) => value && handleConfigModeChange(value)}
+                    sx={toggleButtonGroupStyle}
+                >
+                    {CONFIG_MODES.filter(m => m.enabled).map((mode) => (
+                        <Tooltip key={mode.value} title={mode.description} arrow>
+                            <ToggleButton
+                                value={mode.value}
+                                sx={toggleButtonStyle}
+                            >
+                                {mode.label}
+                            </ToggleButton>
+                        </Tooltip>
+                    ))}
+                </ToggleButtonGroup>
+            </Box>
+        </Box>
+    );
+
     return (
         <PageLayout loading={isLoading} notification={notification}>
             {!providers.length ? (
@@ -495,7 +506,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                     <UnifiedCard
                         title={
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <span>Use Claude Code</span>
+                                <span>Claude Code SDK Configuration</span>
                             </Box>
                         }
                         size="full"
@@ -511,10 +522,9 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
             ) : (
                 <CardGrid>
                     <UnifiedCard
-                        ref={headerRef}
                         title={
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <span>Use Claude Code</span>
+                                <span>Claude Code SDK Configuration</span>
                                 <Tooltip title={`Base URL: ${baseUrl}/tingly/claude_code`}>
                                     <IconButton size="small" sx={{ ml: 0.5 }}>
                                         <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
@@ -534,60 +544,19 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                             </Button>
                         }
                     >
-                        {/* Mode selection row */}
-                        <Box sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            py: 2,
-                            gap: 3,
-                            borderBottom: '1px solid',
-                            borderColor: 'divider'
-                        }}>
-                            {/* Label with info tooltip */}
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
-                                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                                    Mode
-                                </Typography>
-                                <Tooltip
-                                    title={
-                                        <>
-                                            Unified: Single model for all requests
-                                            <br />
-                                            Separate: Distinct models for each variant
-                                        </>
-                                    }
-                                    arrow
-                                >
-                                    <InfoOutlined sx={{ fontSize: '1rem', color: 'text.secondary', cursor: 'help' }} />
-                                </Tooltip>
-                            </Box>
-
-                            {/* Toggle buttons */}
-                            <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
-                                <ToggleButtonGroup
-                                    value={configMode}
-                                    exclusive
-                                    size="small"
-                                    onChange={(_, value) => value && handleConfigModeChange(value)}
-                                    sx={ToggleButtonGroupStyle}
-                                >
-                                    {CONFIG_MODES.filter(m => m.enabled).map((mode) => (
-                                        <Tooltip key={mode.value} title={mode.description} arrow>
-                                            <ToggleButton
-                                                value={mode.value}
-                                                sx={ToggleButtonStyle}
-                                            >
-                                                {mode.label}
-                                            </ToggleButton>
-                                        </Tooltip>
-                                    ))}
-                                </ToggleButtonGroup>
-                            </Box>
-                        </Box>
-
-                        {/* Experimental Features row */}
-                        <ExperimentalFeatures scenario="claude_code" />
-
+                        <ProviderConfigCard
+                            headerRef={headerRef}
+                            title="Claude Code SDK Configuration"
+                            baseUrlPath="/tingly/claude_code"
+                            baseUrl={baseUrl}
+                            onCopy={copyToClipboard}
+                            token={token}
+                            onShowTokenModal={() => setShowTokenModal(true)}
+                            scenario="claude_code"
+                            modeSelection={modeSelection}
+                            showApiKeyRow={false}
+                            showBaseUrlRow={false}
+                        />
                     </UnifiedCard>
 
                     <TemplatePage

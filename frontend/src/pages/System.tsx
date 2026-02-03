@@ -1,17 +1,20 @@
-import { Cancel, CheckCircle, Key, PlayArrow, Refresh as RefreshIcon, RestartAlt, Stop } from '@mui/icons-material';
-import { Box, Button, IconButton, Stack, Typography, Link } from '@mui/material';
+import { Cancel, CheckCircle, CloudUpload, PlayArrow, Refresh as RefreshIcon, RestartAlt, Stop } from '@mui/icons-material';
+import { Box, Button, CircularProgress, IconButton, Stack, Typography, Link, Tabs, Tab, Alert, AlertTitle } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import CardGrid from '@/components/CardGrid';
 import { PageLayout } from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import GlobalExperimentalFeatures from '@/components/GlobalExperimentalFeatures';
+import RequestLog from '@/components/RequestLog';
 import { api, getBaseUrl } from '../services/api';
 import { useVersion } from '../contexts/VersionContext';
+import { useHealth } from '../contexts/HealthContext';
 
 const System = () => {
     const { t } = useTranslation();
-    const { currentVersion } = useVersion();
+    const { currentVersion, hasUpdate, latestVersion, checkingVersion, checkForUpdates } = useVersion();
+    const { isHealthy, checking, checkHealth } = useHealth();
     const [serverStatus, setServerStatus] = useState<any>(null);
     const [baseUrl, setBaseUrl] = useState<string>("");
     const [providersStatus, setProvidersStatus] = useState<any>(null);
@@ -20,6 +23,7 @@ const System = () => {
     const [providerModels, setProviderModels] = useState<any>({});
     const [notification, setNotification] = useState<{ open: boolean; message?: string; severity?: 'success' | 'error' | 'info' | 'warning' }>({ open: false });
     const [loading, setLoading] = useState(true);
+    const [currentTab, setCurrentTab] = useState(0);
 
     useEffect(() => {
         loadAllData();
@@ -136,141 +140,165 @@ const System = () => {
 
     return (
         <PageLayout loading={loading} notification={notification}>
-            <CardGrid>
-                {/* Server Status - Consolidated */}
-                <UnifiedCard
-                    title={t('system.pageTitle')}
-                    size="full"
-                    // rightAction={
-                    //     <Stack direction="row" spacing={1}>
-                    //         <Button
-                    //             variant="outlined"
-                    //             size="small"
-                    //             startIcon={<Key />}
-                    //             onClick={handleGenerateToken}
-                    //             title="Generate Token"
-                    //         >
-                    //             Token
-                    //         </Button>
-                    //         <Button
-                    //             variant="contained"
-                    //             color="success"
-                    //             size="small"
-                    //             startIcon={<PlayArrow />}
-                    //             onClick={handleStartServer}
-                    //             disabled={serverStatus?.server_running}
-                    //             title="Start Server"
-                    //         >
-                    //             Start
-                    //         </Button>
-                    //         <Button
-                    //             variant="contained"
-                    //             color="error"
-                    //             size="small"
-                    //             startIcon={<Stop />}
-                    //             onClick={handleStopServer}
-                    //             disabled={!serverStatus?.server_running}
-                    //             title="Stop Server"
-                    //         >
-                    //             Stop
-                    //         </Button>
-                    //         <Button
-                    //             variant="contained"
-                    //             size="small"
-                    //             startIcon={<RestartAlt />}
-                    //             onClick={handleRestartServer}
-                    //             title="Restart Server"
-                    //         >
-                    //             Restart
-                    //         </Button>
-                    //         <IconButton onClick={loadServerStatus} size="small" title="Refresh Status">
-                    //             <RefreshIcon />
-                    //         </IconButton>
-                    //     </Stack>
-                    // }
-                >
-                    {serverStatus ? (
-                        <Stack spacing={3}>
-                            {/* Status Information */}
-                            <Stack spacing={1}>
-                                <Stack direction="row" alignItems="center" spacing={1}>
+            <Stack spacing={2} sx={{ mb: 2 }}>
+                <Tabs value={currentTab} onChange={(_, newValue) => setCurrentTab(newValue)}>
+                    <Tab label="System Status" />
+                    <Tab label="Request Logs" />
+                </Tabs>
+            </Stack>
+
+            {currentTab === 0 ? (
+                <CardGrid>
+                    {/* Server Status - Minimal Design */}
+                    <UnifiedCard
+                        title="Server Status"
+                        size="full"
+                        rightAction={
+                            <IconButton
+                                onClick={() => { loadServerStatus(); checkHealth(); }}
+                                size="small"
+                                aria-label="Refresh status"
+                            >
+                                {checking ? <CircularProgress size={16} /> : <RefreshIcon />}
+                            </IconButton>
+                        }
+                    >
+                        {serverStatus ? (
+                            <Stack spacing={2}>
+                                {/* Status Row */}
+                                <Stack direction="row" alignItems="center" spacing={2}>
                                     {serverStatus.server_running ? (
                                         <CheckCircle color="success" />
                                     ) : (
                                         <Cancel color="error" />
                                     )}
-                                    <Typography variant="h6">
-                                        Status: {serverStatus.server_running ? t('system.status.running') : t('system.status.stopped')}
+                                    <Typography variant="h6" fontWeight={500}>
+                                        {serverStatus.server_running ? t('system.status.running') : t('system.status.stopped')}
                                     </Typography>
+                                    {isHealthy && (
+                                        <Typography variant="body2" color="success.main">
+                                            · Connected
+                                        </Typography>
+                                    )}
                                 </Stack>
-                                <Typography variant="body2" color="text.secondary">
-                                    <strong>Server:</strong> {baseUrl}
-                                </Typography>
-                                <Typography variant="body2" color="text.secondary">
-                                    <strong>Keys:</strong> {serverStatus.providers_enabled}/{serverStatus.providers_total}
-                                </Typography>
-                                {serverStatus.uptime && (
+
+                                {/* Details */}
+                                <Stack spacing={1} pl={5}>
                                     <Typography variant="body2" color="text.secondary">
-                                        <strong>Uptime:</strong> {serverStatus.uptime}
+                                        Server: {baseUrl}
                                     </Typography>
-                                )}
-                                {serverStatus.last_updated && (
                                     <Typography variant="body2" color="text.secondary">
-                                        <strong>Last Updated:</strong> {serverStatus.last_updated}
+                                        Keys: {serverStatus.providers_enabled}/{serverStatus.providers_total}
                                     </Typography>
-                                )}
-                                {/* {serverStatus.request_count !== undefined && (
-                                    <Typography variant="body2" color="text.secondary">
-                                        <strong>Total Requests:</strong> {serverStatus.request_count}
-                                    </Typography>
-                                )} */}
+                                    {serverStatus.uptime && (
+                                        <Typography variant="body2" color="text.secondary">
+                                            Uptime: {serverStatus.uptime}
+                                        </Typography>
+                                    )}
+                                    {serverStatus.last_updated && (
+                                        <Typography variant="body2" color="text.secondary">
+                                            Last updated: {serverStatus.last_updated}
+                                        </Typography>
+                                    )}
+                                </Stack>
                             </Stack>
+                        ) : (
+                            <Typography color="text.secondary">{t('system.status.loading')}</Typography>
+                        )}
+                    </UnifiedCard>
+
+                    {/* About Card */}
+                    <UnifiedCard
+                        title="About"
+                        size="medium"
+                        width="100%"
+                        rightAction={
+                            <IconButton onClick={() => checkForUpdates(true)} size="small" aria-label="Check for updates" title="Check for updates">
+                                {checkingVersion ? <CircularProgress size={16} /> : <RefreshIcon />}
+                            </IconButton>
+                        }
+                    >
+                        <Stack spacing={1.5}>
+                            {/* Version Update Alert */}
+                            {hasUpdate && (
+                                <Alert severity="info" icon={<CloudUpload fontSize="inherit" />} sx={{ mb: 1 }}>
+                                    <AlertTitle>Update Available</AlertTitle>
+                                    New version {latestVersion} is available! You are on {currentVersion}.
+                                </Alert>
+                            )}
+
+                            <Stack direction="row" alignItems="center" justifyContent="space-between">
+                                <Typography variant="body2" color="text.secondary">
+                                    <strong>Version:</strong> {currentVersion || 'N/A'}
+                                </Typography>
+                                {hasUpdate && (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'info.main' }}>
+                                        <CloudUpload sx={{ fontSize: 16 }} />
+                                        <Typography variant="caption" color="info.main">
+                                            {latestVersion} available
+                                        </Typography>
+                                    </Box>
+                                )}
+                            </Stack>
+                            <Typography variant="body2" color="text.secondary">
+                                <strong>License:</strong> MPL v2.0
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                <strong>GitHub:</strong>{' '}
+                                <Link
+                                    href="https://github.com/tingly-dev/tingly-box"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                >
+                                    tingly-dev/tingly-box
+                                </Link>
+                            </Typography>
                         </Stack>
-                    ) : (
-                        <div>{t('system.status.loading')}</div>
-                    )}
-                </UnifiedCard>
+                    </UnifiedCard>
 
-                {/* About Card */}
-                <UnifiedCard
-                    title="About"
-                    size="medium"
-                    width="100%"
-                >
-                    <Stack spacing={1.5}>
-                        <Typography variant="body2" color="text.secondary">
-                            <strong>Version:</strong> {currentVersion || 'N/A'}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            <strong>License:</strong> MPL v2.0
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            <strong>GitHub:</strong>{' '}
-                            <Link
-                                href="https://github.com/tingly-dev/tingly-box"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                            >
-                                tingly-dev/tingly-box
-                            </Link>
-                        </Typography>
-                    </Stack>
-                </UnifiedCard>
+                    {/* Global Experimental Features */}
+                    <UnifiedCard
+                        title="Global Experimental Features"
+                        size="full"
+                    >
+                        <Stack spacing={1}>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                                These experimental features apply globally to all scenarios. Individual scenarios can override these settings.
+                            </Typography>
+                            <GlobalExperimentalFeatures />
+                        </Stack>
+                    </UnifiedCard>
 
-                {/* Global Experimental Features */}
-                <UnifiedCard
-                    title="Global Experimental Features"
-                    size="full"
-                >
-                    <Stack spacing={1}>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                            These experimental features apply globally to all scenarios. Individual scenarios can override these settings.
-                        </Typography>
-                        <GlobalExperimentalFeatures />
-                    </Stack>
+                </CardGrid>
+            ) : (
+                <UnifiedCard title="Request Logs" size="full">
+                    <RequestLog
+                        getLogs={async (params) => {
+                            try {
+                                const { logsApi } = await api.instances();
+                                const response = await logsApi.apiV1LogGet();
+                                return {
+                                    total: response.data.total || 0,
+                                    logs: response.data.logs || [],
+                                };
+                            } catch (error: any) {
+                                console.error('Failed to get logs:', error);
+                                return { total: 0, logs: [] };
+                            }
+                        }}
+                        clearLogs={async () => {
+                            try {
+                                const { logsApi } = await api.instances();
+                                await logsApi.apiV1LogDelete();
+                                return { success: true, message: 'Logs cleared' };
+                            } catch (error: any) {
+                                console.error('Failed to clear logs:', error);
+                                return { success: false, message: error.message || 'Failed to clear logs' };
+                            }
+                        }}
+                    />
                 </UnifiedCard>
-
-            </CardGrid>
+            )}
         </PageLayout>
     );
 };
