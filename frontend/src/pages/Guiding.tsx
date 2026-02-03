@@ -154,7 +154,7 @@ const Guiding = () => {
                     color="text.secondary"
                     sx={{ fontSize: '1rem', lineHeight: 1.6 }}
                 >
-                    Your AI Model Proxy Toolbox
+                    Your AI Intelligence Layer
                 </Typography>
             </Box>
 
