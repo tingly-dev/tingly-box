@@ -282,7 +282,7 @@ const Layout = ({ children }: LayoutProps) => {
                     return (
                         <React.Fragment key={group.key}>
                             {/* Group Header */}
-                            <ListItem key={`header-${group.key}`} disablePadding sx={{ mb: isStandalone ? 1 : 0.5 }}>
+                            <ListItem key={`header-${group.key}`} disablePadding sx={{ mb: 0.5 }}>
                                 <ListItemButton
                                     component={RouterLink}
                                     to={group.path || group.items[0].path}
@@ -361,7 +361,7 @@ const Layout = ({ children }: LayoutProps) => {
                                 >
                                     <List sx={{ pl: 0, py: 0 }}>
                                         {group.items.map((item) => (
-                                            <ListItem key={item.path} disablePadding sx={{ mb: 0.25 }}>
+                                            <ListItem key={item.path} disablePadding>
                                                 <ListItemButton
                                                     component={RouterLink}
                                                     to={item.path}
