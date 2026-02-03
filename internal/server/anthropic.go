@@ -19,7 +19,7 @@ import (
 )
 
 type (
-	// Model types - based on Anthropic's official models API format
+	// AnthropicModel Model types - based on Anthropic's official models API format
 	AnthropicModel struct {
 		ID          string `json:"id"`
 		CreatedAt   string `json:"created_at"`
