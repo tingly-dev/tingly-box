@@ -66,40 +66,6 @@ const AppDialogs = () => {
         }
     }, [isHealthy, checking, showDisconnectAlert]);
 
-    // Listen for test events
-    useEffect(() => {
-        const handleTestUpdate = () => {
-            setShowUpdateAlert(true);
-        };
-        const handleTestDisconnect = () => {
-            setShowDisconnectAlert(true);
-        };
-
-        window.addEventListener('test-show-update', handleTestUpdate);
-        window.addEventListener('test-show-disconnect', handleTestDisconnect);
-
-        // Also add keyboard shortcuts for testing
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.ctrlKey && e.shiftKey && e.key === 'U') {
-                e.preventDefault();
-                handleTestUpdate();
-            }
-            if (e.ctrlKey && e.shiftKey && e.key === 'D') {
-                e.preventDefault();
-                handleTestDisconnect();
-            }
-        };
-        window.addEventListener('keydown', handleKeyDown);
-
-        return () => {
-            window.removeEventListener('test-show-update', handleTestUpdate);
-            window.removeEventListener('test-show-disconnect', handleTestDisconnect);
-            window.removeEventListener('keydown', handleKeyDown);
-        };
-    }, []);
-
-    console.log('[AppDialogs] Render:', { showDisconnectAlert, openUpdateDialog, isHealthy });
-
     return (
         <>
             {/* Disconnect Alert Dialog */}
@@ -288,7 +254,6 @@ function AppContent() {
     useEffect(() => {
         const off = Events.On('systray-navigate', (event: any) => {
             const path = event.data || event;
-            console.log('[Systray] Navigate to:', path);
             navigate(path);
         });
 
@@ -323,7 +288,7 @@ function AppContent() {
                                         {/* Other routes */}
                                         <Route path="/system" element={<System/>}/>
                                         <Route path="/logs" element={<Navigate to="/system" replace/>}/>
-                                        <Route path="/dashboard" element={<UsageDashboardPage/>}/>
+                                        <Route path="/dashboard" element={<DashboardPage/>}/>
                                         <Route path="/model-test/:providerUuid" element={<ModelTestPage/>}/>
                                         {/* Prompt routes */}
                                         <Route path="/prompt/user" element={<UserPage/>}/>
@@ -341,18 +306,6 @@ function AppContent() {
 }
 
 function App() {
-    // Expose test functions to window for debugging
-    useEffect(() => {
-        (window as any).testShowUpdateDialog = () => {
-            const event = new CustomEvent('test-show-update');
-            window.dispatchEvent(event);
-        };
-        (window as any).testShowDisconnectDialog = () => {
-            const event = new CustomEvent('test-show-disconnect');
-            window.dispatchEvent(event);
-        };
-    }, []);
-
     return (
         <ThemeProvider theme={theme}>
             <CssBaseline/>
