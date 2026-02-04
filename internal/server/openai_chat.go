@@ -102,7 +102,7 @@ func (s *Server) forwardOpenAIRequest(provider *typ.Provider, req *openai.ChatCo
 }
 
 // forwardOpenAIStreamRequest forwards the streaming request to the selected provider using OpenAI library
-func (s *Server) forwardOpenAIStreamRequest(ctx context.Context, provider *typ.Provider, req *openai.ChatCompletionNewParams) (*ssestream.Stream[openai.ChatCompletionChunk], error) {
+func (s *Server) forwardOpenAIStreamRequest(ctx context.Context, provider *typ.Provider, req *openai.ChatCompletionNewParams) (*ssestream.Stream[openai.ChatCompletionChunk], context.CancelFunc, error) {
 	logrus.Debugf("provider: %s (streaming)", provider.Name)
 
 	// Apply provider-specific transformations before forwarding
@@ -116,11 +116,10 @@ func (s *Server) forwardOpenAIStreamRequest(ctx context.Context, provider *typ.P
 	// The context will be canceled if client disconnects
 	timeout := time.Duration(provider.Timeout) * time.Second
 	streamCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
 
 	stream := wrapper.ChatCompletionsNewStreaming(streamCtx, *req)
 
-	return stream, nil
+	return stream, cancel, nil
 }
 
 // buildOpenAIConfig builds the OpenAIConfig for provider transformations
@@ -146,7 +145,7 @@ func (s *Server) buildOpenAIConfig(req *openai.ChatCompletionNewParams) *transfo
 // handleStreamingRequest handles streaming chat completion requests
 func (s *Server) handleStreamingRequest(c *gin.Context, provider *typ.Provider, req *openai.ChatCompletionNewParams, responseModel, actualModel string, rule *typ.Rule) {
 	// Create streaming request with request context for proper cancellation
-	stream, err := s.forwardOpenAIStreamRequest(c.Request.Context(), provider, req)
+	stream, _, err := s.forwardOpenAIStreamRequest(c.Request.Context(), provider, req)
 	if err != nil {
 		// Track error with no usage
 		s.trackUsage(c, rule, provider, actualModel, responseModel, 0, 0, false, "error", "stream_creation_failed")

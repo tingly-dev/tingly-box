@@ -71,7 +71,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 		// Use direct Anthropic SDK call
 		if isStreaming {
 			// Handle streaming request with request context for proper cancellation
-			streamResp, err := s.forwardAnthropicStreamRequestV1(c.Request.Context(), provider, req.MessageNewParams, scenario)
+			streamResp, cancel, err := s.forwardAnthropicStreamRequestV1(c.Request.Context(), provider, req.MessageNewParams, scenario)
 			if err != nil {
 				s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "stream_creation_failed")
 				SendStreamingError(c, err)
@@ -80,6 +80,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 				}
 				return
 			}
+			defer cancel()
 			// Handle the streaming response
 			s.handleAnthropicStreamResponseV1(c, req.MessageNewParams, streamResp, proxyModel, actualModel, rule, provider, recorder)
 		} else {
@@ -117,7 +118,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 
 		if isStreaming {
 			// Create streaming request with request context for proper cancellation
-			streamResp, err := s.forwardGoogleStreamRequest(c.Request.Context(), provider, model, googleReq, cfg)
+			streamResp, _, err := s.forwardGoogleStreamRequest(c.Request.Context(), provider, model, googleReq, cfg)
 			if err != nil {
 				SendStreamingError(c, err)
 				if recorder != nil {
@@ -211,7 +212,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			openaiReq := request.ConvertAnthropicToOpenAIRequestWithProvider(&req.MessageNewParams, true, provider, actualModel)
 
 			// Create streaming request with request context for proper cancellation
-			streamResp, err := s.forwardOpenAIStreamRequest(c.Request.Context(), provider, openaiReq)
+			streamResp, _, err := s.forwardOpenAIStreamRequest(c.Request.Context(), provider, openaiReq)
 			if err != nil {
 				SendStreamingError(c, err)
 				if recorder != nil {
@@ -285,7 +286,7 @@ func (s *Server) forwardAnthropicRequestV1(provider *typ.Provider, req anthropic
 }
 
 // forwardAnthropicStreamRequestV1 forwards streaming request using Anthropic SDK (v1)
-func (s *Server) forwardAnthropicStreamRequestV1(ctx context.Context, provider *typ.Provider, req anthropic.MessageNewParams, scenario string) (*anthropicstream.Stream[anthropic.MessageStreamEventUnion], error) {
+func (s *Server) forwardAnthropicStreamRequestV1(ctx context.Context, provider *typ.Provider, req anthropic.MessageNewParams, scenario string) (*anthropicstream.Stream[anthropic.MessageStreamEventUnion], context.CancelFunc, error) {
 	// Get or create Anthropic client wrapper from pool
 	wrapper := s.clientPool.GetAnthropicClient(provider, string(req.Model))
 
@@ -302,11 +303,20 @@ func (s *Server) forwardAnthropicStreamRequestV1(ctx context.Context, provider *
 
 	streamResp := wrapper.MessagesNewStreaming(streamCtx, req)
 
-	return streamResp, nil
+	return streamResp, cancel, nil
 }
 
 // handleAnthropicStreamResponseV1 processes the Anthropic streaming response and sends it to the client (v1)
 func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.MessageNewParams, streamResp *anthropicstream.Stream[anthropic.MessageStreamEventUnion], respModel, actualModel string, rule *typ.Rule, provider *typ.Provider, recorder *ScenarioRecorder) {
+	// Ensure stream is always closed
+	defer func() {
+		if streamResp != nil {
+			if err := streamResp.Close(); err != nil {
+				logrus.Errorf("Error closing Anthropic v1 stream: %v", err)
+			}
+		}
+	}()
+
 	// Accumulate usage from stream
 	var inputTokens, outputTokens int
 	var hasUsage bool
