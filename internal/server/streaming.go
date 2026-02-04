@@ -116,3 +116,55 @@ func CheckContext(ctx context.Context) bool {
 		return false
 	}
 }
+
+// StreamErrorResult represents the result of a stream operation.
+type StreamErrorResult struct {
+	IsClientCanceled bool
+	IsError          bool
+	Err              error
+}
+
+// ClassifyStreamError classifies a stream error for proper handling.
+// Returns true if the error should stop streaming.
+func ClassifyStreamError(err error) StreamErrorResult {
+	if err == nil {
+		return StreamErrorResult{}
+	}
+
+	// Check for client cancellation first (highest priority)
+	if errors.Is(err, context.Canceled) {
+		return StreamErrorResult{IsClientCanceled: true, Err: err}
+	}
+
+	// Other errors
+	return StreamErrorResult{IsError: true, Err: err}
+}
+
+// SendStreamError sends a standardized error event through SSE.
+// Returns an error if sending fails.
+func SendStreamError(c *gin.Context, err error, defaultCode string) error {
+	result := ClassifyStreamError(err)
+
+	// Client cancellation - just log, don't send error event
+	if result.IsClientCanceled {
+		logrus.Debug("Client disconnected, not sending error event")
+		return nil
+	}
+
+	// Other errors - send error event
+	logrus.Errorf("Stream error: %v", err)
+	errorData := map[string]interface{}{
+		"error": map[string]interface{}{
+			"message": err.Error(),
+			"type":    "stream_error",
+			"code":    defaultCode,
+		},
+	}
+
+	if jsonErr := StreamSSEvent(c, "error", errorData); jsonErr != nil {
+		logrus.Errorf("Failed to send stream error event: %v", jsonErr)
+		return jsonErr
+	}
+
+	return nil
+}
