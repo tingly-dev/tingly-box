@@ -125,7 +125,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		reqParams = &messages.MessageNewParams
 	}
 
-	provider, selectedService, rule, err = s.DetermineProviderAndModelWithScenario(scenarioType, model, reqParams)
+	provider, selectedService, err = s.DetermineProviderAndModelWithScenario(scenarioType, model, reqParams)
 	if err != nil {
 		// Record error if recording is enabled
 		if recorder != nil {

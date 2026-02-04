@@ -68,7 +68,7 @@ func (s *Server) handlePassthroughRequest(c *gin.Context, apiStyle string) {
 	}
 
 	// Determine provider and service via load balancing
-	provider, selectedService, rule, err := s.DetermineProviderAndModel(requestModel)
+	provider, selectedService, err := s.DetermineProviderAndModel(requestModel)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -77,7 +77,6 @@ func (s *Server) handlePassthroughRequest(c *gin.Context, apiStyle string) {
 	// Set context for downstream middleware (stats tracking)
 	c.Set("provider", provider.UUID)
 	c.Set("model", selectedService.Model)
-	c.Set("rule", rule)
 	c.Set("pass_through", true)
 
 	// Replace the model name with the actual provider model
