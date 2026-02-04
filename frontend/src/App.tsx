@@ -16,16 +16,14 @@ import { Events } from '@/bindings';
 
 // Lazy load pages for code splitting
 const Login = lazy(() => import('./pages/Login'));
-const Dashboard = lazy(() => import('./pages/./Guiding'));
+const Guiding = lazy(() => import('./pages/./Guiding'));
 const UseOpenAIPage = lazy(() => import('./pages/UseOpenAIPage'));
 const UseAnthropicPage = lazy(() => import('./pages/UseAnthropicPage'));
 const UseClaudeCodePage = lazy(() => import('./pages/UseClaudeCodePage'));
 const UseOpenCodePage = lazy(() => import('./pages/UseOpenCodePage'));
-const ApiKeyPage = lazy(() => import('./pages/ApiKeyPage'));
-const OAuthPage = lazy(() => import('./pages/OAuthPage'));
 const CredentialPage = lazy(() => import('./pages/CredentialPage'));
 const System = lazy(() => import('./pages/System'));
-const UsageDashboardPage = lazy(() => import('./pages/./DashboardPage'));
+const DashboardPage = lazy(() => import('./pages/./DashboardPage'));
 const ModelTestPage = lazy(() => import('./pages/ModelTestPage'));
 
 // Prompt pages
@@ -273,7 +271,7 @@ function AppContent() {
                             <Layout>
                                 <Suspense fallback={<PageLoader/>}>
                                     <Routes>
-                                        <Route path="/" element={<Dashboard/>}/>
+                                        <Route path="/" element={<DashboardPage/>}/>
                                         {/* Function panel routes */}
                                         <Route path="/use-openai" element={<UseOpenAIPage/>}/>
                                         <Route path="/use-anthropic" element={<UseAnthropicPage/>}/>
