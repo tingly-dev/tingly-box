@@ -3,7 +3,9 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -208,8 +210,8 @@ func (s *Server) handleResponsesStreamingRequest(c *gin.Context, provider *typ.P
 		return
 	}
 
-	// Create streaming request
-	stream, _, err := s.forwardResponsesStreamRequest(provider, params)
+	// Create streaming request with request context for proper cancellation
+	stream, _, err := s.forwardResponsesStreamRequest(c.Request.Context(), provider, params)
 	if err != nil {
 		// Track error with no usage
 		s.trackUsage(c, rule, provider, actualModel, responseModel, 0, 0, false, "error", "stream_creation_failed")
@@ -272,8 +274,22 @@ func (s *Server) handleResponsesStreamResponse(c *gin.Context, stream *ssestream
 		return
 	}
 
-	// Process the stream
-	for stream.Next() {
+	// Process the stream with context cancellation checking
+	c.Stream(func(w io.Writer) bool {
+		// Check context cancellation first
+		select {
+		case <-c.Request.Context().Done():
+			logrus.Debug("Client disconnected, stopping Responses stream")
+			return false
+		default:
+		}
+
+		// Try to get next event
+		if !stream.Next() {
+			// Stream ended
+			return false
+		}
+
 		event := stream.Current()
 		event.Response.Model = responseModel
 
@@ -288,10 +304,20 @@ func (s *Server) handleResponsesStreamResponse(c *gin.Context, stream *ssestream
 
 		c.SSEvent("", event)
 		flusher.Flush()
-	}
+		return true
+	})
 
 	// Check for stream errors
 	if err := stream.Err(); err != nil {
+		// Check if it was a client cancellation
+		if IsContextCanceled(err) || errors.Is(err, context.Canceled) {
+			logrus.Debug("Responses stream canceled by client")
+			if hasUsage {
+				s.trackUsage(c, rule, provider, actualModel, responseModel, int(inputTokens), int(outputTokens), true, "canceled", "client_disconnected")
+			}
+			return
+		}
+
 		logrus.Errorf("Stream error: %v", err)
 		if hasUsage {
 			s.trackUsage(c, rule, provider, actualModel, responseModel, int(inputTokens), int(outputTokens), true, "error", "stream_error")
@@ -351,17 +377,18 @@ func (s *Server) forwardResponsesRequest(provider *typ.Provider, params response
 }
 
 // forwardResponsesStreamRequest forwards a streaming Responses API request to the provider
-func (s *Server) forwardResponsesStreamRequest(provider *typ.Provider, params responses.ResponseNewParams) (*ssestream.Stream[responses.ResponseStreamEventUnion], context.CancelFunc, error) {
+func (s *Server) forwardResponsesStreamRequest(ctx context.Context, provider *typ.Provider, params responses.ResponseNewParams) (*ssestream.Stream[responses.ResponseStreamEventUnion], context.CancelFunc, error) {
 	// Note: ChatGPT backend API providers are handled separately in the Anthropic beta handler
 
 	wrapper := s.clientPool.GetOpenAIClient(provider, params.Model)
 	logrus.Debugf("provider: %s (responses streaming)", provider.Name)
 
-	// Make the request using wrapper method with provider timeout
+	// Use request context with timeout for streaming
+	// The context will be canceled if client disconnects
 	timeout := time.Duration(provider.Timeout) * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	streamCtx, cancel := context.WithTimeout(ctx, timeout)
 
-	stream := wrapper.Client().Responses.NewStreaming(ctx, params)
+	stream := wrapper.Client().Responses.NewStreaming(streamCtx, params)
 
 	return stream, cancel, nil
 }
