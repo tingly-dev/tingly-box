@@ -2,7 +2,7 @@ import CssBaseline from '@mui/material/CssBaseline';
 import { ThemeProvider } from '@mui/material/styles';
 import { CircularProgress, Box, Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, IconButton, Paper, Stack, Divider } from '@mui/material';
 import { BrowserRouter, Route, Routes, useNavigate, Navigate } from 'react-router-dom';
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider } from './contexts/AuthContext';
 import { VersionProvider, useVersion } from './contexts/VersionContext';
@@ -48,30 +48,23 @@ const PageLoader = () => (
 // Dialogs component that uses the health and version contexts
 const AppDialogs = () => {
     const { t } = useTranslation();
-    const { isHealthy, checking, checkHealth } = useHealth();
+    const { isHealthy, checking, checkHealth, disconnectDialogOpen, closeDisconnectDialog } = useHealth();
     const { openUpdateDialog, currentVersion, latestVersion, releaseURL, closeUpdateDialog } = useVersion();
-    const [showDisconnectAlert, setShowDisconnectAlert] = useState(false);
-    const disconnectAlertShown = useRef(false);
-
-    // Show disconnect alert when health status changes to unhealthy
-    useEffect(() => {
-        if (!checking && !isHealthy && !disconnectAlertShown.current) {
-            setShowDisconnectAlert(true);
-            disconnectAlertShown.current = true;
-        } else if (isHealthy && showDisconnectAlert) {
-            setShowDisconnectAlert(false);
-            disconnectAlertShown.current = false;
-        }
-    }, [isHealthy, checking, showDisconnectAlert]);
 
     return (
         <>
-            {/* Disconnect Alert Dialog */}
+            {/* Disconnect Alert Dialog - now manually controlled */}
             <Dialog
-                open={showDisconnectAlert}
-                onClose={() => setShowDisconnectAlert(false)}
+                open={disconnectDialogOpen}
+                onClose={closeDisconnectDialog}
                 maxWidth="sm"
                 fullWidth
+                PaperProps={{
+                    sx: {
+                        borderRadius: 2,
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+                    }
+                }}
             >
                 <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <ErrorIcon color="error" />
@@ -83,7 +76,7 @@ const AppDialogs = () => {
                     </Typography>
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setShowDisconnectAlert(false)}>
+                    <Button onClick={closeDisconnectDialog}>
                         {t('common.close', { defaultValue: 'Close' })}
                     </Button>
                     <Button
