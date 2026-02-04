@@ -17,7 +17,7 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 		ts := NewTestServerWithConfigDir(t, testConfig.Path())
 
 		// Use the existing server with adaptor enabled
-		tsWithAdaptor := NewTestServerWithAdaptorFromConfig(t, ts.appConfig, true)
+		tsWithAdaptor := NewTestServerWithAdaptorFromConfig(ts.appConfig)
 
 		// Add a rule that routes to Anthropic-style provider (glm)
 		rule := map[string]interface{}{
@@ -89,7 +89,7 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 		ts := NewTestServerWithConfigDir(t, testConfig.Path())
 
 		// Use the existing server with adaptor enabled
-		tsWithAdaptor := NewTestServerWithAdaptorFromConfig(t, ts.appConfig, true)
+		tsWithAdaptor := NewTestServerWithAdaptorFromConfig(ts.appConfig)
 
 		// Add a rule that routes to OpenAI-style provider (qwen)
 		rule := map[string]interface{}{
@@ -162,7 +162,7 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 		ts := NewTestServerWithConfigDir(t, testConfig.Path())
 
 		// Use the existing server with adaptor enabled
-		tsWithAdaptor := NewTestServerWithAdaptorFromConfig(t, ts.appConfig, true)
+		tsWithAdaptor := NewTestServerWithAdaptorFromConfig(ts.appConfig)
 
 		// Add a rule that routes to Anthropic-style provider (glm)
 		rule := map[string]interface{}{
@@ -267,7 +267,7 @@ func TestAdaptorFeatureWithRealConfig(t *testing.T) {
 		ts := NewTestServerWithConfigDir(t, testConfig.Path())
 
 		// Use the existing server with adaptor enabled
-		tsWithAdaptor := NewTestServerWithAdaptorFromConfig(t, ts.appConfig, true)
+		tsWithAdaptor := NewTestServerWithAdaptorFromConfig(ts.appConfig)
 
 		// Use existing rule for qwen-plus (which routes to qwen - OpenAI style)
 		// We'll send an Anthropic request to test the adaptor

@@ -92,16 +92,6 @@ func ConvertAnthropicBetaToResponsesRequest(anthropicReq *anthropic.BetaMessageN
 	return params
 }
 
-// ConvertAnthropicBetaToResponsesRequestWithStreaming converts Anthropic beta request to OpenAI Responses API format
-// for streaming requests
-func ConvertAnthropicBetaToResponsesRequestWithStreaming(
-	anthropicReq *anthropic.BetaMessageNewParams,
-	provider *typ.Provider,
-	model string,
-) responses.ResponseNewParams {
-	return ConvertAnthropicBetaToResponsesRequestWithProvider(anthropicReq, provider, model)
-}
-
 // convertBetaUserMessageToResponsesInput converts Anthropic beta user message to Responses API input items
 // Handles text content and tool_result blocks
 func convertBetaUserMessageToResponsesInput(msg anthropic.BetaMessageParam) []responses.ResponseInputItemUnionParam {

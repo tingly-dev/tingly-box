@@ -32,7 +32,6 @@ type StartServerOptions struct {
 	Port              int
 	EnableUI          bool
 	EnableDebug       bool
-	EnableAdaptor     bool
 	EnableOpenBrowser bool
 	Daemon            bool
 	LogFile           string
@@ -97,7 +96,6 @@ func ResolveStartOptions(cmd *cobra.Command, flags StartFlags, appConfig *config
 		Port:              resolvedPort,
 		EnableUI:          flags.EnableUI,
 		EnableDebug:       resolvedDebug,
-		EnableAdaptor:     flags.EnableStyleTransform,
 		EnableOpenBrowser: flags.EnableOpenBrowser,
 		Daemon:            flags.Daemon,
 		LogFile:           flags.LogFile,

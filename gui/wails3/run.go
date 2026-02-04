@@ -166,7 +166,6 @@ func (l *appLauncher) StartGUI(appManager *command.AppManager, opts options.Star
 	serverManager := command.NewServerManager(
 		appManager.AppConfig(),
 		server.WithUI(opts.EnableUI),
-		server.WithAdaptor(opts.EnableAdaptor),
 		server.WithDebug(opts.EnableDebug),
 		server.WithOpenBrowser(opts.EnableOpenBrowser),
 		server.WithHost(opts.Host),
@@ -219,7 +218,6 @@ func (l *appLauncher) StartSlim(appManager *command.AppManager, opts options.Sta
 	serverManager := command.NewServerManager(
 		appManager.AppConfig(),
 		server.WithUI(opts.EnableUI),
-		server.WithAdaptor(opts.EnableAdaptor),
 		server.WithDebug(opts.EnableDebug),
 		server.WithOpenBrowser(opts.EnableOpenBrowser),
 		server.WithHost(opts.Host),

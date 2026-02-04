@@ -69,8 +69,6 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 		return
 	}
 
-	responseModel := string(req.Model)
-
 	// Determine provider & model
 	var (
 		provider        *typ.Provider
@@ -88,7 +86,19 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 		})
 		return
 	}
-	provider, selectedService, rule, err = s.DetermineProviderAndModelWithScenario(scenarioType, responseModel, nil)
+
+	// Check if this is the request model name first
+	rule, err = s.determineRuleWithScenario(scenarioType, req.Model)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+	provider, selectedService, err = s.DetermineProviderAndModelWithScenario(scenarioType, rule, req)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -135,9 +145,9 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 
 	// Handle streaming or non-streaming
 	if req.Stream {
-		s.handleResponsesStreamingRequest(c, provider, params, responseModel, actualModel, rule)
+		s.handleResponsesStreamingRequest(c, provider, params, req.Model, actualModel, rule)
 	} else {
-		s.handleResponsesNonStreamingRequest(c, provider, params, responseModel, actualModel, rule)
+		s.handleResponsesNonStreamingRequest(c, provider, params, req.Model, actualModel, rule)
 	}
 }
 

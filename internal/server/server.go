@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -873,6 +874,11 @@ func (s *Server) GetLoadBalancer() *LoadBalancer {
 // GetPreferredEndpointForModel returns the preferred endpoint (chat or responses) for a model
 // Returns "responses" if the model supports the Responses API, otherwise returns "chat"
 func (s *Server) GetPreferredEndpointForModel(provider *typ.Provider, modelID string) string {
+	// For now, all models with "codex" in their name (case insensitive) prefer completions
+	// In the future, this can be extended to support more models or be configured per-model
+	if strings.Contains(strings.ToLower(modelID), "codex") {
+		return string(db.EndpointTypeResponses)
+	}
 	adaptiveProbe := NewAdaptiveProbe(s)
 	return adaptiveProbe.GetPreferredEndpoint(provider, modelID)
 }

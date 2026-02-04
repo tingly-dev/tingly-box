@@ -87,7 +87,7 @@ func createTestServer(t *testing.T, appConfig *config.AppConfig) *TestServer {
 }
 
 // NewTestServerWithAdaptor creates a new test server with adaptor flag
-func NewTestServerWithAdaptor(t *testing.T, enableAdaptor bool) *TestServer {
+func NewTestServerWithAdaptor(t *testing.T) *TestServer {
 	// Create temp config directory
 	configDir, err := os.MkdirTemp("", "tingly-box-test-*")
 	if err != nil {
@@ -105,7 +105,7 @@ func NewTestServerWithAdaptor(t *testing.T, enableAdaptor bool) *TestServer {
 	}
 
 	// Create server instance with adaptor flag
-	httpServer := server.NewServer(appConfig.GetGlobalConfig(), server.WithAdaptor(enableAdaptor))
+	httpServer := server.NewServer(appConfig.GetGlobalConfig())
 
 	return &TestServer{
 		appConfig: appConfig,
@@ -292,9 +292,9 @@ func (ts *TestServer) AddTestRule(t *testing.T, requestModel, providerName, mode
 }
 
 // NewTestServerWithAdaptorFromConfig creates a new test server with adaptor flag using existing app config
-func NewTestServerWithAdaptorFromConfig(t *testing.T, appConfig *config.AppConfig, enableAdaptor bool) *TestServer {
+func NewTestServerWithAdaptorFromConfig(appConfig *config.AppConfig) *TestServer {
 	// Create server instance with adaptor flag
-	httpServer := server.NewServer(appConfig.GetGlobalConfig(), server.WithAdaptor(enableAdaptor))
+	httpServer := server.NewServer(appConfig.GetGlobalConfig())
 
 	return &TestServer{
 		appConfig: appConfig,
