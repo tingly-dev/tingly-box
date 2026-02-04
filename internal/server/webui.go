@@ -234,6 +234,52 @@ func (s *Server) GetStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// ValidateAuthToken validates an authentication token without requiring auth
+// This is used during login flow to verify a token before establishing session
+func (s *Server) ValidateAuthToken(c *gin.Context) {
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"valid":   false,
+		})
+		return
+	}
+
+	// Extract token from "Bearer <token>" format
+	tokenParts := strings.Split(authHeader, " ")
+	if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"valid":   false,
+		})
+		return
+	}
+
+	token := tokenParts[1]
+
+	// Check against global config user token
+	cfg := s.config
+	if cfg != nil && cfg.HasUserToken() {
+		configToken := cfg.GetUserToken()
+
+		// Direct token comparison
+		if token == configToken || strings.TrimPrefix(token, "Bearer ") == configToken {
+			c.JSON(http.StatusOK, gin.H{
+				"success": true,
+				"valid":   true,
+			})
+			return
+		}
+	}
+
+	// Token is invalid
+	c.JSON(http.StatusUnauthorized, gin.H{
+		"success": false,
+		"valid":   false,
+	})
+}
+
 func (s *Server) GetHistory(c *gin.Context) {
 	response := HistoryResponse{
 		Success: true,
@@ -367,6 +413,14 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 			}
 			c.Next()
 		},
+	)
+
+	// Auth validation endpoint (no auth required) - for validating tokens before login
+	apiAuth := manager.NewGroup("api", "v1", "")
+	apiAuth.GET("/auth/validate", s.ValidateAuthToken,
+		swagger.WithDescription("Validate authentication token"),
+		swagger.WithTags("auth"),
+		swagger.WithResponseModel(gin.H{}),
 	)
 
 	// Create authenticated API group

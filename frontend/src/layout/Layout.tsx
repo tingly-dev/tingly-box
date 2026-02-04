@@ -11,6 +11,7 @@ import {
     Bolt as SkillIcon,
     Send as UserPromptIcon,
     NewReleases,
+    ErrorOutline,
 } from '@mui/icons-material';
 import LockIcon from '@mui/icons-material/Lock';
 import {
@@ -31,6 +32,7 @@ import React, { useState, useMemo } from 'react';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useVersion as useAppVersion } from '../contexts/VersionContext';
+import { useHealth } from '../contexts/HealthContext';
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import OpenAI from '@lobehub/icons/es/OpenAI';
 import Anthropic from '@lobehub/icons/es/Anthropic';
@@ -61,6 +63,7 @@ const Layout = ({ children }: LayoutProps) => {
     const { t } = useTranslation();
     const location = useLocation();
     const { hasUpdate, currentVersion, showUpdateDialog } = useAppVersion();
+    const { isHealthy, showDisconnectDialog } = useHealth();
     const { skillUser, skillIde } = useFeatureFlags();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [homeMenuOpen, setHomeMenuOpen] = useState(true);
@@ -436,7 +439,7 @@ const Layout = ({ children }: LayoutProps) => {
                 })}
             </List>
 
-            {/* Bottom Section - Version Update, Slogan and User */}
+            {/* Bottom Section - Version Update, Health Status, Slogan and User */}
             <Box
                 sx={{
                     p: 2,
@@ -448,54 +451,108 @@ const Layout = ({ children }: LayoutProps) => {
                     flexShrink: 0,
                 }}
             >
-                {/* New Version Available Indicator - always show in dev mode */}
-                {(hasUpdate || import.meta.env.DEV) && (
-                    <Box
-                        onClick={showUpdateDialog}
-                        sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: 0.5,
-                            px: 1.5,
-                            py: 0.75,
-                            borderRadius: 1.5,
-                            bgcolor: import.meta.env.DEV && !hasUpdate ? 'success.main' : 'info.main',
-                            color: import.meta.env.DEV && !hasUpdate ? 'success.contrastText' : 'info.contrastText',
-                            cursor: 'pointer',
-                            transition: 'all 150ms ease-in-out',
-                            '&:hover': {
-                                bgcolor: import.meta.env.DEV && !hasUpdate ? 'success.dark' : 'info.dark',
-                                transform: 'scale(1.02)',
-                            },
-                            '&:active': {
-                                transform: 'scale(0.98)',
-                            },
-                        }}
-                        role="button"
-                        aria-label="View update details"
-                        tabIndex={0}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                showUpdateDialog();
-                            }
-                        }}
-                    >
-                        <NewReleases sx={{ fontSize: 16 }} />
-                        <Typography
-                            variant="caption"
+                {/* Status Indicators */}
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                    {/* Connection Lost Indicator */}
+                    {!isHealthy && (
+                        <Box
+                            onClick={showDisconnectDialog}
                             sx={{
-                                fontWeight: 600,
-                                fontSize: '0.7rem',
-                                textTransform: 'uppercase',
-                                letterSpacing: 0.5,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 0.5,
+                                flex: 1,
+                                px: 1.5,
+                                py: 0.75,
+                                borderRadius: 1.5,
+                                bgcolor: 'error.main',
+                                color: 'error.contrastText',
+                                cursor: 'pointer',
+                                transition: 'all 150ms ease-in-out',
+                                '&:hover': {
+                                    bgcolor: 'error.dark',
+                                    transform: 'scale(1.02)',
+                                },
+                                '&:active': {
+                                    transform: 'scale(0.98)',
+                                },
+                            }}
+                            role="button"
+                            aria-label="View connection details"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    showDisconnectDialog();
+                                }
                             }}
                         >
-                            {import.meta.env.DEV && !hasUpdate ? 'Dev Mode' : 'New Version'}
-                        </Typography>
-                    </Box>
-                )}
+                            <ErrorOutline sx={{ fontSize: 16 }} />
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    fontWeight: 600,
+                                    fontSize: '0.7rem',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: 0.5,
+                                }}
+                            >
+                                Disconnected
+                            </Typography>
+                        </Box>
+                    )}
+
+                    {/* New Version Available Indicator - always show in dev mode */}
+                    {(hasUpdate || import.meta.env.DEV) && (
+                        <Box
+                            onClick={showUpdateDialog}
+                            sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 0.5,
+                                flex: 1,
+                                px: 1.5,
+                                py: 0.75,
+                                borderRadius: 1.5,
+                                bgcolor: import.meta.env.DEV && !hasUpdate ? 'success.main' : 'info.main',
+                                color: import.meta.env.DEV && !hasUpdate ? 'success.contrastText' : 'info.contrastText',
+                                cursor: 'pointer',
+                                transition: 'all 150ms ease-in-out',
+                                '&:hover': {
+                                    bgcolor: import.meta.env.DEV && !hasUpdate ? 'success.dark' : 'info.dark',
+                                    transform: 'scale(1.02)',
+                                },
+                                '&:active': {
+                                    transform: 'scale(0.98)',
+                                },
+                            }}
+                            role="button"
+                            aria-label="View update details"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    showUpdateDialog();
+                                }
+                            }}
+                        >
+                            <NewReleases sx={{ fontSize: 16 }} />
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    fontWeight: 600,
+                                    fontSize: '0.7rem',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: 0.5,
+                                }}
+                            >
+                                {import.meta.env.DEV && !hasUpdate ? 'Dev Mode' : 'New Version'}
+                            </Typography>
+                        </Box>
+                    )}
+                </Box>
                 <Typography
                     variant="body2"
                     sx={{

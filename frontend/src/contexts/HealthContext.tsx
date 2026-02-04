@@ -6,6 +6,9 @@ interface HealthContextType {
     lastCheck: Date | null;
     checking: boolean;
     checkHealth: () => Promise<void>;
+    disconnectDialogOpen: boolean;
+    showDisconnectDialog: () => void;
+    closeDisconnectDialog: () => void;
 }
 
 const HealthContext = createContext<HealthContextType | undefined>(undefined);
@@ -26,6 +29,7 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({ children }) => {
     const [isHealthy, setIsHealthy] = useState(true);
     const [lastCheck, setLastCheck] = useState<Date | null>(null);
     const [checking, setChecking] = useState(false);
+    const [disconnectDialogOpen, setDisconnectDialogOpen] = useState(false);
 
     const checkHealth = useCallback(async () => {
         setChecking(true);
@@ -33,6 +37,10 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({ children }) => {
             const healthy = await api.healthCheck();
             setIsHealthy(healthy);
             setLastCheck(new Date());
+            // Auto close disconnect dialog if health is restored
+            if (healthy && disconnectDialogOpen) {
+                setDisconnectDialogOpen(false);
+            }
         } catch (error) {
             console.error('Health check failed:', error);
             setIsHealthy(false);
@@ -40,6 +48,14 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({ children }) => {
         } finally {
             setChecking(false);
         }
+    }, [disconnectDialogOpen]);
+
+    const showDisconnectDialog = useCallback(() => {
+        setDisconnectDialogOpen(true);
+    }, []);
+
+    const closeDisconnectDialog = useCallback(() => {
+        setDisconnectDialogOpen(false);
     }, []);
 
     useEffect(() => {
@@ -52,7 +68,7 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({ children }) => {
     }, [checkHealth]);
 
     return (
-        <HealthContext.Provider value={{ isHealthy, lastCheck, checking, checkHealth }}>
+        <HealthContext.Provider value={{ isHealthy, lastCheck, checking, checkHealth, disconnectDialogOpen, showDisconnectDialog, closeDisconnectDialog }}>
             {children}
         </HealthContext.Provider>
     );

@@ -1,5 +1,7 @@
 // API service layer for communicating with the backend
 
+import { authEvents } from './authState';
+
 import TinglyService from "@/bindings";
 import {
     Configuration,
@@ -49,6 +51,15 @@ interface ApiInstances {
 // Get user auth token for UI and control API from localStorage
 const getUserAuthToken = (): string | null => {
     return localStorage.getItem('user_auth_token');
+};
+
+// Handle 401 Unauthorized response - centralize auth failure handling
+const handleAuthFailure = () => {
+    localStorage.removeItem('user_auth_token');
+    // Notify AuthContext that auth failed (401 occurred)
+    authEvents.notifyAuthFailure();
+    // Also dispatch custom event for cross-tab sync
+    window.dispatchEvent(new CustomEvent('auth-state-change', { detail: { type: 'logout' } }));
 };
 
 // Get model token for OpenAI/Anthropic API from localStorage
@@ -136,8 +147,7 @@ async function fetchUIAPI(url: string, options: RequestInit = {}): Promise<any> 
 
         // Handle 401 Unauthorized - token is invalid or expired
         if (response.status === 401) {
-            localStorage.removeItem('user_auth_token');
-            window.location.href = '/login';
+            handleAuthFailure();
             return { success: false, error: 'Authentication required' };
         }
 
@@ -211,8 +221,7 @@ export const api = {
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
             return { success: false, error: error.message };
@@ -231,8 +240,7 @@ export const api = {
             return body;
         } catch (error: any) {
             if (error.response?.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
             return { success: false, error: error.message };
@@ -284,8 +292,7 @@ export const api = {
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
             return { success: false, error: error.message };
@@ -300,8 +307,7 @@ export const api = {
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
             return { success: false, error: error.message };
@@ -323,8 +329,7 @@ export const api = {
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
             return { success: false, error: error.message };
@@ -339,8 +344,7 @@ export const api = {
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
             return { success: false, error: error.message };
@@ -355,8 +359,7 @@ export const api = {
             return response.data
         } catch (error: any) {
             if (error.response?.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
             return { success: false, error: error.message };
@@ -371,8 +374,7 @@ export const api = {
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
             return { success: false, error: error.message };
@@ -386,8 +388,7 @@ export const api = {
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
             return { success: false, error: error.message };
@@ -401,8 +402,7 @@ export const api = {
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
             return { success: false, error: error.message };
@@ -416,8 +416,7 @@ export const api = {
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
             return { success: false, error: error.message };
@@ -431,8 +430,7 @@ export const api = {
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
             return { success: false, error: error.message };
@@ -448,8 +446,7 @@ export const api = {
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
             return { success: false, error: error.message };
@@ -475,8 +472,7 @@ export const api = {
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
             return { success: false, error: error.message };
@@ -491,8 +487,7 @@ export const api = {
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
             return { success: false, error: error.message };
@@ -507,8 +502,7 @@ export const api = {
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
             return { success: false, error: error.message };
@@ -553,8 +547,7 @@ export const api = {
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
             return { success: false, error: error.message };
@@ -573,8 +566,7 @@ export const api = {
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
             return { success: false, error: error.message };
@@ -599,8 +591,7 @@ export const api = {
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
             return { success: false, error: error.message };
@@ -695,8 +686,7 @@ export const api = {
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
             return { success: false, error: error.message };
@@ -724,8 +714,7 @@ export const api = {
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
             return { success: false, error: error.message };
@@ -765,8 +754,7 @@ export const api = {
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
             return { success: false, error: error.message };
@@ -785,8 +773,7 @@ export const api = {
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
             return { success: false, error: error.message };
@@ -801,8 +788,7 @@ export const api = {
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
             return { success: false, error: error.message };
@@ -817,8 +803,7 @@ export const api = {
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
             return { success: false, error: error.message };
@@ -833,8 +818,7 @@ export const api = {
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
             return { success: false, error: error.message };
@@ -849,8 +833,7 @@ export const api = {
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
             return { success: false, error: error.message };
@@ -865,8 +848,7 @@ export const api = {
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
             return { success: false, error: error.message };
@@ -887,8 +869,7 @@ export const api = {
             });
 
             if (response.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
 
@@ -916,8 +897,7 @@ export const api = {
             });
 
             if (response.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
 
