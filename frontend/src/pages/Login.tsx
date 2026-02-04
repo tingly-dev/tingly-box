@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Alert, Box, Button, Container, Paper, Snackbar, TextField, Typography } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -11,7 +10,6 @@ const Login: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
     const { login } = useAuth();
-    const navigate = useNavigate();
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -35,9 +33,10 @@ const Login: React.FC = () => {
             if (response.ok) {
                 await login(token);
                 setShowSuccess(true);
+                // Refresh page after successful login to ensure all state and API instances are properly initialized
                 setTimeout(() => {
-                    navigate('/dashboard');
-                }, 1000);
+                    window.location.href = '/';
+                }, 500);
             } else {
                 setError(t('login.errors.invalidToken'));
             }
