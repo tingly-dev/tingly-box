@@ -74,7 +74,18 @@ func (s *Server) AnthropicCountTokens(c *gin.Context) {
 	}
 
 	// Determine provider and model based on request
-	provider, service, _, err := s.DetermineProviderAndModel(model)
+	// Check if this is the request model name first
+	rule, err := s.determineRule(model)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+	provider, service, err := s.DetermineProviderAndModel(rule)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{

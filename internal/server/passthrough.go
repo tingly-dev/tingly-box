@@ -68,10 +68,25 @@ func (s *Server) handlePassthroughRequest(c *gin.Context, apiStyle string) {
 	}
 
 	// Determine provider and service via load balancing
-	provider, selectedService, err := s.DetermineProviderAndModel(requestModel)
+	rule, err := s.determineRule(requestModel)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+	provider, selectedService, err := s.DetermineProviderAndModel(rule)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Set the rule and provider in context
+	if rule != nil {
+		c.Set("rule", rule)
 	}
 
 	// Set context for downstream middleware (stats tracking)

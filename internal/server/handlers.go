@@ -115,138 +115,121 @@ func (s *Server) GetToken(c *gin.Context) {
 }
 
 // DetermineProviderAndModelWithScenario
-func (s *Server) DetermineProviderAndModelWithScenario(scenario typ.RuleScenario, modelName string, req interface{}) (*typ.Provider, *loadbalance.Service, error) {
-	if modelName == "" {
-		return nil, nil, fmt.Errorf("model name is required")
-	}
-	// Check if this is the request model name first
-	rule, err := s.determineRuleWithScenario(scenario, modelName)
-	if err != nil {
-		return nil, nil, err
-	}
-	if rule != nil && rule.Active {
-		c := s.config
-		var selectedService *loadbalance.Service
-		var err error
+func (s *Server) DetermineProviderAndModelWithScenario(scenario typ.RuleScenario, rule *typ.Rule, req interface{}) (*typ.Provider, *loadbalance.Service, error) {
+	modelName := rule.RequestModel
+	c := s.config
+	var selectedService *loadbalance.Service
+	var err error
 
-		// Smart routing: check if enabled and try to match rules
-		if rule.SmartEnabled && len(rule.SmartRouting) > 0 && req != nil {
-			logrus.Debugf("[smart_routing] smart routing enabled for model %s", modelName)
+	// Smart routing: check if enabled and try to match rules
+	if rule.SmartEnabled && len(rule.SmartRouting) > 0 && req != nil {
+		logrus.Debugf("[smart_routing] smart routing enabled for model %s", modelName)
 
-			// Extract context from request (type switch handles different request types)
-			ctx, err := s.ExtractRequestContext(req)
-			if err == nil && ctx != nil {
-				// Create router and evaluate
-				router, err := smartrouting.NewRouter(rule.SmartRouting)
-				if err == nil {
-					if matchedServices, matched := router.EvaluateRequest(ctx); matched && len(matchedServices) > 0 {
-						logrus.Debugf("[smart_routing] rule matched for model %s, selecting from %d services", modelName, len(matchedServices))
-						// Select service from matched services using load balancing
-						selectedService, err = s.SelectServiceFromSmartRouting(matchedServices, rule)
-						if err == nil && selectedService != nil {
-							// Verify the provider exists and is enabled
-							provider, err := c.GetProviderByUUID(selectedService.Provider)
-							if err == nil && provider.Enabled {
-								logrus.Infof("[smart_routing] using smart routed service: %s -> %s", provider.Name, selectedService.Model)
-								return provider, selectedService, nil
-							}
+		// Extract context from request (type switch handles different request types)
+		ctx, err := s.ExtractRequestContext(req)
+		if err == nil && ctx != nil {
+			// Create router and evaluate
+			router, err := smartrouting.NewRouter(rule.SmartRouting)
+			if err == nil {
+				if matchedServices, matched := router.EvaluateRequest(ctx); matched && len(matchedServices) > 0 {
+					logrus.Debugf("[smart_routing] rule matched for model %s, selecting from %d services", modelName, len(matchedServices))
+					// Select service from matched services using load balancing
+					selectedService, err = s.SelectServiceFromSmartRouting(matchedServices, rule)
+					if err == nil && selectedService != nil {
+						// Verify the provider exists and is enabled
+						provider, err := c.GetProviderByUUID(selectedService.Provider)
+						if err == nil && provider.Enabled {
+							logrus.Infof("[smart_routing] using smart routed service: %s -> %s", provider.Name, selectedService.Model)
+							return provider, selectedService, nil
 						}
-					} else {
-						logrus.Debugf("[smart_routing] no rule matched, falling through to load balancer")
 					}
 				} else {
-					logrus.Debugf("[smart_routing] failed to create router: %v", err)
+					logrus.Debugf("[smart_routing] no rule matched, falling through to load balancer")
 				}
 			} else {
-				logrus.Debugf("[smart_routing] failed to extract context: %v", err)
+				logrus.Debugf("[smart_routing] failed to create router: %v", err)
 			}
-			// Fall through to normal load balancer on any error
+		} else {
+			logrus.Debugf("[smart_routing] failed to extract context: %v", err)
 		}
-
-		// Normal load balancing path
-		selectedService, err = s.loadBalancer.SelectService(rule)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to select service: %w", err)
-		}
-
-		if selectedService == nil {
-			return nil, nil, fmt.Errorf("no available service for request model '%s'", modelName)
-		}
-
-		// Verify the provider exists and is enabled
-		provider, err := c.GetProviderByUUID(selectedService.Provider)
-		if err != nil {
-			return nil, nil, fmt.Errorf("provider '%s' not found: %w", selectedService.Provider, err)
-		}
-
-		if !provider.Enabled {
-			return nil, nil, fmt.Errorf("provider '%s' is not enabled", selectedService.Provider)
-		}
-
-		// Update the current service index for the rule
-		s.loadBalancer.UpdateServiceIndex(rule, selectedService)
-
-		// Persist the updated CurrentServiceID to SQLite (not config.json)
-		// This is critical for round-robin to work correctly across requests
-		if err := c.SaveCurrentServiceID(rule.UUID, rule.CurrentServiceID); err != nil {
-			// Log error but don't fail the request
-			fmt.Printf("Warning: failed to persist CurrentServiceID: %v\n", err)
-		}
-
-		// Return provider, selected service, and rule
-		return provider, selectedService, nil
+		// Fall through to normal load balancer on any error
 	}
-	return nil, nil, fmt.Errorf("provider or model not configured for request model '%s'", modelName)
+
+	// Normal load balancing path
+	selectedService, err = s.loadBalancer.SelectService(rule)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to select service: %w", err)
+	}
+
+	if selectedService == nil {
+		return nil, nil, fmt.Errorf("no available service for request model '%s'", modelName)
+	}
+
+	// Verify the provider exists and is enabled
+	provider, err := c.GetProviderByUUID(selectedService.Provider)
+	if err != nil {
+		return nil, nil, fmt.Errorf("provider '%s' not found: %w", selectedService.Provider, err)
+	}
+
+	if !provider.Enabled {
+		return nil, nil, fmt.Errorf("provider '%s' is not enabled", selectedService.Provider)
+	}
+
+	// Update the current service index for the rule
+	s.loadBalancer.UpdateServiceIndex(rule, selectedService)
+
+	// Persist the updated CurrentServiceID to SQLite (not config.json)
+	// This is critical for round-robin to work correctly across requests
+	if err := c.SaveCurrentServiceID(rule.UUID, rule.CurrentServiceID); err != nil {
+		// Log error but don't fail the request
+		fmt.Printf("Warning: failed to persist CurrentServiceID: %v\n", err)
+	}
+
+	// Return provider, selected service, and rule
+	return provider, selectedService, nil
 }
 
 // DetermineProviderAndModel resolves the model name and finds the appropriate provider using load balancing
-func (s *Server) DetermineProviderAndModel(modelName string) (*typ.Provider, *loadbalance.Service, error) {
-	// Check if this is the request model name first
-	rule, err := s.determineRule(modelName)
+func (s *Server) DetermineProviderAndModel(rule *typ.Rule) (*typ.Provider, *loadbalance.Service, error) {
+	modelName := rule.RequestModel
+	c := s.config
+
+	// Set the rule in the context so middleware can use the same rule
+	// We need to pass this context to the actual HTTP handler, but this function
+	// doesn't have access to the Gin context. For now, we'll use a different approach.
+
+	// Use the load balancer to select service
+	selectedService, err := s.loadBalancer.SelectService(rule)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to select service: %w", err)
 	}
-	if rule != nil && rule.Active {
-		c := s.config
 
-		// Set the rule in the context so middleware can use the same rule
-		// We need to pass this context to the actual HTTP handler, but this function
-		// doesn't have access to the Gin context. For now, we'll use a different approach.
-
-		// Use the load balancer to select service
-		selectedService, err := s.loadBalancer.SelectService(rule)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to select service: %w", err)
-		}
-
-		if selectedService == nil {
-			return nil, nil, fmt.Errorf("no available service for request model '%s'", modelName)
-		}
-
-		// Verify the provider exists and is enabled
-		provider, err := c.GetProviderByUUID(selectedService.Provider)
-		if err != nil {
-			return nil, nil, fmt.Errorf("provider '%s' not found: %w", selectedService.Provider, err)
-		}
-
-		if !provider.Enabled {
-			return nil, nil, fmt.Errorf("provider '%s' is not enabled", selectedService.Provider)
-		}
-
-		// Update the current service index for the rule
-		s.loadBalancer.UpdateServiceIndex(rule, selectedService)
-
-		// Persist the updated CurrentServiceID to SQLite (not config.json)
-		// This is critical for round-robin to work correctly across requests
-		if err := c.SaveCurrentServiceID(rule.UUID, rule.CurrentServiceID); err != nil {
-			// Log error but don't fail the request
-			fmt.Printf("Warning: failed to persist CurrentServiceID: %v\n", err)
-		}
-
-		// Return provider, selected service, and rule
-		return provider, selectedService, nil
+	if selectedService == nil {
+		return nil, nil, fmt.Errorf("no available service for request model '%s'", modelName)
 	}
-	return nil, nil, fmt.Errorf("provider or model not configured for request model '%s'", modelName)
+
+	// Verify the provider exists and is enabled
+	provider, err := c.GetProviderByUUID(selectedService.Provider)
+	if err != nil {
+		return nil, nil, fmt.Errorf("provider '%s' not found: %w", selectedService.Provider, err)
+	}
+
+	if !provider.Enabled {
+		return nil, nil, fmt.Errorf("provider '%s' is not enabled", selectedService.Provider)
+	}
+
+	// Update the current service index for the rule
+	s.loadBalancer.UpdateServiceIndex(rule, selectedService)
+
+	// Persist the updated CurrentServiceID to SQLite (not config.json)
+	// This is critical for round-robin to work correctly across requests
+	if err := c.SaveCurrentServiceID(rule.UUID, rule.CurrentServiceID); err != nil {
+		// Log error but don't fail the request
+		fmt.Printf("Warning: failed to persist CurrentServiceID: %v\n", err)
+	}
+
+	// Return provider, selected service, and rule
+	return provider, selectedService, nil
 }
 
 func (s *Server) determineRule(modelName string) (*typ.Rule, error) {

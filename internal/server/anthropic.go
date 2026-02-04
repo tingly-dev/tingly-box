@@ -125,7 +125,18 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		reqParams = &messages.MessageNewParams
 	}
 
-	provider, selectedService, err = s.DetermineProviderAndModelWithScenario(scenarioType, model, reqParams)
+	// Check if this is the request model name first
+	rule, err = s.determineRuleWithScenario(scenarioType, model)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+	provider, selectedService, err = s.DetermineProviderAndModelWithScenario(scenarioType, rule, reqParams)
 	if err != nil {
 		// Record error if recording is enabled
 		if recorder != nil {
@@ -138,6 +149,11 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 			},
 		})
 		return
+	}
+
+	// Set the rule and provider in context
+	if rule != nil {
+		c.Set("rule", rule)
 	}
 
 	// Delegate to the appropriate implementation based on beta parameter
