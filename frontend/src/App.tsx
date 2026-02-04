@@ -51,11 +51,9 @@ const PageLoader = () => (
 const AppDialogs = () => {
     const { t } = useTranslation();
     const { isHealthy, checking, checkHealth } = useHealth();
-    const { showNotification, updateTrigger, currentVersion, latestVersion } = useVersion();
+    const { openUpdateDialog, currentVersion, latestVersion, releaseURL, closeUpdateDialog } = useVersion();
     const [showDisconnectAlert, setShowDisconnectAlert] = useState(false);
-    const [showUpdateAlert, setShowUpdateAlert] = useState(false);
     const disconnectAlertShown = useRef(false);
-    const lastUpdateTrigger = useRef(0);
 
     // Show disconnect alert when health status changes to unhealthy
     useEffect(() => {
@@ -67,20 +65,6 @@ const AppDialogs = () => {
             disconnectAlertShown.current = false;
         }
     }, [isHealthy, checking, showDisconnectAlert]);
-
-    // Show update alert when showNotification changes from false to true
-    // OR when updateTrigger changes (manual refresh)
-    useEffect(() => {
-        // If this is a manual trigger (updateTrigger increased)
-        if (updateTrigger > lastUpdateTrigger.current) {
-            setShowUpdateAlert(true);
-            lastUpdateTrigger.current = updateTrigger;
-        } else if (showNotification && lastUpdateTrigger.current === 0) {
-            // First time showing notification (on mount)
-            setShowUpdateAlert(true);
-            lastUpdateTrigger.current = updateTrigger;
-        }
-    }, [showNotification, updateTrigger, currentVersion, latestVersion]);
 
     // Listen for test events
     useEffect(() => {
@@ -114,7 +98,7 @@ const AppDialogs = () => {
         };
     }, []);
 
-    console.log('[AppDialogs] Render:', { showDisconnectAlert, showUpdateAlert, isHealthy, showNotification });
+    console.log('[AppDialogs] Render:', { showDisconnectAlert, openUpdateDialog, isHealthy });
 
     return (
         <>
@@ -151,8 +135,8 @@ const AppDialogs = () => {
 
             {/* Update Available Dialog */}
             <Dialog
-                open={showUpdateAlert}
-                onClose={() => setShowUpdateAlert(false)}
+                open={openUpdateDialog}
+                onClose={closeUpdateDialog}
                 maxWidth="sm"
                 fullWidth
             >
@@ -194,12 +178,12 @@ const AppDialogs = () => {
                     </Button>
                     <Button
                         variant="contained"
-                        onClick={() => window.open('https://github.com/tingly-dev/tingly-box/releases', '_blank')}
+                        onClick={() => window.open(releaseURL || 'https://github.com/tingly-dev/tingly-box/releases', '_blank')}
                         startIcon={<GitHub />}
                     >
                         GitHub
                     </Button>
-                    <Button onClick={() => setShowUpdateAlert(false)}>
+                    <Button onClick={closeUpdateDialog}>
                         {t('update.later', { defaultValue: 'Later' })}
                     </Button>
                 </DialogActions>
