@@ -174,13 +174,8 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 	case protocol.APIStyleOpenAI:
 		// Check if model prefers Responses API (for models like Codex)
 		// This is used for ChatGPT backend API which only supports Responses API
-		useResponsesAPI := selectedService.PreferCompletions()
-
-		// Also check the probe cache if not already determined
-		if !useResponsesAPI {
-			preferredEndpoint := s.GetPreferredEndpointForModel(provider, actualModel)
-			useResponsesAPI = preferredEndpoint == "responses"
-		}
+		preferredEndpoint := s.GetPreferredEndpointForModel(provider, actualModel)
+		useResponsesAPI := preferredEndpoint == "responses"
 
 		if useResponsesAPI {
 			// Use Responses API path (for Codex and other models that prefer it)
