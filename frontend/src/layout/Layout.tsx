@@ -6,11 +6,11 @@ import {
     ExpandLess,
     ExpandMore,
     BarChart as BarChartIcon,
-    CloudUpload,
     Code as CodeIcon,
     Psychology as PromptIcon,
     Bolt as SkillIcon,
     Send as UserPromptIcon,
+    NewReleases,
 } from '@mui/icons-material';
 import LockIcon from '@mui/icons-material/Lock';
 import {
@@ -60,7 +60,7 @@ interface MenuGroup {
 const Layout = ({ children }: LayoutProps) => {
     const { t } = useTranslation();
     const location = useLocation();
-    const { hasUpdate, currentVersion } = useAppVersion();
+    const { hasUpdate, currentVersion, showUpdateDialog } = useAppVersion();
     const { skillUser, skillIde } = useFeatureFlags();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [homeMenuOpen, setHomeMenuOpen] = useState(true);
@@ -239,15 +239,9 @@ const Layout = ({ children }: LayoutProps) => {
                         sx={{
                             color: 'text.secondary',
                             fontSize: '0.7rem',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 0.5,
                         }}
                     >
                         {currentVersion}
-                        {hasUpdate && (
-                            <CloudUpload sx={{ fontSize: 12, color: 'info.main' }} />
-                        )}
                     </Typography>
                 </Box>
             </Box>
@@ -442,7 +436,7 @@ const Layout = ({ children }: LayoutProps) => {
                 })}
             </List>
 
-            {/* Bottom Section - Slogan and User */}
+            {/* Bottom Section - Version Update, Slogan and User */}
             <Box
                 sx={{
                     p: 2,
@@ -454,6 +448,54 @@ const Layout = ({ children }: LayoutProps) => {
                     flexShrink: 0,
                 }}
             >
+                {/* New Version Available Indicator - always show in dev mode */}
+                {(hasUpdate || import.meta.env.DEV) && (
+                    <Box
+                        onClick={showUpdateDialog}
+                        sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 0.5,
+                            px: 1.5,
+                            py: 0.75,
+                            borderRadius: 1.5,
+                            bgcolor: import.meta.env.DEV && !hasUpdate ? 'success.main' : 'info.main',
+                            color: import.meta.env.DEV && !hasUpdate ? 'success.contrastText' : 'info.contrastText',
+                            cursor: 'pointer',
+                            transition: 'all 150ms ease-in-out',
+                            '&:hover': {
+                                bgcolor: import.meta.env.DEV && !hasUpdate ? 'success.dark' : 'info.dark',
+                                transform: 'scale(1.02)',
+                            },
+                            '&:active': {
+                                transform: 'scale(0.98)',
+                            },
+                        }}
+                        role="button"
+                        aria-label="View update details"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                showUpdateDialog();
+                            }
+                        }}
+                    >
+                        <NewReleases sx={{ fontSize: 16 }} />
+                        <Typography
+                            variant="caption"
+                            sx={{
+                                fontWeight: 600,
+                                fontSize: '0.7rem',
+                                textTransform: 'uppercase',
+                                letterSpacing: 0.5,
+                            }}
+                        >
+                            {import.meta.env.DEV && !hasUpdate ? 'Dev Mode' : 'New Version'}
+                        </Typography>
+                    </Box>
+                )}
                 <Typography
                     variant="body2"
                     sx={{
