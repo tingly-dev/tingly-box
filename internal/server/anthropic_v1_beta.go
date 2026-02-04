@@ -73,7 +73,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 		// Use direct Anthropic SDK call
 		if isStreaming {
 			// Handle streaming request with request context for proper cancellation
-			streamResp, err := s.forwardAnthropicStreamRequestV1Beta(c.Request.Context(), provider, req.BetaMessageNewParams, scenario)
+			streamResp, cancel, err := s.forwardAnthropicStreamRequestV1Beta(c.Request.Context(), provider, req.BetaMessageNewParams, scenario)
 			if err != nil {
 				s.trackUsage(c, rule, provider, actualModel, proxyModel, 0, 0, false, "error", "stream_creation_failed")
 				SendStreamingError(c, err)
@@ -82,6 +82,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 				}
 				return
 			}
+			defer cancel()
 			// Handle the streaming response
 			s.handleAnthropicStreamResponseV1Beta(c, req.BetaMessageNewParams, streamResp, proxyModel, actualModel, rule, provider, recorder)
 		} else {
@@ -119,7 +120,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 
 		if isStreaming {
 			// Create streaming request with request context for proper cancellation
-			streamResp, err := s.forwardGoogleStreamRequest(c.Request.Context(), provider, model, googleReq, cfg)
+			streamResp, cancel, err := s.forwardGoogleStreamRequest(c.Request.Context(), provider, model, googleReq, cfg)
 			if err != nil {
 				SendStreamingError(c, err)
 				if recorder != nil {
@@ -127,6 +128,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 				}
 				return
 			}
+			defer cancel()
 
 			// Handle the streaming response
 			err = stream.HandleGoogleToAnthropicBetaStreamResponse(c, streamResp, proxyModel)
@@ -217,7 +219,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 				}
 
 				// Create streaming request with request context for proper cancellation
-				streamResp, err := s.forwardOpenAIStreamRequest(c.Request.Context(), provider, openaiReq)
+				streamResp, _, err := s.forwardOpenAIStreamRequest(c.Request.Context(), provider, openaiReq)
 				if err != nil {
 					SendStreamingError(c, err)
 					if streamRec != nil {
@@ -296,7 +298,7 @@ func (s *Server) forwardAnthropicRequestV1Beta(provider *typ.Provider, req anthr
 }
 
 // forwardAnthropicStreamRequestV1Beta forwards streaming request using Anthropic SDK (beta)
-func (s *Server) forwardAnthropicStreamRequestV1Beta(ctx context.Context, provider *typ.Provider, req anthropic.BetaMessageNewParams, scenario string) (*anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], error) {
+func (s *Server) forwardAnthropicStreamRequestV1Beta(ctx context.Context, provider *typ.Provider, req anthropic.BetaMessageNewParams, scenario string) (*anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], context.CancelFunc, error) {
 	// Get or create Anthropic client wrapper from pool
 	wrapper := s.clientPool.GetAnthropicClient(provider, string(req.Model))
 
@@ -307,17 +309,25 @@ func (s *Server) forwardAnthropicStreamRequestV1Beta(ctx context.Context, provid
 	// Also add scenario for recording
 	timeout := time.Duration(provider.Timeout) * time.Second
 	streamCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
 
 	streamCtx = context.WithValue(streamCtx, client.ScenarioContextKey, scenario)
 
 	streamResp := wrapper.BetaMessagesNewStreaming(streamCtx, req)
 
-	return streamResp, nil
+	return streamResp, cancel, nil
 }
 
 // handleAnthropicStreamResponseV1Beta processes the Anthropic beta streaming response and sends it to the client
 func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthropic.BetaMessageNewParams, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], respModel, actualModel string, rule *typ.Rule, provider *typ.Provider, recorder *ScenarioRecorder) {
+	// Ensure stream is always closed
+	defer func() {
+		if streamResp != nil {
+			if err := streamResp.Close(); err != nil {
+				logrus.Errorf("Error closing Anthropic v1Beta stream: %v", err)
+			}
+		}
+	}()
+
 	// Accumulate usage from stream
 	var inputTokens, outputTokens int
 	var hasUsage bool
@@ -429,11 +439,11 @@ func (s *Server) forwardGoogleRequest(provider *typ.Provider, model string, cont
 }
 
 // forwardGoogleStreamRequest forwards streaming request to Google API
-func (s *Server) forwardGoogleStreamRequest(ctx context.Context, provider *typ.Provider, model string, contents []*genai.Content, config *genai.GenerateContentConfig) (iter.Seq2[*genai.GenerateContentResponse, error], error) {
+func (s *Server) forwardGoogleStreamRequest(ctx context.Context, provider *typ.Provider, model string, contents []*genai.Content, config *genai.GenerateContentConfig) (iter.Seq2[*genai.GenerateContentResponse, error], context.CancelFunc, error) {
 	// Get or create Google client wrapper from pool
 	wrapper := s.clientPool.GetGoogleClient(provider, model)
 	if wrapper == nil {
-		return nil, fmt.Errorf("failed to get Google client for provider: %s", provider.Name)
+		return nil, nil, fmt.Errorf("failed to get Google client for provider: %s", provider.Name)
 	}
 
 	logrus.Debugln("Creating Google streaming request")
@@ -442,11 +452,10 @@ func (s *Server) forwardGoogleStreamRequest(ctx context.Context, provider *typ.P
 	// The context will be canceled if client disconnects
 	timeout := time.Duration(provider.Timeout) * time.Second
 	streamCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
 
 	streamResp := wrapper.GenerateContentStream(streamCtx, model, contents, config)
 
-	return streamResp, nil
+	return streamResp, cancel, nil
 }
 
 // handleAnthropicV1BetaViaChatCompletions handles Anthropic v1beta request using OpenAI Chat Completions API
