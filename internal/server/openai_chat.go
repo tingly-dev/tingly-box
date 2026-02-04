@@ -3,7 +3,9 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -217,8 +219,22 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 		return
 	}
 
-	// Process the stream
-	for stream.Next() {
+	// Process the stream with context cancellation checking
+	c.Stream(func(w io.Writer) bool {
+		// Check context cancellation first
+		select {
+		case <-c.Request.Context().Done():
+			logrus.Debug("Client disconnected, stopping OpenAI stream")
+			return false
+		default:
+		}
+
+		// Try to get next chunk
+		if !stream.Next() {
+			// Stream ended
+			return false
+		}
+
 		chatChunk := stream.Current()
 
 		// Store the first chunk ID for usage estimation
@@ -239,7 +255,7 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 
 		// Check if we have choices and they're not empty
 		if len(chatChunk.Choices) == 0 {
-			continue
+			return true
 		}
 
 		choice := chatChunk.Choices[0]
@@ -297,16 +313,29 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 		chunkJSON, err := json.Marshal(chunk)
 		if err != nil {
 			logrus.Errorf("Failed to marshal chunk: %v", err)
-			continue
+			return true // Continue on marshal error
 		}
 
 		// Send the chunk
 		c.SSEvent("", string(chunkJSON))
 		flusher.Flush()
-	}
+		return true
+	})
 
 	// Check for stream errors
 	if err := stream.Err(); err != nil {
+		// Check if it was a client cancellation
+		if IsContextCanceled(err) || errors.Is(err, context.Canceled) {
+			logrus.Debug("OpenAI stream canceled by client")
+			// Estimate usage if we don't have it
+			if !hasUsage {
+				inputTokens, _ = token.EstimateInputTokens(req)
+				outputTokens = token.EstimateOutputTokens(contentBuilder.String())
+			}
+			s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, true, "canceled", "client_disconnected")
+			return
+		}
+
 		logrus.Errorf("Stream error: %v", err)
 
 		// If no usage from stream, estimate it

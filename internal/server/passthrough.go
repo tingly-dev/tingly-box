@@ -287,26 +287,41 @@ func (s *Server) copyPassthroughHeaders(src *http.Request, dst *http.Request, pr
 
 // handlePassthroughStreamingResponse handles streaming SSE responses
 func (s *Server) handlePassthroughStreamingResponse(c *gin.Context, resp *http.Response) error {
-	flusher, ok := c.Writer.(http.Flusher)
+	_, ok := c.Writer.(http.Flusher)
 	if !ok {
 		return fmt.Errorf("streaming not supported")
 	}
 
 	c.Status(resp.StatusCode)
-	buffer := make([]byte, 4096)
-	for {
+
+	// Use gin.Stream for proper streaming handling with context cancellation
+	c.Stream(func(w io.Writer) bool {
+		// Check context cancellation first
+		select {
+		case <-c.Request.Context().Done():
+			logrus.Debug("Client disconnected, stopping passthrough stream")
+			return false
+		default:
+		}
+
+		buffer := make([]byte, 4096)
 		n, err := resp.Body.Read(buffer)
 		if n > 0 {
 			c.Writer.Write(buffer[:n])
-			flusher.Flush()
+			if flusher, ok := c.Writer.(http.Flusher); ok {
+				flusher.Flush()
+			}
 		}
 		if err == io.EOF {
-			break
+			return false
 		}
 		if err != nil {
-			return fmt.Errorf("error reading streaming response: %w", err)
+			logrus.Errorf("Error reading passthrough stream: %v", err)
+			return false
 		}
-	}
+		return true
+	})
+
 	return nil
 }
 

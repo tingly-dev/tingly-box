@@ -3,7 +3,9 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -272,8 +274,22 @@ func (s *Server) handleResponsesStreamResponse(c *gin.Context, stream *ssestream
 		return
 	}
 
-	// Process the stream
-	for stream.Next() {
+	// Process the stream with context cancellation checking
+	c.Stream(func(w io.Writer) bool {
+		// Check context cancellation first
+		select {
+		case <-c.Request.Context().Done():
+			logrus.Debug("Client disconnected, stopping Responses stream")
+			return false
+		default:
+		}
+
+		// Try to get next event
+		if !stream.Next() {
+			// Stream ended
+			return false
+		}
+
 		event := stream.Current()
 		event.Response.Model = responseModel
 
@@ -288,10 +304,20 @@ func (s *Server) handleResponsesStreamResponse(c *gin.Context, stream *ssestream
 
 		c.SSEvent("", event)
 		flusher.Flush()
-	}
+		return true
+	})
 
 	// Check for stream errors
 	if err := stream.Err(); err != nil {
+		// Check if it was a client cancellation
+		if IsContextCanceled(err) || errors.Is(err, context.Canceled) {
+			logrus.Debug("Responses stream canceled by client")
+			if hasUsage {
+				s.trackUsage(c, rule, provider, actualModel, responseModel, int(inputTokens), int(outputTokens), true, "canceled", "client_disconnected")
+			}
+			return
+		}
+
 		logrus.Errorf("Stream error: %v", err)
 		if hasUsage {
 			s.trackUsage(c, rule, provider, actualModel, responseModel, int(inputTokens), int(outputTokens), true, "error", "stream_error")

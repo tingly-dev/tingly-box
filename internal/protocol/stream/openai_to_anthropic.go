@@ -1,9 +1,11 @@
 package stream
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -111,9 +113,22 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompl
 	}
 	sendAnthropicStreamEvent(c, eventTypeMessageStart, messageStartEvent, flusher)
 
-	// Process the stream
+	// Process the stream with context cancellation checking
 	chunkCount := 0
-	for stream.Next() {
+	c.Stream(func(w io.Writer) bool {
+		// Check context cancellation first
+		select {
+		case <-c.Request.Context().Done():
+			logrus.Debug("Client disconnected, stopping OpenAI to Anthropic stream")
+			return false
+		default:
+		}
+
+		// Try to get next chunk
+		if !stream.Next() {
+			return false
+		}
+
 		chunkCount++
 		chunk := stream.Current()
 
@@ -124,7 +139,7 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompl
 				state.inputTokens = chunk.Usage.PromptTokens
 				state.outputTokens = chunk.Usage.CompletionTokens
 			}
-			continue
+			return true
 		}
 
 		choice := chunk.Choices[0]
@@ -282,12 +297,19 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompl
 			sendStopEvents(c, state, flusher)
 			sendMessageDelta(c, state, mapOpenAIFinishReasonToAnthropic(choice.FinishReason), flusher)
 			sendMessageStop(c, messageID, responseModel, state, mapOpenAIFinishReasonToAnthropic(choice.FinishReason), flusher)
-			return nil
+			return false
 		}
-	}
+
+		return true
+	})
 
 	// Check for stream errors
 	if err := stream.Err(); err != nil {
+		// Check if it was a client cancellation
+		if errors.Is(err, context.Canceled) {
+			logrus.Debug("OpenAI to Anthropic stream canceled by client")
+			return nil
+		}
 		logrus.Errorf("OpenAI stream error: %v", err)
 		errorEvent := map[string]interface{}{
 			"type": "error",

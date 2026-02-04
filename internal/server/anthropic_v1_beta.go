@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"iter"
@@ -331,6 +332,14 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthrop
 
 	// Use gin.Stream for cleaner streaming handling
 	c.Stream(func(w io.Writer) bool {
+		// Check context cancellation first
+		select {
+		case <-c.Request.Context().Done():
+			logrus.Debug("Client disconnected, stopping Anthropic v1Beta stream")
+			return false
+		default:
+		}
+
 		if !streamResp.Next() {
 			return false
 		}
@@ -361,6 +370,18 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthrop
 
 	// Check for stream errors
 	if err := streamResp.Err(); err != nil {
+		// Check if it was a client cancellation
+		if IsContextCanceled(err) || errors.Is(err, context.Canceled) {
+			logrus.Debug("Anthropic v1Beta stream canceled by client")
+			// Track usage with canceled status
+			if hasUsage {
+				s.trackUsage(c, rule, provider, actualModel, respModel, inputTokens, outputTokens, true, "canceled", "client_disconnected")
+			}
+			// Record error
+			streamRec.RecordError(err)
+			return
+		}
+
 		// Track usage with error status
 		if hasUsage {
 			s.trackUsage(c, rule, provider, actualModel, respModel, inputTokens, outputTokens, true, "error", "stream_error")

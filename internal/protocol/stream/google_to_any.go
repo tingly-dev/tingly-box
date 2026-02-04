@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -53,7 +54,20 @@ func HandleGoogleToOpenAIStreamResponse(c *gin.Context, stream iter.Seq2[*genai.
 
 	// Process the stream
 	for googleResp, err := range stream {
+		// Check context cancellation
+		select {
+		case <-c.Request.Context().Done():
+			logrus.Debug("Client disconnected, stopping Google to OpenAI stream")
+			return nil
+		default:
+		}
+
 		if err != nil {
+			// Check if it was a client cancellation
+			if errors.Is(err, context.Canceled) {
+				logrus.Debug("Google stream canceled by client")
+				return nil
+			}
 			logrus.Errorf("Google stream error: %v", err)
 			return nil
 		}
@@ -245,7 +259,20 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 
 	// Process the stream
 	for googleResp, err := range stream {
+		// Check context cancellation
+		select {
+		case <-c.Request.Context().Done():
+			logrus.Debug("Client disconnected, stopping Google to Anthropic stream")
+			return nil
+		default:
+		}
+
 		if err != nil {
+			// Check if it was a client cancellation
+			if errors.Is(err, context.Canceled) {
+				logrus.Debug("Google stream canceled by client")
+				return nil
+			}
 			logrus.Errorf("Google stream error: %v", err)
 			errorEvent := map[string]interface{}{
 				"type": "error",
@@ -441,7 +468,20 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 
 	// Process the stream
 	for googleResp, err := range stream {
+		// Check context cancellation
+		select {
+		case <-c.Request.Context().Done():
+			logrus.Debug("Client disconnected, stopping Google to Anthropic beta stream")
+			return nil
+		default:
+		}
+
 		if err != nil {
+			// Check if it was a client cancellation
+			if errors.Is(err, context.Canceled) {
+				logrus.Debug("Google stream canceled by client")
+				return nil
+			}
 			logrus.Errorf("Google stream error: %v", err)
 			errorEvent := map[string]interface{}{
 				"type": "error",

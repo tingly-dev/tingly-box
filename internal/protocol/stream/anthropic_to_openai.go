@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -56,10 +57,24 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 		usage        *anthropic.MessageDeltaUsage
 		inputTokens  int
 		outputTokens int
+		finished     bool
 	)
 
-	// Process the stream
-	for stream.Next() {
+	// Process the stream with context cancellation checking
+	c.Stream(func(w io.Writer) bool {
+		// Check context cancellation first
+		select {
+		case <-c.Request.Context().Done():
+			logrus.Debug("Client disconnected, stopping Anthropic to OpenAI stream")
+			return false
+		default:
+		}
+
+		// Try to get next event
+		if !stream.Next() {
+			return false
+		}
+
 		event := stream.Current()
 
 		// Handle different event types
@@ -149,12 +164,24 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 			sendOpenAIStreamChunk(c, chunk)
 			// Send final [DONE] message
 			c.SSEvent("", "[DONE]")
-			return inputTokens, outputTokens, nil
+			finished = true
+			return false
 		}
+
+		return true
+	})
+
+	if finished {
+		return inputTokens, outputTokens, nil
 	}
 
 	// Check for stream errors
 	if err := stream.Err(); err != nil {
+		// Check if it was a client cancellation
+		if errors.Is(err, context.Canceled) {
+			logrus.Debug("Anthropic to OpenAI stream canceled by client")
+			return inputTokens, outputTokens, nil
+		}
 		// EOF is expected when stream ends normally
 		if errors.Is(err, io.EOF) {
 			logrus.Info("Anthropic stream ended normally (EOF)")
