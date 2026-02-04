@@ -117,10 +117,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 const urlToken = urlParams.get('token') || urlParams.get('user_auth_token');
 
                 let finalToken = null;
+                let isFromUrl = false;
 
                 if (urlToken) {
                     // Use URL token
                     finalToken = urlToken;
+                    isFromUrl = true;
+                    // Save token immediately to ensure it persists even if validation fails
                     localStorage.setItem('user_auth_token', urlToken);
 
                     // Clean up URL by removing the token parameter
@@ -136,27 +139,41 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                     }
                 }
 
-                // Validate token by making a test API call
+                // Validate token by making a test API call to the validate endpoint
                 if (finalToken && finalToken.trim() !== '') {
-                    const response = await fetch('/api/status', {
-                        headers: {
-                            'Authorization': `Bearer ${finalToken}`,
-                            'Content-Type': 'application/json',
-                        },
-                    });
+                    try {
+                        const response = await fetch('/api/v1/auth/validate', {
+                            headers: {
+                                'Authorization': `Bearer ${finalToken}`,
+                                'Content-Type': 'application/json',
+                            },
+                        });
 
-                    if (response.ok) {
-                        // Token is valid
+                        if (response.ok) {
+                            // Token is valid
+                            setToken(finalToken);
+                            await api.initialize();
+                        } else {
+                            // Token is invalid
+                            // Only clear if not from URL (to preserve URL tokens for potential retry/debugging)
+                            if (!isFromUrl) {
+                                localStorage.removeItem('user_auth_token');
+                            }
+                            // If from URL, keep it in localStorage but don't set it in state
+                            // This allows the user to see what's happening and retry
+                        }
+                    } catch (validateError) {
+                        // Validation request failed (network error, server error, etc.)
+                        // Don't clear the token - it might be a temporary issue
+                        console.error('Token validation error:', validateError);
+                        // Set the token anyway - API calls will handle 401s later
                         setToken(finalToken);
                         await api.initialize();
-                    } else {
-                        // Token is invalid, clear it
-                        localStorage.removeItem('user_auth_token');
                     }
                 }
             } catch (error) {
                 console.error('Auth initialization error:', error);
-                localStorage.removeItem('user_auth_token');
+                // Don't remove token on general errors - might be temporary
             } finally {
                 // Mark initialization as complete
                 isInitializingRef.current = false;

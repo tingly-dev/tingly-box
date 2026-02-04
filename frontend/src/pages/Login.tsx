@@ -22,8 +22,8 @@ const Login: React.FC = () => {
         setError('');
 
         try {
-            // Validate the token by making a test API call
-            const response = await fetch('/api/status', {
+            // Validate the token by making a test API call to the validate endpoint
+            const response = await fetch('/api/v1/auth/validate', {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json',
