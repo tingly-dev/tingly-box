@@ -1,6 +1,6 @@
 // API service layer for communicating with the backend
 
-import { authState } from './authState';
+import { authEvents } from './authState';
 
 import TinglyService from "@/bindings";
 import {
@@ -56,8 +56,8 @@ const getUserAuthToken = (): string | null => {
 // Handle 401 Unauthorized response - centralize auth failure handling
 const handleAuthFailure = () => {
     localStorage.removeItem('user_auth_token');
-    // Synchronously notify AuthContext (same tab) - state will handle UI
-    authState.setUnauthorized();
+    // Notify AuthContext that auth failed (401 occurred)
+    authEvents.notifyAuthFailure();
     // Also dispatch custom event for cross-tab sync
     window.dispatchEvent(new CustomEvent('auth-state-change', { detail: { type: 'logout' } }));
 };

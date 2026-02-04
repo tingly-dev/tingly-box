@@ -1,15 +1,13 @@
-import React, { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, type ReactNode } from 'react';
 import { api } from '../services/api';
-import { authState } from '../services/authState';
+import { authEvents } from '../services/authState';
 import {
     Dialog,
     DialogTitle,
     DialogContent,
     DialogActions,
     Button,
-    Box,
     Typography,
-    IconButton,
 } from '@mui/material';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 
@@ -87,13 +85,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [authPromptOpen, setAuthPromptOpen] = useState(false);
 
+    // Track whether initialization is complete
+    // This prevents showing the auth dialog during initial token validation
+    const isInitializingRef = useRef(true);
+
     const isAuthenticated = !!token;
 
     const login = async (newToken: string) => {
         setToken(newToken);
         localStorage.setItem('user_auth_token', newToken);
-        // Reset auth state to authenticated
-        authState.setAuthenticated();
         setAuthPromptOpen(false);
         // Initialize API instances with the new token
         await api.initialize();
@@ -106,15 +106,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     const handleGoToLogin = () => {
         setAuthPromptOpen(false);
-        // Navigate to login using React Router
         window.location.href = '/login';
     };
 
     useEffect(() => {
         const initializeAuth = async () => {
             try {
-                // First, check if there's a token in URL parameters
-                // Support both 'token' and 'user_auth_token' parameters
+                // Check if there's a token in URL parameters
                 const urlParams = new URLSearchParams(window.location.search);
                 const urlToken = urlParams.get('token') || urlParams.get('user_auth_token');
 
@@ -125,31 +123,43 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                     finalToken = urlToken;
                     localStorage.setItem('user_auth_token', urlToken);
 
-                    // Clean up URL by removing the token parameter (for security and aesthetics)
+                    // Clean up URL by removing the token parameter
                     const cleanPath = window.location.pathname;
                     const hash = window.location.hash;
                     const cleanUrl = cleanPath + hash;
                     window.history.replaceState({}, '', cleanUrl);
                 } else {
-                    // If no URL token, check localStorage
+                    // Check localStorage
                     const storedToken = localStorage.getItem('user_auth_token');
                     if (storedToken) {
                         finalToken = storedToken;
                     }
                 }
 
-                // Validate token (basic validation - you can add more sophisticated checks)
+                // Validate token by making a test API call
                 if (finalToken && finalToken.trim() !== '') {
-                    setToken(finalToken);
-                    // Initialize API instances with the token
-                    await api.initialize();
+                    const response = await fetch('/api/status', {
+                        headers: {
+                            'Authorization': `Bearer ${finalToken}`,
+                            'Content-Type': 'application/json',
+                        },
+                    });
+
+                    if (response.ok) {
+                        // Token is valid
+                        setToken(finalToken);
+                        await api.initialize();
+                    } else {
+                        // Token is invalid, clear it
+                        localStorage.removeItem('user_auth_token');
+                    }
                 }
             } catch (error) {
                 console.error('Auth initialization error:', error);
-                // Clear potentially corrupted data
                 localStorage.removeItem('user_auth_token');
             } finally {
-                // Authentication check complete
+                // Mark initialization as complete
+                isInitializingRef.current = false;
                 setIsLoading(false);
             }
         };
@@ -157,17 +167,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         initializeAuth();
     }, []);
 
-    // Listen for auth state changes
+    // Listen for auth failure events from API layer (401 responses)
     useEffect(() => {
-        // Subscribe to auth state changes from API layer (401 handling)
-        const unsubscribe = authState.onChange((state) => {
-            if (state === 'unauthorized') {
-                // Clear token state
+        const unsubscribe = authEvents.onAuthFailure(() => {
+            // Only show prompt if:
+            // 1. Initialization is complete (don't show for initial invalid token)
+            // 2. Not already on login page
+            if (!isInitializingRef.current && window.location.pathname !== '/login') {
                 setToken(null);
-                // Only show prompt if not already on login page
-                if (window.location.pathname !== '/login') {
-                    setAuthPromptOpen(true);
-                }
+                setAuthPromptOpen(true);
             }
         });
 
