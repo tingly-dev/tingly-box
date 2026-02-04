@@ -10,20 +10,10 @@ import (
 )
 
 const (
-	githubReleasesAPI = "https://api.github.com/repos/%s/releases/latest"
-	tinglyBoxRepo     = "tingly-dev/tingly-box"
-	npmRegistryAPI    = "https://registry.npmjs.org/%s"
-	npmmirrorAPI      = "https://registry.npmmirror.com/%s"
-	tinglyBoxNPM      = "tingly-box"
+	npmRegistryAPI = "https://registry.npmjs.org/%s"
+	npmmirrorAPI   = "https://registry.npmmirror.com/%s"
+	tinglyBoxNPM   = "tingly-box"
 )
-
-// GitHubRelease represents a GitHub release response
-type GitHubRelease struct {
-	TagName string `json:"tag_name"`
-	HTMLURL string `json:"html_url"`
-	Name    string `json:"name"`
-	Body    string `json:"body"`
-}
 
 // NpmPackage represents an npm registry package response
 type NpmPackage struct {
@@ -59,10 +49,9 @@ func newVersionChecker() *VersionChecker {
 	}
 }
 
-// CheckLatestVersion checks for the latest version with multiple fallbacks:
-// 1. GitHub releases API (preferred)
-// 2. npm registry (fallback)
-// 3. npmmirror (China mirror, last resort)
+// CheckLatestVersion checks for the latest version with fallback:
+// 1. npm registry (primary)
+// 2. npmmirror (China mirror, fallback)
 func (vc *VersionChecker) CheckLatestVersion() (version, releaseURL string, err error) {
 	// Check cache first
 	if vc.cache.latestVersion != "" && time.Since(vc.cache.checkTime) < vc.cache.ttl {
@@ -89,50 +78,8 @@ func (vc *VersionChecker) CheckLatestVersion() (version, releaseURL string, err 
 		return version, releaseURL, nil
 	}
 
-	// Try GitHub at last
-	version, releaseURL, err = vc.checkFromGitHub()
-	if err == nil {
-		// Update cache and return
-		vc.cache.latestVersion = version
-		vc.cache.releaseURL = releaseURL
-		vc.cache.checkTime = time.Now()
-		return version, releaseURL, nil
-	}
-
 	// All failed, return the last error
 	return "", "", err
-}
-
-// checkFromGitHub fetches version from GitHub releases API
-func (vc *VersionChecker) checkFromGitHub() (version, releaseURL string, err error) {
-	resp, err := vc.httpClient.Get(fmt.Sprintf(githubReleasesAPI, tinglyBoxRepo))
-	if err != nil {
-		return "", "", fmt.Errorf("failed to fetch github release: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Handle rate limiting and other errors
-	if resp.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("github API returned status %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to read github response: %w", err)
-	}
-
-	var release GitHubRelease
-	if err := json.Unmarshal(body, &release); err != nil {
-		return "", "", fmt.Errorf("failed to parse github release: %w", err)
-	}
-
-	// Strip common prefixes from tag name: "v", "npx-bundle-", "bundle-"
-	version = release.TagName
-	version = strings.TrimPrefix(version, "v")
-	version = strings.TrimPrefix(version, "npx-bundle-")
-	version = strings.TrimPrefix(version, "bundle-")
-
-	return version, release.HTMLURL, nil
 }
 
 // checkFromNpm fetches version from npm registry API
