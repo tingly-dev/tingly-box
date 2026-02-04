@@ -149,7 +149,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 			tf.HandleV1Beta(&betaMessages.BetaMessageNewParams)
 			logrus.Infoln("smart compact triggered")
 		}
-		s.anthropicMessagesV1Beta(c, betaMessages, model, provider, selectedService, rule)
+		s.anthropicMessagesV1Beta(c, betaMessages, model, provider, selectedService.Model, rule)
 
 	} else {
 
@@ -159,7 +159,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 			tf.HandleV1(&messages.MessageNewParams)
 			logrus.Infoln("smart compact triggered")
 		}
-		s.anthropicMessagesV1(c, messages, model, provider, selectedService, rule)
+		s.anthropicMessagesV1(c, messages, model, provider, selectedService.Model, rule)
 	}
 }
 
