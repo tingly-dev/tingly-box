@@ -162,6 +162,9 @@ func (s *Server) determineProvider(model, explicitProvider string) (*typ.Provide
 
 // DetermineProviderAndModelWithScenario
 func (s *Server) DetermineProviderAndModelWithScenario(scenario typ.RuleScenario, modelName string, req interface{}) (*typ.Provider, *loadbalance.Service, *typ.Rule, error) {
+	if modelName == "" {
+		return nil, nil, nil, fmt.Errorf("model name is required")
+	}
 	// Check if this is the request model name first
 	c := s.config
 	if c != nil && c.IsRequestModelInScenario(modelName, scenario) {

@@ -40,6 +40,21 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 	scenario := c.Param("scenario")
 	scenarioType := typ.RuleScenario(scenario)
 
+	// Check if beta parameter is set to true
+	beta := c.Query("beta") == "true"
+	logrus.Debugf("scenario: %s beta: %v", scenario, beta)
+
+	// Validate scenario
+	if !isValidRuleScenario(scenarioType) {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: fmt.Sprintf("invalid scenario: %s", scenario),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
 	// Start scenario-level recording (client -> tingly-box traffic) only if enabled
 	var recorder *ScenarioRecorder
 	if s.ApplyRecording(scenarioType) {
@@ -51,14 +66,9 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		}
 	}
 
-	// Check if beta parameter is set to true
-	beta := c.Query("beta") == "true"
-	logrus.Debugf("scenario: %s beta: %v", scenario, beta)
-
 	// Read the raw request body first for debugging purposes
 	bodyBytes, err := c.GetRawData()
 	if err != nil {
-		logrus.Debugf("Failed to read request body: %v", err)
 		// Record error if recording is enabled
 		if recorder != nil {
 			recorder.RecordError(err)
@@ -68,13 +78,19 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		c.Request.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
 	}
 
-	var betaMessages protocol.AnthropicBetaMessagesRequest
-	var messages protocol.AnthropicMessagesRequest
+	// Determine provider & model
+	var (
+		provider        *typ.Provider
+		selectedService *loadbalance.Service
+		rule            *typ.Rule
+	)
 	var model string
 	var reqParams interface{} // For smart routing context extraction
+
+	var betaMessages protocol.AnthropicBetaMessagesRequest
+	var messages protocol.AnthropicMessagesRequest
 	if beta {
 		if err := json.Unmarshal(bodyBytes, &betaMessages); err != nil {
-			logrus.Debugf("Failed to unmarshal request body: %v", err)
 			// Record error if recording is enabled
 			if recorder != nil {
 				recorder.RecordError(err)
@@ -89,9 +105,9 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		}
 		model = string(betaMessages.Model)
 		reqParams = &betaMessages.BetaMessageNewParams
+
 	} else {
 		if err := json.Unmarshal(bodyBytes, &messages); err != nil {
-			logrus.Debugf("Failed to unmarshal request body: %v", err)
 			// Record error if recording is enabled
 			if recorder != nil {
 				recorder.RecordError(err)
@@ -104,43 +120,17 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 			})
 			return
 		}
+
 		model = string(messages.Model)
 		reqParams = &messages.MessageNewParams
 	}
 
-	if model == "" {
+	provider, selectedService, rule, err = s.DetermineProviderAndModelWithScenario(scenarioType, model, reqParams)
+	if err != nil {
 		// Record error if recording is enabled
 		if recorder != nil {
 			recorder.RecordError(nil)
 		}
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Model is required",
-				Type:    "invalid_request_error",
-			},
-		})
-		return
-	}
-
-	// Determine provider & model
-	var (
-		provider        *typ.Provider
-		selectedService *loadbalance.Service
-		rule            *typ.Rule
-	)
-
-	// Validate scenario
-	if !isValidRuleScenario(scenarioType) {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: fmt.Sprintf("invalid scenario: %s", scenario),
-				Type:    "invalid_request_error",
-			},
-		})
-		return
-	}
-	provider, selectedService, rule, err = s.DetermineProviderAndModelWithScenario(scenarioType, model, reqParams)
-	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: err.Error(),
@@ -152,6 +142,7 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 
 	// Delegate to the appropriate implementation based on beta parameter
 	if beta {
+
 		// Apply compact transformation only if the compact feature is enabled for this scenario
 		if s.ApplySmartCompact(scenarioType) {
 			tf := smart_compact.NewCompactTransformer(2)
@@ -159,7 +150,9 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 			logrus.Infoln("smart compact triggered")
 		}
 		s.anthropicMessagesV1Beta(c, betaMessages, model, provider, selectedService, rule)
+
 	} else {
+
 		// Apply compact transformation only if the compact feature is enabled for this scenario
 		if s.ApplySmartCompact(scenarioType) {
 			tf := smart_compact.NewCompactTransformer(2)
