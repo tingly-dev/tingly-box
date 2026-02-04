@@ -114,7 +114,7 @@ async function extractBinary(platformDir) {
 
 // Default parameters to use when no arguments are provided
 const DEFAULT_ARGS = [
-	"start",
+	"restart",
 	"--daemon",
 ];
 

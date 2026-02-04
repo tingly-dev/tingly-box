@@ -1,5 +1,6 @@
 import React, { useCallback, useState, useEffect } from 'react';
-import { Box } from '@mui/material';
+import { Box, Fab } from '@mui/material';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import { useNavigate } from 'react-router-dom';
 import ApiKeyModal from '@/components/ApiKeyModal';
 import RuleCard from './RuleCard.tsx';
@@ -35,6 +36,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
     const navigate = useNavigate();
     const [allExpanded, setAllExpanded] = useState<boolean>(true);
     const [expandedStates, setExpandedStates] = useState<Record<string, boolean>>({});
+    const [showScrollTop, setShowScrollTop] = useState<boolean>(false);
 
     // Custom hooks
     const {
@@ -134,6 +136,54 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
         }
     }, [rules, collapsible, allExpanded]);
 
+    // Handle scroll to show/hide the back-to-top button
+    useEffect(() => {
+        // Find the scroll container by looking for elements with overflow-y: auto
+        const findScrollContainer = () => {
+            const mainElement = document.querySelector('main');
+            if (!mainElement) return null;
+            const boxes = mainElement.querySelectorAll('div');
+            for (const box of boxes) {
+                const style = window.getComputedStyle(box);
+                if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
+                    return box as HTMLElement;
+                }
+            }
+            return null;
+        };
+
+        const scrollContainer = findScrollContainer();
+        if (!scrollContainer) return;
+
+        const handleScroll = () => {
+            setShowScrollTop(scrollContainer.scrollTop > 200);
+        };
+
+        scrollContainer.addEventListener('scroll', handleScroll);
+        return () => scrollContainer.removeEventListener('scroll', handleScroll);
+    }, []);
+
+    // Scroll to top handler
+    const handleScrollToTop = useCallback(() => {
+        const findScrollContainer = () => {
+            const mainElement = document.querySelector('main');
+            if (!mainElement) return null;
+            const boxes = mainElement.querySelectorAll('div');
+            for (const box of boxes) {
+                const style = window.getComputedStyle(box);
+                if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
+                    return box as HTMLElement;
+                }
+            }
+            return null;
+        };
+
+        const scrollContainer = findScrollContainer();
+        if (scrollContainer) {
+            scrollContainer.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    }, []);
+
     // Generate unified rightAction if not provided
     const rightAction = customRightAction ?? (
         <TemplatePageActions
@@ -155,7 +205,8 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
     return (
         <>
             <UnifiedCard size="full" title={title} rightAction={rightAction}>
-                <Box ref={scrollContainerRef} sx={SCROLLBOX_SX(headerHeight)}>
+                {/*<Box ref={scrollContainerRef} sx={SCROLLBOX_SX(headerHeight)}>*/}
+                <Box ref={scrollContainerRef}>
                     {rules.map((rule, index) => {
                         const isNewRule = rule.uuid === newRuleUuid;
                         const isLastRule = index === rules.length - 1;
@@ -203,6 +254,22 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
                     }
                 }}
             />
+
+            {showScrollTop && (
+                <Fab
+                    color="primary"
+                    size="small"
+                    onClick={handleScrollToTop}
+                    sx={{
+                        position: 'fixed',
+                        bottom: 50,
+                        right: 80,
+                        zIndex: 1000,
+                    }}
+                >
+                    <KeyboardArrowUpIcon />
+                </Fab>
+            )}
         </>
     );
 };

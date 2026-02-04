@@ -6,11 +6,12 @@ interface VersionContextType {
     latestVersion: string | null;
     hasUpdate: boolean;
     shouldNotify: boolean;
-    showNotification: boolean;
     releaseURL: string | null;
     checking: boolean;
     checkForUpdates: (manual?: boolean) => Promise<void>;
-    updateTrigger: number;
+    showUpdateDialog: () => void;
+    openUpdateDialog: boolean;
+    closeUpdateDialog: () => void;
 }
 
 const VersionContext = createContext<VersionContextType | undefined>(undefined);
@@ -34,15 +35,10 @@ export const VersionProvider: React.FC<VersionProviderProps> = ({ children }) =>
     const [shouldNotify, setShouldNotify] = useState(false);
     const [releaseURL, setReleaseURL] = useState<string | null>(null);
     const [checking, setChecking] = useState(false);
-    const [manualTrigger, setManualTrigger] = useState(false);
-    const [updateTrigger, setUpdateTrigger] = useState(0);
+    const [openUpdateDialog, setOpenUpdateDialog] = useState(false);
 
     const checkForUpdates = useCallback(async (manual = false) => {
         setChecking(true);
-        if (manual) {
-            setManualTrigger(true);
-            setUpdateTrigger(prev => prev + 1);
-        }
         try {
             const result = await api.getLatestVersion();
             if (result.success) {
@@ -60,16 +56,21 @@ export const VersionProvider: React.FC<VersionProviderProps> = ({ children }) =>
     }, []);
 
     useEffect(() => {
-        // Check on mount (non-manual)
+        // Check on mount
         checkForUpdates(false);
 
-        // Check every 24 hours (non-manual)
+        // Check every 24 hours
         const interval = setInterval(() => checkForUpdates(false), 24 * 60 * 60 * 1000);
         return () => clearInterval(interval);
     }, [checkForUpdates]);
 
-    // Determine if notification should show
-    const showNotification = hasUpdate && (shouldNotify || manualTrigger);
+    const showUpdateDialog = useCallback(() => {
+        setOpenUpdateDialog(true);
+    }, []);
+
+    const closeUpdateDialog = useCallback(() => {
+        setOpenUpdateDialog(false);
+    }, []);
 
     return (
         <VersionContext.Provider
@@ -81,8 +82,9 @@ export const VersionProvider: React.FC<VersionProviderProps> = ({ children }) =>
                 releaseURL,
                 checking,
                 checkForUpdates,
-                showNotification,
-                updateTrigger,
+                showUpdateDialog,
+                openUpdateDialog,
+                closeUpdateDialog,
             }}
         >
             {children}

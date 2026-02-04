@@ -1,4 +1,4 @@
-import { Cancel, CheckCircle, CloudUpload, PlayArrow, Refresh as RefreshIcon, RestartAlt, Stop } from '@mui/icons-material';
+import { Cancel, CheckCircle, CloudUpload, PlayArrow, Refresh as RefreshIcon, RestartAlt, Stop, NewReleases } from '@mui/icons-material';
 import { Box, Button, CircularProgress, IconButton, Stack, Typography, Link, Tabs, Tab, Alert, AlertTitle } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,7 +13,7 @@ import { useHealth } from '../contexts/HealthContext';
 
 const System = () => {
     const { t } = useTranslation();
-    const { currentVersion, hasUpdate, latestVersion, checkingVersion, checkForUpdates } = useVersion();
+    const { currentVersion, hasUpdate, latestVersion, checkingVersion, checkForUpdates, showUpdateDialog } = useVersion();
     const { isHealthy, checking, checkHealth } = useHealth();
     const [serverStatus, setServerStatus] = useState<any>(null);
     const [baseUrl, setBaseUrl] = useState<string>("");
@@ -219,11 +219,31 @@ const System = () => {
                         }
                     >
                         <Stack spacing={1.5}>
-                            {/* Version Update Alert */}
-                            {hasUpdate && (
-                                <Alert severity="info" icon={<CloudUpload fontSize="inherit" />} sx={{ mb: 1 }}>
-                                    <AlertTitle>Update Available</AlertTitle>
-                                    New version {latestVersion} is available! You are on {currentVersion}.
+                            {/* Version Update Alert - Clickable, always show in dev mode */}
+                            {(hasUpdate || import.meta.env.DEV) && (
+                                <Alert
+                                    severity={import.meta.env.DEV && !hasUpdate ? "success" : "info"}
+                                    icon={<CloudUpload fontSize="inherit" />}
+                                    sx={{ mb: 1, cursor: 'pointer', '&:hover': { bgcolor: import.meta.env.DEV && !hasUpdate ? 'success.main' : 'info.main' } }}
+                                    onClick={showUpdateDialog}
+                                    role="button"
+                                    aria-label="View update details"
+                                    tabIndex={0}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' || e.key === ' ') {
+                                            e.preventDefault();
+                                            showUpdateDialog();
+                                        }
+                                    }}
+                                >
+                                    <AlertTitle>{import.meta.env.DEV && !hasUpdate ? 'Dev Mode' : 'Update Available'}</AlertTitle>
+                                    {hasUpdate
+                                        ? `New version ${latestVersion} is available! You are on ${currentVersion}.`
+                                        : `Dev mode active. Version: ${currentVersion || 'N/A'}`
+                                    }
+                                    <Typography variant="caption" display="block" sx={{ mt: 0.5, opacity: 0.8 }}>
+                                        Click to view details
+                                    </Typography>
                                 </Alert>
                             )}
 
@@ -231,11 +251,36 @@ const System = () => {
                                 <Typography variant="body2" color="text.secondary">
                                     <strong>Version:</strong> {currentVersion || 'N/A'}
                                 </Typography>
-                                {hasUpdate && (
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'info.main' }}>
-                                        <CloudUpload sx={{ fontSize: 16 }} />
-                                        <Typography variant="caption" color="info.main">
-                                            {latestVersion} available
+                                {(hasUpdate || import.meta.env.DEV) && (
+                                    <Box
+                                        onClick={showUpdateDialog}
+                                        sx={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 0.5,
+                                            color: import.meta.env.DEV && !hasUpdate ? 'success.main' : 'info.main',
+                                            cursor: 'pointer',
+                                            px: 1,
+                                            py: 0.5,
+                                            borderRadius: 1,
+                                            transition: 'all 150ms ease-in-out',
+                                            '&:hover': {
+                                                bgcolor: 'action.hover',
+                                            },
+                                        }}
+                                        role="button"
+                                        aria-label="View update details"
+                                        tabIndex={0}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' || e.key === ' ') {
+                                                e.preventDefault();
+                                                showUpdateDialog();
+                                            }
+                                        }}
+                                    >
+                                        <NewReleases sx={{ fontSize: 16 }} />
+                                        <Typography variant="caption" color={import.meta.env.DEV && !hasUpdate ? 'success.main' : 'info.main'}>
+                                            {hasUpdate ? `${latestVersion} available` : 'Dev Mode'}
                                         </Typography>
                                     </Box>
                                 )}

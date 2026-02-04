@@ -206,7 +206,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                         />
                     </Tooltip>
                     <Chip
-                        label={`${smartRouting.length} ${smartRouting.length === 1 ? 'Rule' : 'Rules'}`}
+                        label="smart"
                         size="small"
                         variant="outlined"
                         sx={{

@@ -76,9 +76,8 @@ const { version: VERSION, remainingArgs } = parseTransportVersion();
 // Default parameters to use when no arguments are provided
 const DEFAULT_ARGS = [
 	// Add your default parameters here, e.g.:
-	"start",
+	"restart",
 	"--daemon",
-	"--prompt-restart",
 ];
 
 async function getPlatformArchAndBinary() {
