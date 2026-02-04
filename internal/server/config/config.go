@@ -60,6 +60,7 @@ type Config struct {
 	statsStore      *db.StatsStore
 	usageStore      *db.UsageStore
 	ruleStateStore  *db.RuleStateStore // Persists current_service_index to SQLite
+	memoryStore     *db.MemoryStore
 	templateManager *data.TemplateManager
 
 	mu sync.RWMutex
@@ -126,6 +127,13 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 		return nil, fmt.Errorf("failed to initialize rule state store: %w", err)
 	}
 	cfg.ruleStateStore = ruleStateStore
+
+	// Initialize prompt store
+	memoryStore, err := db.NewMemoryStore(configDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize prompt store: %w", err)
+	}
+	cfg.memoryStore = memoryStore
 
 	// Load existing cfg if exists
 	if err := cfg.load(); err != nil {
@@ -629,6 +637,14 @@ func (c *Config) GetUsageStore() *db.UsageStore {
 	defer c.mu.RUnlock()
 
 	return c.usageStore
+}
+
+// GetMemoryStore returns the prompt store (may be nil in tests).
+func (c *Config) GetMemoryStore() *db.MemoryStore {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.memoryStore
 }
 
 // HasModelToken checks if a model token is configured
