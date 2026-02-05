@@ -158,7 +158,7 @@ func (h *RemoteCCHandler) GetSession(c *gin.Context) {
 	userID := getUserID(c)
 	sessionID := c.Param("id")
 
-	session, exists := h.sessionMgr.Get(sessionID)
+	session, exists := h.sessionMgr.GetOrLoad(sessionID)
 	if !exists {
 		h.auditLogger.LogRequest("remote_cc_session_get", userID, clientIP, sessionID, getRequestID(c), false, time.Since(start), map[string]interface{}{
 			"error": "session not found",

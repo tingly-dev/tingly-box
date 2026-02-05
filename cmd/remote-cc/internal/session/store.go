@@ -170,6 +170,55 @@ func (s *MessageStore) LoadSessions() ([]*Session, error) {
 	return out, nil
 }
 
+// GetSession retrieves a single session from storage
+func (s *MessageStore) GetSession(sessionID string) (*Session, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	row := s.db.QueryRow(
+		`SELECT id, status, request, response, error, created_at, last_activity, expires_at, context
+		 FROM remote_cc_sessions WHERE id = ?`,
+		sessionID,
+	)
+
+	var id, status, request, response, errMsg, createdAt, lastActivity, expiresAt, contextJSON string
+	if err := row.Scan(&id, &status, &request, &response, &errMsg, &createdAt, &lastActivity, &expiresAt, &contextJSON); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	created, err := time.Parse(time.RFC3339, createdAt)
+	if err != nil {
+		created = time.Now()
+	}
+	last, err := time.Parse(time.RFC3339, lastActivity)
+	if err != nil {
+		last = created
+	}
+	expires, err := time.Parse(time.RFC3339, expiresAt)
+	if err != nil {
+		expires = last.Add(30 * time.Minute)
+	}
+	ctx := make(map[string]interface{})
+	if contextJSON != "" {
+		_ = json.Unmarshal([]byte(contextJSON), &ctx)
+	}
+
+	return &Session{
+		ID:           id,
+		Status:       Status(status),
+		Request:      request,
+		Response:     response,
+		Error:        errMsg,
+		CreatedAt:    created,
+		LastActivity: last,
+		ExpiresAt:    expires,
+		Context:      ctx,
+	}, nil
+}
+
 // InsertMessage writes a message to storage
 func (s *MessageStore) InsertMessage(sessionID string, msg Message) error {
 	if s == nil || s.db == nil {

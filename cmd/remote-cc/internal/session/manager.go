@@ -121,6 +121,27 @@ func (m *Manager) Get(id string) (*Session, bool) {
 	return session, exists
 }
 
+// GetOrLoad retrieves a session by ID, falling back to the store if needed
+func (m *Manager) GetOrLoad(id string) (*Session, bool) {
+	m.mu.RLock()
+	session, exists := m.sessions[id]
+	m.mu.RUnlock()
+	if exists {
+		return session, true
+	}
+	if m.store == nil {
+		return nil, false
+	}
+	sess, err := m.store.GetSession(id)
+	if err != nil || sess == nil {
+		return nil, false
+	}
+	m.mu.Lock()
+	m.sessions[id] = sess
+	m.mu.Unlock()
+	return sess, true
+}
+
 // Update updates a session
 func (m *Manager) Update(id string, fn func(*Session)) bool {
 	m.mu.Lock()
@@ -421,6 +442,9 @@ func (m *Manager) retentionLoop() {
 			}
 			m.mu.Lock()
 			for id, session := range m.sessions {
+				if session.Status == StatusRunning {
+					continue
+				}
 				if session.LastActivity.Before(cutoff) {
 					delete(m.sessions, id)
 				}

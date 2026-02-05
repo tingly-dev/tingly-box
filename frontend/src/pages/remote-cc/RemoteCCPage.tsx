@@ -198,7 +198,11 @@ const RemoteCCPage: React.FC = () => {
         if (!lastSelectedSessionId || selectedSession) return;
         api.getRemoteCCSession(lastSelectedSessionId)
             .then(async (sessionData) => {
-                if (!sessionData?.id) return;
+                if (!sessionData?.id) {
+                    setLastSelectedSessionId('');
+                    localStorage.removeItem(`remotecc.chatHistory.${lastSelectedSessionId}`);
+                    return;
+                }
                 setSelectedSession(sessionData);
                 setSessions((prev) => {
                     if (prev.some((s) => s.id === sessionData.id)) return prev;
@@ -360,6 +364,12 @@ const RemoteCCPage: React.FC = () => {
         setSelectedSession(null);
         setChatHistory([]);
         setLastSelectedSessionId('');
+        setExpandedBySession((prev) => {
+            const next = { ...prev };
+            delete next['new'];
+            return next;
+        });
+        localStorage.removeItem('remotecc.chatHistory.new');
         if (projectPathNewSession.trim()) {
             setProjectPath(projectPathNewSession.trim());
             setProjectPathDialogOpen(false);
