@@ -211,12 +211,12 @@ func (h *RemoteCCHandler) Chat(c *gin.Context) {
 	}
 
 	var sessionID string
-	var session *session.Session
+	var s *session.Session
 	var exists bool
 
 	// If session ID provided, use existing session
 	if req.SessionID != "" {
-		session, exists = h.sessionMgr.Get(req.SessionID)
+		s, exists = h.sessionMgr.Get(req.SessionID)
 		if !exists {
 			h.auditLogger.LogRequest("remote_cc_chat", userID, clientIP, req.SessionID, getRequestID(c), false, time.Since(start), map[string]interface{}{
 				"error": "session not found",
@@ -233,8 +233,8 @@ func (h *RemoteCCHandler) Chat(c *gin.Context) {
 		sessionID = req.SessionID
 	} else {
 		// Create new session
-		session = h.sessionMgr.Create()
-		sessionID = session.ID
+		s = h.sessionMgr.Create()
+		sessionID = s.ID
 
 		// Set initial request
 		h.sessionMgr.SetRequest(sessionID, req.Message)

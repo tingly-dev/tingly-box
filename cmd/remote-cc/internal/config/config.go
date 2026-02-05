@@ -111,7 +111,9 @@ type Config struct {
 	Port              int           // HTTP server port
 	JWTSecret         string        // JWT secret for token validation
 	UserToken         string        // User token from main service (legacy auth)
+	DBPath            string        // SQLite database path for remote-cc
 	SessionTimeout    time.Duration // Session timeout duration
+	MessageRetention  time.Duration // How long to retain messages
 	RateLimitMax      int           // Max auth attempts before block
 	RateLimitWindow   time.Duration // Time window for rate limiting
 	RateLimitBlock    time.Duration // Block duration after exceeding limit
@@ -149,6 +151,14 @@ func Load() (*Config, error) {
 	// User token - optional, for legacy auth fallback
 	userToken := readUserTokenFromMainConfig()
 
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, &ConfigError{
+			Field:   "home_dir",
+			Message: "could not resolve user home directory",
+		}
+	}
+
 	// Session timeout - optional, defaults to 30 minutes
 	sessionTimeoutStr := os.Getenv("OPSX_SESSION_TIMEOUT")
 	var sessionTimeout time.Duration
@@ -163,6 +173,27 @@ func Load() (*Config, error) {
 			}
 		}
 		sessionTimeout = timeout
+	}
+
+	// DB Path - optional, defaults to ~/.tingly-box/remote-cc.db
+	defaultDBPath := filepath.Join(homeDir, ".tingly-box", "remote-cc.db")
+	dbPath := os.Getenv("OPSX_DB_PATH")
+	if dbPath == "" {
+		dbPath = defaultDBPath
+	}
+
+	// Message retention - optional, defaults to 7 days
+	retentionDaysStr := os.Getenv("OPSX_MESSAGE_RETENTION_DAYS")
+	retention := 7 * 24 * time.Hour
+	if retentionDaysStr != "" {
+		days, err := strconv.Atoi(retentionDaysStr)
+		if err != nil || days <= 0 {
+			return nil, &ConfigError{
+				Field:   "message_retention_days",
+				Message: "must be a positive integer",
+			}
+		}
+		retention = time.Duration(days) * 24 * time.Hour
 	}
 
 	// Rate limit max attempts - optional, defaults to 5
@@ -220,15 +251,17 @@ func Load() (*Config, error) {
 		Port:             port,
 		JWTSecret:        jwtSecret,
 		UserToken:        userToken,
+		DBPath:           dbPath,
 		SessionTimeout:   sessionTimeout,
+		MessageRetention: retention,
 		RateLimitMax:     rateLimitMax,
 		RateLimitWindow:  rateLimitWindow,
 		RateLimitBlock:   rateLimitBlock,
 		jwtManager:       jwtManager,
 	}
 
-	logrus.Infof("Configuration loaded: port=%d, session_timeout=%v, rate_limit_max=%d, rate_limit_window=%v, rate_limit_block=%v",
-		port, sessionTimeout, rateLimitMax, rateLimitWindow, rateLimitBlock)
+	logrus.Infof("Configuration loaded: port=%d, session_timeout=%v, db_path=%s, message_retention=%v, rate_limit_max=%d, rate_limit_window=%v, rate_limit_block=%v",
+		port, sessionTimeout, dbPath, retention, rateLimitMax, rateLimitWindow, rateLimitBlock)
 
 	return cfg, nil
 }

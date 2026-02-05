@@ -56,9 +56,15 @@ func main() {
 	logrus.Infof("Starting remote-cc on port %d", cfg.Port)
 
 	// Initialize components
+	store, err := session.NewMessageStore(cfg.DBPath)
+	if err != nil {
+		logrus.Fatalf("Failed to initialize remote-cc message store: %v", err)
+	}
+
 	sessionMgr := session.NewManager(session.Config{
-		Timeout: cfg.SessionTimeout,
-	})
+		Timeout:          cfg.SessionTimeout,
+		MessageRetention: cfg.MessageRetention,
+	}, store)
 
 	claudeLauncher := launcher.NewClaudeCodeLauncher()
 	summaryEngine := summarizer.NewEngine()

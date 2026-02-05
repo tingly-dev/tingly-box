@@ -64,6 +64,10 @@ const RemoteCCPage: React.FC = () => {
 
     const sessionKey = selectedSession?.id || 'new';
     const expandedMessages = expandedBySession[sessionKey] || new Set<number>();
+    const isSessionThinking = !!selectedSession?.id
+        && selectedSession.status === 'running'
+        && (chatHistory.length === 0 || chatHistory[chatHistory.length - 1].role === 'user');
+    const isChatBusy = sending || isSessionThinking;
 
     useEffect(() => {
         const storedNewPath = localStorage.getItem('remotecc.projectPath.new') || '';
@@ -171,6 +175,12 @@ const RemoteCCPage: React.FC = () => {
 
             if (data.sessions) {
                 setSessions(data.sessions);
+                if (selectedSession?.id) {
+                    const updated = data.sessions.find((s: Session) => s.id === selectedSession.id);
+                    if (updated) {
+                        setSelectedSession(updated);
+                    }
+                }
             }
         } catch (err) {
             setError('Failed to load sessions');
@@ -245,7 +255,7 @@ const RemoteCCPage: React.FC = () => {
     }, [chatHistory]);
 
     const handleSendMessage = async () => {
-        if (!message.trim() || sending) return;
+        if (!message.trim() || isChatBusy) return;
         if (!projectPath.trim()) {
             setProjectPathDialogOpen(true);
             return;
@@ -580,14 +590,14 @@ const RemoteCCPage: React.FC = () => {
                                 </Typography>
                             </Box>
                         ))}
-                        {sending && (
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <CircularProgress size={16} />
-                                <Typography variant="body2" color="text.secondary">
-                                    Claude Code is thinking...
-                                </Typography>
-                            </Box>
-                        )}
+                            {isChatBusy && (
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <CircularProgress size={16} />
+                                    <Typography variant="body2" color="text.secondary">
+                                        Claude Code is thinking...
+                                    </Typography>
+                                </Box>
+                            )}
                         <div ref={messagesEndRef} />
                     </Box>
 
@@ -608,14 +618,14 @@ const RemoteCCPage: React.FC = () => {
                             }}
                             size="small"
                         />
-                        <IconButton
-                            color="primary"
-                            onClick={handleSendMessage}
-                            disabled={!message.trim() || sending}
-                            sx={{ alignSelf: 'flex-end' }}
-                        >
-                            {sending ? <CircularProgress size={24} /> : <SendIcon />}
-                        </IconButton>
+                            <IconButton
+                                color="primary"
+                                onClick={handleSendMessage}
+                                disabled={!message.trim() || isChatBusy}
+                                sx={{ alignSelf: 'flex-end' }}
+                            >
+                                {isChatBusy ? <CircularProgress size={24} /> : <SendIcon />}
+                            </IconButton>
                     </Box>
                 </CardContent>
             </Card>

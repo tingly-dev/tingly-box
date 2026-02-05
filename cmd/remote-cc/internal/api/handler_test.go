@@ -23,7 +23,7 @@ func init() {
 }
 
 func setupTestHandler() *Handler {
-	sessionMgr := session.NewManager(session.Config{Timeout: 30 * time.Minute})
+	sessionMgr := session.NewManager(session.Config{Timeout: 30 * time.Minute}, nil)
 	claudeLauncher := launcher.NewClaudeCodeLauncher()
 	summaryEngine := summarizer.NewEngine()
 	auditLogger := audit.NewLogger(audit.Config{

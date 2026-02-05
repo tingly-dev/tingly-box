@@ -22,7 +22,8 @@ const (
 
 // Config holds session manager configuration
 type Config struct {
-	Timeout time.Duration // Session timeout duration
+	Timeout          time.Duration // Session timeout duration
+	MessageRetention time.Duration // Message retention window
 }
 
 // Session represents an execution session
@@ -55,20 +56,24 @@ type Manager struct {
 	stopCh   chan struct{}
 	wg       sync.WaitGroup
 	startTime time.Time
+	store    *MessageStore
 }
 
 // NewManager creates a new session manager
-func NewManager(cfg Config) *Manager {
+func NewManager(cfg Config, store *MessageStore) *Manager {
 	mgr := &Manager{
 		sessions:  make(map[string]*Session),
 		config:    cfg,
 		stopCh:   make(chan struct{}),
 		startTime: time.Now(),
+		store:    store,
 	}
 
 	// Start cleanup goroutine
 	mgr.wg.Add(1)
 	go mgr.cleanupLoop()
+	mgr.wg.Add(1)
+	go mgr.retentionLoop()
 
 	return mgr
 }
@@ -131,6 +136,9 @@ func (m *Manager) Delete(id string) bool {
 
 	delete(m.sessions, id)
 	logrus.Debugf("Session deleted: %s", id)
+	if m.store != nil {
+		_ = m.store.DeleteMessagesForSession(id)
+	}
 
 	return true
 }
@@ -150,6 +158,9 @@ func (m *Manager) Close(id string) bool {
 
 	delete(m.sessions, id)
 	logrus.Debugf("Session closed: %s", id)
+	if m.store != nil {
+		_ = m.store.DeleteMessagesForSession(id)
+	}
 
 	return true
 }
@@ -206,9 +217,15 @@ func (m *Manager) SetContext(id string, key string, value interface{}) bool {
 
 // AppendMessage adds a message to a session
 func (m *Manager) AppendMessage(id string, msg Message) bool {
-	return m.Update(id, func(s *Session) {
-		s.Messages = append(s.Messages, msg)
+	ok := m.Update(id, func(s *Session) {
+		if m.store == nil {
+			s.Messages = append(s.Messages, msg)
+		}
 	})
+	if ok && m.store != nil {
+		_ = m.store.InsertMessage(id, msg)
+	}
+	return ok
 }
 
 // GetMessages retrieves messages for a session
@@ -221,6 +238,11 @@ func (m *Manager) GetMessages(id string) ([]Message, bool) {
 		return nil, false
 	}
 
+	if m.store != nil {
+		if msgs, err := m.store.GetMessages(id); err == nil {
+			return msgs, true
+		}
+	}
 	return append([]Message{}, session.Messages...), true
 }
 
@@ -275,6 +297,9 @@ func (m *Manager) cleanupExpired() {
 func (m *Manager) Stop() {
 	close(m.stopCh)
 	m.wg.Wait()
+	if m.store != nil {
+		_ = m.store.Close()
+	}
 }
 
 // Stats returns session statistics by status
@@ -345,5 +370,31 @@ func (m *Manager) Clear() int {
 	count := len(m.sessions)
 	m.sessions = make(map[string]*Session)
 	logrus.Debugf("Cleared %d sessions", count)
+	if m.store != nil {
+		_ = m.store.ClearAllMessages()
+	}
 	return count
+}
+
+func (m *Manager) retentionLoop() {
+	defer m.wg.Done()
+
+	if m.config.MessageRetention <= 0 {
+		return
+	}
+
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-m.stopCh:
+			return
+		case <-ticker.C:
+			cutoff := time.Now().Add(-m.config.MessageRetention)
+			if m.store != nil {
+				_ = m.store.PurgeOlderThan(cutoff)
+			}
+		}
+	}
 }

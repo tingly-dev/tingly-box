@@ -7,7 +7,7 @@ import (
 
 func TestManager_Create(t *testing.T) {
 	cfg := Config{Timeout: 30 * time.Minute}
-	mgr := NewManager(cfg)
+	mgr := NewManager(cfg, nil)
 	defer mgr.Stop()
 
 	session := mgr.Create()
@@ -35,7 +35,7 @@ func TestManager_Create(t *testing.T) {
 
 func TestManager_Get(t *testing.T) {
 	cfg := Config{Timeout: 30 * time.Minute}
-	mgr := NewManager(cfg)
+	mgr := NewManager(cfg, nil)
 	defer mgr.Stop()
 
 	// Create a session
@@ -55,7 +55,7 @@ func TestManager_Get(t *testing.T) {
 
 func TestManager_Get_NotFound(t *testing.T) {
 	cfg := Config{Timeout: 30 * time.Minute}
-	mgr := NewManager(cfg)
+	mgr := NewManager(cfg, nil)
 	defer mgr.Stop()
 
 	_, exists := mgr.Get("non-existent-id")
@@ -67,7 +67,7 @@ func TestManager_Get_NotFound(t *testing.T) {
 
 func TestManager_Update(t *testing.T) {
 	cfg := Config{Timeout: 30 * time.Minute}
-	mgr := NewManager(cfg)
+	mgr := NewManager(cfg, nil)
 	defer mgr.Stop()
 
 	session := mgr.Create()
@@ -90,7 +90,7 @@ func TestManager_Update(t *testing.T) {
 
 func TestManager_Close(t *testing.T) {
 	cfg := Config{Timeout: 30 * time.Minute}
-	mgr := NewManager(cfg)
+	mgr := NewManager(cfg, nil)
 	defer mgr.Stop()
 
 	session := mgr.Create()
@@ -111,7 +111,7 @@ func TestManager_Close(t *testing.T) {
 
 func TestManager_SetRunning(t *testing.T) {
 	cfg := Config{Timeout: 30 * time.Minute}
-	mgr := NewManager(cfg)
+	mgr := NewManager(cfg, nil)
 	defer mgr.Stop()
 
 	session := mgr.Create()
@@ -126,7 +126,7 @@ func TestManager_SetRunning(t *testing.T) {
 
 func TestManager_SetCompleted(t *testing.T) {
 	cfg := Config{Timeout: 30 * time.Minute}
-	mgr := NewManager(cfg)
+	mgr := NewManager(cfg, nil)
 	defer mgr.Stop()
 
 	session := mgr.Create()
@@ -145,7 +145,7 @@ func TestManager_SetCompleted(t *testing.T) {
 
 func TestManager_SetFailed(t *testing.T) {
 	cfg := Config{Timeout: 30 * time.Minute}
-	mgr := NewManager(cfg)
+	mgr := NewManager(cfg, nil)
 	defer mgr.Stop()
 
 	session := mgr.Create()
@@ -164,7 +164,7 @@ func TestManager_SetFailed(t *testing.T) {
 
 func TestManager_SetRequest(t *testing.T) {
 	cfg := Config{Timeout: 30 * time.Minute}
-	mgr := NewManager(cfg)
+	mgr := NewManager(cfg, nil)
 	defer mgr.Stop()
 
 	session := mgr.Create()
@@ -183,7 +183,7 @@ func TestManager_SetRequest(t *testing.T) {
 
 func TestManager_SetContext(t *testing.T) {
 	cfg := Config{Timeout: 30 * time.Minute}
-	mgr := NewManager(cfg)
+	mgr := NewManager(cfg, nil)
 	defer mgr.Stop()
 
 	session := mgr.Create()
@@ -208,7 +208,7 @@ func TestManager_SetContext(t *testing.T) {
 
 func TestManager_Stats(t *testing.T) {
 	cfg := Config{Timeout: 30 * time.Minute}
-	mgr := NewManager(cfg)
+	mgr := NewManager(cfg, nil)
 	defer mgr.Stop()
 
 	// Create multiple sessions
@@ -230,7 +230,7 @@ func TestManager_Stats(t *testing.T) {
 
 func TestSessionExpiry(t *testing.T) {
 	cfg := Config{Timeout: 1 * time.Second}
-	mgr := NewManager(cfg)
+	mgr := NewManager(cfg, nil)
 	defer mgr.Stop()
 
 	session := mgr.Create()
