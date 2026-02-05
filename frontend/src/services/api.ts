@@ -906,6 +906,97 @@ export const api = {
             return { success: false, error: error.message };
         }
     },
+
+    // ============================================
+    // Remote CC API (opsx-service)
+    // ============================================
+
+    // Get remote-cc sessions
+    getRemoteCCSessions: async (params: { page?: number; limit?: number; status?: string } = {}): Promise<any> => {
+        try {
+            const token = getUserAuthToken();
+            const queryParams = new URLSearchParams();
+            if (params.page) queryParams.set('page', params.page.toString());
+            if (params.limit) queryParams.set('limit', params.limit.toString());
+            if (params.status) queryParams.set('status', params.status);
+
+            const url = `/remote-cc/sessions${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+            });
+
+            if (response.status === 401) {
+                localStorage.removeItem('user_auth_token');
+                window.location.href = '/login';
+                return { success: false, error: 'Authentication required' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Get a specific remote-cc session
+    getRemoteCCSession: async (sessionId: string): Promise<any> => {
+        try {
+            const token = getUserAuthToken();
+            const response = await fetch(`/remote-cc/sessions/${sessionId}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+            });
+
+            if (response.status === 401) {
+                localStorage.removeItem('user_auth_token');
+                window.location.href = '/login';
+                return { success: false, error: 'Authentication required' };
+            }
+
+            if (response.status === 404) {
+                return { success: false, error: 'Session not found' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Send chat message to Claude Code
+    sendRemoteCCChat: async (data: { session_id?: string; message: string; context?: Record<string, any> }): Promise<any> => {
+        try {
+            const token = getUserAuthToken();
+            const response = await fetch('/remote-cc/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+                body: JSON.stringify(data),
+            });
+
+            if (response.status === 401) {
+                localStorage.removeItem('user_auth_token');
+                window.location.href = '/login';
+                return { success: false, error: 'Authentication required' };
+            }
+
+            if (response.status === 404) {
+                return { success: false, error: 'Session not found' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
 };
 
 export default api;

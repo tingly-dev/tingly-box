@@ -27,12 +27,17 @@ func NewJWTManager(secretKey string) *JWTManager {
 	}
 }
 
-// GenerateToken generates a new JWT token
+// GenerateToken generates a new JWT token (24 hour expiry by default)
 func (j *JWTManager) GenerateToken(clientID string) (string, error) {
+	return j.GenerateTokenWithExpiry(clientID, 24*time.Hour)
+}
+
+// GenerateTokenWithExpiry generates a new JWT token with custom expiry
+func (j *JWTManager) GenerateTokenWithExpiry(clientID string, expiry time.Duration) (string, error) {
 	claims := &Claims{
 		ClientID: clientID,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiry)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}

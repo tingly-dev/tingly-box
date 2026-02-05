@@ -277,4 +277,63 @@ tasks:
       - |
         docker run --rm --platform linux/arm64 tingly-box:arm64 \
         sh -c "cd /app && go test ./internal/... -v"
-  
+
+  # Opsx Service tasks
+  opsx:build:
+    summary: Build the opsx-service binary
+    cmds:
+      - |
+        cd cmd/opsx-service
+        go mod tidy
+        go build -o ../../bin/opsx-service .
+
+  opsx:run:
+    summary: Run opsx-service with default configuration
+    env:
+      OPSX_PORT: "18080"
+      OPSX_JWT_SECRET: "test-secret-key"
+      OPSX_SESSION_TIMEOUT: "30m"
+    cmds:
+      - |
+        OPSX_PORT={{.OPSX_PORT | default "18080"}} \
+        OPSX_JWT_SECRET={{.OPSX_JWT_SECRET | default "test-secret-key"}} \
+        OPSX_SESSION_TIMEOUT={{.OPSX_SESSION_TIMEOUT | default "30m"}} \
+        go run ./cmd/opsx-service
+
+  opsx:test:
+    summary: Run tests for opsx-service
+    cmds:
+      - |
+        go test ./cmd/opsx-service/... -v
+
+  opsx:build:cross:
+    summary: Cross-compile opsx-service for all platforms
+    env:
+      VERSION: "dev"
+    cmds:
+      - |
+        for os in linux darwin windows; do
+          for arch in amd64 arm64; do
+            echo "Building for $os/$arch..."
+            GOOS=$os GOARCH=$arch \
+            go build -ldflags="-X main.version=${VERSION}" \
+            -o ./bin/opsx-service-$os-$arch \
+            ./cmd/opsx-service
+          done
+        done
+
+  opsx-token:build:
+    summary: Build the opsx-token binary
+    cmds:
+      - |
+        cd cmd/opsx-service
+        go build -o ../../bin/opsx-token ./cmd/opsx-token
+
+  opsx-token:run:
+    summary: Generate an API token (run via SSH)
+    env:
+      OPSX_JWT_SECRET: "test-secret-key"
+    cmds:
+      - |
+        OPSX_JWT_SECRET={{.OPSX_JWT_SECRET | default "test-secret-key"}} \
+        go run ./cmd/opsx-service/cmd/opsx-token

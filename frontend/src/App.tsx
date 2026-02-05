@@ -31,6 +31,9 @@ const UserPage = lazy(() => import('./pages/prompt/UserPage'));
 const SkillPage = lazy(() => import('./pages/prompt/SkillPage'));
 const CommandPage = lazy(() => import('./pages/prompt/CommandPage'));
 
+// Remote CC page
+const RemoteCCPage = lazy(() => import('./pages/remote-cc/RemoteCCPage'));
+
 // Loading fallback component
 const PageLoader = () => (
     <Box
@@ -285,6 +288,8 @@ function AppContent() {
                                         <Route path="/prompt/user" element={<UserPage/>}/>
                                         <Route path="/prompt/skill" element={<SkillPage/>}/>
                                         <Route path="/prompt/command" element={<CommandPage/>}/>
+                                        {/* Remote CC route */}
+                                        <Route path="/remote-cc" element={<RemoteCCPage/>}/>
                                     </Routes>
                                 </Suspense>
                             </Layout>

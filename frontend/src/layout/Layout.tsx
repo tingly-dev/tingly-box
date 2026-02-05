@@ -10,6 +10,7 @@ import {
     Psychology as PromptIcon,
     Bolt as SkillIcon,
     Send as UserPromptIcon,
+    Remote as RemoteIcon,
     NewReleases,
     ErrorOutline,
 } from '@mui/icons-material';
@@ -64,7 +65,7 @@ const Layout = ({ children }: LayoutProps) => {
     const location = useLocation();
     const { hasUpdate, currentVersion, showUpdateDialog } = useAppVersion();
     const { isHealthy, showDisconnectDialog } = useHealth();
-    const { skillUser, skillIde } = useFeatureFlags();
+    const { skillUser, skillIde, skillRemoteCC } = useFeatureFlags();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [homeMenuOpen, setHomeMenuOpen] = useState(true);
     const [promptMenuOpen, setPromptMenuOpen] = useState(true);
@@ -178,6 +179,19 @@ const Layout = ({ children }: LayoutProps) => {
             label: 'Prompt',
             icon: <PromptIcon sx={{ fontSize: 20 }} />,
             items: promptMenuItems,
+        }] : []),
+        ...(skillRemoteCC ? [{
+            key: 'remote-cc' as const,
+            label: 'Remote CC',
+            icon: <RemoteIcon sx={{ fontSize: 20 }} />,
+            standalone: true,
+            items: [
+                {
+                    path: '/remote-cc',
+                    label: 'Remote Claude Code',
+                    icon: <RemoteIcon sx={{ fontSize: 20 }} />,
+                },
+            ],
         }] : []),
         {
             key: 'system',
