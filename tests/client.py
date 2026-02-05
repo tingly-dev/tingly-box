@@ -119,7 +119,11 @@ class OpenAIClient(BaseProviderClient):
 
     def get_api_endpoint(self, endpoint: str) -> str:
         """Get OpenAI API endpoint."""
-        return f"{self.api_base}/v1/{endpoint}"
+        # Remove trailing /v1 from api_base if present to avoid double /v1/v1
+        base = self.api_base.rstrip("/")
+        if base.endswith("/v1"):
+            return f"{base}/{endpoint}"
+        return f"{base}/v1/{endpoint}"
 
     def list_models(self) -> TestResult:
         """List models using OpenAI API."""
@@ -245,7 +249,11 @@ class AnthropicClient(BaseProviderClient):
 
     def get_api_endpoint(self, endpoint: str) -> str:
         """Get Anthropic API endpoint."""
-        return f"{self.api_base}/v1/{endpoint}"
+        # Remove trailing /v1 from api_base if present to avoid double /v1/v1
+        base = self.api_base.rstrip("/")
+        if base.endswith("/v1"):
+            return f"{base}/{endpoint}"
+        return f"{base}/v1/{endpoint}"
 
     def _create_headers(self) -> dict:
         """Create Anthropic-specific headers."""
@@ -653,13 +661,14 @@ class ProxyClient:
                 error=str(e),
             )
 
-    def chat_completions_openai(self, model: str, prompt: str, **kwargs) -> TestResult:
+    def chat_completions_openai(self, model: str, prompt: str, scenario: str = "openai", **kwargs) -> TestResult:
         """Send chat completion via OpenAI endpoint."""
         start_time = time.time()
 
         try:
             payload = {
                 "model": model,
+                "scenario": scenario,
                 "messages": [{"role": "user", "content": prompt}],
                 **kwargs,
             }
@@ -709,13 +718,14 @@ class ProxyClient:
                 error=str(e),
             )
 
-    def messages_anthropic(self, model: str, prompt: str, **kwargs) -> TestResult:
+    def messages_anthropic(self, model: str, prompt: str, scenario: str = "anthropic", **kwargs) -> TestResult:
         """Send messages request via Anthropic endpoint."""
         start_time = time.time()
 
         try:
             payload = {
                 "model": model,
+                "scenario": scenario,
                 "messages": [{"role": "user", "content": prompt}],
                 **kwargs,
             }

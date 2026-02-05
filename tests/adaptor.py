@@ -96,7 +96,7 @@ class AdaptorTestSuite:
 
     def test_openai_to_anthropic_adaptor(
         self,
-        model: str = "tingly-claude",
+        model: str = "glm-4.7",
         prompt: Optional[str] = None,
     ) -> AdaptorTestResult:
         """Test OpenAI-format request to Anthropic backend."""
@@ -154,7 +154,7 @@ class AdaptorTestSuite:
 
     def test_anthropic_to_openai_adaptor(
         self,
-        model: str = "tingly-claude",
+        model: str = "glm-4.7",
         prompt: Optional[str] = None,
     ) -> AdaptorTestResult:
         """Test Anthropic-format request to OpenAI backend."""
@@ -208,7 +208,7 @@ class AdaptorTestSuite:
 
     def test_openai_to_google_adaptor(
         self,
-        model: str = "tingly-claude",
+        model: str = "glm-4.7",
         prompt: Optional[str] = None,
     ) -> AdaptorTestResult:
         """Test OpenAI-format request to Google backend."""
@@ -265,7 +265,7 @@ class AdaptorTestSuite:
 
     def test_anthropic_to_google_adaptor(
         self,
-        model: str = "tingly-claude",
+        model: str = "glm-4.7",
         prompt: Optional[str] = None,
     ) -> AdaptorTestResult:
         """Test Anthropic-format request to Google backend."""
@@ -322,7 +322,7 @@ class AdaptorTestSuite:
 
     def test_multi_turn_conversation(
         self,
-        model: str = "tingly-claude",
+        model: str = "glm-4.7",
         prompt: Optional[str] = None,
     ) -> AdaptorTestResult:
         """Test multi-turn conversation through adaptor."""
@@ -387,7 +387,7 @@ class AdaptorTestSuite:
 
     def test_system_message_handling(
         self,
-        model: str = "tingly-claude",
+        model: str = "glm-4.7",
         prompt: Optional[str] = None,
     ) -> AdaptorTestResult:
         """Test system message handling in adaptor."""

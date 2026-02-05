@@ -173,12 +173,14 @@ class ConfigLoader:
 
         providers = []
         provider_sources = []
-        if "providers_v2" in data:
+        if "providers_v2" in data and data["providers_v2"]:
             provider_sources.append(data["providers_v2"])
-        if "providers" in data:
+        if "providers" in data and data["providers"]:
             provider_sources.append(data["providers"])
 
         for source in provider_sources:
+            if source is None:
+                continue
             for p in source:
                 try:
                     provider_data = dict(p)

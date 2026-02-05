@@ -122,6 +122,18 @@ class SmokeTestSuite:
             )
             results.append(smoke_result)
 
+            # Print detailed result
+            if self.verbose:
+                if result.success:
+                    self._print(f"  [SMOKE]   list_models: PASS - {result.message}")
+                    if result.data and 'models' in result.data:
+                        self._print(f"  [SMOKE]     Found {len(result.data['models'])} models")
+                else:
+                    self._print(f"  [SMOKE]   list_models: FAIL - {result.message}")
+                    if result.error:
+                        error_short = result.error[:100] + "..." if len(result.error) > 100 else result.error
+                        self._print(f"  [SMOKE]     Error: {error_short}")
+
         except Exception as e:
             results.append(SmokeTestResult(
                 provider_name=provider.name,
@@ -183,6 +195,16 @@ class SmokeTestSuite:
             )
             results.append(smoke_result)
 
+            # Print detailed result
+            if self.verbose:
+                if result.success:
+                    self._print(f"  [SMOKE]   chat_completions: PASS - {result.message}")
+                else:
+                    self._print(f"  [SMOKE]   chat_completions: FAIL - {result.message}")
+                    if result.error:
+                        error_short = result.error[:100] + "..." if len(result.error) > 100 else result.error
+                        self._print(f"  [SMOKE]     Error: {error_short}")
+
         except Exception as e:
             results.append(SmokeTestResult(
                 provider_name=provider.name,
@@ -226,7 +248,7 @@ class SmokeTestSuite:
 
             result = client.chat_completions(request)
 
-            return [SmokeTestResult(
+            smoke_result = SmokeTestResult(
                 provider_name=provider.name,
                 api_style=provider.api_style.value,
                 test_type="chat_completions_with_system",
@@ -235,7 +257,19 @@ class SmokeTestSuite:
                 duration_ms=result.duration_ms,
                 details=result.data or {},
                 error=result.error,
-            )]
+            )
+
+            # Print detailed result
+            if self.verbose:
+                if result.success:
+                    self._print(f"  [SMOKE]   chat_completions_with_system: PASS - {result.message}")
+                else:
+                    self._print(f"  [SMOKE]   chat_completions_with_system: FAIL - {result.message}")
+                    if result.error:
+                        error_short = result.error[:100] + "..." if len(result.error) > 100 else result.error
+                        self._print(f"  [SMOKE]     Error: {error_short}")
+
+            return [smoke_result]
 
         except Exception as e:
             return [SmokeTestResult(
@@ -256,12 +290,19 @@ class SmokeTestSuite:
         if provider.models:
             return provider.models[0]
 
+        # Use specific model names based on provider and API style
         if provider.api_style == APIStyle.OPENAI:
-            return "tingly-gpt"
+            if provider.name.lower() == "qwen":
+                return "qwen-plus"
+            elif provider.name.lower() == "deepseek":
+                return "deepseek-chat"
+            else:
+                return "tingly-gpt"
         elif provider.api_style == APIStyle.ANTHROPIC:
-            return "tingly-claude"
-        elif provider.api_style == APIStyle.GOOGLE:
-            return "tingly-claude"
+            if provider.name.lower() == "glm":
+                return "glm-4.7"
+            else:
+                return "tingly-claude"
 
         return None
 
@@ -282,19 +323,44 @@ class SmokeTestSuite:
             results = self.test_provider_model_fetch(provider)
             for r in results:
                 suite_result.add_result(r)
-                self._print(f"  list_models: {'PASS' if r.passed else 'FAIL'} - {r.message}")
+                if self.verbose:
+                    self._print(f"  list_models: {'PASS' if r.passed else 'FAIL'} - {r.message}")
 
             results = self.test_provider_chat(provider)
             for r in results:
                 suite_result.add_result(r)
-                self._print(f"  chat_completions: {'PASS' if r.passed else 'FAIL'} - {r.message}")
+                if self.verbose:
+                    self._print(f"  chat_completions: {'PASS' if r.passed else 'FAIL'} - {r.message}")
 
             results = self.test_provider_chat_with_system(provider)
             for r in results:
                 suite_result.add_result(r)
-                self._print(f"  chat_with_system: {'PASS' if r.passed else 'FAIL'} - {r.message}")
+                if self.verbose:
+                    self._print(f"  chat_with_system: {'PASS' if r.passed else 'FAIL'} - {r.message}")
 
         suite_result.duration_ms = (time.time() - start_time) * 1000
+
+        # Print summary if verbose
+        if self.verbose:
+            self._print(f"\n--- Smoke Test Summary ---")
+            self._print(f"Total: {suite_result.total_tests} | Passed: {suite_result.passed} | Failed: {suite_result.failed}")
+            self._print(f"Success Rate: {suite_result.success_rate:.1f}%")
+
+            # Group by provider
+            from collections import defaultdict
+            provider_stats = defaultdict(lambda: {'passed': 0, 'failed': 0, 'total': 0})
+            for result in suite_result.results:
+                provider = result.provider_name
+                provider_stats[provider]['total'] += 1
+                if result.passed:
+                    provider_stats[provider]['passed'] += 1
+                else:
+                    provider_stats[provider]['failed'] += 1
+
+            self._print("\nBy Provider:")
+            for provider, stats in provider_stats.items():
+                success_rate = (stats['passed'] / stats['total'] * 100) if stats['total'] > 0 else 0
+                self._print(f"  {provider}: {stats['passed']}/{stats['total']} passed ({success_rate:.1f}%)")
 
         return suite_result
 
@@ -347,7 +413,7 @@ class ProxySmokeTestSuite:
 
     def test_proxy_chat_openai(
         self,
-        model: str = "tingly-claude",
+        model: str = "glm-4.7",
         prompt: Optional[str] = None,
     ) -> SmokeTestResult:
         """Test proxy OpenAI chat endpoint."""
@@ -373,7 +439,7 @@ class ProxySmokeTestSuite:
 
     def test_proxy_chat_anthropic(
         self,
-        model: str = "tingly-claude",
+        model: str = "glm-4.7",
         prompt: Optional[str] = None,
     ) -> SmokeTestResult:
         """Test proxy Anthropic messages endpoint."""
@@ -413,12 +479,12 @@ class ProxySmokeTestSuite:
         self._print(f"  anthropic_list_models: {'PASS' if result.passed else 'FAIL'}")
 
         self._print("Testing proxy OpenAI chat endpoint")
-        result = self.test_proxy_chat_openai(model="tingly-claude")
+        result = self.test_proxy_chat_openai(model="glm-4.7")
         suite_result.add_result(result)
         self._print(f"  chat_completions: {'PASS' if result.passed else 'FAIL'}")
 
         self._print("Testing proxy Anthropic messages endpoint")
-        result = self.test_proxy_chat_anthropic(model="tingly-claude")
+        result = self.test_proxy_chat_anthropic(model="glm-4.7")
         suite_result.add_result(result)
         self._print(f"  messages: {'PASS' if result.passed else 'FAIL'}")
 

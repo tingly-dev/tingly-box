@@ -17,6 +17,7 @@ from .client import BaseProviderClient, OpenAIClient, AnthropicClient, GoogleCli
 from .smoke import SmokeTestSuite, ProxySmokeTestSuite
 from .adaptor import AdaptorTestSuite
 from .differential import DifferentialTestSuite, DifferentialResult
+from .backend_validation import BackendValidationTestSuite, BackendValidationResult
 from .runner import TestRunner, main
 
 __all__ = [
@@ -32,6 +33,8 @@ __all__ = [
     "AdaptorTestSuite",
     "DifferentialTestSuite",
     "DifferentialResult",
+    "BackendValidationTestSuite",
+    "BackendValidationResult",
     "TestRunner",
     "main",
 ]
