@@ -1,22 +1,116 @@
 package config
 
 import (
+	"encoding/json"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 
 	"github.com/tingly-dev/tingly-box/pkg/auth"
 	"github.com/tingly-dev/tingly-box/cmd/remote-cc/internal/middleware"
 )
 
+// readJWTSecretFromMainConfig reads the JWT secret from the main service's config database or JSON config
+func readJWTSecretFromMainConfig() string {
+	// Try to find the main service's config database
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+
+	configPaths := []string{
+		filepath.Join(homeDir, ".tingly-box", "db", "tingly.db"),
+		filepath.Join(homeDir, ".tingly-box", "tingly.db"),
+		"./data/tingly.db",
+	}
+
+	for _, configPath := range configPaths {
+		if _, err := os.Stat(configPath); os.IsNotExist(err) {
+			continue
+		}
+
+		// Open database connection
+		db, err := gorm.Open(sqlite.Open(configPath), &gorm.Config{})
+		if err != nil {
+			logrus.Debugf("Failed to open main service config db at %s: %v", configPath, err)
+			continue
+		}
+
+		// Get underlying SQL DB for proper cleanup
+		sqlDB, err := db.DB()
+		if err != nil {
+			logrus.Debugf("Failed to get SQL DB from GORM: %v", err)
+			continue
+		}
+
+		// Query for JWT secret
+		type ConfigRow struct {
+			Key   string
+			Value string
+		}
+		var result ConfigRow
+		if err := db.Table("config").Where("key = ?", "jwt_secret").Select("value").First(&result).Error; err == nil && result.Value != "" {
+			sqlDB.Close()
+			logrus.Infof("Loaded JWT secret from main service config")
+			return result.Value
+		}
+
+		sqlDB.Close()
+	}
+
+	logrus.Warn("Could not find JWT secret in main service config, using default or environment variable")
+	// Fallback to JSON config
+	if secret := readConfigJSONValue("jwt_secret"); secret != "" {
+		logrus.Infof("Loaded JWT secret from main service config.json")
+		return secret
+	}
+	return ""
+}
+
+// readUserTokenFromMainConfig reads the user token from the main service's JSON config
+func readUserTokenFromMainConfig() string {
+	if token := readConfigJSONValue("user_token"); token != "" {
+		logrus.Infof("Loaded user token from main service config.json")
+		return token
+	}
+	return ""
+}
+
+func readConfigJSONValue(key string) string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	configPath := filepath.Join(homeDir, ".tingly-box", "config.json")
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return ""
+	}
+	var cfg map[string]interface{}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return ""
+	}
+	if val, ok := cfg[key]; ok {
+		if s, ok := val.(string); ok {
+			return s
+		}
+	}
+	return ""
+}
+
 // Config holds the configuration for remote-cc service
 type Config struct {
 	Port              int           // HTTP server port
 	JWTSecret         string        // JWT secret for token validation
+	UserToken         string        // User token from main service (legacy auth)
 	SessionTimeout    time.Duration // Session timeout duration
 	RateLimitMax      int           // Max auth attempts before block
 	RateLimitWindow   time.Duration // Time window for rate limiting
@@ -24,7 +118,7 @@ type Config struct {
 	jwtManager        *auth.JWTManager
 }
 
-// Load reads configuration from environment variables
+// Load reads configuration from environment variables and database
 func Load() (*Config, error) {
 	// Port - required
 	portStr := os.Getenv("OPSX_PORT")
@@ -39,14 +133,21 @@ func Load() (*Config, error) {
 		}
 	}
 
-	// JWT Secret - required
+	// JWT Secret - try OPSX_JWT_SECRET first, then read from main service's config
 	jwtSecret := os.Getenv("OPSX_JWT_SECRET")
 	if jwtSecret == "" {
-		return nil, &ConfigError{
-			Field:   "jwt_secret",
-			Message: "must be set (environment variable OPSX_JWT_SECRET)",
+		// Try to read from main service's config database
+		jwtSecret = readJWTSecretFromMainConfig()
+		if jwtSecret == "" {
+			return nil, &ConfigError{
+				Field:   "jwt_secret",
+				Message: "must be set (environment variable OPSX_JWT_SECRET or main service config)",
+			}
 		}
 	}
+
+	// User token - optional, for legacy auth fallback
+	userToken := readUserTokenFromMainConfig()
 
 	// Session timeout - optional, defaults to 30 minutes
 	sessionTimeoutStr := os.Getenv("OPSX_SESSION_TIMEOUT")
@@ -118,6 +219,7 @@ func Load() (*Config, error) {
 	cfg := &Config{
 		Port:             port,
 		JWTSecret:        jwtSecret,
+		UserToken:        userToken,
 		SessionTimeout:   sessionTimeout,
 		RateLimitMax:     rateLimitMax,
 		RateLimitWindow:  rateLimitWindow,
@@ -158,6 +260,18 @@ func AuthMiddleware(cfg *Config) gin.HandlerFunc {
 		// Validate token using JWT manager
 		claims, err := cfg.jwtManager.ValidateAPIKey(authHeader)
 		if err != nil {
+			// Fallback: accept legacy user token from main config.json
+			normalized := authHeader
+			if strings.HasPrefix(normalized, "Bearer ") {
+				normalized = normalized[7:]
+			}
+			if cfg.UserToken != "" && normalized == cfg.UserToken {
+				c.Set("client_id", "user")
+				c.Set("claims", &auth.Claims{ClientID: "user"})
+				c.Next()
+				return
+			}
+
 			logrus.Warnf("Token validation failed: %v", err)
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error": gin.H{

@@ -3,15 +3,14 @@ import {
     Box,
     Card,
     CardContent,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
     Typography,
     TextField,
     Button,
-    List,
-    ListItem,
-    ListItemText,
-    ListItemIcon,
     Chip,
-    Divider,
     CircularProgress,
     IconButton,
     Paper,
@@ -20,21 +19,13 @@ import {
     MenuItem,
     FormControl,
     InputLabel,
-    Tab,
-    Tabs,
 } from '@mui/material';
 import {
     Send as SendIcon,
-    Chat as ChatIcon,
-    History as HistoryIcon,
-    CheckCircle as SuccessIcon,
-    Error as ErrorIcon,
-    Schedule as PendingIcon,
-    Cancel as ClosedIcon,
     Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { alpha } from '@mui/material/styles';
-import { useTranslation } from 'react-i18next';
+import { Link as RouterLink } from 'react-router-dom';
 import api from '@/services/api';
 
 interface Session {
@@ -55,45 +46,71 @@ interface ChatMessage {
     timestamp: string;
 }
 
-interface Stats {
-    total: number;
-    active: number;
-    completed: number;
-    failed: number;
-    closed: number;
-    uptime: string;
-}
-
-const statusColors: Record<string, string> = {
-    running: '#0891b2',
-    completed: '#10b981',
-    failed: '#ef4444',
-    pending: '#f59e0b',
-    closed: '#6b7280',
-    expired: '#9ca3af',
-};
-
-const statusIcons: Record<string, React.ReactNode> = {
-    running: <PendingIcon fontSize="small" />,
-    completed: <SuccessIcon fontSize="small" />,
-    failed: <ErrorIcon fontSize="small" />,
-    pending: <PendingIcon fontSize="small" />,
-    closed: <ClosedIcon fontSize="small" />,
-};
-
 const RemoteCCPage: React.FC = () => {
-    const { t } = useTranslation();
-    const [activeTab, setActiveTab] = useState(0);
     const [sessions, setSessions] = useState<Session[]>([]);
     const [selectedSession, setSelectedSession] = useState<Session | null>(null);
-    const [stats, setStats] = useState<Stats | null>(null);
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
     const [message, setMessage] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
-    const [statusFilter, setStatusFilter] = useState<string>('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const [projectPath, setProjectPath] = useState('');
+    const [projectPathDialogOpen, setProjectPathDialogOpen] = useState(true);
+    const [expandedBySession, setExpandedBySession] = useState<Record<string, Set<number>>>({});
+    const [projectPathBySession, setProjectPathBySession] = useState<Record<string, string>>({});
+    const [projectPathNewSession, setProjectPathNewSession] = useState<string>('');
+    const [lastSelectedSessionId, setLastSelectedSessionId] = useState<string>('');
+
+    const sessionKey = selectedSession?.id || 'new';
+    const expandedMessages = expandedBySession[sessionKey] || new Set<number>();
+
+    useEffect(() => {
+        const storedNewPath = localStorage.getItem('remotecc.projectPath.new') || '';
+        const storedPathsRaw = localStorage.getItem('remotecc.projectPaths') || '';
+        let storedPaths: Record<string, string> = {};
+        if (storedPathsRaw) {
+            try {
+                storedPaths = JSON.parse(storedPathsRaw);
+            } catch {
+                storedPaths = {};
+            }
+        }
+        const storedLastSessionId = localStorage.getItem('remotecc.lastSessionId') || '';
+        if (storedNewPath) {
+            setProjectPathNewSession(storedNewPath);
+        }
+        if (Object.keys(storedPaths).length > 0) {
+            setProjectPathBySession(storedPaths);
+        }
+        if (storedLastSessionId) {
+            setLastSelectedSessionId(storedLastSessionId);
+        }
+    }, []);
+
+    useEffect(() => {
+        localStorage.setItem('remotecc.projectPath.new', projectPathNewSession);
+    }, [projectPathNewSession]);
+
+    useEffect(() => {
+        localStorage.setItem('remotecc.projectPaths', JSON.stringify(projectPathBySession));
+    }, [projectPathBySession]);
+
+    useEffect(() => {
+        localStorage.setItem('remotecc.lastSessionId', lastSelectedSessionId);
+    }, [lastSelectedSessionId]);
+
+    useEffect(() => {
+        if (selectedSession?.id) {
+            const stored = projectPathBySession[selectedSession.id] || '';
+            setProjectPath(stored);
+            setProjectPathDialogOpen(!stored.trim());
+        } else {
+            const stored = projectPathNewSession || '';
+            setProjectPath(stored);
+            setProjectPathDialogOpen(!stored.trim());
+        }
+    }, [selectedSession?.id, projectPathBySession, projectPathNewSession]);
 
     const fetchSessions = async () => {
         try {
@@ -101,21 +118,15 @@ const RemoteCCPage: React.FC = () => {
             const data = await api.getRemoteCCSessions({
                 page: 1,
                 limit: 100,
-                status: statusFilter || undefined,
             });
+
+            if (data?.success === false) {
+                setError(data.error || 'Failed to load sessions');
+                return;
+            }
 
             if (data.sessions) {
                 setSessions(data.sessions);
-            }
-            if (data.stats) {
-                setStats({
-                    total: data.stats.total || 0,
-                    active: data.stats.active || 0,
-                    completed: data.stats.completed || 0,
-                    failed: data.stats.failed || 0,
-                    closed: data.stats.closed || 0,
-                    uptime: typeof data.stats.uptime === 'string' ? data.stats.uptime : '0s',
-                });
             }
         } catch (err) {
             setError('Failed to load sessions');
@@ -127,7 +138,17 @@ const RemoteCCPage: React.FC = () => {
 
     useEffect(() => {
         fetchSessions();
-    }, [statusFilter]);
+    }, []);
+
+    useEffect(() => {
+        if (!sessions.length || selectedSession) return;
+        const saved = lastSelectedSessionId
+            ? sessions.find((s) => s.id === lastSelectedSessionId)
+            : undefined;
+        if (saved) {
+            handleSessionSelect(saved);
+        }
+    }, [sessions, selectedSession, lastSelectedSessionId]);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -139,6 +160,10 @@ const RemoteCCPage: React.FC = () => {
 
     const handleSendMessage = async () => {
         if (!message.trim() || sending) return;
+        if (!projectPath.trim()) {
+            setProjectPathDialogOpen(true);
+            return;
+        }
 
         const userMessage = message.trim();
         setMessage('');
@@ -159,6 +184,7 @@ const RemoteCCPage: React.FC = () => {
             const data = await api.sendRemoteCCChat({
                 session_id: selectedSession?.id || undefined,
                 message: userMessage,
+                context: { project_path: projectPath.trim() },
             });
 
             if (data.error) {
@@ -181,6 +207,10 @@ const RemoteCCPage: React.FC = () => {
                 const sessionData = await api.getRemoteCCSession(data.session_id);
                 if (sessionData.id) {
                     setSelectedSession(sessionData);
+                    setProjectPathBySession((prev) => ({
+                        ...prev,
+                        [sessionData.id]: projectPath.trim(),
+                    }));
                 }
             }
 
@@ -197,6 +227,9 @@ const RemoteCCPage: React.FC = () => {
     const handleSessionSelect = async (session: Session) => {
         setSelectedSession(session);
         setChatHistory([]);
+        setProjectPath(projectPathBySession[session.id] || '');
+        setLastSelectedSessionId(session.id);
+        setProjectPathDialogOpen(!(projectPathBySession[session.id] || '').trim());
 
         // Load chat history from session
         if (session.request || session.response) {
@@ -219,20 +252,14 @@ const RemoteCCPage: React.FC = () => {
     const handleNewChat = () => {
         setSelectedSession(null);
         setChatHistory([]);
-        setActiveTab(1); // Switch to chat tab
-    };
-
-    const formatDuration = (str: string): string => {
-        const match = str.match(/(?:(\d+)h)?(\d+)m(\d+)s/);
-        if (match) {
-            const [, hours, minutes, seconds] = match;
-            const parts: string[] = [];
-            if (hours) parts.push(`${hours}h`);
-            if (minutes) parts.push(`${minutes}m`);
-            parts.push(`${seconds}s`);
-            return parts.join(' ');
+        setLastSelectedSessionId('');
+        if (projectPathNewSession.trim()) {
+            setProjectPath(projectPathNewSession.trim());
+            setProjectPathDialogOpen(false);
+        } else {
+            setProjectPath('');
+            setProjectPathDialogOpen(true);
         }
-        return str;
     };
 
     return (
@@ -240,11 +267,18 @@ const RemoteCCPage: React.FC = () => {
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
                 <Box>
                     <Typography variant="h4" fontWeight={700} gutterBottom>
-                        Remote Claude Code
+                        Remote Claude Code Chat
                     </Typography>
                     <Typography variant="body1" color="text.secondary">
                         Chat with Claude Code sessions remotely
                     </Typography>
+                    <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                        <Chip
+                            label={selectedSession?.id ? `Session: ${selectedSession.id}` : 'Session: New'}
+                            size="small"
+                            sx={{ fontFamily: 'monospace' }}
+                        />
+                    </Box>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 1 }}>
                     <Button
@@ -257,10 +291,16 @@ const RemoteCCPage: React.FC = () => {
                     </Button>
                     <Button
                         variant="contained"
-                        startIcon={<ChatIcon />}
                         onClick={handleNewChat}
                     >
                         New Chat
+                    </Button>
+                    <Button
+                        component={RouterLink}
+                        to="/remote-cc/sessions"
+                        variant="outlined"
+                    >
+                        Manage Sessions
                     </Button>
                 </Box>
             </Box>
@@ -271,324 +311,217 @@ const RemoteCCPage: React.FC = () => {
                 </Alert>
             )}
 
-            {/* Stats Cards */}
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 3 }}>
-                <Box sx={{ width: { xs: 'calc(50% - 8px)', sm: 'calc(20% - 12px)' } }}>
-                    <Card>
-                        <CardContent sx={{ p: 2 }}>
-                            <Typography variant="body2" color="text.secondary">Total</Typography>
-                            <Typography variant="h5" fontWeight={700}>{stats?.total || 0}</Typography>
-                        </CardContent>
-                    </Card>
-                </Box>
-                <Box sx={{ width: { xs: 'calc(50% - 8px)', sm: 'calc(20% - 12px)' } }}>
-                    <Card>
-                        <CardContent sx={{ p: 2 }}>
-                            <Typography variant="body2" color="text.secondary">Active</Typography>
-                            <Typography variant="h5" fontWeight={700} sx={{ color: '#0891b2' }}>{stats?.active || 0}</Typography>
-                        </CardContent>
-                    </Card>
-                </Box>
-                <Box sx={{ width: { xs: 'calc(50% - 8px)', sm: 'calc(20% - 12px)' } }}>
-                    <Card>
-                        <CardContent sx={{ p: 2 }}>
-                            <Typography variant="body2" color="text.secondary">Completed</Typography>
-                            <Typography variant="h5" fontWeight={700} sx={{ color: '#10b981' }}>{stats?.completed || 0}</Typography>
-                        </CardContent>
-                    </Card>
-                </Box>
-                <Box sx={{ width: { xs: 'calc(50% - 8px)', sm: 'calc(20% - 12px)' } }}>
-                    <Card>
-                        <CardContent sx={{ p: 2 }}>
-                            <Typography variant="body2" color="text.secondary">Failed</Typography>
-                            <Typography variant="h5" fontWeight={700} sx={{ color: '#ef4444' }}>{stats?.failed || 0}</Typography>
-                        </CardContent>
-                    </Card>
-                </Box>
-                <Box sx={{ width: { xs: 'calc(100% - 16px)', sm: 'calc(20% - 12px)' } }}>
-                    <Card>
-                        <CardContent sx={{ p: 2 }}>
-                            <Typography variant="body2" color="text.secondary">Uptime</Typography>
-                            <Typography variant="h5" fontWeight={700}>{formatDuration(stats?.uptime || '0s')}</Typography>
-                        </CardContent>
-                    </Card>
-                </Box>
-            </Box>
+            <Dialog open={projectPathDialogOpen} onClose={() => {}}>
+                <DialogTitle>Set Project Path</DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        Enter the project path to provide Claude Code context for this chat.
+                    </Typography>
+                    <TextField
+                        autoFocus
+                        fullWidth
+                        label="Project Path"
+                        placeholder="/path/to/project"
+                        value={projectPath}
+                        onChange={(e) => setProjectPath(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                if (projectPath.trim()) {
+                                    if (!selectedSession) {
+                                        setProjectPathNewSession(projectPath.trim());
+                                    } else if (selectedSession?.id) {
+                                        setProjectPathBySession((prev) => ({
+                                            ...prev,
+                                            [selectedSession.id]: projectPath.trim(),
+                                        }));
+                                    }
+                                    setProjectPathDialogOpen(false);
+                                }
+                            }
+                        }}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button
+                        variant="contained"
+                        onClick={() => {
+                            if (!selectedSession) {
+                                setProjectPathNewSession(projectPath.trim());
+                            } else if (selectedSession?.id) {
+                                setProjectPathBySession((prev) => ({
+                                    ...prev,
+                                    [selectedSession.id]: projectPath.trim(),
+                                }));
+                            }
+                            setProjectPathDialogOpen(false);
+                        }}
+                        disabled={!projectPath.trim()}
+                    >
+                        Continue
+                    </Button>
+                </DialogActions>
+            </Dialog>
 
-            {/* Tabs */}
-            <Paper sx={{ mb: 3 }}>
-                <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)}>
-                    <Tab label="Sessions" />
-                    <Tab label="Chat" disabled={!selectedSession && chatHistory.length === 0} />
-                </Tabs>
-            </Paper>
+            <Card sx={{ mb: 3 }}>
+                <CardContent sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
+                    <TextField
+                        label="Project Path"
+                        value={projectPath}
+                        onChange={(e) => {
+                            const next = e.target.value;
+                            setProjectPath(next);
+                            if (selectedSession?.id) {
+                                setProjectPathBySession((prev) => ({
+                                    ...prev,
+                                    [selectedSession.id]: next,
+                                }));
+                            } else {
+                                setProjectPathNewSession(next);
+                            }
+                        }}
+                        size="small"
+                        sx={{ minWidth: 260 }}
+                    />
+                    <FormControl size="small" sx={{ minWidth: 240 }}>
+                        <InputLabel>Session</InputLabel>
+                        <Select
+                            value={selectedSession?.id || ''}
+                            label="Session"
+                            onChange={(e) => {
+                                const session = sessions.find((s) => s.id === e.target.value);
+                                if (session) {
+                                    handleSessionSelect(session);
+                                } else {
+                                    handleNewChat();
+                                }
+                            }}
+                        >
+                            <MenuItem value="">
+                                New Session
+                            </MenuItem>
+                            {sessions.map((session) => (
+                                <MenuItem key={session.id} value={session.id}>
+                                    {session.request || 'New Session'}
+                                </MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                    {loading && (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <CircularProgress size={16} />
+                            <Typography variant="body2" color="text.secondary">
+                                Loading sessions...
+                            </Typography>
+                        </Box>
+                    )}
+                </CardContent>
+            </Card>
 
-            {/* Sessions Tab */}
-            {activeTab === 0 && (
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-                    {/* Session List */}
-                    <Box sx={{ width: { xs: '100%', md: '40%' } }}>
-                        <Card>
-                            <CardContent sx={{ p: 2 }}>
-                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                                    <Typography variant="h6" fontWeight={600}>
-                                        Sessions
-                                    </Typography>
-                                    <FormControl size="small" sx={{ minWidth: 120 }}>
-                                        <InputLabel>Status</InputLabel>
-                                        <Select
-                                            value={statusFilter}
-                                            label="Status"
-                                            onChange={(e) => setStatusFilter(e.target.value)}
-                                        >
-                                            <MenuItem value="">All</MenuItem>
-                                            <MenuItem value="running">Running</MenuItem>
-                                            <MenuItem value="completed">Completed</MenuItem>
-                                            <MenuItem value="failed">Failed</MenuItem>
-                                            <MenuItem value="closed">Closed</MenuItem>
-                                        </Select>
-                                    </FormControl>
-                                </Box>
-
-                                {loading ? (
-                                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-                                        <CircularProgress />
-                                    </Box>
-                                ) : (
-                                    <List dense>
-                                        {sessions.map((session) => (
-                                            <ListItem
-                                                key={session.id}
-                                                button
-                                                selected={selectedSession?.id === session.id}
-                                                onClick={() => handleSessionSelect(session)}
-                                                sx={{
-                                                    borderRadius: 1,
-                                                    mb: 0.5,
-                                                    bgcolor: selectedSession?.id === session.id
-                                                        ? alpha('#2563eb', 0.1)
-                                                        : 'transparent',
-                                                }}
-                                            >
-                                                <ListItemIcon sx={{ minWidth: 32 }}>
-                                                    <Box sx={{ color: statusColors[session.status] || '#6b7280' }}>
-                                                        {statusIcons[session.status] || <HistoryIcon />}
-                                                    </Box>
-                                                </ListItemIcon>
-                                                <ListItemText
-                                                    primary={
-                                                        <Typography variant="body2" noWrap>
-                                                            {session.request || 'New Session'}
-                                                        </Typography>
-                                                    }
-                                                    secondary={
-                                                        <Typography variant="caption" color="text.secondary">
-                                                            {new Date(session.created_at).toLocaleString()}
-                                                        </Typography>
-                                                    }
-                                                />
-                                                <Chip
-                                                    label={session.status}
-                                                    size="small"
-                                                    sx={{
-                                                        bgcolor: alpha(statusColors[session.status] || '#6b7280', 0.1),
-                                                        color: statusColors[session.status] || '#6b7280',
-                                                        fontSize: '0.7rem',
-                                                    }}
-                                                />
-                                            </ListItem>
-                                        ))}
-                                        {sessions.length === 0 && (
-                                            <Typography variant="body2" color="text.secondary" sx={{ p: 2, textAlign: 'center' }}>
-                                                No sessions found
-                                            </Typography>
-                                        )}
-                                    </List>
-                                )}
-                            </CardContent>
-                        </Card>
-                    </Box>
-
-                    {/* Session Details */}
-                    <Box sx={{ width: { xs: '100%', md: '60%' } }}>
-                        <Card sx={{ height: 'calc(100vh - 420px)', minHeight: 400 }}>
-                            <CardContent sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
-                                {selectedSession ? (
-                                    <>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                                            <Typography variant="h6" fontWeight={600}>
-                                                Session Details
-                                            </Typography>
-                                            <Chip
-                                                label={selectedSession.status}
-                                                sx={{
-                                                    bgcolor: alpha(statusColors[selectedSession.status] || '#6b7280', 0.1),
-                                                    color: statusColors[selectedSession.status] || '#6b7280',
-                                                }}
-                                            />
-                                        </Box>
-
-                                        <Divider sx={{ mb: 2 }} />
-
-                                        <Box sx={{ flex: 1, overflow: 'auto' }}>
-                                            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                                                Request
-                                            </Typography>
-                                            <Paper
-                                                variant="outlined"
-                                                sx={{ p: 2, mb: 2, bgcolor: 'grey.50', fontFamily: 'monospace', fontSize: 13 }}
-                                            >
-                                                {selectedSession.request || '-'}
-                                            </Paper>
-
-                                            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                                                Response (Summary)
-                                            </Typography>
-                                            <Paper
-                                                variant="outlined"
-                                                sx={{ p: 2, bgcolor: alpha('#10b981', 0.05), fontFamily: 'monospace', fontSize: 13 }}
-                                            >
-                                                {selectedSession.response ? (
-                                                    <>
-                                                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                                                            {selectedSession.response.substring(0, 1000)}
-                                                            {selectedSession.response.length > 1000 && '...'}
-                                                        </Typography>
-                                                        {selectedSession.response.length > 1000 && (
-                                                            <Typography variant="caption" color="text.secondary">
-                                                                (Response truncated. View full response in chat.)
-                                                            </Typography>
-                                                        )}
-                                                    </>
-                                                ) : (
-                                                    '-'
-                                                )}
-                                            </Paper>
-
-                                            {selectedSession.error && (
-                                                <>
-                                                    <Typography variant="subtitle2" color="error" gutterBottom sx={{ mt: 2 }}>
-                                                        Error
-                                                    </Typography>
-                                                    <Paper
-                                                        variant="outlined"
-                                                        sx={{ p: 2, bgcolor: alpha('#ef4444', 0.05), fontFamily: 'monospace', fontSize: 13 }}
-                                                    >
-                                                        <Typography variant="body2" color="error">
-                                                            {selectedSession.error}
-                                                        </Typography>
-                                                    </Paper>
-                                                </>
-                                            )}
-                                        </Box>
-                                    </>
-                                ) : (
-                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                                        <Typography variant="body2" color="text.secondary">
-                                            Select a session to view details or start a new chat
-                                        </Typography>
-                                    </Box>
-                                )}
-                            </CardContent>
-                        </Card>
-                    </Box>
-                </Box>
-            )}
-
-            {/* Chat Tab */}
-            {activeTab === 1 && (
-                <Card sx={{ height: 'calc(100vh - 400px)', minHeight: 400, display: 'flex', flexDirection: 'column' }}>
-                    <CardContent sx={{ p: 2, flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                        {/* Chat Messages */}
-                        <Box sx={{ flex: 1, overflow: 'auto', mb: 2 }}>
-                            {chatHistory.map((msg, index) => (
-                                <Box
-                                    key={index}
+            <Card sx={{ height: 'calc(100vh - 320px)', minHeight: 400, display: 'flex', flexDirection: 'column' }}>
+                <CardContent sx={{ p: 2, flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                    {/* Chat Messages */}
+                    <Box sx={{ flex: 1, overflow: 'auto', mb: 2 }}>
+                        {chatHistory.map((msg, index) => (
+                            <Box
+                                key={index}
+                                sx={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                                    mb: 2,
+                                }}
+                            >
+                                <Chip
+                                    label={msg.role === 'user' ? 'You' : 'Claude Code'}
+                                    size="small"
                                     sx={{
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                                        mb: 2,
+                                        mb: 0.5,
+                                        bgcolor: msg.role === 'user' ? 'primary.main' : alpha('#10b981', 0.1),
+                                        color: msg.role === 'user' ? 'white' : '#10b981',
+                                    }}
+                                />
+                                <Paper
+                                    variant="outlined"
+                                    sx={{
+                                        p: 2,
+                                        maxWidth: '80%',
+                                        bgcolor: msg.role === 'user' ? 'grey.50' : alpha('#10b981', 0.05),
                                     }}
                                 >
-                                    <Chip
-                                        label={msg.role === 'user' ? 'You' : 'Claude Code'}
-                                        size="small"
-                                        sx={{
-                                            mb: 0.5,
-                                            bgcolor: msg.role === 'user' ? 'primary.main' : alpha('#10b981', 0.1),
-                                            color: msg.role === 'user' ? 'white' : '#10b981',
-                                        }}
-                                    />
-                                    <Paper
-                                        variant="outlined"
-                                        sx={{
-                                            p: 2,
-                                            maxWidth: '80%',
-                                            bgcolor: msg.role === 'user' ? 'grey.50' : alpha('#10b981', 0.05),
-                                        }}
-                                    >
-                                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: 13 }}>
-                                            {msg.role === 'assistant' && msg.summary
-                                                ? msg.summary
-                                                : msg.content}
+                                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: 13 }}>
+                                        {msg.role === 'assistant' && msg.summary
+                                            ? (expandedMessages.has(index) ? msg.content : msg.summary)
+                                            : msg.content}
+                                    </Typography>
+                                    {msg.role === 'assistant' && msg.content && msg.content !== msg.summary && (
+                                        <Typography
+                                            variant="caption"
+                                            color="text.secondary"
+                                            sx={{ display: 'block', mt: 1, cursor: 'pointer', textDecoration: 'underline' }}
+                                            onClick={() => {
+                                                setExpandedBySession((prev) => {
+                                                    const current = prev[sessionKey] || new Set<number>();
+                                                    const next = new Set(current);
+                                                    if (next.has(index)) {
+                                                        next.delete(index);
+                                                    } else {
+                                                        next.add(index);
+                                                    }
+                                                    return { ...prev, [sessionKey]: next };
+                                                });
+                                            }}
+                                        >
+                                            {expandedMessages.has(index)
+                                                ? 'Collapse response'
+                                                : `Show full response (${msg.content.length} chars)`}
                                         </Typography>
-                                        {msg.role === 'assistant' && msg.content && msg.content !== msg.summary && (
-                                            <Typography
-                                                variant="caption"
-                                                color="text.secondary"
-                                                sx={{ display: 'block', mt: 1, cursor: 'pointer', textDecoration: 'underline' }}
-                                                onClick={() => alert(msg.content)}
-                                            >
-                                                Show full response ({msg.content.length} chars)
-                                            </Typography>
-                                        )}
-                                    </Paper>
-                                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
-                                        {new Date(msg.timestamp).toLocaleTimeString()}
-                                    </Typography>
-                                </Box>
-                            ))}
-                            {sending && (
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <CircularProgress size={16} />
-                                    <Typography variant="body2" color="text.secondary">
-                                        Claude Code is thinking...
-                                    </Typography>
-                                </Box>
-                            )}
-                            <div ref={messagesEndRef} />
-                        </Box>
+                                    )}
+                                </Paper>
+                                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                                    {new Date(msg.timestamp).toLocaleTimeString()}
+                                </Typography>
+                            </Box>
+                        ))}
+                        {sending && (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <CircularProgress size={16} />
+                                <Typography variant="body2" color="text.secondary">
+                                    Claude Code is thinking...
+                                </Typography>
+                            </Box>
+                        )}
+                        <div ref={messagesEndRef} />
+                    </Box>
 
-                        {/* Message Input */}
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                            <TextField
-                                fullWidth
-                                multiline
-                                maxRows={4}
-                                placeholder="Send a message to Claude Code..."
-                                value={message}
-                                onChange={(e) => setMessage(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && !e.shiftKey) {
-                                        e.preventDefault();
-                                        handleSendMessage();
-                                    }
-                                }}
-                                size="small"
-                            />
-                            <IconButton
-                                color="primary"
-                                onClick={handleSendMessage}
-                                disabled={!message.trim() || sending}
-                                sx={{ alignSelf: 'flex-end' }}
-                            >
-                                {sending ? <CircularProgress size={24} /> : <SendIcon />}
-                            </IconButton>
-                        </Box>
-                    </CardContent>
-                </Card>
-            )}
+                    {/* Message Input */}
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                        <TextField
+                            fullWidth
+                            multiline
+                            maxRows={4}
+                            placeholder="Send a message to Claude Code..."
+                            value={message}
+                            onChange={(e) => setMessage(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    handleSendMessage();
+                                }
+                            }}
+                            size="small"
+                        />
+                        <IconButton
+                            color="primary"
+                            onClick={handleSendMessage}
+                            disabled={!message.trim() || sending}
+                            sx={{ alignSelf: 'flex-end' }}
+                        >
+                            {sending ? <CircularProgress size={24} /> : <SendIcon />}
+                        </IconButton>
+                    </Box>
+                </CardContent>
+            </Card>
         </Box>
     );
 };

@@ -291,10 +291,25 @@ tasks:
     summary: Run remote-cc-service with default configuration
     env:
       OPSX_PORT: "18080"
-      OPSX_JWT_SECRET: "test-secret-key"
       OPSX_SESSION_TIMEOUT: "30m"
     cmds:
-      - cd cmd/remote-cc && OPSX_PORT={{.OPSX_PORT | default "18080"}} OPSX_JWT_SECRET={{.OPSX_JWT_SECRET | default "test-secret-key"}} OPSX_SESSION_TIMEOUT={{.OPSX_SESSION_TIMEOUT | default "30m"}} go run .
+      - |
+        export OPSX_JWT_SECRET="$(python3 - <<'PY'
+        import json, os, sys
+        path = os.path.expanduser("~/.tingly-box/config.json")
+        if not os.path.exists(path):
+            print(f"missing config: {path}", file=sys.stderr)
+            sys.exit(1)
+        with open(path, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+        secret = cfg.get("jwt_secret", "")
+        if not secret:
+            print("jwt_secret missing in config.json", file=sys.stderr)
+            sys.exit(1)
+        print(secret)
+        PY
+        )"
+        cd cmd/remote-cc && OPSX_PORT={{.OPSX_PORT | default "18080"}} OPSX_SESSION_TIMEOUT={{.OPSX_SESSION_TIMEOUT | default "30m"}} go run .
 
   remote-cc:test:
     summary: Run tests for remote-cc-service
@@ -327,7 +342,5 @@ tasks:
 
   remote-cc-token:run:
     summary: Generate an API token (run via SSH)
-    env:
-      OPSX_JWT_SECRET: "test-secret-key"
     cmds:
-      - cd cmd/remote-cc && OPSX_JWT_SECRET={{.OPSX_JWT_SECRET | default "test-secret-key"}} go run ./cmd/opsx-token
+      - cd cmd/remote-cc && go run ./cmd/opsx-token

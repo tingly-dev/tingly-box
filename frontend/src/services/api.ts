@@ -53,6 +53,25 @@ const getUserAuthToken = (): string | null => {
     return localStorage.getItem('user_auth_token');
 };
 
+// Get user auth token for remote-cc calls (also consult GUI binding)
+const getRemoteCCAuthToken = async (): Promise<string | null> => {
+    let token = getUserAuthToken();
+    if (!token && import.meta.env.VITE_PKG_MODE === "gui") {
+        const svc = TinglyService;
+        if (svc) {
+            try {
+                const guiToken = await svc.GetUserAuthToken();
+                if (guiToken) {
+                    token = guiToken;
+                }
+            } catch (err) {
+                console.error('Failed to get GUI token for remote-cc:', err);
+            }
+        }
+    }
+    return token;
+};
+
 // Handle 401 Unauthorized response - centralize auth failure handling
 const handleAuthFailure = () => {
     localStorage.removeItem('user_auth_token');
@@ -937,7 +956,7 @@ export const api = {
     // Get remote-cc sessions
     getRemoteCCSessions: async (params: { page?: number; limit?: number; status?: string } = {}): Promise<any> => {
         try {
-            const token = getUserAuthToken();
+            const token = await getRemoteCCAuthToken();
             const queryParams = new URLSearchParams();
             if (params.page) queryParams.set('page', params.page.toString());
             if (params.limit) queryParams.set('limit', params.limit.toString());
@@ -954,8 +973,7 @@ export const api = {
             });
 
             if (response.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                // Remote-cc auth failures should not force UI logout.
                 return { success: false, error: 'Authentication required' };
             }
 
@@ -968,7 +986,7 @@ export const api = {
     // Get a specific remote-cc session
     getRemoteCCSession: async (sessionId: string): Promise<any> => {
         try {
-            const token = getUserAuthToken();
+            const token = await getRemoteCCAuthToken();
             const baseUrl = api.getRemoteCCBaseUrl();
             const response = await fetch(`${baseUrl}/remote-cc/sessions/${sessionId}`, {
                 method: 'GET',
@@ -979,8 +997,7 @@ export const api = {
             });
 
             if (response.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                // Remote-cc auth failures should not force UI logout.
                 return { success: false, error: 'Authentication required' };
             }
 
@@ -997,7 +1014,7 @@ export const api = {
     // Send chat message to Claude Code
     sendRemoteCCChat: async (data: { session_id?: string; message: string; context?: Record<string, any> }): Promise<any> => {
         try {
-            const token = getUserAuthToken();
+            const token = await getRemoteCCAuthToken();
             const baseUrl = api.getRemoteCCBaseUrl();
             const response = await fetch(`${baseUrl}/remote-cc/chat`, {
                 method: 'POST',
@@ -1009,8 +1026,7 @@ export const api = {
             });
 
             if (response.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+                // Remote-cc auth failures should not force UI logout.
                 return { success: false, error: 'Authentication required' };
             }
 

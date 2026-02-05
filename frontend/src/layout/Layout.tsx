@@ -70,6 +70,7 @@ const Layout = ({ children }: LayoutProps) => {
     const [homeMenuOpen, setHomeMenuOpen] = useState(true);
     const [promptMenuOpen, setPromptMenuOpen] = useState(true);
     const [systemMenuOpen, setSystemMenuOpen] = useState(false);
+    const [remoteCCMenuOpen, setRemoteCCMenuOpen] = useState(true);
     const [easterEggAnchorEl, setEasterEggAnchorEl] = useState<HTMLElement | null>(null);
 
     const handleDrawerToggle = () => {
@@ -184,11 +185,16 @@ const Layout = ({ children }: LayoutProps) => {
             key: 'remote-cc' as const,
             label: 'Remote CC',
             icon: <RemoteIcon sx={{ fontSize: 20 }} />,
-            standalone: true,
+            path: '/remote-cc/chat',
             items: [
                 {
-                    path: '/remote-cc',
-                    label: 'Remote Claude Code',
+                    path: '/remote-cc/chat',
+                    label: 'Chat',
+                    icon: <RemoteIcon sx={{ fontSize: 20 }} />,
+                },
+                {
+                    path: '/remote-cc/sessions',
+                    label: 'Sessions',
                     icon: <RemoteIcon sx={{ fontSize: 20 }} />,
                 },
             ],
@@ -271,6 +277,7 @@ const Layout = ({ children }: LayoutProps) => {
                     const isCredentialGroup = group.key === 'credential';
                     const isPromptGroup = group.key === 'prompt';
                     const isSystemGroup = group.key === 'system';
+                    const isRemoteCCGroup = group.key === 'remote-cc';
                     const isStandalone = group.standalone;
 
                     // For standalone groups (like Dashboard), no collapse state
@@ -287,6 +294,9 @@ const Layout = ({ children }: LayoutProps) => {
                         } else if (isSystemGroup) {
                             isOpen = systemMenuOpen;
                             setIsOpen = setSystemMenuOpen;
+                        } else if (isRemoteCCGroup) {
+                            isOpen = remoteCCMenuOpen;
+                            setIsOpen = setRemoteCCMenuOpen;
                         }
                     }
 

@@ -1006,6 +1006,11 @@ func (c *Config) GetScenarioFlag(scenario typ.RuleScenario, flagName string) boo
 			return val
 		}
 		return false
+	case "skill_remote_cc":
+		if val, ok := config.Extensions["skill_remote_cc"].(bool); ok {
+			return val
+		}
+		return false
 	default:
 		return false
 	}
@@ -1060,6 +1065,12 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 			config.Extensions = make(map[string]interface{})
 		}
 		config.Extensions["skill_ide"] = value
+	case "skill_remote_cc":
+		// Store in Extensions
+		if config.Extensions == nil {
+			config.Extensions = make(map[string]interface{})
+		}
+		config.Extensions["skill_remote_cc"] = value
 	default:
 		return fmt.Errorf("unknown flag name: %s", flagName)
 	}
