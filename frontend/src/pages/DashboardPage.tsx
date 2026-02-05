@@ -34,11 +34,12 @@ interface Provider {
     name: string;
 }
 
-type TimeRange = 'today' | 'yesterday' | '7d' | '30d' | '90d';
+type TimeRange = 'today' | 'yesterday' | '3d' | '7d' | '30d' | '90d';
 
 const TIME_RANGE_CONFIG: Record<TimeRange, { label: string; days: number; interval: string }> = {
     today: { label: 'Today', days: 1, interval: 'hour' },
     yesterday: { label: 'Yesterday', days: 1, interval: 'hour' },
+    '3d': { label: '3 Days', days: 3, interval: 'day' },
     '7d': { label: '7 Days', days: 7, interval: 'day' },
     '30d': { label: '30 Days', days: 30, interval: 'day' },
     '90d': { label: '90 Days', days: 90, interval: 'day' },
