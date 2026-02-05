@@ -6,7 +6,7 @@
 <h1 align="center">Tingly Box</h1>
 
 <p align="center">
-  <strong>Your local AI Intelligence Layer — not just a proxy, but an autonomous orchestrator.</strong>
+  <strong>Your Local AI Intelligence Layer <br/> Not just a proxy, but an autonomous orchestrator</strong>
 </p>
 
 <p align="center">
