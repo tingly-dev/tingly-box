@@ -199,7 +199,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 			streamResp, cancel, err := s.forwardAnthropicStreamRequestV1(c.Request.Context(), provider, anthropicReq, scenario)
 			if err != nil {
 				// Track error with no usage
-				s.trackUsageFromContext(c, 0, 0, "error", "stream_creation_failed")
+				s.trackUsageFromContext(c, 0, 0, err)
 				c.JSON(http.StatusInternalServerError, ErrorResponse{
 					Error: ErrorDetail{
 						Message: "Failed to create streaming request: " + err.Error(),
@@ -214,7 +214,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 			if err != nil {
 				// Track usage with error status
 				if inputTokens > 0 || outputTokens > 0 {
-					s.trackUsageFromContext(c, inputTokens, outputTokens, "error", "stream_handler_failed")
+					s.trackUsageFromContext(c, inputTokens, outputTokens, err)
 				}
 				c.JSON(http.StatusInternalServerError, ErrorResponse{
 					Error: ErrorDetail{
@@ -227,14 +227,14 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 
 			// Track successful streaming completion
 			if inputTokens > 0 || outputTokens > 0 {
-				s.trackUsageFromContext(c, inputTokens, outputTokens, "success", "")
+				s.trackUsageFromContext(c, inputTokens, outputTokens, nil)
 			}
 			return
 		} else {
 			anthropicResp, err := s.forwardAnthropicRequestV1(provider, anthropicReq, scenario)
 			if err != nil {
 				// Track error with no usage
-				s.trackUsageFromContext(c, 0, 0, "error", "forward_failed")
+				s.trackUsageFromContext(c, 0, 0, err)
 				c.JSON(http.StatusInternalServerError, ErrorResponse{
 					Error: ErrorDetail{
 						Message: "Failed to forward Anthropic request: " + err.Error(),
@@ -247,7 +247,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 			// Track usage from response
 			inputTokens := int(anthropicResp.Usage.InputTokens)
 			outputTokens := int(anthropicResp.Usage.OutputTokens)
-			s.trackUsageFromContext(c, inputTokens, outputTokens, "success", "")
+			s.trackUsageFromContext(c, inputTokens, outputTokens, nil)
 
 			// Use provider-aware conversion for provider-specific handling
 			openaiResp := nonstream.ConvertAnthropicToOpenAIResponseWithProvider(anthropicResp, responseModel, provider, actualModel)

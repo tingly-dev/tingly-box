@@ -1,6 +1,9 @@
 package server
 
 import (
+	"context"
+	"errors"
+
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/obs/otel"
@@ -29,9 +32,8 @@ func (s *Server) trackUsage(c *gin.Context, rule *typ.Rule, provider *typ.Provid
 //   - c: Gin context containing all tracking metadata
 //   - inputTokens: Number of input/prompt tokens consumed
 //   - outputTokens: Number of output/completion tokens consumed
-//   - status: Request status - "success", "error", or "canceled"
-//   - errorCode: Error code if status is not "success"
-func (s *Server) trackUsageFromContext(c *gin.Context, inputTokens, outputTokens int, status, errorCode string) {
+//   - err: Error if request failed, nil for success (context.Canceled maps to "canceled" status)
+func (s *Server) trackUsageFromContext(c *gin.Context, inputTokens, outputTokens int, err error) {
 	rule, provider, model, requestModel, scenario, streamed, startTime := GetTrackingContext(c)
 
 	if rule == nil || provider == nil || model == "" {
@@ -39,6 +41,18 @@ func (s *Server) trackUsageFromContext(c *gin.Context, inputTokens, outputTokens
 	}
 
 	latencyMs := calculateLatencyFromStart(startTime)
+
+	// Determine status and error code from error
+	status, errorCode := "success", ""
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			status = "canceled"
+			errorCode = "client_disconnected"
+		} else {
+			status = "error"
+			errorCode = sanitizeErrorCode(err)
+		}
+	}
 
 	// 1. Update service stats (inline, no UsageTracker allocation)
 	s.updateServiceStats(rule, provider, model, inputTokens, outputTokens)
@@ -63,6 +77,15 @@ func (s *Server) trackUsageFromContext(c *gin.Context, inputTokens, outputTokens
 
 	// 3. Record detailed usage (for analytics/dashboard)
 	s.recordDetailedUsage(c, rule, provider, model, requestModel, scenario, inputTokens, outputTokens, streamed, status, errorCode, latencyMs)
+}
+
+// sanitizeErrorCode extracts a safe error code from an error.
+func sanitizeErrorCode(err error) string {
+	if err == nil {
+		return ""
+	}
+	// Use error type name as code, avoid exposing sensitive info
+	return err.Error()
 }
 
 // recordDetailedUsage writes a detailed usage record to the database.

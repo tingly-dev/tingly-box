@@ -71,7 +71,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			// Handle streaming request with request context for proper cancellation
 			streamResp, cancel, err := s.forwardAnthropicStreamRequestV1(c.Request.Context(), provider, req.MessageNewParams, scenario)
 			if err != nil {
-				s.trackUsageFromContext(c, 0, 0, "error", "stream_creation_failed")
+				s.trackUsageFromContext(c, 0, 0, err)
 				SendStreamingError(c, err)
 				if recorder != nil {
 					recorder.RecordError(err)
@@ -85,7 +85,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			// Handle non-streaming request
 			anthropicResp, err := s.forwardAnthropicRequestV1(provider, req.MessageNewParams, scenario)
 			if err != nil {
-				s.trackUsageFromContext(c, 0, 0, "error", "forward_failed")
+				s.trackUsageFromContext(c, 0, 0, err)
 				SendForwardingError(c, err)
 				if recorder != nil {
 					recorder.RecordError(err)
@@ -96,7 +96,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			// Track usage from response
 			inputTokens := int(anthropicResp.Usage.InputTokens)
 			outputTokens := int(anthropicResp.Usage.OutputTokens)
-			s.trackUsageFromContext(c, inputTokens, outputTokens, "success", "")
+			s.trackUsageFromContext(c, inputTokens, outputTokens, nil)
 
 			// FIXME: now we use req model as resp model
 			anthropicResp.Model = anthropic.Model(proxyModel)
@@ -158,7 +158,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 				inputTokens = int(response.UsageMetadata.PromptTokenCount)
 				outputTokens = int(response.UsageMetadata.CandidatesTokenCount)
 			}
-			s.trackUsageFromContext(c, inputTokens, outputTokens, "success", "")
+			s.trackUsageFromContext(c, inputTokens, outputTokens, nil)
 
 			// Record response if scenario recording is enabled
 			if recorder != nil {
@@ -246,7 +246,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			// Track usage from response
 			inputTokens := int(response.Usage.PromptTokens)
 			outputTokens := int(response.Usage.CompletionTokens)
-			s.trackUsageFromContext(c, inputTokens, outputTokens, "success", "")
+			s.trackUsageFromContext(c, inputTokens, outputTokens, nil)
 
 			// Record response if scenario recording is enabled
 			if recorder != nil {
@@ -375,7 +375,7 @@ func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.M
 			logrus.Debug("Anthropic v1 stream canceled by client")
 			// Track usage with canceled status
 			if hasUsage {
-				s.trackUsageFromContext(c, inputTokens, outputTokens, "canceled", "client_disconnected")
+				s.trackUsageFromContext(c, inputTokens, outputTokens, err)
 			}
 			// Record error
 			streamRec.RecordError(err)
@@ -384,7 +384,7 @@ func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.M
 
 		// Track usage with error status
 		if hasUsage {
-			s.trackUsageFromContext(c, inputTokens, outputTokens, "error", "stream_error")
+			s.trackUsageFromContext(c, inputTokens, outputTokens, err)
 		}
 		MarshalAndSendErrorEvent(c, err.Error(), "stream_error", "stream_failed")
 		// Record error
@@ -394,7 +394,7 @@ func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.M
 
 	// Track successful streaming completion
 	if hasUsage {
-		s.trackUsageFromContext(c, inputTokens, outputTokens, "success", "")
+		s.trackUsageFromContext(c, inputTokens, outputTokens, nil)
 	}
 
 	// Send completion event
@@ -426,7 +426,7 @@ func (s *Server) handleAnthropicV1ViaResponsesAPINonStreaming(c *gin.Context, re
 	}
 
 	if err != nil {
-		s.trackUsageFromContext(c, 0, 0, "error", "forward_failed")
+		s.trackUsageFromContext(c, 0, 0, err)
 		SendForwardingError(c, err)
 		if recorder != nil {
 			recorder.RecordError(err)
@@ -439,7 +439,7 @@ func (s *Server) handleAnthropicV1ViaResponsesAPINonStreaming(c *gin.Context, re
 	outputTokens := int(response.Usage.OutputTokens)
 
 	// Track usage
-	s.trackUsageFromContext(c, inputTokens, outputTokens, "success", "")
+	s.trackUsageFromContext(c, inputTokens, outputTokens, nil)
 
 	// Convert Responses API response back to Anthropic v1 format
 	anthropicResp := nonstream.ConvertResponsesToAnthropicV1Response(response, proxyModel)
@@ -474,7 +474,7 @@ func (s *Server) handleAnthropicV1ViaResponsesAPIStreaming(c *gin.Context, req p
 	// For standard OpenAI providers, use the OpenAI SDK
 	streamResp, cancel, err := s.forwardResponsesStreamRequest(c.Request.Context(), provider, responsesReq)
 	if err != nil {
-		s.trackUsageFromContext(c, 0, 0, "error", "stream_creation_failed")
+		s.trackUsageFromContext(c, 0, 0, err)
 		SendStreamingError(c, err)
 		if streamRec != nil {
 			streamRec.RecordError(err)
@@ -489,7 +489,7 @@ func (s *Server) handleAnthropicV1ViaResponsesAPIStreaming(c *gin.Context, req p
 
 	// Track usage from stream (would be accumulated in handler)
 	if err != nil {
-		s.trackUsageFromContext(c, 0, 0, "error", "stream_error")
+		s.trackUsageFromContext(c, 0, 0, err)
 		if streamRec != nil {
 			streamRec.RecordError(err)
 		}
