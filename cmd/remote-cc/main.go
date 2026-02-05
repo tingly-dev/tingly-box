@@ -119,18 +119,18 @@ func main() {
 	})
 
 	// Rate limit middleware for auth endpoints (before auth middleware)
-	authRateLimit := middleware.RateLimitMiddleware(rateLimiter, "/opsx/handshake", "/opsx/execute")
+	authRateLimit := middleware.RateLimitMiddleware(rateLimiter, "/remotecc/handshake", "/remotecc/execute")
 
-	// API endpoints with authentication and rate limiting
-	opsxAPI := router.Group("/opsx")
-	opsxAPI.Use(authRateLimit)
-	opsxAPI.Use(config.AuthMiddleware(cfg))
+	// RemoteCC legacy-compatible API routes
+	remoteCCLegacyAPI := router.Group("/remotecc")
+	remoteCCLegacyAPI.Use(authRateLimit)
+	remoteCCLegacyAPI.Use(config.AuthMiddleware(cfg))
 
 	apiHandler := api.NewHandler(sessionMgr, claudeLauncher, summaryEngine, auditLogger)
-	opsxAPI.POST("/handshake", apiHandler.Handshake)
-	opsxAPI.POST("/execute", apiHandler.Execute)
-	opsxAPI.GET("/status/:session_id", apiHandler.Status)
-	opsxAPI.POST("/close", apiHandler.Close)
+	remoteCCLegacyAPI.POST("/handshake", apiHandler.Handshake)
+	remoteCCLegacyAPI.POST("/execute", apiHandler.Execute)
+	remoteCCLegacyAPI.GET("/status/:session_id", apiHandler.Status)
+	remoteCCLegacyAPI.POST("/close", apiHandler.Close)
 
 	// Admin endpoints (separate auth for admin token)
 	adminAPI := router.Group("/admin")
@@ -172,7 +172,6 @@ func main() {
 	}()
 
 	logrus.Infof("remote-cc started successfully")
-	logrus.Infof("API endpoints available at http://localhost:%d/opsx/*", cfg.Port)
 	logrus.Infof("Admin endpoints available at http://localhost:%d/admin/*", cfg.Port)
 
 	// Wait for interrupt signal

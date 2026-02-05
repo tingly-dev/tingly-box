@@ -318,9 +318,14 @@ const RemoteCCSessionsPage: React.FC = () => {
                                                     </Typography>
                                                 }
                                                 secondary={
-                                                    <Typography variant="caption" color="text.secondary">
-                                                        {new Date(session.created_at).toLocaleString()}
-                                                    </Typography>
+                                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                                                        <Typography variant="caption" color="text.secondary">
+                                                            {new Date(session.created_at).toLocaleString()}
+                                                        </Typography>
+                                                        <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                                                            {session.id}
+                                                        </Typography>
+                                                    </Box>
                                                 }
                                             />
                                             <Chip

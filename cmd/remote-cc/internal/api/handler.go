@@ -110,7 +110,7 @@ func getRequestID(c *gin.Context) string {
 	return uuid.New().String()[:8]
 }
 
-// Handshake handles POST /opsx/handshake
+// Handshake handles POST /remotecc/handshake
 func (h *Handler) Handshake(c *gin.Context) {
 	start := time.Now()
 	requestID := getRequestID(c)
@@ -151,7 +151,7 @@ func (h *Handler) Handshake(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// Execute handles POST /opsx/execute
+// Execute handles POST /remotecc/execute
 func (h *Handler) Execute(c *gin.Context) {
 	start := time.Now()
 	requestID := getRequestID(c)
@@ -253,7 +253,7 @@ func (h *Handler) Execute(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// Status handles GET /opsx/status/:session_id
+// Status handles GET /remotecc/status/:session_id
 func (h *Handler) Status(c *gin.Context) {
 	start := time.Now()
 	requestID := getRequestID(c)
@@ -308,7 +308,7 @@ func (h *Handler) Status(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// Close handles POST /opsx/close
+// Close handles POST /remotecc/close
 func (h *Handler) Close(c *gin.Context) {
 	start := time.Now()
 	requestID := getRequestID(c)
