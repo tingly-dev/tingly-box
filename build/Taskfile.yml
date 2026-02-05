@@ -7,6 +7,7 @@ tasks:
   go:mod:tidy:
     summary: Runs `go mod tidy`
     internal: true
+    dir: gui/wails3
     cmds:
       - go mod tidy
 
