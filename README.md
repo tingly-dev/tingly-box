@@ -1,11 +1,34 @@
-# Tingly Box
+<p align="center">
 
-**Tingly Box is your local AI intelligence layer — not just a proxy, but an autonomous orchestrator that decides *which model to call, when to compress context, and how to route requests for maximum efficiency*.**  
+[//]: # (  <img src="docs/banner.png" alt="Tingly Box Banner" width="100%" />)
+</p>
+
+<h1 align="center">Tingly Box</h1>
+
+<p align="center">
+  <strong>Your local AI Intelligence Layer — not just a proxy, but an autonomous orchestrator.</strong>
+</p>
+
+<p align="center">
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#key-features">Features</a> •
+  <a href="#use-with-openai-sdk-or-claude-code">Usage</a> •
+  <a href="#documentation">Documentation</a> •
+  <a href="#https://github.com/tingly-dev/tingly-box/issues">Issues</a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go" alt="Go Version" />
+  <img src="https://img.shields.io/badge/License-MPL%202.0-brightgreen.svg" alt="License" />
+  <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey" alt="Platform" />
+</p>
+
+Tingly Box decides **which model to call, when to compress context, and how to route requests for maximum efficiency** — while offering **secure, reliable, and customizable functional extensions**.
 
 ![Tingly Box Web UI Demo](./docs/images/output.gif)
 
 
-## ✨ Key Features
+## Key Features
 
 - **Unified API** – One mixin endpoint to rule them all, use what you like - OpenAI / Anthropic / Google
 - **Smart Routing, Not Just Load Balancing** – Intelligently route requests across models and tokens based on cost, speed, or custom policies, not simple load balancing
@@ -16,7 +39,7 @@
 - **Visual Control Panel** – Intuitive UI to manage providers, routes, aliases, and models at a glance
 - **Client Side Usage Stats** - Track token consumption, latency, cost estimates, and model selection per request—directly from your client
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Install
 
@@ -90,7 +113,7 @@ docker run -d \
 
 
 
-## **🔌 Use with OpenAI SDK or Claude Code**
+## **Use with OpenAI SDK or Claude Code**
 
 **Python OpenAI SDK**
 
@@ -149,25 +172,25 @@ This works with any tool that supports OpenAI-compatible endpoints: Cherry Studi
 
 
 
-## 🖥 Web Management UI
+## Web Management UI
 
 ```bash
-npx tingly-box start
+npx tingly-box@latest
 ```
 
 
-## 📚 Documentation
+## Documentation
 
 **[User Manual](./docs/user-manual.md)** – Installation, configuration, and operational guide
 
 
-## **🧩 Philosophy**
+## **Philosophy**
 
 - **One endpoint, many providers** – Consolidates multiple providers behind a single API with minimal configuration.
 - **Seamless integration** – Works with SDKs and CLI tools with minimal setup.
 
 
-## **🤝 How to Contribute**
+## **How to Contribute**
 
 We welcome contributions! Follow these steps, inspired by popular open-source repositories:
 
@@ -210,7 +233,7 @@ We welcome contributions! Follow these steps, inspired by popular open-source re
 
 
 
-## 📞 Support
+## Support
 
 | Telegram    | Wechat |
 | :--------: | :-------: |
@@ -218,7 +241,7 @@ We welcome contributions! Follow these steps, inspired by popular open-source re
 | https://t.me/+V1sqeajw1pYwMzU1 | http://chv.ckcoa5.cn/t/OSFb |
 
 
-## 🤲 Contributors
+## Contributors
 
 <a href="https://github.com/tingly-dev/tingly-box/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=tingly-dev/tingly-box" />
