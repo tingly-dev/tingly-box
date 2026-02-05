@@ -37,7 +37,7 @@ type Config struct {
 	// Merged fields from Config struct
 	ProvidersV1 map[string]*typ.Provider `json:"providers"`
 	Providers   []*typ.Provider          `json:"providers_v2,omitempty"`
-	ServerPort  int                      `json:"server_port"`
+	ServerPort  int                      `json:"-"`
 	JWTSecret   string                   `json:"jwt_secret"`
 
 	// Server settings

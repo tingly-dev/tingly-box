@@ -291,6 +291,11 @@ const RemoteCCPage: React.FC = () => {
         setSending(true);
         setError(null);
 
+        // If starting a new session, clear existing chat area before first message
+        if (!selectedSession) {
+            setChatHistory([]);
+        }
+
         // Add user message to chat
         setChatHistory(prev => [
             ...prev,
@@ -328,6 +333,7 @@ const RemoteCCPage: React.FC = () => {
                 const sessionData = await api.getRemoteCCSession(data.session_id);
                 if (sessionData.id) {
                     setSelectedSession(sessionData);
+                    setLastSelectedSessionId(sessionData.id);
                     setProjectPathBySession((prev) => ({
                         ...prev,
                         [sessionData.id]: projectPath.trim(),
