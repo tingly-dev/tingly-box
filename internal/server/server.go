@@ -20,6 +20,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/data"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/obs/otel"
 	"github.com/tingly-dev/tingly-box/internal/server/background"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
@@ -82,6 +83,10 @@ type Server struct {
 	// scenario-specific recording sinks (created on-demand when recording flag is enabled)
 	scenarioRecordSinks   map[typ.RuleScenario]*obs.Sink
 	scenarioRecordSinksMu sync.RWMutex
+
+	// OTel meter setup for unified token tracking
+	meterSetup   *otel.MeterSetup
+	tokenTracker *otel.TokenTracker
 
 	// options
 	enableUI      bool
@@ -419,6 +424,20 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	} else {
 		server.capabilityStore = capabilityStore
 		logrus.Debugf("Model capability store initialized")
+	}
+
+	// Initialize OTel meter setup for token tracking
+	meterSetup, err := otel.NewMeterSetup(context.Background(), otel.DefaultConfig(), &otel.StoreRefs{
+		StatsStore: cfg.GetStatsStore(),
+		UsageStore: cfg.GetUsageStore(),
+		Sink:       server.recordSink,
+	})
+	if err != nil {
+		logrus.Warnf("Failed to initialize OTel meter setup: %v", err)
+	} else if meterSetup != nil {
+		server.meterSetup = meterSetup
+		server.tokenTracker = meterSetup.Tracker()
+		logrus.Debugf("OTel meter setup initialized")
 	}
 
 	// Setup middleware
@@ -916,6 +935,13 @@ func (s *Server) Stop(ctx context.Context) error {
 	}
 	s.scenarioRecordSinks = make(map[typ.RuleScenario]*obs.Sink)
 	s.scenarioRecordSinksMu.Unlock()
+
+	// Shutdown OTel meter setup
+	if s.meterSetup != nil {
+		if err := s.meterSetup.Shutdown(ctx); err != nil {
+			logrus.Errorf("OTel shutdown error: %v", err)
+		}
+	}
 
 	fmt.Println("Shutting down server...")
 	return s.httpServer.Shutdown(ctx)
