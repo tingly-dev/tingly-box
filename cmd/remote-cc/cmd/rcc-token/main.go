@@ -17,12 +17,12 @@ type Config struct {
 
 // loadConfig loads configuration from environment
 func loadConfig() (*Config, error) {
-	secret := os.Getenv("OPSX_JWT_SECRET")
+	secret := os.Getenv("RCC_JWT_SECRET")
 	if secret == "" {
-		return nil, fmt.Errorf("OPSX_JWT_SECRET not set")
+		return nil, fmt.Errorf("RCC_JWT_SECRET not set")
 	}
 
-	timeoutStr := os.Getenv("OPSX_SESSION_TIMEOUT")
+	timeoutStr := os.Getenv("RCC_SESSION_TIMEOUT")
 	timeout := 30 * time.Minute
 	if timeoutStr != "" {
 		d, err := time.ParseDuration(timeoutStr)

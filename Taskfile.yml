@@ -290,11 +290,11 @@ tasks:
   remote-cc:run:
     summary: Run remote-cc-service with default configuration
     env:
-      OPSX_PORT: "18080"
-      OPSX_SESSION_TIMEOUT: "30m"
+      RCC_PORT: "18080"
+      RCC_SESSION_TIMEOUT: "30m"
     cmds:
       - |
-        export OPSX_JWT_SECRET="$(python3 - <<'PY'
+        export RCC_JWT_SECRET="$(python3 - <<'PY'
         import json, os, sys
         path = os.path.expanduser("~/.tingly-box/config.json")
         if not os.path.exists(path):
@@ -309,7 +309,7 @@ tasks:
         print(secret)
         PY
         )"
-        cd cmd/remote-cc && OPSX_PORT={{.OPSX_PORT | default "18080"}} OPSX_SESSION_TIMEOUT={{.OPSX_SESSION_TIMEOUT | default "30m"}} go run .
+        cd cmd/remote-cc && RCC_PORT={{.RCC_PORT | default "18080"}} RCC_SESSION_TIMEOUT={{.RCC_SESSION_TIMEOUT | default "30m"}} go run .
 
   remote-cc:test:
     summary: Run tests for remote-cc-service

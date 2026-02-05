@@ -123,7 +123,7 @@ type Config struct {
 // Load reads configuration from environment variables and database
 func Load() (*Config, error) {
 	// Port - required
-	portStr := os.Getenv("OPSX_PORT")
+	portStr := os.Getenv("RCC_PORT")
 	if portStr == "" {
 		portStr = "18080" // default port
 	}
@@ -135,15 +135,15 @@ func Load() (*Config, error) {
 		}
 	}
 
-	// JWT Secret - try OPSX_JWT_SECRET first, then read from main service's config
-	jwtSecret := os.Getenv("OPSX_JWT_SECRET")
+	// JWT Secret - try RCC_JWT_SECRET first, then read from main service's config
+	jwtSecret := os.Getenv("RCC_JWT_SECRET")
 	if jwtSecret == "" {
 		// Try to read from main service's config database
 		jwtSecret = readJWTSecretFromMainConfig()
 		if jwtSecret == "" {
 			return nil, &ConfigError{
 				Field:   "jwt_secret",
-				Message: "must be set (environment variable OPSX_JWT_SECRET or main service config)",
+				Message: "must be set (environment variable RCC_JWT_SECRET or main service config)",
 			}
 		}
 	}
@@ -160,7 +160,7 @@ func Load() (*Config, error) {
 	}
 
 	// Session timeout - optional, defaults to 30 minutes
-	sessionTimeoutStr := os.Getenv("OPSX_SESSION_TIMEOUT")
+	sessionTimeoutStr := os.Getenv("RCC_SESSION_TIMEOUT")
 	var sessionTimeout time.Duration
 	if sessionTimeoutStr == "" {
 		sessionTimeout = 30 * time.Minute
@@ -177,13 +177,13 @@ func Load() (*Config, error) {
 
 	// DB Path - optional, defaults to ~/.tingly-box/remote-cc.db
 	defaultDBPath := filepath.Join(homeDir, ".tingly-box", "remote-cc.db")
-	dbPath := os.Getenv("OPSX_DB_PATH")
+	dbPath := os.Getenv("RCC_DB_PATH")
 	if dbPath == "" {
 		dbPath = defaultDBPath
 	}
 
 	// Message retention - optional, defaults to 7 days
-	retentionDaysStr := os.Getenv("OPSX_MESSAGE_RETENTION_DAYS")
+	retentionDaysStr := os.Getenv("RCC_MESSAGE_RETENTION_DAYS")
 	retention := 7 * 24 * time.Hour
 	if retentionDaysStr != "" {
 		days, err := strconv.Atoi(retentionDaysStr)
@@ -197,7 +197,7 @@ func Load() (*Config, error) {
 	}
 
 	// Rate limit max attempts - optional, defaults to 5
-	rateLimitMaxStr := os.Getenv("OPSX_RATE_LIMIT_MAX")
+	rateLimitMaxStr := os.Getenv("RCC_RATE_LIMIT_MAX")
 	var rateLimitMax int
 	if rateLimitMaxStr == "" {
 		rateLimitMax = 5
@@ -213,7 +213,7 @@ func Load() (*Config, error) {
 	}
 
 	// Rate limit window - optional, defaults to 5 minutes
-	rateLimitWindowStr := os.Getenv("OPSX_RATE_LIMIT_WINDOW")
+	rateLimitWindowStr := os.Getenv("RCC_RATE_LIMIT_WINDOW")
 	var rateLimitWindow time.Duration
 	if rateLimitWindowStr == "" {
 		rateLimitWindow = 5 * time.Minute
@@ -229,7 +229,7 @@ func Load() (*Config, error) {
 	}
 
 	// Rate limit block duration - optional, defaults to 5 minutes
-	rateLimitBlockStr := os.Getenv("OPSX_RATE_LIMIT_BLOCK")
+	rateLimitBlockStr := os.Getenv("RCC_RATE_LIMIT_BLOCK")
 	var rateLimitBlock time.Duration
 	if rateLimitBlockStr == "" {
 		rateLimitBlock = 5 * time.Minute
