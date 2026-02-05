@@ -165,11 +165,6 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 		return
 	}
 
-	// Set the rule and provider in context so middleware can use the same rule
-	if rule != nil {
-		c.Set("rule", rule)
-	}
-
 	actualModel := selectedService.Model
 
 	maxAllowed := s.templateManager.GetMaxTokensForModelByProvider(provider, actualModel)
@@ -178,9 +173,8 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 	responseModel := proxyModel
 	req.Model = actualModel
 
-	// Set provider UUID in context (Service.Provider uses UUID, not name)
-	c.Set("provider", provider.UUID)
-	c.Set("model", actualModel)
+	// Set tracking context with all metadata (eliminates need for explicit parameter passing)
+	SetTrackingContext(c, rule, provider, actualModel, responseModel, isStreaming)
 
 	apiStyle := provider.APIStyle
 
@@ -205,7 +199,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 			streamResp, cancel, err := s.forwardAnthropicStreamRequestV1(c.Request.Context(), provider, anthropicReq, scenario)
 			if err != nil {
 				// Track error with no usage
-				s.trackUsage(c, rule, provider, actualModel, responseModel, 0, 0, true, "error", "stream_creation_failed")
+				s.trackUsageFromContext(c, 0, 0, "error", "stream_creation_failed")
 				c.JSON(http.StatusInternalServerError, ErrorResponse{
 					Error: ErrorDetail{
 						Message: "Failed to create streaming request: " + err.Error(),
@@ -220,7 +214,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 			if err != nil {
 				// Track usage with error status
 				if inputTokens > 0 || outputTokens > 0 {
-					s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, true, "error", "stream_handler_failed")
+					s.trackUsageFromContext(c, inputTokens, outputTokens, "error", "stream_handler_failed")
 				}
 				c.JSON(http.StatusInternalServerError, ErrorResponse{
 					Error: ErrorDetail{
@@ -233,14 +227,14 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 
 			// Track successful streaming completion
 			if inputTokens > 0 || outputTokens > 0 {
-				s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, true, "success", "")
+				s.trackUsageFromContext(c, inputTokens, outputTokens, "success", "")
 			}
 			return
 		} else {
 			anthropicResp, err := s.forwardAnthropicRequestV1(provider, anthropicReq, scenario)
 			if err != nil {
 				// Track error with no usage
-				s.trackUsage(c, rule, provider, actualModel, responseModel, 0, 0, false, "error", "forward_failed")
+				s.trackUsageFromContext(c, 0, 0, "error", "forward_failed")
 				c.JSON(http.StatusInternalServerError, ErrorResponse{
 					Error: ErrorDetail{
 						Message: "Failed to forward Anthropic request: " + err.Error(),
@@ -253,7 +247,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 			// Track usage from response
 			inputTokens := int(anthropicResp.Usage.InputTokens)
 			outputTokens := int(anthropicResp.Usage.OutputTokens)
-			s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, false, "success", "")
+			s.trackUsageFromContext(c, inputTokens, outputTokens, "success", "")
 
 			// Use provider-aware conversion for provider-specific handling
 			openaiResp := nonstream.ConvertAnthropicToOpenAIResponseWithProvider(anthropicResp, responseModel, provider, actualModel)
