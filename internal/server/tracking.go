@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/tingly-dev/tingly-box/internal/data/db"
+	"github.com/tingly-dev/tingly-box/internal/obs/otel"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -53,10 +54,33 @@ func (t *UsageTracker) RecordUsage(
 		return
 	}
 
+	scenario := extractScenarioFromPath(c.Request.URL.Path)
+	latencyMs := calculateLatency(c)
+
 	// 1. Record usage on the rule's service stats (for load balancing)
 	t.recordOnService(rule, provider, model, inputTokens, outputTokens)
 
-	// 2. Record detailed usage (for analytics/dashboard)
+	// 2. Record to OTel if token tracker is available (from server context)
+	if tokenTracker, exists := c.Get("token_tracker"); exists && tokenTracker != nil {
+		if tt, ok := tokenTracker.(*otel.TokenTracker); ok {
+			tt.RecordUsage(c.Request.Context(), otel.UsageOptions{
+				Provider:     provider.Name,
+				ProviderUUID: provider.UUID,
+				Model:        model,
+				RequestModel: requestModel,
+				RuleUUID:     rule.UUID,
+				Scenario:     scenario,
+				InputTokens:  inputTokens,
+				OutputTokens: outputTokens,
+				Streamed:     streamed,
+				Status:       status,
+				ErrorCode:    errorCode,
+				LatencyMs:    latencyMs,
+			})
+		}
+	}
+
+	// 3. Record detailed usage (for analytics/dashboard)
 	if t.usageStore != nil {
 		t.recordDetailed(c, rule, provider, model, requestModel, inputTokens, outputTokens, streamed, status, errorCode)
 	}
