@@ -69,6 +69,16 @@ func NewManager(cfg Config, store *MessageStore) *Manager {
 		store:    store,
 	}
 
+	if store != nil {
+		if sessions, err := store.LoadSessions(); err == nil {
+			for _, s := range sessions {
+				mgr.sessions[s.ID] = s
+			}
+		} else {
+			logrus.Warnf("Failed to load remote-cc sessions from DB: %v", err)
+		}
+	}
+
 	// Start cleanup goroutine
 	mgr.wg.Add(1)
 	go mgr.cleanupLoop()
@@ -95,6 +105,9 @@ func (m *Manager) Create() *Session {
 
 	m.sessions[session.ID] = session
 	logrus.Debugf("Session created: %s (expires at %s)", session.ID, session.ExpiresAt.Format(time.RFC3339))
+	if m.store != nil {
+		_ = m.store.UpsertSession(session)
+	}
 
 	return session
 }
@@ -120,6 +133,9 @@ func (m *Manager) Update(id string, fn func(*Session)) bool {
 
 	fn(session)
 	session.LastActivity = time.Now()
+	if m.store != nil {
+		_ = m.store.UpsertSession(session)
+	}
 
 	return true
 }
@@ -138,6 +154,7 @@ func (m *Manager) Delete(id string) bool {
 	logrus.Debugf("Session deleted: %s", id)
 	if m.store != nil {
 		_ = m.store.DeleteMessagesForSession(id)
+		_ = m.store.DeleteSession(id)
 	}
 
 	return true
@@ -160,6 +177,7 @@ func (m *Manager) Close(id string) bool {
 	logrus.Debugf("Session closed: %s", id)
 	if m.store != nil {
 		_ = m.store.DeleteMessagesForSession(id)
+		_ = m.store.DeleteSession(id)
 	}
 
 	return true
@@ -289,6 +307,10 @@ func (m *Manager) cleanupExpired() {
 			session.Status = StatusExpired
 			delete(m.sessions, id)
 			logrus.Debugf("Session expired and cleaned up: %s", id)
+			if m.store != nil {
+				_ = m.store.DeleteMessagesForSession(id)
+				_ = m.store.DeleteSession(id)
+			}
 		}
 	}
 }
@@ -372,6 +394,7 @@ func (m *Manager) Clear() int {
 	logrus.Debugf("Cleared %d sessions", count)
 	if m.store != nil {
 		_ = m.store.ClearAllMessages()
+		_ = m.store.ClearAllSessions()
 	}
 	return count
 }
@@ -394,7 +417,15 @@ func (m *Manager) retentionLoop() {
 			cutoff := time.Now().Add(-m.config.MessageRetention)
 			if m.store != nil {
 				_ = m.store.PurgeOlderThan(cutoff)
+				_ = m.store.PurgeSessionsOlderThan(cutoff)
 			}
+			m.mu.Lock()
+			for id, session := range m.sessions {
+				if session.LastActivity.Before(cutoff) {
+					delete(m.sessions, id)
+				}
+			}
+			m.mu.Unlock()
 		}
 	}
 }

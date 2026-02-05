@@ -2,6 +2,7 @@ package session
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -37,6 +38,20 @@ func NewMessageStore(dbPath string) (*MessageStore, error) {
 
 func initMessageSchema(db *sql.DB) error {
 	_, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS remote_cc_sessions (
+			id TEXT PRIMARY KEY,
+			status TEXT NOT NULL,
+			request TEXT,
+			response TEXT,
+			error TEXT,
+			created_at TEXT NOT NULL,
+			last_activity TEXT NOT NULL,
+			expires_at TEXT NOT NULL,
+			context TEXT
+		);
+		CREATE INDEX IF NOT EXISTS idx_remote_cc_sessions_last_activity
+		ON remote_cc_sessions(last_activity);
+
 		CREATE TABLE IF NOT EXISTS remote_cc_messages (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			session_id TEXT NOT NULL,
@@ -49,6 +64,110 @@ func initMessageSchema(db *sql.DB) error {
 		ON remote_cc_messages(session_id, timestamp);
 	`)
 	return err
+}
+
+// UpsertSession writes session metadata to storage
+func (s *MessageStore) UpsertSession(sess *Session) error {
+	if s == nil || s.db == nil || sess == nil {
+		return nil
+	}
+	contextJSON := ""
+	if sess.Context != nil {
+		if b, err := json.Marshal(sess.Context); err == nil {
+			contextJSON = string(b)
+		}
+	}
+	_, err := s.db.Exec(
+		`INSERT INTO remote_cc_sessions(id, status, request, response, error, created_at, last_activity, expires_at, context)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		 ON CONFLICT(id) DO UPDATE SET
+		   status=excluded.status,
+		   request=excluded.request,
+		   response=excluded.response,
+		   error=excluded.error,
+		   created_at=excluded.created_at,
+		   last_activity=excluded.last_activity,
+		   expires_at=excluded.expires_at,
+		   context=excluded.context`,
+		sess.ID,
+		string(sess.Status),
+		sess.Request,
+		sess.Response,
+		sess.Error,
+		sess.CreatedAt.Format(time.RFC3339),
+		sess.LastActivity.Format(time.RFC3339),
+		sess.ExpiresAt.Format(time.RFC3339),
+		contextJSON,
+	)
+	return err
+}
+
+// DeleteSession removes a session from storage
+func (s *MessageStore) DeleteSession(sessionID string) error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	_, err := s.db.Exec(`DELETE FROM remote_cc_sessions WHERE id = ?`, sessionID)
+	return err
+}
+
+// ClearAllSessions removes all sessions from storage
+func (s *MessageStore) ClearAllSessions() error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	_, err := s.db.Exec(`DELETE FROM remote_cc_sessions`)
+	return err
+}
+
+// LoadSessions loads all sessions from storage
+func (s *MessageStore) LoadSessions() ([]*Session, error) {
+	if s == nil || s.db == nil {
+		return []*Session{}, nil
+	}
+	rows, err := s.db.Query(
+		`SELECT id, status, request, response, error, created_at, last_activity, expires_at, context FROM remote_cc_sessions`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []*Session
+	for rows.Next() {
+		var id, status, request, response, errMsg, createdAt, lastActivity, expiresAt, contextJSON string
+		if err := rows.Scan(&id, &status, &request, &response, &errMsg, &createdAt, &lastActivity, &expiresAt, &contextJSON); err != nil {
+			return nil, err
+		}
+		created, err := time.Parse(time.RFC3339, createdAt)
+		if err != nil {
+			created = time.Now()
+		}
+		last, err := time.Parse(time.RFC3339, lastActivity)
+		if err != nil {
+			last = created
+		}
+		expires, err := time.Parse(time.RFC3339, expiresAt)
+		if err != nil {
+			expires = last.Add(30 * time.Minute)
+		}
+		ctx := make(map[string]interface{})
+		if contextJSON != "" {
+			_ = json.Unmarshal([]byte(contextJSON), &ctx)
+		}
+		out = append(out, &Session{
+			ID:           id,
+			Status:       Status(status),
+			Request:      request,
+			Response:     response,
+			Error:        errMsg,
+			CreatedAt:    created,
+			LastActivity: last,
+			ExpiresAt:    expires,
+			Context:      ctx,
+		})
+	}
+	return out, nil
 }
 
 // InsertMessage writes a message to storage
@@ -126,6 +245,21 @@ func (s *MessageStore) PurgeOlderThan(cutoff time.Time) error {
 	}
 	if n, err := res.RowsAffected(); err == nil && n > 0 {
 		logrus.Infof("Purged %d remote-cc messages older than %s", n, cutoff.Format(time.RFC3339))
+	}
+	return nil
+}
+
+// PurgeSessionsOlderThan deletes sessions older than a cutoff
+func (s *MessageStore) PurgeSessionsOlderThan(cutoff time.Time) error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	res, err := s.db.Exec(`DELETE FROM remote_cc_sessions WHERE last_activity < ?`, cutoff.Format(time.RFC3339))
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err == nil && n > 0 {
+		logrus.Infof("Purged %d remote-cc sessions older than %s", n, cutoff.Format(time.RFC3339))
 	}
 	return nil
 }
