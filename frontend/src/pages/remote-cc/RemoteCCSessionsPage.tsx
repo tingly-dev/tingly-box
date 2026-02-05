@@ -192,10 +192,23 @@ const RemoteCCSessionsPage: React.FC = () => {
                         color="error"
                         variant="contained"
                         onClick={() => {
-                            setSessions([]);
-                            setSelectedSession(null);
-                            setStats(null);
-                            setClearDialogOpen(false);
+                            api.clearRemoteCCSessions()
+                                .then((result) => {
+                                    if (result?.success) {
+                                        setSessions([]);
+                                        setSelectedSession(null);
+                                        setStats(null);
+                                    } else {
+                                        setError(result?.error || 'Failed to clear sessions');
+                                    }
+                                })
+                                .catch((err) => {
+                                    console.error(err);
+                                    setError('Failed to clear sessions');
+                                })
+                                .finally(() => {
+                                    setClearDialogOpen(false);
+                                });
                         }}
                     >
                         Clear

@@ -338,9 +338,9 @@ tasks:
     cmds:
       - |
         cd cmd/remote-cc
-        go build -o ../../bin/remote-cc-token ./cmd/opsx-token
+        go build -o ../../bin/remote-cc-token ./cmd/rcc-token
 
   remote-cc-token:run:
     summary: Generate an API token (run via SSH)
     cmds:
-      - cd cmd/remote-cc && go run ./cmd/opsx-token
+      - cd cmd/remote-cc && go run ./cmd/rcc-token

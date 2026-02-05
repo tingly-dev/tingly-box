@@ -140,6 +140,7 @@ func main() {
 	remoteCCAPI.GET("/sessions", remoteCCHandler.GetSessions)
 	remoteCCAPI.GET("/sessions/:id", remoteCCHandler.GetSession)
 	remoteCCAPI.POST("/chat", remoteCCHandler.Chat)
+	remoteCCAPI.POST("/sessions/clear", remoteCCHandler.ClearSessions)
 
 	// Create HTTP server
 	srv := &http.Server{

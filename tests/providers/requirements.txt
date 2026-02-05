@@ -1,5 +1,0 @@
-# Tingly-Box Provider Test System
-# Python test system for AI provider smoke and differential testing
-
-httpx>=0.25.0
-pyyaml>=6.0

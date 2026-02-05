@@ -1039,6 +1039,29 @@ export const api = {
             return { success: false, error: error.message };
         }
     },
+
+    // Clear all remote-cc sessions
+    clearRemoteCCSessions: async (): Promise<any> => {
+        try {
+            const token = await getRemoteCCAuthToken();
+            const baseUrl = api.getRemoteCCBaseUrl();
+            const response = await fetch(`${baseUrl}/remote-cc/sessions/clear`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+            });
+
+            if (response.status === 401) {
+                return { success: false, error: 'Authentication required' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
 };
 
 export default api;

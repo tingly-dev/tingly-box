@@ -288,6 +288,24 @@ func (h *RemoteCCHandler) Chat(c *gin.Context) {
 	})
 }
 
+// ClearSessions handles POST /remote-cc/sessions/clear
+func (h *RemoteCCHandler) ClearSessions(c *gin.Context) {
+	start := time.Now()
+	clientIP := c.ClientIP()
+	userID := getUserID(c)
+
+	cleared := h.sessionMgr.Clear()
+
+	h.auditLogger.LogRequest("remote_cc_sessions_clear", userID, clientIP, "", getRequestID(c), true, time.Since(start), map[string]interface{}{
+		"cleared": cleared,
+	})
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"cleared": cleared,
+	})
+}
+
 // getAllSessions returns all sessions (helper function)
 func (h *RemoteCCHandler) getAllSessions() []*session.Session {
 	return h.sessionMgr.List()

@@ -307,3 +307,14 @@ func (m *Manager) List() []*Session {
 	}
 	return sessions
 }
+
+// Clear removes all sessions
+func (m *Manager) Clear() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	count := len(m.sessions)
+	m.sessions = make(map[string]*Session)
+	logrus.Debugf("Cleared %d sessions", count)
+	return count
+}
