@@ -1145,12 +1145,26 @@ export const api = {
         }
     },
 
-    // Get remote-coder bot settings (legacy - returns single bot)
-    getRemoteCCBotSettings: async (): Promise<any> => {
+    // ============================================
+    // Prompt Recording API
+    // ============================================
+
+    // Get prompt rounds with filtering and pagination
+    getPromptRounds: async (params: {
+        scenario?: string;
+        protocol?: string;
+        limit?: number;
+        offset?: number;
+    } = {}): Promise<any> => {
         try {
-            const token = await getRemoteCCAuthToken();
-            const baseUrl = api.getRemoteCCBaseUrl();
-            const response = await fetch(`${baseUrl}/remote-coder/bot/settings`, {
+            const token = getUserAuthToken();
+            const queryParams = new URLSearchParams();
+            if (params.scenario) queryParams.set('scenario', params.scenario);
+            if (params.protocol) queryParams.set('protocol', params.protocol);
+            if (params.limit) queryParams.set('limit', params.limit.toString());
+            if (params.offset) queryParams.set('offset', params.offset.toString());
+
+            const response = await fetch(`${await getApiBaseUrl()}/api/v1/prompts/rounds?${queryParams}`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1159,6 +1173,8 @@ export const api = {
             });
 
             if (response.status === 401) {
+                localStorage.removeItem('user_auth_token');
+                window.location.href = '/login';
                 return { success: false, error: 'Authentication required' };
             }
 
@@ -1168,12 +1184,18 @@ export const api = {
         }
     },
 
-    // Get all bot settings (V2 API - returns array)
-    getBotSettingsList: async (): Promise<any> => {
+    // Get user inputs for prompt user page
+    getPromptUserInputs: async (params: {
+        scenario?: string;
+        limit?: number;
+    } = {}): Promise<any> => {
         try {
-            const token = await getRemoteCCAuthToken();
-            const baseUrl = api.getRemoteCCBaseUrl();
-            const response = await fetch(`${baseUrl}/remote-coder/bot/settings/list`, {
+            const token = getUserAuthToken();
+            const queryParams = new URLSearchParams();
+            if (params.scenario) queryParams.set('scenario', params.scenario);
+            if (params.limit) queryParams.set('limit', params.limit.toString());
+
+            const response = await fetch(`${await getApiBaseUrl()}/api/v1/prompts/user-inputs?${queryParams}`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1182,6 +1204,8 @@ export const api = {
             });
 
             if (response.status === 401) {
+                localStorage.removeItem('user_auth_token');
+                window.location.href = '/login';
                 return { success: false, error: 'Authentication required' };
             }
 
@@ -1191,54 +1215,30 @@ export const api = {
         }
     },
 
-    // Get a specific bot setting by UUID
-    getBotSetting: async (uuid: string): Promise<any> => {
-        try {
-            const token = await getRemoteCCAuthToken();
-            const baseUrl = api.getRemoteCCBaseUrl();
-            const response = await fetch(`${baseUrl}/remote-coder/bot/settings/${encodeURIComponent(uuid)}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
-                },
-            });
-
-            if (response.status === 401) {
-                return { success: false, error: 'Authentication required' };
-            }
-
-            return await response.json();
-        } catch (error: any) {
-            return { success: false, error: error.message };
-        }
-    },
-
-    // Create a new bot setting
-    createBotSetting: async (data: {
-        name?: string;
-        platform?: string;
-        auth_type?: string;
-        auth?: Record<string, string>;
-        proxy_url?: string;
-        chat_id?: string;
-        bash_allowlist?: string[];
-        enabled?: boolean;
-        token?: string;
+    // Search prompt rounds by user input content
+    searchPromptRounds: async (params: {
+        query: string;
+        scenario?: string;
+        limit?: number;
     }): Promise<any> => {
         try {
-            const token = await getRemoteCCAuthToken();
-            const baseUrl = api.getRemoteCCBaseUrl();
-            const response = await fetch(`${baseUrl}/remote-coder/bot/settings`, {
-                method: 'POST',
+            const token = getUserAuthToken();
+            const queryParams = new URLSearchParams();
+            queryParams.set('q', params.query);
+            if (params.scenario) queryParams.set('scenario', params.scenario);
+            if (params.limit) queryParams.set('limit', params.limit.toString());
+
+            const response = await fetch(`${await getApiBaseUrl()}/api/v1/prompts/search?${queryParams}`, {
+                method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
                     ...(token && { 'Authorization': `Bearer ${token}` }),
                 },
-                body: JSON.stringify(data),
             });
 
             if (response.status === 401) {
+                localStorage.removeItem('user_auth_token');
+                window.location.href = '/login';
                 return { success: false, error: 'Authentication required' };
             }
 
@@ -1248,30 +1248,30 @@ export const api = {
         }
     },
 
-    // Update a bot setting
-    updateBotSetting: async (uuid: string, data: {
-        name?: string;
-        platform?: string;
-        auth_type?: string;
-        auth?: Record<string, string>;
-        proxy_url?: string;
-        chat_id?: string;
-        bash_allowlist?: string[];
-        enabled?: boolean;
+    // Get rounds by project and/or session ID
+    getPromptRoundsByProjectSession: async (params: {
+        project_id?: string;
+        session_id?: string;
+        limit?: number;
     }): Promise<any> => {
         try {
-            const token = await getRemoteCCAuthToken();
-            const baseUrl = api.getRemoteCCBaseUrl();
-            const response = await fetch(`${baseUrl}/remote-coder/bot/settings/${encodeURIComponent(uuid)}`, {
-                method: 'PUT',
+            const token = getUserAuthToken();
+            const queryParams = new URLSearchParams();
+            if (params.project_id) queryParams.set('project_id', params.project_id);
+            if (params.session_id) queryParams.set('session_id', params.session_id);
+            if (params.limit) queryParams.set('limit', params.limit.toString());
+
+            const response = await fetch(`${await getApiBaseUrl()}/api/v1/prompts/by-project-session?${queryParams}`, {
+                method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
                     ...(token && { 'Authorization': `Bearer ${token}` }),
                 },
-                body: JSON.stringify(data),
             });
 
             if (response.status === 401) {
+                localStorage.removeItem('user_auth_token');
+                window.location.href = '/login';
                 return { success: false, error: 'Authentication required' };
             }
 
@@ -1281,12 +1281,44 @@ export const api = {
         }
     },
 
-    // Delete a bot setting
-    deleteBotSetting: async (uuid: string): Promise<any> => {
+    // Get rounds by metadata key-value
+    getPromptRoundsByMetadata: async (params: {
+        key: string;
+        value: string;
+        limit?: number;
+    }): Promise<any> => {
         try {
-            const token = await getRemoteCCAuthToken();
-            const baseUrl = api.getRemoteCCBaseUrl();
-            const response = await fetch(`${baseUrl}/remote-coder/bot/settings/${encodeURIComponent(uuid)}`, {
+            const token = getUserAuthToken();
+            const queryParams = new URLSearchParams();
+            queryParams.set('key', params.key);
+            queryParams.set('value', params.value);
+            if (params.limit) queryParams.set('limit', params.limit.toString());
+
+            const response = await fetch(`${await getApiBaseUrl()}/api/v1/prompts/by-metadata?${queryParams}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+            });
+
+            if (response.status === 401) {
+                localStorage.removeItem('user_auth_token');
+                window.location.href = '/login';
+                return { success: false, error: 'Authentication required' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Delete old prompt records
+    deleteOldPromptRecords: async (days: number): Promise<any> => {
+        try {
+            const token = getUserAuthToken();
+            const response = await fetch(`${await getApiBaseUrl()}/api/v1/prompts/old-records?days=${days}`, {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1295,108 +1327,8 @@ export const api = {
             });
 
             if (response.status === 401) {
-                return { success: false, error: 'Authentication required' };
-            }
-
-            return await response.json();
-        } catch (error: any) {
-            return { success: false, error: error.message };
-        }
-    },
-
-    // Toggle a bot setting's enabled status
-    toggleBotSetting: async (uuid: string): Promise<any> => {
-        try {
-            const token = await getRemoteCCAuthToken();
-            const baseUrl = api.getRemoteCCBaseUrl();
-            const response = await fetch(`${baseUrl}/remote-coder/bot/settings/${encodeURIComponent(uuid)}/toggle`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
-                },
-            });
-
-            if (response.status === 401) {
-                return { success: false, error: 'Authentication required' };
-            }
-
-            return await response.json();
-        } catch (error: any) {
-            return { success: false, error: error.message };
-        }
-    },
-
-    // Update remote-coder bot settings
-    updateRemoteCCBotSettings: async (data: {
-        name?: string;
-        platform?: string;
-        auth_type?: string;
-        auth?: Record<string, string>;
-        proxy_url?: string;
-        chat_id?: string;
-        bash_allowlist?: string[];
-        token?: string; // Legacy field for backward compatibility
-    }): Promise<any> => {
-        try {
-            const token = await getRemoteCCAuthToken();
-            const baseUrl = api.getRemoteCCBaseUrl();
-            const response = await fetch(`${baseUrl}/remote-coder/bot/settings`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
-                },
-                body: JSON.stringify(data),
-            });
-
-            if (response.status === 401) {
-                return { success: false, error: 'Authentication required' };
-            }
-
-            return await response.json();
-        } catch (error: any) {
-            return { success: false, error: error.message };
-        }
-    },
-
-    // Get all supported bot platforms
-    getBotPlatforms: async (): Promise<any> => {
-        try {
-            const token = await getRemoteCCAuthToken();
-            const baseUrl = api.getRemoteCCBaseUrl();
-            const response = await fetch(`${baseUrl}/remote-coder/bot/platforms`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
-                },
-            });
-
-            if (response.status === 401) {
-                return { success: false, error: 'Authentication required' };
-            }
-
-            return await response.json();
-        } catch (error: any) {
-            return { success: false, error: error.message };
-        }
-    },
-
-    // Get platform auth configuration
-    getBotPlatformConfig: async (platform: string): Promise<any> => {
-        try {
-            const token = await getRemoteCCAuthToken();
-            const baseUrl = api.getRemoteCCBaseUrl();
-            const response = await fetch(`${baseUrl}/remote-coder/bot/platform-config?platform=${encodeURIComponent(platform)}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
-                },
-            });
-
-            if (response.status === 401) {
+                localStorage.removeItem('user_auth_token');
+                window.location.href = '/login';
                 return { success: false, error: 'Authentication required' };
             }
 

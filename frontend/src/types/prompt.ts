@@ -96,3 +96,74 @@ export interface RecordingFilter {
   projectFilter?: string;
   typeFilter?: RecordingType;
 }
+
+// ============================================
+// Prompt Recording Types (Database-based)
+// ============================================
+
+export type ProtocolType = 'anthropic' | 'openai' | 'google';
+
+export interface PromptRoundItem {
+  id: number;
+  scenario: string;
+  provider_uuid: string;
+  provider_name: string;
+  model: string;
+  protocol: ProtocolType;
+  request_id?: string;
+  project_id?: string;
+  session_id?: string;
+  metadata?: Record<string, unknown>;
+  round_index: number;
+  user_input: string;
+  round_result?: string;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  created_at: string;
+  is_streaming: boolean;
+  has_tool_use: boolean;
+}
+
+export interface PromptRoundListResponse {
+  success: boolean;
+  data: {
+    rounds: PromptRoundItem[];
+    total: number;
+  };
+  error?: string;
+}
+
+export interface PromptRoundListData {
+  rounds: PromptRoundItem[];
+  total: number;
+}
+
+export interface PromptUserInputsResponse {
+  success: boolean;
+  data: PromptRoundItem[];
+}
+
+export interface PromptSearchResponse {
+  success: boolean;
+  data: PromptRoundItem[];
+}
+
+export interface PromptDeleteResponse {
+  success: boolean;
+  message: string;
+  data: {
+    deleted_count: number;
+    cutoff_days: number;
+  };
+}
+
+export interface PromptFilters {
+  scenario?: string;
+  protocol?: ProtocolType;
+  searchQuery?: string;
+  project_id?: string;
+  session_id?: string;
+  limit?: number;
+  offset?: number;
+}
