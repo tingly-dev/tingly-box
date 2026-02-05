@@ -10,7 +10,7 @@ import {
     Psychology as PromptIcon,
     Bolt as SkillIcon,
     Send as UserPromptIcon,
-    Remote as RemoteIcon,
+    Lan as RemoteIcon,
     NewReleases,
     ErrorOutline,
 } from '@mui/icons-material';

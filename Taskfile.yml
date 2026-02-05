@@ -278,36 +278,32 @@ tasks:
         docker run --rm --platform linux/arm64 tingly-box:arm64 \
         sh -c "cd /app && go test ./internal/... -v"
 
-  # Opsx Service tasks
-  opsx:build:
-    summary: Build the opsx-service binary
+  # remote-cc Service tasks
+  remote-cc:build:
+    summary: Build the remote-cc-service binary
     cmds:
       - |
-        cd cmd/opsx-service
+        cd cmd/remote-cc
         go mod tidy
-        go build -o ../../bin/opsx-service .
+        go build -o ../../bin/remote-cc-service .
 
-  opsx:run:
-    summary: Run opsx-service with default configuration
+  remote-cc:run:
+    summary: Run remote-cc-service with default configuration
     env:
       OPSX_PORT: "18080"
       OPSX_JWT_SECRET: "test-secret-key"
       OPSX_SESSION_TIMEOUT: "30m"
     cmds:
-      - |
-        OPSX_PORT={{.OPSX_PORT | default "18080"}} \
-        OPSX_JWT_SECRET={{.OPSX_JWT_SECRET | default "test-secret-key"}} \
-        OPSX_SESSION_TIMEOUT={{.OPSX_SESSION_TIMEOUT | default "30m"}} \
-        go run ./cmd/opsx-service
+      - cd cmd/remote-cc && OPSX_PORT={{.OPSX_PORT | default "18080"}} OPSX_JWT_SECRET={{.OPSX_JWT_SECRET | default "test-secret-key"}} OPSX_SESSION_TIMEOUT={{.OPSX_SESSION_TIMEOUT | default "30m"}} go run .
 
-  opsx:test:
-    summary: Run tests for opsx-service
+  remote-cc:test:
+    summary: Run tests for remote-cc-service
     cmds:
       - |
-        go test ./cmd/opsx-service/... -v
+        go test ./cmd/remote-cc/... -v
 
-  opsx:build:cross:
-    summary: Cross-compile opsx-service for all platforms
+  remote-cc:build:cross:
+    summary: Cross-compile remote-cc-service for all platforms
     env:
       VERSION: "dev"
     cmds:
@@ -317,23 +313,21 @@ tasks:
             echo "Building for $os/$arch..."
             GOOS=$os GOARCH=$arch \
             go build -ldflags="-X main.version=${VERSION}" \
-            -o ./bin/opsx-service-$os-$arch \
-            ./cmd/opsx-service
+            -o ./bin/remote-cc-service-$os-$arch \
+            ./cmd/remote-cc
           done
         done
 
-  opsx-token:build:
-    summary: Build the opsx-token binary
+  remote-cc-token:build:
+    summary: Build the remote-cc-token binary
     cmds:
       - |
-        cd cmd/opsx-service
-        go build -o ../../bin/opsx-token ./cmd/opsx-token
+        cd cmd/remote-cc
+        go build -o ../../bin/remote-cc-token ./cmd/opsx-token
 
-  opsx-token:run:
+  remote-cc-token:run:
     summary: Generate an API token (run via SSH)
     env:
       OPSX_JWT_SECRET: "test-secret-key"
     cmds:
-      - |
-        OPSX_JWT_SECRET={{.OPSX_JWT_SECRET | default "test-secret-key"}} \
-        go run ./cmd/opsx-service/cmd/opsx-token
+      - cd cmd/remote-cc && OPSX_JWT_SECRET={{.OPSX_JWT_SECRET | default "test-secret-key"}} go run ./cmd/opsx-token

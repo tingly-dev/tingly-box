@@ -911,6 +911,29 @@ export const api = {
     // Remote CC API (opsx-service)
     // ============================================
 
+    // Get the base URL for remote-cc service
+    getRemoteCCBaseUrl: (): string => {
+        return `${window.location.protocol}//${window.location.hostname}:18080`;
+    },
+
+    // Check if remote-cc service is available
+    checkRemoteCCAvailable: async (): Promise<boolean> => {
+        try {
+            const baseUrl = api.getRemoteCCBaseUrl();
+            const response = await fetch(`${baseUrl}/remote-cc/available`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
+            const data = await response.json();
+            return data.available === true;
+        } catch (error: any) {
+            console.error('Remote-CC availability check failed:', error);
+            return false;
+        }
+    },
+
     // Get remote-cc sessions
     getRemoteCCSessions: async (params: { page?: number; limit?: number; status?: string } = {}): Promise<any> => {
         try {
@@ -918,9 +941,10 @@ export const api = {
             const queryParams = new URLSearchParams();
             if (params.page) queryParams.set('page', params.page.toString());
             if (params.limit) queryParams.set('limit', params.limit.toString());
-            if (params.status) queryParams.set('status', params.status);
+            if (params.status) queryParams.set('status', params.status.toString());
 
-            const url = `/remote-cc/sessions${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+            const baseUrl = api.getRemoteCCBaseUrl();
+            const url = `${baseUrl}/remote-cc/sessions${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
             const response = await fetch(url, {
                 method: 'GET',
                 headers: {
@@ -945,7 +969,8 @@ export const api = {
     getRemoteCCSession: async (sessionId: string): Promise<any> => {
         try {
             const token = getUserAuthToken();
-            const response = await fetch(`/remote-cc/sessions/${sessionId}`, {
+            const baseUrl = api.getRemoteCCBaseUrl();
+            const response = await fetch(`${baseUrl}/remote-cc/sessions/${sessionId}`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -973,7 +998,8 @@ export const api = {
     sendRemoteCCChat: async (data: { session_id?: string; message: string; context?: Record<string, any> }): Promise<any> => {
         try {
             const token = getUserAuthToken();
-            const response = await fetch('/remote-cc/chat', {
+            const baseUrl = api.getRemoteCCBaseUrl();
+            const response = await fetch(`${baseUrl}/remote-cc/chat`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

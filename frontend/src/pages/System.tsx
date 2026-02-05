@@ -7,6 +7,7 @@ import { PageLayout } from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import GlobalExperimentalFeatures from '@/components/GlobalExperimentalFeatures';
 import RequestLog from '@/components/RequestLog';
+import RemoteCCConfig from '@/components/RemoteCCConfig';
 import { api, getBaseUrl } from '../services/api';
 import { useVersion } from '../contexts/VersionContext';
 import { useHealth } from '../contexts/HealthContext';
@@ -311,6 +312,19 @@ const System = () => {
                                 These experimental features apply globally to all scenarios. Individual scenarios can override these settings.
                             </Typography>
                             <GlobalExperimentalFeatures />
+                        </Stack>
+                    </UnifiedCard>
+
+                    {/* Remote CC */}
+                    <UnifiedCard
+                        title="Remote Claude Code"
+                        size="full"
+                    >
+                        <Stack spacing={2}>
+                            <Typography variant="body2" color="text.secondary">
+                                Enable remote access to Claude Code. When enabled, a "Remote CC" menu item will appear in the sidebar, allowing you to chat with Claude Code sessions remotely.
+                            </Typography>
+                            <RemoteCCConfig />
                         </Stack>
                     </UnifiedCard>
 
