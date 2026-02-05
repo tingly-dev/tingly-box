@@ -101,6 +101,50 @@ const RemoteCCPage: React.FC = () => {
     }, [lastSelectedSessionId]);
 
     useEffect(() => {
+        const raw = localStorage.getItem('remotecc.expandedMessages') || '';
+        if (!raw) return;
+        try {
+            const data = JSON.parse(raw) as Record<string, number[]>;
+            const next: Record<string, Set<number>> = {};
+            for (const [key, values] of Object.entries(data)) {
+                if (Array.isArray(values)) {
+                    next[key] = new Set(values.filter((v) => Number.isInteger(v)));
+                }
+            }
+            setExpandedBySession(next);
+        } catch {
+            // ignore parse errors
+        }
+    }, []);
+
+    useEffect(() => {
+        const payload: Record<string, number[]> = {};
+        for (const [key, value] of Object.entries(expandedBySession)) {
+            payload[key] = Array.from(value);
+        }
+        localStorage.setItem('remotecc.expandedMessages', JSON.stringify(payload));
+    }, [expandedBySession]);
+
+    useEffect(() => {
+        if (!sessionKey) return;
+        const raw = localStorage.getItem(`remotecc.chatHistory.${sessionKey}`) || '';
+        if (!raw) return;
+        try {
+            const parsed = JSON.parse(raw) as ChatMessage[];
+            if (Array.isArray(parsed)) {
+                setChatHistory(parsed);
+            }
+        } catch {
+            // ignore parse errors
+        }
+    }, [sessionKey]);
+
+    useEffect(() => {
+        if (!sessionKey) return;
+        localStorage.setItem(`remotecc.chatHistory.${sessionKey}`, JSON.stringify(chatHistory));
+    }, [chatHistory, sessionKey]);
+
+    useEffect(() => {
         if (selectedSession?.id) {
             const stored = projectPathBySession[selectedSession.id] || '';
             setProjectPath(stored);
@@ -139,6 +183,48 @@ const RemoteCCPage: React.FC = () => {
     useEffect(() => {
         fetchSessions();
     }, []);
+
+    useEffect(() => {
+        if (!lastSelectedSessionId || selectedSession) return;
+        api.getRemoteCCSession(lastSelectedSessionId)
+            .then(async (sessionData) => {
+                if (!sessionData?.id) return;
+                setSelectedSession(sessionData);
+                setSessions((prev) => {
+                    if (prev.some((s) => s.id === sessionData.id)) return prev;
+                    return [sessionData, ...prev];
+                });
+                const messages = await api.getRemoteCCSessionMessages(sessionData.id);
+                if (messages?.messages && Array.isArray(messages.messages)) {
+                    setChatHistory(messages.messages.map((m: any) => ({
+                        role: m.role,
+                        content: m.content || '',
+                        summary: m.summary,
+                        timestamp: m.timestamp || new Date().toISOString(),
+                    })));
+                    return;
+                }
+
+                if (sessionData.request || sessionData.response) {
+                    setChatHistory([
+                        {
+                            role: 'user',
+                            content: sessionData.request || '',
+                            timestamp: sessionData.created_at,
+                        },
+                        {
+                            role: 'assistant',
+                            content: sessionData.response || '',
+                            summary: sessionData.response || '',
+                            timestamp: sessionData.last_activity,
+                        },
+                    ]);
+                }
+            })
+            .catch((err) => {
+                console.error('Failed to restore last session:', err);
+            });
+    }, [lastSelectedSessionId, selectedSession]);
 
     useEffect(() => {
         if (!sessions.length || selectedSession) return;
@@ -231,7 +317,18 @@ const RemoteCCPage: React.FC = () => {
         setLastSelectedSessionId(session.id);
         setProjectPathDialogOpen(!(projectPathBySession[session.id] || '').trim());
 
-        // Load chat history from session
+        const messages = await api.getRemoteCCSessionMessages(session.id);
+        if (messages?.messages && Array.isArray(messages.messages)) {
+            setChatHistory(messages.messages.map((m: any) => ({
+                role: m.role,
+                content: m.content || '',
+                summary: m.summary,
+                timestamp: m.timestamp || new Date().toISOString(),
+            })));
+            return;
+        }
+
+        // Fallback to session summary
         if (session.request || session.response) {
             setChatHistory([
                 {

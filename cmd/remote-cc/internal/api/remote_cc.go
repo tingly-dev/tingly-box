@@ -65,6 +65,14 @@ type RemoteChatResponse struct {
 	Error      string `json:"error,omitempty"`
 }
 
+// RemoteChatMessage represents a chat message for API response
+type RemoteChatMessage struct {
+	Role      string `json:"role"`
+	Content   string `json:"content"`
+	Summary   string `json:"summary,omitempty"`
+	Timestamp string `json:"timestamp"`
+}
+
 // GetSessions handles GET /remote-cc/sessions
 func (h *RemoteCCHandler) GetSessions(c *gin.Context) {
 	start := time.Now()
@@ -232,6 +240,13 @@ func (h *RemoteCCHandler) Chat(c *gin.Context) {
 		h.sessionMgr.SetRequest(sessionID, req.Message)
 	}
 
+	// Append user message to history
+	h.sessionMgr.AppendMessage(sessionID, session.Message{
+		Role:      "user",
+		Content:   req.Message,
+		Timestamp: time.Now(),
+	})
+
 	// Update session status
 	h.sessionMgr.SetRunning(sessionID)
 
@@ -271,6 +286,14 @@ func (h *RemoteCCHandler) Chat(c *gin.Context) {
 	// Generate summary (chopped response)
 	summary := h.summaryEngine.Summarize(response)
 
+	// Append assistant message to history
+	h.sessionMgr.AppendMessage(sessionID, session.Message{
+		Role:      "assistant",
+		Content:   response,
+		Summary:   summary,
+		Timestamp: time.Now(),
+	})
+
 	logrus.Debugf("Remote-cc chat completed: session=%s, response_length=%d, summary_length=%d",
 		sessionID, len(response), len(summary))
 
@@ -285,6 +308,47 @@ func (h *RemoteCCHandler) Chat(c *gin.Context) {
 		Summary:       summary,
 		FullResponse: response,
 		Success:     true,
+	})
+}
+
+// GetSessionMessages handles GET /remote-cc/sessions/:id/messages
+func (h *RemoteCCHandler) GetSessionMessages(c *gin.Context) {
+	start := time.Now()
+	clientIP := c.ClientIP()
+	userID := getUserID(c)
+	sessionID := c.Param("id")
+
+	messages, exists := h.sessionMgr.GetMessages(sessionID)
+	if !exists {
+		h.auditLogger.LogRequest("remote_cc_session_messages", userID, clientIP, sessionID, getRequestID(c), false, time.Since(start), map[string]interface{}{
+			"error": "session not found",
+		})
+
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": gin.H{
+				"message": "Session not found",
+				"type":    "not_found_error",
+			},
+		})
+		return
+	}
+
+	resp := make([]RemoteChatMessage, 0, len(messages))
+	for _, msg := range messages {
+		resp = append(resp, RemoteChatMessage{
+			Role:      msg.Role,
+			Content:   msg.Content,
+			Summary:   msg.Summary,
+			Timestamp: msg.Timestamp.Format(time.RFC3339),
+		})
+	}
+
+	h.auditLogger.LogRequest("remote_cc_session_messages", userID, clientIP, sessionID, getRequestID(c), true, time.Since(start), map[string]interface{}{
+		"count": len(resp),
+	})
+
+	c.JSON(http.StatusOK, gin.H{
+		"messages": resp,
 	})
 }
 

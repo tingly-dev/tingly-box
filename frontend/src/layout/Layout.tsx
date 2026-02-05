@@ -11,6 +11,7 @@ import {
     Bolt as SkillIcon,
     Send as UserPromptIcon,
     Lan as RemoteIcon,
+    ChatBubbleOutline as ChatIcon,
     NewReleases,
     ErrorOutline,
 } from '@mui/icons-material';
@@ -190,7 +191,7 @@ const Layout = ({ children }: LayoutProps) => {
                 {
                     path: '/remote-cc/chat',
                     label: 'Chat',
-                    icon: <RemoteIcon sx={{ fontSize: 20 }} />,
+                    icon: <ChatIcon sx={{ fontSize: 20 }} />,
                 },
                 {
                     path: '/remote-cc/sessions',

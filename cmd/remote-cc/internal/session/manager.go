@@ -36,6 +36,15 @@ type Session struct {
 	LastActivity  time.Time              // Last activity timestamp
 	ExpiresAt     time.Time              // Session expiration timestamp
 	Context       map[string]interface{} // Request context for continued communication
+	Messages      []Message              // Chat message history
+}
+
+// Message represents a chat message within a session
+type Message struct {
+	Role      string    // "user" or "assistant"
+	Content   string    // Full content
+	Summary   string    // Optional summary for assistant responses
+	Timestamp time.Time // When the message was created
 }
 
 // Manager handles session lifecycle
@@ -193,6 +202,26 @@ func (m *Manager) SetContext(id string, key string, value interface{}) bool {
 	return m.Update(id, func(s *Session) {
 		s.Context[key] = value
 	})
+}
+
+// AppendMessage adds a message to a session
+func (m *Manager) AppendMessage(id string, msg Message) bool {
+	return m.Update(id, func(s *Session) {
+		s.Messages = append(s.Messages, msg)
+	})
+}
+
+// GetMessages retrieves messages for a session
+func (m *Manager) GetMessages(id string) ([]Message, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	session, exists := m.sessions[id]
+	if !exists {
+		return nil, false
+	}
+
+	return append([]Message{}, session.Messages...), true
 }
 
 // GetContext retrieves context data for a session
