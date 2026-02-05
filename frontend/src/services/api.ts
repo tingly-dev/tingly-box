@@ -1144,6 +1144,199 @@ export const api = {
             return { success: false, error: error.message };
         }
     },
+
+    // ============================================
+    // Prompt Recording API
+    // ============================================
+
+    // Get prompt rounds with filtering and pagination
+    getPromptRounds: async (params: {
+        scenario?: string;
+        protocol?: string;
+        limit?: number;
+        offset?: number;
+    } = {}): Promise<any> => {
+        try {
+            const token = getUserAuthToken();
+            const queryParams = new URLSearchParams();
+            if (params.scenario) queryParams.set('scenario', params.scenario);
+            if (params.protocol) queryParams.set('protocol', params.protocol);
+            if (params.limit) queryParams.set('limit', params.limit.toString());
+            if (params.offset) queryParams.set('offset', params.offset.toString());
+
+            const response = await fetch(`${await getApiBaseUrl()}/api/v1/prompts/rounds?${queryParams}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+            });
+
+            if (response.status === 401) {
+                localStorage.removeItem('user_auth_token');
+                window.location.href = '/login';
+                return { success: false, error: 'Authentication required' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Get user inputs for prompt user page
+    getPromptUserInputs: async (params: {
+        scenario?: string;
+        limit?: number;
+    } = {}): Promise<any> => {
+        try {
+            const token = getUserAuthToken();
+            const queryParams = new URLSearchParams();
+            if (params.scenario) queryParams.set('scenario', params.scenario);
+            if (params.limit) queryParams.set('limit', params.limit.toString());
+
+            const response = await fetch(`${await getApiBaseUrl()}/api/v1/prompts/user-inputs?${queryParams}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+            });
+
+            if (response.status === 401) {
+                localStorage.removeItem('user_auth_token');
+                window.location.href = '/login';
+                return { success: false, error: 'Authentication required' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Search prompt rounds by user input content
+    searchPromptRounds: async (params: {
+        query: string;
+        scenario?: string;
+        limit?: number;
+    }): Promise<any> => {
+        try {
+            const token = getUserAuthToken();
+            const queryParams = new URLSearchParams();
+            queryParams.set('q', params.query);
+            if (params.scenario) queryParams.set('scenario', params.scenario);
+            if (params.limit) queryParams.set('limit', params.limit.toString());
+
+            const response = await fetch(`${await getApiBaseUrl()}/api/v1/prompts/search?${queryParams}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+            });
+
+            if (response.status === 401) {
+                localStorage.removeItem('user_auth_token');
+                window.location.href = '/login';
+                return { success: false, error: 'Authentication required' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Get rounds by project and/or session ID
+    getPromptRoundsByProjectSession: async (params: {
+        project_id?: string;
+        session_id?: string;
+        limit?: number;
+    }): Promise<any> => {
+        try {
+            const token = getUserAuthToken();
+            const queryParams = new URLSearchParams();
+            if (params.project_id) queryParams.set('project_id', params.project_id);
+            if (params.session_id) queryParams.set('session_id', params.session_id);
+            if (params.limit) queryParams.set('limit', params.limit.toString());
+
+            const response = await fetch(`${await getApiBaseUrl()}/api/v1/prompts/by-project-session?${queryParams}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+            });
+
+            if (response.status === 401) {
+                localStorage.removeItem('user_auth_token');
+                window.location.href = '/login';
+                return { success: false, error: 'Authentication required' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Get rounds by metadata key-value
+    getPromptRoundsByMetadata: async (params: {
+        key: string;
+        value: string;
+        limit?: number;
+    }): Promise<any> => {
+        try {
+            const token = getUserAuthToken();
+            const queryParams = new URLSearchParams();
+            queryParams.set('key', params.key);
+            queryParams.set('value', params.value);
+            if (params.limit) queryParams.set('limit', params.limit.toString());
+
+            const response = await fetch(`${await getApiBaseUrl()}/api/v1/prompts/by-metadata?${queryParams}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+            });
+
+            if (response.status === 401) {
+                localStorage.removeItem('user_auth_token');
+                window.location.href = '/login';
+                return { success: false, error: 'Authentication required' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Delete old prompt records
+    deleteOldPromptRecords: async (days: number): Promise<any> => {
+        try {
+            const token = getUserAuthToken();
+            const response = await fetch(`${await getApiBaseUrl()}/api/v1/prompts/old-records?days=${days}`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+            });
+
+            if (response.status === 401) {
+                localStorage.removeItem('user_auth_token');
+                window.location.href = '/login';
+                return { success: false, error: 'Authentication required' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
 };
 
 export default api;
