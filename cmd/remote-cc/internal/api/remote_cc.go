@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -46,6 +47,7 @@ type RemoteSession struct {
 	CreatedAt    string    `json:"created_at"`
 	LastActivity string    `json:"last_activity"`
 	ExpiresAt    string    `json:"expires_at"`
+	ProjectPath  string    `json:"project_path,omitempty"`
 }
 
 // RemoteChatRequest represents a chat request to Claude Code
@@ -120,6 +122,14 @@ func (h *RemoteCCHandler) GetSessions(c *gin.Context) {
 	// Convert to response format
 	entries := make([]RemoteSession, len(paginatedSessions))
 	for i, s := range paginatedSessions {
+		projectPath := ""
+		if s.Context != nil {
+			if v, ok := s.Context["project_path"]; ok {
+				if pv, ok := v.(string); ok {
+					projectPath = pv
+				}
+			}
+		}
 		entries[i] = RemoteSession{
 			ID:           s.ID,
 			Status:       string(s.Status),
@@ -129,6 +139,7 @@ func (h *RemoteCCHandler) GetSessions(c *gin.Context) {
 			CreatedAt:    s.CreatedAt.Format(time.RFC3339),
 			LastActivity: s.LastActivity.Format(time.RFC3339),
 			ExpiresAt:    s.ExpiresAt.Format(time.RFC3339),
+			ProjectPath:  projectPath,
 		}
 	}
 
@@ -177,6 +188,15 @@ func (h *RemoteCCHandler) GetSession(c *gin.Context) {
 
 	h.auditLogger.LogRequest("remote_cc_session_get", userID, clientIP, sessionID, getRequestID(c), true, time.Since(start), nil)
 
+	projectPath := ""
+	if session.Context != nil {
+		if v, ok := session.Context["project_path"]; ok {
+			if pv, ok := v.(string); ok {
+				projectPath = pv
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, RemoteSession{
 		ID:           session.ID,
 		Status:       string(session.Status),
@@ -186,6 +206,7 @@ func (h *RemoteCCHandler) GetSession(c *gin.Context) {
 		CreatedAt:    session.CreatedAt.Format(time.RFC3339),
 		LastActivity: session.LastActivity.Format(time.RFC3339),
 		ExpiresAt:    session.ExpiresAt.Format(time.RFC3339),
+		ProjectPath:  projectPath,
 	})
 }
 
@@ -255,7 +276,20 @@ func (h *RemoteCCHandler) Chat(c *gin.Context) {
 	defer cancel()
 
 	// Execute Claude Code
-	result, err := h.claudeLauncher.Execute(ctx, req.Message)
+	projectPath := ""
+	if req.Context != nil {
+		if v, ok := req.Context["project_path"]; ok {
+			if s, ok := v.(string); ok {
+				projectPath = strings.TrimSpace(s)
+			}
+		}
+	}
+	if projectPath != "" {
+		h.sessionMgr.SetContext(sessionID, "project_path", projectPath)
+	}
+	result, err := h.claudeLauncher.Execute(ctx, req.Message, launcher.ExecuteOptions{
+		ProjectPath: projectPath,
+	})
 	response := result.Output
 	if err != nil && result.Error != "" {
 		response = result.Error

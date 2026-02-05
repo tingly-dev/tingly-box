@@ -26,6 +26,11 @@ type ClaudeCodeLauncher struct {
 	skipPermissions bool  // Whether to skip permission prompts
 }
 
+// ExecuteOptions controls Claude Code execution
+type ExecuteOptions struct {
+	ProjectPath string
+}
+
 // NewClaudeCodeLauncher creates a new Claude Code launcher
 func NewClaudeCodeLauncher() *ClaudeCodeLauncher {
 	return &ClaudeCodeLauncher{
@@ -35,14 +40,30 @@ func NewClaudeCodeLauncher() *ClaudeCodeLauncher {
 	}
 }
 
+// SetSkipPermissions enables or disables skip permissions mode
+func (l *ClaudeCodeLauncher) SetSkipPermissions(enabled bool) {
+	l.skipPermissions = enabled
+}
+
+// SetCLIPath sets an explicit CLI path
+func (l *ClaudeCodeLauncher) SetCLIPath(path string) {
+	if strings.TrimSpace(path) != "" {
+		l.cliPath = path
+	}
+}
+
 // Execute runs Claude Code with the given prompt
-func (l *ClaudeCodeLauncher) Execute(ctx context.Context, prompt string) (*Result, error) {
-	return l.ExecuteWithTimeout(ctx, prompt, l.defaultTimeout)
+func (l *ClaudeCodeLauncher) Execute(ctx context.Context, prompt string, opts ExecuteOptions) (*Result, error) {
+	return l.ExecuteWithTimeout(ctx, prompt, l.defaultTimeout, opts)
 }
 
 // ExecuteWithTimeout runs Claude Code with a specific timeout
-func (l *ClaudeCodeLauncher) ExecuteWithTimeout(ctx context.Context, prompt string, timeout time.Duration) (*Result, error) {
+func (l *ClaudeCodeLauncher) ExecuteWithTimeout(ctx context.Context, prompt string, timeout time.Duration, opts ExecuteOptions) (*Result, error) {
 	start := time.Now()
+
+	if !l.IsAvailable() {
+		return &Result{Error: "claude CLI not found"}, exec.ErrNotFound
+	}
 
 	// Build command args
 	args := []string{"--print", "--output-format", "text"}
@@ -55,6 +76,15 @@ func (l *ClaudeCodeLauncher) ExecuteWithTimeout(ctx context.Context, prompt stri
 	args = append(args, prompt)
 
 	cmd := exec.CommandContext(ctx, l.cliPath, args...)
+	if strings.TrimSpace(opts.ProjectPath) != "" {
+		if stat, err := os.Stat(opts.ProjectPath); err == nil && stat.IsDir() {
+			cmd.Dir = opts.ProjectPath
+		} else if err != nil {
+			return &Result{Error: "invalid project path: " + err.Error()}, err
+		} else {
+			return &Result{Error: "invalid project path: not a directory"}, os.ErrInvalid
+		}
+	}
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

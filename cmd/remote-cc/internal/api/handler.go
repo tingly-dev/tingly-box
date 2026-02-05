@@ -212,7 +212,7 @@ func (h *Handler) Execute(c *gin.Context) {
 	h.sessionMgr.SetRunning(req.SessionID)
 
 	// Execute Claude Code
-	result, err := h.claude.Execute(c.Request.Context(), req.Request)
+	result, err := h.claude.Execute(c.Request.Context(), req.Request, launcher.ExecuteOptions{})
 
 	response := ExecuteResponse{
 		SessionID: req.SessionID,

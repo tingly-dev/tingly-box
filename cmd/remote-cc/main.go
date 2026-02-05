@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -67,6 +68,12 @@ func main() {
 	}, store)
 
 	claudeLauncher := launcher.NewClaudeCodeLauncher()
+	if path := strings.TrimSpace(os.Getenv("RCC_CLAUDE_PATH")); path != "" {
+		claudeLauncher.SetCLIPath(path)
+	}
+	if v := strings.ToLower(strings.TrimSpace(os.Getenv("RCC_SKIP_PERMISSIONS"))); v == "1" || v == "true" || v == "yes" {
+		claudeLauncher.SetSkipPermissions(true)
+	}
 	summaryEngine := summarizer.NewEngine()
 
 	// Initialize audit logger
