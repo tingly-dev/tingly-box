@@ -42,7 +42,10 @@ func SetTrackingContext(c *gin.Context, rule *typ.Rule, provider *typ.Provider, 
 
 	// Extract scenario from path if not already set
 	if _, exists := c.Get(ContextKeyScenario); !exists {
-		scenario := extractScenarioFromPath(c.Request.URL.Path)
+		scenario := "unknown"
+		if c.Request != nil && c.Request.URL != nil {
+			scenario = extractScenarioFromPath(c.Request.URL.Path)
+		}
 		c.Set(ContextKeyScenario, scenario)
 	}
 }

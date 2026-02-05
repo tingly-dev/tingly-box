@@ -91,6 +91,10 @@ func sanitizeErrorCode(err error) string {
 // recordDetailedUsage writes a detailed usage record to the database.
 // This maintains the detailed analytics tracking for the dashboard.
 func (s *Server) recordDetailedUsage(c *gin.Context, rule *typ.Rule, provider *typ.Provider, model, requestModel, scenario string, inputTokens, outputTokens int, streamed bool, status, errorCode string, latencyMs int) {
+	if s.config == nil {
+		return
+	}
+
 	usageStore := s.config.GetUsageStore()
 	if usageStore == nil {
 		return
@@ -121,7 +125,7 @@ func (s *Server) recordDetailedUsage(c *gin.Context, rule *typ.Rule, provider *t
 // updateServiceStats updates the service-level statistics for load balancing.
 // This is inlined from the old UsageTracker.recordOnService to avoid unnecessary allocations.
 func (s *Server) updateServiceStats(rule *typ.Rule, provider *typ.Provider, model string, inputTokens, outputTokens int) {
-	if rule == nil || provider == nil {
+	if rule == nil || provider == nil || s.config == nil {
 		return
 	}
 
