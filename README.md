@@ -14,7 +14,7 @@
   <a href="#key-features">Features</a> •
   <a href="#use-with-openai-sdk-or-claude-code">Usage</a> •
   <a href="#documentation">Documentation</a> •
-  <a href="#https://github.com/tingly-dev/tingly-box/issues">Issues</a>
+  <a href="https://github.com/tingly-dev/tingly-box/issues">Issues</a>
 </p>
 
 <p align="center">
