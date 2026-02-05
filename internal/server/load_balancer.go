@@ -7,7 +7,6 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
-	"github.com/tingly-dev/tingly-box/internal/server/middleware"
 	typ "github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -15,17 +14,15 @@ import (
 type LoadBalancer struct {
 	tactics map[loadbalance.TacticType]typ.LoadBalancingTactic
 	stats   map[string]*loadbalance.ServiceStats
-	statsMW *middleware.StatsMiddleware
 	config  *config.Config
 	mutex   sync.RWMutex
 }
 
 // NewLoadBalancer creates a new load balancer
-func NewLoadBalancer(statsMW *middleware.StatsMiddleware, cfg *config.Config) *LoadBalancer {
+func NewLoadBalancer(cfg *config.Config) *LoadBalancer {
 	lb := &LoadBalancer{
 		tactics: make(map[loadbalance.TacticType]typ.LoadBalancingTactic),
 		stats:   make(map[string]*loadbalance.ServiceStats),
-		statsMW: statsMW,
 		config:  cfg,
 	}
 
@@ -112,9 +109,15 @@ func (lb *LoadBalancer) UpdateServiceIndex(rule *typ.Rule, selectedService *load
 }
 
 // RecordUsage records usage for a service
+// Deprecated: This method is no longer needed as usage is recorded directly in handlers
 func (lb *LoadBalancer) RecordUsage(provider, model string, inputTokens, outputTokens int) {
-	serviceID := fmt.Sprintf("%s:%s", provider, model)
-	lb.statsMW.RecordUsage(serviceID, inputTokens, outputTokens)
+	// No-op: usage is now recorded directly in handlers via trackUsageFromContext
+	// This method is kept for backward compatibility during the migration
+}
+
+// Stop stops the load balancer and cleanup resources
+func (lb *LoadBalancer) Stop() {
+	// No-op: no resources to cleanup
 }
 
 // GetServiceStats returns statistics for a specific service
@@ -307,12 +310,5 @@ func (lb *LoadBalancer) GetRuleSummary(rule *typ.Rule) map[string]interface{} {
 		"active":             rule.Active,
 		"is_legacy":          false,
 		"services":           serviceSummaries,
-	}
-}
-
-// Stop stops the load balancer and cleanup resources
-func (lb *LoadBalancer) Stop() {
-	if lb.statsMW != nil {
-		lb.statsMW.Stop()
 	}
 }

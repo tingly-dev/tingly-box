@@ -41,7 +41,6 @@ type Server struct {
 	logger     *obs.MemoryLogger
 
 	// middleware
-	statsMW         *middleware.StatsMiddleware
 	errorMW         *middleware.ErrorLogMiddleware
 	authMW          *middleware.AuthMiddleware
 	memoryLogMW     *middleware.MemoryLogMiddleware
@@ -339,9 +338,6 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 		log.Panicf("Unknown recording mode %s", server.recordMode)
 	}
 
-	// Initialize statistics middleware with server reference
-	statsMW := middleware.NewStatsMiddleware(cfg)
-
 	// Initialize memory log middleware for HTTP request logging
 	memoryLogMW := middleware.NewMemoryLogMiddleware(1000) // Store up to 1000 entries
 
@@ -349,7 +345,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	authMW := middleware.NewAuthMiddleware(cfg, jwtManager)
 
 	// Initialize load balancer
-	loadBalancer := NewLoadBalancer(statsMW, cfg)
+	loadBalancer := NewLoadBalancer(cfg)
 
 	// Initialize load balancer API
 	loadBalancerAPI := NewLoadBalancerAPI(loadBalancer, cfg)
@@ -379,7 +375,6 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	tokenRefresher := background.NewTokenRefresher(oauthManager, cfg)
 
 	// Update server with dependencies
-	server.statsMW = statsMW
 	server.authMW = authMW
 	server.memoryLogMW = memoryLogMW
 	server.loadBalancer = loadBalancer
@@ -626,11 +621,6 @@ func (s *Server) setupMiddleware() {
 	// Debug middleware for logging requests/responses (only if enabled)
 	if s.errorMW != nil {
 		s.engine.Use(s.errorMW.Middleware())
-	}
-
-	// Statistics middleware for load balancing
-	if s.statsMW != nil {
-		s.engine.Use(s.statsMW.Middleware())
 	}
 
 	// CORS middleware
