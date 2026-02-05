@@ -34,10 +34,11 @@ interface Provider {
     name: string;
 }
 
-type TimeRange = 'today' | '7d' | '30d' | '90d';
+type TimeRange = 'today' | 'yesterday' | '7d' | '30d' | '90d';
 
 const TIME_RANGE_CONFIG: Record<TimeRange, { label: string; days: number; interval: string }> = {
     today: { label: 'Today', days: 1, interval: 'hour' },
+    yesterday: { label: 'Yesterday', days: 1, interval: 'hour' },
     '7d': { label: '7 Days', days: 7, interval: 'day' },
     '30d': { label: '30 Days', days: 30, interval: 'day' },
     '90d': { label: '90 Days', days: 90, interval: 'day' },
@@ -91,6 +92,10 @@ export default function DashboardPage() {
             if (range === 'today') {
                 // For today: from today 00:00:00 to now
                 endTime = now;
+            } else if (range === 'yesterday') {
+                // For yesterday: from yesterday 00:00:00 to today 00:00:00
+                startTime.setDate(startTime.getDate() - 1);
+                endTime = new Date(todayStart);
             } else {
                 // For multi-day mode: from (N-1) days ago 00:00:00 to tomorrow 00:00:00
                 // This ensures we get complete data for today
@@ -338,7 +343,7 @@ export default function DashboardPage() {
             {/* Charts */}
             <Grid container spacing={2.5} sx={{ mb: 4 }}>
                 <Grid size={{ xs: 12, md: 6 }}>
-                    {timeRange === 'today' ? (
+                    {timeRange === 'today' || timeRange === 'yesterday' ? (
                         <HourlyTokenHistoryChart data={timeSeries} />
                     ) : (
                         <DailyTokenHistoryChart data={timeSeries} />
