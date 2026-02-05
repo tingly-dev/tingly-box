@@ -1,15 +1,21 @@
 import React, { useState } from 'react';
 import { Alert, Box, Button, Container, Paper, Snackbar, TextField, Typography } from '@mui/material';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 
 const Login: React.FC = () => {
     const { t } = useTranslation();
+    const navigate = useNavigate();
+    const location = useLocation();
     const [token, setToken] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
     const { login } = useAuth();
+
+    // Get the redirect path from router state or sessionStorage, default to '/'
+    const from = (location.state as any)?.from?.pathname || sessionStorage.getItem('redirectAfterLogin') || '/';
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -33,9 +39,11 @@ const Login: React.FC = () => {
             if (response.ok) {
                 await login(token);
                 setShowSuccess(true);
-                // Refresh page after successful login to ensure all state and API instances are properly initialized
+                // Clear the saved redirect path
+                sessionStorage.removeItem('redirectAfterLogin');
+                // Navigate to the original path after successful login
                 setTimeout(() => {
-                    window.location.href = '/';
+                    navigate(from, { replace: true });
                 }, 500);
             } else {
                 setError(t('login.errors.invalidToken'));

@@ -106,6 +106,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     const handleGoToLogin = () => {
         setAuthPromptOpen(false);
+        // Save current location for redirect after login
+        const currentPath = window.location.pathname + window.location.search + window.location.hash;
+        sessionStorage.setItem('redirectAfterLogin', currentPath);
         window.location.href = '/login';
     };
 
