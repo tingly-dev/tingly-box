@@ -666,6 +666,59 @@ func (sr *ScenarioRecorder) recordPromptRounds(provider *typ.Provider, model str
 		requestID = extractorWithMeta.ExtractRequestID(httpHeaders)
 	}
 
+	// Special handling for claude_code scenario: parse request metadata user_id to extract session_id
+	// The user_id comes from the request body metadata field, not HTTP headers
+	// Format: user_{hash}_account__session_{uuid}
+	// Example: user_5e35a7eade54f54369d7937e3c0530db22e875f470179b5e9cb01e682630c907_account__session_81ca9881-6299-46c2-ae66-7bb28357034f
+	if sr.scenario == "claude_code" {
+		// Extract user_id from parsed request metadata (not from HTTP headers)
+		var anthropicUserID string
+		switch req := sr.parsedRequest.(type) {
+		case *protocol.AnthropicBetaMessagesRequest:
+			if req.BetaMessageNewParams.Metadata.UserID.Valid() {
+				anthropicUserID = req.BetaMessageNewParams.Metadata.UserID.Value
+			}
+		case *protocol.AnthropicMessagesRequest:
+			if req.MessageNewParams.Metadata.UserID.Valid() {
+				anthropicUserID = req.MessageNewParams.Metadata.UserID.Value
+			}
+		}
+
+		if anthropicUserID != "" {
+			// Try to parse claude_code format
+			if parsed := TryParseClaudeCodeUserID(anthropicUserID); parsed != nil {
+				// Use extracted session_id from claude_code user_id
+				sessionID = parsed.SessionID
+				// Store the full user_id hash in metadata
+				if metadata == nil {
+					metadata = make(map[string]interface{})
+				}
+				metadata["claude_code_user_id"] = parsed.UserID
+				metadata["claude_code_user_id_full"] = anthropicUserID
+			} else {
+				// Pattern doesn't match, generate UUID for session_id
+				if sessionID == "" {
+					sessionID = GenerateSessionID()
+				}
+				// Store original user_id in metadata
+				if metadata == nil {
+					metadata = make(map[string]interface{})
+				}
+				metadata["anthropic_user_id"] = anthropicUserID
+			}
+		} else {
+			// No user_id in request metadata, generate session_id
+			if sessionID == "" {
+				sessionID = GenerateSessionID()
+			}
+		}
+	}
+
+	// Ensure session_id is never empty (generate if needed)
+	if sessionID == "" {
+		sessionID = GenerateSessionID()
+	}
+
 	// Convert metadata to JSON string
 	metadataJSON := ""
 	if len(metadata) > 0 {
