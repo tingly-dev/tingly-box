@@ -249,6 +249,19 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 
 			// Use provider-aware conversion for provider-specific handling
 			openaiResp := nonstream.ConvertAnthropicToOpenAIResponseWithProvider(anthropicResp, responseModel, provider, actualModel)
+			if shouldRoundtripResponse(c, "anthropic") {
+				roundtripped, err := roundtripOpenAIMapViaAnthropic(openaiResp, responseModel, provider, actualModel)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, ErrorResponse{
+						Error: ErrorDetail{
+							Message: "Failed to roundtrip response: " + err.Error(),
+							Type:    "api_error",
+						},
+					})
+					return
+				}
+				openaiResp = roundtripped
+			}
 			c.JSON(http.StatusOK, openaiResp)
 			return
 		}
