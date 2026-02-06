@@ -11,6 +11,8 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/data/db"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 
@@ -19,7 +21,8 @@ import (
 
 // RecordScenarioRequest records the scenario-level request (client -> tingly-box)
 // This captures the original request from the client before any transformation
-func (s *Server) RecordScenarioRequest(c *gin.Context, scenario string) *ScenarioRecorder {
+// protocolType is used to select the appropriate extractor for prompt recording
+func (s *Server) RecordScenarioRequest(c *gin.Context, scenario string, protocolType db.ProtocolType) *ScenarioRecorder {
 	scenarioType := typ.RuleScenario(scenario)
 
 	// Get or create sink for this scenario (on-demand)
@@ -28,8 +31,15 @@ func (s *Server) RecordScenarioRequest(c *gin.Context, scenario string) *Scenari
 		return nil
 	}
 
-	// Read and restore the request body
+	// Get prompt store if prompt recording is enabled
+	var memoryStore *db.MemoryStore
+	memoryStore = s.config.GetMemoryStore()
 
+	// Get the appropriate extractor for this protocol
+	var extractor MemoryExtractor
+	extractor = PromptExtractors[protocolType]
+
+	// Read and restore the request body
 	bodyBytes, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		logrus.Debugf("Failed to read request body for scenario recording: %v", err)
@@ -55,28 +65,44 @@ func (s *Server) RecordScenarioRequest(c *gin.Context, scenario string) *Scenari
 	}
 
 	return &ScenarioRecorder{
-		sink:      sink,
-		scenario:  scenario,
-		req:       req,
-		startTime: time.Now(),
-		c:         c,
-		bodyBytes: bodyBytes,
+		sink:        sink,
+		memoryStore: memoryStore,
+		extractor:   extractor,
+		protocol:    protocolType,
+		scenario:    scenario,
+		req:         req,
+		startTime:   time.Now(),
+		c:           c,
+		bodyBytes:   bodyBytes,
 	}
 }
 
 // ScenarioRecorder captures scenario-level request/response recording
+// Enhanced to support prompt recording to database when enabled
 type ScenarioRecorder struct {
-	sink      *obs.Sink
-	scenario  string
-	req       *obs.RecordRequest
-	startTime time.Time
-	c         *gin.Context
-	bodyBytes []byte
+	sink        *obs.Sink
+	memoryStore *db.MemoryStore
+	extractor   MemoryExtractor
+	protocol    db.ProtocolType
+	scenario    string
+	req         *obs.RecordRequest
+	startTime   time.Time
+	c           *gin.Context
+	bodyBytes   []byte
+
+	// parsedRequest holds the pre-parsed request from upstream handlers.
+	// This avoids re-parsing the bodyBytes for prompt recording.
+	// Type can be: *protocol.AnthropicBetaMessagesRequest, *protocol.AnthropicMessagesRequest, etc.
+	parsedRequest interface{}
 
 	// For streaming responses
 	streamChunks      []map[string]interface{} // Collected stream chunks
 	isStreaming       bool                     // Whether this is a streaming response
 	assembledResponse map[string]interface{}   // Assembled response from stream
+
+	// Token counts for prompt recording
+	inputTokens  int
+	outputTokens int
 }
 
 // EnableStreaming enables streaming mode for this recorder
@@ -154,8 +180,19 @@ func (sr *ScenarioRecorder) GetStreamChunks() []map[string]interface{} {
 	return sr.streamChunks
 }
 
+// SetParsedRequest sets the pre-parsed request from upstream handlers.
+// This avoids re-parsing the bodyBytes for prompt recording.
+// Supported types: *protocol.AnthropicBetaMessagesRequest, *protocol.AnthropicMessagesRequest
+func (sr *ScenarioRecorder) SetParsedRequest(req interface{}) {
+	if sr == nil {
+		return
+	}
+	sr.parsedRequest = req
+}
+
 // RecordResponse records the scenario-level response (tingly-box -> client)
 // This captures the response sent back to the client
+// Enhanced to also record prompt rounds to database when prompt_recording is enabled
 func (sr *ScenarioRecorder) RecordResponse(provider *typ.Provider, model string) {
 	if sr == nil || sr.sink == nil {
 		return
@@ -218,6 +255,9 @@ func (sr *ScenarioRecorder) RecordResponse(provider *typ.Provider, model string)
 	// Record with scenario-based file naming
 	duration := time.Since(sr.startTime)
 	sr.sink.RecordWithScenario(provider.Name, model, sr.scenario, sr.req, resp, duration, nil)
+
+	// Enhanced: Also record to database if prompt recording is enabled
+	sr.recordPromptRounds(provider, model, headers, duration)
 }
 
 // RecordError records an error for the scenario-level request
@@ -306,6 +346,11 @@ func (sr *streamRecorder) Finish(model string, inputTokens, outputTokens int) {
 	if inputTokens == 0 && outputTokens == 0 && sr.hasUsage {
 		inputTokens = sr.inputTokens
 		outputTokens = sr.outputTokens
+	}
+	// Store token counts on the scenario recorder for prompt recording
+	if sr.recorder != nil {
+		sr.recorder.inputTokens = inputTokens
+		sr.recorder.outputTokens = outputTokens
 	}
 	assembled := sr.assembler.Finish(model, inputTokens, outputTokens)
 	if assembled != nil {
@@ -559,4 +604,429 @@ func NewNonStreamRecorderHook(recorder *ScenarioRecorder, provider *typ.Provider
 	return func() {
 		recorder.RecordResponse(provider, model)
 	}
+}
+
+// recordPromptRounds records prompt rounds to database when prompt_recording is enabled
+// This is called automatically by RecordResponse when memoryStore is available
+func (sr *ScenarioRecorder) recordPromptRounds(provider *typ.Provider, model string, headers map[string]string, duration time.Duration) {
+	if sr == nil || sr.memoryStore == nil || sr.extractor == nil {
+		return
+	}
+
+	// Extract rounds - try pre-parsed request first, then fallback to bodyBytes
+	var rounds []db.RoundData
+	var err error
+
+	// Use switch to handle different pre-parsed request types
+	switch req := sr.parsedRequest.(type) {
+	case *protocol.AnthropicBetaMessagesRequest:
+		// Use pre-parsed beta messages directly
+		rounds = sr.extractRoundsFromBetaMessages(req.Messages)
+	case *protocol.AnthropicMessagesRequest:
+		// Use pre-parsed v1 messages directly
+		rounds = sr.extractRoundsFromV1Messages(req.Messages)
+	default:
+		// Fallback to extractor parsing bodyBytes
+		rounds, err = sr.extractor.ExtractRounds(sr.bodyBytes)
+		if err != nil {
+			logrus.Debugf("Failed to extract rounds for prompt recording: %v", err)
+			return
+		}
+	}
+
+	if len(rounds) == 0 {
+		return
+	}
+
+	// Convert map[string]string to http.Header for metadata extraction
+	httpHeaders := make(http.Header)
+	for k, v := range headers {
+		httpHeaders.Set(k, v)
+	}
+
+	// Extract metadata from response headers
+	metadata, err := sr.extractor.ExtractMetadata(httpHeaders)
+	if err != nil {
+		logrus.Debugf("Failed to extract metadata: %v", err)
+		// Continue without metadata
+	}
+
+	// Extract common correlation IDs (project_id, session_id, request_id)
+	projectID := ""
+	sessionID := ""
+	requestID := ""
+
+	if extractorWithMeta, ok := sr.extractor.(interface {
+		ExtractProjectID(http.Header) string
+		ExtractSessionID(http.Header) string
+		ExtractRequestID(http.Header) string
+	}); ok {
+		projectID = extractorWithMeta.ExtractProjectID(httpHeaders)
+		sessionID = extractorWithMeta.ExtractSessionID(httpHeaders)
+		requestID = extractorWithMeta.ExtractRequestID(httpHeaders)
+	}
+
+	// Convert metadata to JSON string
+	metadataJSON := ""
+	if len(metadata) > 0 {
+		data, err := json.Marshal(metadata)
+		if err != nil {
+			logrus.Debugf("Failed to marshal metadata: %v", err)
+		} else {
+			metadataJSON = string(data)
+		}
+	}
+
+	// Determine input/output tokens (use tracked values or try to extract from response)
+	inputTokens := sr.inputTokens
+	outputTokens := sr.outputTokens
+
+	// If tokens not tracked, try to extract from assembled response
+	if inputTokens == 0 && outputTokens == 0 && sr.assembledResponse != nil {
+		if usage, ok := sr.assembledResponse["usage"].(map[string]interface{}); ok {
+			if in, ok := usage["input_tokens"].(float64); ok {
+				inputTokens = int(in)
+			}
+			if out, ok := usage["output_tokens"].(float64); ok {
+				outputTokens = int(out)
+			}
+		}
+	}
+
+	// Extract assistant's output from assembled response (only for current round)
+	currentRoundResult := sr.extractRoundResultFromResponse()
+
+	// Create prompt round records
+	records := make([]*db.MemoryRoundRecord, len(rounds))
+	for i, round := range rounds {
+		// Convert full messages to JSON
+		fullMessagesJSON := ""
+		if round.FullMessages != nil {
+			data, err := json.Marshal(round.FullMessages)
+			if err != nil {
+				logrus.Debugf("Failed to marshal full messages: %v", err)
+			} else {
+				fullMessagesJSON = string(data)
+			}
+		}
+
+		// Check if this round has tool use
+		hasToolUse := sr.hasToolUseInMessages(round.FullMessages)
+
+		// Extract RoundResult:
+		// - For current round (last one): use response (assembledResponse)
+		// - For historical rounds: extract from request messages
+		var result string
+		if i == len(rounds)-1 {
+			// Current round - use response
+			result = currentRoundResult
+		} else {
+			// Historical rounds - extract from request messages
+			result = round.RoundResult // Already extracted by extractRoundsFromV1Messages
+		}
+
+		records[i] = &db.MemoryRoundRecord{
+			Scenario:     sr.scenario,
+			ProviderUUID: provider.UUID,
+			ProviderName: provider.Name,
+			Model:        model,
+
+			Protocol:  sr.protocol,
+			RequestID: requestID,
+
+			ProjectID: projectID,
+			SessionID: sessionID,
+
+			Metadata: metadataJSON,
+
+			RoundIndex:    round.RoundIndex,
+			UserInput:     round.UserInput,
+			UserInputHash: round.UserInputHash,
+			RoundResult:   result,
+			FullMessages:  fullMessagesJSON,
+
+			InputTokens:  inputTokens,
+			OutputTokens: outputTokens,
+
+			IsStreaming: sr.isStreaming,
+			HasToolUse:  hasToolUse,
+		}
+	}
+
+	// Save all records in a single transaction
+	if err := sr.memoryStore.RecordRounds(records); err != nil {
+		logrus.Errorf("Failed to record prompt rounds: %v", err)
+		return
+	}
+
+	logrus.Debugf("Recorded %d prompt rounds for scenario %s", len(records), sr.scenario)
+}
+
+// hasToolUseInMessages checks if any message contains tool use
+func (sr *ScenarioRecorder) hasToolUseInMessages(messages []map[string]interface{}) bool {
+	for _, msg := range messages {
+		if content, ok := msg["content"].([]interface{}); ok {
+			for _, block := range content {
+				if blockMap, ok := block.(map[string]interface{}); ok {
+					if blockType, ok := blockMap["type"].(string); ok {
+						if blockType == "tool_use" {
+							return true
+						}
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+// extractRoundsFromV1Messages extracts rounds from pre-parsed v1 messages
+func (sr *ScenarioRecorder) extractRoundsFromV1Messages(messages []anthropic.MessageParam) []db.RoundData {
+	grouper := protocol.NewGrouper()
+	rounds := grouper.GroupV1(messages)
+
+	result := make([]db.RoundData, 0, len(rounds))
+	for i, round := range rounds {
+		userInput := sr.extractUserInputFromV1(round.Messages)
+		// Extract RoundResult from request messages (for historical rounds)
+		// Current round's result will be filled from response
+		roundResult := sr.extractRoundResultFromV1Messages(round.Messages)
+
+		result = append(result, db.RoundData{
+			RoundIndex:    i,
+			UserInput:     userInput,
+			UserInputHash: db.ComputeUserInputHash(userInput),
+			RoundResult:   roundResult,
+			FullMessages:  sr.normalizeV1Messages(round.Messages),
+		})
+	}
+	return result
+}
+
+// extractRoundsFromBetaMessages extracts rounds from pre-parsed beta messages
+func (sr *ScenarioRecorder) extractRoundsFromBetaMessages(messages []anthropic.BetaMessageParam) []db.RoundData {
+	grouper := protocol.NewGrouper()
+	rounds := grouper.GroupBeta(messages)
+
+	result := make([]db.RoundData, 0, len(rounds))
+	for i, round := range rounds {
+		userInput := sr.extractUserInputFromBeta(round.Messages)
+		// Extract RoundResult from request messages (for historical rounds)
+		// Current round's result will be filled from response
+		roundResult := sr.extractRoundResultFromBetaMessages(round.Messages)
+
+		result = append(result, db.RoundData{
+			RoundIndex:    i,
+			UserInput:     userInput,
+			UserInputHash: db.ComputeUserInputHash(userInput),
+			RoundResult:   roundResult,
+			FullMessages:  sr.normalizeBetaMessages(round.Messages),
+		})
+	}
+	return result
+}
+
+// Helper methods for v1 messages
+func (sr *ScenarioRecorder) extractUserInputFromV1(messages []anthropic.MessageParam) string {
+	for _, msg := range messages {
+		if string(msg.Role) == "user" {
+			var input string
+			for _, block := range msg.Content {
+				if block.OfText != nil {
+					input += block.OfText.Text + "\n"
+				}
+			}
+			return input
+		}
+	}
+	return ""
+}
+
+func (sr *ScenarioRecorder) normalizeV1Messages(messages []anthropic.MessageParam) []map[string]interface{} {
+	result := make([]map[string]interface{}, len(messages))
+	for i, msg := range messages {
+		result[i] = sr.normalizeV1Message(msg)
+	}
+	return result
+}
+
+func (sr *ScenarioRecorder) normalizeV1Message(msg anthropic.MessageParam) map[string]interface{} {
+	normalized := map[string]interface{}{
+		"role": string(msg.Role),
+	}
+
+	content := make([]map[string]interface{}, len(msg.Content))
+	for i, block := range msg.Content {
+		content[i] = sr.normalizeV1ContentBlock(block)
+	}
+	normalized["content"] = content
+
+	return normalized
+}
+
+func (sr *ScenarioRecorder) normalizeV1ContentBlock(block anthropic.ContentBlockParamUnion) map[string]interface{} {
+	result := make(map[string]interface{})
+
+	switch {
+	case block.OfText != nil:
+		result["type"] = "text"
+		result["text"] = block.OfText.Text
+	case block.OfImage != nil:
+		result["type"] = "image"
+		img := block.OfImage
+		result["source"] = map[string]interface{}{
+			"type":       "image_source",
+			"media_type": "image",
+			"data":       img.Source,
+		}
+	case block.OfToolUse != nil:
+		result["type"] = "tool_use"
+		result["id"] = block.OfToolUse.ID
+		result["name"] = block.OfToolUse.Name
+		result["input"] = block.OfToolUse.Input
+	case block.OfToolResult != nil:
+		result["type"] = "tool_result"
+		result["tool_use_id"] = block.OfToolResult.ToolUseID
+		result["content"] = block.OfToolResult.Content
+	}
+	return result
+}
+
+// Helper methods for beta messages
+func (sr *ScenarioRecorder) extractUserInputFromBeta(messages []anthropic.BetaMessageParam) string {
+	for _, msg := range messages {
+		if string(msg.Role) == "user" {
+			var input string
+			for _, block := range msg.Content {
+				if block.OfText != nil {
+					input += block.OfText.Text + "\n"
+				}
+			}
+			return input
+		}
+	}
+	return ""
+}
+
+// extractRoundResultFromV1Messages extracts assistant's output from v1 messages in a round
+// For rounds with multiple assistant messages (e.g., with tool use), returns only the last one
+// which typically contains the final answer after tool execution
+func (sr *ScenarioRecorder) extractRoundResultFromV1Messages(messages []anthropic.MessageParam) string {
+	var lastAssistantResult string
+	for _, msg := range messages {
+		if string(msg.Role) == "assistant" {
+			var result string
+			for _, block := range msg.Content {
+				if block.OfText != nil {
+					result += block.OfText.Text + "\n"
+				}
+			}
+			if result != "" {
+				lastAssistantResult = result
+			}
+		}
+	}
+	return lastAssistantResult
+}
+
+// extractRoundResultFromBetaMessages extracts assistant's output from beta messages in a round
+// For rounds with multiple assistant messages (e.g., with tool use), returns only the last one
+// which typically contains the final answer after tool execution
+func (sr *ScenarioRecorder) extractRoundResultFromBetaMessages(messages []anthropic.BetaMessageParam) string {
+	var lastAssistantResult string
+	for _, msg := range messages {
+		if string(msg.Role) == "assistant" {
+			var result string
+			for _, block := range msg.Content {
+				if block.OfText != nil {
+					result += block.OfText.Text + "\n"
+				}
+			}
+			if result != "" {
+				lastAssistantResult = result
+			}
+		}
+	}
+	return lastAssistantResult
+}
+
+func (sr *ScenarioRecorder) normalizeBetaMessages(messages []anthropic.BetaMessageParam) []map[string]interface{} {
+	result := make([]map[string]interface{}, len(messages))
+	for i, msg := range messages {
+		result[i] = sr.normalizeBetaMessage(msg)
+	}
+	return result
+}
+
+func (sr *ScenarioRecorder) normalizeBetaMessage(msg anthropic.BetaMessageParam) map[string]interface{} {
+	normalized := map[string]interface{}{
+		"role": string(msg.Role),
+	}
+
+	content := make([]map[string]interface{}, len(msg.Content))
+	for i, block := range msg.Content {
+		content[i] = sr.normalizeBetaContentBlock(block)
+	}
+	normalized["content"] = content
+
+	return normalized
+}
+
+func (sr *ScenarioRecorder) normalizeBetaContentBlock(block anthropic.BetaContentBlockParamUnion) map[string]interface{} {
+	result := make(map[string]interface{})
+
+	switch {
+	case block.OfText != nil:
+		result["type"] = "text"
+		result["text"] = block.OfText.Text
+	case block.OfImage != nil:
+		result["type"] = "image"
+		img := block.OfImage
+		result["source"] = map[string]interface{}{
+			"type":       "image_source",
+			"media_type": "image",
+			"data":       img.Source,
+		}
+	case block.OfToolUse != nil:
+		result["type"] = "tool_use"
+		result["id"] = block.OfToolUse.ID
+		result["name"] = block.OfToolUse.Name
+		result["input"] = block.OfToolUse.Input
+	case block.OfToolResult != nil:
+		result["type"] = "tool_result"
+		result["tool_use_id"] = block.OfToolResult.ToolUseID
+		result["content"] = block.OfToolResult.Content
+	}
+	return result
+}
+
+// extractRoundResultFromResponse extracts assistant's output from the assembled response
+func (sr *ScenarioRecorder) extractRoundResultFromResponse() string {
+	if sr == nil || sr.assembledResponse == nil {
+		return ""
+	}
+
+	// Try to extract content from the response
+	// Anthropic response format: { "content": [...], ... }
+	if content, ok := sr.assembledResponse["content"].([]interface{}); ok {
+		var result string
+		for _, block := range content {
+			if blockMap, ok := block.(map[string]interface{}); ok {
+				if blockType, ok := blockMap["type"].(string); ok {
+					switch blockType {
+					case "text":
+						if text, ok := blockMap["text"].(string); ok {
+							result += text + "\n"
+						}
+					case "tool_use":
+						// For tool use, we might want to record the tool name and result
+						// For now, just skip or add a placeholder
+					}
+				}
+			}
+		}
+		return result
+	}
+
+	return ""
 }
