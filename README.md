@@ -3,11 +3,9 @@
 [//]: # (  <img src="docs/banner.png" alt="Tingly Box Banner" width="100%" />)
 </p>
 
-<h1 align="center">Tingly Box</h1>
+![Tingly Box Web UI Demo](./docs/images/hero.png)
 
-<p align="center">
-  <strong>Your Local AI Intelligence Layer <br/> Not just a proxy, but an autonomous orchestrator</strong>
-</p>
+<h1 align="center">Tingly Box</h1>
 
 <p align="center">
   <a href="#quick-start">Quick Start</a> •
@@ -23,7 +21,7 @@
   <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey" alt="Platform" />
 </p>
 
-Tingly Box decides **which model to call, when to compress context, and how to route requests for maximum efficiency** — while offering **secure, reliable, and customizable functional extensions**.
+Tingly Box decides **which model to call, when to compress context, and how to route requests for maximum efficiency**, offering **secure, reliable, and customizable functional extensions**.
 
 ![Tingly Box Web UI Demo](./docs/images/output.gif)
 
