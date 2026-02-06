@@ -28,7 +28,8 @@ type ScenarioFlags struct {
 
 	// Experimental feature flags (scenario-based opt-in)
 	SmartCompact bool `json:"smart_compact,omitempty" yaml:"smart_compact,omitempty"` // Enable smart compact (remove thinking blocks)
-	Recording    bool `json:"recording,omitempty" yaml:"recording,omitempty"`         // Enable scenario recording
+	Recording    bool `json:"recording,omitempty" yaml:"recording,omitempty"`         // Enable scenario recording (JSONL files)
+	SmartMemory  bool `json:"smart_memory,omitempty" yaml:"smart_memory,omitempty"`   // Enable prompt recording (database)
 }
 
 // ScenarioConfig represents configuration for a specific scenario
