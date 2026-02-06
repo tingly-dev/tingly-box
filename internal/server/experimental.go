@@ -8,6 +8,7 @@ import (
 const (
 	ExperimentalFeatureSmartCompact = "smart_compact"
 	ExperimentalFeatureRecording    = "recording"
+	ExperimentalFeatureSmartMemory  = "smart_memory"
 )
 
 // IsExperimentalFeatureEnabled checks if an experimental feature is enabled for a scenario
@@ -26,4 +27,9 @@ func (s *Server) ApplySmartCompact(scenario typ.RuleScenario) bool {
 // ApplyRecording checks if recording should be applied for a scenario
 func (s *Server) ApplyRecording(scenario typ.RuleScenario) bool {
 	return s.IsExperimentalFeatureEnabled(scenario, ExperimentalFeatureRecording)
+}
+
+// ApplySmartMemory checks if prompt recording should be applied for a scenario
+func (s *Server) ApplySmartMemory(scenario typ.RuleScenario) bool {
+	return s.IsExperimentalFeatureEnabled(scenario, ExperimentalFeatureSmartMemory)
 }
