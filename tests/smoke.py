@@ -31,6 +31,9 @@ class SmokeTestResult:
     duration_ms: float
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
     details: dict = field(default_factory=dict)
+    http_method: Optional[str] = None
+    http_url: Optional[str] = None
+    http_status: Optional[int] = None
     error: Optional[str] = None
 
 
@@ -144,6 +147,9 @@ class SmokeTestSuite:
                 message=result.message,
                 duration_ms=result.duration_ms,
                 details=result.data or {},
+                http_method=(result.data or {}).get("http_method"),
+                http_url=(result.data or {}).get("http_url"),
+                http_status=(result.data or {}).get("http_status"),
                 error=result.error,
             )
             results.append(smoke_result)
@@ -237,6 +243,9 @@ class SmokeTestSuite:
                 message=result.message,
                 duration_ms=result.duration_ms,
                 details=result.data or {},
+                http_method=(result.data or {}).get("http_method"),
+                http_url=(result.data or {}).get("http_url"),
+                http_status=(result.data or {}).get("http_status"),
                 error=result.error,
             )
             results.append(smoke_result)
@@ -328,6 +337,9 @@ class SmokeTestSuite:
                 message=result.message,
                 duration_ms=result.duration_ms,
                 details=result.data or {},
+                http_method=(result.data or {}).get("http_method"),
+                http_url=(result.data or {}).get("http_url"),
+                http_status=(result.data or {}).get("http_status"),
                 error=result.error,
             )
 

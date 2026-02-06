@@ -594,6 +594,11 @@ class ProxyClient:
 
             duration_ms = (time.time() - start_time) * 1000
 
+            http_info = {
+                "http_method": "GET",
+                "http_url": url,
+                "http_status": response.status_code,
+            }
             if response.status_code == 200:
                 data = response.json()
                 models = [m["id"] for m in data.get("data", [])]
@@ -603,7 +608,7 @@ class ProxyClient:
                     test_type="list_models",
                     message=f"Successfully listed {len(models)} models",
                     duration_ms=duration_ms,
-                    data={"models": models},
+                    data={"models": models, **http_info},
                 )
             else:
                 return TestResult(
@@ -612,6 +617,7 @@ class ProxyClient:
                     test_type="list_models",
                     message=f"API returned status {response.status_code}",
                     duration_ms=duration_ms,
+                    data=http_info,
                     error=response.text[:500],
                 )
 
@@ -643,6 +649,11 @@ class ProxyClient:
 
             duration_ms = (time.time() - start_time) * 1000
 
+            http_info = {
+                "http_method": "GET",
+                "http_url": url,
+                "http_status": response.status_code,
+            }
             if response.status_code == 200:
                 data = response.json()
                 models = [m["id"] for m in data.get("data", [])]
@@ -652,7 +663,7 @@ class ProxyClient:
                     test_type="list_models",
                     message=f"Successfully listed {len(models)} models",
                     duration_ms=duration_ms,
-                    data={"models": models},
+                    data={"models": models, **http_info},
                 )
             else:
                 return TestResult(
@@ -661,6 +672,7 @@ class ProxyClient:
                     test_type="list_models",
                     message=f"API returned status {response.status_code}",
                     duration_ms=duration_ms,
+                    data=http_info,
                     error=response.text[:500],
                 )
 
@@ -701,6 +713,11 @@ class ProxyClient:
 
             duration_ms = (time.time() - start_time) * 1000
 
+            http_info = {
+                "http_method": "POST",
+                "http_url": url,
+                "http_status": response.status_code,
+            }
             if response.status_code == 200:
                 data = response.json()
                 return TestResult(
@@ -713,6 +730,7 @@ class ProxyClient:
                         "id": data.get("id"),
                         "model": data.get("model"),
                         "choices_count": len(data.get("choices", [])),
+                        **http_info,
                     },
                     raw_response=data,
                 )
@@ -723,6 +741,7 @@ class ProxyClient:
                     test_type="chat_completions",
                     message=f"API returned status {response.status_code}",
                     duration_ms=duration_ms,
+                    data=http_info,
                     error=response.text[:500],
                 )
 
@@ -763,6 +782,11 @@ class ProxyClient:
 
             duration_ms = (time.time() - start_time) * 1000
 
+            http_info = {
+                "http_method": "POST",
+                "http_url": url,
+                "http_status": response.status_code,
+            }
             if response.status_code == 200:
                 data = response.json()
                 return TestResult(
@@ -774,6 +798,7 @@ class ProxyClient:
                     data={
                         "id": data.get("id"),
                         "model": data.get("model"),
+                        **http_info,
                     },
                     raw_response=data,
                 )
@@ -784,6 +809,7 @@ class ProxyClient:
                     test_type="messages",
                     message=f"API returned status {response.status_code}",
                     duration_ms=duration_ms,
+                    data=http_info,
                     error=response.text[:500],
                 )
 

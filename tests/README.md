@@ -7,13 +7,13 @@ This directory contains the Python-based test infrastructure for tingly-box.
 ### Automated Test (Recommended)
 
 ```bash
-./run_automated_test.sh
+task tests:interface
 ```
 
 This will:
 - Create a temporary directory
 - Generate test configuration
-- Start the tingly-box server on port 12581
+- Start the tingly-box server on a free port
 - Run all test suites
 - Display results
 - Clean up automatically
@@ -22,10 +22,10 @@ This will:
 
 ```bash
 # Terminal 1: Start server
-tingly-box server --port 12581 --config tests/test_config_port12581.json
+tingly-box start --port 12581 --config-dir ~/.tingly-box --browser=false
 
 # Terminal 2: Run tests
-python3 -m runner --verbose
+python3 -m tests.runner --verbose
 ```
 
 ## Test Configuration
@@ -33,39 +33,39 @@ python3 -m runner --verbose
 ### Production Server (Port 12580)
 
 - **Config**: `~/.tingly-box/config.json`
-- **Usage**: `python3 -m runner --verbose`
+- **Usage**: `python3 -m tests.runner --verbose`
 
 ### Test Server (Port 12581)
 
 - **Config**: `tests/test_config_port12581.json`
-- **Usage**: Automated via `run_automated_test.sh`
-- **Scenarios**: deepseek-test, glm-test, qwen-test
+- **Usage**: Automated via `task tests:interface`
+- **Scenarios**: openai, anthropic (generated from real config)
 
 ## Test Suites
 
-1. **Smoke Tests** - Direct provider API tests
+1. **Smoke Tests** - Tingly-box scenario endpoints (no direct provider calls)
    ```bash
-   python3 -m runner --smoke --verbose
+   python3 -m tests.runner --smoke --verbose
    ```
 
 2. **Proxy Tests** - Tingly-box proxy endpoint tests
    ```bash
-   python3 -m runner --proxy-smoke --verbose
+   python3 -m tests.runner --proxy-smoke --verbose
    ```
 
 3. **Backend Validation** - Field existence and format compliance
    ```bash
-   python3 -m runner --backend --verbose
+   python3 -m tests.runner --backend --verbose
    ```
 
 4. **Adaptor Tests** - API format adaptation tests
    ```bash
-   python3 -m runner --adaptor --verbose
+   python3 -m tests.runner --adaptor --verbose
    ```
 
 5. **Differential Tests** - Cross-provider consistency
    ```bash
-   python3 -m runner --differential --verbose
+   python3 -m tests.runner --differential --verbose
    ```
 
 ## Dependencies
@@ -83,16 +83,9 @@ pip install -r requirements.txt
 ## Test Results
 
 Results are saved to:
-- **Directory**: `../test_results/`
+- **Directory**: `tests/test_results/`
 - **Formats**: JSON and HTML
 
 See [Complete Test Documentation](../docs/test.md) for detailed information.
-
-## Current Status
-
-✅ **GLM Backend**: 100% success (3/3 tests)
-✅ **Deepseek Backend**: 100% success (3/3 tests)
-⚠️ **Qwen Backend**: 0% (API key issue - external)
-⚠️ **Proxy Tests**: Failing (server bug - needs backend fix)
 
 See [Complete Test Documentation](../docs/test.md) for detailed information.

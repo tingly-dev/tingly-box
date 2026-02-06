@@ -400,6 +400,14 @@ class TestRunner:
 
         test_results_html = ""
 
+        suite_details = {
+            "Smoke Tests": "Smoke: tingly-box scenario endpoints for list/models and chat.",
+            "Proxy Smoke Tests": "Proxy: /tingly/<scenario> models + chat/messages.",
+            "Adaptor Tests": "Adaptor: format adaptation via tingly-box (OpenAI↔Anthropic/Google).",
+            "Differential Tests": "Differential: compare responses across tingly-box scenarios.",
+            "Backend Validation Tests": "Backend validation: field compliance of tingly-box responses.",
+        }
+
         if result.suite_name == "All Tests" and result.results:
             for suite_name, suite_result in result.results:
                 suite_status = "passed"
@@ -409,6 +417,8 @@ class TestRunner:
                     suite_status = "skipped"
 
                 suite_items_html = _render_test_items(suite_result.results or [])
+                suite_detail = suite_details.get(suite_name, "")
+                suite_detail_html = f'<div class="suite-detail">{suite_detail}</div>' if suite_detail else ""
                 test_results_html += f"""
                 <details class="suite">
                     <summary class="suite-summary {suite_status}">
@@ -416,6 +426,7 @@ class TestRunner:
                         <span class="suite-meta">Passed: {suite_result.passed} | Failed: {suite_result.failed} | Skipped: {suite_result.skipped} | {suite_result.success_rate:.1f}%</span>
                     </summary>
                     <div class="suite-body">
+                        {suite_detail_html}
                         <div class="test-item-details">Duration: {suite_result.duration_ms:.2f}ms</div>
                         {suite_items_html}
                     </div>
@@ -703,6 +714,11 @@ class TestRunner:
         }}
         .suite-body {{
             padding: 16px;
+        }}
+        .suite-detail {{
+            font-size: 0.9em;
+            color: #6b7280;
+            margin-bottom: 8px;
         }}
     </style>
 </head>
