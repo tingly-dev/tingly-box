@@ -66,12 +66,12 @@ const Layout = ({ children }: LayoutProps) => {
     const location = useLocation();
     const { hasUpdate, currentVersion, showUpdateDialog } = useAppVersion();
     const { isHealthy, showDisconnectDialog } = useHealth();
-    const { skillUser, skillIde, skillRemoteCC } = useFeatureFlags();
+    const { skillUser, skillIde, enableRemoteCoder } = useFeatureFlags();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [homeMenuOpen, setHomeMenuOpen] = useState(true);
     const [promptMenuOpen, setPromptMenuOpen] = useState(true);
     const [systemMenuOpen, setSystemMenuOpen] = useState(false);
-    const [remoteCCMenuOpen, setRemoteCCMenuOpen] = useState(true);
+    const [remoteCoderMenuOpen, setRemoteCoderMenuOpen] = useState(true);
     const [easterEggAnchorEl, setEasterEggAnchorEl] = useState<HTMLElement | null>(null);
 
     const handleDrawerToggle = () => {
@@ -182,19 +182,19 @@ const Layout = ({ children }: LayoutProps) => {
             icon: <PromptIcon sx={{ fontSize: 20 }} />,
             items: promptMenuItems,
         }] : []),
-        ...(skillRemoteCC ? [{
-            key: 'remote-cc' as const,
-            label: 'Remote CC',
+        ...(enableRemoteCoder ? [{
+            key: 'remote-coder' as const,
+            label: 'Remote Coder',
             icon: <RemoteIcon sx={{ fontSize: 20 }} />,
-            path: '/remote-cc/chat',
+            path: '/remote-coder/chat',
             items: [
                 {
-                    path: '/remote-cc/chat',
+                    path: '/remote-coder/chat',
                     label: 'Chat',
                     icon: <ChatIcon sx={{ fontSize: 20 }} />,
                 },
                 {
-                    path: '/remote-cc/sessions',
+                    path: '/remote-coder/sessions',
                     label: 'Sessions',
                     icon: <RemoteIcon sx={{ fontSize: 20 }} />,
                 },
@@ -278,7 +278,7 @@ const Layout = ({ children }: LayoutProps) => {
                     const isCredentialGroup = group.key === 'credential';
                     const isPromptGroup = group.key === 'prompt';
                     const isSystemGroup = group.key === 'system';
-                    const isRemoteCCGroup = group.key === 'remote-cc';
+                    const isRemoteCoderGroup = group.key === 'remote-coder';
                     const isStandalone = group.standalone;
 
                     // For standalone groups (like Dashboard), no collapse state
@@ -295,9 +295,9 @@ const Layout = ({ children }: LayoutProps) => {
                         } else if (isSystemGroup) {
                             isOpen = systemMenuOpen;
                             setIsOpen = setSystemMenuOpen;
-                        } else if (isRemoteCCGroup) {
-                            isOpen = remoteCCMenuOpen;
-                            setIsOpen = setRemoteCCMenuOpen;
+                        } else if (isRemoteCoderGroup) {
+                            isOpen = remoteCoderMenuOpen;
+                            setIsOpen = setRemoteCoderMenuOpen;
                         }
                     }
 

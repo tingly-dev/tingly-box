@@ -26,7 +26,7 @@ type RemoteCCHandler struct {
 	config        *config.Config
 }
 
-// NewRemoteCCHandler creates a new remote-cc handler
+// NewRemoteCCHandler creates a new remote-coder handler
 func NewRemoteCCHandler(sessionMgr *session.Manager, claudeLauncher *launcher.ClaudeCodeLauncher, summaryEngine *summarizer.Engine, auditLogger *audit.Logger, cfg *config.Config) *RemoteCCHandler {
 	return &RemoteCCHandler{
 		sessionMgr:     sessionMgr,
@@ -75,7 +75,7 @@ type RemoteChatMessage struct {
 	Timestamp string `json:"timestamp"`
 }
 
-// GetSessions handles GET /remote-cc/sessions
+// GetSessions handles GET /remote-coder/sessions
 func (h *RemoteCCHandler) GetSessions(c *gin.Context) {
 	start := time.Now()
 	clientIP := c.ClientIP()
@@ -143,7 +143,7 @@ func (h *RemoteCCHandler) GetSessions(c *gin.Context) {
 		}
 	}
 
-	logrus.Debugf("Remote-cc sessions request: page=%d, limit=%d, status=%s, total=%d", page, limit, status, total)
+	logrus.Debugf("Remote-coder sessions request: page=%d, limit=%d, status=%s, total=%d", page, limit, status, total)
 
 	h.auditLogger.LogRequest("remote_cc_sessions", userID, clientIP, "", getRequestID(c), true, time.Since(start), map[string]interface{}{
 		"page":   page,
@@ -162,7 +162,7 @@ func (h *RemoteCCHandler) GetSessions(c *gin.Context) {
 	})
 }
 
-// GetSession handles GET /remote-cc/sessions/:id
+// GetSession handles GET /remote-coder/sessions/:id
 func (h *RemoteCCHandler) GetSession(c *gin.Context) {
 	start := time.Now()
 	clientIP := c.ClientIP()
@@ -184,7 +184,7 @@ func (h *RemoteCCHandler) GetSession(c *gin.Context) {
 		return
 	}
 
-	logrus.Debugf("Remote-cc session get: id=%s, status=%s", sessionID, session.Status)
+	logrus.Debugf("Remote-coder session get: id=%s, status=%s", sessionID, session.Status)
 
 	h.auditLogger.LogRequest("remote_cc_session_get", userID, clientIP, sessionID, getRequestID(c), true, time.Since(start), nil)
 
@@ -210,7 +210,7 @@ func (h *RemoteCCHandler) GetSession(c *gin.Context) {
 	})
 }
 
-// Chat handles POST /remote-cc/chat
+// Chat handles POST /remote-coder/chat
 func (h *RemoteCCHandler) Chat(c *gin.Context) {
 	start := time.Now()
 	clientIP := c.ClientIP()
@@ -328,7 +328,7 @@ func (h *RemoteCCHandler) Chat(c *gin.Context) {
 		Timestamp: time.Now(),
 	})
 
-	logrus.Debugf("Remote-cc chat completed: session=%s, response_length=%d, summary_length=%d",
+	logrus.Debugf("Remote-coder chat completed: session=%s, response_length=%d, summary_length=%d",
 		sessionID, len(response), len(summary))
 
 	h.auditLogger.LogRequest("remote_cc_chat", userID, clientIP, sessionID, getRequestID(c), true, time.Since(start), map[string]interface{}{
@@ -345,7 +345,7 @@ func (h *RemoteCCHandler) Chat(c *gin.Context) {
 	})
 }
 
-// GetSessionMessages handles GET /remote-cc/sessions/:id/messages
+// GetSessionMessages handles GET /remote-coder/sessions/:id/messages
 func (h *RemoteCCHandler) GetSessionMessages(c *gin.Context) {
 	start := time.Now()
 	clientIP := c.ClientIP()
@@ -386,7 +386,7 @@ func (h *RemoteCCHandler) GetSessionMessages(c *gin.Context) {
 	})
 }
 
-// ClearSessions handles POST /remote-cc/sessions/clear
+// ClearSessions handles POST /remote-coder/sessions/clear
 func (h *RemoteCCHandler) ClearSessions(c *gin.Context) {
 	start := time.Now()
 	clientIP := c.ClientIP()

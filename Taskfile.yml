@@ -337,10 +337,9 @@ tasks:
     summary: Build the remote-cc-token binary
     cmds:
       - |
-        cd cmd/remote-cc
-        go build -o ../../bin/remote-cc-token ./cmd/rcc-token
+        go build -o ./bin/remote-cc-token ./cmd/remote-coder
 
   remote-cc-token:run:
     summary: Generate an API token (run via SSH)
     cmds:
-      - cd cmd/remote-cc && go run ./cmd/rcc-token
+      - go run ./cmd/remote-coder

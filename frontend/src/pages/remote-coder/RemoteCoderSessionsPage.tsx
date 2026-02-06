@@ -72,7 +72,7 @@ const statusIcons: Record<string, React.ReactNode> = {
     closed: <ClosedIcon fontSize="small" />,
 };
 
-const RemoteCCSessionsPage: React.FC = () => {
+const RemoteCoderSessionsPage: React.FC = () => {
     const [sessions, setSessions] = useState<Session[]>([]);
     const [selectedSession, setSelectedSession] = useState<Session | null>(null);
     const [stats, setStats] = useState<Stats | null>(null);
@@ -138,7 +138,7 @@ const RemoteCCSessionsPage: React.FC = () => {
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
                 <Box>
                     <Typography variant="h4" fontWeight={700} gutterBottom>
-                        Remote Claude Code
+                        Remote Coder
                     </Typography>
                     <Typography variant="body1" color="text.secondary">
                         Manage remote Claude Code sessions
@@ -162,7 +162,7 @@ const RemoteCCSessionsPage: React.FC = () => {
                     </Button>
                     <Button
                         component={RouterLink}
-                        to="/remote-cc/chat"
+                        to="/remote-coder/chat"
                         variant="contained"
                     >
                         Open Chat
@@ -180,7 +180,7 @@ const RemoteCCSessionsPage: React.FC = () => {
                 <DialogTitle>Clear All Sessions</DialogTitle>
                 <DialogContent>
                     <Typography variant="body2" color="text.secondary">
-                        This will clear all stored Remote CC sessions from the local UI cache.
+                        This will clear all stored Remote Coder sessions from the local UI cache.
                         It does not delete sessions on the server.
                     </Typography>
                 </DialogContent>
@@ -438,4 +438,4 @@ const RemoteCCSessionsPage: React.FC = () => {
     );
 };
 
-export default RemoteCCSessionsPage;
+export default RemoteCoderSessionsPage;

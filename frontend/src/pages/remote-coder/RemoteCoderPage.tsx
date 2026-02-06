@@ -47,7 +47,7 @@ interface ChatMessage {
     timestamp: string;
 }
 
-const RemoteCCPage: React.FC = () => {
+const RemoteCoderPage: React.FC = () => {
     const [sessions, setSessions] = useState<Session[]>([]);
     const [selectedSession, setSelectedSession] = useState<Session | null>(null);
     const [loading, setLoading] = useState(true);
@@ -72,8 +72,12 @@ const RemoteCCPage: React.FC = () => {
     const isChatBusy = sending || isSessionThinking;
 
     useEffect(() => {
-        const storedNewPath = localStorage.getItem('remotecc.projectPath.new') || '';
-        const storedPathsRaw = localStorage.getItem('remotecc.projectPaths') || '';
+        const storedNewPath = localStorage.getItem('remotecoder.projectPath.new')
+            || localStorage.getItem('remotecc.projectPath.new')
+            || '';
+        const storedPathsRaw = localStorage.getItem('remotecoder.projectPaths')
+            || localStorage.getItem('remotecc.projectPaths')
+            || '';
         let storedPaths: Record<string, string> = {};
         if (storedPathsRaw) {
             try {
@@ -82,7 +86,9 @@ const RemoteCCPage: React.FC = () => {
                 storedPaths = {};
             }
         }
-        const storedLastSessionId = localStorage.getItem('remotecc.lastSessionId') || '';
+        const storedLastSessionId = localStorage.getItem('remotecoder.lastSessionId')
+            || localStorage.getItem('remotecc.lastSessionId')
+            || '';
         if (storedNewPath) {
             setProjectPathNewSession(storedNewPath);
         }
@@ -95,19 +101,21 @@ const RemoteCCPage: React.FC = () => {
     }, []);
 
     useEffect(() => {
-        localStorage.setItem('remotecc.projectPath.new', projectPathNewSession);
+        localStorage.setItem('remotecoder.projectPath.new', projectPathNewSession);
     }, [projectPathNewSession]);
 
     useEffect(() => {
-        localStorage.setItem('remotecc.projectPaths', JSON.stringify(projectPathBySession));
+        localStorage.setItem('remotecoder.projectPaths', JSON.stringify(projectPathBySession));
     }, [projectPathBySession]);
 
     useEffect(() => {
-        localStorage.setItem('remotecc.lastSessionId', lastSelectedSessionId);
+        localStorage.setItem('remotecoder.lastSessionId', lastSelectedSessionId);
     }, [lastSelectedSessionId]);
 
     useEffect(() => {
-        const raw = localStorage.getItem('remotecc.expandedMessages') || '';
+        const raw = localStorage.getItem('remotecoder.expandedMessages')
+            || localStorage.getItem('remotecc.expandedMessages')
+            || '';
         if (!raw) return;
         try {
             const data = JSON.parse(raw) as Record<string, number[]>;
@@ -128,12 +136,14 @@ const RemoteCCPage: React.FC = () => {
         for (const [key, value] of Object.entries(expandedBySession)) {
             payload[key] = Array.from(value);
         }
-        localStorage.setItem('remotecc.expandedMessages', JSON.stringify(payload));
+        localStorage.setItem('remotecoder.expandedMessages', JSON.stringify(payload));
     }, [expandedBySession]);
 
     useEffect(() => {
         if (!sessionKey) return;
-        const raw = localStorage.getItem(`remotecc.chatHistory.${sessionKey}`) || '';
+        const raw = localStorage.getItem(`remotecoder.chatHistory.${sessionKey}`)
+            || localStorage.getItem(`remotecc.chatHistory.${sessionKey}`)
+            || '';
         if (!raw) return;
         try {
             const parsed = JSON.parse(raw) as ChatMessage[];
@@ -147,7 +157,7 @@ const RemoteCCPage: React.FC = () => {
 
     useEffect(() => {
         if (!sessionKey) return;
-        localStorage.setItem(`remotecc.chatHistory.${sessionKey}`, JSON.stringify(chatHistory));
+        localStorage.setItem(`remotecoder.chatHistory.${sessionKey}`, JSON.stringify(chatHistory));
     }, [chatHistory, sessionKey]);
 
     useEffect(() => {
@@ -193,7 +203,7 @@ const RemoteCCPage: React.FC = () => {
                 });
                 if (lastSelectedSessionId && !data.sessions.some((s: Session) => s.id === lastSelectedSessionId)) {
                     setLastSelectedSessionId('');
-                    localStorage.removeItem(`remotecc.chatHistory.${lastSelectedSessionId}`);
+                    localStorage.removeItem(`remotecoder.chatHistory.${lastSelectedSessionId}`);
                 }
             }
         } catch (err) {
@@ -215,7 +225,7 @@ const RemoteCCPage: React.FC = () => {
             .then(async (sessionData) => {
                 if (!sessionData?.id) {
                     setLastSelectedSessionId('');
-                    localStorage.removeItem(`remotecc.chatHistory.${lastSelectedSessionId}`);
+                    localStorage.removeItem(`remotecoder.chatHistory.${lastSelectedSessionId}`);
                     return;
                 }
                 setSelectedSession(sessionData);
@@ -403,7 +413,7 @@ const RemoteCCPage: React.FC = () => {
             delete next['new'];
             return next;
         });
-        localStorage.removeItem('remotecc.chatHistory.new');
+        localStorage.removeItem('remotecoder.chatHistory.new');
         if (projectPathNewSession.trim()) {
             setProjectPath(projectPathNewSession.trim());
             setProjectPathDialogOpen(false);
@@ -418,7 +428,7 @@ const RemoteCCPage: React.FC = () => {
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
                 <Box>
                     <Typography variant="h4" fontWeight={700} gutterBottom>
-                        Remote Claude Code Chat
+                        Remote Coder Chat
                     </Typography>
                     <Typography variant="body1" color="text.secondary">
                         Chat with Claude Code sessions remotely
@@ -448,7 +458,7 @@ const RemoteCCPage: React.FC = () => {
                     </Button>
                     <Button
                         component={RouterLink}
-                        to="/remote-cc/sessions"
+                        to="/remote-coder/sessions"
                         variant="outlined"
                     >
                         Manage Sessions
@@ -677,4 +687,4 @@ const RemoteCCPage: React.FC = () => {
     );
 };
 
-export default RemoteCCPage;
+export default RemoteCoderPage;

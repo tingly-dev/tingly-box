@@ -48,7 +48,11 @@ func main() {
 	}
 
 	// Setup logging
-	logrus.SetLevel(logrus.InfoLevel)
+	logLevel := logrus.InfoLevel
+	if v := strings.ToLower(strings.TrimSpace(os.Getenv("RCC_DEBUG"))); v == "1" || v == "true" || v == "yes" {
+		logLevel = logrus.DebugLevel
+	}
+	logrus.SetLevel(logLevel)
 	logrus.SetFormatter(&logrus.TextFormatter{
 		TimestampFormat: "2006-01-02 15:04:05",
 		FullTimestamp:   true,
@@ -110,19 +114,19 @@ func main() {
 	})
 
 	// Availability check endpoint (no auth required, for frontend to detect if service is running)
-	router.GET("/remote-cc/available", func(c *gin.Context) {
+	router.GET("/remote-coder/available", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"available": true,
-			"service":   "remote-cc",
+			"service":   "remote-coder",
 			"timestamp": time.Now().UTC().Format(time.RFC3339),
 		})
 	})
 
 	// Rate limit middleware for auth endpoints (before auth middleware)
-	authRateLimit := middleware.RateLimitMiddleware(rateLimiter, "/remotecc/handshake", "/remotecc/execute")
+	authRateLimit := middleware.RateLimitMiddleware(rateLimiter, "/remote-coder/handshake", "/remote-coder/execute")
 
-	// RemoteCC legacy-compatible API routes
-	remoteCCLegacyAPI := router.Group("/remotecc")
+	// RemoteCoder legacy-compatible API routes
+	remoteCCLegacyAPI := router.Group("/remote-coder")
 	remoteCCLegacyAPI.Use(authRateLimit)
 	remoteCCLegacyAPI.Use(config.AuthMiddleware(cfg))
 
@@ -145,8 +149,8 @@ func main() {
 	adminAPI.POST("/tokens/validate", adminHandler.ValidateToken)
 	adminAPI.POST("/tokens/revoke", adminHandler.RevokeToken)
 
-	// Remote-CC endpoints (always enabled)
-	remoteCCAPI := router.Group("/remote-cc")
+	// Remote Coder endpoints (always enabled)
+	remoteCCAPI := router.Group("/remote-coder")
 	remoteCCAPI.Use(config.AuthMiddleware(cfg))
 
 	remoteCCHandler := api.NewRemoteCCHandler(sessionMgr, claudeLauncher, summaryEngine, auditLogger, cfg)

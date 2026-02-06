@@ -31,9 +31,9 @@ const UserPage = lazy(() => import('./pages/prompt/UserPage'));
 const SkillPage = lazy(() => import('./pages/prompt/SkillPage'));
 const CommandPage = lazy(() => import('./pages/prompt/CommandPage'));
 
-// Remote CC page
-const RemoteCCPage = lazy(() => import('./pages/remote-cc/RemoteCCPage'));
-const RemoteCCSessionsPage = lazy(() => import('./pages/remote-cc/RemoteCCSessionsPage'));
+// Remote Coder page
+const RemoteCoderPage = lazy(() => import('./pages/remote-coder/RemoteCoderPage'));
+const RemoteCoderSessionsPage = lazy(() => import('./pages/remote-coder/RemoteCoderSessionsPage'));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -289,10 +289,10 @@ function AppContent() {
                                         <Route path="/prompt/user" element={<UserPage/>}/>
                                         <Route path="/prompt/skill" element={<SkillPage/>}/>
                                         <Route path="/prompt/command" element={<CommandPage/>}/>
-                                        {/* Remote CC routes */}
-                                        <Route path="/remote-cc" element={<Navigate to="/remote-cc/chat" replace/>}/>
-                                        <Route path="/remote-cc/chat" element={<RemoteCCPage/>}/>
-                                        <Route path="/remote-cc/sessions" element={<RemoteCCSessionsPage/>}/>
+                                        {/* Remote Coder routes */}
+                                        <Route path="/remote-coder" element={<Navigate to="/remote-coder/chat" replace/>}/>
+                                        <Route path="/remote-coder/chat" element={<RemoteCoderPage/>}/>
+                                        <Route path="/remote-coder/sessions" element={<RemoteCoderSessionsPage/>}/>
                                     </Routes>
                                 </Suspense>
                             </Layout>

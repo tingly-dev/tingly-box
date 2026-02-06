@@ -39,7 +39,7 @@ func TestHandler_Handshake_Success(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 
-	req := httptest.NewRequest("POST", "/remotecc/handshake", nil)
+	req := httptest.NewRequest("POST", "/remote-coder/handshake", nil)
 	c.Request = req
 
 	handler.Handshake(c)
@@ -75,7 +75,7 @@ func TestHandler_Handshake_WithBody(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 
-	req := httptest.NewRequest("POST", "/remotecc/handshake", bytes.NewReader(bodyBytes))
+	req := httptest.NewRequest("POST", "/remote-coder/handshake", bytes.NewReader(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	c.Request = req
 
@@ -98,7 +98,7 @@ func TestHandler_Execute_SessionNotFound(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 
-	req := httptest.NewRequest("POST", "/remotecc/execute", bytes.NewReader(bodyBytes))
+	req := httptest.NewRequest("POST", "/remote-coder/execute", bytes.NewReader(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	c.Request = req
 
@@ -115,7 +115,7 @@ func TestHandler_Execute_InvalidRequest(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 
-	req := httptest.NewRequest("POST", "/remotecc/execute", nil)
+	req := httptest.NewRequest("POST", "/remote-coder/execute", nil)
 	c.Request = req
 
 	handler.Execute(c)
@@ -131,7 +131,7 @@ func TestHandler_Status_SessionNotFound(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 
-	req := httptest.NewRequest("GET", "/remotecc/status/non-existent", nil)
+	req := httptest.NewRequest("GET", "/remote-coder/status/non-existent", nil)
 	c.Request = req
 	c.Params = gin.Params{{Key: "session_id", Value: "non-existent"}}
 
@@ -151,7 +151,7 @@ func TestHandler_Status_Success(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 
-	req := httptest.NewRequest("GET", "/remotecc/status/"+session.ID, nil)
+	req := httptest.NewRequest("GET", "/remote-coder/status/"+session.ID, nil)
 	c.Request = req
 	c.Params = gin.Params{{Key: "session_id", Value: session.ID}}
 
@@ -182,7 +182,7 @@ func TestHandler_Close_SessionNotFound(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 
-	req := httptest.NewRequest("POST", "/remotecc/close", bytes.NewReader(bodyBytes))
+	req := httptest.NewRequest("POST", "/remote-coder/close", bytes.NewReader(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	c.Request = req
 
@@ -199,7 +199,7 @@ func TestHandler_Close_InvalidRequest(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 
-	req := httptest.NewRequest("POST", "/remotecc/close", nil)
+	req := httptest.NewRequest("POST", "/remote-coder/close", nil)
 	c.Request = req
 
 	handler.Close(c)
@@ -223,7 +223,7 @@ func TestHandler_Close_Success(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 
-	req := httptest.NewRequest("POST", "/remotecc/close", bytes.NewReader(bodyBytes))
+	req := httptest.NewRequest("POST", "/remote-coder/close", bytes.NewReader(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	c.Request = req
 
@@ -252,7 +252,7 @@ func TestHandler_Execute_FullFlow(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	req := httptest.NewRequest("POST", "/remotecc/handshake", bytes.NewReader(handshakeBytes))
+	req := httptest.NewRequest("POST", "/remote-coder/handshake", bytes.NewReader(handshakeBytes))
 	req.Header.Set("Content-Type", "application/json")
 	c.Request = req
 
@@ -270,7 +270,7 @@ func TestHandler_Execute_FullFlow(t *testing.T) {
 
 	w = httptest.NewRecorder()
 	c, _ = gin.CreateTestContext(w)
-	req = httptest.NewRequest("POST", "/remotecc/execute", bytes.NewReader(executeBytes))
+	req = httptest.NewRequest("POST", "/remote-coder/execute", bytes.NewReader(executeBytes))
 	req.Header.Set("Content-Type", "application/json")
 	c.Request = req
 
@@ -292,7 +292,7 @@ func TestHandler_Execute_FullFlow(t *testing.T) {
 	// Check status
 	w = httptest.NewRecorder()
 	c, _ = gin.CreateTestContext(w)
-	req = httptest.NewRequest("GET", "/remotecc/status/"+handshakeResponse.SessionID, nil)
+	req = httptest.NewRequest("GET", "/remote-coder/status/"+handshakeResponse.SessionID, nil)
 	c.Request = req
 	c.Params = gin.Params{{Key: "session_id", Value: handshakeResponse.SessionID}}
 
@@ -310,7 +310,7 @@ func TestHandler_Execute_FullFlow(t *testing.T) {
 
 	w = httptest.NewRecorder()
 	c, _ = gin.CreateTestContext(w)
-	req = httptest.NewRequest("POST", "/remotecc/close", bytes.NewReader(closeBytes))
+	req = httptest.NewRequest("POST", "/remote-coder/close", bytes.NewReader(closeBytes))
 	req.Header.Set("Content-Type", "application/json")
 	c.Request = req
 
