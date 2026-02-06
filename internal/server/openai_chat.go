@@ -29,7 +29,7 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 	response, err := s.forwardOpenAIRequest(provider, req)
 	if err != nil {
 		// Track error with no usage
-		s.trackUsage(c, rule, provider, actualModel, responseModel, 0, 0, false, "error", "forward_failed")
+		s.trackUsageFromContext(c, 0, 0, err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Failed to forward request: " + err.Error(),
@@ -44,7 +44,7 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 	outputTokens := int(response.Usage.CompletionTokens)
 
 	// Track usage
-	s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, false, "success", "")
+	s.trackUsageFromContext(c, inputTokens, outputTokens, nil)
 
 	// Convert response to JSON map for modification
 	responseJSON, err := json.Marshal(response)
@@ -148,7 +148,7 @@ func (s *Server) handleStreamingRequest(c *gin.Context, provider *typ.Provider, 
 	stream, _, err := s.forwardOpenAIStreamRequest(c.Request.Context(), provider, req)
 	if err != nil {
 		// Track error with no usage
-		s.trackUsage(c, rule, provider, actualModel, responseModel, 0, 0, false, "error", "stream_creation_failed")
+		s.trackUsageFromContext(c, 0, 0, err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Failed to create streaming request: " + err.Error(),
@@ -175,7 +175,7 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 			logrus.Errorf("Panic in streaming handler: %v", r)
 			// Track panic as error with any usage we accumulated
 			if hasUsage {
-				s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, true, "error", "panic")
+				s.trackUsageFromContext(c, inputTokens, outputTokens, fmt.Errorf("panic: %v", r))
 			}
 			// Try to send an error event if possible
 			if c.Writer != nil {
@@ -332,7 +332,7 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 				inputTokens, _ = token.EstimateInputTokens(req)
 				outputTokens = token.EstimateOutputTokens(contentBuilder.String())
 			}
-			s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, true, "canceled", "client_disconnected")
+			s.trackUsageFromContext(c, inputTokens, outputTokens, err)
 			return
 		}
 
@@ -345,7 +345,7 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 		}
 
 		// Track usage with error status
-		s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, true, "error", "stream_error")
+		s.trackUsageFromContext(c, inputTokens, outputTokens, err)
 
 		// Send error event
 		errorChunk := map[string]interface{}{
@@ -410,7 +410,7 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 		}
 	}
 
-	s.trackUsage(c, rule, provider, actualModel, responseModel, inputTokens, outputTokens, true, "success", "")
+	s.trackUsageFromContext(c, inputTokens, outputTokens, nil)
 
 	// Send the final [DONE] message
 	c.SSEvent("", "[DONE]")

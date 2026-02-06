@@ -111,16 +111,10 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 		return
 	}
 
-	// Set the rule and provider in context
-	if rule != nil {
-		c.Set("rule", rule)
-	}
-
 	actualModel := selectedService.Model
 
-	// Set provider UUID and model in context
-	c.Set("provider", provider.UUID)
-	c.Set("model", actualModel)
+	// Set tracking context with all metadata (eliminates need for explicit parameter passing)
+	SetTrackingContext(c, rule, provider, actualModel, req.Model, req.Stream)
 
 	// Check provider API style - only OpenAI-style providers support Responses API
 	if provider.APIStyle != protocol.APIStyleOpenAI {
@@ -159,7 +153,7 @@ func (s *Server) handleResponsesNonStreamingRequest(c *gin.Context, provider *ty
 	response, err := s.forwardResponsesRequest(provider, params)
 	if err != nil {
 		// Track error with no usage
-		s.trackUsage(c, rule, provider, actualModel, responseModel, 0, 0, false, "error", "forward_failed")
+		s.trackUsageFromContext(c, 0, 0, err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Failed to forward request: " + err.Error(),
@@ -174,7 +168,7 @@ func (s *Server) handleResponsesNonStreamingRequest(c *gin.Context, provider *ty
 	outputTokens := int64(response.Usage.OutputTokens)
 
 	// Track usage
-	s.trackUsage(c, rule, provider, actualModel, responseModel, int(inputTokens), int(outputTokens), false, "success", "")
+	s.trackUsageFromContext(c, int(inputTokens), int(outputTokens), nil)
 
 	// Check if this is a ChatGPT backend API provider (Codex OAuth)
 	// These providers return responses in a different format that needs conversion
@@ -214,7 +208,7 @@ func (s *Server) handleResponsesStreamingRequest(c *gin.Context, provider *typ.P
 	stream, _, err := s.forwardResponsesStreamRequest(c.Request.Context(), provider, params)
 	if err != nil {
 		// Track error with no usage
-		s.trackUsage(c, rule, provider, actualModel, responseModel, 0, 0, false, "error", "stream_creation_failed")
+		s.trackUsageFromContext(c, 0, 0, err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Failed to create streaming request: " + err.Error(),
@@ -238,7 +232,7 @@ func (s *Server) handleResponsesStreamResponse(c *gin.Context, stream *ssestream
 		if r := recover(); r != nil {
 			logrus.Errorf("Panic in streaming handler: %v", r)
 			if hasUsage {
-				s.trackUsage(c, rule, provider, actualModel, responseModel, int(inputTokens), int(outputTokens), true, "error", "panic")
+				s.trackUsageFromContext(c, int(inputTokens), int(outputTokens), fmt.Errorf("panic: %v", r))
 			}
 			if c.Writer != nil {
 				c.Writer.WriteHeader(http.StatusInternalServerError)
@@ -313,14 +307,14 @@ func (s *Server) handleResponsesStreamResponse(c *gin.Context, stream *ssestream
 		if IsContextCanceled(err) || errors.Is(err, context.Canceled) {
 			logrus.Debug("Responses stream canceled by client")
 			if hasUsage {
-				s.trackUsage(c, rule, provider, actualModel, responseModel, int(inputTokens), int(outputTokens), true, "canceled", "client_disconnected")
+				s.trackUsageFromContext(c, int(inputTokens), int(outputTokens), err)
 			}
 			return
 		}
 
 		logrus.Errorf("Stream error: %v", err)
 		if hasUsage {
-			s.trackUsage(c, rule, provider, actualModel, responseModel, int(inputTokens), int(outputTokens), true, "error", "stream_error")
+			s.trackUsageFromContext(c, int(inputTokens), int(outputTokens), err)
 		}
 
 		errorChunk := map[string]any{
@@ -344,7 +338,7 @@ func (s *Server) handleResponsesStreamResponse(c *gin.Context, stream *ssestream
 
 	// Track successful streaming completion
 	if hasUsage {
-		s.trackUsage(c, rule, provider, actualModel, responseModel, int(inputTokens), int(outputTokens), true, "success", "")
+		s.trackUsageFromContext(c, int(inputTokens), int(outputTokens), nil)
 	}
 
 	// Send the final [DONE] message
