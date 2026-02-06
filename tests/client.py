@@ -661,21 +661,26 @@ class ProxyClient:
                 error=str(e),
             )
 
-    def chat_completions_openai(self, model: str, prompt: str, scenario: str = "openai", **kwargs) -> TestResult:
+    def chat_completions_openai(self, model: str, prompt: str, scenario: Optional[str] = None, **kwargs) -> TestResult:
         """Send chat completion via OpenAI endpoint."""
         start_time = time.time()
 
         try:
             payload = {
                 "model": model,
-                "scenario": scenario,
                 "messages": [{"role": "user", "content": prompt}],
                 **kwargs,
             }
 
+            # Use scenario-based route if scenario provided
+            if scenario:
+                url = f"{self.server_url}/tingly/{scenario}/chat/completions"
+            else:
+                url = f"{self.server_url}/openai/v1/chat/completions"
+
             with self._create_client() as client:
                 response = client.post(
-                    f"{self.server_url}/openai/v1/chat/completions",
+                    url,
                     headers=self._create_headers(),
                     json=payload,
                 )
@@ -718,21 +723,26 @@ class ProxyClient:
                 error=str(e),
             )
 
-    def messages_anthropic(self, model: str, prompt: str, scenario: str = "anthropic", **kwargs) -> TestResult:
+    def messages_anthropic(self, model: str, prompt: str, scenario: Optional[str] = None, **kwargs) -> TestResult:
         """Send messages request via Anthropic endpoint."""
         start_time = time.time()
 
         try:
             payload = {
                 "model": model,
-                "scenario": scenario,
                 "messages": [{"role": "user", "content": prompt}],
                 **kwargs,
             }
 
+            # Use scenario-based route if scenario provided
+            if scenario:
+                url = f"{self.server_url}/tingly/{scenario}/messages"
+            else:
+                url = f"{self.server_url}/anthropic/v1/messages"
+
             with self._create_client() as client:
                 response = client.post(
-                    f"{self.server_url}/anthropic/v1/messages",
+                    url,
                     headers=self._create_headers(),
                     json=payload,
                 )

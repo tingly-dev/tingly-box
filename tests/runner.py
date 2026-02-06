@@ -314,10 +314,27 @@ class TestRunner:
                     # Determine status
                     status = "passed" if r.get("passed", False) else ("skipped" if r.get("verdict") == "inconclusive" else "failed")
 
-                    test_name = r.get('test_name', r.get('test_type', r.get('provider_name', 'Unknown')))
+                    # Build detailed test name with context
+                    test_name_parts = []
+
+                    # Backend validation tests
+                    if r.get("backend_provider"):
+                        backend = r.get("backend_provider", "")
+                        style = r.get("client_style", "")
+                        model = r.get("model", "")
+                        test_name_parts.append(f"Testing {backend} backend")
+                        test_name_parts.append(f"via {style.upper()} format")
+                        if model:
+                            test_name_parts.append(f"with model {model}")
+                    # Other tests
+                    else:
+                        test_name_parts.append(r.get('test_name', r.get('test_type', r.get('provider_name', 'Unknown'))))
+
+                    test_name = " ".join(test_name_parts)
                     message = r.get('message', '')
                     duration = r.get('duration_ms', 0)
                     error = r.get('error', '')
+                    timestamp = r.get('timestamp', '')
 
                     test_results_html += f"""
                     <div class="test-item {status}">
@@ -326,7 +343,45 @@ class TestRunner:
                             <div class="test-item-status status-{status}">{status.upper()}</div>
                         </div>
                         <div class="test-item-message">{message}</div>
-                        <div class="test-item-details">Duration: {duration:.2f}ms</div>"""
+                        <div class="test-item-details">Duration: {duration:.2f}ms"""
+
+                    # Add timestamp if available
+                    if timestamp:
+                        try:
+                            from datetime import datetime
+                            # Parse ISO timestamp and format nicely
+                            dt = datetime.fromisoformat(timestamp)
+                            formatted_time = dt.strftime("%Y-%m-%d %H:%M:%S")
+                            test_results_html += f"""
+                        <div class="test-item-timestamp">Timestamp: {formatted_time}</div>"""
+                        except:
+                            pass
+
+                    # Add HTTP request details if available
+                    if r.get("http_method") or r.get("http_url") or r.get("http_status"):
+                        test_results_html += f"""
+                        <div class="test-item-http">"""
+                        if r.get("http_method"):
+                            test_results_html += f"<span class=\"http-method\">{r['http_method']}</span> "
+                        if r.get("http_url"):
+                            test_results_html += f"<span class=\"http-url\">{r['http_url']}</span>"
+                        if r.get("http_status"):
+                            status_code = r['http_status']
+                            # Color code status
+                            if 200 <= status_code < 300:
+                                status_color = "#10b981"
+                            elif 400 <= status_code < 500:
+                                status_color = "#f59e0b"
+                            elif 500 <= status_code < 600:
+                                status_color = "#ef4444"
+                            else:
+                                status_color = "#6b7280"
+                            test_results_html += f" <span class=\"http-status\" style=\"color: {status_color}\">\"{status_code}\"</span>"
+                        test_results_html += """
+                        </div>"""
+
+                    # Add details section
+                    test_results_html += "</div>"
 
                     # Add error if present
                     if error:
@@ -350,6 +405,19 @@ class TestRunner:
                             if actual:
                                 test_results_html += f", got {actual}"
                             test_results_html += "</div>"
+                        test_results_html += '</div>'
+
+                    # Add additional context for backend tests
+                    if r.get("backend_provider"):
+                        test_results_html += '<div class="test-context">'
+                        test_results_html += f"<strong>Provider:</strong> {r.get('backend_provider')} | "
+                        test_results_html += f"<strong>Style:</strong> {r.get('client_style', '').upper()}"
+                        if r.get("missing_fields"):
+                            test_results_html += f"<br><strong>Missing Fields:</strong> {', '.join(r.get('missing_fields', []))}"
+                        if r.get("invalid_fields"):
+                            invalid = r.get("invalid_fields", {})
+                            if invalid:
+                                test_results_html += f"<br><strong>Invalid Fields:</strong> {', '.join(invalid.keys())}"
                         test_results_html += '</div>'
 
                     test_results_html += "</div>"
@@ -548,6 +616,42 @@ class TestRunner:
         }}
         .field-issue-detail {{
             color: #6b7280;
+        }}
+        .test-item-timestamp {{
+            font-size: 0.8em;
+            color: #9ca3af;
+            margin-top: 4px;
+        }}
+        .test-item-http {{
+            font-size: 0.8em;
+            color: #6b7280;
+            margin-top: 4px;
+            padding: 8px;
+            background: #f3f4f6;
+            border-radius: 4px;
+            font-family: monospace;
+        }}
+        .http-method {{
+            color: #667eea;
+            font-weight: bold;
+        }}
+        .http-url {{
+            color: #059669;
+            word-break: break-all;
+        }}
+        .http-status {{
+            font-weight: bold;
+        }}
+        .test-context {{
+            margin-top: 10px;
+            padding: 10px;
+            background: #f9fafb;
+            border-left: 3px solid #d1d5db;
+            border-radius: 4px;
+            font-size: 0.85em;
+        }}
+        .test-context strong {{
+            color: #374151;
         }}
     </style>
 </head>

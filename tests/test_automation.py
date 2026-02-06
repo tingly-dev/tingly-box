@@ -384,21 +384,18 @@ class TestAutomation:
         logger.info(f"Log: {log_path}")
 
         with open(log_path, 'w') as log_file:
-            env = os.environ.copy()
-            env['TINGLY_CONFIG_DIR'] = str(self.temp_dir)
-
             process = subprocess.Popen(
                 [
                     str(self.server_binary),
                     "start",
+                    "--config-dir", str(self.temp_dir),
                     "--port", str(self.test_port),
                     "--browser", "false",
                     "--daemon"
                 ],
                 stdout=log_file,
                 stderr=subprocess.STDOUT,
-                cwd=str(self.temp_dir),
-                env=env
+                cwd=str(self.temp_dir)
             )
 
         # For daemon mode, the process exits immediately after starting the server
@@ -424,9 +421,20 @@ class TestAutomation:
         for attempt in range(1, max_attempts + 1):
             try:
                 with urllib.request.urlopen(url, timeout=2) as response:
-                    if response.status == 200:
+                    # Accept 200 (success) or 401 (requires auth - means server is running)
+                    if response.status in (200, 401):
                         logger.info("✓ Server is ready!")
                         return True
+            except urllib.error.HTTPError as e:
+                # HTTP 401 means server is running but requires auth
+                if e.code == 401:
+                    logger.info("✓ Server is ready (requires auth)!")
+                    return True
+                if attempt == max_attempts:
+                    logger.error(f"Server failed to start after {max_attempts} attempts")
+                    return False
+                logger.debug(f"Attempt {attempt}/{max_attempts} failed: {e}")
+                time.sleep(1)
             except Exception as e:
                 if attempt == max_attempts:
                     logger.error(f"Server failed to start after {max_attempts} attempts")
@@ -448,20 +456,26 @@ class TestAutomation:
         """
         logger.info("Running test suite")
 
-        output_dir = self.temp_dir / "test_results"
-        output_dir.mkdir(exist_ok=True)
+        # Create permanent output directory in tests/ with timestamp
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        permanent_output_dir = self.project_dir / "tests" / "test_results" / timestamp
+        permanent_output_dir.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Results will be saved to: {permanent_output_dir}")
 
         start_time = time.time()
 
-        # Run tests using Python module
+        # Run tests using Python module against the test server
+        # Output directly to permanent directory
+        server_url = f"http://localhost:{self.test_port}"
         sys.argv = [
             "tests.runner",
             "--all",
             "--html",
             "--save",
             "--verbose",
-            "-c", str(config_path),
-            "--output", str(output_dir)
+            "--server-url", server_url,
+            "--output", str(permanent_output_dir)
         ]
 
         try:
@@ -469,10 +483,11 @@ class TestAutomation:
             exit_code = run_tests()
             duration_ms = (time.time() - start_time) * 1000
             logger.info(f"Tests completed with exit code: {exit_code}")
+
             return TestResult(
                 exit_code=exit_code,
                 duration_ms=duration_ms,
-                log_path=output_dir
+                log_path=permanent_output_dir
             )
         except Exception as e:
             logger.exception(f"Test execution failed: {e}")
@@ -480,7 +495,7 @@ class TestAutomation:
             return TestResult(
                 exit_code=1,
                 duration_ms=duration_ms,
-                log_path=output_dir
+                log_path=permanent_output_dir
             )
 
     def _cleanup(self) -> None:
@@ -491,16 +506,14 @@ class TestAutomation:
         if self.temp_dir:
             try:
                 # Use tingly-box stop command to properly stop the daemon
-                env = os.environ.copy()
-                env['TINGLY_CONFIG_DIR'] = str(self.temp_dir)
                 subprocess.run(
                     [
                         str(self.server_binary),
-                        "stop"
+                        "stop",
+                        "--config-dir", str(self.temp_dir)
                     ],
                     capture_output=True,
-                    timeout=10,
-                    env=env
+                    timeout=10
                 )
                 logger.info("Server stopped")
             except Exception as e:
@@ -594,6 +607,15 @@ class TestAutomation:
         logger.info(f"Results Directory: {result.log_path}")
         logger.info("")
 
+        # List saved files
+        if result.log_path.exists():
+            result_files = list(result.log_path.glob("*"))
+            if result_files:
+                logger.info("Saved files:")
+                for file in sorted(result_files):
+                    logger.info(f"  - {file.name}")
+        logger.info("")
+
         # Display summary
         if result.exit_code == 0:
             logger.info("✓ Tests completed successfully")
@@ -601,7 +623,8 @@ class TestAutomation:
             logger.warning("⚠ Tests completed with errors")
 
         logger.info("")
-        logger.info("Note: Temp directory will be removed after script exits")
+        logger.info("Note: Test results are saved permanently in tests/test_results/")
+        logger.info("      Temp directory will be removed after script exits")
 
 
 def main() -> int:

@@ -79,9 +79,10 @@ class BackendValidationResult:
     backend_provider: str
     client_style: str
     test_type: str
-    passed: bool
-    message: str
-    duration_ms: float
+    model: Optional[str] = None
+    passed: bool = False
+    message: str = ""
+    duration_ms: float = 0.0
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
 
     missing_fields: list[str] = field(default_factory=list)
@@ -114,21 +115,27 @@ class BackendValidationSuiteResult:
 class BackendValidationTestSuite:
     """Test suite for backend field validation."""
 
-    # Backend model mappings
+    # Backend model mappings for proxy testing
+    # Uses built-in scenario types: "openai", "anthropic", "claude_code", "open_code"
+    # Each backend maps to a scenario type and has a request_model name
     BACKEND_MODELS = {
-        "qwen": {
-            "openai": ["qwen-turbo", "qwen-plus", "qwen-max", "qwen-long"],
-            "anthropic": ["qwen-turbo", "qwen-plus", "qwen-max"],
-        },
         "glm": {
-            "openai": ["glm-4", "glm-4-flash", "glm-4-plus", "glm-4-air"],
-            "anthropic": ["glm-4", "glm-4-flash"],
+            "scenario": "anthropic",  # GLM uses anthropic scenario
+            "request_model": "glm-test",
+            "provider_model": "glm-4.7",
+            "test_format": "anthropic",  # Only test anthropic format
+        },
+        "qwen": {
+            "scenario": "claude_code",  # Qwen uses claude_code scenario
+            "request_model": "qwen-test",
+            "provider_model": "qwen-plus",
+            "test_format": "openai",  # Test openai format (provider uses openai API)
         },
         "deepseek": {
-            "openai": ["deepseek-chat", "deepseek-coder"],
-        },
-        "baichuan": {
-            "openai": ["baichuan2-turbo", "baichuan2-53b"],
+            "scenario": "openai",  # Deepseek uses openai scenario
+            "request_model": "deepseek-test",
+            "provider_model": "deepseek-chat",
+            "test_format": "openai",  # Only test openai format
         },
     }
 
@@ -352,17 +359,25 @@ class BackendValidationTestSuite:
         test_prompt = prompt or self.config.test_prompt
         start_time = time.time()
 
-        # Get default model for backend
-        if not model:
-            models = self.BACKEND_MODELS.get(backend, {}).get("openai", [])
-            model = models[0] if models else f"{backend}-chat"
+        # Get scenario and request_model for backend
+        backend_config = self.BACKEND_MODELS.get(backend, {})
+        scenario = backend_config.get("scenario", "openai")
+        request_model = backend_config.get("request_model", f"{backend}-test")
 
-        self._print(f"Testing {backend} backend via OpenAI format with model {model}")
+        # Use request_model for the API call (server maps this to provider model)
+        if not model:
+            model = request_model
+
+        # Track provider_model for validation (actual model returned by provider)
+        provider_model = backend_config.get("provider_model", model)
+
+        self._print(f"Testing {backend} backend via OpenAI format with scenario {scenario}, request_model {model}")
 
         try:
             result = self.proxy_client.chat_completions_openai(
-                model=model,
+                model=model,  # request_model for server to map to provider
                 prompt=test_prompt,
+                scenario=scenario,  # Scenario for URL routing
                 temperature=0.7,
                 max_tokens=100,
             )
@@ -374,6 +389,7 @@ class BackendValidationTestSuite:
                     backend_provider=backend,
                     client_style="openai",
                     test_type="openai_format_validation",
+                    model=model,
                     passed=False,
                     message="Request failed",
                     duration_ms=duration_ms,
@@ -393,6 +409,7 @@ class BackendValidationTestSuite:
                 backend_provider=backend,
                 client_style="openai",
                 test_type="openai_format_validation",
+                model=model,
                 passed=passed,
                 message=message,
                 duration_ms=duration_ms,
@@ -408,6 +425,7 @@ class BackendValidationTestSuite:
                 backend_provider=backend,
                 client_style="openai",
                 test_type="openai_format_validation",
+                model=model,
                 passed=False,
                 message="Exception during validation",
                 duration_ms=duration_ms,
@@ -424,17 +442,25 @@ class BackendValidationTestSuite:
         test_prompt = prompt or self.config.test_prompt
         start_time = time.time()
 
-        # Get default model for backend
-        if not model:
-            models = self.BACKEND_MODELS.get(backend, {}).get("anthropic", [])
-            model = models[0] if models else f"{backend}-chat"
+        # Get scenario and request_model for backend
+        backend_config = self.BACKEND_MODELS.get(backend, {})
+        scenario = backend_config.get("scenario", "anthropic")
+        request_model = backend_config.get("request_model", f"{backend}-test")
 
-        self._print(f"Testing {backend} backend via Anthropic format with model {model}")
+        # Use request_model for the API call (server maps this to provider model)
+        if not model:
+            model = request_model
+
+        # Track provider_model for validation (actual model returned by provider)
+        provider_model = backend_config.get("provider_model", model)
+
+        self._print(f"Testing {backend} backend via Anthropic format with scenario {scenario}, request_model {model}")
 
         try:
             result = self.proxy_client.messages_anthropic(
-                model=model,
+                model=model,  # request_model for server to map to provider
                 prompt=test_prompt,
+                scenario=scenario,  # Scenario for URL routing
                 temperature=0.7,
                 max_tokens=100,
             )
@@ -446,6 +472,7 @@ class BackendValidationTestSuite:
                     backend_provider=backend,
                     client_style="anthropic",
                     test_type="anthropic_format_validation",
+                    model=model,
                     passed=False,
                     message="Request failed",
                     duration_ms=duration_ms,
@@ -465,6 +492,7 @@ class BackendValidationTestSuite:
                 backend_provider=backend,
                 client_style="anthropic",
                 test_type="anthropic_format_validation",
+                model=model,
                 passed=passed,
                 message=message,
                 duration_ms=duration_ms,
@@ -480,6 +508,7 @@ class BackendValidationTestSuite:
                 backend_provider=backend,
                 client_style="anthropic",
                 test_type="anthropic_format_validation",
+                model=model,
                 passed=False,
                 message="Exception during validation",
                 duration_ms=duration_ms,
@@ -490,9 +519,9 @@ class BackendValidationTestSuite:
         self,
         backends: Optional[list[str]] = None,
     ) -> BackendValidationSuiteResult:
-        """Test all specified backends with both client formats."""
+        """Test all specified backends with their appropriate client formats."""
         suite_result = BackendValidationSuiteResult(suite_name="Backend Validation Test Suite")
-        test_backends = backends or ["qwen", "glm", "deepseek"]
+        test_backends = backends or ["glm", "qwen", "deepseek"]
 
         self._print("=== Running Backend Validation Tests ===\n")
 
@@ -501,20 +530,16 @@ class BackendValidationTestSuite:
         for backend in test_backends:
             self._print(f"\n--- Testing {backend} backend ---")
 
-            # Test OpenAI format
-            self._print(f"  OpenAI format...")
-            result = self.test_backend_openai_format(backend)
-            suite_result.results.append(result)
-            suite_result.total_tests += 1
-            if result.passed:
-                suite_result.passed += 1
-            else:
-                suite_result.failed += 1
-            self._print(f"    Result: {'PASS' if result.passed else 'FAIL'} - {result.message}")
+            backend_config = self.BACKEND_MODELS.get(backend, {})
+            test_format = backend_config.get("test_format", "openai")
 
-            # Test Anthropic format
-            self._print(f"  Anthropic format...")
-            result = self.test_backend_anthropic_format(backend)
+            # Test with the appropriate format based on backend configuration
+            self._print(f"  {test_format.upper()} format...")
+            if test_format == "openai":
+                result = self.test_backend_openai_format(backend)
+            else:
+                result = self.test_backend_anthropic_format(backend)
+
             suite_result.results.append(result)
             suite_result.total_tests += 1
             if result.passed:
