@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/smart_compact"
@@ -52,27 +53,32 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		return
 	}
 
+	// Read the raw request body first for debugging purposes
+	bodyBytes, err := c.GetRawData()
+	if err != nil {
+		logrus.Debugf("Failed to read request body: %v", err)
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Failed to read request body",
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+	// Store the body back for parsing
+	c.Request.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
+
 	// Start scenario-level recording (client -> tingly-box traffic) only if enabled
+	// Note: prompt recording is handled automatically by ScenarioRecorder
+	// when prompt_recording is enabled for the scenario
 	var recorder *ScenarioRecorder
 	if s.ApplyRecording(scenarioType) {
-		recorder = s.RecordScenarioRequest(c, scenario)
+		recorder = s.RecordScenarioRequest(c, scenario, db.ProtocolAnthropic)
 		if recorder != nil {
 			// Store recorder in context for use in handlers
 			c.Set("scenario_recorder", recorder)
 			// Note: RecordResponse will be called by handler after stream completes
 		}
-	}
-
-	// Read the raw request body first for debugging purposes
-	bodyBytes, err := c.GetRawData()
-	if err != nil {
-		// Record error if recording is enabled
-		if recorder != nil {
-			recorder.RecordError(err)
-		}
-	} else {
-		// Store the body back for parsing
-		c.Request.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
 	}
 
 	// Determine provider & model
@@ -103,6 +109,11 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 		model = string(betaMessages.Model)
 		reqParams = &betaMessages.BetaMessageNewParams
 
+		// Set pre-parsed request for prompt recording (avoids re-parsing)
+		if recorder != nil {
+			recorder.SetParsedRequest(&betaMessages)
+		}
+
 	} else {
 		if err := json.Unmarshal(bodyBytes, &messages); err != nil {
 			// Record error if recording is enabled
@@ -120,6 +131,11 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 
 		model = string(messages.Model)
 		reqParams = &messages.MessageNewParams
+
+		// Set pre-parsed request for prompt recording (avoids re-parsing)
+		if recorder != nil {
+			recorder.SetParsedRequest(&messages)
+		}
 	}
 
 	// Check if this is the request model name first
