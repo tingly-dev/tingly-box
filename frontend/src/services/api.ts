@@ -1146,11 +1146,11 @@ export const api = {
     },
 
     // ============================================
-    // Prompt Recording API
+    // Memory Recording API
     // ============================================
 
-    // Get prompt rounds with filtering and pagination
-    getPromptRounds: async (params: {
+    // Get memory rounds with filtering and pagination
+    getMemoryRounds: async (params: {
         scenario?: string;
         protocol?: string;
         limit?: number;
@@ -1164,7 +1164,7 @@ export const api = {
             if (params.limit) queryParams.set('limit', params.limit.toString());
             if (params.offset) queryParams.set('offset', params.offset.toString());
 
-            const response = await fetch(`${await getApiBaseUrl()}/api/v1/prompts/rounds?${queryParams}`, {
+            const response = await fetch(`${await getApiBaseUrl()}/api/v1/memory/rounds?${queryParams}`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1184,8 +1184,8 @@ export const api = {
         }
     },
 
-    // Get user inputs for prompt user page
-    getPromptUserInputs: async (params: {
+    // Get user inputs for memory user page
+    getMemoryUserInputs: async (params: {
         scenario?: string;
         limit?: number;
     } = {}): Promise<any> => {
@@ -1195,7 +1195,7 @@ export const api = {
             if (params.scenario) queryParams.set('scenario', params.scenario);
             if (params.limit) queryParams.set('limit', params.limit.toString());
 
-            const response = await fetch(`${await getApiBaseUrl()}/api/v1/prompts/user-inputs?${queryParams}`, {
+            const response = await fetch(`${await getApiBaseUrl()}/api/v1/memory/user-inputs?${queryParams}`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1215,8 +1215,8 @@ export const api = {
         }
     },
 
-    // Search prompt rounds by user input content
-    searchPromptRounds: async (params: {
+    // Search memory rounds by user input content
+    searchMemoryRounds: async (params: {
         query: string;
         scenario?: string;
         limit?: number;
@@ -1228,7 +1228,7 @@ export const api = {
             if (params.scenario) queryParams.set('scenario', params.scenario);
             if (params.limit) queryParams.set('limit', params.limit.toString());
 
-            const response = await fetch(`${await getApiBaseUrl()}/api/v1/prompts/search?${queryParams}`, {
+            const response = await fetch(`${await getApiBaseUrl()}/api/v1/memory/search?${queryParams}`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1249,7 +1249,7 @@ export const api = {
     },
 
     // Get rounds by project and/or session ID
-    getPromptRoundsByProjectSession: async (params: {
+    getMemoryRoundsByProjectSession: async (params: {
         project_id?: string;
         session_id?: string;
         limit?: number;
@@ -1261,7 +1261,7 @@ export const api = {
             if (params.session_id) queryParams.set('session_id', params.session_id);
             if (params.limit) queryParams.set('limit', params.limit.toString());
 
-            const response = await fetch(`${await getApiBaseUrl()}/api/v1/prompts/by-project-session?${queryParams}`, {
+            const response = await fetch(`${await getApiBaseUrl()}/api/v1/memory/by-project-session?${queryParams}`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1282,7 +1282,7 @@ export const api = {
     },
 
     // Get rounds by metadata key-value
-    getPromptRoundsByMetadata: async (params: {
+    getMemoryRoundsByMetadata: async (params: {
         key: string;
         value: string;
         limit?: number;
@@ -1294,7 +1294,7 @@ export const api = {
             queryParams.set('value', params.value);
             if (params.limit) queryParams.set('limit', params.limit.toString());
 
-            const response = await fetch(`${await getApiBaseUrl()}/api/v1/prompts/by-metadata?${queryParams}`, {
+            const response = await fetch(`${await getApiBaseUrl()}/api/v1/memory/by-metadata?${queryParams}`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1314,11 +1314,11 @@ export const api = {
         }
     },
 
-    // Delete old prompt records
-    deleteOldPromptRecords: async (days: number): Promise<any> => {
+    // Delete old memory records
+    deleteOldMemoryRecords: async (days: number): Promise<any> => {
         try {
             const token = getUserAuthToken();
-            const response = await fetch(`${await getApiBaseUrl()}/api/v1/prompts/old-records?days=${days}`, {
+            const response = await fetch(`${await getApiBaseUrl()}/api/v1/memory/old-records?days=${days}`, {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',
