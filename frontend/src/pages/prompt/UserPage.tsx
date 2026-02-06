@@ -16,6 +16,7 @@ import {
   Select,
   MenuItem,
   TextField,
+  Collapse,
 } from '@mui/material';
 import {
   Description,
@@ -23,6 +24,9 @@ import {
   Search as SearchIcon,
   Delete,
   Close,
+  Refresh,
+  ExpandMore,
+  ExpandLess,
 } from '@mui/icons-material';
 import PageLayout from '@/components/PageLayout';
 import { RecordingCalendar } from '@/components/prompt';
@@ -56,38 +60,47 @@ const UserPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [scenarioFilter, setScenarioFilter] = useState<string>('');
   const [protocolFilter, setProtocolFilter] = useState<string | undefined>();
-  const [promptRounds, setPromptRounds] = useState<PromptRoundItem[]>([]);
-  const [filteredRounds, setFilteredRounds] = useState<PromptRoundItem[]>([]);
-  const [selectedRound, setSelectedRound] = useState<PromptRoundItem | null>(null);
+  const [memories, setMemories] = useState<PromptRoundItem[]>([]);
+  const [filteredMemories, setFilteredMemories] = useState<PromptRoundItem[]>([]);
+  const [selectedMemory, setSelectedMemory] = useState<PromptRoundItem | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [roundToDelete, setRoundToDelete] = useState<PromptRoundItem | null>(null);
+  const [memoryToDelete, setMemoryToDelete] = useState<PromptRoundItem | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [injectionSectionExpanded, setInjectionSectionExpanded] = useState(false);
+  const [expandedInjections, setExpandedInjections] = useState<Record<number, boolean>>({});
 
-  // Fetch prompt rounds from API
-  useEffect(() => {
-    const fetchPromptRounds = async () => {
-      setLoading(true);
-      try {
-        const result = await api.getPromptUserInputs({ limit: 100 });
-        if (result.success && result.data) {
-          setPromptRounds(result.data);
-        } else {
-          console.error('Failed to fetch prompt rounds:', result.error);
-          setPromptRounds([]);
-        }
-      } catch (error) {
-        console.error('Error fetching prompt rounds:', error);
-        setPromptRounds([]);
-      } finally {
-        setLoading(false);
+  // Fetch memories from API
+  const fetchMemories = async () => {
+    setLoading(true);
+    try {
+      const result = await api.getMemoryUserInputs({ limit: 100 });
+      if (result.success && result.data) {
+        setMemories(result.data);
+      } else {
+        console.error('Failed to fetch memories:', result.error);
+        setMemories([]);
       }
-    };
+    } catch (error) {
+      console.error('Error fetching memories:', error);
+      setMemories([]);
+    } finally {
+      setLoading(false);
+      setIsRefreshing(false);
+    }
+  };
 
-    fetchPromptRounds();
+  useEffect(() => {
+    fetchMemories();
   }, []);
 
-  // Filter rounds based on selected date/range and filters
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    fetchMemories();
+  };
+
+  // Filter memories based on selected date/range and filters
   useEffect(() => {
-    let filtered = [...promptRounds];
+    let filtered = [...memories];
 
     // Date range or single date filter
     if (rangeMode !== null) {
@@ -96,17 +109,17 @@ const UserPage = () => {
       const startDate = new Date(today);
       startDate.setDate(startDate.getDate() - rangeMode);
       startDate.setHours(0, 0, 0, 0);
-      filtered = filtered.filter((round) => {
-        const roundDate = new Date(round.created_at);
-        return roundDate >= startDate && roundDate <= today;
+      filtered = filtered.filter((item) => {
+        const itemDate = new Date(item.created_at);
+        return itemDate >= startDate && itemDate <= today;
       });
     } else {
-      filtered = filtered.filter((round) => {
-        const roundDate = new Date(round.created_at);
+      filtered = filtered.filter((item) => {
+        const itemDate = new Date(item.created_at);
         return (
-          roundDate.getDate() === selectedDate.getDate() &&
-          roundDate.getMonth() === selectedDate.getMonth() &&
-          roundDate.getFullYear() === selectedDate.getFullYear()
+          itemDate.getDate() === selectedDate.getDate() &&
+          itemDate.getMonth() === selectedDate.getMonth() &&
+          itemDate.getFullYear() === selectedDate.getFullYear()
         );
       });
     }
@@ -115,36 +128,36 @@ const UserPage = () => {
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(
-        (round) =>
-          round.user_input.toLowerCase().includes(query) ||
-          round.round_result?.toLowerCase().includes(query) ||
-          round.model.toLowerCase().includes(query)
+        (item) =>
+          item.user_input.toLowerCase().includes(query) ||
+          item.round_result?.toLowerCase().includes(query) ||
+          item.model.toLowerCase().includes(query)
       );
     }
 
     // Scenario filter
     if (scenarioFilter) {
-      filtered = filtered.filter((round) => round.scenario === scenarioFilter);
+      filtered = filtered.filter((item) => item.scenario === scenarioFilter);
     }
 
     // Protocol filter
     if (protocolFilter) {
-      filtered = filtered.filter((round) => round.protocol === protocolFilter);
+      filtered = filtered.filter((item) => item.protocol === protocolFilter);
     }
 
-    setFilteredRounds(filtered);
-  }, [promptRounds, selectedDate, rangeMode, searchQuery, scenarioFilter, protocolFilter]);
+    setFilteredMemories(filtered);
+  }, [memories, selectedDate, rangeMode, searchQuery, scenarioFilter, protocolFilter]);
 
-  // Calculate recording counts per date for calendar
-  const recordingCounts = useMemo(() => {
+  // Calculate memory counts per date for calendar
+  const memoryCounts = useMemo(() => {
     const counts = new Map<string, number>();
-    promptRounds.forEach((round) => {
-      const date = new Date(round.created_at);
+    memories.forEach((item) => {
+      const date = new Date(item.created_at);
       const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
       counts.set(dateKey, (counts.get(dateKey) || 0) + 1);
     });
     return counts;
-  }, [promptRounds]);
+  }, [memories]);
 
   const handleDateSelect = (date: Date) => {
     setSelectedDate(date);
@@ -154,30 +167,30 @@ const UserPage = () => {
     setRangeMode(days);
   };
 
-  const handleViewDetails = (round: PromptRoundItem) => {
-    setSelectedRound(round);
+  const handleViewDetails = (memory: PromptRoundItem) => {
+    setSelectedMemory(memory);
   };
 
-  const handleDeleteClick = (round: PromptRoundItem) => {
-    setRoundToDelete(round);
+  const handleDeleteClick = (memory: PromptRoundItem) => {
+    setMemoryToDelete(memory);
     setDeleteDialogOpen(true);
   };
 
   const handleDeleteConfirm = async () => {
-    if (!roundToDelete) return;
+    if (!memoryToDelete) return;
     // Note: Individual delete is not implemented in API yet
     // For now, just remove from local state
-    setPromptRounds(promptRounds.filter((r) => r.id !== roundToDelete.id));
-    if (selectedRound?.id === roundToDelete.id) {
-      setSelectedRound(null);
+    setMemories(memories.filter((m) => m.id !== memoryToDelete.id));
+    if (selectedMemory?.id === memoryToDelete.id) {
+      setSelectedMemory(null);
     }
     setDeleteDialogOpen(false);
-    setRoundToDelete(null);
+    setMemoryToDelete(null);
   };
 
   const handleDeleteCancel = () => {
     setDeleteDialogOpen(false);
-    setRoundToDelete(null);
+    setMemoryToDelete(null);
   };
 
   // Get date label for header
@@ -188,10 +201,30 @@ const UserPage = () => {
     return selectedDate.toLocaleDateString();
   };
 
-  // Format user input for display
-  const formatUserInput = (input: string, maxLength: number = 80) => {
-    if (input.length <= maxLength) return input;
-    return input.substring(0, maxLength) + '...';
+  // Parse Claude Code input to extract XML-like tagged injections
+  // Returns { injections: [{tag, content}], remainingInput: string }
+  const parseClaudeCodeInput = (input: string) => {
+    const injections: { tag: string; content: string }[] = [];
+    let remainingInput = input;
+
+    // Match XML-like tags: <tagname>content</tagname>
+    // This regex handles multiline content
+    const tagRegex = /<([a-zA-Z_][a-zA-Z0-9_-]*)>([\s\S]*?)<\/\1>/g;
+    let match;
+    let lastIndex = 0;
+
+    while ((match = tagRegex.exec(input)) !== null) {
+      injections.push({
+        tag: match[1],
+        content: match[2].trim(),
+      });
+      lastIndex = match.index + match[0].length;
+    }
+
+    // Remove all tagged sections from the input to get the remaining content
+    remainingInput = input.replace(tagRegex, '').trim();
+
+    return { injections, remainingInput };
   };
 
   return (
@@ -201,20 +234,35 @@ const UserPage = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
           <Box>
             <Typography variant="h3" sx={{ fontWeight: 600, mb: 1 }}>
-              Prompt Recordings
+              Project Memory
             </Typography>
             <Typography variant="body1" color="text.secondary">
-              Browse and search your AI conversation history
+              Your AI conversation history and project context
             </Typography>
           </Box>
+          <IconButton
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            sx={{ bgcolor: 'action.hover', '&:hover': { bgcolor: 'action.selected' } }}
+          >
+            <Refresh sx={{ ...(isRefreshing && { animation: 'spin 1s linear infinite' }) }} />
+          </IconButton>
         </Box>
+
+        {/* Global styles for spin animation */}
+        <style>{`
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
 
         {/* Search and Filter */}
         <Paper sx={{ p: 2, mb: 2 }}>
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
             {/* Search Input */}
             <TextField
-              placeholder="Search prompts..."
+              placeholder="Search memories..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               InputProps={{
@@ -316,7 +364,7 @@ const UserPage = () => {
               <RecordingCalendar
                 currentDate={calendarDate}
                 selectedDate={selectedDate}
-                recordingCounts={recordingCounts}
+                recordingCounts={memoryCounts}
                 onDateSelect={handleDateSelect}
                 onMonthChange={setCalendarDate}
                 onRangeChange={handleRangeChange}
@@ -324,7 +372,7 @@ const UserPage = () => {
             </Box>
           </Paper>
 
-          {/* Column 2: Rounds List */}
+          {/* Column 2: Memories List */}
           <Paper
             sx={{
               width: 380,
@@ -338,11 +386,11 @@ const UserPage = () => {
           >
             <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                {getDateLabel()} ({filteredRounds.length})
+                {getDateLabel()} ({filteredMemories.length})
               </Typography>
             </Box>
             <Box sx={{ flex: 1, overflow: 'auto' }}>
-              {filteredRounds.length === 0 ? (
+              {filteredMemories.length === 0 ? (
                 <Box
                   sx={{
                     display: 'flex',
@@ -356,26 +404,26 @@ const UserPage = () => {
                 >
                   <FolderOpen sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
                   <Typography variant="body2" color="text.secondary">
-                    {promptRounds.length === 0 ? 'No prompt recordings found' : 'No recordings match your filters'}
+                    {memories.length === 0 ? 'No memories found' : 'No memories match your filters'}
                   </Typography>
                 </Box>
               ) : (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  {filteredRounds.map((round) => (
+                  {filteredMemories.map((memory) => (
                     <Paper
-                      key={round.id}
-                      onClick={() => handleViewDetails(round)}
+                      key={memory.id}
+                      onClick={() => handleViewDetails(memory)}
                       sx={{
                         mx: 1,
                         mt: 1,
                         mb: 0,
                         p: 1.5,
                         border: '1px solid',
-                        borderColor: selectedRound?.id === round.id ? 'primary.main' : 'divider',
+                        borderColor: selectedMemory?.id === memory.id ? 'primary.main' : 'divider',
                         borderRadius: 2,
                         cursor: 'pointer',
                         transition: 'all 0.2s',
-                        backgroundColor: selectedRound?.id === round.id ? 'action.selected' : 'background.paper',
+                        backgroundColor: selectedMemory?.id === memory.id ? 'action.selected' : 'background.paper',
                         '&:hover': {
                           borderColor: 'primary.main',
                           boxShadow: 1,
@@ -384,9 +432,9 @@ const UserPage = () => {
                     >
                       <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
                         {/* Time */}
-                        <Box sx={{ minWidth: 50, mt: 0.25 }}>
-                          <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', fontSize: '0.7rem' }}>
-                            {new Date(round.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                        <Box sx={{ minWidth: 45, mt: 0.25, flexShrink: 0 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 500, color: 'text.secondary', fontSize: '0.7rem' }}>
+                            {new Date(memory.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                           </Typography>
                         </Box>
 
@@ -396,58 +444,39 @@ const UserPage = () => {
                             variant="body2"
                             sx={{
                               fontWeight: 500,
-                              whiteSpace: 'nowrap',
+                              whiteSpace: 'pre-wrap',
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
+                              display: '-webkit-box',
+                              WebkitLineClamp: 3,
+                              WebkitBoxOrient: 'vertical',
                               fontSize: '0.8rem',
+                              lineHeight: 1.4,
+                              mb: 0.5,
                             }}
                           >
-                            {formatUserInput(round.user_input)}
+                            {memory.scenario === 'claude_code'
+                              ? parseClaudeCodeInput(memory.user_input).remainingInput || memory.user_input.slice(0, 100)
+                              : memory.user_input}
                           </Typography>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25, flexWrap: 'wrap' }}>
-                            <Chip
-                              label={round.protocol}
-                              size="tiny"
-                              sx={{
-                                height: 16,
-                                fontSize: '0.6rem',
-                                borderRadius: 0.5,
-                                backgroundColor: 'primary.100',
-                                color: 'primary.dark',
-                                fontWeight: 500,
-                              }}
-                            />
+
+                          {/* Compact Meta Info */}
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
                             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
-                              {round.model}
+                              {memory.model}
                             </Typography>
-                            {round.is_streaming && (
-                              <Chip
-                                label="stream"
-                                size="tiny"
-                                sx={{
-                                  height: 16,
-                                  fontSize: '0.6rem',
-                                  borderRadius: 0.5,
-                                  backgroundColor: 'info.100',
-                                  color: 'info.dark',
-                                  fontWeight: 500,
-                                }}
-                              />
-                            )}
-                            {round.has_tool_use && (
-                              <Chip
-                                label="tools"
-                                size="tiny"
-                                sx={{
-                                  height: 16,
-                                  fontSize: '0.6rem',
-                                  borderRadius: 0.5,
-                                  backgroundColor: 'warning.100',
-                                  color: 'warning.dark',
-                                  fontWeight: 500,
-                                }}
-                              />
-                            )}
+                            <Box sx={{ display: 'flex', gap: 0.25 }}>
+                              {memory.is_streaming && (
+                                <Typography variant="caption" sx={{ fontSize: '0.6rem', color: 'info.main', fontWeight: 500 }}>
+                                  stream
+                                </Typography>
+                              )}
+                              {memory.has_tool_use && (
+                                <Typography variant="caption" sx={{ fontSize: '0.6rem', color: 'warning.main', fontWeight: 500 }}>
+                                  tools
+                                </Typography>
+                              )}
+                            </Box>
                           </Box>
                         </Box>
 
@@ -456,9 +485,9 @@ const UserPage = () => {
                           size="small"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleDeleteClick(round);
+                            handleDeleteClick(memory);
                           }}
-                          sx={{ opacity: 0.6, '&:hover': { opacity: 1 } }}
+                          sx={{ opacity: 0.6, '&:hover': { opacity: 1 }, flexShrink: 0 }}
                         >
                           <Delete sx={{ fontSize: 16 }} />
                         </IconButton>
@@ -470,7 +499,7 @@ const UserPage = () => {
             </Box>
           </Paper>
 
-          {/* Column 3: Round Detail */}
+          {/* Column 3: Memory Detail */}
           <Paper
             sx={{
               flex: 1,
@@ -501,16 +530,16 @@ const UserPage = () => {
                   whiteSpace: 'nowrap',
                 }}
               >
-                {selectedRound ? 'Prompt Details' : 'Prompt Details'}
+                {selectedMemory ? 'Memory Details' : 'Memory Details'}
               </Typography>
-              {selectedRound && (
-                <IconButton size="small" onClick={() => setSelectedRound(null)}>
+              {selectedMemory && (
+                <IconButton size="small" onClick={() => setSelectedMemory(null)}>
                   <Close />
                 </IconButton>
               )}
             </Box>
             <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
-              {!selectedRound ? (
+              {!selectedMemory ? (
                 <Box
                   sx={{
                     display: 'flex',
@@ -524,125 +553,262 @@ const UserPage = () => {
                 >
                   <Description sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
                   <Typography variant="body2" color="text.secondary">
-                    Select a prompt recording to view its details
+                    Select a memory to view its details
                   </Typography>
                 </Box>
               ) : (
                 <Box>
-                  <Box sx={{ display: 'flex', gap: 0.5, mb: 2 }}>
-                    <Chip label={selectedRound.protocol} size="small" color="primary" variant="outlined" />
-                    <Chip label={selectedRound.scenario} size="small" color="secondary" variant="outlined" />
-                    {selectedRound.is_streaming && (
-                      <Chip label="Streaming" size="small" color="info" variant="outlined" />
+                  {/* Compact Meta Row */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+                    <Typography variant="caption" color="text.secondary">
+                      {new Date(selectedMemory.created_at).toLocaleString()}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">•</Typography>
+                    <Typography variant="caption" color="text.secondary">{selectedMemory.model}</Typography>
+                    <Typography variant="caption" color="text.secondary">•</Typography>
+                    <Typography variant="caption" color="text.secondary">{selectedMemory.provider_name}</Typography>
+                    {selectedMemory.is_streaming && (
+                      <>
+                        <Typography variant="caption" color="text.secondary">•</Typography>
+                        <Chip label="Streaming" size="small" sx={{ height: 20, fontSize: '0.65rem' }} />
+                      </>
                     )}
-                    {selectedRound.has_tool_use && (
-                      <Chip label="Tool Use" size="small" color="warning" variant="outlined" />
+                    {selectedMemory.has_tool_use && (
+                      <>
+                        <Typography variant="caption" color="text.secondary">•</Typography>
+                        <Chip label="Tool Use" size="small" sx={{ height: 20, fontSize: '0.65rem' }} />
+                      </>
                     )}
                   </Box>
 
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600, mb: 0.5 }}>
-                      Model
+                  {/* Token Info */}
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                      TOKENS
                     </Typography>
-                    <Typography variant="body1">{selectedRound.model}</Typography>
-                  </Box>
-
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600, mb: 0.5 }}>
-                      Provider
-                    </Typography>
-                    <Typography variant="body1">{selectedRound.provider_name}</Typography>
-                  </Box>
-
-                  {selectedRound.project_id && (
-                    <Box sx={{ mb: 2 }}>
-                      <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600, mb: 0.5 }}>
-                        Project ID
-                      </Typography>
-                      <Typography variant="body1" sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
-                        {selectedRound.project_id}
-                      </Typography>
+                    <Box sx={{ display: 'flex', gap: 3, mt: 0.5 }}>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">Input</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {selectedMemory.input_tokens.toLocaleString()}
+                        </Typography>
+                      </Box>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">Output</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {selectedMemory.output_tokens.toLocaleString()}
+                        </Typography>
+                      </Box>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">Total</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500, color: 'primary.main' }}>
+                          {selectedMemory.total_tokens.toLocaleString()}
+                        </Typography>
+                      </Box>
                     </Box>
-                  )}
+                  </Box>
 
-                  {selectedRound.session_id && (
-                    <Box sx={{ mb: 2 }}>
-                      <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600, mb: 0.5 }}>
-                        Session ID
-                      </Typography>
-                      <Typography variant="body1" sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
-                        {selectedRound.session_id}
-                      </Typography>
+                  {/* Context Info (collapsible) */}
+                  <Box sx={{ mb: 3, p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, mb: 0.5, display: 'block' }}>
+                      CONTEXT
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 0.5 }}>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">Protocol</Typography>
+                        <Typography variant="caption" sx={{ ml: 0.5, fontWeight: 500 }}>{selectedMemory.protocol}</Typography>
+                      </Box>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">Scenario</Typography>
+                        <Typography variant="caption" sx={{ ml: 0.5, fontWeight: 500 }}>{selectedMemory.scenario}</Typography>
+                      </Box>
+                      {selectedMemory.project_id && (
+                        <Box>
+                          <Typography variant="caption" color="text.secondary">Project</Typography>
+                          <Typography variant="caption" sx={{ ml: 0.5, fontFamily: 'monospace', fontWeight: 500 }}>
+                            {selectedMemory.project_id.slice(0, 8)}...
+                          </Typography>
+                        </Box>
+                      )}
+                      {selectedMemory.session_id && (
+                        <Box>
+                          <Typography variant="caption" color="text.secondary">Session</Typography>
+                          <Typography variant="caption" sx={{ ml: 0.5, fontFamily: 'monospace', fontWeight: 500 }}>
+                            {selectedMemory.session_id.slice(0, 8)}...
+                          </Typography>
+                        </Box>
+                      )}
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">Round</Typography>
+                        <Typography variant="caption" sx={{ ml: 0.5, fontWeight: 500 }}>#{selectedMemory.round_index}</Typography>
+                      </Box>
                     </Box>
-                  )}
-
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600, mb: 0.5 }}>
-                      Tokens
-                    </Typography>
-                    <Typography variant="body1">
-                      Input: {selectedRound.input_tokens.toLocaleString()} | Output: {selectedRound.output_tokens.toLocaleString()} | Total:{' '}
-                      {selectedRound.total_tokens.toLocaleString()}
-                    </Typography>
                   </Box>
 
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600, mb: 0.5 }}>
-                      Time
-                    </Typography>
-                    <Typography variant="body1">{new Date(selectedRound.created_at).toLocaleString()}</Typography>
-                  </Box>
+                  {/* Parse input for Claude Code scenario */}
+                  {(() => {
+                    const isClaudeCode = selectedMemory.scenario === 'claude_code';
+                    const { injections, remainingInput } = isClaudeCode
+                      ? parseClaudeCodeInput(selectedMemory.user_input)
+                      : { injections: [], remainingInput: selectedMemory.user_input };
 
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600, mb: 0.5 }}>
-                      Round Index
-                    </Typography>
-                    <Typography variant="body1">{selectedRound.round_index}</Typography>
-                  </Box>
+                    return (
+                      <>
+                        {/* INPUT INJECTION - Separate section (only for claude_code with injections) */}
+                        {injections.length > 0 && (
+                          <Box sx={{ mb: 3 }}>
+                            {/* Collapsible Header for Injection Section */}
+                            <Box
+                              sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                cursor: 'pointer',
+                                mb: 1,
+                              }}
+                              onClick={() => setInjectionSectionExpanded(!injectionSectionExpanded)}
+                            >
+                              <IconButton size="small" sx={{ p: 0, mr: 0.5 }}>
+                                {injectionSectionExpanded ? <ExpandLess /> : <ExpandMore />}
+                              </IconButton>
+                              <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                                INPUT INJECTION ({injections.length})
+                              </Typography>
+                            </Box>
 
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600, mb: 0.5 }}>
-                      User Input
+                            {/* Collapsible Injection Cards */}
+                            <Collapse in={injectionSectionExpanded}>
+                              {injections.map((inj, idx) => {
+                                const isExpanded = expandedInjections[idx] ?? false;
+                                return (
+                                  <Paper
+                                    key={idx}
+                                    variant="outlined"
+                                    sx={{
+                                      mb: idx < injections.length - 1 ? 1 : 0,
+                                      bgcolor: 'primary.50',
+                                      border: '1px solid',
+                                      borderColor: 'primary.200',
+                                      borderRadius: 1,
+                                      overflow: 'hidden',
+                                    }}
+                                  >
+                                    {/* Collapsible Header for Each Injection */}
+                                    <Box
+                                      sx={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        p: 1,
+                                        cursor: 'pointer',
+                                        '&:hover': { bgcolor: 'primary.100' },
+                                      }}
+                                      onClick={() =>
+                                        setExpandedInjections((prev) => ({
+                                          ...prev,
+                                          [idx]: !prev[idx],
+                                        }))
+                                      }
+                                    >
+                                      <IconButton size="small" sx={{ p: 0, mr: 0.5 }}>
+                                        {isExpanded ? <ExpandLess /> : <ExpandMore />}
+                                      </IconButton>
+                                      <Typography
+                                        variant="caption"
+                                        sx={{
+                                          color: 'primary.main',
+                                          fontWeight: 600,
+                                          fontSize: '0.7rem',
+                                          textTransform: 'uppercase',
+                                        }}
+                                      >
+                                        &lt;{inj.tag}&gt;
+                                      </Typography>
+                                    </Box>
+
+                                    {/* Collapsible Content */}
+                                    <Collapse in={isExpanded}>
+                                      <Box sx={{ px: 1.5, pb: 1.5 }}>
+                                        <Typography
+                                          variant="body2"
+                                          sx={{
+                                            fontFamily: 'monospace',
+                                            fontSize: '0.8rem',
+                                            whiteSpace: 'pre-wrap',
+                                            wordBreak: 'break-word',
+                                            color: 'text.primary',
+                                            lineHeight: 1.5,
+                                          }}
+                                        >
+                                          {inj.content}
+                                        </Typography>
+                                      </Box>
+                                    </Collapse>
+                                  </Paper>
+                                );
+                              })}
+                            </Collapse>
+                          </Box>
+                        )}
+
+                        {/* YOUR INPUT - Separate section */}
+                        <Box sx={{ mb: 3 }}>
+                          <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600, mb: 1 }}>
+                            YOUR INPUT
+                          </Typography>
+                          <Paper
+                            variant="outlined"
+                            sx={{
+                              p: 2,
+                              bgcolor: 'background.default',
+                              maxHeight: 250,
+                              overflow: 'auto',
+                              whiteSpace: 'pre-wrap',
+                              wordBreak: 'break-word',
+                              minHeight: 60,
+                            }}
+                          >
+                            {remainingInput ? (
+                              <Typography variant="body1" sx={{ fontFamily: 'inherit', fontSize: '0.9rem', lineHeight: 1.6 }}>
+                                {remainingInput}
+                              </Typography>
+                            ) : (
+                              <Typography variant="body2" sx={{ color: 'text.disabled', fontStyle: 'italic' }}>
+                                {isClaudeCode ? '(Only injection tags, no additional input)' : selectedMemory.user_input}
+                              </Typography>
+                            )}
+                          </Paper>
+                        </Box>
+                      </>
+                    );
+                  })()}
+
+                  {/* AI RESPONSE - Separate section */}
+                  <Box>
+                    <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600, mb: 1 }}>
+                      AI RESPONSE
                     </Typography>
                     <Paper
                       variant="outlined"
                       sx={{
-                        p: 1.5,
+                        p: 2,
                         bgcolor: 'background.default',
-                        maxHeight: 200,
+                        maxHeight: 400,
                         overflow: 'auto',
                         whiteSpace: 'pre-wrap',
                         wordBreak: 'break-word',
+                        minHeight: 80,
                       }}
                     >
-                      <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
-                        {selectedRound.user_input}
-                      </Typography>
+                      {selectedMemory.round_result ? (
+                        <Typography variant="body1" sx={{ fontFamily: 'inherit', fontSize: '0.9rem', lineHeight: 1.6 }}>
+                          {selectedMemory.round_result}
+                        </Typography>
+                      ) : (
+                        <Typography variant="body2" sx={{ color: 'text.disabled', fontStyle: 'italic' }}>
+                          No response text available (may contain only tool calls or be empty)
+                        </Typography>
+                      )}
                     </Paper>
                   </Box>
-
-                  {selectedRound.round_result && (
-                    <Box>
-                      <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600, mb: 0.5 }}>
-                        Round Result
-                      </Typography>
-                      <Paper
-                        variant="outlined"
-                        sx={{
-                          p: 1.5,
-                          bgcolor: 'background.default',
-                          maxHeight: 300,
-                          overflow: 'auto',
-                          whiteSpace: 'pre-wrap',
-                          wordBreak: 'break-word',
-                        }}
-                      >
-                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
-                          {selectedRound.round_result}
-                        </Typography>
-                      </Paper>
-                    </Box>
-                  )}
                 </Box>
               )}
             </Box>
@@ -652,15 +818,25 @@ const UserPage = () => {
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onClose={handleDeleteCancel}>
-        <DialogTitle>Delete Recording</DialogTitle>
+        <DialogTitle>Delete Memory</DialogTitle>
         <DialogContent>
           <Typography variant="body1">
-            Are you sure you want to delete this prompt recording? This action cannot be undone.
+            Are you sure you want to delete this memory? This action cannot be undone.
           </Typography>
-          {roundToDelete && (
+          {memoryToDelete && (
             <Paper variant="outlined" sx={{ mt: 2, p: 1.5, bgcolor: 'background.default' }}>
-              <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
-                {formatUserInput(roundToDelete.user_input, 100)}
+              <Typography
+                variant="body2"
+                sx={{
+                  whiteSpace: 'pre-wrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 3,
+                  WebkitBoxOrient: 'vertical',
+                }}
+              >
+                {memoryToDelete.user_input}
               </Typography>
             </Paper>
           )}
