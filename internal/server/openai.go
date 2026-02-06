@@ -166,12 +166,9 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 	}
 
 	actualModel := selectedService.Model
-
-	maxAllowed := s.templateManager.GetMaxTokensForModelByProvider(provider, actualModel)
-
-	// FIXME: response as proxy / request
-	responseModel := proxyModel
 	req.Model = actualModel
+	maxAllowed := s.templateManager.GetMaxTokensForModelByProvider(provider, actualModel)
+	responseModel := proxyModel
 
 	// Set tracking context with all metadata (eliminates need for explicit parameter passing)
 	SetTrackingContext(c, rule, provider, actualModel, responseModel, isStreaming)
@@ -263,9 +260,9 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 		}
 
 		if isStreaming {
-			s.handleStreamingRequest(c, provider, &req.ChatCompletionNewParams, responseModel, actualModel, rule)
+			s.handleStreamingRequest(c, provider, &req.ChatCompletionNewParams, responseModel, rule)
 		} else {
-			s.handleNonStreamingRequest(c, provider, &req.ChatCompletionNewParams, responseModel, actualModel, rule)
+			s.handleNonStreamingRequest(c, provider, &req.ChatCompletionNewParams, responseModel, rule)
 		}
 	}
 }

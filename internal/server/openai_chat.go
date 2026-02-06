@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,8 +25,18 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// generateObfuscationString generates a random string similar to "KOJz1A"
+func generateObfuscationString() string {
+	b := make([]byte, 4)
+	if _, err := rand.Read(b); err != nil {
+		// Fallback to timestamp-based if crypto rand fails
+		return base64.URLEncoding.EncodeToString([]byte(fmt.Sprintf("%d", time.Now().UnixNano())))[:6]
+	}
+	return base64.URLEncoding.EncodeToString(b)[:6]
+}
+
 // handleNonStreamingRequest handles non-streaming chat completion requests
-func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, req *openai.ChatCompletionNewParams, responseModel, actualModel string, rule *typ.Rule) {
+func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, req *openai.ChatCompletionNewParams, responseModel string, rule *typ.Rule) {
 	// Forward request to provider
 	response, err := s.forwardOpenAIRequest(provider, req)
 	if err != nil {
@@ -147,7 +159,7 @@ func (s *Server) buildOpenAIConfig(req *openai.ChatCompletionNewParams) *transfo
 }
 
 // handleStreamingRequest handles streaming chat completion requests
-func (s *Server) handleStreamingRequest(c *gin.Context, provider *typ.Provider, req *openai.ChatCompletionNewParams, responseModel, actualModel string, rule *typ.Rule) {
+func (s *Server) handleStreamingRequest(c *gin.Context, provider *typ.Provider, req *openai.ChatCompletionNewParams, responseModel string, rule *typ.Rule) {
 	// Create streaming request with request context for proper cancellation
 	stream, _, err := s.forwardOpenAIStreamRequest(c.Request.Context(), provider, req)
 	if err != nil {
@@ -163,11 +175,11 @@ func (s *Server) handleStreamingRequest(c *gin.Context, provider *typ.Provider, 
 	}
 
 	// Handle the streaming response
-	s.handleOpenAIStreamResponse(c, stream, req, responseModel, actualModel, rule, provider)
+	s.handleOpenAIStreamResponse(c, stream, req, responseModel, rule, provider)
 }
 
 // handleOpenAIStreamResponse processes the streaming response and sends it to the client
-func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.Stream[openai.ChatCompletionChunk], req *openai.ChatCompletionNewParams, responseModel, actualModel string, rule *typ.Rule, provider *typ.Provider) {
+func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.Stream[openai.ChatCompletionChunk], req *openai.ChatCompletionNewParams, responseModel string, rule *typ.Rule, provider *typ.Provider) {
 	// Accumulate usage from stream chunks
 	var inputTokens, outputTokens int
 	var hasUsage bool
