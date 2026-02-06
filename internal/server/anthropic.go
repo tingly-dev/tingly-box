@@ -181,6 +181,15 @@ func (s *Server) AnthropicMessages(c *gin.Context) {
 
 // AnthropicListModels handles Anthropic v1 models endpoint
 func (s *Server) AnthropicListModels(c *gin.Context) {
+	s.anthropicListModelsWithScenario(c, nil)
+}
+
+// AnthropicListModelsForScenario handles scenario-scoped model listing for Anthropic format
+func (s *Server) AnthropicListModelsForScenario(c *gin.Context, scenario typ.RuleScenario) {
+	s.anthropicListModelsWithScenario(c, &scenario)
+}
+
+func (s *Server) anthropicListModelsWithScenario(c *gin.Context, scenario *typ.RuleScenario) {
 	cfg := s.config
 	if cfg == nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
@@ -197,6 +206,9 @@ func (s *Server) AnthropicListModels(c *gin.Context) {
 	var models []AnthropicModel
 	for _, rule := range rules {
 		if !rule.Active {
+			continue
+		}
+		if scenario != nil && rule.GetScenario() != *scenario {
 			continue
 		}
 
