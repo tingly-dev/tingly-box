@@ -46,8 +46,8 @@ Tingly Box decides **which model to call, when to compress context, and how to r
 **From npm (recommended)**
 
 ```bash
-# Install and run
-npx tingly-box@latest start
+# Install and run (auto service migration without any args)
+npx tingly-box@latest
 ```
 
 > if any trouble, please check tingly-box process and port 12580 and confirm to kill them.
