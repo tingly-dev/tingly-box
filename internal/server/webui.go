@@ -66,6 +66,9 @@ func (s *Server) UseUIEndpoints() {
 	// Usage API routes
 	s.RegisterUsageRoutes(manager)
 
+	// Memory API routes
+	s.RegisterMemoryRoutes(manager)
+
 	// Config apply API routes
 	s.RegisterConfigApplyRoutes(manager)
 
