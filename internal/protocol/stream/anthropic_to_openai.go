@@ -2,6 +2,7 @@ package stream
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -163,7 +164,8 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 
 			sendOpenAIStreamChunk(c, chunk)
 			// Send final [DONE] message
-			c.SSEvent("", "[DONE]")
+			// MENTION: must keep extra space (matching openai_chat.go:462)
+			c.SSEvent("", " [DONE]")
 			finished = true
 			return false
 		}
@@ -188,14 +190,21 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 			return inputTokens, outputTokens, nil
 		}
 		logrus.Errorf("Anthropic stream error: %v", err)
-		// Send error event
-		c.SSEvent("", map[string]interface{}{
+		// Send error event in OpenAI format
+		errorChunk := map[string]interface{}{
 			"error": map[string]interface{}{
 				"message": err.Error(),
 				"type":    "stream_error",
 				"code":    "stream_failed",
 			},
-		})
+		}
+		errorJSON, marshalErr := json.Marshal(errorChunk)
+		if marshalErr == nil {
+			c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", errorJSON))
+		}
+		if flusher, ok := c.Writer.(http.Flusher); ok {
+			flusher.Flush()
+		}
 		return inputTokens, outputTokens, nil
 	}
 
@@ -204,7 +213,13 @@ func HandleAnthropicToOpenAIStreamResponse(c *gin.Context, req *anthropic.Messag
 
 // sendOpenAIStreamChunk helper function to send a chunk in OpenAI format
 func sendOpenAIStreamChunk(c *gin.Context, chunk map[string]interface{}) {
-	c.SSEvent("", chunk)
+	chunkJSON, err := json.Marshal(chunk)
+	if err != nil {
+		logrus.Errorf("Failed to marshal chunk: %v", err)
+		return
+	}
+	// MENTION: Must keep extra space (matching openai_chat.go:365)
+	c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", chunkJSON))
 	if flusher, ok := c.Writer.(http.Flusher); ok {
 		flusher.Flush()
 	}
