@@ -94,6 +94,53 @@ func (s *Server) RegisterMemoryRoutes(manager *swagger.RouteManager) {
 		swagger.WithResponseModel(MemoryRoundsResponse{}),
 	)
 
+	// GET /api/v1/memory/user-inputs/list - Get lightweight list for user page
+	apiV1.GET("/memory/user-inputs/list", memoryAPI.GetUserInputsList,
+		swagger.WithDescription("Get lightweight list for memory user page with date range filtering"),
+		swagger.WithTags("memory"),
+		swagger.WithQueryConfig("scenario", swagger.QueryParamConfig{
+			Name:        "scenario",
+			Type:        "string",
+			Required:    false,
+			Description: "Filter by scenario (e.g., claude_code, opencode)",
+		}),
+		swagger.WithQueryConfig("protocol", swagger.QueryParamConfig{
+			Name:        "protocol",
+			Type:        "string",
+			Required:    false,
+			Description: "Filter by protocol (anthropic, openai, google)",
+		}),
+		swagger.WithQueryConfig("start_date", swagger.QueryParamConfig{
+			Name:        "start_date",
+			Type:        "string",
+			Required:    false,
+			Description: "Start date in ISO format (e.g., 2024-01-01)",
+		}),
+		swagger.WithQueryConfig("end_date", swagger.QueryParamConfig{
+			Name:        "end_date",
+			Type:        "string",
+			Required:    false,
+			Description: "End date in ISO format (e.g., 2024-12-31)",
+		}),
+		swagger.WithQueryConfig("limit", swagger.QueryParamConfig{
+			Name:        "limit",
+			Type:        "integer",
+			Required:    false,
+			Description: "Maximum number of results to return (default 100, max 500)",
+			Default:     100,
+			Minimum:     intPtr(1),
+			Maximum:     intPtr(500),
+		}),
+		swagger.WithResponseModel(MemoryRoundListResponse{}),
+	)
+
+	// GET /api/v1/memory/rounds/:id - Get full details for a specific round
+	apiV1.GET("/memory/rounds/:id", memoryAPI.GetRoundDetail,
+		swagger.WithDescription("Get full details for a specific memory round"),
+		swagger.WithTags("memory"),
+		swagger.WithResponseModel(MemoryRoundDetailResponse{}),
+	)
+
 	// GET /api/v1/memory/search - Search memory rounds by user input content
 	apiV1.GET("/memory/search", memoryAPI.Search,
 		swagger.WithDescription("Search memory rounds by user input content"),
@@ -211,6 +258,27 @@ type MemoryRoundListData struct {
 type MemoryRoundsResponse struct {
 	Success bool              `json:"success"`
 	Data    []MemoryRoundItem `json:"data"`
+}
+
+// MemoryRoundDetailResponse represents the response for a single round detail
+type MemoryRoundDetailResponse struct {
+	Success bool            `json:"success"`
+	Data    MemoryRoundItem `json:"data"`
+	Error   string          `json:"error,omitempty"`
+}
+
+// MemoryRoundListItem represents a lightweight item for list display
+// Contains only minimal fields to reduce data transfer
+type MemoryRoundListItem struct {
+	ID           uint   `json:"id"`
+	Scenario     string `json:"scenario"`
+	ProviderName string `json:"provider_name"`
+	Model        string `json:"model"`
+	Protocol     string `json:"protocol"`
+	CreatedAt    string `json:"created_at"`
+	IsStreaming  bool   `json:"is_streaming"`
+	HasToolUse   bool   `json:"has_tool_use"`
+	UserInput    string `json:"user_input"`
 }
 
 // MemoryDeleteOldRecordsResponse represents the response for deleting old records
@@ -581,6 +649,99 @@ func (api *MemoryAPI) DeleteOldRecords(c *gin.Context) {
 	})
 }
 
+// GetUserInputsList retrieves lightweight list for memory user page with date range filtering
+func (api *MemoryAPI) GetUserInputsList(c *gin.Context) {
+	if api.memoryStore == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"success": false,
+			"error":   "Memory store not available",
+		})
+		return
+	}
+
+	scenario := c.Query("scenario")
+	protocol := c.Query("protocol")
+	startDate := c.Query("start_date")
+	endDate := c.Query("end_date")
+	limitStr := c.DefaultQuery("limit", "100")
+
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 {
+		limit = 100
+	}
+	if limit > 500 {
+		limit = 500
+	}
+
+	records, err := api.memoryStore.GetUserInputsList(scenario, protocol, startDate, endDate, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to retrieve memory list",
+		})
+		return
+	}
+
+	// Convert to lightweight list format
+	items := make([]MemoryRoundListItem, len(records))
+	for i, r := range records {
+		items[i] = MemoryRoundListItem{
+			ID:           r.ID,
+			Scenario:     r.Scenario,
+			ProviderName: r.ProviderName,
+			Model:        r.Model,
+			Protocol:     string(r.Protocol),
+			CreatedAt:    r.CreatedAt.Format("2006-01-02T15:04:05Z"),
+			IsStreaming:  r.IsStreaming,
+			HasToolUse:   r.HasToolUse,
+			UserInput:    r.UserInput,
+		}
+	}
+
+	c.JSON(http.StatusOK, MemoryRoundListResponse{
+		Success: true,
+		Data: MemoryRoundListData{
+			Rounds: convertToListItems(items),
+			Total:  int64(len(items)),
+		},
+	})
+}
+
+// GetRoundDetail retrieves full details for a specific memory round
+func (api *MemoryAPI) GetRoundDetail(c *gin.Context) {
+	if api.memoryStore == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"success": false,
+			"error":   "Memory store not available",
+		})
+		return
+	}
+
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid ID format",
+		})
+		return
+	}
+
+	record, err := api.memoryStore.GetRoundByID(uint(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"error":   "Memory round not found",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, MemoryRoundDetailResponse{
+		Success: true,
+		Data:    convertToMemoryRoundItem(*record),
+	})
+}
+
 // convertToMemoryRoundItem converts a db record to API response format
 func convertToMemoryRoundItem(r db.MemoryRoundRecord) MemoryRoundItem {
 	// Parse metadata JSON string to map
@@ -610,4 +771,24 @@ func convertToMemoryRoundItem(r db.MemoryRoundRecord) MemoryRoundItem {
 		IsStreaming:  r.IsStreaming,
 		HasToolUse:   r.HasToolUse,
 	}
+}
+
+// convertToListItems converts lightweight list items to full MemoryRoundItem format
+// This is needed because the frontend expects the full type structure
+func convertToListItems(items []MemoryRoundListItem) []MemoryRoundItem {
+	result := make([]MemoryRoundItem, len(items))
+	for i, item := range items {
+		result[i] = MemoryRoundItem{
+			ID:           item.ID,
+			Scenario:     item.Scenario,
+			ProviderName: item.ProviderName,
+			Model:        item.Model,
+			Protocol:     item.Protocol,
+			CreatedAt:    item.CreatedAt,
+			IsStreaming:  item.IsStreaming,
+			HasToolUse:   item.HasToolUse,
+			UserInput:    item.UserInput,
+		}
+	}
+	return result
 }
