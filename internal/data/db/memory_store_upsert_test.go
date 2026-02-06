@@ -30,7 +30,7 @@ func TestRecordRoundsUpsert(t *testing.T) {
 	sessionID := "test-session-upsert"
 
 	// === Scenario 1: First request - only UserInput, no RoundResult yet ===
-	records1 := []*PromptRoundRecord{
+	records1 := []*MemoryRoundRecord{
 		{
 			Scenario:      "test",
 			ProviderUUID:  "provider-1",
@@ -52,7 +52,7 @@ func TestRecordRoundsUpsert(t *testing.T) {
 	}
 
 	// Verify the record was created
-	var saved PromptRoundRecord
+	var saved MemoryRoundRecord
 	err = store.db.Where("session_id = ? AND user_input_hash = ?",
 		sessionID, ComputeUserInputHash("What is Golang?")).
 		First(&saved).Error
@@ -66,7 +66,7 @@ func TestRecordRoundsUpsert(t *testing.T) {
 	t.Logf("✓ Initial record created with empty RoundResult")
 
 	// === Scenario 2: Second request - same UserInput, now with RoundResult ===
-	records2 := []*PromptRoundRecord{
+	records2 := []*MemoryRoundRecord{
 		{
 			Scenario:      "test",
 			ProviderUUID:  "provider-1",
@@ -110,7 +110,7 @@ func TestRecordRoundsUpsert(t *testing.T) {
 	t.Logf("✓ RoundResult updated: %q", saved.RoundResult)
 
 	// === Scenario 3: Third request - don't overwrite existing RoundResult ===
-	records3 := []*PromptRoundRecord{
+	records3 := []*MemoryRoundRecord{
 		{
 			Scenario:      "test",
 			ProviderUUID:  "provider-1",
@@ -177,7 +177,7 @@ func TestMultipleRoundsUpsert(t *testing.T) {
 	sessionID := "test-multi-upsert"
 
 	// Request 1: Two rounds, both without results
-	records1 := []*PromptRoundRecord{
+	records1 := []*MemoryRoundRecord{
 		{
 			Scenario:      "test",
 			ProviderUUID:  "p1",
@@ -210,7 +210,7 @@ func TestMultipleRoundsUpsert(t *testing.T) {
 	}
 
 	// Request 2: Same rounds, now with results for Q1, Q2 still empty
-	records2 := []*PromptRoundRecord{
+	records2 := []*MemoryRoundRecord{
 		{
 			Scenario:      "test",
 			ProviderUUID:  "p1",
@@ -243,7 +243,7 @@ func TestMultipleRoundsUpsert(t *testing.T) {
 	}
 
 	// Verify: Q1 should have result, Q2 should still be empty
-	var rounds []PromptRoundRecord
+	var rounds []MemoryRoundRecord
 	err = store.db.Where("session_id = ?", sessionID).Order("round_index").Find(&rounds).Error
 	if err != nil {
 		t.Fatalf("Failed to find rounds: %v", err)
@@ -263,7 +263,7 @@ func TestMultipleRoundsUpsert(t *testing.T) {
 	t.Log("✓ Multiple rounds upsert works correctly")
 
 	// Request 3: Now Q2 gets result
-	records3 := []*PromptRoundRecord{
+	records3 := []*MemoryRoundRecord{
 		{
 			Scenario:      "test",
 			ProviderUUID:  "p1",

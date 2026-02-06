@@ -49,7 +49,7 @@ func NewMemoryStore(baseDir string) (*MemoryStore, error) {
 	}
 
 	// Auto-migrate schema for prompt_rounds table
-	if err := db.AutoMigrate(&PromptRoundRecord{}); err != nil {
+	if err := db.AutoMigrate(&MemoryRoundRecord{}); err != nil {
 		return nil, fmt.Errorf("failed to migrate prompt database: %w", err)
 	}
 	log.Printf("Prompt store initialization completed")
@@ -58,7 +58,7 @@ func NewMemoryStore(baseDir string) (*MemoryStore, error) {
 }
 
 // RecordRound saves a single round to database
-func (ps *MemoryStore) RecordRound(record *PromptRoundRecord) error {
+func (ps *MemoryStore) RecordRound(record *MemoryRoundRecord) error {
 	if record == nil {
 		return errors.New("record cannot be nil")
 	}
@@ -78,7 +78,7 @@ func (ps *MemoryStore) RecordRound(record *PromptRoundRecord) error {
 
 // RecordRounds saves multiple rounds in a single transaction
 // Supports upsert: updates RoundResult if record exists but RoundResult is empty
-func (ps *MemoryStore) RecordRounds(records []*PromptRoundRecord) error {
+func (ps *MemoryStore) RecordRounds(records []*MemoryRoundRecord) error {
 	if len(records) == 0 {
 		return nil
 	}
@@ -87,8 +87,8 @@ func (ps *MemoryStore) RecordRounds(records []*PromptRoundRecord) error {
 	defer ps.mu.Unlock()
 
 	now := time.Now().UTC()
-	var newRecords []*PromptRoundRecord
-	var updates []*PromptRoundRecord
+	var newRecords []*MemoryRoundRecord
+	var updates []*MemoryRoundRecord
 
 	for _, record := range records {
 		// Calculate hash if not already set
@@ -97,7 +97,7 @@ func (ps *MemoryStore) RecordRounds(records []*PromptRoundRecord) error {
 		}
 
 		// Check if record already exists
-		var existing PromptRoundRecord
+		var existing MemoryRoundRecord
 		err := ps.db.Where("session_id = ? AND user_input_hash = ?",
 			record.SessionID, record.UserInputHash).
 			First(&existing).Error
@@ -159,16 +159,16 @@ func (ps *MemoryStore) RecordRounds(records []*PromptRoundRecord) error {
 }
 
 // GetRoundsByScenario retrieves rounds for a scenario with pagination
-func (ps *MemoryStore) GetRoundsByScenario(scenario string, limit, offset int) ([]PromptRoundRecord, int64, error) {
+func (ps *MemoryStore) GetRoundsByScenario(scenario string, limit, offset int) ([]MemoryRoundRecord, int64, error) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
 	var total int64
-	if err := ps.db.Model(&PromptRoundRecord{}).Where("scenario = ?", scenario).Count(&total).Error; err != nil {
+	if err := ps.db.Model(&MemoryRoundRecord{}).Where("scenario = ?", scenario).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	var records []PromptRoundRecord
+	var records []MemoryRoundRecord
 	if err := ps.db.Where("scenario = ?", scenario).
 		Order("created_at DESC").
 		Limit(limit).
@@ -181,16 +181,16 @@ func (ps *MemoryStore) GetRoundsByScenario(scenario string, limit, offset int) (
 }
 
 // GetRoundsByProtocol retrieves rounds by protocol type with pagination
-func (ps *MemoryStore) GetRoundsByProtocol(protocol ProtocolType, limit, offset int) ([]PromptRoundRecord, int64, error) {
+func (ps *MemoryStore) GetRoundsByProtocol(protocol ProtocolType, limit, offset int) ([]MemoryRoundRecord, int64, error) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
 	var total int64
-	if err := ps.db.Model(&PromptRoundRecord{}).Where("protocol = ?", protocol).Count(&total).Error; err != nil {
+	if err := ps.db.Model(&MemoryRoundRecord{}).Where("protocol = ?", protocol).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	var records []PromptRoundRecord
+	var records []MemoryRoundRecord
 	if err := ps.db.Where("protocol = ?", protocol).
 		Order("created_at DESC").
 		Limit(limit).
@@ -203,11 +203,11 @@ func (ps *MemoryStore) GetRoundsByProtocol(protocol ProtocolType, limit, offset 
 }
 
 // GetRoundsByProjectSession retrieves rounds by project and/or session ID
-func (ps *MemoryStore) GetRoundsByProjectSession(projectID, sessionID string, limit int) ([]PromptRoundRecord, error) {
+func (ps *MemoryStore) GetRoundsByProjectSession(projectID, sessionID string, limit int) ([]MemoryRoundRecord, error) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
-	query := ps.db.Model(&PromptRoundRecord{})
+	query := ps.db.Model(&MemoryRoundRecord{})
 	if projectID != "" {
 		query = query.Where("project_id = ?", projectID)
 	}
@@ -215,7 +215,7 @@ func (ps *MemoryStore) GetRoundsByProjectSession(projectID, sessionID string, li
 		query = query.Where("session_id = ?", sessionID)
 	}
 
-	var records []PromptRoundRecord
+	var records []MemoryRoundRecord
 	if err := query.
 		Order("created_at DESC").
 		Limit(limit).
@@ -228,12 +228,12 @@ func (ps *MemoryStore) GetRoundsByProjectSession(projectID, sessionID string, li
 
 // GetRoundsByMetadata retrieves rounds by metadata key-value pairs
 // Uses JSON extraction to query the metadata column
-func (ps *MemoryStore) GetRoundsByMetadata(key, value string, limit int) ([]PromptRoundRecord, error) {
+func (ps *MemoryStore) GetRoundsByMetadata(key, value string, limit int) ([]MemoryRoundRecord, error) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
 	// SQLite JSON extraction: json_extract(metadata, '$.key') = value
-	var records []PromptRoundRecord
+	var records []MemoryRoundRecord
 	if err := ps.db.Where("json_extract(metadata, ?) = ?", "$."+key, value).
 		Order("created_at DESC").
 		Limit(limit).
@@ -245,16 +245,16 @@ func (ps *MemoryStore) GetRoundsByMetadata(key, value string, limit int) ([]Prom
 }
 
 // GetRoundsByMultipleMetadata filters by multiple metadata fields
-func (ps *MemoryStore) GetRoundsByMultipleMetadata(metadata map[string]string, limit int) ([]PromptRoundRecord, error) {
+func (ps *MemoryStore) GetRoundsByMultipleMetadata(metadata map[string]string, limit int) ([]MemoryRoundRecord, error) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
-	query := ps.db.Model(&PromptRoundRecord{})
+	query := ps.db.Model(&MemoryRoundRecord{})
 	for key, value := range metadata {
 		query = query.Where("json_extract(metadata, ?) = ?", "$."+key, value)
 	}
 
-	var records []PromptRoundRecord
+	var records []MemoryRoundRecord
 	if err := query.
 		Order("created_at DESC").
 		Limit(limit).
@@ -266,12 +266,12 @@ func (ps *MemoryStore) GetRoundsByMultipleMetadata(metadata map[string]string, l
 }
 
 // GetUserInputs retrieves only user inputs (for prompt user page)
-func (ps *MemoryStore) GetUserInputs(scenario string, limit int) ([]PromptRoundRecord, error) {
+func (ps *MemoryStore) GetUserInputs(scenario string, limit int) ([]MemoryRoundRecord, error) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
-	var records []PromptRoundRecord
-	query := ps.db.Model(&PromptRoundRecord{}).
+	var records []MemoryRoundRecord
+	query := ps.db.Model(&MemoryRoundRecord{}).
 		Select("id, scenario, provider_uuid, provider_name, model, protocol, request_id, project_id, session_id, round_index, user_input, created_at")
 
 	if scenario != "" {
@@ -289,12 +289,12 @@ func (ps *MemoryStore) GetUserInputs(scenario string, limit int) ([]PromptRoundR
 }
 
 // SearchRounds searches rounds by user input content
-func (ps *MemoryStore) SearchRounds(scenario, query string, limit int) ([]PromptRoundRecord, error) {
+func (ps *MemoryStore) SearchRounds(scenario, query string, limit int) ([]MemoryRoundRecord, error) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
-	var records []PromptRoundRecord
-	dbQuery := ps.db.Model(&PromptRoundRecord{}).Where("user_input LIKE ?", "%"+query+"%")
+	var records []MemoryRoundRecord
+	dbQuery := ps.db.Model(&MemoryRoundRecord{}).Where("user_input LIKE ?", "%"+query+"%")
 
 	if scenario != "" {
 		dbQuery = dbQuery.Where("scenario = ?", scenario)
@@ -315,7 +315,7 @@ func (ps *MemoryStore) DeleteOlderThan(cutoffDate time.Time) (int64, error) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
-	result := ps.db.Where("created_at < ?", cutoffDate).Delete(&PromptRoundRecord{})
+	result := ps.db.Where("created_at < ?", cutoffDate).Delete(&MemoryRoundRecord{})
 	return result.RowsAffected, result.Error
 }
 
@@ -332,7 +332,7 @@ func (ps *MemoryStore) Close() error {
 }
 
 // SetMetadata sets the metadata as JSON string on a record
-func SetMetadata(record *PromptRoundRecord, metadata interface{}) error {
+func SetMetadata(record *MemoryRoundRecord, metadata interface{}) error {
 	if metadata == nil {
 		record.Metadata = ""
 		return nil
@@ -347,7 +347,7 @@ func SetMetadata(record *PromptRoundRecord, metadata interface{}) error {
 }
 
 // GetMetadata parses the metadata JSON string into a map
-func GetMetadata(record *PromptRoundRecord) (map[string]interface{}, error) {
+func GetMetadata(record *MemoryRoundRecord) (map[string]interface{}, error) {
 	if record.Metadata == "" {
 		return nil, nil
 	}
