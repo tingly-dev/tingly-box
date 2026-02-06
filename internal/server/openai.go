@@ -17,6 +17,15 @@ import (
 
 // OpenAIListModels handles the /v1/models endpoint (OpenAI compatible)
 func (s *Server) OpenAIListModels(c *gin.Context) {
+	s.openAIListModelsWithScenario(c, nil)
+}
+
+// OpenAIListModelsForScenario handles scenario-scoped model listing for OpenAI format
+func (s *Server) OpenAIListModelsForScenario(c *gin.Context, scenario typ.RuleScenario) {
+	s.openAIListModelsWithScenario(c, &scenario)
+}
+
+func (s *Server) openAIListModelsWithScenario(c *gin.Context, scenario *typ.RuleScenario) {
 	cfg := s.config
 	if cfg == nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
@@ -35,8 +44,10 @@ func (s *Server) OpenAIListModels(c *gin.Context) {
 		if !rule.Active {
 			continue
 		}
+		if scenario != nil && rule.GetScenario() != *scenario {
+			continue
+		}
 
-		// Build description from rule's services
 		ownedBy := "tingly-box"
 		services := rule.GetServices()
 		if len(services) > 0 {

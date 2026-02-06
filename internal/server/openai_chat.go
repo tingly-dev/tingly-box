@@ -499,10 +499,10 @@ func (s *Server) ListModelsByScenario(c *gin.Context) {
 	// Route to appropriate handler based on scenario
 	switch scenarioType {
 	case typ.ScenarioAnthropic, typ.ScenarioClaudeCode:
-		s.AnthropicListModels(c)
+		s.AnthropicListModelsForScenario(c, scenarioType)
 	default:
 		// OpenAI is the default
-		s.OpenAIListModels(c)
+		s.OpenAIListModelsForScenario(c, scenarioType)
 	}
 }
 
