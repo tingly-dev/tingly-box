@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -17,6 +17,7 @@ import {
   MenuItem,
   TextField,
   Collapse,
+  CircularProgress,
 } from '@mui/material';
 import {
   Description,
@@ -30,7 +31,7 @@ import {
 } from '@mui/icons-material';
 import PageLayout from '@/components/PageLayout';
 import { RecordingCalendar } from '@/components/prompt';
-import type { PromptRoundItem, ProtocolType } from '@/types/prompt';
+import type { PromptRoundItem, PromptRoundListItem } from '@/types/prompt';
 import { useTranslation } from 'react-i18next';
 import api from '@/services/api';
 
@@ -54,110 +55,137 @@ const PROTOCOLS: { value: string | undefined; label: string }[] = [
 const UserPage = () => {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  // List state - lightweight items
+  const [memoryList, setMemoryList] = useState<PromptRoundListItem[]>([]);
+  const [filteredMemories, setFilteredMemories] = useState<PromptRoundListItem[]>([]);
+
+  // Detail state - full item data
+  const [selectedMemory, setSelectedMemory] = useState<PromptRoundItem | null>(null);
+
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [rangeMode, setRangeMode] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [scenarioFilter, setScenarioFilter] = useState<string>('');
   const [protocolFilter, setProtocolFilter] = useState<string | undefined>();
-  const [memories, setMemories] = useState<PromptRoundItem[]>([]);
-  const [filteredMemories, setFilteredMemories] = useState<PromptRoundItem[]>([]);
-  const [selectedMemory, setSelectedMemory] = useState<PromptRoundItem | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [memoryToDelete, setMemoryToDelete] = useState<PromptRoundItem | null>(null);
+  const [memoryToDelete, setMemoryToDelete] = useState<PromptRoundListItem | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [injectionSectionExpanded, setInjectionSectionExpanded] = useState(false);
   const [expandedInjections, setExpandedInjections] = useState<Record<number, boolean>>({});
 
-  // Fetch memories from API
-  const fetchMemories = async () => {
+  // Format date to ISO string for API
+  const formatDateForAPI = useCallback((date: Date): string => {
+    return date.toISOString().split('T')[0];
+  }, []);
+
+  // Fetch lightweight list from API
+  const fetchMemoryList = async () => {
     setLoading(true);
     try {
-      const result = await api.getMemoryUserInputs({ limit: 100 });
-      if (result.success && result.data) {
-        setMemories(result.data);
+      // Calculate date range for API call
+      let startDate: Date | undefined;
+      let endDate: Date | undefined;
+
+      if (rangeMode !== null) {
+        endDate = new Date();
+        startDate = new Date();
+        startDate.setDate(startDate.getDate() - rangeMode);
       } else {
-        console.error('Failed to fetch memories:', result.error);
-        setMemories([]);
+        startDate = new Date(selectedDate);
+        startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(selectedDate);
+        endDate.setHours(23, 59, 59, 999);
+      }
+
+      // TODO: Once backend implements /api/v1/memory/user-inputs/list endpoint,
+      // use the following parameters:
+      const result = await api.getMemoryUserInputsList({
+        scenario: scenarioFilter || undefined,
+        protocol: protocolFilter,
+        start_date: startDate ? formatDateForAPI(startDate) : undefined,
+        end_date: endDate ? formatDateForAPI(endDate) : undefined,
+        limit: 100,
+      });
+
+      if (result.success && result.data) {
+        // Backend returns { success: true, data: { rounds: [...], total: ... } }
+        setMemoryList(result.data.rounds || []);
+      } else {
+        console.error('Failed to fetch memory list:', result.error);
+        setMemoryList([]);
       }
     } catch (error) {
-      console.error('Error fetching memories:', error);
-      setMemories([]);
+      console.error('Error fetching memory list:', error);
+      setMemoryList([]);
     } finally {
       setLoading(false);
       setIsRefreshing(false);
     }
   };
 
+  // Fetch full details for a specific memory
+  const fetchMemoryDetail = async (id: number) => {
+    setDetailLoading(true);
+    try {
+      const result = await api.getMemoryRoundDetail(id);
+      if (result.success && result.data) {
+        setSelectedMemory(result.data);
+      } else {
+        console.error('Failed to fetch memory detail:', result.error);
+        setSelectedMemory(null);
+      }
+    } catch (error) {
+      console.error('Error fetching memory detail:', error);
+      setSelectedMemory(null);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  // Initial fetch and refetch when date/filter changes
   useEffect(() => {
-    fetchMemories();
-  }, []);
+    fetchMemoryList();
+    // Clear selected memory when list changes
+    setSelectedMemory(null);
+  }, [selectedDate, rangeMode, scenarioFilter, protocolFilter]);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
-    fetchMemories();
+    fetchMemoryList();
   };
 
   // Filter memories based on selected date/range and filters
+  // Note: With the new API flow, most filtering should happen on the backend
+  // This is mainly for search query filtering since it's client-side
   useEffect(() => {
-    let filtered = [...memories];
+    let filtered = [...memoryList];
 
-    // Date range or single date filter
-    if (rangeMode !== null) {
-      const today = new Date();
-      today.setHours(23, 59, 59, 999);
-      const startDate = new Date(today);
-      startDate.setDate(startDate.getDate() - rangeMode);
-      startDate.setHours(0, 0, 0, 0);
-      filtered = filtered.filter((item) => {
-        const itemDate = new Date(item.created_at);
-        return itemDate >= startDate && itemDate <= today;
-      });
-    } else {
-      filtered = filtered.filter((item) => {
-        const itemDate = new Date(item.created_at);
-        return (
-          itemDate.getDate() === selectedDate.getDate() &&
-          itemDate.getMonth() === selectedDate.getMonth() &&
-          itemDate.getFullYear() === selectedDate.getFullYear()
-        );
-      });
-    }
-
-    // Search filter
+    // Search filter (client-side since backend doesn't support it yet)
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(
         (item) =>
-          item.user_input.toLowerCase().includes(query) ||
-          item.round_result?.toLowerCase().includes(query) ||
+          item.user_input_preview.toLowerCase().includes(query) ||
           item.model.toLowerCase().includes(query)
       );
     }
 
-    // Scenario filter
-    if (scenarioFilter) {
-      filtered = filtered.filter((item) => item.scenario === scenarioFilter);
-    }
-
-    // Protocol filter
-    if (protocolFilter) {
-      filtered = filtered.filter((item) => item.protocol === protocolFilter);
-    }
-
     setFilteredMemories(filtered);
-  }, [memories, selectedDate, rangeMode, searchQuery, scenarioFilter, protocolFilter]);
+  }, [memoryList, searchQuery]);
 
   // Calculate memory counts per date for calendar
   const memoryCounts = useMemo(() => {
     const counts = new Map<string, number>();
-    memories.forEach((item) => {
+    memoryList.forEach((item) => {
       const date = new Date(item.created_at);
       const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
       counts.set(dateKey, (counts.get(dateKey) || 0) + 1);
     });
     return counts;
-  }, [memories]);
+  }, [memoryList]);
 
   const handleDateSelect = (date: Date) => {
     setSelectedDate(date);
@@ -167,11 +195,12 @@ const UserPage = () => {
     setRangeMode(days);
   };
 
-  const handleViewDetails = (memory: PromptRoundItem) => {
-    setSelectedMemory(memory);
+  const handleViewDetails = (memory: PromptRoundListItem) => {
+    // Fetch full details when clicking an item
+    fetchMemoryDetail(memory.id);
   };
 
-  const handleDeleteClick = (memory: PromptRoundItem) => {
+  const handleDeleteClick = (memory: PromptRoundListItem) => {
     setMemoryToDelete(memory);
     setDeleteDialogOpen(true);
   };
@@ -180,7 +209,7 @@ const UserPage = () => {
     if (!memoryToDelete) return;
     // Note: Individual delete is not implemented in API yet
     // For now, just remove from local state
-    setMemories(memories.filter((m) => m.id !== memoryToDelete.id));
+    setMemoryList(memoryList.filter((m) => m.id !== memoryToDelete.id));
     if (selectedMemory?.id === memoryToDelete.id) {
       setSelectedMemory(null);
     }
@@ -404,7 +433,7 @@ const UserPage = () => {
                 >
                   <FolderOpen sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
                   <Typography variant="body2" color="text.secondary">
-                    {memories.length === 0 ? 'No memories found' : 'No memories match your filters'}
+                    {memoryList.length === 0 ? 'No memories found' : 'No memories match your filters'}
                   </Typography>
                 </Box>
               ) : (
@@ -539,7 +568,24 @@ const UserPage = () => {
               )}
             </Box>
             <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
-              {!selectedMemory ? (
+              {detailLoading ? (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: '100%',
+                    p: 3,
+                    textAlign: 'center',
+                  }}
+                >
+                  <CircularProgress size={40} sx={{ mb: 2 }} />
+                  <Typography variant="body2" color="text.secondary">
+                    Loading memory details...
+                  </Typography>
+                </Box>
+              ) : !selectedMemory ? (
                 <Box
                   sx={{
                     display: 'flex',

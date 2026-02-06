@@ -1248,6 +1248,70 @@ export const api = {
         }
     },
 
+    // Get lightweight list for user page (optimized - minimal fields)
+    // Backend endpoint: /api/v1/memory/user-inputs/list
+    getMemoryUserInputsList: async (params: {
+        scenario?: string;
+        protocol?: string;
+        start_date?: string;  // ISO date string
+        end_date?: string;    // ISO date string
+        limit?: number;
+    } = {}): Promise<any> => {
+        try {
+            const token = getUserAuthToken();
+            const queryParams = new URLSearchParams();
+            if (params.scenario) queryParams.set('scenario', params.scenario);
+            if (params.protocol) queryParams.set('protocol', params.protocol);
+            if (params.start_date) queryParams.set('start_date', params.start_date);
+            if (params.end_date) queryParams.set('end_date', params.end_date);
+            if (params.limit) queryParams.set('limit', params.limit.toString());
+
+            const response = await fetch(`${await getApiBaseUrl()}/api/v1/memory/user-inputs/list?${queryParams}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+            });
+
+            if (response.status === 401) {
+                localStorage.removeItem('user_auth_token');
+                window.location.href = '/login';
+                return { success: false, error: 'Authentication required' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Get full details for a specific memory round
+    // Backend endpoint: /api/v1/memory/rounds/:id
+    getMemoryRoundDetail: async (id: number): Promise<any> => {
+        try {
+            const token = getUserAuthToken();
+
+            const response = await fetch(`${await getApiBaseUrl()}/api/v1/memory/rounds/${id}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+            });
+
+            if (response.status === 401) {
+                localStorage.removeItem('user_auth_token');
+                window.location.href = '/login';
+                return { success: false, error: 'Authentication required' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
     // Get rounds by project and/or session ID
     getMemoryRoundsByProjectSession: async (params: {
         project_id?: string;
