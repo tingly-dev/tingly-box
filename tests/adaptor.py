@@ -64,6 +64,12 @@ class AdaptorTestSuite:
         if self.verbose:
             print(f"  [ADAPTOR] {msg}")
 
+    def _get_rule_for_scenario(self, scenario: str):
+        rule = self.config.get_rule_by_scenario(scenario)
+        if rule:
+            return rule
+        return self.config.get_any_rule()
+
     def _build_openai_request(
         self,
         model: str,
@@ -96,7 +102,7 @@ class AdaptorTestSuite:
 
     def test_openai_to_anthropic_adaptor(
         self,
-        model: str = "glm-4.7",
+        model: Optional[str] = None,
         prompt: Optional[str] = None,
     ) -> AdaptorTestResult:
         """Test OpenAI-format request to Anthropic backend."""
@@ -104,15 +110,22 @@ class AdaptorTestSuite:
         start_time = time.time()
 
         try:
-            request_body = self._build_openai_request(model, test_prompt)
+            rule = self._get_rule_for_scenario("anthropic")
+            scenario = rule.scenario if rule else "anthropic"
+            request_model = rule.request_model if rule and rule.request_model else model
+            request_body = self._build_openai_request(request_model or "", test_prompt)
 
-            self._print(f"Testing OpenAI->Anthropic adaptation with model {model}")
+            self._print(f"Testing OpenAI->Anthropic adaptation with model {request_model}")
 
             with ProxyClient(
                 server_url=self.config.server_url,
                 token=self.config.auth_token,
             ) as client:
-                result = client.chat_completions_openai(model, test_prompt)
+                result = client.chat_completions_openai(
+                    model=request_model or "",
+                    prompt=test_prompt,
+                    scenario=scenario,
+                )
 
             duration_ms = (time.time() - start_time) * 1000
 
@@ -154,7 +167,7 @@ class AdaptorTestSuite:
 
     def test_anthropic_to_openai_adaptor(
         self,
-        model: str = "glm-4.7",
+        model: Optional[str] = None,
         prompt: Optional[str] = None,
     ) -> AdaptorTestResult:
         """Test Anthropic-format request to OpenAI backend."""
@@ -162,11 +175,18 @@ class AdaptorTestSuite:
         start_time = time.time()
 
         try:
-            request_body = self._build_anthropic_request(model, test_prompt)
+            rule = self._get_rule_for_scenario("openai")
+            scenario = rule.scenario if rule else "openai"
+            request_model = rule.request_model if rule and rule.request_model else model
+            request_body = self._build_anthropic_request(request_model or "", test_prompt)
 
-            self._print(f"Testing Anthropic->OpenAI adaptation with model {model}")
+            self._print(f"Testing Anthropic->OpenAI adaptation with model {request_model}")
 
-            result = self.proxy_client.messages_anthropic(model, test_prompt)
+            result = self.proxy_client.messages_anthropic(
+                model=request_model or "",
+                prompt=test_prompt,
+                scenario=scenario,
+            )
 
             duration_ms = (time.time() - start_time) * 1000
 
@@ -208,7 +228,7 @@ class AdaptorTestSuite:
 
     def test_openai_to_google_adaptor(
         self,
-        model: str = "glm-4.7",
+        model: Optional[str] = None,
         prompt: Optional[str] = None,
     ) -> AdaptorTestResult:
         """Test OpenAI-format request to Google backend."""
@@ -216,13 +236,17 @@ class AdaptorTestSuite:
         start_time = time.time()
 
         try:
-            request_body = self._build_openai_request(model, test_prompt)
+            rule = self._get_rule_for_scenario("openai")
+            scenario = rule.scenario if rule else "openai"
+            request_model = rule.request_model if rule and rule.request_model else model
+            request_body = self._build_openai_request(request_model or "", test_prompt)
 
-            self._print(f"Testing OpenAI->Google adaptation with model {model}")
+            self._print(f"Testing OpenAI->Google adaptation with model {request_model}")
 
             result = self.proxy_client.chat_completions_openai(
-                model=model,
+                model=request_model or "",
                 prompt=test_prompt,
+                scenario=scenario,
             )
 
             duration_ms = (time.time() - start_time) * 1000
@@ -265,7 +289,7 @@ class AdaptorTestSuite:
 
     def test_anthropic_to_google_adaptor(
         self,
-        model: str = "glm-4.7",
+        model: Optional[str] = None,
         prompt: Optional[str] = None,
     ) -> AdaptorTestResult:
         """Test Anthropic-format request to Google backend."""
@@ -273,13 +297,17 @@ class AdaptorTestSuite:
         start_time = time.time()
 
         try:
-            request_body = self._build_anthropic_request(model, test_prompt)
+            rule = self._get_rule_for_scenario("anthropic")
+            scenario = rule.scenario if rule else "anthropic"
+            request_model = rule.request_model if rule and rule.request_model else model
+            request_body = self._build_anthropic_request(request_model or "", test_prompt)
 
-            self._print(f"Testing Anthropic->Google adaptation with model {model}")
+            self._print(f"Testing Anthropic->Google adaptation with model {request_model}")
 
             result = self.proxy_client.messages_anthropic(
-                model=model,
+                model=request_model or "",
                 prompt=test_prompt,
+                scenario=scenario,
             )
 
             duration_ms = (time.time() - start_time) * 1000
@@ -322,7 +350,7 @@ class AdaptorTestSuite:
 
     def test_multi_turn_conversation(
         self,
-        model: str = "glm-4.7",
+        model: Optional[str] = None,
         prompt: Optional[str] = None,
     ) -> AdaptorTestResult:
         """Test multi-turn conversation through adaptor."""
@@ -330,6 +358,9 @@ class AdaptorTestSuite:
         start_time = time.time()
 
         try:
+            rule = self._get_rule_for_scenario("openai")
+            scenario = rule.scenario if rule else "openai"
+            request_model = rule.request_model if rule and rule.request_model else model
             messages = [
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": "What is 2+2?"},
@@ -337,15 +368,16 @@ class AdaptorTestSuite:
                 {"role": "user", "content": "What about 3+3?"},
             ]
 
-            self._print(f"Testing multi-turn conversation with model {model}")
+            self._print(f"Testing multi-turn conversation with model {request_model}")
 
             with ProxyClient(
                 server_url=self.config.server_url,
                 token=self.config.auth_token,
             ) as client:
                 result = client.chat_completions_openai(
-                    model=model,
+                    model=request_model or "",
                     prompt=test_prompt,
+                    scenario=scenario,
                 )
 
             duration_ms = (time.time() - start_time) * 1000
@@ -387,7 +419,7 @@ class AdaptorTestSuite:
 
     def test_system_message_handling(
         self,
-        model: str = "glm-4.7",
+        model: Optional[str] = None,
         prompt: Optional[str] = None,
     ) -> AdaptorTestResult:
         """Test system message handling in adaptor."""
@@ -395,17 +427,21 @@ class AdaptorTestSuite:
         start_time = time.time()
 
         try:
+            rule = self._get_rule_for_scenario("anthropic")
+            scenario = rule.scenario if rule else "anthropic"
+            request_model = rule.request_model if rule and rule.request_model else model
             system_prompt = "You are a test assistant. Be concise."
             messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": test_prompt},
             ]
 
-            self._print(f"Testing system message handling with model {model}")
+            self._print(f"Testing system message handling with model {request_model}")
 
             result = self.proxy_client.messages_anthropic(
-                model=model,
+                model=request_model or "",
                 prompt=test_prompt,
+                scenario=scenario,
             )
 
             duration_ms = (time.time() - start_time) * 1000

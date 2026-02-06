@@ -568,17 +568,27 @@ class ProxyClient:
             "User-Agent": "Tingly-Box-Test/1.0",
         }
         if self.token:
-            headers["Authorization"] = f"Bearer {self.token}"
+            bearer_token = self.token
+            raw_token = self.token
+            if self.token.startswith("tingly-box-"):
+                raw_token = self.token[len("tingly-box-"):]
+            # Send both forms to maximize compatibility with server config.
+            headers["Authorization"] = f"Bearer {bearer_token}"
+            headers["X-Api-Key"] = raw_token
         return headers
 
-    def list_models_openai(self) -> TestResult:
+    def list_models_openai(self, scenario: Optional[str] = None) -> TestResult:
         """List models via OpenAI endpoint."""
         start_time = time.time()
 
         try:
             with self._create_client() as client:
+                if scenario:
+                    url = f"{self.server_url}/tingly/{scenario}/models"
+                else:
+                    url = f"{self.server_url}/openai/v1/models"
                 response = client.get(
-                    f"{self.server_url}/openai/v1/models",
+                    url,
                     headers=self._create_headers(),
                 )
 
@@ -616,14 +626,18 @@ class ProxyClient:
                 error=str(e),
             )
 
-    def list_models_anthropic(self) -> TestResult:
+    def list_models_anthropic(self, scenario: Optional[str] = None) -> TestResult:
         """List models via Anthropic endpoint."""
         start_time = time.time()
 
         try:
             with self._create_client() as client:
+                if scenario:
+                    url = f"{self.server_url}/tingly/{scenario}/models"
+                else:
+                    url = f"{self.server_url}/anthropic/v1/models"
                 response = client.get(
-                    f"{self.server_url}/anthropic/v1/models",
+                    url,
                     headers=self._create_headers(),
                 )
 

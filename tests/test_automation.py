@@ -19,6 +19,7 @@ import json
 import os
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -64,6 +65,12 @@ class TestResult:
 
 class TestAutomation:
     """Automated test infrastructure for tingly-box."""
+    TARGET_PROVIDER_NAMES = {"qwen-test", "glm-test", "minimax-test"}
+    TARGET_PROVIDER_ALIASES = {
+        "qwen-test": "qwen",
+        "glm-test": "glm",
+        "minimax-test": "minimax",
+    }
 
     def __init__(
         self,
@@ -81,7 +88,7 @@ class TestAutomation:
             verbose: Enable verbose logging
             config_path: Path to tingly-box config (default: ~/.tingly-box/config.json)
         """
-        self.test_port = test_port
+        self.test_port = self._select_test_port(test_port)
         self.project_dir = project_dir or self._find_project_dir()
         self.verbose = verbose
         self.temp_dir: Optional[Path] = None
@@ -97,6 +104,17 @@ class TestAutomation:
         logger.info(f"Server binary: {self.server_binary}")
         logger.info(f"Test port: {self.test_port}")
         logger.info(f"Config path: {self.config_path}")
+
+    def _select_test_port(self, preferred: int) -> int:
+        """Pick an available local port, preferring the provided one."""
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.bind(("127.0.0.1", preferred))
+                return preferred
+        except OSError:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.bind(("127.0.0.1", 0))
+                return sock.getsockname()[1]
 
     @staticmethod
     def _find_project_dir() -> Path:
@@ -130,24 +148,6 @@ class TestAutomation:
         logger.info(f"Config loaded successfully")
         return config
 
-    def _get_provider_token(self, config: Dict, provider_name: str) -> Optional[str]:
-        """
-        Get provider token from config.
-
-        Args:
-            config: Configuration dictionary
-            provider_name: Name of provider (qwen, glm, deepseek)
-
-        Returns:
-            Provider token or None if not found
-        """
-        providers_v2 = config.get("providers_v2", [])
-        for provider in providers_v2:
-            if provider.get("name") == provider_name:
-                return provider.get("token")
-        logger.warning(f"Provider '{provider_name}' not found in config")
-        return None
-
     def _create_temp_directory(self) -> Path:
         """Create and return path to temporary directory."""
         temp_dir = Path(tempfile.mkdtemp(prefix="tingly-box-test-"))
@@ -165,16 +165,10 @@ class TestAutomation:
             Path to created config file
         """
         config_path = temp_dir / "config.json"
-
-        # Read template if it exists
-        if self.config_template_path.exists():
-            logger.info(f"Using template config: {self.config_template_path}")
-            shutil.copy(self.config_template_path, config_path)
-        else:
-            logger.info("Creating config from scratch")
-            config_data = self._generate_config_data()
-            with open(config_path, 'w') as f:
-                json.dump(config_data, f, indent=2)
+        logger.info("Creating config from real config")
+        config_data = self._generate_config_data()
+        with open(config_path, 'w') as f:
+            json.dump(config_data, f, indent=2)
 
         logger.info(f"Created test config: {config_path}")
         return config_path
@@ -186,175 +180,163 @@ class TestAutomation:
         Returns:
             Configuration dictionary
         """
-        # Load existing config to get model_token and provider tokens
         config = self._load_config()
+        providers = self._extract_providers(config)
+        rules, provider_uuids = self._build_rules_from_config(config, providers)
+        if not rules:
+            raise RuntimeError(
+                "No test rules could be generated from the real config. "
+                "Ensure providers have models or existing rules with services."
+            )
+        scenarios = self._build_scenarios_from_rules(rules)
+
+        filtered_providers = [p for p in providers if p.get("uuid") in provider_uuids]
+
         model_token = config.get("model_token", "")
-
-        # Get provider tokens from config
-        qwen_token = self._get_provider_token(config, "qwen") or ""
-        glm_token = self._get_provider_token(config, "glm") or ""
-        deepseek_token = self._get_provider_token(config, "deepseek") or ""
-
-        # Get jwt_secret from config
         jwt_secret = config.get("jwt_secret", "1765265404669863000")
 
-        return {
-            "rules": [
-                {
-                    "uuid": "test-deepseek-rule",
-                    "scenario": "deepseek-test",
-                    "request_model": "deepseek-test",
-                    "response_model": "",
-                    "description": "Test scenario for Deepseek backend",
-                    "services": [
-                        {
-                            "provider": "25419e90-f5af-11f0-8c69-6ec60317391b",
-                            "model": "deepseek-chat",
-                            "weight": 1,
-                            "active": True,
-                            "time_window": 300
-                        }
-                    ],
-                    "lb_tactic": {
-                        "type": "round_robin",
-                        "params": {
-                            "request_threshold": 10
-                        }
-                    },
-                    "active": True,
-                    "smart_enabled": False
-                },
-                {
-                    "uuid": "test-glm-rule",
-                    "scenario": "glm-test",
-                    "request_model": "glm-test",
-                    "response_model": "",
-                    "description": "Test scenario for GLM backend",
-                    "services": [
-                        {
-                            "provider": "fc958d9c-df0d-11f0-a608-6ec70917391c",
-                            "model": "glm-4.7",
-                            "weight": 1,
-                            "active": True,
-                            "time_window": 300
-                        }
-                    ],
-                    "lb_tactic": {
-                        "type": "round_robin",
-                        "params": {
-                            "request_threshold": 10
-                        }
-                    },
-                    "active": True,
-                    "smart_enabled": False
-                },
-                {
-                    "uuid": "test-qwen-rule",
-                    "scenario": "qwen-test",
-                    "request_model": "qwen-test",
-                    "response_model": "",
-                    "description": "Test scenario for Qwen backend",
-                    "services": [
-                        {
-                            "provider": "fc958d9c-df0d-11f0-a608-6ec60317391b",
-                            "model": "qwen-plus",
-                            "weight": 1,
-                            "active": True,
-                            "time_window": 300
-                        }
-                    ],
-                    "lb_tactic": {
-                        "type": "round_robin",
-                        "params": {
-                            "request_threshold": 10
-                        }
-                    },
-                    "active": True,
-                    "smart_enabled": False
-                }
-            ],
-            "default_request_id": 14,
-            "user_token": "tingly-box-user-token",
+        test_config = {
+            "rules": rules,
+            "default_request_id": config.get("default_request_id", 14),
+            "user_token": config.get("user_token", "tingly-box-user-token"),
             "model_token": model_token,
-            "encrypt_providers": False,
-            "scenarios": [
-                {
-                    "scenario": "deepseek-test",
-                    "flags": {
-                        "unified": False,
-                        "separate": True,
-                        "smart": False
-                    }
-                },
-                {
-                    "scenario": "glm-test",
-                    "flags": {
-                        "unified": False,
-                        "separate": True,
-                        "smart": False
-                    }
-                },
-                {
-                    "scenario": "qwen-test",
-                    "flags": {
-                        "unified": False,
-                        "separate": True,
-                        "smart": False
-                    }
-                }
-            ],
-            "gui": {
-                "debug": False,
-                "port": 0,
-                "verbose": False
-            },
-            "tool_interceptor": {
-                "enabled": False
-            },
-            "providers_v2": [
-                {
-                    "uuid": "fc958d9c-df0d-11f0-a608-6ec60317391b",
-                    "name": "qwen",
-                    "api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-                    "api_style": "openai",
-                    "token": qwen_token,
-                    "no_key_required": False,
-                    "enabled": True,
-                    "proxy_url": "",
-                    "timeout": 1800,
-                    "last_updated": "2025-12-22T16:12:41+08:00",
-                    "auth_type": ""
-                },
-                {
-                    "uuid": "fc958d9c-df0d-11f0-a608-6ec70917391c",
-                    "name": "glm",
-                    "api_base": "https://open.bigmodel.cn/api/anthropic",
-                    "api_style": "anthropic",
-                    "token": glm_token,
-                    "no_key_required": False,
-                    "enabled": True,
-                    "proxy_url": "",
-                    "timeout": 1800,
-                    "auth_type": ""
-                },
-                {
-                    "uuid": "25419e90-f5af-11f0-8c69-6ec60317391b",
-                    "name": "deepseek",
-                    "api_base": "https://api.deepseek.com/v1",
-                    "api_style": "openai",
-                    "token": deepseek_token,
-                    "no_key_required": False,
-                    "enabled": True,
-                    "proxy_url": "",
-                    "timeout": 1800,
-                    "auth_type": ""
-                }
-            ],
+            "encrypt_providers": config.get("encrypt_providers", False),
+            "scenarios": scenarios,
+            "gui": config.get("gui", {"debug": False, "port": 0, "verbose": False}),
+            "tool_interceptor": config.get("tool_interceptor", {"enabled": False}),
+            "providers_v2": filtered_providers,
             "server_port": self.test_port,
             "jwt_secret": jwt_secret,
-            "default_max_tokens": 8192,
-            "verbose": True
+            "default_max_tokens": config.get("default_max_tokens", 8192),
+            "verbose": config.get("verbose", True),
         }
+
+        if "providers" in config and not config.get("providers_v2"):
+            test_config["providers"] = providers
+
+        return test_config
+
+    def _extract_providers(self, config: Dict) -> list:
+        """Extract enabled providers from real config."""
+        providers = []
+        if config.get("providers_v2"):
+            providers = list(config.get("providers_v2", []))
+        elif config.get("providers"):
+            providers = list(config.get("providers", []))
+
+        enabled = []
+        for provider in providers:
+            if provider.get("enabled") is False:
+                continue
+            enabled.append(provider)
+        return enabled
+
+    def _build_rules_from_config(self, config: Dict, providers: list) -> tuple[list, set]:
+        """Build rules for test config based on real providers."""
+        rules = []
+        provider_uuids = set()
+        config_rules = config.get("rules", []) or []
+        provider_lookup = {str(p.get("name", "")).lower(): p for p in providers}
+
+        def scenario_for_provider(provider: Dict) -> str:
+            api_style = (provider.get("api_style") or "openai").lower()
+            if api_style in ("anthropic", "claude_code", "opencode"):
+                return api_style
+            return "openai"
+
+        def find_service_for_provider(provider_uuid: str) -> Optional[Dict]:
+            for rule in config_rules:
+                for service in rule.get("services", []) or []:
+                    if service.get("provider") == provider_uuid and service.get("model"):
+                        return {
+                            "model": service.get("model"),
+                        }
+            return None
+
+        for target_name in self.TARGET_PROVIDER_NAMES:
+            target_key = target_name.lower()
+            alias_key = self.TARGET_PROVIDER_ALIASES.get(target_name, target_name).lower()
+
+            candidates = []
+            target_provider = provider_lookup.get(target_key)
+            if target_provider:
+                candidates.append(target_provider)
+            alias_provider = provider_lookup.get(alias_key)
+            if alias_provider and alias_provider not in candidates:
+                candidates.append(alias_provider)
+
+            if not candidates:
+                logger.warning(f"Skipping provider '{target_name}' - not found in config")
+                continue
+
+            provider = None
+            model = None
+            for candidate in candidates:
+                candidate_uuid = candidate.get("uuid")
+                service_info = find_service_for_provider(candidate_uuid)
+                if service_info:
+                    provider = candidate
+                    model = service_info["model"]
+                    break
+                if candidate.get("models"):
+                    provider = candidate
+                    model = candidate["models"][0]
+                    break
+
+            if not provider or not model:
+                logger.warning(f"Skipping provider '{target_name}' - no model found in config")
+                continue
+
+            provider_uuid = provider.get("uuid")
+            provider_name = provider.get("name") or target_name
+            scenario = scenario_for_provider(provider)
+
+            provider_uuids.add(provider_uuid)
+            rules.append({
+                "uuid": f"test-{target_name}-rule",
+                "scenario": scenario,
+                "request_model": target_name,
+                "response_model": "",
+                "description": f"Test rule for {provider_name} using {scenario} scenario",
+                "services": [
+                    {
+                        "provider": provider_uuid,
+                        "model": model,
+                        "weight": 1,
+                        "active": True,
+                        "time_window": 300,
+                    }
+                ],
+                "lb_tactic": {
+                    "type": "round_robin",
+                    "params": {
+                        "request_threshold": 10,
+                    },
+                },
+                "active": True,
+                "smart_enabled": False,
+            })
+
+        return rules, provider_uuids
+
+    def _build_scenarios_from_rules(self, rules: list) -> list:
+        """Build scenario flags for the test config."""
+        scenarios = []
+        seen = set()
+        for rule in rules:
+            scenario = rule.get("scenario")
+            if not scenario or scenario in seen:
+                continue
+            seen.add(scenario)
+            scenarios.append({
+                "scenario": scenario,
+                "flags": {
+                    "unified": False,
+                    "separate": True,
+                    "smart": False,
+                },
+            })
+        return scenarios
 
     def _check_server_binary(self) -> None:
         """Check if server binary exists."""
@@ -390,17 +372,14 @@ class TestAutomation:
                     "start",
                     "--config-dir", str(self.temp_dir),
                     "--port", str(self.test_port),
-                    "--browser", "false",
-                    "--daemon"
+                "--browser", "false"
                 ],
                 stdout=log_file,
                 stderr=subprocess.STDOUT,
                 cwd=str(self.temp_dir)
             )
 
-        # For daemon mode, the process exits immediately after starting the server
-        # So we can't use the return process to check if it's running
-        logger.info(f"Server started in daemon mode")
+        logger.info("Server started")
         return process
 
     def _wait_for_server(self, max_attempts: int = 30) -> bool:
@@ -417,19 +396,26 @@ class TestAutomation:
 
         url = f"http://localhost:{self.test_port}/tingly/openai/v1/models"
         logger.info(f"Waiting for server to be ready at {url}")
+        model_token = ""
+        try:
+            config = self._load_config()
+            model_token = config.get("model_token", "")
+        except Exception:
+            model_token = ""
 
         for attempt in range(1, max_attempts + 1):
             try:
-                with urllib.request.urlopen(url, timeout=2) as response:
-                    # Accept 200 (success) or 401 (requires auth - means server is running)
+                req = urllib.request.Request(url)
+                if model_token:
+                    req.add_header("Authorization", f"Bearer {model_token}")
+                with urllib.request.urlopen(req, timeout=2) as response:
                     if response.status in (200, 401):
                         logger.info("✓ Server is ready!")
                         return True
             except urllib.error.HTTPError as e:
-                # HTTP 401 means server is running but requires auth
-                if e.code == 401:
-                    logger.info("✓ Server is ready (requires auth)!")
-                    return True
+                # Any HTTP response means server is up (even if auth/route fails)
+                logger.info(f"✓ Server is ready (HTTP {e.code})!")
+                return True
                 if attempt == max_attempts:
                     logger.error(f"Server failed to start after {max_attempts} attempts")
                     return False
@@ -474,6 +460,7 @@ class TestAutomation:
             "--html",
             "--save",
             "--verbose",
+            "--config", str(config_path),
             "--server-url", server_url,
             "--output", str(permanent_output_dir)
         ]
@@ -502,19 +489,11 @@ class TestAutomation:
         """Clean up resources."""
         logger.info("Cleaning up resources")
 
-        # Stop server if running (for daemon mode)
-        if self.temp_dir:
+        # Stop server if running
+        if self.server_process and self.server_process.poll() is None:
             try:
-                # Use tingly-box stop command to properly stop the daemon
-                subprocess.run(
-                    [
-                        str(self.server_binary),
-                        "stop",
-                        "--config-dir", str(self.temp_dir)
-                    ],
-                    capture_output=True,
-                    timeout=10
-                )
+                self.server_process.terminate()
+                self.server_process.wait(timeout=10)
                 logger.info("Server stopped")
             except Exception as e:
                 logger.warning(f"Failed to stop server: {e}")

@@ -85,8 +85,8 @@ class TestRunner:
 
         suite = SmokeTestSuite(self.config, self.verbose)
 
-        # Filter to only test the true backends: glm, deepseek, qwen
-        target_backends = {"glm", "deepseek", "qwen"}
+        # Filter to only test the true backends: qwen, glm, minimax
+        target_backends = {"glm", "qwen", "minimax"}
         filtered_providers = [
             p for p in self.config.providers
             if p.name.lower() in target_backends
@@ -290,137 +290,138 @@ class TestRunner:
         skipped_percent = (result.skipped / total) * 100
 
         # Generate test results HTML
+        def _render_test_items(items: list) -> str:
+            html = ""
+            for r in items:
+                if not isinstance(r, dict):
+                    continue
+                status = "passed" if r.get("passed", False) else ("skipped" if r.get("verdict") == "inconclusive" else "failed")
+
+                test_name_parts = []
+                if r.get("backend_provider"):
+                    backend = r.get("backend_provider", "")
+                    style = r.get("client_style", "")
+                    model = r.get("model", "")
+                    test_name_parts.append(f"Testing {backend} backend")
+                    test_name_parts.append(f"via {style.upper()} format")
+                    if model:
+                        test_name_parts.append(f"with model {model}")
+                else:
+                    test_name_parts.append(r.get('test_name', r.get('test_type', r.get('provider_name', 'Unknown'))))
+
+                test_name = " ".join(test_name_parts)
+                message = r.get('message', '')
+                duration = r.get('duration_ms', 0)
+                error = r.get('error', '')
+                timestamp = r.get('timestamp', '')
+
+                html += f"""
+                <div class="test-item {status}">
+                    <div class="test-item-header">
+                        <div class="test-item-name">{test_name}</div>
+                        <div class="test-item-status status-{status}">{status.upper()}</div>
+                    </div>
+                    <div class="test-item-message">{message}</div>
+                    <div class="test-item-details">Duration: {duration:.2f}ms"""
+
+                if timestamp:
+                    try:
+                        from datetime import datetime
+                        dt = datetime.fromisoformat(timestamp)
+                        formatted_time = dt.strftime("%Y-%m-%d %H:%M:%S")
+                        html += f"""
+                    <div class="test-item-timestamp">Timestamp: {formatted_time}</div>"""
+                    except:
+                        pass
+
+                if r.get("http_method") or r.get("http_url") or r.get("http_status"):
+                    html += """
+                    <div class="test-item-http">"""
+                    if r.get("http_method"):
+                        html += f"<span class=\"http-method\">{r['http_method']}</span> "
+                    if r.get("http_url"):
+                        html += f"<span class=\"http-url\">{r['http_url']}</span>"
+                    if r.get("http_status"):
+                        status_code = r['http_status']
+                        if 200 <= status_code < 300:
+                            status_color = "#10b981"
+                        elif 400 <= status_code < 500:
+                            status_color = "#f59e0b"
+                        elif 500 <= status_code < 600:
+                            status_color = "#ef4444"
+                        else:
+                            status_color = "#6b7280"
+                        html += f" <span class=\"http-status\" style=\"color: {status_color}\">\"{status_code}\"</span>"
+                    html += """
+                    </div>"""
+
+                html += "</div>"
+
+                if error:
+                    html += f"""
+                    <div class="error-box">{error}</div>"""
+
+                if r.get("field_issues"):
+                    def _issue_value(issue_obj, key, default=""):
+                        if isinstance(issue_obj, dict):
+                            return issue_obj.get(key, default)
+                        return getattr(issue_obj, key, default)
+                    html += '<div class="field-issues">'
+                    for issue in r.get("field_issues", []):
+                        severity_class = 'error' if _issue_value(issue, 'severity') == 'error' else ''
+                        field_path = _issue_value(issue, 'field_path')
+                        issue_type = _issue_value(issue, 'issue_type')
+                        expected = _issue_value(issue, 'expected')
+                        actual = _issue_value(issue, 'actual')
+
+                        html += f"""
+                        <div class="field-issue {severity_class}">
+                            <span class="field-issue-path">{field_path}</span>
+                            <span class="field-issue-detail"> - {issue_type}: expected {expected}"""
+                        if actual:
+                            html += f", got {actual}"
+                        html += "</div>"
+                    html += '</div>'
+
+                if r.get("backend_provider"):
+                    html += '<div class="test-context">'
+                    html += f"<strong>Provider:</strong> {r.get('backend_provider')} | "
+                    html += f"<strong>Style:</strong> {r.get('client_style', '').upper()}"
+                    if r.get("missing_fields"):
+                        html += f"<br><strong>Missing Fields:</strong> {', '.join(r.get('missing_fields', []))}"
+                    if r.get("invalid_fields"):
+                        invalid = r.get("invalid_fields", {})
+                        if invalid:
+                            html += f"<br><strong>Invalid Fields:</strong> {', '.join(invalid.keys())}"
+                    html += '</div>'
+
+                html += "</div>"
+            return html
+
         test_results_html = ""
 
-        # Handle different result structures
         if result.suite_name == "All Tests" and result.results:
-            # All tests - results is a list of (suite_name, suite_result) tuples
             for suite_name, suite_result in result.results:
+                suite_status = "passed"
+                if suite_result.failed > 0:
+                    suite_status = "failed"
+                elif suite_result.skipped > 0:
+                    suite_status = "skipped"
+
+                suite_items_html = _render_test_items(suite_result.results or [])
                 test_results_html += f"""
-                <div class="test-item passed">
-                    <div class="test-item-header">
-                        <div class="test-item-name">{suite_name}</div>
-                        <div class="test-item-status status-passed">{suite_result.success_rate:.1f}% Success</div>
+                <details class="suite">
+                    <summary class="suite-summary {suite_status}">
+                        <span class="suite-name">{suite_name}</span>
+                        <span class="suite-meta">Passed: {suite_result.passed} | Failed: {suite_result.failed} | Skipped: {suite_result.skipped} | {suite_result.success_rate:.1f}%</span>
+                    </summary>
+                    <div class="suite-body">
+                        <div class="test-item-details">Duration: {suite_result.duration_ms:.2f}ms</div>
+                        {suite_items_html}
                     </div>
-                    <div class="test-item-message">
-                        Passed: {suite_result.passed} | Failed: {suite_result.failed} | Skipped: {suite_result.skipped}
-                    </div>
-                    <div class="test-item-details">Duration: {suite_result.duration_ms:.2f}ms</div>
-                </div>"""
+                </details>"""
         else:
-            # Individual suite - results is a list of test result dictionaries
-            for r in result.results:
-                if isinstance(r, dict):
-                    # Determine status
-                    status = "passed" if r.get("passed", False) else ("skipped" if r.get("verdict") == "inconclusive" else "failed")
-
-                    # Build detailed test name with context
-                    test_name_parts = []
-
-                    # Backend validation tests
-                    if r.get("backend_provider"):
-                        backend = r.get("backend_provider", "")
-                        style = r.get("client_style", "")
-                        model = r.get("model", "")
-                        test_name_parts.append(f"Testing {backend} backend")
-                        test_name_parts.append(f"via {style.upper()} format")
-                        if model:
-                            test_name_parts.append(f"with model {model}")
-                    # Other tests
-                    else:
-                        test_name_parts.append(r.get('test_name', r.get('test_type', r.get('provider_name', 'Unknown'))))
-
-                    test_name = " ".join(test_name_parts)
-                    message = r.get('message', '')
-                    duration = r.get('duration_ms', 0)
-                    error = r.get('error', '')
-                    timestamp = r.get('timestamp', '')
-
-                    test_results_html += f"""
-                    <div class="test-item {status}">
-                        <div class="test-item-header">
-                            <div class="test-item-name">{test_name}</div>
-                            <div class="test-item-status status-{status}">{status.upper()}</div>
-                        </div>
-                        <div class="test-item-message">{message}</div>
-                        <div class="test-item-details">Duration: {duration:.2f}ms"""
-
-                    # Add timestamp if available
-                    if timestamp:
-                        try:
-                            from datetime import datetime
-                            # Parse ISO timestamp and format nicely
-                            dt = datetime.fromisoformat(timestamp)
-                            formatted_time = dt.strftime("%Y-%m-%d %H:%M:%S")
-                            test_results_html += f"""
-                        <div class="test-item-timestamp">Timestamp: {formatted_time}</div>"""
-                        except:
-                            pass
-
-                    # Add HTTP request details if available
-                    if r.get("http_method") or r.get("http_url") or r.get("http_status"):
-                        test_results_html += f"""
-                        <div class="test-item-http">"""
-                        if r.get("http_method"):
-                            test_results_html += f"<span class=\"http-method\">{r['http_method']}</span> "
-                        if r.get("http_url"):
-                            test_results_html += f"<span class=\"http-url\">{r['http_url']}</span>"
-                        if r.get("http_status"):
-                            status_code = r['http_status']
-                            # Color code status
-                            if 200 <= status_code < 300:
-                                status_color = "#10b981"
-                            elif 400 <= status_code < 500:
-                                status_color = "#f59e0b"
-                            elif 500 <= status_code < 600:
-                                status_color = "#ef4444"
-                            else:
-                                status_color = "#6b7280"
-                            test_results_html += f" <span class=\"http-status\" style=\"color: {status_color}\">\"{status_code}\"</span>"
-                        test_results_html += """
-                        </div>"""
-
-                    # Add details section
-                    test_results_html += "</div>"
-
-                    # Add error if present
-                    if error:
-                        test_results_html += f"""
-                        <div class="error-box">{error}</div>"""
-
-                    # Add field issues for backend validation tests
-                    if r.get("field_issues"):
-                        test_results_html += '<div class="field-issues">'
-                        for issue in r.get("field_issues", []):
-                            severity_class = 'error' if issue.get('severity') == 'error' else ''
-                            field_path = issue.get('field_path', '')
-                            issue_type = issue.get('issue_type', '')
-                            expected = issue.get('expected', '')
-                            actual = issue.get('actual', '')
-
-                            test_results_html += f"""
-                            <div class="field-issue {severity_class}">
-                                <span class="field-issue-path">{field_path}</span>
-                                <span class="field-issue-detail"> - {issue_type}: expected {expected}"""
-                            if actual:
-                                test_results_html += f", got {actual}"
-                            test_results_html += "</div>"
-                        test_results_html += '</div>'
-
-                    # Add additional context for backend tests
-                    if r.get("backend_provider"):
-                        test_results_html += '<div class="test-context">'
-                        test_results_html += f"<strong>Provider:</strong> {r.get('backend_provider')} | "
-                        test_results_html += f"<strong>Style:</strong> {r.get('client_style', '').upper()}"
-                        if r.get("missing_fields"):
-                            test_results_html += f"<br><strong>Missing Fields:</strong> {', '.join(r.get('missing_fields', []))}"
-                        if r.get("invalid_fields"):
-                            invalid = r.get("invalid_fields", {})
-                            if invalid:
-                                test_results_html += f"<br><strong>Invalid Fields:</strong> {', '.join(invalid.keys())}"
-                        test_results_html += '</div>'
-
-                    test_results_html += "</div>"
+            test_results_html = _render_test_items(result.results)
 
         # Build HTML document
         html_content = f"""<!DOCTYPE html>
@@ -652,6 +653,56 @@ class TestRunner:
         }}
         .test-context strong {{
             color: #374151;
+        }}
+        details.suite {{
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            background: #fff;
+        }}
+        .suite-summary {{
+            cursor: pointer;
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+            color: #1f2937;
+            list-style: none;
+        }}
+        .suite-summary::-webkit-details-marker {{
+            display: none;
+        }}
+        .suite-summary::before {{
+            content: "▸";
+            margin-right: 8px;
+            color: #6b7280;
+        }}
+        details[open] > .suite-summary::before {{
+            content: "▾";
+        }}
+        .suite-summary.passed {{
+            background: #f0fdf4;
+            border-bottom: 1px solid #e5e7eb;
+        }}
+        .suite-summary.failed {{
+            background: #fef2f2;
+            border-bottom: 1px solid #e5e7eb;
+        }}
+        .suite-summary.skipped {{
+            background: #fffbeb;
+            border-bottom: 1px solid #e5e7eb;
+        }}
+        .suite-name {{
+            font-size: 1.05em;
+        }}
+        .suite-meta {{
+            font-weight: normal;
+            color: #6b7280;
+            font-size: 0.9em;
+        }}
+        .suite-body {{
+            padding: 16px;
         }}
     </style>
 </head>

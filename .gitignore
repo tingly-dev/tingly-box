@@ -103,3 +103,4 @@ wheels/
 .installed.cfg
 *.egg
 MANIFEST
+/tests/test_results/

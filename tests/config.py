@@ -83,6 +83,7 @@ class Rule:
     scenario: str = ""
     request_model: str = ""
     response_model: str = ""
+    description: str = ""
     services: list = field(default_factory=list)
     lb_tactic: str = "round_robin"
     active: bool = True
@@ -112,6 +113,35 @@ class TestConfig:
         for p in self.providers:
             if p.name == name:
                 return p
+        return None
+
+    def get_provider_by_uuid(self, uuid: str) -> Optional[Provider]:
+        """Get provider by UUID."""
+        for p in self.providers:
+            if p.uuid == uuid:
+                return p
+        return None
+
+    def get_rule_by_scenario(self, scenario: str) -> Optional[Rule]:
+        """Get the first active rule for a scenario."""
+        for r in self.rules:
+            if r.active and r.scenario == scenario and r.request_model:
+                return r
+        return None
+
+    def get_any_rule(self) -> Optional[Rule]:
+        """Get the first active rule with a request model."""
+        for r in self.rules:
+            if r.active and r.request_model:
+                return r
+        return None
+
+    def get_service_model_for_rule(self, rule: Rule) -> Optional[str]:
+        """Get the first service model for a rule."""
+        for service in rule.services or []:
+            model = service.get("model")
+            if model:
+                return model
         return None
 
 
@@ -201,6 +231,7 @@ class ConfigLoader:
                         scenario=r.get("scenario", ""),
                         request_model=r.get("request_model", ""),
                         response_model=r.get("response_model", ""),
+                        description=r.get("description", ""),
                         services=r.get("services", []),
                         lb_tactic=r.get("lb_tactic", "round_robin"),
                         active=r.get("active", True),
@@ -264,6 +295,7 @@ class ConfigLoader:
                         scenario=r.get("scenario", ""),
                         request_model=r.get("request_model", ""),
                         response_model=r.get("response_model", ""),
+                        description=r.get("description", ""),
                         services=r.get("services", []),
                         lb_tactic=r.get("lb_tactic", "round_robin"),
                         active=r.get("active", True),

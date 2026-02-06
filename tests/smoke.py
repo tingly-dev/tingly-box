@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 from datetime import datetime
 
-from .config import TestConfig, Provider, APIStyle
+from .config import TestConfig, Provider, APIStyle, Rule
 from .client import (
     BaseProviderClient,
     OpenAIClient,
@@ -67,6 +67,12 @@ class SmokeTestSuite:
     def __init__(self, config: TestConfig, verbose: bool = False):
         self.config = config
         self.verbose = verbose
+        self.proxy_client = ProxyClient(
+            server_url=config.server_url,
+            token=config.auth_token,
+            timeout=config.timeout,
+        )
+        self.proxy_only = True
 
     def _print(self, msg: str):
         if self.verbose:
@@ -74,6 +80,8 @@ class SmokeTestSuite:
 
     def _create_client(self, provider: Provider) -> BaseProviderClient:
         """Create appropriate client for provider."""
+        if self.proxy_only:
+            raise RuntimeError("Direct provider client creation disabled in proxy-only mode")
         if provider.api_style == APIStyle.OPENAI:
             return OpenAIClient(
                 name=provider.name,
@@ -101,14 +109,32 @@ class SmokeTestSuite:
         else:
             raise ValueError(f"Unknown API style: {provider.api_style}")
 
+    def _get_rule_for_provider(self, provider: Provider) -> Optional[Rule]:
+        for rule in self.config.rules:
+            if not rule.active:
+                continue
+            for service in rule.services or []:
+                if service.get("provider") == provider.uuid:
+                    return rule
+        return None
+
     def test_provider_model_fetch(self, provider: Provider) -> list[SmokeTestResult]:
         """Test model fetching for a provider."""
         results = []
         self._print(f"Testing model fetch for {provider.name}")
 
         try:
-            client = self._create_client(provider)
-            result = client.list_models()
+            if self.proxy_only:
+                rule = self._get_rule_for_provider(provider)
+                if not rule:
+                    raise RuntimeError("No routing rule found for provider")
+                if provider.api_style == APIStyle.ANTHROPIC:
+                    result = self.proxy_client.list_models_anthropic(scenario=rule.scenario)
+                else:
+                    result = self.proxy_client.list_models_openai(scenario=rule.scenario)
+            else:
+                client = self._create_client(provider)
+                result = client.list_models()
 
             smoke_result = SmokeTestResult(
                 provider_name=provider.name,
@@ -173,15 +199,35 @@ class SmokeTestSuite:
         self._print(f"Testing chat for {provider.name} with model {test_model}")
 
         try:
-            client = self._create_client(provider)
-            request = ChatRequest(
-                model=test_model,
-                messages=[ChatMessage(role="user", content=test_prompt)],
-                temperature=0.7,
-                max_tokens=100,
-            )
-
-            result = client.chat_completions(request)
+            if self.proxy_only:
+                rule = self._get_rule_for_provider(provider)
+                if not rule:
+                    raise RuntimeError("No routing rule found for provider")
+                if provider.api_style == APIStyle.ANTHROPIC:
+                    result = self.proxy_client.messages_anthropic(
+                        model=rule.request_model,
+                        prompt=test_prompt,
+                        scenario=rule.scenario,
+                        temperature=0.7,
+                        max_tokens=100,
+                    )
+                else:
+                    result = self.proxy_client.chat_completions_openai(
+                        model=rule.request_model,
+                        prompt=test_prompt,
+                        scenario=rule.scenario,
+                        temperature=0.7,
+                        max_tokens=100,
+                    )
+            else:
+                client = self._create_client(provider)
+                request = ChatRequest(
+                    model=test_model,
+                    messages=[ChatMessage(role="user", content=test_prompt)],
+                    temperature=0.7,
+                    max_tokens=100,
+                )
+                result = client.chat_completions(request)
 
             smoke_result = SmokeTestResult(
                 provider_name=provider.name,
@@ -235,18 +281,44 @@ class SmokeTestSuite:
         self._print(f"Testing chat with system for {provider.name}")
 
         try:
-            client = self._create_client(provider)
-            request = ChatRequest(
-                model=test_model,
-                messages=[
-                    ChatMessage(role="system", content=system_prompt),
-                    ChatMessage(role="user", content=test_prompt),
-                ],
-                temperature=0.7,
-                max_tokens=100,
-            )
-
-            result = client.chat_completions(request)
+            if self.proxy_only:
+                rule = self._get_rule_for_provider(provider)
+                if not rule:
+                    raise RuntimeError("No routing rule found for provider")
+                if provider.api_style == APIStyle.ANTHROPIC:
+                    result = self.proxy_client.messages_anthropic(
+                        model=rule.request_model,
+                        prompt=test_prompt,
+                        scenario=rule.scenario,
+                        system=system_prompt,
+                        messages=[{"role": "user", "content": test_prompt}],
+                        temperature=0.7,
+                        max_tokens=100,
+                    )
+                else:
+                    result = self.proxy_client.chat_completions_openai(
+                        model=rule.request_model,
+                        prompt=test_prompt,
+                        scenario=rule.scenario,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": test_prompt},
+                        ],
+                        temperature=0.7,
+                        max_tokens=100,
+                    )
+            else:
+                client = self._create_client(provider)
+                request = ChatRequest(
+                    model=test_model,
+                    messages=[
+                        ChatMessage(role="system", content=system_prompt),
+                        ChatMessage(role="user", content=test_prompt),
+                    ],
+                    temperature=0.7,
+                    max_tokens=100,
+                )
+                result = client.chat_completions(request)
 
             smoke_result = SmokeTestResult(
                 provider_name=provider.name,
@@ -381,9 +453,67 @@ class ProxySmokeTestSuite:
         if self.verbose:
             print(f"  [PROXY] {msg}")
 
+    def _get_rule_for_scenario(self, scenario: str) -> Optional[Rule]:
+        rule = self.config.get_rule_by_scenario(scenario)
+        if rule:
+            return rule
+        return self.config.get_any_rule()
+
+    def _get_rule_by_request_model(self, request_model: str) -> Optional[Rule]:
+        for rule in self.config.rules:
+            if rule.active and rule.request_model == request_model:
+                return rule
+        return None
+
+    def _run_proxy_chat(self, request_model: str, test_type: str, api_style: str) -> SmokeTestResult:
+        rule = self._get_rule_by_request_model(request_model)
+        if not rule:
+            return SmokeTestResult(
+                provider_name="proxy",
+                api_style=api_style,
+                test_type=test_type,
+                passed=False,
+                message=f"Rule not found for request_model {request_model}",
+                duration_ms=0,
+                error="missing_rule",
+            )
+
+        test_prompt = self.config.test_prompt
+        if api_style == "openai":
+            result = self.proxy_client.chat_completions_openai(
+                model=rule.request_model,
+                prompt=test_prompt,
+                scenario=rule.scenario,
+                temperature=0.7,
+                max_tokens=100,
+            )
+            test_type_label = "chat_completions"
+        else:
+            result = self.proxy_client.messages_anthropic(
+                model=rule.request_model,
+                prompt=test_prompt,
+                scenario=rule.scenario,
+                temperature=0.7,
+                max_tokens=100,
+            )
+            test_type_label = "messages"
+
+        return SmokeTestResult(
+            provider_name="proxy",
+            api_style=api_style,
+            test_type=test_type_label,
+            passed=result.success,
+            message=result.message,
+            duration_ms=result.duration_ms,
+            details=result.data or {},
+            error=result.error,
+        )
+
     def test_proxy_list_models_openai(self) -> SmokeTestResult:
         """Test proxy OpenAI models endpoint."""
-        result = self.proxy_client.list_models_openai()
+        rule = self._get_rule_for_scenario("openai")
+        scenario = rule.scenario if rule else "openai"
+        result = self.proxy_client.list_models_openai(scenario=scenario)
 
         return SmokeTestResult(
             provider_name="proxy",
@@ -398,7 +528,9 @@ class ProxySmokeTestSuite:
 
     def test_proxy_list_models_anthropic(self) -> SmokeTestResult:
         """Test proxy Anthropic models endpoint."""
-        result = self.proxy_client.list_models_anthropic()
+        rule = self._get_rule_for_scenario("anthropic")
+        scenario = rule.scenario if rule else "anthropic"
+        result = self.proxy_client.list_models_anthropic(scenario=scenario)
 
         return SmokeTestResult(
             provider_name="proxy",
@@ -413,15 +545,20 @@ class ProxySmokeTestSuite:
 
     def test_proxy_chat_openai(
         self,
-        model: str = "glm-4.7",
+        model: Optional[str] = None,
         prompt: Optional[str] = None,
     ) -> SmokeTestResult:
         """Test proxy OpenAI chat endpoint."""
         test_prompt = prompt or self.config.test_prompt
 
+        rule = self._get_rule_for_scenario("openai")
+        scenario = rule.scenario if rule else "openai"
+        request_model = rule.request_model if rule and rule.request_model else model
+
         result = self.proxy_client.chat_completions_openai(
-            model=model,
+            model=request_model or "",
             prompt=test_prompt,
+            scenario=scenario,
             temperature=0.7,
             max_tokens=100,
         )
@@ -439,15 +576,20 @@ class ProxySmokeTestSuite:
 
     def test_proxy_chat_anthropic(
         self,
-        model: str = "glm-4.7",
+        model: Optional[str] = None,
         prompt: Optional[str] = None,
     ) -> SmokeTestResult:
         """Test proxy Anthropic messages endpoint."""
         test_prompt = prompt or self.config.test_prompt
 
+        rule = self._get_rule_for_scenario("anthropic")
+        scenario = rule.scenario if rule else "anthropic"
+        request_model = rule.request_model if rule and rule.request_model else model
+
         result = self.proxy_client.messages_anthropic(
-            model=model,
+            model=request_model or "",
             prompt=test_prompt,
+            scenario=scenario,
             temperature=0.7,
             max_tokens=100,
         )
@@ -478,15 +620,16 @@ class ProxySmokeTestSuite:
         suite_result.add_result(result)
         self._print(f"  anthropic_list_models: {'PASS' if result.passed else 'FAIL'}")
 
-        self._print("Testing proxy OpenAI chat endpoint")
-        result = self.test_proxy_chat_openai(model="glm-4.7")
-        suite_result.add_result(result)
-        self._print(f"  chat_completions: {'PASS' if result.passed else 'FAIL'}")
-
-        self._print("Testing proxy Anthropic messages endpoint")
-        result = self.test_proxy_chat_anthropic(model="glm-4.7")
-        suite_result.add_result(result)
-        self._print(f"  messages: {'PASS' if result.passed else 'FAIL'}")
+        targets = [
+            ("qwen-test", "openai"),
+            ("minimax-test", "anthropic"),
+            ("glm-test", "anthropic"),
+        ]
+        for request_model, api_style in targets:
+            self._print(f"Testing proxy {api_style} chat endpoint for {request_model}")
+            result = self._run_proxy_chat(request_model, "chat", api_style)
+            suite_result.add_result(result)
+            self._print(f"  {request_model}: {'PASS' if result.passed else 'FAIL'}")
 
         suite_result.duration_ms = (time.time() - start_time) * 1000
 
