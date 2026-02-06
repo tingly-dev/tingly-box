@@ -109,6 +109,10 @@ func (s *Server) forwardOpenAIStreamRequest(ctx context.Context, provider *typ.P
 	config := s.buildOpenAIConfig(req)
 	req = transformer.ApplyProviderTransforms(req, provider, req.Model, config)
 
+	if len(req.Tools) == 0 {
+		req.Tools = nil
+	}
+
 	// Get or create OpenAI client wrapper from pool
 	wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
 
@@ -283,6 +287,11 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 			delta["tool_calls"] = choice.Delta.ToolCalls
 		}
 
+		finishReason := &choice.FinishReason
+		if finishReason != nil && *finishReason == "" {
+			finishReason = nil
+		}
+
 		// Prepare the chunk in OpenAI format
 		chunk := map[string]interface{}{
 			"id":      chatChunk.ID,
@@ -293,7 +302,7 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 				{
 					"index":         choice.Index,
 					"delta":         delta,
-					"finish_reason": choice.FinishReason,
+					"finish_reason": finishReason,
 					"logprobs":      choice.Logprobs,
 				},
 			},
