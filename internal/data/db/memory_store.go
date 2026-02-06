@@ -272,7 +272,7 @@ func (ps *MemoryStore) GetUserInputs(scenario string, limit int) ([]MemoryRoundR
 
 	var records []MemoryRoundRecord
 	query := ps.db.Model(&MemoryRoundRecord{}).
-		Select("id, scenario, provider_uuid, provider_name, model, protocol, request_id, project_id, session_id, round_index, user_input, created_at")
+		Select("id, scenario, provider_uuid, provider_name, model, protocol, request_id, project_id, session_id, round_index, user_input, round_result, created_at")
 
 	if scenario != "" {
 		query = query.Where("scenario = ?", scenario)
