@@ -10,6 +10,8 @@ import {
     Psychology as PromptIcon,
     Bolt as SkillIcon,
     Send as UserPromptIcon,
+    Lan as RemoteIcon,
+    ChatBubbleOutline as ChatIcon,
     NewReleases,
     ErrorOutline,
 } from '@mui/icons-material';
@@ -64,11 +66,12 @@ const Layout = ({ children }: LayoutProps) => {
     const location = useLocation();
     const { hasUpdate, currentVersion, showUpdateDialog } = useAppVersion();
     const { isHealthy, showDisconnectDialog } = useHealth();
-    const { skillUser, skillIde } = useFeatureFlags();
+    const { skillUser, skillIde, enableRemoteCoder } = useFeatureFlags();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [homeMenuOpen, setHomeMenuOpen] = useState(true);
     const [promptMenuOpen, setPromptMenuOpen] = useState(true);
     const [systemMenuOpen, setSystemMenuOpen] = useState(false);
+    const [remoteCoderMenuOpen, setRemoteCoderMenuOpen] = useState(true);
     const [easterEggAnchorEl, setEasterEggAnchorEl] = useState<HTMLElement | null>(null);
 
     const handleDrawerToggle = () => {
@@ -179,6 +182,24 @@ const Layout = ({ children }: LayoutProps) => {
             icon: <PromptIcon sx={{ fontSize: 20 }} />,
             items: promptMenuItems,
         }] : []),
+        ...(enableRemoteCoder ? [{
+            key: 'remote-coder' as const,
+            label: 'Remote Coder',
+            icon: <RemoteIcon sx={{ fontSize: 20 }} />,
+            path: '/remote-coder/chat',
+            items: [
+                {
+                    path: '/remote-coder/chat',
+                    label: 'Chat',
+                    icon: <ChatIcon sx={{ fontSize: 20 }} />,
+                },
+                {
+                    path: '/remote-coder/sessions',
+                    label: 'Sessions',
+                    icon: <RemoteIcon sx={{ fontSize: 20 }} />,
+                },
+            ],
+        }] : []),
         {
             key: 'system',
             label: 'System',
@@ -257,6 +278,7 @@ const Layout = ({ children }: LayoutProps) => {
                     const isCredentialGroup = group.key === 'credential';
                     const isPromptGroup = group.key === 'prompt';
                     const isSystemGroup = group.key === 'system';
+                    const isRemoteCoderGroup = group.key === 'remote-coder';
                     const isStandalone = group.standalone;
 
                     // For standalone groups (like Dashboard), no collapse state
@@ -273,6 +295,9 @@ const Layout = ({ children }: LayoutProps) => {
                         } else if (isSystemGroup) {
                             isOpen = systemMenuOpen;
                             setIsOpen = setSystemMenuOpen;
+                        } else if (isRemoteCoderGroup) {
+                            isOpen = remoteCoderMenuOpen;
+                            setIsOpen = setRemoteCoderMenuOpen;
                         }
                     }
 

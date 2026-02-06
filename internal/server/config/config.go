@@ -37,7 +37,7 @@ type Config struct {
 	// Merged fields from Config struct
 	ProvidersV1 map[string]*typ.Provider `json:"providers"`
 	Providers   []*typ.Provider          `json:"providers_v2,omitempty"`
-	ServerPort  int                      `json:"server_port"`
+	ServerPort  int                      `json:"-"`
 	JWTSecret   string                   `json:"jwt_secret"`
 
 	// Server settings
@@ -1006,6 +1006,15 @@ func (c *Config) GetScenarioFlag(scenario typ.RuleScenario, flagName string) boo
 			return val
 		}
 		return false
+	case "enable_remote_coder":
+		if val, ok := config.Extensions["enable_remote_coder"].(bool); ok {
+			return val
+		}
+		// Backward compatibility
+		if val, ok := config.Extensions["skill_remote_cc"].(bool); ok {
+			return val
+		}
+		return false
 	default:
 		return false
 	}
@@ -1060,6 +1069,14 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 			config.Extensions = make(map[string]interface{})
 		}
 		config.Extensions["skill_ide"] = value
+	case "enable_remote_coder":
+		// Store in Extensions
+		if config.Extensions == nil {
+			config.Extensions = make(map[string]interface{})
+		}
+		config.Extensions["enable_remote_coder"] = value
+		// Backward compatibility
+		config.Extensions["skill_remote_cc"] = value
 	default:
 		return fmt.Errorf("unknown flag name: %s", flagName)
 	}

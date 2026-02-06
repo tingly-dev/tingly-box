@@ -53,6 +53,25 @@ const getUserAuthToken = (): string | null => {
     return localStorage.getItem('user_auth_token');
 };
 
+// Get user auth token for remote-coder calls (also consult GUI binding)
+const getRemoteCCAuthToken = async (): Promise<string | null> => {
+    let token = getUserAuthToken();
+    if (!token && import.meta.env.VITE_PKG_MODE === "gui") {
+        const svc = TinglyService;
+        if (svc) {
+            try {
+                const guiToken = await svc.GetUserAuthToken();
+                if (guiToken) {
+                    token = guiToken;
+                }
+            } catch (err) {
+                console.error('Failed to get GUI token for remote-coder:', err);
+            }
+        }
+    }
+    return token;
+};
+
 // Handle 401 Unauthorized response - centralize auth failure handling
 const handleAuthFailure = () => {
     localStorage.removeItem('user_auth_token');
@@ -898,6 +917,170 @@ export const api = {
 
             if (response.status === 401) {
                 handleAuthFailure();
+                return { success: false, error: 'Authentication required' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // ============================================
+    // Remote Coder API
+    // ============================================
+
+    // Get the base URL for remote-coder service
+    getRemoteCCBaseUrl: (): string => {
+        return `${window.location.protocol}//${window.location.hostname}:18080`;
+    },
+
+    // Check if remote-coder service is available
+    checkRemoteCCAvailable: async (): Promise<boolean> => {
+        try {
+            const baseUrl = api.getRemoteCCBaseUrl();
+            const response = await fetch(`${baseUrl}/remote-coder/available`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
+            const data = await response.json();
+            return data.available === true;
+        } catch (error: any) {
+            console.error('Remote Coder availability check failed:', error);
+            return false;
+        }
+    },
+
+    // Get remote-coder sessions
+    getRemoteCCSessions: async (params: { page?: number; limit?: number; status?: string } = {}): Promise<any> => {
+        try {
+            const token = await getRemoteCCAuthToken();
+            const queryParams = new URLSearchParams();
+            if (params.page) queryParams.set('page', params.page.toString());
+            if (params.limit) queryParams.set('limit', params.limit.toString());
+            if (params.status) queryParams.set('status', params.status.toString());
+
+            const baseUrl = api.getRemoteCCBaseUrl();
+            const url = `${baseUrl}/remote-coder/sessions${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+            });
+
+            if (response.status === 401) {
+                // Remote-coder auth failures should not force UI logout.
+                return { success: false, error: 'Authentication required' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Get a specific remote-coder session
+    getRemoteCCSession: async (sessionId: string): Promise<any> => {
+        try {
+            const token = await getRemoteCCAuthToken();
+            const baseUrl = api.getRemoteCCBaseUrl();
+            const response = await fetch(`${baseUrl}/remote-coder/sessions/${sessionId}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+            });
+
+            if (response.status === 401) {
+                // Remote-coder auth failures should not force UI logout.
+                return { success: false, error: 'Authentication required' };
+            }
+
+            if (response.status === 404) {
+                return { success: false, error: 'Session not found' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Get messages for a specific remote-coder session
+    getRemoteCCSessionMessages: async (sessionId: string): Promise<any> => {
+        try {
+            const token = await getRemoteCCAuthToken();
+            const baseUrl = api.getRemoteCCBaseUrl();
+            const response = await fetch(`${baseUrl}/remote-coder/sessions/${sessionId}/messages`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+            });
+
+            if (response.status === 401) {
+                return { success: false, error: 'Authentication required' };
+            }
+
+            if (response.status === 404) {
+                return { success: false, error: 'Session not found' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Send chat message to remote-coder
+    sendRemoteCCChat: async (data: { session_id?: string; message: string; context?: Record<string, any> }): Promise<any> => {
+        try {
+            const token = await getRemoteCCAuthToken();
+            const baseUrl = api.getRemoteCCBaseUrl();
+            const response = await fetch(`${baseUrl}/remote-coder/chat`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+                body: JSON.stringify(data),
+            });
+
+            if (response.status === 401) {
+                // Remote-coder auth failures should not force UI logout.
+                return { success: false, error: 'Authentication required' };
+            }
+
+            if (response.status === 404) {
+                return { success: false, error: 'Session not found' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Clear all remote-coder sessions
+    clearRemoteCCSessions: async (): Promise<any> => {
+        try {
+            const token = await getRemoteCCAuthToken();
+            const baseUrl = api.getRemoteCCBaseUrl();
+            const response = await fetch(`${baseUrl}/remote-coder/sessions/clear`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+            });
+
+            if (response.status === 401) {
                 return { success: false, error: 'Authentication required' };
             }
 
