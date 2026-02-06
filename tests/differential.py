@@ -14,7 +14,7 @@ from pathlib import Path
 from difflib import SequenceMatcher
 import statistics
 
-from .config import TestConfig
+from .config import TestConfig, Provider, APIStyle
 from .client import ProxyClient
 
 
@@ -38,6 +38,8 @@ class DifferentialResult:
     comparison_tokens: int = 0
     token_difference: int = 0
 
+    detail: str = ""
+    paths: list = field(default_factory=list)
     error: Optional[str] = None
 
 
@@ -81,6 +83,45 @@ class DifferentialTestSuite:
         if rule:
             return rule
         return self.config.get_any_rule()
+
+    def _get_rule_by_request_model(self, request_model: str):
+        for rule in self.config.rules:
+            if rule.active and rule.request_model == request_model:
+                return rule
+        return None
+
+    def _run_path(self, name: str, style: str, scenario: str, request_model: str, roundtrip: Optional[str] = None) -> dict:
+        endpoint = "/tingly/{}/{}".format(
+            scenario,
+            "chat/completions" if style == "openai" else "messages",
+        )
+        headers = {"X-Tingly-Response-Roundtrip": roundtrip} if roundtrip else None
+        if style == "openai":
+            result = self.proxy_client.chat_completions_openai(
+                model=request_model,
+                prompt=self.config.test_prompt,
+                scenario=scenario,
+                extra_headers=headers,
+                temperature=0.7,
+                max_tokens=100,
+            )
+        else:
+            result = self.proxy_client.messages_anthropic(
+                model=request_model,
+                prompt=self.config.test_prompt,
+                scenario=scenario,
+                extra_headers=headers,
+                temperature=0.7,
+                max_tokens=100,
+            )
+        return {
+            "name": name,
+            "style": style,
+            "scenario": scenario,
+            "request_model": request_model,
+            "endpoint": endpoint,
+            "result": result,
+        }
 
     def _hash_response(self, response: dict) -> str:
         """Create a hash of the response content for comparison."""
@@ -147,6 +188,135 @@ class DifferentialTestSuite:
         """Estimate token count."""
         return max(1, len(text) // 4)
 
+    def test_three_path_for_provider(self, provider: Provider, base_model: str) -> DifferentialResult:
+        """Test three-path differential flow for a provider."""
+        start_time = time.time()
+        direct_rule = self._get_rule_by_request_model(base_model)
+        xform_rule = self._get_rule_by_request_model(f"{base_model}-xform")
+        roundtrip_rule = self._get_rule_by_request_model(f"{base_model}-rt")
+
+        if not direct_rule or not xform_rule or not roundtrip_rule:
+            return DifferentialResult(
+                test_name=f"{base_model}_three_path",
+                comparison_type="three_path",
+                passed=False,
+                verdict="inconclusive",
+                message="Missing differential rules for provider",
+                duration_ms=(time.time() - start_time) * 1000,
+                error="Missing one or more differential rules (direct/xform/roundtrip)",
+            )
+
+        if provider.api_style == APIStyle.ANTHROPIC:
+            direct_style = "anthropic"
+            xform_style = "openai"
+            roundtrip_style = "anthropic"
+            roundtrip_header = "openai"
+        else:
+            direct_style = "openai"
+            xform_style = "anthropic"
+            roundtrip_style = "openai"
+            roundtrip_header = "anthropic"
+
+        direct_path = self._run_path("direct", direct_style, direct_rule.scenario, direct_rule.request_model)
+        xform_path = self._run_path("xform", xform_style, xform_rule.scenario, xform_rule.request_model)
+        roundtrip_path = self._run_path("roundtrip", roundtrip_style, roundtrip_rule.scenario, roundtrip_rule.request_model, roundtrip=roundtrip_header)
+
+        duration_ms = (time.time() - start_time) * 1000
+
+        paths = [direct_path, xform_path, roundtrip_path]
+        failures = [p for p in paths if not p["result"].success]
+        if failures:
+            return DifferentialResult(
+                test_name=f"{base_model}_three_path",
+                comparison_type="three_path",
+                passed=False,
+                verdict="fail",
+                message="One or more paths failed",
+                duration_ms=duration_ms,
+                detail=" | ".join([f"{p['name']}={p['endpoint']}" for p in paths]),
+                paths=[
+                    {
+                        "name": p["name"],
+                        "style": p["style"],
+                        "scenario": p["scenario"],
+                        "request_model": p["request_model"],
+                        "endpoint": p["endpoint"],
+                        "success": p["result"].success,
+                        "error": p["result"].error,
+                    }
+                    for p in paths
+                ],
+                error="; ".join([p["result"].error or "request failed" for p in failures]),
+            )
+
+        normalized = {
+            p["name"]: self._normalize_response_style(p["style"], p["result"].raw_response or {})
+            for p in paths
+        }
+
+        differences = []
+        missing_fields = {}
+        for name, data in normalized.items():
+            missing = [k for k, v in data.items() if v is None]
+            if missing:
+                missing_fields[name] = missing
+        if missing_fields:
+            differences.append({
+                "type": "missing_fields",
+                "details": missing_fields,
+            })
+
+        direct_content = normalized["direct"]["content"]
+        similarity_scores = {
+            "xform": self._calculate_similarity(direct_content, normalized["xform"]["content"]),
+            "roundtrip": self._calculate_similarity(direct_content, normalized["roundtrip"]["content"]),
+        }
+        avg_similarity = statistics.mean(similarity_scores.values())
+
+        passed = len(differences) == 0
+        verdict = "pass" if passed else "fail"
+        if passed and avg_similarity < 0.7:
+            verdict = "inconclusive"
+
+        detail = " | ".join([
+            f"direct={direct_path['endpoint']} model={direct_path['request_model']}",
+            f"xform={xform_path['endpoint']} model={xform_path['request_model']}",
+            f"roundtrip={roundtrip_path['endpoint']} model={roundtrip_path['request_model']}",
+        ])
+
+        return DifferentialResult(
+            test_name=f"{base_model}_three_path",
+            comparison_type="three_path",
+            passed=passed and verdict == "pass",
+            verdict=verdict,
+            message=f"Three-path: avg similarity {avg_similarity:.2%}",
+            duration_ms=duration_ms,
+            baseline_response=normalized["direct"],
+            comparison_response={
+                "xform": normalized["xform"],
+                "roundtrip": normalized["roundtrip"],
+            },
+            differences=differences,
+            similarity_score=avg_similarity,
+            baseline_tokens=self._count_tokens_estimate(normalized["direct"]["content"]),
+            comparison_tokens=self._count_tokens_estimate(normalized["xform"]["content"]),
+            token_difference=abs(
+                self._count_tokens_estimate(normalized["direct"]["content"]) -
+                self._count_tokens_estimate(normalized["roundtrip"]["content"])
+            ),
+            detail=detail,
+            paths=[
+                {
+                    "name": p["name"],
+                    "style": p["style"],
+                    "scenario": p["scenario"],
+                    "request_model": p["request_model"],
+                    "endpoint": p["endpoint"],
+                }
+                for p in paths
+            ],
+        )
+
     def _normalize_response(self, response: dict) -> dict:
         """Normalize response for comparison."""
         normalized = {}
@@ -162,6 +332,44 @@ class DifferentialTestSuite:
             normalized["usage"] = response["message"].get("usage", {})
 
         return normalized
+
+    def _normalize_response_style(self, style: str, response: dict) -> dict:
+        """Normalize response to a common schema based on response style."""
+        content = ""
+        finish_reason = ""
+        role = ""
+        model = response.get("model", "")
+        input_tokens = None
+        output_tokens = None
+
+        if style == "openai":
+            choices = response.get("choices", []) or []
+            if choices:
+                choice = choices[0]
+                message = choice.get("message") or {}
+                content = message.get("content", "") or ""
+                role = message.get("role", "") or ""
+                finish_reason = choice.get("finish_reason", "") or ""
+            usage = response.get("usage") or {}
+            input_tokens = usage.get("prompt_tokens")
+            output_tokens = usage.get("completion_tokens")
+        else:
+            blocks = response.get("content", []) or []
+            content = "".join([b.get("text", "") for b in blocks if b.get("type") == "text"])
+            role = response.get("role", "") or ""
+            finish_reason = response.get("stop_reason", "") or ""
+            usage = response.get("usage") or {}
+            input_tokens = usage.get("input_tokens")
+            output_tokens = usage.get("output_tokens")
+
+        return {
+            "model": model,
+            "role": role,
+            "finish_reason": finish_reason,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "content": content,
+        }
 
     def test_roundtrip_openai_anthropic_openai(
         self,
@@ -624,16 +832,24 @@ class DifferentialTestSuite:
 
         self._print("=== Running Differential Tests ===\n")
 
-        tests = [
-            ("Roundtrip O->A->O", self.test_roundtrip_openai_anthropic_openai),
-            ("Anthropic roundtrip", self.test_anthropic_roundtrip),
-            ("Multi-provider consistency", self.test_multi_provider_consistency),
-            ("Response structure equivalence", self.test_response_structure_equivalence),
+        target_models = {"qwen-test", "glm-test", "minimax-test"}
+        base_rules = [
+            r for r in self.config.rules
+            if r.active and r.request_model in target_models and r.services
         ]
 
-        for name, test_func in tests:
-            self._print(f"Testing {name}...")
-            result = test_func()
+        if not base_rules:
+            suite_result.duration_ms = (time.time() - start_time) * 1000
+            return suite_result
+
+        for rule in base_rules:
+            provider = None
+            if rule.services:
+                provider = self.config.get_provider_by_uuid(rule.services[0].get("provider", ""))
+            if not provider:
+                continue
+            self._print(f"Testing three-path flow for {rule.request_model}...")
+            result = self.test_three_path_for_provider(provider, rule.request_model)
             suite_result.results.append(result)
             suite_result.total_tests += 1
             if result.passed:

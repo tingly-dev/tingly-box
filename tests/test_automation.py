@@ -244,6 +244,32 @@ class TestAutomation:
                 return api_style
             return "openai"
 
+        def add_rule(request_model: str, scenario: str, description: str, provider_uuid: str, model: str) -> None:
+            rules.append({
+                "uuid": f"test-{request_model}-rule",
+                "scenario": scenario,
+                "request_model": request_model,
+                "response_model": "",
+                "description": description,
+                "services": [
+                    {
+                        "provider": provider_uuid,
+                        "model": model,
+                        "weight": 1,
+                        "active": True,
+                        "time_window": 300,
+                    }
+                ],
+                "lb_tactic": {
+                    "type": "round_robin",
+                    "params": {
+                        "request_threshold": 10,
+                    },
+                },
+                "active": True,
+                "smart_enabled": False,
+            })
+
         def find_service_for_provider(provider_uuid: str) -> Optional[Dict]:
             for rule in config_rules:
                 for service in rule.get("services", []) or []:
@@ -292,30 +318,30 @@ class TestAutomation:
             scenario = scenario_for_provider(provider)
 
             provider_uuids.add(provider_uuid)
-            rules.append({
-                "uuid": f"test-{target_name}-rule",
-                "scenario": scenario,
-                "request_model": target_name,
-                "response_model": "",
-                "description": f"Test rule for {provider_name} using {scenario} scenario",
-                "services": [
-                    {
-                        "provider": provider_uuid,
-                        "model": model,
-                        "weight": 1,
-                        "active": True,
-                        "time_window": 300,
-                    }
-                ],
-                "lb_tactic": {
-                    "type": "round_robin",
-                    "params": {
-                        "request_threshold": 10,
-                    },
-                },
-                "active": True,
-                "smart_enabled": False,
-            })
+            add_rule(
+                request_model=target_name,
+                scenario=scenario,
+                description=f"Test rule for {provider_name} using {scenario} scenario",
+                provider_uuid=provider_uuid,
+                model=model,
+            )
+
+            # Differential test variants: request transform and response roundtrip
+            alt_scenario = "openai" if scenario != "openai" else "anthropic"
+            add_rule(
+                request_model=f"{target_name}-xform",
+                scenario=alt_scenario,
+                description=f"Differential request-transform rule for {provider_name} via {alt_scenario}",
+                provider_uuid=provider_uuid,
+                model=model,
+            )
+            add_rule(
+                request_model=f"{target_name}-rt",
+                scenario=scenario,
+                description=f"Differential response-roundtrip rule for {provider_name} via {scenario}",
+                provider_uuid=provider_uuid,
+                model=model,
+            )
 
         return rules, provider_uuids
 

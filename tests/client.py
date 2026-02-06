@@ -562,7 +562,7 @@ class ProxyClient:
             return self._create_client()
         return self._client
 
-    def _create_headers(self) -> dict:
+    def _create_headers(self, extra_headers: Optional[dict] = None) -> dict:
         headers = {
             "Content-Type": "application/json",
             "User-Agent": "Tingly-Box-Test/1.0",
@@ -575,6 +575,8 @@ class ProxyClient:
             # Send both forms to maximize compatibility with server config.
             headers["Authorization"] = f"Bearer {bearer_token}"
             headers["X-Api-Key"] = raw_token
+        if extra_headers:
+            headers.update(extra_headers)
         return headers
 
     def list_models_openai(self, scenario: Optional[str] = None) -> TestResult:
@@ -687,7 +689,7 @@ class ProxyClient:
                 error=str(e),
             )
 
-    def chat_completions_openai(self, model: str, prompt: str, scenario: Optional[str] = None, **kwargs) -> TestResult:
+    def chat_completions_openai(self, model: str, prompt: str, scenario: Optional[str] = None, extra_headers: Optional[dict] = None, **kwargs) -> TestResult:
         """Send chat completion via OpenAI endpoint."""
         start_time = time.time()
 
@@ -707,7 +709,7 @@ class ProxyClient:
             with self._create_client() as client:
                 response = client.post(
                     url,
-                    headers=self._create_headers(),
+                    headers=self._create_headers(extra_headers),
                     json=payload,
                 )
 
@@ -756,7 +758,7 @@ class ProxyClient:
                 error=str(e),
             )
 
-    def messages_anthropic(self, model: str, prompt: str, scenario: Optional[str] = None, **kwargs) -> TestResult:
+    def messages_anthropic(self, model: str, prompt: str, scenario: Optional[str] = None, extra_headers: Optional[dict] = None, **kwargs) -> TestResult:
         """Send messages request via Anthropic endpoint."""
         start_time = time.time()
 
@@ -776,7 +778,7 @@ class ProxyClient:
             with self._create_client() as client:
                 response = client.post(
                     url,
-                    headers=self._create_headers(),
+                    headers=self._create_headers(extra_headers),
                     json=payload,
                 )
 

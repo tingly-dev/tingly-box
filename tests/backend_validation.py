@@ -90,6 +90,7 @@ class BackendValidationResult:
     field_issues: list[FieldValidationIssue] = field(default_factory=list)
     raw_response: dict = field(default_factory=dict)
 
+    detail: str = ""
     error: Optional[str] = None
 
 
@@ -368,6 +369,7 @@ class BackendValidationTestSuite:
         self._print(f"Testing {backend} backend via OpenAI format with scenario {scenario}, request_model {request_model}")
 
         try:
+            endpoint = f"/tingly/{scenario}/chat/completions"
             result = self.proxy_client.chat_completions_openai(
                 model=request_model,
                 prompt=test_prompt,
@@ -387,6 +389,7 @@ class BackendValidationTestSuite:
                     passed=False,
                     message="Request failed",
                     duration_ms=duration_ms,
+                    detail=f"scenario={scenario} endpoint={endpoint} model={request_model}",
                     error=result.error,
                 )
 
@@ -411,6 +414,7 @@ class BackendValidationTestSuite:
                 invalid_fields=invalid_fields,
                 field_issues=issues,
                 raw_response=response,
+                detail=f"scenario={scenario} endpoint={endpoint} model={request_model}",
             )
 
         except Exception as e:
@@ -423,6 +427,7 @@ class BackendValidationTestSuite:
                 passed=False,
                 message="Exception during validation",
                 duration_ms=duration_ms,
+                detail=f"scenario={scenario} endpoint={endpoint} model={request_model}",
                 error=str(e),
             )
 
@@ -440,6 +445,7 @@ class BackendValidationTestSuite:
         self._print(f"Testing {backend} backend via Anthropic format with scenario {scenario}, request_model {request_model}")
 
         try:
+            endpoint = f"/tingly/{scenario}/messages"
             result = self.proxy_client.messages_anthropic(
                 model=request_model,
                 prompt=test_prompt,
@@ -459,6 +465,7 @@ class BackendValidationTestSuite:
                     passed=False,
                     message="Request failed",
                     duration_ms=duration_ms,
+                    detail=f"scenario={scenario} endpoint={endpoint} model={request_model}",
                     error=result.error,
                 )
 
@@ -483,6 +490,7 @@ class BackendValidationTestSuite:
                 invalid_fields=invalid_fields,
                 field_issues=issues,
                 raw_response=response,
+                detail=f"scenario={scenario} endpoint={endpoint} model={request_model}",
             )
 
         except Exception as e:
@@ -495,6 +503,7 @@ class BackendValidationTestSuite:
                 passed=False,
                 message="Exception during validation",
                 duration_ms=duration_ms,
+                detail=f"scenario={scenario} endpoint={endpoint} model={request_model}",
                 error=str(e),
             )
 

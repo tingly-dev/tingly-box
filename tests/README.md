@@ -63,7 +63,10 @@ python3 -m tests.runner --verbose
    python3 -m tests.runner --adaptor --verbose
    ```
 
-5. **Differential Tests** - Cross-provider consistency
+5. **Differential Tests** - Three-path differential via tingly-box
+   - **Direct**: sends the request through the provider’s rule and scenario without extra transforms.
+   - **Request-transform**: sends through the opposite scenario (OpenAI↔Anthropic) to exercise request conversion.
+   - **Response-roundtrip**: sends through the provider’s scenario but roundtrips the response through the opposite format and back.
    ```bash
    python3 -m tests.runner --differential --verbose
    ```

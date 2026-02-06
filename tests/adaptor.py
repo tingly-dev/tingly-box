@@ -26,6 +26,7 @@ class AdaptorTestResult:
     response_transform: dict = field(default_factory=dict)
     original_request: dict = field(default_factory=dict)
     transformed_response: dict = field(default_factory=dict)
+    detail: str = ""
     error: Optional[str] = None
 
 
@@ -129,6 +130,7 @@ class AdaptorTestSuite:
 
             duration_ms = (time.time() - start_time) * 1000
 
+            endpoint = f"/tingly/{scenario}/chat/completions"
             if result.success:
                 return AdaptorTestResult(
                     source_style="openai",
@@ -139,6 +141,7 @@ class AdaptorTestSuite:
                     duration_ms=duration_ms,
                     original_request=request_body,
                     transformed_response=result.raw_response or {},
+                    detail=f"scenario={scenario} endpoint={endpoint} model={request_model}",
                     error=None,
                 )
             else:
@@ -150,6 +153,7 @@ class AdaptorTestSuite:
                     message="Adaptation failed",
                     duration_ms=duration_ms,
                     original_request=request_body,
+                    detail=f"scenario={scenario} endpoint={endpoint} model={request_model}",
                     error=result.error,
                 )
 
@@ -190,6 +194,7 @@ class AdaptorTestSuite:
 
             duration_ms = (time.time() - start_time) * 1000
 
+            endpoint = f"/tingly/{scenario}/messages"
             if result.success:
                 return AdaptorTestResult(
                     source_style="anthropic",
@@ -200,6 +205,7 @@ class AdaptorTestSuite:
                     duration_ms=duration_ms,
                     original_request=request_body,
                     transformed_response=result.raw_response or {},
+                    detail=f"scenario={scenario} endpoint={endpoint} model={request_model}",
                     error=None,
                 )
             else:
@@ -211,6 +217,7 @@ class AdaptorTestSuite:
                     message="Adaptation failed",
                     duration_ms=duration_ms,
                     original_request=request_body,
+                    detail=f"scenario={scenario} endpoint={endpoint} model={request_model}",
                     error=result.error,
                 )
 
@@ -251,6 +258,7 @@ class AdaptorTestSuite:
 
             duration_ms = (time.time() - start_time) * 1000
 
+            endpoint = f"/tingly/{scenario}/chat/completions"
             if result.success:
                 return AdaptorTestResult(
                     source_style="openai",
@@ -261,6 +269,7 @@ class AdaptorTestSuite:
                     duration_ms=duration_ms,
                     original_request=request_body,
                     transformed_response=result.raw_response or {},
+                    detail=f"scenario={scenario} endpoint={endpoint} model={request_model}",
                     error=None,
                 )
             else:
@@ -272,6 +281,7 @@ class AdaptorTestSuite:
                     message="Adaptation failed",
                     duration_ms=duration_ms,
                     original_request=request_body,
+                    detail=f"scenario={scenario} endpoint={endpoint} model={request_model}",
                     error=result.error,
                 )
 
@@ -312,6 +322,7 @@ class AdaptorTestSuite:
 
             duration_ms = (time.time() - start_time) * 1000
 
+            endpoint = f"/tingly/{scenario}/messages"
             if result.success:
                 return AdaptorTestResult(
                     source_style="anthropic",
@@ -322,6 +333,7 @@ class AdaptorTestSuite:
                     duration_ms=duration_ms,
                     original_request=request_body,
                     transformed_response=result.raw_response or {},
+                    detail=f"scenario={scenario} endpoint={endpoint} model={request_model}",
                     error=None,
                 )
             else:
@@ -333,6 +345,7 @@ class AdaptorTestSuite:
                     message="Adaptation failed",
                     duration_ms=duration_ms,
                     original_request=request_body,
+                    detail=f"scenario={scenario} endpoint={endpoint} model={request_model}",
                     error=result.error,
                 )
 
@@ -382,6 +395,7 @@ class AdaptorTestSuite:
 
             duration_ms = (time.time() - start_time) * 1000
 
+            endpoint = f"/tingly/{scenario}/chat/completions"
             if result.success:
                 return AdaptorTestResult(
                     source_style="openai",
@@ -392,6 +406,7 @@ class AdaptorTestSuite:
                     duration_ms=duration_ms,
                     original_request={"messages": messages},
                     transformed_response=result.raw_response or {},
+                    detail=f"scenario={scenario} endpoint={endpoint} model={request_model}",
                     error=None,
                 )
             else:
@@ -402,6 +417,7 @@ class AdaptorTestSuite:
                     passed=False,
                     message="Multi-turn conversation failed",
                     duration_ms=duration_ms,
+                    detail=f"scenario={scenario} endpoint={endpoint} model={request_model}",
                     error=result.error,
                 )
 
@@ -446,6 +462,7 @@ class AdaptorTestSuite:
 
             duration_ms = (time.time() - start_time) * 1000
 
+            endpoint = f"/tingly/{scenario}/messages"
             if result.success:
                 return AdaptorTestResult(
                     source_style="anthropic",
@@ -456,6 +473,7 @@ class AdaptorTestSuite:
                     duration_ms=duration_ms,
                     original_request={"system": system_prompt, "messages": messages},
                     transformed_response=result.raw_response or {},
+                    detail=f"scenario={scenario} endpoint={endpoint} model={request_model}",
                     error=None,
                 )
             else:
@@ -466,6 +484,7 @@ class AdaptorTestSuite:
                     passed=False,
                     message="System message handling failed",
                     duration_ms=duration_ms,
+                    detail=f"scenario={scenario} endpoint={endpoint} model={request_model}",
                     error=result.error,
                 )
 

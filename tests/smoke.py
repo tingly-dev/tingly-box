@@ -518,6 +518,9 @@ class ProxySmokeTestSuite:
             message=result.message,
             duration_ms=result.duration_ms,
             details=result.data or {},
+            http_method=(result.data or {}).get("http_method"),
+            http_url=(result.data or {}).get("http_url"),
+            http_status=(result.data or {}).get("http_status"),
             error=result.error,
         )
 
@@ -535,6 +538,9 @@ class ProxySmokeTestSuite:
             message=result.message,
             duration_ms=result.duration_ms,
             details=result.data or {},
+            http_method=(result.data or {}).get("http_method"),
+            http_url=(result.data or {}).get("http_url"),
+            http_status=(result.data or {}).get("http_status"),
             error=result.error,
         )
 
@@ -552,6 +558,9 @@ class ProxySmokeTestSuite:
             message=result.message,
             duration_ms=result.duration_ms,
             details=result.data or {},
+            http_method=(result.data or {}).get("http_method"),
+            http_url=(result.data or {}).get("http_url"),
+            http_status=(result.data or {}).get("http_status"),
             error=result.error,
         )
 

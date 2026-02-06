@@ -84,6 +84,21 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 	// Update response model if configured
 	responseMap["model"] = responseModel
 
+	if shouldRoundtripResponse(c, "anthropic") {
+		roundtripped, err := roundtripOpenAIResponseViaAnthropic(response, responseModel, provider, actualModel)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Error: ErrorDetail{
+					Message: "Failed to roundtrip response: " + err.Error(),
+					Type:    "api_error",
+				},
+			})
+			return
+		}
+		responseMap = roundtripped
+		responseMap["model"] = responseModel
+	}
+
 	// Return modified response
 	c.JSON(http.StatusOK, responseMap)
 }
