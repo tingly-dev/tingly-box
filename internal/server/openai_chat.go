@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,8 +25,18 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// generateObfuscationString generates a random string similar to "KOJz1A"
+func generateObfuscationString() string {
+	b := make([]byte, 4)
+	if _, err := rand.Read(b); err != nil {
+		// Fallback to timestamp-based if crypto rand fails
+		return base64.URLEncoding.EncodeToString([]byte(fmt.Sprintf("%d", time.Now().UnixNano())))[:6]
+	}
+	return base64.URLEncoding.EncodeToString(b)[:6]
+}
+
 // handleNonStreamingRequest handles non-streaming chat completion requests
-func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, req *openai.ChatCompletionNewParams, responseModel, actualModel string, rule *typ.Rule) {
+func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, req *openai.ChatCompletionNewParams, responseModel string, rule *typ.Rule) {
 	// Forward request to provider
 	response, err := s.forwardOpenAIRequest(provider, req)
 	if err != nil {
@@ -109,6 +121,10 @@ func (s *Server) forwardOpenAIStreamRequest(ctx context.Context, provider *typ.P
 	config := s.buildOpenAIConfig(req)
 	req = transformer.ApplyProviderTransforms(req, provider, req.Model, config)
 
+	if len(req.Tools) == 0 {
+		req.Tools = nil
+	}
+
 	// Get or create OpenAI client wrapper from pool
 	wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
 
@@ -143,7 +159,7 @@ func (s *Server) buildOpenAIConfig(req *openai.ChatCompletionNewParams) *transfo
 }
 
 // handleStreamingRequest handles streaming chat completion requests
-func (s *Server) handleStreamingRequest(c *gin.Context, provider *typ.Provider, req *openai.ChatCompletionNewParams, responseModel, actualModel string, rule *typ.Rule) {
+func (s *Server) handleStreamingRequest(c *gin.Context, provider *typ.Provider, req *openai.ChatCompletionNewParams, responseModel string, rule *typ.Rule) {
 	// Create streaming request with request context for proper cancellation
 	stream, _, err := s.forwardOpenAIStreamRequest(c.Request.Context(), provider, req)
 	if err != nil {
@@ -159,11 +175,11 @@ func (s *Server) handleStreamingRequest(c *gin.Context, provider *typ.Provider, 
 	}
 
 	// Handle the streaming response
-	s.handleOpenAIStreamResponse(c, stream, req, responseModel, actualModel, rule, provider)
+	s.handleOpenAIStreamResponse(c, stream, req, responseModel, rule, provider)
 }
 
 // handleOpenAIStreamResponse processes the streaming response and sends it to the client
-func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.Stream[openai.ChatCompletionChunk], req *openai.ChatCompletionNewParams, responseModel, actualModel string, rule *typ.Rule, provider *typ.Provider) {
+func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.Stream[openai.ChatCompletionChunk], req *openai.ChatCompletionNewParams, responseModel string, rule *typ.Rule, provider *typ.Provider) {
 	// Accumulate usage from stream chunks
 	var inputTokens, outputTokens int
 	var hasUsage bool
@@ -199,12 +215,13 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 		}
 	}()
 
-	// Set SSE headers
-	c.Header("Content-Type", "text/event-stream")
+	// Set SSE headers (mimicking OpenAI response headers)
+	c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization, Cache-Control")
+	c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+	c.Header("Access-Control-Allow-Origin", "*")
+	c.Header("Content-Type", "text/event-stream; charset=utf-8")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
-	c.Header("Access-Control-Allow-Origin", "*")
-	c.Header("Access-Control-Allow-Headers", "Cache-Control")
 
 	// Create a flusher to ensure immediate sending of data
 	flusher, ok := c.Writer.(http.Flusher)
@@ -236,6 +253,7 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 		}
 
 		chatChunk := stream.Current()
+		obfuscationValue := generateObfuscationString() // Generate obfuscation value once per stream
 
 		// Store the first chunk ID for usage estimation
 		if firstChunkID == "" && chatChunk.ID != "" {
@@ -272,15 +290,24 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 		}
 		if choice.Delta.Content != "" {
 			delta["content"] = choice.Delta.Content
+		} else {
+			delta["content"] = ""
 		}
 		if choice.Delta.Refusal != "" {
 			delta["refusal"] = choice.Delta.Refusal
+		} else {
+			delta["refusal"] = nil
 		}
 		if choice.Delta.JSON.FunctionCall.Valid() {
 			delta["function_call"] = choice.Delta.FunctionCall
 		}
 		if len(choice.Delta.ToolCalls) > 0 {
 			delta["tool_calls"] = choice.Delta.ToolCalls
+		}
+
+		finishReason := &choice.FinishReason
+		if finishReason != nil && *finishReason == "" {
+			finishReason = nil
 		}
 
 		// Prepare the chunk in OpenAI format
@@ -293,7 +320,7 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 				{
 					"index":         choice.Index,
 					"delta":         delta,
-					"finish_reason": choice.FinishReason,
+					"finish_reason": finishReason,
 					"logprobs":      choice.Logprobs,
 				},
 			},
@@ -309,6 +336,25 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 			chunk["system_fingerprint"] = chatChunk.SystemFingerprint
 		}
 
+		// Add service_tier if present
+		if chatChunk.ServiceTier != "" {
+			chunk["service_tier"] = chatChunk.ServiceTier
+		} else {
+			chunk["service_tier"] = "default"
+		}
+
+		// Add obfuscation if present in extra fields, otherwise use generated value
+		if obfuscationField, ok := chatChunk.JSON.ExtraFields["obfuscation"]; ok && obfuscationField.Valid() {
+			var upstreamObfuscation string
+			if err := json.Unmarshal([]byte(obfuscationField.Raw()), &upstreamObfuscation); err == nil {
+				chunk["obfuscation"] = upstreamObfuscation
+			} else {
+				chunk["obfuscation"] = obfuscationValue
+			}
+		} else {
+			chunk["obfuscation"] = obfuscationValue
+		}
+
 		// Convert to JSON and send as SSE
 		chunkJSON, err := json.Marshal(chunk)
 		if err != nil {
@@ -317,7 +363,8 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 		}
 
 		// Send the chunk
-		c.SSEvent("", string(chunkJSON))
+		// MENTION: Must keep extra space
+		c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", chunkJSON))
 		flusher.Flush()
 		return true
 	})
@@ -413,7 +460,8 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 	s.trackUsageFromContext(c, inputTokens, outputTokens, nil)
 
 	// Send the final [DONE] message
-	c.SSEvent("", "[DONE]")
+	// MENTION: must keep extra space
+	c.SSEvent("", " [DONE]")
 	flusher.Flush()
 }
 
