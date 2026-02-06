@@ -207,7 +207,7 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 	c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization")
 	c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 	c.Header("Access-Control-Allow-Origin", "*")
-	c.Header("Access-Control-Allow-Headers", "Cache-Control")
+	c.Header("Content-Type", "text/event-stream; charset=utf-8")
 
 	// Create a flusher to ensure immediate sending of data
 	flusher, ok := c.Writer.(http.Flusher)
@@ -239,6 +239,7 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 		}
 
 		chatChunk := stream.Current()
+		obfuscationValue := generateObfuscationString() // Generate obfuscation value once per stream
 
 		// Store the first chunk ID for usage estimation
 		if firstChunkID == "" && chatChunk.ID != "" {
@@ -275,9 +276,13 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 		}
 		if choice.Delta.Content != "" {
 			delta["content"] = choice.Delta.Content
+		} else {
+			delta["content"] = ""
 		}
 		if choice.Delta.Refusal != "" {
 			delta["refusal"] = choice.Delta.Refusal
+		} else {
+			delta["refusal"] = nil
 		}
 		if choice.Delta.JSON.FunctionCall.Valid() {
 			delta["function_call"] = choice.Delta.FunctionCall
@@ -317,6 +322,25 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 			chunk["system_fingerprint"] = chatChunk.SystemFingerprint
 		}
 
+		// Add service_tier if present
+		if chatChunk.ServiceTier != "" {
+			chunk["service_tier"] = chatChunk.ServiceTier
+		} else {
+			chunk["service_tier"] = "default"
+		}
+
+		// Add obfuscation if present in extra fields, otherwise use generated value
+		if obfuscationField, ok := chatChunk.JSON.ExtraFields["obfuscation"]; ok && obfuscationField.Valid() {
+			var upstreamObfuscation string
+			if err := json.Unmarshal([]byte(obfuscationField.Raw()), &upstreamObfuscation); err == nil {
+				chunk["obfuscation"] = upstreamObfuscation
+			} else {
+				chunk["obfuscation"] = obfuscationValue
+			}
+		} else {
+			chunk["obfuscation"] = obfuscationValue
+		}
+
 		// Convert to JSON and send as SSE
 		chunkJSON, err := json.Marshal(chunk)
 		if err != nil {
@@ -325,7 +349,8 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 		}
 
 		// Send the chunk
-		c.SSEvent("", string(chunkJSON))
+		// MENTION: Must keep extra space
+		c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", chunkJSON))
 		flusher.Flush()
 		return true
 	})
@@ -421,7 +446,8 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 	s.trackUsageFromContext(c, inputTokens, outputTokens, nil)
 
 	// Send the final [DONE] message
-	c.SSEvent("", "[DONE]")
+	// MENTION: must keep extra space
+	c.SSEvent("", " [DONE]")
 	flusher.Flush()
 }
 
