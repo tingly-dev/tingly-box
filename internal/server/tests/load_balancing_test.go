@@ -18,7 +18,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/server"
-	"github.com/tingly-dev/tingly-box/internal/server/middleware"
 	typ "github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -31,12 +30,8 @@ func TestLoadBalancer_RoundRobin(t *testing.T) {
 	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
-	// Create stats middleware
-	statsMW := middleware.NewStatsMiddleware(appConfig.GetGlobalConfig())
-	defer statsMW.Stop()
-
-	// Create load balancer - pass the config from appConfig
-	lb := server.NewLoadBalancer(statsMW, appConfig.GetGlobalConfig())
+	// Create load balancer
+	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig())
 	defer lb.Stop()
 
 	// Create test rule with multiple services using new LBTactic format
@@ -129,12 +124,8 @@ func TestLoadBalancer_EnabledFilter(t *testing.T) {
 	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
-	// Create stats middleware
-	statsMW := middleware.NewStatsMiddleware(appConfig.GetGlobalConfig())
-	defer statsMW.Stop()
-
 	// Create load balancer
-	lb := server.NewLoadBalancer(statsMW, appConfig.GetGlobalConfig())
+	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig())
 	defer lb.Stop()
 
 	// Create test rule with mixed enabled/disabled services
@@ -199,44 +190,24 @@ func TestLoadBalancer_RecordUsage(t *testing.T) {
 	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
-	// Create stats middleware
-	statsMW := middleware.NewStatsMiddleware(appConfig.GetGlobalConfig())
-	defer statsMW.Stop()
-
 	// Create load balancer
-	lb := server.NewLoadBalancer(statsMW, appConfig.GetGlobalConfig())
+	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig())
 	defer lb.Stop()
 
-	// Create a rule with the test service so RecordUsage can find it
-	testRule := typ.Rule{
-		Scenario:     typ.ScenarioOpenAI,
-		RequestModel: "test-model",
-		UUID:         uuid.New().String(),
-		Services: []*loadbalance.Service{
-			{
-				Provider:   "test-provider",
-				Model:      "test-model",
-				Weight:     1,
-				Active:     true,
-				TimeWindow: 300,
-			},
-		},
-		Active: true,
+	// Create a test service
+	testService := &loadbalance.Service{
+		Provider:   "test-provider",
+		Model:      "test-model",
+		Weight:     1,
+		Active:     true,
+		TimeWindow: 300,
 	}
 
-	// Add the rule to the config
-	err = appConfig.GetGlobalConfig().AddOrUpdateRequestConfigByRequestModel(testRule)
-	require.NoError(t, err)
-
-	// Record usage for a service - now it should be recorded
-	lb.RecordUsage("test-provider", "test-model", 120, 30) // 120 input, 30 output tokens
+	// Record usage directly on the service
+	testService.RecordUsage(120, 30) // 120 input, 30 output tokens
 
 	// Check that statistics were recorded
-	stats := lb.GetServiceStats("test-provider", "test-model")
-	if stats == nil {
-		t.Fatal("Expected stats to be recorded")
-	}
-
+	stats := &testService.Stats
 	statsCopy := stats.GetStats()
 	if statsCopy.RequestCount != 1 {
 		t.Errorf("Expected RequestCount = 1, got %d", statsCopy.RequestCount)
@@ -257,12 +228,8 @@ func TestLoadBalancer_ValidateRule(t *testing.T) {
 	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
-	// Create stats middleware
-	statsMW := middleware.NewStatsMiddleware(appConfig.GetGlobalConfig())
-	defer statsMW.Stop()
-
 	// Create load balancer
-	lb := server.NewLoadBalancer(statsMW, appConfig.GetGlobalConfig())
+	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig())
 	defer lb.Stop()
 
 	// Test valid rule
@@ -324,12 +291,8 @@ func TestLoadBalancer_GetRuleSummary(t *testing.T) {
 	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
-	// Create stats middleware
-	statsMW := middleware.NewStatsMiddleware(appConfig.GetGlobalConfig())
-	defer statsMW.Stop()
-
 	// Create load balancer
-	lb := server.NewLoadBalancer(statsMW, appConfig.GetGlobalConfig())
+	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig())
 	defer lb.Stop()
 
 	// Create test rule
@@ -850,12 +813,8 @@ func TestLoadBalancer_WeightedRandom(t *testing.T) {
 	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
-	// Create stats middleware
-	statsMW := middleware.NewStatsMiddleware(appConfig.GetGlobalConfig())
-	defer statsMW.Stop()
-
 	// Create load balancer - it already has all default tactics
-	lb := server.NewLoadBalancer(statsMW, appConfig.GetGlobalConfig())
+	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig())
 	defer lb.Stop()
 
 	// Create test rule with weighted services using new LBTactic format
@@ -971,12 +930,8 @@ func TestLoadBalancer_WithMockProvider(t *testing.T) {
 		t.Fatalf("Failed to add rule: %v", err)
 	}
 
-	// Create stats middleware
-	statsMW := middleware.NewStatsMiddleware(ts.appConfig.GetGlobalConfig())
-	defer statsMW.Stop()
-
 	// Create load balancer
-	lb := server.NewLoadBalancer(statsMW, ts.appConfig.GetGlobalConfig())
+	lb := server.NewLoadBalancer(ts.appConfig.GetGlobalConfig())
 	defer lb.Stop()
 
 	// Test service selection
@@ -993,18 +948,16 @@ func TestLoadBalancer_WithMockProvider(t *testing.T) {
 		t.Errorf("Expected provider = mock-provider, got %s", service.Provider)
 	}
 
-	// Record usage
-	lb.RecordUsage(service.Provider, service.Model, 120, 30)
+	// Record usage directly on the service
+	service.RecordUsage(120, 30)
 
 	// Verify stats were recorded
-	stats := lb.GetServiceStats(service.Provider, service.Model)
-	if stats == nil {
-		t.Fatal("Expected stats to be recorded")
-	}
-
-	statsCopy := stats.GetStats()
+	statsCopy := service.Stats.GetStats()
 	if statsCopy.RequestCount != 1 {
 		t.Errorf("Expected RequestCount = 1, got %d", statsCopy.RequestCount)
+	}
+	if statsCopy.WindowTokensConsumed != 150 {
+		t.Errorf("Expected WindowTokensConsumed = 150, got %d", statsCopy.WindowTokensConsumed)
 	}
 }
 
@@ -1013,12 +966,8 @@ func TestLoadBalancer_RoundRobinThreshold2(t *testing.T) {
 	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
-	// Create stats middleware
-	statsMW := middleware.NewStatsMiddleware(appConfig.GetGlobalConfig())
-	defer statsMW.Stop()
-
 	// Create load balancer
-	lb := server.NewLoadBalancer(statsMW, appConfig.GetGlobalConfig())
+	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig())
 	defer lb.Stop()
 
 	// Create test rule with 3 services to make the rotation more interesting
