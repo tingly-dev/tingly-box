@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -236,7 +237,7 @@ type MemoryRoundItem struct {
 	Metadata     map[string]string `json:"metadata,omitempty"`
 	RoundIndex   int               `json:"round_index"`
 	UserInput    string            `json:"user_input"`
-	RoundResult  string            `json:"round_result,omitempty"`
+	RoundResult  string            `json:"round_result"`
 	InputTokens  int               `json:"input_tokens"`
 	OutputTokens int               `json:"output_tokens"`
 	TotalTokens  int               `json:"total_tokens"`
@@ -582,6 +583,12 @@ func (api *MemoryAPI) DeleteOldRecords(c *gin.Context) {
 
 // convertToMemoryRoundItem converts a db record to API response format
 func convertToMemoryRoundItem(r db.MemoryRoundRecord) MemoryRoundItem {
+	// Parse metadata JSON string to map
+	var metadata map[string]string
+	if r.Metadata != "" {
+		json.Unmarshal([]byte(r.Metadata), &metadata)
+	}
+
 	return MemoryRoundItem{
 		ID:           r.ID,
 		Scenario:     r.Scenario,
@@ -592,6 +599,7 @@ func convertToMemoryRoundItem(r db.MemoryRoundRecord) MemoryRoundItem {
 		RequestID:    r.RequestID,
 		ProjectID:    r.ProjectID,
 		SessionID:    r.SessionID,
+		Metadata:     metadata,
 		RoundIndex:   r.RoundIndex,
 		UserInput:    r.UserInput,
 		RoundResult:  r.RoundResult,
