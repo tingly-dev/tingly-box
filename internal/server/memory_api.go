@@ -276,7 +276,7 @@ func (api *MemoryAPI) GetRounds(c *gin.Context) {
 		offset = 0
 	}
 
-	var records []db.PromptRoundRecord
+	var records []db.MemoryRoundRecord
 	var total int64
 
 	// Query based on filters
@@ -285,7 +285,7 @@ func (api *MemoryAPI) GetRounds(c *gin.Context) {
 		records, total, err = api.memoryStore.GetRoundsByProtocol(db.ProtocolType(protocol), limit+100, 0) // Get more then filter
 		if err == nil {
 			// Filter by scenario
-			filtered := make([]db.PromptRoundRecord, 0)
+			filtered := make([]db.MemoryRoundRecord, 0)
 			for _, r := range records {
 				if r.Scenario == scenario {
 					filtered = append(filtered, r)
@@ -303,7 +303,7 @@ func (api *MemoryAPI) GetRounds(c *gin.Context) {
 				records = filtered[offset:end]
 				total = int64(len(filtered))
 			} else {
-				records = []db.PromptRoundRecord{}
+				records = []db.MemoryRoundRecord{}
 				total = int64(len(filtered))
 			}
 		}
@@ -581,7 +581,7 @@ func (api *MemoryAPI) DeleteOldRecords(c *gin.Context) {
 }
 
 // convertToMemoryRoundItem converts a db record to API response format
-func convertToMemoryRoundItem(r db.PromptRoundRecord) MemoryRoundItem {
+func convertToMemoryRoundItem(r db.MemoryRoundRecord) MemoryRoundItem {
 	return MemoryRoundItem{
 		ID:           r.ID,
 		Scenario:     r.Scenario,

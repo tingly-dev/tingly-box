@@ -14,9 +14,9 @@ const (
 	ProtocolOpenAICompat ProtocolType = "openai_compat" // OpenAI-compatible APIs
 )
 
-// PromptRoundRecord stores a single conversation round with user input and result
+// MemoryRoundRecord stores a single conversation round with user input and result
 // Designed to be protocol-agnostic for future extensibility
-type PromptRoundRecord struct {
+type MemoryRoundRecord struct {
 	ID           uint   `gorm:"primaryKey;autoIncrement;column:id"`
 	Scenario     string `gorm:"column:scenario;index:idx_prompt_rounds_scenario;not null"`
 	ProviderUUID string `gorm:"column:provider_uuid;index:idx_prompt_rounds_provider;not null"`
@@ -61,8 +61,8 @@ type PromptRoundRecord struct {
 }
 
 // TableName specifies the table name for GORM
-func (PromptRoundRecord) TableName() string {
-	return "prompt_rounds"
+func (MemoryRoundRecord) TableName() string {
+	return "vibe_memory"
 }
 
 // PromptMetadata represents protocol-specific metadata in JSON format
@@ -79,7 +79,7 @@ type PromptMetadata struct {
 }
 
 // SetMetadata sets the metadata as JSON string
-func (r *PromptRoundRecord) SetMetadata(metadata interface{}) error {
+func (r *MemoryRoundRecord) SetMetadata(metadata interface{}) error {
 	if metadata == nil {
 		r.Metadata = ""
 		return nil
