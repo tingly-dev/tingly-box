@@ -88,7 +88,3 @@ pip install -r requirements.txt
 Results are saved to:
 - **Directory**: `tests/test_results/`
 - **Formats**: JSON and HTML
-
-See [Complete Test Documentation](../docs/test.md) for detailed information.
-
-See [Complete Test Documentation](../docs/test.md) for detailed information.
