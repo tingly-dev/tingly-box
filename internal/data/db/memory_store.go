@@ -114,21 +114,20 @@ func (ps *MemoryStore) RecordRounds(records []*MemoryRoundRecord) error {
 			// Database error
 			return fmt.Errorf("failed to check for existing record: %w", err)
 		} else {
-			// Record exists, check if we need to update RoundResult
-			if existing.RoundResult == "" && record.RoundResult != "" {
+			// Record exists, update with new data
+			if record.RoundResult != "" {
 				// Update RoundResult for existing record
 				existing.RoundResult = record.RoundResult
-				existing.UpdatedAt = now
-				if record.InputTokens > 0 {
-					existing.InputTokens = record.InputTokens
-				}
-				if record.OutputTokens > 0 {
-					existing.OutputTokens = record.OutputTokens
-				}
-				existing.TotalTokens = existing.InputTokens + existing.OutputTokens
-				updates = append(updates, &existing)
 			}
-			// If RoundResult already exists, keep it (don't overwrite)
+			existing.UpdatedAt = now
+			if record.InputTokens > 0 {
+				existing.InputTokens = record.InputTokens
+			}
+			if record.OutputTokens > 0 {
+				existing.OutputTokens = record.OutputTokens
+			}
+			existing.TotalTokens = existing.InputTokens + existing.OutputTokens
+			updates = append(updates, &existing)
 		}
 	}
 

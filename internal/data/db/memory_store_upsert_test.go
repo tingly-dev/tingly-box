@@ -109,7 +109,7 @@ func TestRecordRoundsUpsert(t *testing.T) {
 	}
 	t.Logf("✓ RoundResult updated: %q", saved.RoundResult)
 
-	// === Scenario 3: Third request - don't overwrite existing RoundResult ===
+	// === Scenario 3: Third request - overwrite existing RoundResult ===
 	records3 := []*MemoryRoundRecord{
 		{
 			Scenario:      "test",
@@ -121,8 +121,10 @@ func TestRecordRoundsUpsert(t *testing.T) {
 			RoundIndex:    0,
 			UserInput:     "What is Golang?",
 			UserInputHash: ComputeUserInputHash("What is Golang?"),
-			RoundResult:   "Different response", // Should NOT overwrite
+			RoundResult:   "Updated response - Go is awesome!", // SHOULD overwrite
 			FullMessages:  `{"role":"user","content":[{"type":"text","text":"What is Golang?"}]}`,
+			InputTokens:   15,
+			OutputTokens:  60,
 		},
 	}
 
@@ -131,7 +133,7 @@ func TestRecordRoundsUpsert(t *testing.T) {
 		t.Fatalf("Failed to process records: %v", err)
 	}
 
-	// Verify RoundResult was NOT overwritten
+	// Verify RoundResult WAS overwritten
 	err = store.db.Where("session_id = ? AND user_input_hash = ?",
 		sessionID, ComputeUserInputHash("What is Golang?")).
 		First(&saved).Error
@@ -139,18 +141,21 @@ func TestRecordRoundsUpsert(t *testing.T) {
 		t.Fatalf("Failed to find record: %v", err)
 	}
 
-	if saved.RoundResult == "Different response" {
-		t.Error("RoundResult should not be overwritten when it already has a value")
+	if saved.RoundResult != "Updated response - Go is awesome!" {
+		t.Errorf("RoundResult should be overwritten. Expected %q, got %q",
+			"Updated response - Go is awesome!", saved.RoundResult)
 	}
-	if saved.RoundResult != "Go is a programming language by Google." {
-		t.Errorf("RoundResult was incorrectly overwritten. Expected %q, got %q",
-			"Go is a programming language by Google.", saved.RoundResult)
+	if saved.InputTokens != 15 {
+		t.Errorf("InputTokens not updated. Expected 15, got %d", saved.InputTokens)
 	}
-	t.Logf("✓ Existing RoundResult preserved: %q", saved.RoundResult)
+	if saved.OutputTokens != 60 {
+		t.Errorf("OutputTokens not updated. Expected 60, got %d", saved.OutputTokens)
+	}
+	t.Logf("✓ Existing RoundResult was overwritten: %q", saved.RoundResult)
 
 	t.Log("\n========== Upsert Test Summary ==========")
 	t.Log("✓ Empty RoundResult can be updated")
-	t.Log("✓ Existing RoundResult is preserved (not overwritten)")
+	t.Log("✓ Existing RoundResult IS overwritten (new behavior)")
 	t.Log("✓ Token counts can be updated")
 }
 
