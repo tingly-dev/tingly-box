@@ -65,6 +65,83 @@ type OAuthDetail struct {
 	ExtraFields  map[string]interface{} `json:"extra_fields"`  // Any extra field for some special clients
 }
 
+// ToolInterceptorConfig contains configuration for tool interceptor (search & fetch)
+type ToolInterceptorConfig struct {
+	Enabled    bool   `json:"enabled"`               // Master switch for tool interceptor
+	SearchAPI  string `json:"search_api,omitempty"`  // "brave" or "google"
+	SearchKey  string `json:"search_key,omitempty"`  // API key for search service
+	MaxResults int    `json:"max_results,omitempty"` // Max search results to return (default: 10)
+
+	// Proxy configuration
+	ProxyURL string `json:"proxy_url,omitempty"` // HTTP proxy URL (e.g., "http://127.0.0.1:7897")
+
+	// Fetch configuration
+	MaxFetchSize int64 `json:"max_fetch_size,omitempty"` // Max content size for fetch in bytes (default: 1MB)
+	FetchTimeout int64 `json:"fetch_timeout,omitempty"`  // Fetch timeout in seconds (default: 30)
+	MaxURLLength int   `json:"max_url_length,omitempty"` // Max URL length (default: 2000)
+}
+
+// ToolInterceptorOverride contains provider-level overrides for tool interceptor
+type ToolInterceptorOverride struct {
+	// Disabled allows provider to explicitly disable when globally enabled
+	Disabled bool `json:"disabled,omitempty"`
+
+	// MaxResults override for this specific provider
+	MaxResults *int `json:"max_results,omitempty"`
+}
+
+// GetEffectiveConfig returns the effective tool interceptor config for a provider
+// Global config is used as base, with provider overrides applied
+func (p *Provider) GetEffectiveConfig(global *ToolInterceptorConfig) (*ToolInterceptorConfig, bool) {
+	if global == nil || !global.Enabled {
+		return nil, false
+	}
+
+	// Check if provider has explicitly disabled
+	if p.ToolInterceptorOverride != nil && p.ToolInterceptorOverride.Disabled {
+		return nil, false
+	}
+
+	// Start with global config
+	effective := &ToolInterceptorConfig{
+		Enabled:      global.Enabled,
+		SearchAPI:    global.SearchAPI,
+		SearchKey:    global.SearchKey,
+		MaxResults:   global.MaxResults,
+		ProxyURL:     global.ProxyURL,
+		MaxFetchSize: global.MaxFetchSize,
+		FetchTimeout: global.FetchTimeout,
+		MaxURLLength: global.MaxURLLength,
+	}
+
+	// Apply provider overrides
+	if p.ToolInterceptorOverride != nil {
+		if p.ToolInterceptorOverride.MaxResults != nil {
+			effective.MaxResults = *p.ToolInterceptorOverride.MaxResults
+		}
+	}
+
+	// Set defaults
+	if effective.MaxResults == 0 {
+		effective.MaxResults = 10
+	}
+	if effective.MaxFetchSize == 0 {
+		effective.MaxFetchSize = 1 * 1024 * 1024 // 1MB
+	}
+	if effective.FetchTimeout == 0 {
+		effective.FetchTimeout = 30 // 30 seconds
+	}
+	if effective.MaxURLLength == 0 {
+		effective.MaxURLLength = 2000
+	}
+	// Default to duckduckgo if no search API specified
+	if effective.SearchAPI == "" {
+		effective.SearchAPI = "duckduckgo"
+	}
+
+	return effective, true
+}
+
 // IsExpired checks if the OAuth token is expired
 func (o *OAuthDetail) IsExpired() bool {
 	if o == nil || o.ExpiresAt == "" {
@@ -94,8 +171,9 @@ type Provider struct {
 	LastUpdated   string            `json:"last_updated,omitempty"` // Last update timestamp
 
 	// Auth configuration
-	AuthType    AuthType     `json:"auth_type"`              // api_key or oauth
-	OAuthDetail *OAuthDetail `json:"oauth_detail,omitempty"` // OAuth credentials (only for oauth auth type)
+	AuthType                AuthType                 `json:"auth_type"`                           // api_key or oauth
+	OAuthDetail             *OAuthDetail             `json:"oauth_detail,omitempty"`              // OAuth credentials (only for oauth auth type)
+	ToolInterceptorOverride *ToolInterceptorOverride `json:"tool_interceptor_override,omitempty"` // Provider-level override for tool interceptor
 }
 
 // GetAccessToken returns the access token based on auth type
@@ -239,6 +317,42 @@ func (r *Rule) GetCurrentService() *loadbalance.Service {
 	if r.CurrentServiceID != "" {
 		for _, svc := range activeServices {
 			if svc.ServiceID() == r.CurrentServiceID && svc.Active {
+				return svc
+			}
+		}
+	}
+
+	// Default to first service if CurrentServiceID not found or not set
+	return activeServices[0]
+}
+
+// GetUUID returns the rule UUID
+func (r *Rule) GetUUID() string {
+	return r.UUID
+}
+
+// SetCurrentServiceID sets the current service ID (used by RuleStateStore hydration)
+func (r *Rule) SetCurrentServiceID(serviceID string) {
+	r.CurrentServiceID = serviceID
+}
+
+// GetCurrentServiceID returns the current service ID
+func (r *Rule) GetCurrentServiceID() string {
+	return r.CurrentServiceID
+}
+
+// GetCurrentService returns the current active service based on CurrentServiceID
+func (r *Rule) GetCurrentService() *loadbalance.Service {
+	activeServices := r.GetActiveServices()
+	if len(activeServices) == 0 {
+		return nil
+	}
+
+	// If CurrentServiceID is set, find and return that service
+	if r.CurrentServiceID != "" {
+		for _, svc := range activeServices {
+			svcID := svc.Provider + ":" + svc.Model
+			if svcID == r.CurrentServiceID && svc.Active {
 				return svc
 			}
 		}

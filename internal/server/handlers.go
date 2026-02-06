@@ -120,6 +120,21 @@ func (s *Server) DetermineProviderAndModelWithScenario(scenario typ.RuleScenario
 	c := s.config
 	var selectedService *loadbalance.Service
 	var err error
+	if c != nil && c.IsRequestModelInScenario(modelName, scenario) {
+		// Get the Rule for this specific request model using the same method as middleware
+		uuid := c.GetUUIDByRequestModelAndScenario(modelName, scenario)
+		rules := c.GetRequestConfigs()
+		var rule *typ.Rule
+		for i := range rules {
+			if rules[i].UUID == uuid && rules[i].Active {
+				rule = &rules[i] // Get pointer to actual rule in config
+				break
+			}
+		}
+
+		if rule != nil && rule.Active {
+			var selectedService *loadbalance.Service
+			var err error
 
 	// Smart routing: check if enabled and try to match rules
 	if rule.SmartEnabled && len(rule.SmartRouting) > 0 && req != nil {
@@ -193,6 +208,17 @@ func (s *Server) DetermineProviderAndModelWithScenario(scenario typ.RuleScenario
 func (s *Server) DetermineProviderAndModel(rule *typ.Rule) (*typ.Provider, *loadbalance.Service, error) {
 	modelName := rule.RequestModel
 	c := s.config
+	if c != nil && c.IsRequestModel(modelName) {
+		// Get the Rule for this specific request model using the same method as middleware
+		uuid := c.GetUUIDByRequestModel(modelName)
+		rules := c.GetRequestConfigs()
+		var rule *typ.Rule
+		for i := range rules {
+			if rules[i].UUID == uuid && rules[i].Active {
+				rule = &rules[i] // Get pointer to actual rule in config
+				break
+			}
+		}
 
 	// Set the rule in the context so middleware can use the same rule
 	// We need to pass this context to the actual HTTP handler, but this function
