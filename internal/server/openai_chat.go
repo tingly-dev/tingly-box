@@ -203,10 +203,9 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 		}
 	}()
 
-	// Set SSE headers
-	c.Header("Content-Type", "text/event-stream")
-	c.Header("Cache-Control", "no-cache")
-	c.Header("Connection", "keep-alive")
+	// Set SSE headers (mimicking OpenAI response headers)
+	c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization")
+	c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 	c.Header("Access-Control-Allow-Origin", "*")
 	c.Header("Access-Control-Allow-Headers", "Cache-Control")
 
