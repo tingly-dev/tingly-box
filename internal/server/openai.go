@@ -228,7 +228,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 			}
 			return
 		} else {
-			anthropicResp, err := s.forwardAnthropicRequestV1(provider, anthropicReq, scenario)
+			anthropicResp, cancel, err := s.forwardAnthropicRequestV1(provider, anthropicReq, scenario)
 			if err != nil {
 				// Track error with no usage
 				s.trackUsageFromContext(c, 0, 0, err)
@@ -240,6 +240,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 				})
 				return
 			}
+			defer cancel()
 
 			// Track usage from response
 			inputTokens := int(anthropicResp.Usage.InputTokens)

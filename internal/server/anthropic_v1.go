@@ -83,7 +83,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			s.handleAnthropicStreamResponseV1(c, req.MessageNewParams, streamResp, proxyModel, actualModel, rule, provider, recorder)
 		} else {
 			// Handle non-streaming request
-			anthropicResp, err := s.forwardAnthropicRequestV1(provider, req.MessageNewParams, scenario)
+			anthropicResp, cancel, err := s.forwardAnthropicRequestV1(provider, req.MessageNewParams, scenario)
 			if err != nil {
 				s.trackUsageFromContext(c, 0, 0, err)
 				SendForwardingError(c, err)
@@ -92,6 +92,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 				}
 				return
 			}
+			defer cancel()
 
 			// Track usage from response
 			inputTokens := int(anthropicResp.Usage.InputTokens)
@@ -264,7 +265,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 }
 
 // forwardAnthropicRequestV1 forwards request using Anthropic SDK with proper types (v1)
-func (s *Server) forwardAnthropicRequestV1(provider *typ.Provider, req anthropic.MessageNewParams, scenario string) (*anthropic.Message, error) {
+func (s *Server) forwardAnthropicRequestV1(provider *typ.Provider, req anthropic.MessageNewParams, scenario string) (*anthropic.Message, context.CancelFunc, error) {
 	// Get or create Anthropic client wrapper from pool
 	wrapper := s.clientPool.GetAnthropicClient(provider, string(req.Model))
 
@@ -274,13 +275,13 @@ func (s *Server) forwardAnthropicRequestV1(provider *typ.Provider, req anthropic
 	// Make the request using Anthropic SDK with timeout (provider.Timeout is in seconds)
 	timeout := time.Duration(provider.Timeout) * time.Second
 	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
 	message, err := wrapper.MessagesNew(ctx, req)
 	if err != nil {
-		return nil, err
+		cancel()
+		return nil, nil, err
 	}
 
-	return message, nil
+	return message, cancel, nil
 }
 
 // forwardAnthropicStreamRequestV1 forwards streaming request using Anthropic SDK (v1)
@@ -295,12 +296,8 @@ func (s *Server) forwardAnthropicStreamRequestV1(ctx context.Context, provider *
 	// Also add scenario for recording
 	timeout := time.Duration(provider.Timeout) * time.Second
 	streamCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
 	streamCtx = context.WithValue(streamCtx, client.ScenarioContextKey, scenario)
-
 	streamResp := wrapper.MessagesNewStreaming(streamCtx, req)
-
 	return streamResp, cancel, nil
 }
 

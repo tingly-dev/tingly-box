@@ -85,7 +85,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			s.handleAnthropicStreamResponseV1Beta(c, req.BetaMessageNewParams, streamResp, proxyModel, actualModel, rule, provider, recorder)
 		} else {
 			// Handle non-streaming request
-			anthropicResp, err := s.forwardAnthropicRequestV1Beta(provider, req.BetaMessageNewParams, scenario)
+			anthropicResp, cancel, err := s.forwardAnthropicRequestV1Beta(provider, req.BetaMessageNewParams, scenario)
 			if err != nil {
 				s.trackUsageFromContext(c, 0, 0, err)
 				SendForwardingError(c, err)
@@ -94,6 +94,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 				}
 				return
 			}
+			defer cancel()
 
 			// Track usage from response
 			inputTokens := int(anthropicResp.Usage.InputTokens)
@@ -276,7 +277,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 }
 
 // forwardAnthropicRequestV1Beta forwards request using Anthropic SDK with proper types (beta)
-func (s *Server) forwardAnthropicRequestV1Beta(provider *typ.Provider, req anthropic.BetaMessageNewParams, scenario string) (*anthropic.BetaMessage, error) {
+func (s *Server) forwardAnthropicRequestV1Beta(provider *typ.Provider, req anthropic.BetaMessageNewParams, scenario string) (*anthropic.BetaMessage, context.CancelFunc, error) {
 	// Get or create Anthropic client wrapper from pool
 	wrapper := s.clientPool.GetAnthropicClient(provider, string(req.Model))
 
@@ -286,13 +287,13 @@ func (s *Server) forwardAnthropicRequestV1Beta(provider *typ.Provider, req anthr
 	// Make the request using Anthropic SDK with timeout (provider.Timeout is in seconds)
 	timeout := time.Duration(provider.Timeout) * time.Second
 	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
 	message, err := wrapper.BetaMessagesNew(ctx, req)
 	if err != nil {
-		return nil, err
+		cancel()
+		return nil, nil, err
 	}
 
-	return message, nil
+	return message, cancel, nil
 }
 
 // forwardAnthropicStreamRequestV1Beta forwards streaming request using Anthropic SDK (beta)
@@ -307,11 +308,8 @@ func (s *Server) forwardAnthropicStreamRequestV1Beta(ctx context.Context, provid
 	// Also add scenario for recording
 	timeout := time.Duration(provider.Timeout) * time.Second
 	streamCtx, cancel := context.WithTimeout(ctx, timeout)
-
 	streamCtx = context.WithValue(streamCtx, client.ScenarioContextKey, scenario)
-
 	streamResp := wrapper.BetaMessagesNewStreaming(streamCtx, req)
-
 	return streamResp, cancel, nil
 }
 
