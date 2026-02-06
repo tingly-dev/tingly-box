@@ -288,6 +288,54 @@ func (ps *MemoryStore) GetUserInputs(scenario string, limit int) ([]MemoryRoundR
 	return records, nil
 }
 
+// GetUserInputsList retrieves lightweight list for user page with date range filtering
+// Returns only minimal fields needed for list display (optimized for data transfer)
+func (ps *MemoryStore) GetUserInputsList(scenario, protocol string, startDate, endDate string, limit int) ([]MemoryRoundRecord, error) {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+
+	var records []MemoryRoundRecord
+	// Select only minimal fields for list display
+	// Include full user_input for search and preview functionality
+	query := ps.db.Model(&MemoryRoundRecord{}).
+		Select("id, scenario, provider_name, model, protocol, created_at, is_streaming, has_tool_use, user_input")
+
+	if scenario != "" {
+		query = query.Where("scenario = ?", scenario)
+	}
+	if protocol != "" {
+		query = query.Where("protocol = ?", protocol)
+	}
+	if startDate != "" {
+		query = query.Where("created_at >= ?", startDate)
+	}
+	if endDate != "" {
+		query = query.Where("created_at <= ?", endDate)
+	}
+
+	if err := query.
+		Order("created_at DESC").
+		Limit(limit).
+		Find(&records).Error; err != nil {
+		return nil, err
+	}
+
+	return records, nil
+}
+
+// GetRoundByID retrieves a single round by ID with full details
+func (ps *MemoryStore) GetRoundByID(id uint) (*MemoryRoundRecord, error) {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+
+	var record MemoryRoundRecord
+	if err := ps.db.Where("id = ?", id).First(&record).Error; err != nil {
+		return nil, err
+	}
+
+	return &record, nil
+}
+
 // SearchRounds searches rounds by user input content
 func (ps *MemoryStore) SearchRounds(scenario, query string, limit int) ([]MemoryRoundRecord, error) {
 	ps.mu.Lock()
