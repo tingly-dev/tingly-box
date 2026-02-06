@@ -103,6 +103,20 @@ export interface RecordingFilter {
 
 export type ProtocolType = 'anthropic' | 'openai' | 'google';
 
+// Lightweight type for list items (reduces initial data transfer)
+export interface PromptRoundListItem {
+  id: number;
+  scenario: string;
+  provider_name: string;
+  model: string;
+  protocol: ProtocolType;
+  created_at: string;
+  is_streaming: boolean;
+  has_tool_use: boolean;
+  // Full user_input for search and preview (truncated in UI only)
+  user_input: string;
+}
+
 export interface PromptRoundItem {
   id: number;
   scenario: string;
