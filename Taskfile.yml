@@ -22,6 +22,18 @@ vars:
   BIN_DIR: "bin"
 
 tasks:
+  build:
+    aliases:
+      - cli:build
+    cmds:
+      - task: web:dist
+      - task: go:build
+  dev:
+    aliases:
+      - cli:dev
+    cmds:
+      - task: web:dist
+      - task: start
   
   start:
     aliases:
@@ -52,20 +64,6 @@ tasks:
       - |
         openapi-generator-cli generate -g typescript-axios -i ./swagger.json -o ./frontend/src/client
   
-  
-  build:
-    aliases:
-      - cli:build
-    cmds:
-      - task: web:dist
-      - task: go:build
-  dev:
-    aliases:
-      - cli:dev
-    cmds:
-      - task: web:dist
-      - task: start
-  
   go:build:
     env:
       ARCH:
@@ -78,7 +76,7 @@ tasks:
         BUILD_TIME="$(date -u '+%Y-%m-%d-%H-%M-%S' 2>/dev/null || echo 'unknown')"
         GO_VERSION="$(go version | awk '{print $3}' | sed 's/go//' 2>/dev/null || echo 'unknown')"
         PLATFORM="${OS}/${ARCH}"
-
+        
         # Build with ldflags
         mkdir -p build
         LDFLAGS="-X main.version=${VERSION} -X main.gitCommit=${GIT_COMMIT} -X main.buildTime=${BUILD_TIME} -X main.goVersion=${GO_VERSION} -X main.platform=${PLATFORM}"
@@ -88,15 +86,12 @@ tasks:
     cmds:
       - |
         go test ./internal/...
-
+  
   tests:interface:
     summary: Run Python interface tests (test_automation)
     cmds:
       - |
-       python -m tests.test_automation
-
-  
-
+        python -m tests.test_automation
   
   web:dev:
     cmds:
@@ -121,7 +116,7 @@ tasks:
       - |
         mkdir -p internal/web/dist/
         cp -R frontend/dist/* internal/web/dist/
-
+  
   web:build:dev:
     cmds:
       - task: codegen
@@ -136,8 +131,7 @@ tasks:
       - |
         mkdir -p internal/web/dist/
         cp -R frontend/dist/* internal/web/dist/
-
-
+  
   check:zig:
     summary: Check if zig is installed
     cmds:
@@ -152,8 +146,7 @@ tasks:
           exit 1
         fi
         echo "Found: $(zig version)"
-
-
+  
   # remote-cc Service tasks
   remote-cc:build:
     summary: Build the remote-cc-service binary
@@ -162,7 +155,7 @@ tasks:
         cd cmd/remote-cc
         go mod tidy
         go build -o ../../bin/remote-cc-service .
-
+  
   remote-cc:run:
     summary: Run remote-cc-service with default configuration
     env:
@@ -186,13 +179,13 @@ tasks:
         PY
         )"
         cd cmd/remote-cc && RCC_PORT={{.RCC_PORT | default "18080"}} RCC_SESSION_TIMEOUT={{.RCC_SESSION_TIMEOUT | default "30m"}} go run .
-
+  
   remote-cc:test:
     summary: Run tests for remote-cc-service
     cmds:
       - |
         go test ./cmd/remote-cc/... -v
-
+  
   remote-cc:build:cross:
     summary: Cross-compile remote-cc-service for all platforms
     env:
@@ -208,13 +201,13 @@ tasks:
             ./cmd/remote-cc
           done
         done
-
+  
   remote-cc-token:build:
     summary: Build the remote-cc-token binary
     cmds:
       - |
         go build -o ./bin/remote-cc-token ./cmd/remote-coder
-
+  
   remote-cc-token:run:
     summary: Generate an API token (run via SSH)
     cmds:
