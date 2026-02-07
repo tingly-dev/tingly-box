@@ -1,14 +1,12 @@
 import {
     Box,
-    FormControlLabel,
-    Switch,
     Tooltip,
     Typography,
+    Chip,
 } from '@mui/material';
 import { Science } from '@mui/icons-material';
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
-import { switchControlLabelStyle } from '@/styles/toggleStyles';
 
 export interface ExperimentalFeaturesProps {
     scenario: string;
@@ -41,13 +39,14 @@ const ExperimentalFeatures: React.FC<ExperimentalFeaturesProps> = ({ scenario })
         }
     };
 
-    const setFeature = (featureKey: string, enabled: boolean) => {
-        console.log('setFeature called:', featureKey, enabled);
-        api.setScenarioFlag(scenario, featureKey, enabled)
+    const toggleFeature = (featureKey: string) => {
+        const newValue = !features[featureKey];
+        console.log('toggleFeature called:', featureKey, newValue);
+        api.setScenarioFlag(scenario, featureKey, newValue)
             .then((result) => {
                 console.log('setScenarioFlag result:', result);
                 if (result.success) {
-                    setFeatures(prev => ({ ...prev, [featureKey]: enabled }));
+                    setFeatures(prev => ({ ...prev, [featureKey]: newValue }));
                 } else {
                     console.error('Failed to set feature:', result);
                     loadFeatures();
@@ -79,24 +78,30 @@ const ExperimentalFeatures: React.FC<ExperimentalFeaturesProps> = ({ scenario })
                 </Tooltip>
             </Box>
 
-            {/* Feature toggles using Switch */}
+            {/* Feature toggles as clickable chips */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
-                {FEATURES.map((feature) => (
-                    <Tooltip key={feature.key} title={feature.description} arrow>
-                        <FormControlLabel
-                            control={
-                                <Switch
-                                    size="small"
-                                    checked={features[feature.key] || false}
-                                    onChange={(e) => setFeature(feature.key, e.target.checked)}
-                                    color="primary"
-                                />
-                            }
-                            label={feature.label}
-                            sx={switchControlLabelStyle}
-                        />
-                    </Tooltip>
-                ))}
+                {FEATURES.map((feature) => {
+                    const isEnabled = features[feature.key] || false;
+                    return (
+                                                <Tooltip key={feature.key} title={feature.description + (isEnabled ? ' (enabled)' : ' (disabled) - Click to enable')} arrow>
+                            <Chip
+                                label={`${feature.label} · ${isEnabled ? 'On' : 'Off'}`}
+                                onClick={() => toggleFeature(feature.key)}
+                                size="small"
+                                sx={{
+                                    bgcolor: isEnabled ? 'primary.main' : 'action.hover',
+                                    color: isEnabled ? 'primary.contrastText' : 'text.primary',
+                                    fontWeight: isEnabled ? 600 : 400,
+                                    border: isEnabled ? 'none' : '1px solid',
+                                    borderColor: 'divider',
+                                    '&:hover': {
+                                        bgcolor: isEnabled ? 'primary.dark' : 'action.selected',
+                                    },
+                                }}
+                            />
+                        </Tooltip>
+                    );
+                })}
             </Box>
         </Box>
     );

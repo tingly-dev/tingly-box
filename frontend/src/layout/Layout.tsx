@@ -14,6 +14,7 @@ import {
     ChatBubbleOutline as ChatIcon,
     NewReleases,
     ErrorOutline,
+    LaptopMac,
 } from '@mui/icons-material';
 import LockIcon from '@mui/icons-material/Lock';
 import {
@@ -160,6 +161,11 @@ const Layout = ({ children }: LayoutProps) => {
                     path: '/use-opencode',
                     label: t('layout.nav.useOpenCode', { defaultValue: 'OpenCode' }),
                     icon: <CodeIcon sx={{ fontSize: 20 }} />,
+                },
+                {
+                    path: '/use-xcode',
+                    label: t('layout.nav.useXcode', { defaultValue: 'Xcode' }),
+                    icon: <LaptopMac sx={{ fontSize: 20 }} />,
                 },
             ],
         },
