@@ -1,6 +1,7 @@
 package db
 
 import (
+	"errors"
 	"time"
 
 	"gorm.io/gorm"
@@ -137,6 +138,63 @@ func (AuditLog) TableName() string {
 // EnterpriseDB manages enterprise-specific database operations
 type EnterpriseDB struct {
 	db *gorm.DB
+}
+
+// UserRepository defines user data access interface
+type UserRepository interface {
+	GetByID(id int64) (*User, error)
+	GetByUsername(username string) (*User, error)
+	GetByEmail(email string) (*User, error)
+	UpdateLastLogin(id int64) error
+}
+
+type userRepositoryImpl struct {
+	db *gorm.DB
+}
+
+// NewUserRepository creates a new user repository
+func NewUserRepository(db *gorm.DB) UserRepository {
+	return &userRepositoryImpl{db: db}
+}
+
+func (r *userRepositoryImpl) GetByID(id int64) (*User, error) {
+	var user User
+	err := r.db.Where("id = ?", id).First(&user).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, gorm.ErrRecordNotFound
+		}
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (r *userRepositoryImpl) GetByUsername(username string) (*User, error) {
+	var user User
+	err := r.db.Where("username = ?", username).First(&user).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, gorm.ErrRecordNotFound
+		}
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (r *userRepositoryImpl) GetByEmail(email string) (*User, error) {
+	var user User
+	err := r.db.Where("email = ?", email).First(&user).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, gorm.ErrRecordNotFound
+		}
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (r *userRepositoryImpl) UpdateLastLogin(id int64) error {
+	return r.db.Model(&User{}).Where("id = ?", id).Update("last_login_at", time.Now()).Error
 }
 
 // NewEnterpriseDB creates a new enterprise database manager
