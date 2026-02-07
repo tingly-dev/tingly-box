@@ -1,0 +1,20 @@
+# https://taskfile.dev
+
+version: '3'
+
+tasks:
+  # Docker build and test tasks for ARM64
+  build:arm64:
+    summary: Build Docker image for Linux ARM64
+    cmds:
+      - |
+        docker build --platform linux/arm64 -t tingly-box:arm64 -f build/linux/Dockerfile.arm64 .
+
+  test:arm64:
+    summary: Run tests in Linux ARM64 Docker container
+    deps:
+      - task: docker:build:arm64
+    cmds:
+      - |
+        docker run --rm --platform linux/arm64 tingly-box:arm64 \
+        sh -c "cd /app && go test ./internal/... -v"
