@@ -140,6 +140,9 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 	}
 
 	cfg.InsertDefaultRule()
+	if cfg.VirtualModelToken == "" {
+		cfg.VirtualModelToken = constant.DefaultVirtualModelToken
+	}
 	cfg.Save()
 
 	// Ensure tokens exist even for existing configs
@@ -149,13 +152,13 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 		updated = true
 	}
 	if cfg.UserToken == "" {
-		cfg.UserToken = "tingly-box-user-token"
+		cfg.UserToken = constant.DefaultUserToken
 		updated = true
 	}
 	if cfg.ModelToken == "" {
 		modelToken, err := auth.NewJWTManager(cfg.JWTSecret).GenerateToken("tingly-box")
 		if err != nil {
-			cfg.ModelToken = "tingly-box-model-token"
+			cfg.ModelToken = constant.DefaultModelToken
 		}
 		cfg.ModelToken = modelToken
 		updated = true
@@ -1277,18 +1280,18 @@ func (c *Config) CreateDefaultConfig() error {
 	c.DefaultRequestID = 0
 	// Set default auth tokens if not already set
 	if c.UserToken == "" {
-		c.UserToken = "tingly-box-user-token"
+		c.UserToken = constant.DefaultUserToken
 	}
 	if c.ModelToken == "" {
 		modelToken, err := auth.NewJWTManager(c.JWTSecret).GenerateToken("tingly-box")
 		if err != nil {
-			c.ModelToken = "tingly-box-model-token"
+			c.ModelToken = constant.DefaultModelToken
 		}
 		c.ModelToken = "tingly-box-" + modelToken
 	}
 	// Set default virtual model token (independent from model token)
 	if c.VirtualModelToken == "" {
-		c.VirtualModelToken = "tingly-virtual-model-token"
+		c.VirtualModelToken = constant.DefaultVirtualModelToken
 	}
 	// Initialize merged fields with defaults
 	c.ProvidersV1 = make(map[string]*typ.Provider)
