@@ -6,12 +6,20 @@ includes:
   wails:
     taskfile: ./Taskfile.wails.yml
     flatten: true
+  windows-cli:
+    taskfile: ./Taskfile.windows.yml
+  linux-cli:
+    taskfile: ./Taskfile.linux.yml
+  docker:
+    taskfile: ./Taskfile.docker.yml
 
 vars:
   VERSION: ""
   BUILD_DIR: build
   DIST_DIR: build/dist
   PORT: 12580
+  BIN_NAME: "tingly-box"
+  BIN_DIR: "bin"
 
 tasks:
   
@@ -20,11 +28,11 @@ tasks:
       - http
     cmds:
       - go run ./cli/tingly-box --verbose start --debug --port 12580 --browser=false
-  
-  https:
+  start:https:
+    aliases:
+      - https
     cmds:
       - go run ./cli/tingly-box --verbose start --https --port 12581 --browser=false
-  
   record:
     cmds:
       - go run ./cli/tingly-box --verbose start --port 12580 --record-mode=scenario --debug --browser=false
@@ -44,10 +52,19 @@ tasks:
       - |
         openapi-generator-cli generate -g typescript-axios -i ./swagger.json -o ./frontend/src/client
   
-  cli:build:
+  
+  build:
+    aliases:
+      - cli:build
     cmds:
       - task: web:dist
       - task: go:build
+  dev:
+    aliases:
+      - cli:dev
+    cmds:
+      - task: web:dist
+      - task: start
   
   go:build:
     env:
@@ -77,11 +94,9 @@ tasks:
     cmds:
       - |
        python -m tests.test_automation
+
   
-  cli:dev:
-    cmds:
-      - task: web:dist
-      - task: start
+
   
   web:dev:
     cmds:
@@ -121,53 +136,7 @@ tasks:
       - |
         mkdir -p internal/web/dist/
         cp -R frontend/dist/* internal/web/dist/
-  
-  windows:build:amd64:
-    summary: Cross-compiles for Windows AMD64 with CGO enabled (requires mingw-w64)
-    cmds:
-      - task: windows:build:cross:amd64
 
-  windows:build:arm64:
-    summary: Cross-compiles for Windows ARM64 with CGO (requires manual setup, see task output)
-    cmds:
-      - task: windows:build:cross:arm64
-
-  # CLI build tasks for Windows (uses zig for cross-compilation with CGO)
-  windows:cli:build:amd64:
-    summary: Cross-compiles CLI for Windows AMD64 (requires zig)
-    cmds:
-      - task: windows:cli:build:cross:amd64
-
-  windows:cli:build:arm64:
-    summary: Cross-compiles CLI for Windows ARM64 (requires zig)
-    cmds:
-      - task: windows:cli:build:cross:arm64
-
-  windows:cli:build:cross:amd64:
-    summary: Cross-compiles CLI for Windows AMD64 with zig
-    deps:
-      - task: check:zig
-    cmds:
-      - |
-        mkdir -p {{.BIN_DIR}}
-        # Use zig as cross-compiler for Windows AMD64
-        CC="zig cc -target x86_64-windows-gnu" \
-        CXX="zig c++ -target x86_64-windows-gnu" \
-        GOOS=windows GOARCH=amd64 CGO_ENABLED=1 \
-        go build -buildvcs=false -ldflags="-w -s" -o {{.BIN_DIR}}/{{.BIN_NAME}}-amd64.exe ./cli/tingly-box
-
-  windows:cli:build:cross:arm64:
-    summary: Cross-compiles CLI for Windows ARM64 with zig
-    deps:
-      - task: check:zig
-    cmds:
-      - |
-        mkdir -p {{.BIN_DIR}}
-        # Use zig as cross-compiler for Windows ARM64
-        CC="zig cc -target aarch64-windows-gnu" \
-        CXX="zig c++ -target aarch64-windows-gnu" \
-        GOOS=windows GOARCH=arm64 CGO_ENABLED=1 \
-        go build -buildvcs=false -ldflags="-w -s" -o {{.BIN_DIR}}/{{.BIN_NAME}}-arm64.exe ./cli/tingly-box
 
   check:zig:
     summary: Check if zig is installed
@@ -184,40 +153,6 @@ tasks:
         fi
         echo "Found: $(zig version)"
 
-  # CLI build tasks for Linux (uses zig for cross-compilation with CGO)
-  cli:linux:arm64:
-    summary: Cross-compiles CLI for Linux ARM64 (requires zig)
-    cmds:
-      - task: cli:linux:arm64:cross
-
-  cli:linux:arm64:cross:
-    summary: Cross-compiles CLI for Linux ARM64 with zig
-    deps:
-      - task: check:zig
-    cmds:
-      - |
-        mkdir -p {{.BIN_DIR}}
-        # Use zig as cross-compiler for Linux ARM64
-        CC="zig cc -target aarch64-linux-gnu" \
-        CXX="zig c++ -target aarch64-linux-gnu" \
-        GOOS=linux GOARCH=arm64 CGO_ENABLED=1 \
-        go build -buildvcs=false -ldflags="-w -s" -o {{.BIN_DIR}}/{{.BIN_NAME}}-linux-arm64 ./cli/tingly-box
-
-  # Docker build and test tasks for ARM64
-  docker:build:arm64:
-    summary: Build Docker image for Linux ARM64
-    cmds:
-      - |
-        docker build --platform linux/arm64 -t tingly-box:arm64 -f build/linux/Dockerfile.arm64 .
-
-  docker:test:arm64:
-    summary: Run tests in Linux ARM64 Docker container
-    deps:
-      - task: docker:build:arm64
-    cmds:
-      - |
-        docker run --rm --platform linux/arm64 tingly-box:arm64 \
-        sh -c "cd /app && go test ./internal/... -v"
 
   # remote-cc Service tasks
   remote-cc:build:
