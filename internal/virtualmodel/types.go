@@ -2,13 +2,12 @@ package virtualmodel
 
 import "time"
 
-// Model represents a virtual model in the models list
+// Model represents a virtual model in the models list (OpenAI-compatible format)
 type Model struct {
-	ID          string `json:"id"`
-	Object      string `json:"object"`
-	Created     int64  `json:"created"`
-	OwnedBy     string `json:"owned_by"`
-	Description string `json:"description,omitempty"`
+	ID      string `json:"id"`
+	Object  string `json:"object"`
+	Created int64  `json:"created"`
+	OwnedBy string `json:"owned_by"`
 }
 
 // VirtualModelConfig holds the configuration for a virtual model
@@ -74,11 +73,10 @@ func (vm *VirtualModel) GetStreamChunks() []string {
 // ToModel converts to Model type for API response
 func (vm *VirtualModel) ToModel() Model {
 	return Model{
-		ID:          vm.config.ID,
-		Object:      "model",
-		Created:     time.Now().Unix(),
-		OwnedBy:     "tingly-box-virtual",
-		Description: vm.config.Description,
+		ID:      vm.config.ID,
+		Object:  "model",
+		Created: time.Now().Unix(),
+		OwnedBy: "tingly-box-virtual",
 	}
 }
 

@@ -23,12 +23,18 @@ func NewHandler(registry *Registry) *Handler {
 	}
 }
 
+// OpenAIModelsResponse represents OpenAI's models API response format
+type OpenAIModelsResponse struct {
+	Object string  `json:"object"`
+	Data   []Model `json:"data"`
+}
+
 // ListModels handles the GET /virtual/v1/models endpoint
 func (h *Handler) ListModels(c *gin.Context) {
 	models := h.registry.ListModels()
-	c.JSON(http.StatusOK, gin.H{
-		"object": "list",
-		"data":   models,
+	c.JSON(http.StatusOK, OpenAIModelsResponse{
+		Object: "list",
+		Data:   models,
 	})
 }
 
