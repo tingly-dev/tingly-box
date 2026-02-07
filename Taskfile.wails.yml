@@ -1,0 +1,71 @@
+# https://taskfile.dev
+
+version: '3'
+
+includes:
+  common: ./build/Taskfile.yml
+  windows: ./build/windows/Taskfile.yml
+  darwin: ./build/darwin/Taskfile.yml
+  linux: ./build/linux/Taskfile.yml
+
+vars:
+  APP_NAME: "TinglyBox"
+  BIN_NAME: "tingly-box"
+  PACKAGE_PATH: ./gui/wails3
+  VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
+
+tasks:
+  wails:build:
+    summary: Builds the application
+    cmds:
+      - task: codegen
+      - task: "{{OS}}:build"
+
+  wails:package:
+    summary: Packages a production build of the application
+    cmds:
+      - task: codegen
+      - task: "{{OS}}:package"
+
+  wails:run:
+    summary: Runs the application
+    cmds:
+      - task: codegen
+      - task: "{{OS}}:run"
+
+  wails:dev:
+    summary: Runs the application in development mode
+    cmds:
+      - task: codegen
+      - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
+
+  wails:binding:
+    cmds:
+      - |
+        cd ./gui/wails3
+        wails3 generate bindings -ts -f '-buildvcs=false -gcflags=all="-l"' -clean=true ./ -d ../../frontend/src/bindings
+
+  wails:web:
+    cmds:
+      - cd frontend; pnpm build:dev:wails
+      - |
+        mkdir -p internal/web_wails3/dist/
+        cp -R frontend/dist/* internal/web_wails3/dist/
+
+  wails:manual:
+    cmds:
+      - |
+        # Get build info
+        VERSION="dev"
+        GIT_COMMIT="$(git rev-parse HEAD 2>/dev/null || echo 'unknown')"
+        GO_VERSION="$(go version | awk '{print $3}' | sed 's/go//' 2>/dev/null || echo 'unknown')"
+        PLATFORM="$(go env GOOS)/$(go env GOARCH)"
+
+        # Build with ldflags
+        LDFLAGS='-X main.version=${VERSION} -X main.gitCommit=${GIT_COMMIT} -X main.buildTime=${BUILD_TIME} -X main.goVersion=${GO_VERSION} -X main.platform=${PLATFORM} -w -s'
+        go build -tags debug -trimpath -buildvcs=false -ldflags="${LDFLAGS}" -o bin/{{.BIN_NAME}} {{.PACKAGE_PATH}}
+        mkdir -p bin/{{.APP_NAME}}.app/Contents/{MacOS,Resources}
+        cp build/darwin/icons.icns bin/{{.APP_NAME}}.app/Contents/Resources
+        cp bin/{{.BIN_NAME}} bin/{{.APP_NAME}}.app/Contents/MacOS
+        cp build/darwin/Info.plist bin/{{.APP_NAME}}.app/Contents
+        codesign --force --deep --sign - bin/{{.APP_NAME}}.app

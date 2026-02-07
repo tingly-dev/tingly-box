@@ -1,0 +1,35 @@
+# https://taskfile.dev
+
+version: '3'
+
+vars:
+  BIN_NAME: "tingly-box"
+  BIN_DIR: "bin"
+
+tasks:
+  # Windows build tasks (uses zig for cross-compilation with CGO)
+  build:amd64:
+    summary: Cross-compiles for Windows AMD64 (requires zig)
+    deps:
+      - task: check:zig
+    cmds:
+      - |
+        mkdir -p {{.BIN_DIR}}
+        # Use zig as cross-compiler for Windows AMD64
+        CC="zig cc -target x86_64-windows-gnu" \
+        CXX="zig c++ -target x86_64-windows-gnu" \
+        GOOS=windows GOARCH=amd64 CGO_ENABLED=1 \
+        go build -buildvcs=false -ldflags="-w -s" -o {{.BIN_DIR}}/{{.BIN_NAME}}-amd64.exe ./cli/tingly-box
+
+  build:arm64:
+    summary: Cross-compiles for Windows ARM64 (requires zig)
+    deps:
+      - task: check:zig
+    cmds:
+      - |
+        mkdir -p {{.BIN_DIR}}
+        # Use zig as cross-compiler for Windows ARM64
+        CC="zig cc -target aarch64-windows-gnu" \
+        CXX="zig c++ -target aarch64-windows-gnu" \
+        GOOS=windows GOARCH=arm64 CGO_ENABLED=1 \
+        go build -buildvcs=false -ldflags="-w -s" -o {{.BIN_DIR}}/{{.BIN_NAME}}-arm64.exe ./cli/tingly-box

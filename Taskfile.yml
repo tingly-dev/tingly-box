@@ -3,80 +3,56 @@
 version: '3'
 
 includes:
-  common: ./build/Taskfile.yml
-  windows: ./build/windows/Taskfile.yml
-  darwin: ./build/darwin/Taskfile.yml
-  linux: ./build/linux/Taskfile.yml
+  wails:
+    taskfile: ./Taskfile.wails.yml
+    flatten: true
+  windows-cli:
+    taskfile: ./Taskfile.windows.yml
+  linux-cli:
+    taskfile: ./Taskfile.linux.yml
+  docker:
+    taskfile: ./Taskfile.docker.yml
 
 vars:
   VERSION: ""
   BUILD_DIR: build
   DIST_DIR: build/dist
-  
-  WAILS_PACKAGE_PATH: ./gui_wails3
-  
   PORT: 12580
-  
-  APP_NAME: "TinglyBox"
   BIN_NAME: "tingly-box"
   BIN_DIR: "bin"
-  VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
 
 tasks:
-  wails:build:
-    summary: Builds the application
+  build:
+    aliases:
+      - cli:build
     cmds:
-      - task: codegen
-      - task: "{{OS}}:build"
-  
-  wails:package:
-    summary: Packages a production build of the application
+      - task: web:dist
+      - task: go:build
+  dev:
+    aliases:
+      - cli:dev
     cmds:
-      - task: codegen
-      - task: "{{OS}}:package"
+      - task: web:dist
+      - task: start
   
-  wails:run:
-    summary: Runs the application
+  start:
+    aliases:
+      - http
     cmds:
-      - task: codegen
-      - task: "{{OS}}:run"
-  
-  wails:dev:
-    summary: Runs the application in development mode
+      - go run ./cli/tingly-box --verbose start --debug --port 12580 --browser=false
+  start:https:
+    aliases:
+      - https
     cmds:
-      - task: codegen
-      - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
+      - go run ./cli/tingly-box --verbose start --https --port 12581 --browser=false
+  record:
+    cmds:
+      - go run ./cli/tingly-box --verbose start --port 12580 --record-mode=scenario --debug --browser=false
   
-  wails:binding:
+  swagger:
     cmds:
       - |
-        cd ./gui/wails3
-        wails3 generate bindings -ts -f '-buildvcs=false -gcflags=all="-l"' -clean=true ./ -d ../../frontend/src/bindings
-  
-  wails:web:
-    cmds:
-      - cd frontend; pnpm build:dev:wails
-      - |
-        mkdir -p internal/web_wails3/dist/
-        cp -R frontend/dist/* internal/web_wails3/dist/
-  
-  wails:manual:
-    cmds:
-      - |
-        # Get build info
-        VERSION="dev"
-        GIT_COMMIT="$(git rev-parse HEAD 2>/dev/null || echo 'unknown')"
-        GO_VERSION="$(go version | awk '{print $3}' | sed 's/go//' 2>/dev/null || echo 'unknown')"
-        PLATFORM="$(go env GOOS)/$(go env GOARCH)"
-
-        # Build with ldflags
-        LDFLAGS='-X main.version=${VERSION} -X main.gitCommit=${GIT_COMMIT} -X main.buildTime=${BUILD_TIME} -X main.goVersion=${GO_VERSION} -X main.platform=${PLATFORM} -w -s'
-        go build -tags debug -trimpath -buildvcs=false -ldflags="${LDFLAGS}" -o bin/{{.BIN_NAME}} {{.PACKAGE_PATH}}
-        mkdir -p bin/{{.APP_NAME}}.app/Contents/{MacOS,Resources}
-        cp build/darwin/icons.icns bin/{{.APP_NAME}}.app/Contents/Resources
-        cp bin/{{.BIN_NAME}} bin/{{.APP_NAME}}.app/Contents/MacOS
-        cp build/darwin/Info.plist bin/{{.APP_NAME}}.app/Contents
-        codesign --force --deep --sign - bin/{{.APP_NAME}}.app
+        curl -s http://localhost:{{.PORT}}/swagger.json > swagger.json
   
   codegen:
     cmds:
@@ -87,30 +63,6 @@ tasks:
         echo ref: https://openapi-generator.tech/docs/installation
       - |
         openapi-generator-cli generate -g typescript-axios -i ./swagger.json -o ./frontend/src/client
-  
-  swagger:
-    cmds:
-      - |
-        curl -s http://localhost:{{.PORT}}/swagger.json > swagger.json
-  
-  http:
-    aliases:
-      - start
-    cmds:
-      - go run ./cli/tingly-box --verbose start --debug --port 12580 --browser=false
-    
-  https:
-    cmds:
-      - go run ./cli/tingly-box --verbose start --https --port 12581 --browser=false
-  
-  record:
-    cmds:
-      - go run ./cli/tingly-box --verbose start --port 12580 --record-mode=scenario --debug --browser=false
-  
-  cli:build:
-    cmds:
-      - task: web:dist
-      - task: go:build
   
   go:build:
     env:
@@ -124,7 +76,7 @@ tasks:
         BUILD_TIME="$(date -u '+%Y-%m-%d-%H-%M-%S' 2>/dev/null || echo 'unknown')"
         GO_VERSION="$(go version | awk '{print $3}' | sed 's/go//' 2>/dev/null || echo 'unknown')"
         PLATFORM="${OS}/${ARCH}"
-
+        
         # Build with ldflags
         mkdir -p build
         LDFLAGS="-X main.version=${VERSION} -X main.gitCommit=${GIT_COMMIT} -X main.buildTime=${BUILD_TIME} -X main.goVersion=${GO_VERSION} -X main.platform=${PLATFORM}"
@@ -134,25 +86,23 @@ tasks:
     cmds:
       - |
         go test ./internal/...
-
+  
   tests:interface:
     summary: Run Python interface tests (test_automation)
     cmds:
       - |
-       python -m tests.test_automation
-  
-  cli:dev:
-    cmds:
-      - task: web:dist
-      - |
-        go run ./cli/tingly-box start
+        python -m tests.test_automation
   
   web:dev:
     cmds:
       - |
+        echo "This is only for frontend dev, please start your tingly-box server too"
+      - |
         cd frontend; pnpm dev
   
-  web:dist:
+  web:build:
+    aliases:
+      - web:dist
     cmds:
       - task: codegen
       - |
@@ -166,8 +116,8 @@ tasks:
       - |
         mkdir -p internal/web/dist/
         cp -R frontend/dist/* internal/web/dist/
-
-  web:dist-dev:
+  
+  web:build:dev:
     cmds:
       - task: codegen
       - |
@@ -182,58 +132,6 @@ tasks:
         mkdir -p internal/web/dist/
         cp -R frontend/dist/* internal/web/dist/
   
-  gui:build:
-    cmds:
-      - |
-        go build -buildvcs=false -gcflags=all="-l" -o bin/{{.BIN_NAME}} ./gui_wails3
-
-  windows:build:amd64:
-    summary: Cross-compiles for Windows AMD64 with CGO enabled (requires mingw-w64)
-    cmds:
-      - task: windows:build:cross:amd64
-#  brew install zig
-  windows:build:arm64:
-    summary: Cross-compiles for Windows ARM64 with CGO (requires manual setup, see task output)
-    cmds:
-      - task: windows:build:cross:arm64
-
-  # CLI build tasks for Windows (uses zig for cross-compilation with CGO)
-  windows:cli:build:amd64:
-    summary: Cross-compiles CLI for Windows AMD64 (requires zig)
-    cmds:
-      - task: windows:cli:build:cross:amd64
-
-  windows:cli:build:arm64:
-    summary: Cross-compiles CLI for Windows ARM64 (requires zig)
-    cmds:
-      - task: windows:cli:build:cross:arm64
-
-  windows:cli:build:cross:amd64:
-    summary: Cross-compiles CLI for Windows AMD64 with zig
-    deps:
-      - task: check:zig
-    cmds:
-      - |
-        mkdir -p {{.BIN_DIR}}
-        # Use zig as cross-compiler for Windows AMD64
-        CC="zig cc -target x86_64-windows-gnu" \
-        CXX="zig c++ -target x86_64-windows-gnu" \
-        GOOS=windows GOARCH=amd64 CGO_ENABLED=1 \
-        go build -buildvcs=false -ldflags="-w -s" -o {{.BIN_DIR}}/{{.BIN_NAME}}-amd64.exe ./cli/tingly-box
-
-  windows:cli:build:cross:arm64:
-    summary: Cross-compiles CLI for Windows ARM64 with zig
-    deps:
-      - task: check:zig
-    cmds:
-      - |
-        mkdir -p {{.BIN_DIR}}
-        # Use zig as cross-compiler for Windows ARM64
-        CC="zig cc -target aarch64-windows-gnu" \
-        CXX="zig c++ -target aarch64-windows-gnu" \
-        GOOS=windows GOARCH=arm64 CGO_ENABLED=1 \
-        go build -buildvcs=false -ldflags="-w -s" -o {{.BIN_DIR}}/{{.BIN_NAME}}-arm64.exe ./cli/tingly-box
-
   check:zig:
     summary: Check if zig is installed
     cmds:
@@ -248,42 +146,7 @@ tasks:
           exit 1
         fi
         echo "Found: $(zig version)"
-
-  # CLI build tasks for Linux (uses zig for cross-compilation with CGO)
-  cli:linux:arm64:
-    summary: Cross-compiles CLI for Linux ARM64 (requires zig)
-    cmds:
-      - task: cli:linux:arm64:cross
-
-  cli:linux:arm64:cross:
-    summary: Cross-compiles CLI for Linux ARM64 with zig
-    deps:
-      - task: check:zig
-    cmds:
-      - |
-        mkdir -p {{.BIN_DIR}}
-        # Use zig as cross-compiler for Linux ARM64
-        CC="zig cc -target aarch64-linux-gnu" \
-        CXX="zig c++ -target aarch64-linux-gnu" \
-        GOOS=linux GOARCH=arm64 CGO_ENABLED=1 \
-        go build -buildvcs=false -ldflags="-w -s" -o {{.BIN_DIR}}/{{.BIN_NAME}}-linux-arm64 ./cli/tingly-box
-
-  # Docker build and test tasks for ARM64
-  docker:build:arm64:
-    summary: Build Docker image for Linux ARM64
-    cmds:
-      - |
-        docker build --platform linux/arm64 -t tingly-box:arm64 -f build/linux/Dockerfile.arm64 .
-
-  docker:test:arm64:
-    summary: Run tests in Linux ARM64 Docker container
-    deps:
-      - task: docker:build:arm64
-    cmds:
-      - |
-        docker run --rm --platform linux/arm64 tingly-box:arm64 \
-        sh -c "cd /app && go test ./internal/... -v"
-
+  
   # remote-cc Service tasks
   remote-cc:build:
     summary: Build the remote-cc-service binary
@@ -292,7 +155,7 @@ tasks:
         cd cmd/remote-cc
         go mod tidy
         go build -o ../../bin/remote-cc-service .
-
+  
   remote-cc:run:
     summary: Run remote-cc-service with default configuration
     env:
@@ -316,13 +179,13 @@ tasks:
         PY
         )"
         cd cmd/remote-cc && RCC_PORT={{.RCC_PORT | default "18080"}} RCC_SESSION_TIMEOUT={{.RCC_SESSION_TIMEOUT | default "30m"}} go run .
-
+  
   remote-cc:test:
     summary: Run tests for remote-cc-service
     cmds:
       - |
         go test ./cmd/remote-cc/... -v
-
+  
   remote-cc:build:cross:
     summary: Cross-compile remote-cc-service for all platforms
     env:
@@ -338,13 +201,13 @@ tasks:
             ./cmd/remote-cc
           done
         done
-
+  
   remote-cc-token:build:
     summary: Build the remote-cc-token binary
     cmds:
       - |
         go build -o ./bin/remote-cc-token ./cmd/remote-coder
-
+  
   remote-cc-token:run:
     summary: Generate an API token (run via SSH)
     cmds:
