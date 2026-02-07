@@ -152,6 +152,62 @@ func (am *AuthMiddleware) ModelAuthMiddleware() gin.HandlerFunc {
 	}
 }
 
+// VirtualModelAuthMiddleware middleware for virtual model API authentication
+// Uses an independent token separate from the main model token
+func (am *AuthMiddleware) VirtualModelAuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		xApiKey := c.GetHeader("X-Api-Key")
+		if authHeader == "" && xApiKey == "" {
+			c.JSON(http.StatusUnauthorized, ErrorResponse{
+				Error: ErrorDetail{
+					Message: "Authorization header required for virtual model access",
+					Type:    "invalid_request_error",
+				},
+			})
+			c.Abort()
+			return
+		}
+
+		token := authHeader
+		// Remove "Bearer " prefix if present in the token
+		if strings.HasPrefix(token, "Bearer ") {
+			token = token[7:]
+		}
+
+		// Check against virtual model token
+		cfg := am.config
+		if cfg == nil || !cfg.HasVirtualModelToken() {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Error: ErrorDetail{
+					Message: "virtual model token not configured",
+					Type:    "invalid_request_error",
+				},
+			})
+			return
+		}
+
+		configToken := cfg.GetVirtualModelToken()
+
+		// Direct token comparison
+		if token == configToken || xApiKey == configToken {
+			// Token matches, allow access
+			c.Set("client_id", "virtual_model_authenticated")
+			c.Next()
+			return
+		}
+
+		c.JSON(http.StatusUnauthorized, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Invalid virtual model authorization",
+				Type:    "invalid_request_error",
+			},
+		})
+		c.Abort()
+		return
+	}
+}
+
 // AuthMiddleware validates the authentication token
 func (am *AuthMiddleware) AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {

@@ -746,8 +746,8 @@ func (s *Server) SetupPassthroughAnthropicEndpoints(group *gin.RouterGroup) {
 // UseVirtualModelEndpoints sets up virtual model endpoints for testing
 func (s *Server) UseVirtualModelEndpoints() {
 	virtual := s.engine.Group("/virtual/v1")
-	virtual.GET("/models", s.authMW.ModelAuthMiddleware(), s.virtualModelService.GetHandler().ListModels)
-	virtual.POST("/chat/completions", s.authMW.ModelAuthMiddleware(), s.virtualModelService.GetHandler().ChatCompletions)
+	virtual.GET("/models", s.authMW.VirtualModelAuthMiddleware(), s.virtualModelService.GetHandler().ListModels)
+	virtual.POST("/chat/completions", s.authMW.VirtualModelAuthMiddleware(), s.virtualModelService.GetHandler().ChatCompletions)
 }
 
 func (s *Server) UseLoadBalanceEndpoints() {
@@ -811,9 +811,11 @@ func (s *Server) Start(port int) error {
 	if !s.enableUI {
 		fmt.Printf("OpenAI v1 Chat API endpoint: %s://%s:%d/openai/v1/chat/completions\n", scheme, resolvedHost, port)
 		fmt.Printf("Anthropic v1 Message API endpoint: %s://%s:%d/anthropic/v1/messages\n", scheme, resolvedHost, port)
+		fmt.Printf("Virtual Model API endpoint: %s://%s:%d/virtual/v1/chat/completions\n", scheme, resolvedHost, port)
 		//Fixme:: we should not hardcode it here
 		fmt.Printf("Mode name: %s\n", "tingly")
 		fmt.Printf("Model API key: %s\n", s.config.GetModelToken())
+		fmt.Printf("Virtual Model API key: %s\n", s.config.GetVirtualModelToken())
 
 		if s.httpsEnabled {
 			certDir := s.httpsCertDir

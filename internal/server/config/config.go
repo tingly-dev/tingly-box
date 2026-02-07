@@ -26,13 +26,14 @@ import (
 
 // Config represents the global configuration
 type Config struct {
-	Rules            []typ.Rule           `yaml:"rules" json:"rules"`                           // List of request configurations
-	DefaultRequestID int                  `yaml:"default_request_id" json:"default_request_id"` // Index of the default Rule
-	UserToken        string               `yaml:"user_token" json:"user_token"`                 // User token for UI and control API authentication
-	ModelToken       string               `yaml:"model_token" json:"model_token"`               // Model token for OpenAI and Anthropic API authentication
-	EncryptProviders bool                 `yaml:"encrypt_providers" json:"encrypt_providers"`   // Whether to encrypt provider info (default false)
-	Scenarios        []typ.ScenarioConfig `yaml:"scenarios" json:"scenarios"`                   // Scenario-specific configurations
-	GUI              GUIConfig            `json:"gui"`                                          // GUI-specific settings
+	Rules             []typ.Rule           `yaml:"rules" json:"rules"`                             // List of request configurations
+	DefaultRequestID  int                  `yaml:"default_request_id" json:"default_request_id"`   // Index of the default Rule
+	UserToken         string               `yaml:"user_token" json:"user_token"`                   // User token for UI and control API authentication
+	ModelToken        string               `yaml:"model_token" json:"model_token"`                 // Model token for OpenAI and Anthropic API authentication
+	VirtualModelToken string               `yaml:"virtual_model_token" json:"virtual_model_token"` // Virtual model token for testing (independent from ModelToken)
+	EncryptProviders  bool                 `yaml:"encrypt_providers" json:"encrypt_providers"`     // Whether to encrypt provider info (default false)
+	Scenarios         []typ.ScenarioConfig `yaml:"scenarios" json:"scenarios"`                     // Scenario-specific configurations
+	GUI               GUIConfig            `json:"gui"`                                            // GUI-specific settings
 
 	// Merged fields from Config struct
 	ProvidersV1 map[string]*typ.Provider `json:"providers"`
@@ -627,6 +628,31 @@ func (c *Config) HasModelToken() bool {
 	defer c.mu.RUnlock()
 
 	return c.ModelToken != ""
+}
+
+// SetVirtualModelToken sets the virtual model token for testing
+func (c *Config) SetVirtualModelToken(token string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.VirtualModelToken = token
+	return c.Save()
+}
+
+// GetVirtualModelToken returns the virtual model token
+func (c *Config) GetVirtualModelToken() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.VirtualModelToken
+}
+
+// HasVirtualModelToken checks if a virtual model token is configured
+func (c *Config) HasVirtualModelToken() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.VirtualModelToken != ""
 }
 
 // Legacy compatibility methods for backward compatibility
@@ -1259,6 +1285,10 @@ func (c *Config) CreateDefaultConfig() error {
 			c.ModelToken = "tingly-box-model-token"
 		}
 		c.ModelToken = "tingly-box-" + modelToken
+	}
+	// Set default virtual model token (independent from model token)
+	if c.VirtualModelToken == "" {
+		c.VirtualModelToken = "tingly-virtual-model-token"
 	}
 	// Initialize merged fields with defaults
 	c.ProvidersV1 = make(map[string]*typ.Provider)
