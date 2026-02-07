@@ -212,3 +212,21 @@ tasks:
     summary: Generate an API token (run via SSH)
     cmds:
       - go run ./cmd/remote-coder
+
+  submodule:
+    summary: Show git HEAD and branch for each submodule in libs/
+    cmds:
+      - |
+        for dir in libs/*/; do
+          if [ -d "$dir" ]; then
+            name=$(basename "$dir")
+            cd "$dir"
+            head=$(git rev-parse HEAD 2>/dev/null || echo "N/A")
+            branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "N/A")
+            echo "$name:"
+            echo "  HEAD: $head"
+            echo "  Branch: $branch"
+            echo ""
+            cd - > /dev/null
+          fi
+        done
