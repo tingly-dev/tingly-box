@@ -102,8 +102,16 @@ const ProviderFormDialog = ({
         setVerificationResult(null);
 
         if (typeof newValue === 'string') {
-            // Custom input - only update apiBase
-            onChange('apiBase', newValue);
+            // Check if this string matches a provider's display format "Title - URL"
+            // If so, extract just the URL part
+            const providers = getCurrentProviders();
+            const matchingProvider = providers.find(p => `${p.title} - ${p.baseUrl}` === newValue);
+            if (matchingProvider) {
+                onChange('apiBase', matchingProvider.baseUrl);
+            } else {
+                // Custom input - only update apiBase
+                onChange('apiBase', newValue);
+            }
         } else if (newValue && newValue.baseUrl) {
             // Preset selected - update apiBase
             onChange('apiBase', newValue.baseUrl);
@@ -355,6 +363,22 @@ const ProviderFormDialog = ({
                                     autoSelect
                                     size="small"
                                     options={getCurrentProviders()}
+                                    filterOptions={(options, state) => {
+                                        // Custom filter: when input is in "Title - URL" format (from selection),
+                                        const inputValue = state.inputValue.toLowerCase();
+                                        const isSelectedFormat = options.some(
+                                            opt => `${opt.title} - ${opt.baseUrl}`.toLowerCase() === inputValue
+                                        );
+                                        if (isSelectedFormat) {
+                                            // Show all options when the input is just the selected display format
+                                            return options;
+                                        }
+                                        // Otherwise, use default filtering logic
+                                        return options.filter(option =>
+                                            option.title.toLowerCase().includes(inputValue) ||
+                                            option.baseUrl.toLowerCase().includes(inputValue)
+                                        );
+                                    }}
                                     getOptionLabel={(option) => {
                                         if (typeof option === 'string') return option;
                                         return `${option.title} - ${option.baseUrl}`;
@@ -363,10 +387,21 @@ const ProviderFormDialog = ({
                                     onChange={(_event, newValue) => {
                                         handleProviderOrBaseUrlSelect(newValue);
                                     }}
-                                    onInputChange={(_event, newInputValue) => {
-                                        // Allow custom input
-                                        onChange('apiBase', newInputValue);
-                                        setVerificationResult(null);
+                                    inputValue={(() => {
+                                        // Find the provider that matches current apiBase and show "Title - URL" format
+                                        const providers = getCurrentProviders();
+                                        const matchingProvider = providers.find(p => p.baseUrl === data.apiBase);
+                                        if (matchingProvider) {
+                                            return `${matchingProvider.title} - ${matchingProvider.baseUrl}`;
+                                        }
+                                        return data.apiBase;
+                                    })()}
+                                    onInputChange={(_event, newInputValue, reason) => {
+                                        // Only update apiBase when user is typing (not when selecting from dropdown)
+                                        if (reason === 'input') {
+                                            onChange('apiBase', newInputValue);
+                                            setVerificationResult(null);
+                                        }
                                     }}
                                     renderOption={(props, option) => (
                                         <Box component="li" {...props} sx={{ fontSize: '0.875rem' }}>
