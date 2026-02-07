@@ -64,11 +64,8 @@ npx tingly-box@latest
 
 git submodule update --init --recursive
 
-# Build CLI binary
-task go:build
-
 # Build with frontend
-task cli:build
+task build
 
 # Build GUI binary via wails3
 task wails:build
@@ -85,35 +82,19 @@ docker run -d \
   ghcr.io/tingly-dev/tingly-box
 ```
 
-**From Docker (Build from sketch)**
+## **Use with IDE, CLI, SDK and any AI application**
 
-```bash
-# Pull and run the NPX-based image (recommended - smaller size, auto-updates)
-mkdir -p tingly-data
-docker run -d \
-  --name tingly-box \
-  -p 12580:12580 \
-  -v `pwd`/tingly-data:/app/.tingly-box \
-  ghcr.io/tingly-dev/tingly-box:latest
+**Tool Integration**
 
-# Or build the full image locally from source
-docker build -t tingly-box:latest .
+- Claude Code
+- OpenCode
+- Xcode
+- Gemini
+- ……
 
-# Run container
-docker run -d \
-  --name tingly-box \
-  -p 12580:12580 \
-  -v $(pwd)/data/.tingly-box:/app/.tingly-box \
-  -v $(pwd)/data/logs:/app/logs \
-  -v $(pwd)/data/memory:/app/memory \
-  tingly-box:latest
-```
+Any application is ready to use.
 
-
-
-## **Use with OpenAI SDK or Claude Code**
-
-**Python OpenAI SDK**
+**OpenAI SDK**
 
 ```python
 from openai import OpenAI
@@ -124,32 +105,30 @@ client = OpenAI(
 )
 
 response = client.chat.completions.create(
-# To pass litellm model name validation, use "gpt-3.5-turbo"
-    model="tingly",
+    model="tingly-gpt",
     messages=[{"role": "user", "content": "Hello!"}]
 )
 print(response)
 ```
 
-**Claude Code**
+**Anthropic SDK**
 
-```bash
-# Settings file (~/.claude/settings.json)
-{
-  "env": {
-    "DISABLE_TELEMETRY": "1",
-    "DISABLE_ERROR_REPORTING": "1",
-    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-    "API_TIMEOUT_MS": "3000000",
-    "ANTHROPIC_AUTH_TOKEN": "{content after tingly token cmd 'Current API Key from Global Config'}",
-    "ANTHROPIC_BASE_URL": "http://localhost:12580/tingly/claude_code",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "tingly/cc",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "tingly/cc",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "tingly/cc",
-    "ANTHROPIC_MODEL": "tingly/cc",
-    "hasCompletedOnboarding": true
-  }
-}
+```python
+from anthropic import Anthropic
+
+client = Anthropic(
+    api_key="your-tingly-model-token",
+    base_url="http://localhost:12580/tingly/anthropic"
+)
+
+response = client.messages.create(
+    model="tingly",
+    max_tokens=1024,
+    messages=[
+        {"role": "user", "content": "Hello!"}
+    ]
+)
+print(response)
 ```
 
 > Tingly Box proxies requests transparently for SDKs and CLI tools.
