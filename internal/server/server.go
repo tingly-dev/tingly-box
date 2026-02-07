@@ -26,6 +26,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
 	servertls "github.com/tingly-dev/tingly-box/internal/server/tls"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/virtualmodel"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
 	"github.com/tingly-dev/tingly-box/pkg/network"
 	oauth2 "github.com/tingly-dev/tingly-box/pkg/oauth"
@@ -86,6 +87,9 @@ type Server struct {
 	// OTel meter setup for unified token tracking
 	meterSetup   *otel.MeterSetup
 	tokenTracker *otel.TokenTracker
+
+	// virtual model service for testing
+	virtualModelService *virtualmodel.Service
 
 	// options
 	enableUI      bool
@@ -435,6 +439,10 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 		logrus.Debugf("OTel meter setup initialized")
 	}
 
+	// Initialize virtual model service
+	server.virtualModelService = virtualmodel.NewService()
+	logrus.Debugf("Virtual model service initialized with default models")
+
 	// Setup middleware
 	server.setupMiddleware()
 
@@ -637,6 +645,9 @@ func (s *Server) setupRoutes() {
 	s.UseAIEndpoints()
 
 	s.UseLoadBalanceEndpoints()
+
+	// Virtual model endpoints for testing
+	s.UseVirtualModelEndpoints()
 }
 
 func (s *Server) UseAIEndpoints() {
@@ -730,6 +741,13 @@ func (s *Server) SetupPassthroughAnthropicEndpoints(group *gin.RouterGroup) {
 	group.POST("/messages/count_tokens", s.authMW.ModelAuthMiddleware(), s.PassthroughAnthropic)
 	// Models endpoint returns tingly-box's model list (not passthrough)
 	group.GET("/models", s.authMW.ModelAuthMiddleware(), s.AnthropicListModels)
+}
+
+// UseVirtualModelEndpoints sets up virtual model endpoints for testing
+func (s *Server) UseVirtualModelEndpoints() {
+	virtual := s.engine.Group("/virtual/v1")
+	virtual.GET("/models", s.authMW.ModelAuthMiddleware(), s.virtualModelService.GetHandler().ListModels)
+	virtual.POST("/chat/completions", s.authMW.ModelAuthMiddleware(), s.virtualModelService.GetHandler().ChatCompletions)
 }
 
 func (s *Server) UseLoadBalanceEndpoints() {
