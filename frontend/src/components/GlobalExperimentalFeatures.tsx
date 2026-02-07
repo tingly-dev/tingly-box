@@ -1,15 +1,13 @@
 import {
     Alert,
     Box,
-    FormControlLabel,
-    Switch,
     Tooltip,
     Typography,
+    Chip,
 } from '@mui/material';
 import { Psychology, Cloud } from '@mui/icons-material';
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
-import { switchControlLabelStyle } from '@/styles/toggleStyles';
 
 const SKILL_FEATURES = [
     { key: 'skill_ide', label: 'IDE Skills', description: 'Enable IDE Skills feature for managing code snippets and skills from IDEs' },
@@ -43,13 +41,14 @@ const GlobalExperimentalFeatures: React.FC = () => {
         }
     };
 
-    const setFeature = (featureKey: string, enabled: boolean) => {
-        console.log('setGlobalFeature called:', featureKey, enabled);
-        api.setScenarioFlag('_global', featureKey, enabled)
+    const toggleFeature = (featureKey: string) => {
+        const newValue = !features[featureKey];
+        console.log('toggleGlobalFeature called:', featureKey, newValue);
+        api.setScenarioFlag('_global', featureKey, newValue)
             .then((result) => {
                 console.log('setScenarioFlag result:', result);
                 if (result.success) {
-                    setFeatures(prev => ({ ...prev, [featureKey]: enabled }));
+                    setFeatures(prev => ({ ...prev, [featureKey]: newValue }));
                 } else {
                     console.error('Failed to set global feature:', result);
                     loadFeatures();
@@ -61,11 +60,12 @@ const GlobalExperimentalFeatures: React.FC = () => {
             });
     };
 
-    const setRemoteCoder = (enabled: boolean) => {
-        api.setScenarioFlag('_global', 'enable_remote_coder', enabled)
+    const toggleRemoteCoder = () => {
+        const newValue = !remoteCoderEnabled;
+        api.setScenarioFlag('_global', 'enable_remote_coder', newValue)
             .then((result) => {
                 if (result.success) {
-                    setRemoteCoderEnabled(enabled);
+                    setRemoteCoderEnabled(newValue);
                 } else {
                     console.error('Failed to set Remote Coder:', result);
                     loadFeatures();
@@ -85,38 +85,47 @@ const GlobalExperimentalFeatures: React.FC = () => {
         return null;
     }
 
+    const chipStyle = (isEnabled: boolean) => ({
+        bgcolor: isEnabled ? 'primary.main' : 'action.hover',
+        color: isEnabled ? 'primary.contrastText' : 'text.primary',
+        fontWeight: isEnabled ? 600 : 400,
+        border: isEnabled ? 'none' : '1px solid',
+        borderColor: 'divider',
+        '&:hover': {
+            bgcolor: isEnabled ? 'primary.dark' : 'action.selected',
+        },
+    });
+
     return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
             {/* Skill Features */}
             <Box sx={{ display: 'flex', alignItems: 'center', py: 2, gap: 3 }}>
                 {/* Label */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
+                    <Psychology sx={{ fontSize: '1rem', color: 'text.secondary' }} />
                     <Typography variant="subtitle2" sx={{ color: 'text.secondary' }}>
                         Skills
                     </Typography>
                     <Tooltip title="Skill Features - Enable prompt and skill management features" arrow>
-                        <Psychology sx={{ fontSize: '1rem', color: 'text.secondary' }} />
+                        <Box />
                     </Tooltip>
                 </Box>
 
-                {/* Skill feature toggles using Switch */}
+                {/* Skill feature toggles as clickable chips */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
-                    {SKILL_FEATURES.map((feature) => (
-                        <Tooltip key={feature.key} title={feature.description} arrow>
-                            <FormControlLabel
-                                control={
-                                    <Switch
-                                        size="small"
-                                        checked={features[feature.key] || false}
-                                        onChange={(e) => setFeature(feature.key, e.target.checked)}
-                                        color="primary"
-                                    />
-                                }
-                                label={feature.label}
-                                sx={switchControlLabelStyle}
+                    {SKILL_FEATURES.map((feature) => {
+                        const isEnabled = features[feature.key] || false;
+                        return (
+                                                    <Tooltip key={feature.key} title={feature.description + (isEnabled ? ' (enabled)' : ' (disabled) - Click to enable')} arrow>
+                            <Chip
+                                label={`${feature.label} · ${isEnabled ? 'On' : 'Off'}`}
+                                onClick={() => toggleFeature(feature.key)}
+                                size="small"
+                                sx={chipStyle(isEnabled)}
                             />
                         </Tooltip>
-                    ))}
+                        );
+                    })}
                 </Box>
             </Box>
 
@@ -130,20 +139,14 @@ const GlobalExperimentalFeatures: React.FC = () => {
                     </Typography>
                 </Box>
 
-                {/* Remote Coder Switch - on the same line */}
+                {/* Remote Coder Toggle as clickable chip */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
-                    <Tooltip title="Enable Remote Coder - access sessions remotely through the web UI" arrow>
-                        <FormControlLabel
-                            control={
-                                <Switch
-                                    size="small"
-                                    checked={remoteCoderEnabled}
-                                    onChange={(e) => setRemoteCoder(e.target.checked)}
-                                    color="primary"
-                                />
-                            }
-                            label="Remote Coder"
-                            sx={switchControlLabelStyle}
+                                        <Tooltip title={"Enable Remote Coder - access sessions remotely through the web UI" + (remoteCoderEnabled ? ' (enabled)' : ' (disabled) - Click to enable')} arrow>
+                        <Chip
+                            label={`Remote Coder · ${remoteCoderEnabled ? 'On' : 'Off'}`}
+                            onClick={toggleRemoteCoder}
+                            size="small"
+                            sx={chipStyle(remoteCoderEnabled)}
                         />
                     </Tooltip>
                 </Box>

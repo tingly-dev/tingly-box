@@ -554,8 +554,8 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                             onShowTokenModal={() => setShowTokenModal(true)}
                             scenario="claude_code"
                             modeSelection={modeSelection}
-                            showApiKeyRow={false}
-                            showBaseUrlRow={false}
+                            showApiKeyRow={true}
+                            showBaseUrlRow={true}
                         />
                     </UnifiedCard>
 
