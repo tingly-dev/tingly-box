@@ -26,6 +26,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
 	servertls "github.com/tingly-dev/tingly-box/internal/server/tls"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/virtualmodel"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
 	"github.com/tingly-dev/tingly-box/pkg/network"
 	oauth2 "github.com/tingly-dev/tingly-box/pkg/oauth"
@@ -86,6 +87,9 @@ type Server struct {
 	// OTel meter setup for unified token tracking
 	meterSetup   *otel.MeterSetup
 	tokenTracker *otel.TokenTracker
+
+	// virtual model service for testing
+	virtualModelService *virtualmodel.Service
 
 	// options
 	enableUI      bool
@@ -435,6 +439,10 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 		logrus.Debugf("OTel meter setup initialized")
 	}
 
+	// Initialize virtual model service
+	server.virtualModelService = virtualmodel.NewService()
+	logrus.Debugf("Virtual model service initialized with default models")
+
 	// Setup middleware
 	server.setupMiddleware()
 
@@ -637,6 +645,9 @@ func (s *Server) setupRoutes() {
 	s.UseAIEndpoints()
 
 	s.UseLoadBalanceEndpoints()
+
+	// Virtual model endpoints for testing
+	s.UseVirtualModelEndpoints()
 }
 
 func (s *Server) UseAIEndpoints() {
@@ -732,6 +743,13 @@ func (s *Server) SetupPassthroughAnthropicEndpoints(group *gin.RouterGroup) {
 	group.GET("/models", s.authMW.ModelAuthMiddleware(), s.AnthropicListModels)
 }
 
+// UseVirtualModelEndpoints sets up virtual model endpoints for testing
+func (s *Server) UseVirtualModelEndpoints() {
+	virtual := s.engine.Group("/virtual/v1")
+	virtual.GET("/models", s.authMW.VirtualModelAuthMiddleware(), s.virtualModelService.GetHandler().ListModels)
+	virtual.POST("/chat/completions", s.authMW.VirtualModelAuthMiddleware(), s.virtualModelService.GetHandler().ChatCompletions)
+}
+
 func (s *Server) UseLoadBalanceEndpoints() {
 	// API routes for load balancer management
 	api := s.engine.Group("/api/v1/load-balancer")
@@ -793,9 +811,11 @@ func (s *Server) Start(port int) error {
 	if !s.enableUI {
 		fmt.Printf("OpenAI v1 Chat API endpoint: %s://%s:%d/openai/v1/chat/completions\n", scheme, resolvedHost, port)
 		fmt.Printf("Anthropic v1 Message API endpoint: %s://%s:%d/anthropic/v1/messages\n", scheme, resolvedHost, port)
+		fmt.Printf("Virtual Model API endpoint: %s://%s:%d/virtual/v1/chat/completions\n", scheme, resolvedHost, port)
 		//Fixme:: we should not hardcode it here
 		fmt.Printf("Mode name: %s\n", "tingly")
 		fmt.Printf("Model API key: %s\n", s.config.GetModelToken())
+		fmt.Printf("Virtual Model API key: %s\n", s.config.GetVirtualModelToken())
 
 		if s.httpsEnabled {
 			certDir := s.httpsCertDir
