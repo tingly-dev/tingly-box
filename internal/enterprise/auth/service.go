@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/enterprise/db"
+	"gorm.io/gorm"
 )
 
 var (
@@ -86,7 +87,7 @@ func (s *AuthService) Login(ctx context.Context, req LoginRequest, ipAddress, us
 	// Get user by username
 	user, err := s.userRepo.GetByUsername(req.Username)
 	if err != nil {
-		if errors.Is(err, db.ErrUserNotFound) {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			s.logAudit(ctx, nil, "user.login", "user", "", nil, ipAddress, userAgent, "failure")
 			return nil, ErrInvalidCredentials
 		}

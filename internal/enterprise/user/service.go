@@ -10,10 +10,6 @@ import (
 )
 
 var (
-	// ErrUserAlreadyExists is returned when creating a duplicate user
-	ErrUserAlreadyExists = errors.New("user already exists")
-	// ErrUserNotFound is returned when a user is not found
-	ErrUserNotFound = errors.New("user not found")
 	// ErrSelfAction is returned when trying to perform an action on self
 	ErrSelfAction = errors.New("cannot perform this action on yourself")
 	// ErrLastAdmin is returned when trying to deactivate the last admin

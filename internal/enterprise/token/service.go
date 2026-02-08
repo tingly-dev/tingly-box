@@ -83,7 +83,7 @@ func (s *serviceImpl) CreateToken(ctx context.Context, req CreateTokenRequest, a
 	if req.UserID != nil {
 		// Only admins can create tokens for other users
 		if actor.Role != db.RoleAdmin {
-			return nil, ErrForbidden
+			return nil, "", ErrForbidden
 		}
 		userID = *req.UserID
 	}
@@ -102,7 +102,7 @@ func (s *serviceImpl) CreateToken(ctx context.Context, req CreateTokenRequest, a
 	}
 
 	// Log audit
-	s.logAudit(ctx, actor, "token.create", "token", token.UUID, nil)
+	s.logAudit(ctx, actor, "token.create", token.UUID, nil)
 
 	return token, rawToken, nil
 }
@@ -227,7 +227,7 @@ func (s *serviceImpl) UpdateToken(ctx context.Context, id int64, req UpdateToken
 	}
 
 	// Log audit
-	s.logAudit(ctx, actor, "token.update", "token", token.UUID, nil)
+	s.logAudit(ctx, actor, "token.update", token.UUID, nil)
 
 	return updatedToken, nil
 }
@@ -248,7 +248,7 @@ func (s *serviceImpl) DeleteToken(ctx context.Context, id int64, actor *db.User)
 	}
 
 	// Log audit
-	s.logAudit(ctx, actor, "token.delete", "token", token.UUID, nil)
+	s.logAudit(ctx, actor, "token.delete", token.UUID, nil)
 
 	return nil
 }
@@ -269,7 +269,7 @@ func (s *serviceImpl) DeleteTokenByUUID(ctx context.Context, uuid string, actor 
 	}
 
 	// Log audit
-	s.logAudit(ctx, actor, "token.delete", "token", token.UUID, nil)
+	s.logAudit(ctx, actor, "token.delete", token.UUID, nil)
 
 	return nil
 }

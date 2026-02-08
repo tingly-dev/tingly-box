@@ -3,9 +3,10 @@ package enterprise
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
-	"github.com/tingly-dev/tingly-box/internal/enterprise/admin"
+	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/enterprise/auth"
 	"github.com/tingly-dev/tingly-box/internal/enterprise/db"
 	"github.com/tingly-dev/tingly-box/internal/enterprise/rbac"
@@ -24,9 +25,9 @@ type enterpriseIntegrationImpl struct {
 	passwordSvc    *auth.PasswordService
 	jwtSvc         *auth.JWTService
 	authMiddleware *rbac.AuthMiddleware
-	userRepo       db.UserRepository
+	userRepo       user.Repository
 	tokenModel     *token.Model
-	sessionModel   *db.SessionModel
+	sessionRepo    db.SessionRepository
 }
 
 // NewIntegration creates a new enterprise integration instance
@@ -81,12 +82,13 @@ func (ei *enterpriseIntegrationImpl) Initialize(ctx context.Context, config *Con
 	ei.jwtSvc = auth.NewJWTService(jwtConfig)
 
 	// Initialize repositories
-	ei.userRepo = db.NewUserRepository(enterpriseDB.GetDB())
+	userRepo := user.NewRepository(enterpriseDB.GetDB())
+	ei.userRepo = userRepo
 	sessionRepo := db.NewSessionRepository(enterpriseDB.GetDB())
 	auditRepo := db.NewAuditLogRepository(enterpriseDB.GetDB())
 
 	// Initialize user model and service
-	userModel := user.NewModel(ei.userRepo)
+	userModel := user.NewModel(userRepo)
 	ei.userService = user.NewService(userModel, ei.passwordSvc, auditRepo)
 
 	// Initialize token model and service
@@ -94,8 +96,8 @@ func (ei *enterpriseIntegrationImpl) Initialize(ctx context.Context, config *Con
 	ei.tokenModel = token.NewModel(tokenRepo)
 	ei.tokenService = token.NewService(ei.tokenModel, auditRepo)
 
-	// Initialize session model
-	ei.sessionModel = db.NewSessionModel(sessionRepo)
+	// Store session repo for auth service
+	ei.sessionRepo = sessionRepo
 
 	// Initialize auth service
 	sessionExpiry := 24 * time.Hour
@@ -160,12 +162,12 @@ func (ei *enterpriseIntegrationImpl) ValidateAccessToken(ctx context.Context, to
 }
 
 // ValidateAPIToken validates an API token and returns the associated user
-func (ei *enterpriseIntegrationImpl) ValidateAPIToken(ctx context.Context, token string) (*UserInfo, *TokenInfo, error) {
+func (ei *enterpriseIntegrationImpl) ValidateAPIToken(ctx context.Context, rawToken string) (*UserInfo, *TokenInfo, error) {
 	if !ei.enabled {
 		return nil, nil, ErrNotEnabled
 	}
 
-	apiToken, err := ei.tokenModel.ValidateToken(token)
+	apiToken, err := ei.tokenModel.ValidateToken(rawToken)
 	if err != nil {
 		if err == token.ErrTokenExpired {
 			return nil, nil, ErrTokenExpired
@@ -589,7 +591,9 @@ func (ei *enterpriseIntegrationImpl) CleanupExpired(ctx context.Context) error {
 	}
 
 	// Cleanup expired sessions
-	_, err := ei.sessionModel.CleanupExpired()
+	sessionRepo := db.NewSessionRepository(ei.db.GetDB())
+	sessionModel := db.NewSessionModel(sessionRepo)
+	_, err := sessionModel.CleanupExpired()
 	if err != nil {
 		return err
 	}

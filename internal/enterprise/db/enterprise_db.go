@@ -58,13 +58,19 @@ func NewEnterpriseDB(config *EnterpriseDBConfig) (*EnterpriseDB, error) {
 		"isolated": true,
 	}).Info("Initializing enterprise database (COMPLETELY ISOLATED)")
 
-	// Build DSN with options
-	dsn := dbPath
-	for k, v := range config.SQLiteOpts {
-		dsn += fmt.Sprintf("&%s=%s", k, v)
+	// Build DSN with options - SQLite format: file:/path/to/db?option1=value1&option2=value2
+	dsn := "file:" + dbPath
+	if len(config.SQLiteOpts) > 0 {
+		dsn += "?"
+		first := true
+		for k, v := range config.SQLiteOpts {
+			if !first {
+				dsn += "&"
+			}
+			dsn += fmt.Sprintf("%s=%s", k, v)
+			first = false
+		}
 	}
-	// Remove leading &
-	dsn = fmt.Sprintf("?%s", dsn[1:])
 
 	// Open database connection
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
@@ -97,7 +103,7 @@ func NewEnterpriseDB(config *EnterpriseDBConfig) (*EnterpriseDB, error) {
 
 	// Initialize repositories
 	userRepo := NewUserRepository(db)
-	sessionRepo := NewSessionRepository(db)
+	_ = NewSessionRepository(db)  // Will be used for session management
 	auditRepo := NewAuditLogRepository(db)
 
 	// Create default admin user if no users exist

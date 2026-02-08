@@ -135,11 +135,6 @@ func (AuditLog) TableName() string {
 	return "ent_audit_logs"
 }
 
-// EnterpriseDB manages enterprise-specific database operations
-type EnterpriseDB struct {
-	db *gorm.DB
-}
-
 // UserRepository defines user data access interface
 type UserRepository interface {
 	GetByID(id int64) (*User, error)

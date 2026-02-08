@@ -105,7 +105,7 @@ func (s *JWTService) ValidateToken(tokenString string) (*JWTClaims, error) {
 	}
 
 	// Check issuer
-	if !claims.VerifyIssuer(s.config.Issuer, true) {
+	if claims.Issuer != s.config.Issuer {
 		return nil, ErrInvalidToken
 	}
 

@@ -1,8 +1,6 @@
 package user
 
 import (
-	"time"
-
 	"github.com/google/uuid"
 	"github.com/tingly-dev/tingly-box/internal/enterprise/db"
 )

@@ -5,14 +5,9 @@ package enterprise
 
 import (
 	"context"
-	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/tingly-dev/tingly-box/internal/enterprise/auth"
 	"github.com/tingly-dev/tingly-box/internal/enterprise/db"
-	"github.com/tingly-dev/tingly-box/internal/enterprise/rbac"
-	"github.com/tingly-dev/tingly-box/internal/enterprise/token"
-	"github.com/tingly-dev/tingly-box/internal/enterprise/user"
 )
 
 // Integration provides the main interface for integrating enterprise features
@@ -149,14 +144,7 @@ type Config struct {
 	PasswordMinLength int
 
 	// Logger is the logger instance (should be logrus)
-	Logger interface{ // Using interface to avoid direct logrus dependency
-		WithFields(map[string]interface{}) interface{}
-		WithError(error) interface{}
-		Warn(args ...interface{})
-		Info(args ...interface{})
-		Debug(args ...interface{})
-		Error(args ...interface{})
-	}
+	Logger interface{} // Using interface{} to accept *logrus.Logger directly
 
 	// DatabaseConfig allows custom database configuration
 	// If nil, uses default SQLite configuration
@@ -320,26 +308,6 @@ type EnterpriseError struct {
 func (e *EnterpriseError) Error() string {
 	return e.Message
 }
-
-// NewIntegration creates a new enterprise integration instance
-func NewIntegration() Integration {
-	return &enterpriseIntegration{}
-}
-
-// enterpriseIntegration implements the Integration interface
-type enterpriseIntegration struct {
-	config        *Config
-	enabled       bool
-	db            *db.EnterpriseDB
-	authService   *auth.AuthService
-	userService   user.Service
-	tokenService  token.Service
-	passwordSvc   *auth.PasswordService
-	jwtSvc        *auth.JWTService
-	authMiddleware *rbac.AuthMiddleware
-}
-
-// ... (implementation would be in separate files)
 
 // Helper function to convert db.User to UserInfo
 func toUserInfo(u *db.User) *UserInfo {
