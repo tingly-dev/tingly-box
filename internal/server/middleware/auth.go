@@ -184,6 +184,7 @@ func (am *AuthMiddleware) VirtualModelAuthMiddleware() gin.HandlerFunc {
 					Type:    "invalid_request_error",
 				},
 			})
+			c.Abort()
 			return
 		}
 
