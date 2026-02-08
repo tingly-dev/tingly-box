@@ -1,0 +1,69 @@
+# IMBot Configuration Example
+# This file shows how to configure multiple IM bots
+
+# Bot configurations
+bots:
+  # Telegram Bot
+  - platform: telegram
+    enabled: true
+    auth:
+      type: token
+      token: ${TELEGRAM_BOT_TOKEN}  # Set environment variable
+    options:
+      webhookUrl: ""
+      useWebhook: false
+      updateTimeout: 30
+    logging:
+      level: info
+      timestamps: true
+
+  # Discord Bot
+  - platform: discord
+    enabled: true
+    auth:
+      type: token
+      token: ${DISCORD_BOT_TOKEN}
+    options:
+      intents:
+        - Guilds
+        - GuildMessages
+        - MessageContent
+    logging:
+      level: info
+
+  # Slack Bot
+  - platform: slack
+    enabled: true
+    auth:
+      type: token
+      token: ${SLACK_BOT_TOKEN}
+    options:
+      appToken: ${SLACK_APP_TOKEN}
+    logging:
+      level: info
+
+  # Feishu/Lark Bot
+  - platform: feishu
+    enabled: true
+    auth:
+      type: oauth
+      clientId: ${FEISHU_APP_ID}
+      clientSecret: ${FEISHU_APP_SECRET}
+    options:
+      domain: feishu  # or "lark" for international
+      encryptKey: ${FEISHU_ENCRYPT_KEY}
+      verificationToken: ${FEISHU_VERIFICATION_TOKEN}
+      webhookPath: /webhook/feishu
+    logging:
+      level: debug
+
+# Global logging configuration
+logging:
+  level: info
+  timestamps: true
+
+# Bot manager configuration
+manager:
+  autoReconnect: true
+  maxReconnectAttempts: 5
+  reconnectDelayMs: 5000
