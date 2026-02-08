@@ -1,5 +1,5 @@
 // Package pkg provides the public API for the imbot package
-package pkg
+package imbot
 
 import (
 	"github.com/tingly-dev/tingly-box/imbot/internal/core"
@@ -118,7 +118,7 @@ func NewSystemContent(eventType string, data map[string]interface{}) *core.Syste
 }
 
 // NewPlatformInfo creates a new platform info
-func NewPlatformInfo(platform core.Platform, name string) *core.PlatformInfo {
+func NewPlatformInfo(platform Platform, name string) *core.PlatformInfo {
 	return core.NewPlatformInfo(platform, name)
 }
 
@@ -128,37 +128,37 @@ func NewBotError(code core.ErrorCode, message string, recoverable bool) *core.Bo
 }
 
 // NewAuthFailedError creates a new auth failed error
-func NewAuthFailedError(platform core.Platform, message string, cause error) *core.BotError {
+func NewAuthFailedError(platform Platform, message string, cause error) *core.BotError {
 	return core.NewAuthFailedError(platform, message, cause)
 }
 
 // NewConnectionFailedError creates a new connection failed error
-func NewConnectionFailedError(platform core.Platform, message string, recoverable bool) *core.BotError {
+func NewConnectionFailedError(platform Platform, message string, recoverable bool) *core.BotError {
 	return core.NewConnectionFailedError(platform, message, recoverable)
 }
 
 // NewRateLimitedError creates a new rate limited error
-func NewRateLimitedError(platform core.Platform, retryAfter int) *core.BotError {
+func NewRateLimitedError(platform Platform, retryAfter int) *core.BotError {
 	return core.NewRateLimitedError(platform, retryAfter)
 }
 
 // NewMessageTooLongError creates a new message too long error
-func NewMessageTooLongError(platform core.Platform, length, limit int) *core.BotError {
+func NewMessageTooLongError(platform Platform, length, limit int) *core.BotError {
 	return core.NewMessageTooLongError(platform, length, limit)
 }
 
 // NewInvalidTargetError creates a new invalid target error
-func NewInvalidTargetError(platform core.Platform, target, reason string) *core.BotError {
+func NewInvalidTargetError(platform Platform, target, reason string) *core.BotError {
 	return core.NewInvalidTargetError(platform, target, reason)
 }
 
 // NewMediaNotSupportedError creates a new media not supported error
-func NewMediaNotSupportedError(platform core.Platform, mediaType string) *core.BotError {
+func NewMediaNotSupportedError(platform Platform, mediaType string) *core.BotError {
 	return core.NewMediaNotSupportedError(platform, mediaType)
 }
 
 // NewTimeoutError creates a new timeout error
-func NewTimeoutError(platform core.Platform, operation string, timeoutMs int) *core.BotError {
+func NewTimeoutError(platform Platform, operation string, timeoutMs int) *core.BotError {
 	return core.NewTimeoutError(platform, operation, timeoutMs)
 }
 
@@ -178,18 +178,18 @@ func GetErrorCode(err error) core.ErrorCode {
 }
 
 // WrapError wraps an error as a BotError
-func WrapError(err error, platform core.Platform, fallbackCode core.ErrorCode) *core.BotError {
+func WrapError(err error, platform Platform, fallbackCode core.ErrorCode) *core.BotError {
 	return core.WrapError(err, platform, fallbackCode)
 }
 
 // GetPlatformCapabilities returns capabilities for a platform
 func GetPlatformCapabilities(platform string) *core.PlatformCapabilities {
-	return core.GetPlatformCapabilities(core.Platform(platform))
+	return core.GetPlatformCapabilities(Platform(platform))
 }
 
 // GetPlatformName returns the human-readable name for a platform
 func GetPlatformName(platform string) string {
-	return core.GetPlatformName(core.Platform(platform))
+	return core.GetPlatformName(Platform(platform))
 }
 
 // IsValidPlatform checks if a platform string is valid

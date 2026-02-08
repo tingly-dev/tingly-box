@@ -1,4 +1,4 @@
-package pkg
+package imbot
 
 import (
 	"fmt"
@@ -44,7 +44,7 @@ func CreateBots(configs []*core.Config) ([]core.Bot, error) {
 
 // IsPlatformSupported checks if a platform is supported
 func IsPlatformSupported(platformStr string) bool {
-	return platform.IsSupported(core.Platform(platformStr))
+	return platform.IsSupported(Platform(platformStr))
 }
 
 // SupportedPlatforms returns a list of all supported platforms
@@ -59,7 +59,7 @@ func SupportedPlatforms() []string {
 
 // GetPlatformInfo returns information about a platform
 func GetPlatformInfo(platform string) (*core.PlatformInfo, error) {
-	p := core.Platform(platform)
+	p := Platform(platform)
 	if !core.IsValidPlatform(platform) {
 		return nil, fmt.Errorf("invalid platform: %s", platform)
 	}

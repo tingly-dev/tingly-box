@@ -1,4 +1,4 @@
-package pkg
+package imbot
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 
 // Manager manages multiple bot instances
 type Manager struct {
-	bots     map[core.Platform][]core.Bot
+	bots     map[Platform][]core.Bot
 	config   *ManagerConfig
 	handlers *eventHandlers
 	mu       sync.RWMutex
@@ -23,11 +23,11 @@ type Manager struct {
 
 // eventHandlers stores global event handlers
 type eventHandlers struct {
-	message      []func(core.Message, core.Platform)
-	error        []func(error, core.Platform)
-	connected    []func(core.Platform)
-	disconnected []func(core.Platform)
-	ready        []func(core.Platform)
+	message      []func(core.Message, Platform)
+	error        []func(error, Platform)
+	connected    []func(Platform)
+	disconnected []func(Platform)
+	ready        []func(Platform)
 }
 
 // ManagerOption is a function that configures the manager
@@ -66,14 +66,14 @@ func NewManager(opts ...ManagerOption) *Manager {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	m := &Manager{
-		bots:   make(map[core.Platform][]core.Bot),
+		bots:   make(map[Platform][]core.Bot),
 		config: core.DefaultManagerConfig(),
 		handlers: &eventHandlers{
-			message:      make([]func(core.Message, core.Platform), 0),
-			error:        make([]func(error, core.Platform), 0),
-			connected:    make([]func(core.Platform), 0),
-			disconnected: make([]func(core.Platform), 0),
-			ready:        make([]func(core.Platform), 0),
+			message:      make([]func(core.Message, Platform), 0),
+			error:        make([]func(error, Platform), 0),
+			connected:    make([]func(Platform), 0),
+			disconnected: make([]func(Platform), 0),
+			ready:        make([]func(Platform), 0),
 		},
 		logger: core.NewLogger(nil),
 		ctx:    ctx,
@@ -135,7 +135,7 @@ func (m *Manager) AddBots(configs []*core.Config) error {
 }
 
 // RemoveBot removes a bot from the manager
-func (m *Manager) RemoveBot(platform core.Platform, index int) error {
+func (m *Manager) RemoveBot(platform Platform, index int) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -157,7 +157,7 @@ func (m *Manager) RemoveBot(platform core.Platform, index int) error {
 }
 
 // GetBot returns a bot for the given platform
-func (m *Manager) GetBot(platform core.Platform) core.Bot {
+func (m *Manager) GetBot(platform Platform) core.Bot {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -170,7 +170,7 @@ func (m *Manager) GetBot(platform core.Platform) core.Bot {
 }
 
 // GetBots returns all bots for a platform
-func (m *Manager) GetBots(platform core.Platform) []core.Bot {
+func (m *Manager) GetBots(platform Platform) []core.Bot {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -184,11 +184,11 @@ func (m *Manager) GetBots(platform core.Platform) []core.Bot {
 }
 
 // GetAllBots returns all bots across all platforms
-func (m *Manager) GetAllBots() map[core.Platform][]core.Bot {
+func (m *Manager) GetAllBots() map[Platform][]core.Bot {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	result := make(map[core.Platform][]core.Bot)
+	result := make(map[Platform][]core.Bot)
 	for platform, bots := range m.bots {
 		result[platform] = make([]core.Bot, len(bots))
 		copy(result[platform], bots)
@@ -231,7 +231,7 @@ func (m *Manager) Stop(ctx context.Context) error {
 	for platform, bots := range m.bots {
 		for _, bot := range bots {
 			wg.Add(1)
-			go func(b core.Bot, p core.Platform) {
+			go func(b core.Bot, p Platform) {
 				defer wg.Done()
 				if err := b.Disconnect(ctx); err != nil {
 					m.logger.Error("Error disconnecting %s bot: %v", p, err)
@@ -253,42 +253,42 @@ func (m *Manager) Close() error {
 }
 
 // OnMessage registers a global message handler
-func (m *Manager) OnMessage(handler func(core.Message, core.Platform)) {
+func (m *Manager) OnMessage(handler func(core.Message, Platform)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.handlers.message = append(m.handlers.message, handler)
 }
 
 // OnError registers a global error handler
-func (m *Manager) OnError(handler func(error, core.Platform)) {
+func (m *Manager) OnError(handler func(error, Platform)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.handlers.error = append(m.handlers.error, handler)
 }
 
 // OnConnected registers a global connected handler
-func (m *Manager) OnConnected(handler func(core.Platform)) {
+func (m *Manager) OnConnected(handler func(Platform)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.handlers.connected = append(m.handlers.connected, handler)
 }
 
 // OnDisconnected registers a global disconnected handler
-func (m *Manager) OnDisconnected(handler func(core.Platform)) {
+func (m *Manager) OnDisconnected(handler func(Platform)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.handlers.disconnected = append(m.handlers.disconnected, handler)
 }
 
 // OnReady registers a global ready handler
-func (m *Manager) OnReady(handler func(core.Platform)) {
+func (m *Manager) OnReady(handler func(Platform)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.handlers.ready = append(m.handlers.ready, handler)
 }
 
 // SendTo sends a message to a specific platform and target
-func (m *Manager) SendTo(platform core.Platform, target string, opts *core.SendMessageOptions) (*core.SendResult, error) {
+func (m *Manager) SendTo(platform Platform, target string, opts *core.SendMessageOptions) (*core.SendResult, error) {
 	bot := m.GetBot(platform)
 	if bot == nil {
 		return nil, fmt.Errorf("no bot available for platform: %s", platform)
@@ -298,8 +298,8 @@ func (m *Manager) SendTo(platform core.Platform, target string, opts *core.SendM
 }
 
 // Broadcast sends a message to multiple targets
-func (m *Manager) Broadcast(targets []Target, opts *core.SendMessageOptions) map[core.Platform]*core.SendResult {
-	results := make(map[core.Platform]*core.SendResult)
+func (m *Manager) Broadcast(targets []Target, opts *core.SendMessageOptions) map[Platform]*core.SendResult {
+	results := make(map[Platform]*core.SendResult)
 
 	for _, target := range targets {
 		result, err := m.SendTo(target.Platform, target.Target, opts)
@@ -331,15 +331,15 @@ func (m *Manager) GetStatus() map[string]*core.BotStatus {
 }
 
 // setupBotHandlers sets up event handlers for a bot
-func (m *Manager) setupBotHandlers(bot core.Bot, platform core.Platform) {
+func (m *Manager) setupBotHandlers(bot core.Bot, platform Platform) {
 	bot.OnMessage(func(msg core.Message) {
 		m.mu.RLock()
-		handlers := make([]func(core.Message, core.Platform), len(m.handlers.message))
+		handlers := make([]func(core.Message, Platform), len(m.handlers.message))
 		copy(handlers, m.handlers.message)
 		m.mu.RUnlock()
 
 		for _, handler := range handlers {
-			go func(h func(core.Message, core.Platform)) {
+			go func(h func(core.Message, Platform)) {
 				defer func() {
 					if r := recover(); r != nil {
 						m.logger.Error("panic in message handler: %v", r)
@@ -352,12 +352,12 @@ func (m *Manager) setupBotHandlers(bot core.Bot, platform core.Platform) {
 
 	bot.OnError(func(err error) {
 		m.mu.RLock()
-		handlers := make([]func(error, core.Platform), len(m.handlers.error))
+		handlers := make([]func(error, Platform), len(m.handlers.error))
 		copy(handlers, m.handlers.error)
 		m.mu.RUnlock()
 
 		for _, handler := range handlers {
-			go func(h func(error, core.Platform)) {
+			go func(h func(error, Platform)) {
 				defer func() {
 					if r := recover(); r != nil {
 						m.logger.Error("panic in error handler: %v", r)
@@ -370,12 +370,12 @@ func (m *Manager) setupBotHandlers(bot core.Bot, platform core.Platform) {
 
 	bot.OnConnected(func() {
 		m.mu.RLock()
-		handlers := make([]func(core.Platform), len(m.handlers.connected))
+		handlers := make([]func(Platform), len(m.handlers.connected))
 		copy(handlers, m.handlers.connected)
 		m.mu.RUnlock()
 
 		for _, handler := range handlers {
-			go func(h func(core.Platform)) {
+			go func(h func(Platform)) {
 				defer func() {
 					if r := recover(); r != nil {
 						m.logger.Error("panic in connected handler: %v", r)
@@ -388,12 +388,12 @@ func (m *Manager) setupBotHandlers(bot core.Bot, platform core.Platform) {
 
 	bot.OnDisconnected(func() {
 		m.mu.RLock()
-		handlers := make([]func(core.Platform), len(m.handlers.disconnected))
+		handlers := make([]func(Platform), len(m.handlers.disconnected))
 		copy(handlers, m.handlers.disconnected)
 		m.mu.RUnlock()
 
 		for _, handler := range handlers {
-			go func(h func(core.Platform)) {
+			go func(h func(Platform)) {
 				defer func() {
 					if r := recover(); r != nil {
 						m.logger.Error("panic in disconnected handler: %v", r)
@@ -411,12 +411,12 @@ func (m *Manager) setupBotHandlers(bot core.Bot, platform core.Platform) {
 
 	bot.OnReady(func() {
 		m.mu.RLock()
-		handlers := make([]func(core.Platform), len(m.handlers.ready))
+		handlers := make([]func(Platform), len(m.handlers.ready))
 		copy(handlers, m.handlers.ready)
 		m.mu.RUnlock()
 
 		for _, handler := range handlers {
-			go func(h func(core.Platform)) {
+			go func(h func(Platform)) {
 				defer func() {
 					if r := recover(); r != nil {
 						m.logger.Error("panic in ready handler: %v", r)
@@ -429,7 +429,7 @@ func (m *Manager) setupBotHandlers(bot core.Bot, platform core.Platform) {
 }
 
 // handleReconnect handles auto-reconnect logic
-func (m *Manager) handleReconnect(bot core.Bot, platform core.Platform) {
+func (m *Manager) handleReconnect(bot core.Bot, platform Platform) {
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
@@ -461,14 +461,14 @@ func (m *Manager) handleReconnect(bot core.Bot, platform core.Platform) {
 
 // Target represents a message target
 type Target struct {
-	Platform core.Platform
+	Platform Platform
 	Target   string
 }
 
 // NewTarget creates a new target
 func NewTarget(platform string, target string) Target {
 	return Target{
-		Platform: core.Platform(platform),
+		Platform: Platform(platform),
 		Target:   target,
 	}
 }

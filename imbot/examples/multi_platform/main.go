@@ -6,8 +6,8 @@ import (
 	"log"
 	"os"
 
+	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/imbot/internal/core"
-	pkg "github.com/tingly-dev/tingly-box/imbot/pkg"
 )
 
 func main() {
@@ -20,25 +20,25 @@ func main() {
 	}
 
 	// Create bot manager with custom options
-	manager := pkg.NewManager(
-		pkg.WithAutoReconnect(true),
-		pkg.WithMaxReconnectAttempts(10),
-		pkg.WithReconnectDelay(3000), // 3 seconds
+	manager := imbot.NewManager(
+		imbot.WithAutoReconnect(true),
+		imbot.WithMaxReconnectAttempts(10),
+		imbot.WithReconnectDelay(3000), // 3 seconds
 	)
 
 	// Collect configs
-	var configs []*pkg.Config
+	var configs []*imbot.Config
 
 	// Add Telegram if token provided
 	if telegramToken != "" {
-		configs = append(configs, &pkg.Config{
+		configs = append(configs, &imbot.Config{
 			Platform: core.PlatformTelegram,
 			Enabled:  true,
-			Auth: pkg.AuthConfig{
+			Auth: imbot.AuthConfig{
 				Type:  "token",
 				Token: telegramToken,
 			},
-			Logging: &pkg.LoggingConfig{
+			Logging: &imbot.LoggingConfig{
 				Level: "info",
 			},
 		})
@@ -47,14 +47,14 @@ func main() {
 
 	// Add Discord if token provided
 	if discordToken != "" {
-		configs = append(configs, &pkg.Config{
+		configs = append(configs, &imbot.Config{
 			Platform: core.PlatformDiscord,
 			Enabled:  true,
-			Auth: pkg.AuthConfig{
+			Auth: imbot.AuthConfig{
 				Type:  "token",
 				Token: discordToken,
 			},
-			Logging: &pkg.LoggingConfig{
+			Logging: &imbot.LoggingConfig{
 				Level: "info",
 			},
 			Options: map[string]interface{}{
@@ -70,7 +70,7 @@ func main() {
 	}
 
 	// Unified message handler for all platforms
-	manager.OnMessage(func(msg pkg.Message, platform core.Platform) {
+	manager.OnMessage(func(msg imbot.Message, platform core.Platform) {
 		// Log the message
 		logMsg := fmt.Sprintf("[%-10s] %s: %s",
 			platform,
@@ -137,7 +137,7 @@ func main() {
 	log.Println("✅ Bot stopped cleanly")
 }
 
-func handleTextMessage(manager *pkg.Manager, msg pkg.Message, platform core.Platform) {
+func handleTextMessage(manager *imbot.Manager, msg imbot.Message, platform core.Platform) {
 	text := msg.GetText()
 
 	// Handle commands
@@ -158,7 +158,7 @@ func handleTextMessage(manager *pkg.Manager, msg pkg.Message, platform core.Plat
 	}
 }
 
-func handleMediaMessage(manager *pkg.Manager, msg pkg.Message, platform core.Platform) {
+func handleMediaMessage(manager *imbot.Manager, msg imbot.Message, platform core.Platform) {
 	media := msg.GetMedia()
 	if len(media) > 0 {
 		bot := manager.GetBot(platform)
@@ -169,7 +169,7 @@ func handleMediaMessage(manager *pkg.Manager, msg pkg.Message, platform core.Pla
 	}
 }
 
-func sendHelp(manager *pkg.Manager, msg pkg.Message, platform core.Platform) {
+func sendHelp(manager *imbot.Manager, msg imbot.Message, platform core.Platform) {
 	bot := manager.GetBot(platform)
 	if bot == nil {
 		return
@@ -183,13 +183,13 @@ func sendHelp(manager *pkg.Manager, msg pkg.Message, platform core.Platform) {
 
 This bot works on multiple platforms!`
 
-	bot.SendMessage(context.Background(), msg.Sender.ID, &pkg.SendMessageOptions{
+	bot.SendMessage(context.Background(), msg.Sender.ID, &imbot.SendMessageOptions{
 		Text:      helpText,
-		ParseMode: pkg.ParseModeMarkdown,
+		ParseMode: imbot.ParseModeMarkdown,
 	})
 }
 
-func sendPong(manager *pkg.Manager, msg pkg.Message, platform core.Platform) {
+func sendPong(manager *imbot.Manager, msg imbot.Message, platform core.Platform) {
 	bot := manager.GetBot(platform)
 	if bot == nil {
 		return
@@ -198,7 +198,7 @@ func sendPong(manager *pkg.Manager, msg pkg.Message, platform core.Platform) {
 	bot.SendText(context.Background(), msg.Sender.ID, "🏓 Pong!")
 }
 
-func sendStatus(manager *pkg.Manager, msg pkg.Message, platform core.Platform) {
+func sendStatus(manager *imbot.Manager, msg imbot.Message, platform core.Platform) {
 	bot := manager.GetBot(platform)
 	if bot == nil {
 		return
@@ -215,13 +215,13 @@ func sendStatus(manager *pkg.Manager, msg pkg.Message, platform core.Platform) {
 		statusText += fmt.Sprintf("\n%s %s: %s", emoji, key, getStatusText(status))
 	}
 
-	bot.SendMessage(context.Background(), msg.Sender.ID, &pkg.SendMessageOptions{
+	bot.SendMessage(context.Background(), msg.Sender.ID, &imbot.SendMessageOptions{
 		Text:      statusText,
-		ParseMode: pkg.ParseModeMarkdown,
+		ParseMode: imbot.ParseModeMarkdown,
 	})
 }
 
-func getStatusText(status *pkg.BotStatus) string {
+func getStatusText(status *imbot.BotStatus) string {
 	if status.Connected {
 		return "Connected"
 	}
