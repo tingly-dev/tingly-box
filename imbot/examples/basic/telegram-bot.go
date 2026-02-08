@@ -5,9 +5,16 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"slices"
 
 	"github.com/tingly-dev/tingly-box/imbot"
 )
+
+var WHITE_LIST []string
+
+func init() {
+	WHITE_LIST = []string{""}
+}
 
 func main() {
 	// Get bot token from environment
@@ -51,6 +58,14 @@ func main() {
 
 		// Echo the message back
 		bot := manager.GetBot(platform)
+
+		// check user
+		if !slices.Contains(WHITE_LIST, msg.Sender.ID) {
+			log.Printf("Rejected by white list")
+			bot.SendText(context.Background(), msg.Sender.ID, fmt.Sprintf("Rejected"))
+			return
+		}
+
 		if bot != nil {
 			_, err := bot.SendText(context.Background(), msg.Sender.ID, fmt.Sprintf("Echo: %s", msg.GetText()))
 			if err != nil {
