@@ -89,11 +89,6 @@ func (r *Registry) RegisterBuiltinPlatforms() {
 		return whatsapp.NewWhatsAppBot(config)
 	})
 
-	// WhatsApp
-	r.Register(core.PlatformWhatsApp, func(config *core.Config) (core.Bot, error) {
-		return NewWhatsAppBot(config)
-	})
-
 	// WebChat (mock for testing)
 	r.Register(core.PlatformWebChat, func(config *core.Config) (core.Bot, error) {
 		return NewMockBot(config)
@@ -183,7 +178,13 @@ func (m *MockBot) SendMessage(ctx context.Context, target string, opts *core.Sen
 	// Create result
 	result := &core.SendResult{
 		MessageID: fmt.Sprintf("mock-%d", len(m.messages)),
-		Timestamp: ctx.Value("timestamp").(int64),
+	}
+
+	// Use timestamp from context if available, otherwise use current time
+	if ts, ok := ctx.Value("timestamp").(int64); ok {
+		result.Timestamp = ts
+	} else {
+		result.Timestamp = 0 // Will be set by caller
 	}
 
 	return result, nil

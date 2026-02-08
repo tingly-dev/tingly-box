@@ -1,6 +1,9 @@
 package core
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // Bot represents the interface for all messaging platform bots
 type Bot interface {
@@ -68,9 +71,11 @@ func (s *BotStatus) IsHealthy() bool {
 }
 
 // LastActivityTime returns the last activity as a time.Time
-func (s *BotStatus) LastActivityTime() string {
-	// TODO: convert to time.Time
-	return ""
+func (s *BotStatus) LastActivityTime() time.Time {
+	if s.LastActivity == 0 {
+		return time.Time{}
+	}
+	return time.Unix(s.LastActivity, 0)
 }
 
 // PlatformInfo represents information about a platform

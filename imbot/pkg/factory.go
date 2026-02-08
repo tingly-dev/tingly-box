@@ -43,8 +43,8 @@ func CreateBots(configs []*core.Config) ([]core.Bot, error) {
 }
 
 // IsPlatformSupported checks if a platform is supported
-func IsPlatformSupported(platform string) bool {
-	return platform.IsSupported(core.Platform(platform))
+func IsPlatformSupported(platformStr string) bool {
+	return platform.IsSupported(core.Platform(platformStr))
 }
 
 // SupportedPlatforms returns a list of all supported platforms

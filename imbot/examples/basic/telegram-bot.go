@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/tingly-dev/tingly-box/imbot/pkg"
+	pkg "github.com/tingly-dev/tingly-box/imbot/pkg"
 )
 
 func main() {
@@ -17,20 +17,20 @@ func main() {
 	}
 
 	// Create bot manager
-	manager := imbot.NewManager(
-		imbot.WithAutoReconnect(true),
-		imbot.WithMaxReconnectAttempts(5),
+	manager := pkg.NewManager(
+		pkg.WithAutoReconnect(true),
+		pkg.WithMaxReconnectAttempts(5),
 	)
 
 	// Add Telegram bot
-	err := manager.AddBot(&imbot.Config{
-		Platform: imbot.PlatformTelegram,
+	err := manager.AddBot(&pkg.Config{
+		Platform: pkg.PlatformTelegram,
 		Enabled:  true,
-		Auth: imbot.AuthConfig{
+		Auth: pkg.AuthConfig{
 			Type:  "token",
 			Token: token,
 		},
-		Logging: &imbot.LoggingConfig{
+		Logging: &pkg.LoggingConfig{
 			Level:      "info",
 			Timestamps: true,
 		},
@@ -40,7 +40,7 @@ func main() {
 	}
 
 	// Set up message handler
-	manager.OnMessage(func(msg imbot.Message, platform imbot.Platform) {
+	manager.OnMessage(func(msg pkg.Message, platform pkg.Platform) {
 		// Print incoming message
 		fmt.Printf("[%-10s] %s (%s): %s\n",
 			platform,
@@ -60,16 +60,16 @@ func main() {
 	})
 
 	// Set up error handler
-	manager.OnError(func(err error, platform imbot.Platform) {
+	manager.OnError(func(err error, platform pkg.Platform) {
 		log.Printf("[%s] Error: %v", platform, err)
 	})
 
 	// Set up connection handlers
-	manager.OnConnected(func(platform imbot.Platform) {
+	manager.OnConnected(func(platform pkg.Platform) {
 		log.Printf("[%s] Bot connected", platform)
 	})
 
-	manager.OnDisconnected(func(platform imbot.Platform) {
+	manager.OnDisconnected(func(platform pkg.Platform) {
 		log.Printf("[%s] Bot disconnected", platform)
 	})
 

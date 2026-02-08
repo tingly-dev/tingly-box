@@ -158,6 +158,7 @@ type MediaAttachment struct {
 	URL       string                 `json:"url"`
 	MimeType  string                 `json:"mimeType,omitempty"`
 	Filename  string                 `json:"filename,omitempty"`
+	Title     string                 `json:"title,omitempty"`
 	Size      int64                  `json:"size,omitempty"`
 	Thumbnail string                 `json:"thumbnail,omitempty"`
 	Width     int                    `json:"width,omitempty"`

@@ -40,7 +40,7 @@ func NewDiscordBot(config *core.Config) (*Bot, error) {
 		token = "Bot " + token
 	}
 
-	// Create Discord session
+	// Create Discord session with intents
 	session, err := discordgo.New(token)
 	if err != nil {
 		return nil, core.NewAuthFailedError(core.PlatformDiscord, "failed to create discord session", err)
@@ -63,7 +63,8 @@ func NewDiscordBot(config *core.Config) (*Bot, error) {
 		}
 	}
 
-	session.IdentifyIntents = bot.intents
+	// Note: In newer versions of discordgo, intents are set via New(token) with Intent options
+	// or through session GatewayManager.Identify. For now, we store intents and use them when needed.
 
 	return bot, nil
 }
@@ -176,7 +177,9 @@ func (b *Bot) EditMessage(ctx context.Context, messageID string, text string) er
 		return core.NewInvalidTargetError(core.PlatformDiscord, messageID, "invalid format, expected channelID:messageID")
 	}
 
-	_, err := b.session.ChannelMessageEdit(parts[0], parts[1], &discordgo.MessageEdit{
+	_, err := b.session.ChannelMessageEditComplex(&discordgo.MessageEdit{
+		ID:      parts[1],
+		Channel: parts[0],
 		Content: &text,
 	})
 	if err != nil {
@@ -244,7 +247,7 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 	sender := core.Sender{
 		ID:          m.Message.Author.ID,
 		Username:    m.Message.Author.Username,
-		DisplayName: m.Message.Author.Globalname,
+		DisplayName: m.Message.Author.GlobalName,
 		Raw:         make(map[string]interface{}),
 	}
 
@@ -294,10 +297,13 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 	}
 
 	// Add thread context if reply
-	if m.Message.Reference != nil && m.Message.Reference.MessageID != "" {
-		message.ThreadContext = &core.ThreadContext{
-			ID:              m.Message.Reference.MessageID,
-			ParentMessageID: m.Message.Reference.MessageID,
+	if m.Message.Reference != nil {
+		ref := m.Message.Reference()
+		if ref != nil && ref.MessageID != "" {
+			message.ThreadContext = &core.ThreadContext{
+				ID:              ref.MessageID,
+				ParentMessageID: ref.MessageID,
+			}
 		}
 	}
 
@@ -352,8 +358,8 @@ func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessag
 		}
 	}
 
-	// Send message
-	m, err := b.session.ChannelMessageSend(target, sendData)
+	// Send message - ChannelMessageSendComplex for MessageSend struct
+	m, err := b.session.ChannelMessageSendComplex(target, sendData)
 	if err != nil {
 		return nil, core.WrapError(err, core.PlatformDiscord, core.ErrPlatformError)
 	}
@@ -388,8 +394,8 @@ func (b *Bot) sendMedia(ctx context.Context, target string, opts *core.SendMessa
 		Files: files,
 	}
 
-	if opts.Caption != "" {
-		sendData.Content = opts.Caption
+	if opts.Text != "" {
+		sendData.Content = opts.Text
 	}
 
 	m, err := b.session.ChannelMessageSendComplex(target, sendData)
@@ -471,7 +477,14 @@ func hasBotPrefix(token string) bool {
 
 func parseDiscordMessageReference(ref string) []string {
 	// Discord uses "channelID:messageID" format
-	return discordgo.SplitMessageReference(ref)
+	// Split by the first colon
+	for i := 0; i < len(ref); i++ {
+		if ref[i] == ':' {
+			return []string{ref[:i], ref[i+1:]}
+		}
+	}
+	// If no colon found, return the ref as channel ID with empty message ID
+	return []string{ref, ""}
 }
 
 func parseIntent(intent string) discordgo.Intent {

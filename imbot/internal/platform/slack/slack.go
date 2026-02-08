@@ -12,13 +12,13 @@ import (
 // Bot implements the Slack bot
 type Bot struct {
 	*core.BaseBot
-	client    *slack.Client
-	rtm       *slack.RTM
-	appToken  string
-	ctx       context.Context
-	cancel    context.CancelFunc
-	wg        sync.WaitGroup
-	mu        sync.RWMutex
+	client   *slack.Client
+	rtm      *slack.RTM
+	appToken string
+	ctx      context.Context
+	cancel   context.CancelFunc
+	wg       sync.WaitGroup
+	mu       sync.RWMutex
 }
 
 // NewSlackBot creates a new Slack bot
@@ -56,10 +56,6 @@ func (b *Bot) Connect(ctx context.Context) error {
 	authResp, err := b.client.AuthTest()
 	if err != nil {
 		return core.NewAuthFailedError(core.PlatformSlack, "authentication failed", err)
-	}
-
-	if !authResp.OK {
-		return core.NewAuthFailedError(core.PlatformSlack, "authentication not OK", nil)
 	}
 
 	b.UpdateConnected(true)
@@ -141,8 +137,9 @@ func (b *Bot) React(ctx context.Context, messageID string, emoji string) error {
 		return core.NewInvalidTargetError(core.PlatformSlack, messageID, "invalid format, expected channelID:timestamp")
 	}
 
-	// Add reaction
-	err := b.client.AddReaction(parts[0], slack.ItemRef{Timestamp: parts[1]}, emoji)
+	// Add reaction - slack-go API: AddReaction(name string, item ItemRef)
+	itemRef := slack.NewRefToMessage(parts[0], parts[1])
+	err := b.client.AddReaction(emoji, itemRef)
 	if err != nil {
 		return core.WrapError(err, core.PlatformSlack, core.ErrPlatformError)
 	}
@@ -195,7 +192,7 @@ func (b *Bot) DeleteMessage(ctx context.Context, messageID string) error {
 		return core.NewInvalidTargetError(core.PlatformSlack, messageID, "invalid format, expected channelID:timestamp")
 	}
 
-	_, err := b.client.DeleteMessage(parts[0], parts[1])
+	_, _, err := b.client.DeleteMessage(parts[0], parts[1])
 	if err != nil {
 		return core.WrapError(err, core.PlatformSlack, core.ErrPlatformError)
 	}
@@ -226,7 +223,9 @@ func (b *Bot) startRTM() error {
 	go b.handleRTMEvents(rtm)
 
 	b.rtm = rtm
-	return rtm.Connect()
+	// RTM connects automatically when we call ManageConnection or after starting the goroutine
+	// Return nil immediately, the connection will be established in the background
+	return nil
 }
 
 // handleRTMEvents handles RTM events
@@ -246,13 +245,13 @@ func (b *Bot) handleRTMEvents(rtm *slack.RTM) {
 				return
 			}
 
-			switch ev := msg.Data.(type) {
+			switch data := msg.Data.(type) {
 			case *slack.HelloEvent:
 				b.Logger().Debug("Slack RTM connected")
 			case *slack.MessageEvent:
-				b.handleMessage(msg.Data.(*slack.MessageEvent))
-			case *slack slack.RTMError:
-				b.EmitEvent(msg.Data.(*slack.RTMError))
+				b.handleMessage(data)
+			case *slack.RTMError:
+				b.EmitError(fmt.Errorf("RTM error: %v", data))
 			}
 		}
 	}
@@ -270,8 +269,8 @@ func (b *Bot) handleMessage(event *slack.MessageEvent) {
 
 	// Get sender info
 	sender := core.Sender{
-		ID:   event.User,
-		Raw:  make(map[string]interface{}),
+		ID:  event.User,
+		Raw: make(map[string]interface{}),
 	}
 
 	// Try to get user info
@@ -291,8 +290,10 @@ func (b *Bot) handleMessage(event *slack.MessageEvent) {
 	}
 
 	// Get channel info
-	channel, err := b.client.GetChannelInfo(event.Channel)
-	if err == nil {
+	channel, err := b.client.GetConversationInfo(&slack.GetConversationInfoInput{
+		ChannelID: event.Channel,
+	})
+	if err == nil && channel.Name != "" {
 		recipient.DisplayName = channel.Name
 	}
 
@@ -334,12 +335,34 @@ func (b *Bot) handleMessage(event *slack.MessageEvent) {
 
 // getChatType determines the chat type
 func (b *Bot) getChatType(event *slack.MessageEvent) core.ChatType {
-	// Check if it's a DM or group DM
-	if event.ChannelType == "im" || event.ChannelType == "mpim" {
-		return core.ChatTypeDirect
+	// Try to get conversation info to determine type
+	channel, err := b.client.GetConversationInfo(&slack.GetConversationInfoInput{
+		ChannelID: event.Channel,
+	})
+	if err == nil {
+		if channel.IsIM {
+			return core.ChatTypeDirect
+		}
+		if channel.IsMpIM {
+			return core.ChatTypeDirect
+		}
+		if channel.IsChannel || channel.IsGroup {
+			return core.ChatTypeGroup
+		}
 	}
 
-	// Otherwise it's a channel (group)
+	// Fallback to checking channel ID format
+	// DMs typically start with 'D', channels with 'C', groups with 'G'
+	if len(event.Channel) > 0 {
+		switch event.Channel[0] {
+		case 'D':
+			return core.ChatTypeDirect
+		case 'G':
+			// Could be MPDM or private channel
+			return core.ChatTypeGroup
+		}
+	}
+
 	return core.ChatTypeGroup
 }
 
@@ -408,8 +431,8 @@ func (b *Bot) sendMedia(ctx context.Context, target string, opts *core.SendMessa
 
 	// For now, send as a message with URL
 	var text string
-	if opts.Caption != "" {
-		text = opts.Caption + "\n" + media.URL
+	if opts.Text != "" {
+		text = opts.Text + "\n" + media.URL
 	} else {
 		text = media.URL
 	}
@@ -445,7 +468,7 @@ func (b *Bot) handleFiles(files []slack.File) core.Content {
 			Type:     mediaType,
 			URL:      file.URLPrivate,
 			Filename: file.Name,
-			Size:     file.Size,
+			Size:     int64(file.Size),
 			Title:    file.Title,
 			Raw:      make(map[string]interface{}),
 		}

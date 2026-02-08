@@ -208,7 +208,7 @@ func (m *Manager) Start(ctx context.Context) error {
 	// Connect all bots
 	for platform, bots := range m.bots {
 		for _, bot := range bots {
-			if bot.Config().Enabled && !bot.IsConnected() {
+			if !bot.IsConnected() {
 				if err := bot.Connect(ctx); err != nil {
 					m.logger.Error("Failed to connect %s bot: %v", platform, err)
 				}

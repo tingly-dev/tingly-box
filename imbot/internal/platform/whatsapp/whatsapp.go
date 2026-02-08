@@ -1,6 +1,7 @@
 package whatsapp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -193,11 +194,20 @@ func (b *Bot) React(ctx context.Context, messageID string, emoji string) error {
 	}
 
 	// WhatsApp uses send endpoint with reaction type
+	// Note: messageID should be in format "phone_number:message_id" for WhatsApp
+	// since the Bot interface doesn't provide target phone number separately
 	url := fmt.Sprintf("%s/%s/messages", b.apiURL, b.phoneID)
+
+	// Parse phone number from messageID if in format "phone:message_id"
+	phoneNumber := messageID
+	if idx := findIndex(messageID, ":"); idx != -1 {
+		phoneNumber = messageID[:idx]
+		messageID = messageID[idx+1:]
+	}
 
 	reqBody := map[string]interface{}{
 		"messaging_product": "whatsapp",
-		"to":                target,
+		"to":                phoneNumber,
 		"type":              "reaction",
 		"reaction": map[string]string{
 			"message_id": messageID,
@@ -363,9 +373,9 @@ func (b *Bot) sendMedia(ctx context.Context, target string, opts *core.SendMessa
 	}
 
 	// Add caption if provided
-	if opts.Caption != "" {
+	if opts.Text != "" {
 		reqBody["text"] = map[string]string{
-			"body": opts.Caption,
+			"body": opts.Text,
 		}
 	}
 

@@ -7,6 +7,11 @@ import (
 
 // Re-export core types
 type (
+	// Platform types
+	Platform  = core.Platform
+	ChatType  = core.ChatType
+	ParseMode = core.ParseMode
+
 	// Message types
 	Message         = core.Message
 	Sender          = core.Sender
@@ -33,7 +38,8 @@ type (
 	ManagerConfig = core.ManagerConfig
 
 	// Error types
-	BotError = core.BotError
+	BotError  = core.BotError
+	ErrorCode = core.ErrorCode
 
 	// Other types
 	MediaAttachment   = core.MediaAttachment
