@@ -39,6 +39,9 @@ const (
 
 const DBFileName = "tingly.db" // Unified SQLite database file
 
+// Enterprise database file (separate from community edition)
+const EnterpriseDBFileName = "tingly_enterprise.db"
+
 // Load balancing threshold defaults
 const DefaultRequestThreshold = int64(10)  // Default request threshold for round-robin and hybrid tactics
 const DefaultTokenThreshold = int64(10000) // Default token threshold for token-based and hybrid tactics
@@ -75,4 +78,9 @@ func GetDBDir(baseDir string) string {
 
 func GetDBFile(baseDir string) string {
 	return filepath.Join(baseDir, DBDirName, DBFileName)
+}
+
+// GetEnterpriseDBFile returns the enterprise database file path (separate from community db)
+func GetEnterpriseDBFile(baseDir string) string {
+	return filepath.Join(baseDir, DBDirName, EnterpriseDBFileName)
 }

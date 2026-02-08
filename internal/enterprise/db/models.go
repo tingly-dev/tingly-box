@@ -197,9 +197,10 @@ func (r *userRepositoryImpl) UpdateLastLogin(id int64) error {
 	return r.db.Model(&User{}).Where("id = ?", id).Update("last_login_at", time.Now()).Error
 }
 
-// NewEnterpriseDB creates a new enterprise database manager
-func NewEnterpriseDB(db *gorm.DB) *EnterpriseDB {
-	return &EnterpriseDB{db: db}
+// EnterpriseDB manages enterprise-specific database operations
+type EnterpriseDB struct {
+	db      *gorm.DB
+	BaseDir string // Base directory for path resolution
 }
 
 // AutoMigrate runs auto-migration for all enterprise models
