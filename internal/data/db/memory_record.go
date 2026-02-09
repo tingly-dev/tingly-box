@@ -56,8 +56,8 @@ type MemoryRoundRecord struct {
 	UpdatedAt time.Time `gorm:"column:updated_at;not null"`
 
 	// Flags
-	IsStreaming bool `gorm:"column:is_streaming;type:integer"`
-	HasToolUse  bool `gorm:"column:has_tool_use;type:integer"`
+	IsStreaming  bool `gorm:"column:is_streaming;type:integer"`
+	ToolUseCount int  `gorm:"column:tool_use_count;default:0"` // Number of tool use interactions in this round
 }
 
 // TableName specifies the table name for GORM
@@ -98,4 +98,5 @@ type RoundData struct {
 	FullMessages  []map[string]interface{} // Normalized message array
 	InputTokens   int                      // Input token count
 	OutputTokens  int                      // Output token count
+	ToolUseCount  int                      // Number of tool use interactions
 }
