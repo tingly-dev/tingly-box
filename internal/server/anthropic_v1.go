@@ -147,16 +147,18 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			}
 
 			// Handle the streaming response
-			err = stream.HandleGoogleToAnthropicStreamResponse(c, streamResp, proxyModel)
+			usage, err := stream.HandleGoogleToAnthropicStreamResponse(c, streamResp, proxyModel)
 			if err != nil {
+				s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, err)
 				SendInternalError(c, err.Error())
 				if recorder != nil {
 					recorder.RecordError(err)
 				}
+				return
 			}
 
-			// Track usage from stream (would be accumulated in handler)
-			// For Google, usage is tracked in the stream handler
+			// Track usage from stream handler
+			s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, nil)
 
 		} else {
 			// Handle non-streaming request
@@ -249,13 +251,18 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			}
 
 			// Handle the streaming response
-			err = stream.HandleOpenAIToAnthropicStreamResponse(c, openaiReq, streamResp, proxyModel)
+			usage, err := stream.HandleOpenAIToAnthropicStreamResponse(c, openaiReq, streamResp, proxyModel)
 			if err != nil {
+				s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, err)
 				SendInternalError(c, err.Error())
 				if recorder != nil {
 					recorder.RecordError(err)
 				}
+				return
 			}
+
+			// Track usage from stream handler
+			s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, nil)
 
 		} else {
 			// Handle non-streaming request
@@ -319,7 +326,9 @@ func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.M
 	hc := NewHandleContext(c, provider, actualModel, respModel).
 		WithRecorder(recorder).
 		WithServer(s)
-	HandleAnthropicV1Stream(hc, req, streamResp)
+
+	usageStat, err := HandleAnthropicV1Stream(hc, req, streamResp)
+	s.trackUsageFromContext(c, usageStat.InputTokens, usageStat.OutputTokens, err)
 }
 
 // handleAnthropicV1ViaResponsesAPINonStreaming handles non-streaming Responses API request for v1

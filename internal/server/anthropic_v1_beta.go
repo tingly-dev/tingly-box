@@ -140,16 +140,18 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			defer cancel()
 
 			// Handle the streaming response
-			err = stream.HandleGoogleToAnthropicBetaStreamResponse(c, streamResp, proxyModel)
+			usage, err := stream.HandleGoogleToAnthropicBetaStreamResponse(c, streamResp, proxyModel)
 			if err != nil {
+				s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, err)
 				SendInternalError(c, err.Error())
 				if recorder != nil {
 					recorder.RecordError(err)
 				}
+				return
 			}
 
-			// Track usage from stream (would be accumulated in handler)
-			// For Google, usage is tracked in the stream handler
+			// Track usage from stream handler
+			s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, nil)
 
 		} else {
 			// Handle non-streaming request
@@ -305,7 +307,9 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthrop
 	hc := NewHandleContext(c, provider, actualModel, respModel).
 		WithRecorder(recorder).
 		WithServer(s)
-	HandleAnthropicV1BetaStream(hc, req, streamResp)
+
+	usageStat, err := HandleAnthropicV1BetaStream(hc, req, streamResp)
+	s.trackUsageFromContext(c, usageStat.InputTokens, usageStat.OutputTokens, err)
 }
 
 // forwardGoogleRequest forwards request to Google API

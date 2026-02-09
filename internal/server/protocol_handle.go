@@ -16,6 +16,7 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
 )
 
@@ -24,7 +25,8 @@ import (
 // ===================================================================
 
 // HandleAnthropicV1Stream handles Anthropic v1 streaming response.
-func HandleAnthropicV1Stream(hc *HandleContext, req anthropic.MessageNewParams, streamResp *anthropicstream.Stream[anthropic.MessageStreamEventUnion]) error {
+// Returns (UsageStat, error)
+func HandleAnthropicV1Stream(hc *HandleContext, req anthropic.MessageNewParams, streamResp *anthropicstream.Stream[anthropic.MessageStreamEventUnion]) (protocol.UsageStat, error) {
 	defer streamResp.Close()
 
 	hc.SetupSSEHeaders()
@@ -72,31 +74,27 @@ func HandleAnthropicV1Stream(hc *HandleContext, req anthropic.MessageNewParams, 
 	if err != nil {
 		if errors.Is(err, context.Canceled) || IsContextCanceled(err) {
 			logrus.Debug("Anthropic v1 stream canceled by client")
-			if hasUsage {
-				hc.TrackUsage(inputTokens, outputTokens, err)
-			}
 			streamRec.RecordError(err)
-			return nil
+			if !hasUsage {
+				return protocol.ZeroUsageStat(), nil
+			}
+			return protocol.NewUsageStat(inputTokens, outputTokens), nil
 		}
 
-		hc.TrackUsage(inputTokens, outputTokens, err)
-		MarshalAndSendErrorEvent(hc.GinContext, err.Error(), "stream_error", "stream_failed")
 		streamRec.RecordError(err)
-		return err
-	}
-
-	if hasUsage {
-		hc.TrackUsage(inputTokens, outputTokens, nil)
+		MarshalAndSendErrorEvent(hc.GinContext, err.Error(), "stream_error", "stream_failed")
+		return protocol.NewUsageStat(inputTokens, outputTokens), err
 	}
 
 	SendFinishEvent(hc.GinContext)
 	streamRec.RecordResponse(hc.Provider, hc.ActualModel)
 
-	return nil
+	return protocol.NewUsageStat(inputTokens, outputTokens), nil
 }
 
 // HandleAnthropicV1BetaStream handles Anthropic v1 beta streaming response.
-func HandleAnthropicV1BetaStream(hc *HandleContext, req anthropic.BetaMessageNewParams, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion]) error {
+// Returns (UsageStat, error)
+func HandleAnthropicV1BetaStream(hc *HandleContext, req anthropic.BetaMessageNewParams, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion]) (protocol.UsageStat, error) {
 	defer streamResp.Close()
 
 	hc.SetupSSEHeaders()
@@ -144,35 +142,29 @@ func HandleAnthropicV1BetaStream(hc *HandleContext, req anthropic.BetaMessageNew
 	if err != nil {
 		if errors.Is(err, context.Canceled) || IsContextCanceled(err) {
 			logrus.Debug("Anthropic v1 beta stream canceled by client")
-			if hasUsage {
-				hc.TrackUsage(inputTokens, outputTokens, err)
-			}
 			streamRec.RecordError(err)
-			return nil
+			if !hasUsage {
+				return protocol.ZeroUsageStat(), nil
+			}
+			return protocol.NewUsageStat(inputTokens, outputTokens), nil
 		}
 
-		hc.TrackUsage(inputTokens, outputTokens, err)
-		MarshalAndSendErrorEvent(hc.GinContext, err.Error(), "stream_error", "stream_failed")
 		streamRec.RecordError(err)
-		return err
-	}
-
-	if hasUsage {
-		hc.TrackUsage(inputTokens, outputTokens, nil)
+		MarshalAndSendErrorEvent(hc.GinContext, err.Error(), "stream_error", "stream_failed")
+		return protocol.NewUsageStat(inputTokens, outputTokens), err
 	}
 
 	SendFinishEvent(hc.GinContext)
 	streamRec.RecordResponse(hc.Provider, hc.ActualModel)
 
-	return nil
+	return protocol.NewUsageStat(inputTokens, outputTokens), nil
 }
 
 // HandleAnthropicV1NonStream handles Anthropic v1 non-streaming response.
-func HandleAnthropicV1NonStream(hc *HandleContext, resp *anthropic.Message) error {
+// Returns (UsageStat, error)
+func HandleAnthropicV1NonStream(hc *HandleContext, resp *anthropic.Message) (protocol.UsageStat, error) {
 	inputTokens := int(resp.Usage.InputTokens)
 	outputTokens := int(resp.Usage.OutputTokens)
-
-	hc.TrackUsage(inputTokens, outputTokens, nil)
 
 	resp.Model = anthropic.Model(hc.ResponseModel)
 
@@ -182,15 +174,14 @@ func HandleAnthropicV1NonStream(hc *HandleContext, resp *anthropic.Message) erro
 	}
 
 	hc.GinContext.JSON(http.StatusOK, resp)
-	return nil
+	return protocol.NewUsageStat(inputTokens, outputTokens), nil
 }
 
 // HandleAnthropicV1BetaNonStream handles Anthropic v1 beta non-streaming response.
-func HandleAnthropicV1BetaNonStream(hc *HandleContext, resp *anthropic.BetaMessage) error {
+// Returns (UsageStat, error)
+func HandleAnthropicV1BetaNonStream(hc *HandleContext, resp *anthropic.BetaMessage) (protocol.UsageStat, error) {
 	inputTokens := int(resp.Usage.InputTokens)
 	outputTokens := int(resp.Usage.OutputTokens)
-
-	hc.TrackUsage(inputTokens, outputTokens, nil)
 
 	resp.Model = anthropic.Model(hc.ResponseModel)
 
@@ -200,7 +191,7 @@ func HandleAnthropicV1BetaNonStream(hc *HandleContext, resp *anthropic.BetaMessa
 	}
 
 	hc.GinContext.JSON(http.StatusOK, resp)
-	return nil
+	return protocol.NewUsageStat(inputTokens, outputTokens), nil
 }
 
 // ===================================================================
@@ -208,7 +199,8 @@ func HandleAnthropicV1BetaNonStream(hc *HandleContext, resp *anthropic.BetaMessa
 // ===================================================================
 
 // HandleOpenAIChatStream handles OpenAI chat streaming response.
-func HandleOpenAIChatStream(hc *HandleContext, stream *openaistream.Stream[openai.ChatCompletionChunk], req *openai.ChatCompletionNewParams) error {
+// Returns (UsageStat, error)
+func HandleOpenAIChatStream(hc *HandleContext, stream *openaistream.Stream[openai.ChatCompletionChunk], req *openai.ChatCompletionNewParams) (protocol.UsageStat, error) {
 	defer stream.Close()
 
 	// Set SSE headers (mimicking OpenAI response headers)
@@ -234,7 +226,7 @@ func HandleOpenAIChatStream(hc *HandleContext, stream *openaistream.Stream[opena
 				Code:    "streaming_unsupported",
 			},
 		})
-		return fmt.Errorf("streaming not supported")
+		return protocol.ZeroUsageStat(), fmt.Errorf("streaming not supported")
 	}
 
 	err := hc.ProcessStream(
@@ -279,7 +271,6 @@ func HandleOpenAIChatStream(hc *HandleContext, stream *openaistream.Stream[opena
 			inputTokens, _ = token.EstimateInputTokens(req)
 			outputTokens = token.EstimateOutputTokens(contentBuilder.String())
 		}
-		hc.TrackUsage(inputTokens, outputTokens, err)
 
 		errorChunk := map[string]interface{}{
 			"error": map[string]interface{}{
@@ -291,7 +282,7 @@ func HandleOpenAIChatStream(hc *HandleContext, stream *openaistream.Stream[opena
 		errorJSON, _ := json.Marshal(errorChunk)
 		c.SSEvent("", string(errorJSON))
 		flusher.Flush()
-		return err
+		return protocol.NewUsageStat(inputTokens, outputTokens), err
 	}
 
 	if !hasUsage {
@@ -330,50 +321,47 @@ func HandleOpenAIChatStream(hc *HandleContext, stream *openaistream.Stream[opena
 		}
 	}
 
-	hc.TrackUsage(inputTokens, outputTokens, nil)
-
 	// Send the final [DONE] message
 	c.SSEvent("", " [DONE]")
 	flusher.Flush()
 
-	return nil
+	return protocol.NewUsageStat(inputTokens, outputTokens), nil
 }
 
 // HandleOpenAIChatNonStream handles OpenAI chat non-streaming response.
-func HandleOpenAIChatNonStream(hc *HandleContext, resp *openai.ChatCompletion) error {
+// Returns (UsageStat, error)
+func HandleOpenAIChatNonStream(hc *HandleContext, resp *openai.ChatCompletion) (protocol.UsageStat, error) {
 	inputTokens := int(resp.Usage.PromptTokens)
 	outputTokens := int(resp.Usage.CompletionTokens)
-
-	hc.TrackUsage(inputTokens, outputTokens, nil)
 
 	// Convert response to JSON map for modification
 	responseJSON, err := json.Marshal(resp)
 	if err != nil {
 		hc.SendError(err, "api_error", "marshal_failed")
-		return err
+		return protocol.ZeroUsageStat(), err
 	}
 
 	var responseMap map[string]interface{}
 	if err := json.Unmarshal(responseJSON, &responseMap); err != nil {
 		hc.SendError(err, "api_error", "unmarshal_failed")
-		return err
+		return protocol.ZeroUsageStat(), err
 	}
 
 	// Update response model
 	responseMap["model"] = hc.ResponseModel
 
 	hc.GinContext.JSON(http.StatusOK, responseMap)
-	return nil
+	return protocol.NewUsageStat(inputTokens, outputTokens), nil
 }
 
 // HandleOpenAIResponsesStream handles OpenAI Responses API streaming response.
-func HandleOpenAIResponsesStream(hc *HandleContext, stream *openaistream.Stream[responses.ResponseStreamEventUnion]) error {
+// Returns (UsageStat, error)
+func HandleOpenAIResponsesStream(hc *HandleContext, stream *openaistream.Stream[responses.ResponseStreamEventUnion]) (protocol.UsageStat, error) {
 	defer stream.Close()
 
 	hc.SetupSSEHeaders()
 
 	var inputTokens, outputTokens int
-	var hasUsage bool
 	streamRec := newStreamRecorder(hc.Recorder)
 
 	err := hc.ProcessStream(
@@ -393,29 +381,23 @@ func HandleOpenAIResponsesStream(hc *HandleContext, stream *openaistream.Stream[
 	streamRec.Finish(hc.ResponseModel, inputTokens, outputTokens)
 
 	if err != nil {
-		hc.TrackUsage(inputTokens, outputTokens, err)
 		streamRec.RecordError(err)
-		return err
-	}
-
-	if hasUsage {
-		hc.TrackUsage(inputTokens, outputTokens, nil)
+		return protocol.NewUsageStat(inputTokens, outputTokens), err
 	}
 
 	streamRec.RecordResponse(hc.Provider, hc.ActualModel)
 
-	return nil
+	return protocol.NewUsageStat(inputTokens, outputTokens), nil
 }
 
 // HandleOpenAIResponsesNonStream handles OpenAI Responses API non-streaming response.
-func HandleOpenAIResponsesNonStream(hc *HandleContext, resp *responses.Response) error {
+// Returns (UsageStat, error)
+func HandleOpenAIResponsesNonStream(hc *HandleContext, resp *responses.Response) (protocol.UsageStat, error) {
 	inputTokens := int(resp.Usage.InputTokens)
 	outputTokens := int(resp.Usage.OutputTokens)
 
-	hc.TrackUsage(inputTokens, outputTokens, nil)
-
 	hc.GinContext.JSON(http.StatusOK, resp)
-	return nil
+	return protocol.NewUsageStat(inputTokens, outputTokens), nil
 }
 
 // ===================================================================
