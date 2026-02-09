@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { Box, Tooltip, Typography, IconButton, Button, ButtonGroup } from '@mui/material';
+import { useState } from 'react';
+import { Box, Tooltip, Typography, IconButton, ButtonGroup } from '@mui/material';
 import { ArrowBackIosNew, ArrowForwardIos } from '@mui/icons-material';
 import { LocalizationProvider, DateCalendar } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -9,21 +9,13 @@ import type { SxProps, Theme } from '@mui/material/styles';
 interface RecordingCalendarProps {
   currentDate: Date;
   selectedDate: Date;
-  recordingCounts: Map<string, number>; // date string -> count
+  recordingCounts: Map<string, number>; // date string -> count (for dot indicator)
   onDateSelect: (date: Date) => void;
   onMonthChange: (date: Date) => void;
   onRangeChange?: (days: number | null) => void; // null = single date mode, number = range mode
+  rangeMode?: number | null; // External range mode for highlighting
   sx?: SxProps<Theme>;
 }
-
-// Activity levels for color intensity
-const getActivityLevel = (count: number): number => {
-  if (count === 0) return 0;
-  if (count <= 2) return 1;
-  if (count <= 4) return 2;
-  if (count <= 6) return 3;
-  return 4;
-};
 
 const RecordingCalendar: React.FC<RecordingCalendarProps> = ({
   currentDate,
@@ -32,10 +24,13 @@ const RecordingCalendar: React.FC<RecordingCalendarProps> = ({
   onDateSelect,
   onMonthChange,
   onRangeChange,
+  rangeMode: externalRangeMode,
   sx = {},
 }) => {
   const [viewDate, setViewDate] = useState(currentDate);
-  const [rangeMode, setRangeMode] = useState<number | null>(null);
+  // Use external range mode if provided, otherwise use internal state
+  const [internalRangeMode, setInternalRangeMode] = useState<number | null>(null);
+  const rangeMode = externalRangeMode !== undefined ? externalRangeMode : internalRangeMode;
 
   const formatDateKey = (date: Date): string => {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -60,62 +55,68 @@ const RecordingCalendar: React.FC<RecordingCalendarProps> = ({
     return date >= startDate && date <= today;
   };
 
-  // Custom PickersDay with activity color
+  // Custom PickersDay with range highlight and activity indicator
   const CustomDay = (props: PickersDayProps<Date>) => {
     const { day, outsideCurrentMonth, ...other } = props;
     const dateKey = formatDateKey(day);
     const count = recordingCounts.get(dateKey) || 0;
-    const level = getActivityLevel(count);
     const isSelected = isSameDay(day, selectedDate);
     const inRange = isInRange(day);
-
-    // Color mapping
-    const getBgColor = () => {
-      if (isSelected) return '#3b82f6';
-      if (outsideCurrentMonth) return 'transparent';
-      if (inRange) return '#e0f2fe'; // Light blue for range
-      switch (level) {
-        case 0: return 'transparent';
-        case 1: return '#dcfce7';
-        case 2: return '#86efac';
-        case 3: return '#22c55e';
-        case 4: return '#15803d';
-        default: return 'transparent';
-      }
-    };
-
-    const getTextColor = () => {
-      if (isSelected) return '#ffffff';
-      if (inRange) return '#0369a1';
-      if (level >= 3) return '#ffffff';
-      if (level >= 1) return '#166534';
-      return 'inherit';
-    };
+    const hasActivity = count > 0;
 
     return (
       <Tooltip
         title={
-          count > 0
+          hasActivity
             ? `${count} recording${count > 1 ? 's' : ''} on ${day.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}`
             : day.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
         }
         arrow
       >
-        <PickersDay
-          {...other}
-          day={day}
-          outsideCurrentMonth={outsideCurrentMonth}
-          sx={{
-            backgroundColor: getBgColor(),
-            color: getTextColor(),
-            fontWeight: count > 0 || inRange ? 600 : 400,
-            '&:hover': {
-              backgroundColor: isSelected ? '#2563eb' : (count > 0 ? '#bbf7d0' : inRange ? '#bae6fd' : undefined),
-            },
-          }}
-        >
-          {day.getDate()}
-        </PickersDay>
+        <Box sx={{ position: 'relative', display: 'inline-block' }}>
+          <PickersDay
+            {...other}
+            day={day}
+            outsideCurrentMonth={outsideCurrentMonth}
+            sx={{
+              backgroundColor: isSelected
+                ? '#3b82f6'
+                : inRange
+                ? '#e0f2fe'
+                : 'transparent',
+              color: isSelected
+                ? '#ffffff'
+                : inRange
+                ? '#0369a1'
+                : 'inherit',
+              fontWeight: isSelected || inRange ? 600 : 400,
+              '&:hover': {
+                backgroundColor: isSelected
+                  ? '#2563eb'
+                  : inRange
+                  ? '#bae6fd'
+                  : undefined,
+              },
+            }}
+          >
+            {day.getDate()}
+          </PickersDay>
+          {/* Activity dot indicator */}
+          {hasActivity && !isSelected && (
+            <Box
+              sx={{
+                position: 'absolute',
+                bottom: 2,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                width: 4,
+                height: 4,
+                borderRadius: '50%',
+                backgroundColor: inRange ? '#0369a1' : '#22c55e',
+              }}
+            />
+          )}
+        </Box>
       </Tooltip>
     );
   };
@@ -135,13 +136,22 @@ const RecordingCalendar: React.FC<RecordingCalendarProps> = ({
   };
 
   const handleRangeClick = (days: number) => {
-    if (rangeMode === days) {
-      // Toggle off
-      setRangeMode(null);
-      onRangeChange?.(null);
+    if (externalRangeMode !== undefined) {
+      // External range mode is controlled, just notify parent
+      if (externalRangeMode === days) {
+        onRangeChange?.(null);
+      } else {
+        onRangeChange?.(days);
+      }
     } else {
-      setRangeMode(days);
-      onRangeChange?.(days);
+      // Internal range mode is uncontrolled
+      if (internalRangeMode === days) {
+        setInternalRangeMode(null);
+        onRangeChange?.(null);
+      } else {
+        setInternalRangeMode(days);
+        onRangeChange?.(days);
+      }
     }
   };
 
@@ -200,8 +210,12 @@ const RecordingCalendar: React.FC<RecordingCalendarProps> = ({
             value={selectedDate}
             onChange={(newDate) => {
               if (newDate) {
-                setRangeMode(null);
-                onRangeChange?.(null);
+                // Clear range mode when selecting a specific date
+                if (externalRangeMode !== undefined) {
+                  onRangeChange?.(null);
+                } else {
+                  setInternalRangeMode(null);
+                }
                 onDateSelect(newDate);
               }
             }}
@@ -223,7 +237,7 @@ const RecordingCalendar: React.FC<RecordingCalendarProps> = ({
             }}
           />
 
-          {/* Legend */}
+          {/* Status */}
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <Typography variant="caption" color="text.secondary">
               {rangeMode
@@ -232,30 +246,16 @@ const RecordingCalendar: React.FC<RecordingCalendarProps> = ({
               }
             </Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Box
+                sx={{
+                  width: 4,
+                  height: 4,
+                  borderRadius: '50%',
+                  backgroundColor: '#22c55e',
+                }}
+              />
               <Typography variant="caption" color="text.secondary">
-                Less
-              </Typography>
-              {[
-                { color: '#f3f4f6', label: '0' },
-                { color: '#dcfce7', label: '1-2' },
-                { color: '#86efac', label: '3-4' },
-                { color: '#22c55e', label: '5-6' },
-                { color: '#15803d', label: '7+' },
-              ].map((item) => (
-                <Tooltip key={item.label} title={item.label}>
-                  <Box
-                    sx={{
-                      width: 14,
-                      height: 14,
-                      borderRadius: 1,
-                      backgroundColor: item.color,
-                      border: '1px solid rgba(0,0,0,0.1)',
-                    }}
-                  />
-                </Tooltip>
-              ))}
-              <Typography variant="caption" color="text.secondary">
-                More
+                Has recordings
               </Typography>
             </Box>
           </Box>

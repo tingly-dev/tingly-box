@@ -28,7 +28,7 @@ const DashboardPage = lazy(() => import('./pages/./DashboardPage'));
 const ModelTestPage = lazy(() => import('./pages/ModelTestPage'));
 
 // Prompt pages
-const UserPage = lazy(() => import('./pages/prompt/UserPage'));
+const UserPage = lazy(() => import('./pages/prompt/./MemoryPage'));
 const SkillPage = lazy(() => import('./pages/prompt/SkillPage'));
 const CommandPage = lazy(() => import('./pages/prompt/CommandPage'));
 
