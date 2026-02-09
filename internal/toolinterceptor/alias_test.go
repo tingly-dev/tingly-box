@@ -138,9 +138,6 @@ func TestIsFetchTool(t *testing.T) {
 func TestDefaultConfig(t *testing.T) {
 	config := DefaultConfig()
 
-	if config.Enabled != false {
-		t.Errorf("DefaultConfig().Enabled = %v, want false", config.Enabled)
-	}
 	if config.SearchAPI != "duckduckgo" {
 		t.Errorf("DefaultConfig().SearchAPI = %q, want \"duckduckgo\"", config.SearchAPI)
 	}

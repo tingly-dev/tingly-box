@@ -30,7 +30,6 @@ type FetchRequest struct {
 
 // Config represents the tool interceptor configuration
 type Config struct {
-	Enabled    bool
 	SearchAPI  string // "brave", "google", or "duckduckgo"
 	SearchKey  string // API key for search service (not needed for duckduckgo)
 	MaxResults int    // Max search results (default: 10)
@@ -47,7 +46,6 @@ type Config struct {
 // DefaultConfig returns default configuration
 func DefaultConfig() *Config {
 	return &Config{
-		Enabled:      false,
 		SearchAPI:    "duckduckgo",
 		MaxResults:   10,
 		MaxFetchSize: 1 * 1024 * 1024, // 1MB

@@ -22,28 +22,30 @@ type Interceptor struct {
 
 // NewInterceptor creates a new tool interceptor with global configuration
 func NewInterceptor(globalConfig *typ.ToolInterceptorConfig) *Interceptor {
-	if globalConfig == nil {
-		globalConfig = &typ.ToolInterceptorConfig{
-			Enabled:      false,
-			PreferLocalSearch: false,
-			SearchAPI:    "duckduckgo",
-			MaxResults:   10,
-			MaxFetchSize: 1 * 1024 * 1024, // 1MB
-			FetchTimeout: 30,              // 30 seconds
-			MaxURLLength: 2000,
-		}
-	}
-
 	cache := NewCache()
-	handlerConfig := &Config{
-		Enabled:      globalConfig.Enabled,
-		SearchAPI:    globalConfig.SearchAPI,
-		SearchKey:    globalConfig.SearchKey,
-		MaxResults:   globalConfig.MaxResults,
-		ProxyURL:     globalConfig.ProxyURL,
-		MaxFetchSize: globalConfig.MaxFetchSize,
-		FetchTimeout: globalConfig.FetchTimeout,
-		MaxURLLength: globalConfig.MaxURLLength,
+	handlerConfig := DefaultConfig()
+	if globalConfig != nil {
+		if globalConfig.SearchAPI != "" {
+			handlerConfig.SearchAPI = globalConfig.SearchAPI
+		}
+		if globalConfig.SearchKey != "" {
+			handlerConfig.SearchKey = globalConfig.SearchKey
+		}
+		if globalConfig.MaxResults != 0 {
+			handlerConfig.MaxResults = globalConfig.MaxResults
+		}
+		if globalConfig.ProxyURL != "" {
+			handlerConfig.ProxyURL = globalConfig.ProxyURL
+		}
+		if globalConfig.MaxFetchSize != 0 {
+			handlerConfig.MaxFetchSize = globalConfig.MaxFetchSize
+		}
+		if globalConfig.FetchTimeout != 0 {
+			handlerConfig.FetchTimeout = globalConfig.FetchTimeout
+		}
+		if globalConfig.MaxURLLength != 0 {
+			handlerConfig.MaxURLLength = globalConfig.MaxURLLength
+		}
 	}
 
 	return &Interceptor{
@@ -71,7 +73,7 @@ func (i *Interceptor) IsEnabledForProvider(provider *typ.Provider) bool {
 func (i *Interceptor) GetConfigForProvider(provider *typ.Provider) *typ.ToolInterceptorConfig {
 	effectiveConfig, enabled := provider.GetEffectiveConfig(i.globalConfig)
 	if !enabled || effectiveConfig == nil {
-		return &typ.ToolInterceptorConfig{Enabled: false}
+		return nil
 	}
 
 	return effectiveConfig
@@ -477,7 +479,7 @@ func previewString(s string, max int) string {
 func (i *Interceptor) executeSearch(provider *typ.Provider, argsJSON string) ToolResult {
 	// Get provider-specific config
 	providerConfig := i.GetConfigForProvider(provider)
-	if providerConfig == nil || !providerConfig.Enabled {
+	if providerConfig == nil {
 		return ToolResult{
 			Content: "",
 			Error:   "Search is not enabled for this provider",
@@ -505,7 +507,6 @@ func (i *Interceptor) executeSearch(provider *typ.Provider, argsJSON string) Too
 
 	// Execute search with provider-specific config
 	handlerConfig := &Config{
-		Enabled:      providerConfig.Enabled,
 		SearchAPI:    providerConfig.SearchAPI,
 		SearchKey:    providerConfig.SearchKey,
 		MaxResults:   providerConfig.MaxResults,

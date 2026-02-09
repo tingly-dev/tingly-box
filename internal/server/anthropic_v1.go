@@ -51,10 +51,10 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 	if s.toolInterceptor != nil {
 		interceptorConfig = s.toolInterceptor.GetConfigForProvider(provider)
 	}
-	shouldIntercept := interceptorConfig != nil && interceptorConfig.Enabled && (interceptorConfig.PreferLocalSearch || !hasBuiltInWebSearch)
-	shouldStripTools := !shouldIntercept && !hasBuiltInWebSearch
+	shouldIntercept := interceptorConfig != nil && (interceptorConfig.PreferLocalSearch || !hasBuiltInWebSearch)
+	shouldStripTools := interceptorConfig == nil && !hasBuiltInWebSearch
 
-	if interceptorConfig != nil && interceptorConfig.Enabled && interceptorConfig.PreferLocalSearch {
+	if interceptorConfig != nil && interceptorConfig.PreferLocalSearch {
 		logrus.Infof("Tool interceptor active for provider %s (prefer_local_search enabled)", provider.Name)
 	} else if shouldIntercept {
 		logrus.Infof("Tool interceptor active for provider %s (no built-in web_search)", provider.Name)

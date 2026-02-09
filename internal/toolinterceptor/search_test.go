@@ -11,7 +11,6 @@ import (
 func TestSearchHandler_Search(t *testing.T) {
 	// Create search handler with test config
 	config := &Config{
-		Enabled:    true,
 		SearchAPI:  "brave",
 		SearchKey:  "test-api-key",
 		MaxResults: 10,
@@ -52,7 +51,6 @@ func TestSearchHandler_Search(t *testing.T) {
 
 func TestSearchHandler_MissingAPIKey(t *testing.T) {
 	config := &Config{
-		Enabled:    true,
 		SearchAPI:  "brave",
 		SearchKey:  "", // Empty API key
 		MaxResults: 10,
@@ -71,7 +69,6 @@ func TestSearchHandler_MissingAPIKey(t *testing.T) {
 
 func TestSearchHandler_UnsupportedAPI(t *testing.T) {
 	config := &Config{
-		Enabled:    true,
 		SearchAPI:  "unsupported_api",
 		SearchKey:  "test-key",
 		MaxResults: 10,
@@ -90,7 +87,6 @@ func TestSearchHandler_UnsupportedAPI(t *testing.T) {
 
 func TestSearchHandler_DuckDuckGo(t *testing.T) {
 	config := &Config{
-		Enabled:    true,
 		SearchAPI:  "duckduckgo",
 		SearchKey:  "", // No API key needed for DDG
 		MaxResults: 5,

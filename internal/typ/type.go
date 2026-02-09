@@ -67,7 +67,6 @@ type OAuthDetail struct {
 
 // ToolInterceptorConfig contains configuration for tool interceptor (search & fetch)
 type ToolInterceptorConfig struct {
-	Enabled    bool   `json:"enabled"`               // Master switch for tool interceptor
 	PreferLocalSearch bool `json:"prefer_local_search,omitempty"` // Prefer local tool interception even if provider has built-in search
 	SearchAPI  string `json:"search_api,omitempty"`  // "brave" or "google"
 	SearchKey  string `json:"search_key,omitempty"`  // API key for search service
@@ -96,7 +95,7 @@ type ToolInterceptorOverride struct {
 func (p *Provider) GetEffectiveConfig(global *ToolInterceptorConfig) (*ToolInterceptorConfig, bool) {
 	// Provider-level config (preferred)
 	if p.ToolInterceptor != nil {
-		if !p.ToolInterceptor.Enabled {
+		if p.ToolInterceptorOverride != nil && p.ToolInterceptorOverride.Disabled {
 			return nil, false
 		}
 
@@ -106,7 +105,6 @@ func (p *Provider) GetEffectiveConfig(global *ToolInterceptorConfig) (*ToolInter
 		}
 
 		effective := &ToolInterceptorConfig{
-			Enabled:      true,
 			PreferLocalSearch: base.PreferLocalSearch,
 			SearchAPI:    base.SearchAPI,
 			SearchKey:    base.SearchKey,
@@ -152,7 +150,7 @@ func (p *Provider) GetEffectiveConfig(global *ToolInterceptorConfig) (*ToolInter
 	}
 
 	// Legacy override path (requires global enabled)
-	if global == nil || !global.Enabled {
+	if global == nil {
 		return nil, false
 	}
 
@@ -163,7 +161,6 @@ func (p *Provider) GetEffectiveConfig(global *ToolInterceptorConfig) (*ToolInter
 
 	// Start with global config
 	effective := &ToolInterceptorConfig{
-		Enabled:      global.Enabled,
 		PreferLocalSearch: global.PreferLocalSearch,
 		SearchAPI:    global.SearchAPI,
 		SearchKey:    global.SearchKey,
