@@ -34,19 +34,19 @@ const (
 
 // JWTConfig configures JWT token generation
 type JWTConfig struct {
-	Secret              []byte
-	AccessTokenExpiry   time.Duration
-	RefreshTokenExpiry  time.Duration
-	Issuer              string
+	Secret             []byte
+	AccessTokenExpiry  time.Duration
+	RefreshTokenExpiry time.Duration
+	Issuer             string
 }
 
 // DefaultJWTConfig returns the default JWT configuration
 func DefaultJWTConfig(secret string) JWTConfig {
 	return JWTConfig{
-		Secret:              []byte(secret),
-		AccessTokenExpiry:   15 * time.Minute,
-		RefreshTokenExpiry:  7 * 24 * time.Hour, // 7 days
-		Issuer:              "tingly-box-enterprise",
+		Secret:             []byte(secret),
+		AccessTokenExpiry:  8 * time.Hour,
+		RefreshTokenExpiry: 7 * 24 * time.Hour, // 7 days
+		Issuer:             "tingly-box-enterprise",
 	}
 }
 
