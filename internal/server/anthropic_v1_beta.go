@@ -217,8 +217,8 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 					streamRec.SetupStreamRecorderInContext(c, "stream_event_recorder")
 				}
 
-				// Create streaming request with request context for proper cancellation
-				streamResp, _, err := s.forwardOpenAIStreamRequest(c.Request.Context(), provider, openaiReq)
+				// Create streaming request
+				streamResp, err := s.forwardOpenAIStreamRequest(provider, openaiReq)
 				if err != nil {
 					SendStreamingError(c, err)
 					if streamRec != nil {

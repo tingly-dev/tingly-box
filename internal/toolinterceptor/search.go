@@ -516,10 +516,22 @@ func (h *SearchHandler) parseDuckDuckGoHTML(body io.Reader, maxCount int) ([]Sea
 	}
 
 	if len(results) == 0 {
+		lowerHTML := strings.ToLower(html)
+		if strings.Contains(lowerHTML, "captcha") || strings.Contains(lowerHTML, "verify") {
+			logrus.Warn("DuckDuckGo HTML response appears to include a captcha/verification page")
+		}
+		logrus.Warnf("DuckDuckGo HTML parsing returned 0 results (len=%d). Preview=%q", len(htmlBytes), previewStringSearch(html, 500))
 		return nil, fmt.Errorf("no search results found (DuckDuckGo may have blocked the request)")
 	}
 
 	return results, nil
+}
+
+func previewStringSearch(s string, max int) string {
+	if max <= 0 || len(s) <= max {
+		return s
+	}
+	return s[:max] + "..."
 }
 
 // FormatResults formats search results as a JSON string for tool response

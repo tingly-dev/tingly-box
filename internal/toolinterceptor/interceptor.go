@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/tingly-dev/tingly-box/internal/typ"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -53,7 +55,10 @@ func NewInterceptor(globalConfig *typ.ToolInterceptorConfig) *Interceptor {
 
 // IsEnabledForProvider checks if interceptor is enabled for a specific provider
 func (i *Interceptor) IsEnabledForProvider(provider *typ.Provider) bool {
-	if i.globalConfig == nil || !i.globalConfig.Enabled {
+	if provider == nil {
+		return false
+	}
+	if i.globalConfig == nil && provider.ToolInterceptor == nil {
 		return false
 	}
 
@@ -342,11 +347,17 @@ func (i *Interceptor) executeTool(provider *typ.Provider, toolName string, argsJ
 		}
 	}
 
+	logrus.Infof("Executed tool locally: %s (handler=%s)", toolName, handlerType)
+
 	switch handlerType {
 	case HandlerTypeSearch:
-		return i.executeSearch(provider, argsJSON)
+		result := i.executeSearch(provider, argsJSON)
+		logrus.Infof("Local tool result: %s len=%d is_error=%v err=%q preview=%q", toolName, len(result.Content), result.IsError, result.Error, previewString(result.Content, 200))
+		return result
 	case HandlerTypeFetch:
-		return i.executeFetch(provider, argsJSON)
+		result := i.executeFetch(provider, argsJSON)
+		logrus.Infof("Local tool result: %s len=%d is_error=%v err=%q preview=%q", toolName, len(result.Content), result.IsError, result.Error, previewString(result.Content, 200))
+		return result
 	default:
 		return ToolResult{
 			Content: "",
@@ -354,6 +365,13 @@ func (i *Interceptor) executeTool(provider *typ.Provider, toolName string, argsJ
 			IsError: true,
 		}
 	}
+}
+
+func previewString(s string, max int) string {
+	if max <= 0 || len(s) <= max {
+		return s
+	}
+	return s[:max] + "..."
 }
 
 // executeSearch executes a search tool
@@ -509,6 +527,39 @@ func StripSearchFetchToolsAnthropic(tools []anthropic.ToolUnionParam) []anthropi
 	}
 
 	return filtered
+}
+
+// StripSearchFetchToolsOpenAI removes search/fetch tool definitions from OpenAI tools array.
+// This is used when local interception is disabled but the provider doesn't support tools.
+func StripSearchFetchToolsOpenAI(req *openai.ChatCompletionNewParams) *openai.ChatCompletionNewParams {
+	if req == nil || len(req.Tools) == 0 {
+		return req
+	}
+
+	filtered := make([]openai.ChatCompletionToolUnionParam, 0, len(req.Tools))
+	for _, toolUnion := range req.Tools {
+		fn := toolUnion.GetFunction()
+		if fn == nil {
+			// Not a function tool, keep it
+			filtered = append(filtered, toolUnion)
+			continue
+		}
+
+		if !ShouldInterceptTool(fn.Name) {
+			filtered = append(filtered, toolUnion)
+		}
+	}
+
+	if len(filtered) == len(req.Tools) {
+		return req
+	}
+
+	req.Tools = filtered
+	if len(filtered) == 0 && ShouldStripToolChoice(req) {
+		req.ToolChoice = openai.ChatCompletionToolChoiceOptionUnionParam{}
+	}
+
+	return req
 }
 
 // ShouldStripToolChoice checks if tool_choice should be stripped (only contains search/fetch tools)

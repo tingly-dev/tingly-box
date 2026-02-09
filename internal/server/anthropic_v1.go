@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -19,6 +20,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
+	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -70,13 +72,20 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 		hasBuiltInWebSearch := s.templateManager.ProviderHasBuiltInWebSearch(provider)
 
 		// === Tool Interceptor: Check if enabled and should be used ===
-		// Only intercept if provider does NOT have built-in web_search
-		shouldIntercept := !hasBuiltInWebSearch && s.toolInterceptor != nil && s.toolInterceptor.IsEnabledForProvider(provider)
+		// Prefer local interception when configured, even if provider has built-in web_search
+		shouldIntercept := s.toolInterceptor != nil && s.toolInterceptor.IsEnabledForProvider(provider)
+		shouldStripTools := !shouldIntercept && !hasBuiltInWebSearch
 
 		if shouldIntercept {
-			logrus.Infof("Tool interceptor active for provider %s (no built-in web_search)", provider.Name)
+			logrus.Infof("Tool interceptor active for provider %s (local search enabled)", provider.Name)
+		} else if shouldStripTools {
+			logrus.Infof("Tool interceptor disabled and provider %s has no built-in web_search; stripping search/fetch tools", provider.Name)
 		} else if hasBuiltInWebSearch {
 			logrus.Infof("Provider %s has built-in web_search, using native implementation", provider.Name)
+		}
+
+		if shouldStripTools {
+			req.MessageNewParams.Tools = toolinterceptor.StripSearchFetchToolsAnthropic(req.MessageNewParams.Tools)
 		}
 
 		// Use direct Anthropic SDK call
@@ -272,7 +281,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			openaiReq := request.ConvertAnthropicToOpenAIRequestWithProvider(&req.MessageNewParams, true, provider, actualModel)
 
 			// Create streaming request with request context for proper cancellation
-			streamResp, _, err := s.forwardOpenAIStreamRequest(c.Request.Context(), provider, openaiReq)
+			streamResp, err := s.forwardOpenAIStreamRequest(provider, openaiReq)
 			if err != nil {
 				SendStreamingError(c, err)
 				if recorder != nil {

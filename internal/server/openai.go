@@ -1,16 +1,25 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/packages/param"
+	"github.com/openai/openai-go/v3/packages/ssestream"
+	"github.com/openai/openai-go/v3/responses"
+	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
+	"github.com/tingly-dev/tingly-box/internal/protocol/request/transformer"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
 	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
@@ -191,11 +200,14 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 	hasBuiltInWebSearch := s.templateManager.ProviderHasBuiltInWebSearch(provider)
 
 	// === Tool Interceptor: Check if enabled and should be used ===
-	// Only intercept if provider does NOT have built-in web_search
-	shouldIntercept := !hasBuiltInWebSearch && s.toolInterceptor != nil && s.toolInterceptor.IsEnabledForProvider(provider)
+	// Prefer local interception when configured, even if provider has built-in web_search
+	shouldIntercept := s.toolInterceptor != nil && s.toolInterceptor.IsEnabledForProvider(provider)
+	shouldStripTools := !shouldIntercept && !hasBuiltInWebSearch
 
 	if shouldIntercept {
-		logrus.Infof("Tool interceptor active for provider %s (no built-in web_search)", provider.Name)
+		logrus.Infof("Tool interceptor active for provider %s (local search enabled)", provider.Name)
+	} else if shouldStripTools {
+		logrus.Infof("Tool interceptor disabled and provider %s has no built-in web_search; stripping search/fetch tools", provider.Name)
 	} else if hasBuiltInWebSearch {
 		logrus.Infof("Provider %s has built-in web_search, using native implementation", provider.Name)
 	}
@@ -298,20 +310,22 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 		}
 
 		if isStreaming {
-			s.handleStreamingRequest(c, provider, &req.ChatCompletionNewParams, responseModel, actualModel, rule, shouldIntercept)
+			s.handleStreamingRequest(c, provider, &req.ChatCompletionNewParams, responseModel, actualModel, rule, shouldIntercept, shouldStripTools)
 		} else {
-			s.handleNonStreamingRequest(c, provider, &req.ChatCompletionNewParams, responseModel, actualModel, rule, shouldIntercept)
+			s.handleNonStreamingRequest(c, provider, &req.ChatCompletionNewParams, responseModel, actualModel, rule, shouldIntercept, shouldStripTools)
 		}
 	}
 }
 
 // handleNonStreamingRequest handles non-streaming chat completion requests
-func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel, actualModel string, rule *typ.Rule, shouldIntercept bool) {
+func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel, actualModel string, rule *typ.Rule, shouldIntercept, shouldStripTools bool) {
 	// === PRE-REQUEST INTERCEPTION: Strip tools before sending to provider ===
 	req := originalReq
 	if shouldIntercept {
 		preparedReq, _ := s.toolInterceptor.PrepareOpenAIRequest(provider, originalReq)
 		req = preparedReq
+	} else if shouldStripTools {
+		req = toolinterceptor.StripSearchFetchToolsOpenAI(originalReq)
 	}
 
 	// Forward request to provider and get response
@@ -529,12 +543,14 @@ func (s *Server) handleInterceptedToolCalls(provider *typ.Provider, originalReq 
 }
 
 // handleStreamingRequest handles streaming chat completion requests
-func (s *Server) handleStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel, actualModel string, rule *typ.Rule, shouldIntercept bool) {
+func (s *Server) handleStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel, actualModel string, rule *typ.Rule, shouldIntercept, shouldStripTools bool) {
 	// === PRE-REQUEST INTERCEPTION: Strip tools before sending to provider ===
 	req := originalReq
 	if shouldIntercept {
 		preparedReq, _ := s.toolInterceptor.PrepareOpenAIRequest(provider, originalReq)
 		req = preparedReq
+	} else if shouldStripTools {
+		req = toolinterceptor.StripSearchFetchToolsOpenAI(originalReq)
 	}
 
 	// Create streaming request
