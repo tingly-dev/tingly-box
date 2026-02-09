@@ -763,9 +763,6 @@ func (sr *ScenarioRecorder) recordPromptRounds(provider *typ.Provider, model str
 			}
 		}
 
-		// Check if this round has tool use
-		hasToolUse := sr.hasToolUseInMessages(round.FullMessages)
-
 		// Extract RoundResult:
 		// - For current round (last one): use response (assembledResponse)
 		// - For historical rounds: extract from request messages
@@ -801,8 +798,8 @@ func (sr *ScenarioRecorder) recordPromptRounds(provider *typ.Provider, model str
 			InputTokens:  inputTokens,
 			OutputTokens: outputTokens,
 
-			IsStreaming: sr.isStreaming,
-			HasToolUse:  hasToolUse,
+			IsStreaming:  sr.isStreaming,
+			ToolUseCount: round.ToolUseCount,
 		}
 	}
 
@@ -815,22 +812,25 @@ func (sr *ScenarioRecorder) recordPromptRounds(provider *typ.Provider, model str
 	logrus.Debugf("Recorded %d prompt rounds for scenario %s", len(records), sr.scenario)
 }
 
-// hasToolUseInMessages checks if any message contains tool use
-func (sr *ScenarioRecorder) hasToolUseInMessages(messages []map[string]interface{}) bool {
+// countToolUseInMessages counts the number of tool_use blocks in messages
+func (sr *ScenarioRecorder) countToolUseInMessages(messages []map[string]interface{}) int {
+	count := 0
 	for _, msg := range messages {
-		if content, ok := msg["content"].([]interface{}); ok {
-			for _, block := range content {
-				if blockMap, ok := block.(map[string]interface{}); ok {
-					if blockType, ok := blockMap["type"].(string); ok {
-						if blockType == "tool_use" {
-							return true
+		if role, ok := msg["role"].(string); ok && role == "assistant" {
+			if content, ok := msg["content"].([]interface{}); ok {
+				for _, block := range content {
+					if blockMap, ok := block.(map[string]interface{}); ok {
+						if blockType, ok := blockMap["type"].(string); ok {
+							if blockType == "tool_use" {
+								count++
+							}
 						}
 					}
 				}
 			}
 		}
 	}
-	return false
+	return count
 }
 
 // extractRoundsFromV1Messages extracts rounds from pre-parsed v1 messages
@@ -851,6 +851,7 @@ func (sr *ScenarioRecorder) extractRoundsFromV1Messages(messages []anthropic.Mes
 			UserInputHash: db.ComputeUserInputHash(userInput),
 			RoundResult:   roundResult,
 			FullMessages:  sr.normalizeV1Messages(round.Messages),
+			ToolUseCount:  sr.countToolUseInV1Messages(round.Messages),
 		})
 	}
 	return result
@@ -874,6 +875,7 @@ func (sr *ScenarioRecorder) extractRoundsFromBetaMessages(messages []anthropic.B
 			UserInputHash: db.ComputeUserInputHash(userInput),
 			RoundResult:   roundResult,
 			FullMessages:  sr.normalizeBetaMessages(round.Messages),
+			ToolUseCount:  sr.countToolUseInBetaMessages(round.Messages),
 		})
 	}
 	return result
@@ -1001,6 +1003,36 @@ func (sr *ScenarioRecorder) extractRoundResultFromBetaMessages(messages []anthro
 		}
 	}
 	return lastAssistantResult
+}
+
+// countToolUseInV1Messages counts the number of tool_use blocks in v1 messages
+func (sr *ScenarioRecorder) countToolUseInV1Messages(messages []anthropic.MessageParam) int {
+	count := 0
+	for _, msg := range messages {
+		if string(msg.Role) == "assistant" {
+			for _, block := range msg.Content {
+				if block.OfToolUse != nil {
+					count++
+				}
+			}
+		}
+	}
+	return count
+}
+
+// countToolUseInBetaMessages counts the number of tool_use blocks in beta messages
+func (sr *ScenarioRecorder) countToolUseInBetaMessages(messages []anthropic.BetaMessageParam) int {
+	count := 0
+	for _, msg := range messages {
+		if string(msg.Role) == "assistant" {
+			for _, block := range msg.Content {
+				if block.OfToolUse != nil {
+					count++
+				}
+			}
+		}
+	}
+	return count
 }
 
 func (sr *ScenarioRecorder) normalizeBetaMessages(messages []anthropic.BetaMessageParam) []map[string]interface{} {
