@@ -118,7 +118,7 @@
     },
     "dashscope": {
       "id": "dashscope",
-      "name": "Aliyun Dashscope",
+      "name": "Aliyun Dashscope (CN) ",
       "alias": "Aliyun Dashscope (CN) | 阿里云百炼（中国）",
       "status": "active",
       "valid": true,
@@ -186,7 +186,7 @@
     },
     "minimax": {
       "id": "minimax",
-      "name": "Minimax",
+      "name": "Minimax (CN) ",
       "alias": "Minimax (CN) | Minimax（中国）",
       "status": "active",
       "valid": true,
@@ -285,7 +285,7 @@
     },
     "zai-cn": {
       "id": "zai",
-      "name": "Bigmodel",
+      "name": "Bigmodel (CN) ",
       "alias": "Bigmodel (CN) | 智谱（中国）",
       "status": "active",
       "valid": true,
@@ -310,7 +310,7 @@
     },
     "zai-cn-coding-plan": {
       "id": "zai-coding",
-      "name": "Bigmodel GLM Coding Plan",
+      "name": "Bigmodel GLM Coding Plan (CN) ",
       "alias": "Bigmodel GLM Coding Plan (CN) | 智谱 GLM Coding Plan（中国）",
       "status": "active",
       "valid": true,
@@ -437,7 +437,7 @@
     },
     "moonshot": {
       "id": "moonshot",
-      "name": "Moonshot AI",
+      "name": "Moonshot AI (CN)",
       "alias": "Moonshot AI (CN)",
       "status": "active",
       "valid": true,
