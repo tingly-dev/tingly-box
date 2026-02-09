@@ -147,6 +147,50 @@ func (s *Server) RegisterMemoryRoutes(manager *swagger.RouteManager) {
 		swagger.WithResponseModel(MemoryRoundListResponse{}),
 	)
 
+	// GET /api/v1/memory/sessions - Get sessions grouped by date and account (deduplicated)
+	apiV1.GET("/memory/sessions", memoryAPI.GetSessions,
+		swagger.WithDescription("Get unique sessions grouped by date with account deduplication"),
+		swagger.WithTags("memory"),
+		swagger.WithQueryConfig("start_date", swagger.QueryParamConfig{
+			Name:        "start_date",
+			Type:        "string",
+			Required:    false,
+			Description: "Start date in ISO format (e.g., 2024-01-01)",
+		}),
+		swagger.WithQueryConfig("end_date", swagger.QueryParamConfig{
+			Name:        "end_date",
+			Type:        "string",
+			Required:    false,
+			Description: "End date in ISO format (e.g., 2024-12-31)",
+		}),
+		swagger.WithQueryConfig("limit", swagger.QueryParamConfig{
+			Name:        "limit",
+			Type:        "integer",
+			Required:    false,
+			Description: "Maximum number of sessions to return (default 100, max 500)",
+			Default:     100,
+			Minimum:     intPtr(1),
+			Maximum:     intPtr(500),
+		}),
+		swagger.WithResponseModel(MemorySessionListResponse{}),
+	)
+
+	// GET /api/v1/memory/sessions/:id/rounds - Get all rounds for a specific session
+	apiV1.GET("/memory/sessions/:id/rounds", memoryAPI.GetSessionRounds,
+		swagger.WithDescription("Get all rounds for a specific session"),
+		swagger.WithTags("memory"),
+		swagger.WithQueryConfig("limit", swagger.QueryParamConfig{
+			Name:        "limit",
+			Type:        "integer",
+			Required:    false,
+			Description: "Maximum number of rounds to return (default 100, max 500)",
+			Default:     100,
+			Minimum:     intPtr(1),
+			Maximum:     intPtr(500),
+		}),
+		swagger.WithResponseModel(MemorySessionRoundsResponse{}),
+	)
+
 	// GET /api/v1/memory/rounds/:id - Get full details for a specific round
 	apiV1.GET("/memory/rounds/:id", memoryAPI.GetRoundDetail,
 		swagger.WithDescription("Get full details for a specific memory round"),
@@ -303,6 +347,43 @@ type MemoryDeleteOldRecordsResponse struct {
 		DeletedCount int64 `json:"deleted_count"`
 		CutoffDays   int   `json:"cutoff_days"`
 	} `json:"data"`
+}
+
+// MemorySessionListResponse represents the response for listing sessions
+type MemorySessionListResponse struct {
+	Success bool                  `json:"success"`
+	Data    MemorySessionListData `json:"data"`
+	Error   string                `json:"error,omitempty"`
+}
+
+// MemorySessionListData contains the list of sessions
+type MemorySessionListData struct {
+	Sessions []MemorySessionItem `json:"sessions"`
+	Total    int64               `json:"total"`
+}
+
+// MemorySessionItem represents a single session in the list
+type MemorySessionItem struct {
+	ID                string `json:"id"`
+	SessionID         string `json:"session_id"`
+	Scenario          string `json:"scenario"`
+	ProviderName      string `json:"provider_name"`
+	Protocol          string `json:"protocol"`
+	Model             string `json:"model"`
+	AccountID         string `json:"account_id"`
+	AccountName       string `json:"account_name"`
+	CreatedAt         string `json:"created_at"`
+	TotalRounds       int    `json:"total_rounds"`
+	TotalTokens       int    `json:"total_tokens"`
+	TotalInputTokens  int    `json:"total_input_tokens"`
+	TotalOutputTokens int    `json:"total_output_tokens"`
+}
+
+// MemorySessionRoundsResponse represents the response for getting rounds in a session
+type MemorySessionRoundsResponse struct {
+	Success bool              `json:"success"`
+	Data    []MemoryRoundItem `json:"data"`
+	Error   string            `json:"error,omitempty"`
 }
 
 // MemoryRoundItem represents a single memory round in the list response
@@ -808,4 +889,114 @@ func convertToListItems(items []MemoryRoundListItem) []MemoryRoundItem {
 		}
 	}
 	return result
+}
+
+// GetSessions retrieves sessions grouped by date and account (deduplicated)
+func (api *MemoryAPI) GetSessions(c *gin.Context) {
+	if api.memoryStore == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"success": false,
+			"error":   "Memory store not available",
+		})
+		return
+	}
+
+	startDate := c.Query("start_date")
+	endDate := c.Query("end_date")
+	limitStr := c.DefaultQuery("limit", "100")
+
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 {
+		limit = 100
+	}
+	if limit > 500 {
+		limit = 500
+	}
+
+	sessions, err := api.memoryStore.GetSessionsByDate(startDate, endDate, limit)
+	if err != nil {
+		fmt.Printf("ERROR: Failed to retrieve sessions: %v\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to retrieve sessions: %v", err),
+		})
+		return
+	}
+
+	// Convert to response format
+	items := make([]MemorySessionItem, len(sessions))
+	for i, s := range sessions {
+		items[i] = MemorySessionItem{
+			ID:                strconv.FormatUint(uint64(s.ID), 10),
+			SessionID:         s.SessionID,
+			Scenario:          s.Scenario,
+			ProviderName:      s.ProviderName,
+			Protocol:          s.Protocol,
+			Model:             s.Model,
+			AccountID:         s.AccountID,
+			AccountName:       s.AccountName,
+			CreatedAt:         s.CreatedAt.Format("2006-01-02T15:04:05Z"),
+			TotalRounds:       s.TotalRounds,
+			TotalTokens:       s.TotalTokens,
+			TotalInputTokens:  s.TotalInputTokens,
+			TotalOutputTokens: s.TotalOutputTokens,
+		}
+	}
+
+	c.JSON(http.StatusOK, MemorySessionListResponse{
+		Success: true,
+		Data: MemorySessionListData{
+			Sessions: items,
+			Total:    int64(len(items)),
+		},
+	})
+}
+
+// GetSessionRounds retrieves all rounds for a specific session
+func (api *MemoryAPI) GetSessionRounds(c *gin.Context) {
+	if api.memoryStore == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"success": false,
+			"error":   "Memory store not available",
+		})
+		return
+	}
+
+	sessionID := c.Param("id")
+	if sessionID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Session ID is required",
+		})
+		return
+	}
+
+	limitStr := c.DefaultQuery("limit", "100")
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 {
+		limit = 100
+	}
+	if limit > 500 {
+		limit = 500
+	}
+
+	records, err := api.memoryStore.GetRoundsBySession(sessionID, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to retrieve session rounds",
+		})
+		return
+	}
+
+	// Convert to response format
+	items := make([]MemoryRoundItem, len(records))
+	for i, r := range records {
+		items[i] = convertToMemoryRoundItem(r)
+	}
+
+	c.JSON(http.StatusOK, MemorySessionRoundsResponse{
+		Success: true,
+		Data:    items,
+	})
 }
