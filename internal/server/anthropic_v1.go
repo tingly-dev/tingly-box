@@ -2,11 +2,8 @@ package server
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"io"
 	"net/http"
-	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
@@ -14,7 +11,6 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 
-	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
@@ -306,139 +302,24 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 
 // forwardAnthropicRequestV1 forwards request using Anthropic SDK with proper types (v1)
 func (s *Server) forwardAnthropicRequestV1(provider *typ.Provider, req anthropic.MessageNewParams, scenario string) (*anthropic.Message, context.CancelFunc, error) {
-	// Get or create Anthropic client wrapper from pool
-	wrapper := s.clientPool.GetAnthropicClient(provider, string(req.Model))
-
-	// Create context with scenario for recording
-	ctx := context.WithValue(context.Background(), client.ScenarioContextKey, scenario)
-
-	// Make the request using Anthropic SDK with timeout (provider.Timeout is in seconds)
-	timeout := time.Duration(provider.Timeout) * time.Second
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	message, err := wrapper.MessagesNew(ctx, req)
-	if err != nil {
-		cancel()
-		return nil, nil, err
-	}
-
-	return message, cancel, nil
+	fc := NewForwardContext(nil, s.clientPool, provider, string(req.Model)).
+		WithScenario(scenario)
+	return ForwardAnthropicV1(fc, req)
 }
 
 // forwardAnthropicStreamRequestV1 forwards streaming request using Anthropic SDK (v1)
 func (s *Server) forwardAnthropicStreamRequestV1(ctx context.Context, provider *typ.Provider, req anthropic.MessageNewParams, scenario string) (*anthropicstream.Stream[anthropic.MessageStreamEventUnion], context.CancelFunc, error) {
-	// Get or create Anthropic client wrapper from pool
-	wrapper := s.clientPool.GetAnthropicClient(provider, string(req.Model))
-
-	logrus.Debugln("Creating Anthropic streaming request")
-
-	// Use request context with timeout for streaming
-	// The context will be canceled if client disconnects
-	// Also add scenario for recording
-	timeout := time.Duration(provider.Timeout) * time.Second
-	streamCtx, cancel := context.WithTimeout(ctx, timeout)
-	streamCtx = context.WithValue(streamCtx, client.ScenarioContextKey, scenario)
-	streamResp := wrapper.MessagesNewStreaming(streamCtx, req)
-	return streamResp, cancel, nil
+	fc := NewForwardContext(ctx, s.clientPool, provider, string(req.Model)).
+		WithScenario(scenario)
+	return ForwardAnthropicV1Stream(fc, req)
 }
 
 // handleAnthropicStreamResponseV1 processes the Anthropic streaming response and sends it to the client (v1)
 func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.MessageNewParams, streamResp *anthropicstream.Stream[anthropic.MessageStreamEventUnion], respModel, actualModel string, rule *typ.Rule, provider *typ.Provider, recorder *ScenarioRecorder) {
-	// Ensure stream is always closed
-	defer func() {
-		if streamResp != nil {
-			if err := streamResp.Close(); err != nil {
-				logrus.Errorf("Error closing Anthropic v1 stream: %v", err)
-			}
-		}
-	}()
-
-	// Accumulate usage from stream
-	var inputTokens, outputTokens int
-	var hasUsage bool
-
-	// Create stream recorder for unified recording
-	streamRec := newStreamRecorder(recorder)
-
-	// Set SSE headers
-	SetupSSEHeaders(c)
-
-	// Check SSE support
-	if !CheckSSESupport(c) {
-		return
-	}
-
-	// Use gin.Stream for cleaner streaming handling
-	c.Stream(func(w io.Writer) bool {
-		// Check context cancellation first
-		select {
-		case <-c.Request.Context().Done():
-			logrus.Debug("Client disconnected, stopping Anthropic v1 stream")
-			return false
-		default:
-		}
-
-		if !streamResp.Next() {
-			return false
-		}
-
-		event := streamResp.Current()
-		event.Message.Model = anthropic.Model(respModel)
-
-		// Record event using streamRecorder
-		streamRec.RecordV1Event(&event)
-
-		// Accumulate usage from message_stop event
-		if event.Usage.InputTokens > 0 {
-			inputTokens = int(event.Usage.InputTokens)
-			hasUsage = true
-		}
-		if event.Usage.OutputTokens > 0 {
-			outputTokens = int(event.Usage.OutputTokens)
-			hasUsage = true
-		}
-
-		// Convert the event to JSON and send as SSE
-		c.SSEvent(event.Type, event)
-		return true
-	})
-
-	// Finish recording and assemble response
-	streamRec.Finish(respModel, inputTokens, outputTokens)
-
-	// Check for stream errors
-	if err := streamResp.Err(); err != nil {
-		// Check if it was a client cancellation
-		if IsContextCanceled(err) || errors.Is(err, context.Canceled) {
-			logrus.Debug("Anthropic v1 stream canceled by client")
-			// Track usage with canceled status
-			if hasUsage {
-				s.trackUsageFromContext(c, inputTokens, outputTokens, err)
-			}
-			// Record error
-			streamRec.RecordError(err)
-			return
-		}
-
-		// Track usage with error status
-		if hasUsage {
-			s.trackUsageFromContext(c, inputTokens, outputTokens, err)
-		}
-		MarshalAndSendErrorEvent(c, err.Error(), "stream_error", "stream_failed")
-		// Record error
-		streamRec.RecordError(err)
-		return
-	}
-
-	// Track successful streaming completion
-	if hasUsage {
-		s.trackUsageFromContext(c, inputTokens, outputTokens, nil)
-	}
-
-	// Send completion event
-	SendFinishEvent(c)
-
-	// Record the response after stream completes
-	streamRec.RecordResponse(provider, actualModel)
+	hc := NewHandleContext(c, provider, actualModel, respModel).
+		WithRecorder(recorder).
+		WithServer(s)
+	HandleAnthropicV1Stream(hc, req, streamResp)
 }
 
 // handleAnthropicV1ViaResponsesAPINonStreaming handles non-streaming Responses API request for v1

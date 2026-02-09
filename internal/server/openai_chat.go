@@ -159,72 +159,20 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 
 // forwardOpenAIRequest forwards the request to the selected provider using OpenAI library
 func (s *Server) forwardOpenAIRequest(provider *typ.Provider, req *openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
-	logrus.Infof("provider: %s, model: %s", provider.Name, req.Model)
-
-	// Apply provider-specific transformations before forwarding
-	config := s.buildOpenAIConfig(req)
-	req = transformer.ApplyProviderTransforms(req, provider, req.Model, config)
-
-	// Get or create OpenAI client wrapper from pool
-	wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
-
-	// Make the request using wrapper method with provider timeout
-	timeout := time.Duration(provider.Timeout) * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	chatCompletion, err := wrapper.ChatCompletionsNew(ctx, *req)
-	if err != nil {
-		logrus.Error(err)
-		return nil, fmt.Errorf("failed to create chat completion: %w", err)
-	}
-
-	return chatCompletion, nil
+	fc := NewForwardContext(nil, s.clientPool, provider, req.Model)
+	return ForwardOpenAIChat(fc, req)
 }
 
 // forwardOpenAIStreamRequest forwards the streaming request to the selected provider using OpenAI library
 func (s *Server) forwardOpenAIStreamRequest(ctx context.Context, provider *typ.Provider, req *openai.ChatCompletionNewParams) (*ssestream.Stream[openai.ChatCompletionChunk], context.CancelFunc, error) {
-	logrus.Debugf("provider: %s (streaming)", provider.Name)
-
-	// Apply provider-specific transformations before forwarding
-	config := s.buildOpenAIConfig(req)
-	req = transformer.ApplyProviderTransforms(req, provider, req.Model, config)
-
-	if len(req.Tools) == 0 {
-		req.Tools = nil
-	}
-
-	// Get or create OpenAI client wrapper from pool
-	wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
-
-	// Use request context with timeout for streaming
-	// The context will be canceled if client disconnects
-	timeout := time.Duration(provider.Timeout) * time.Second
-	streamCtx, cancel := context.WithTimeout(ctx, timeout)
-
-	stream := wrapper.ChatCompletionsNewStreaming(streamCtx, *req)
-
-	return stream, cancel, nil
+	fc := NewForwardContext(ctx, s.clientPool, provider, req.Model)
+	return ForwardOpenAIChatStream(fc, req)
 }
 
 // buildOpenAIConfig builds the OpenAIConfig for provider transformations
+// Deprecated: Use buildOpenAIConfig in protocol_forward.go instead
 func (s *Server) buildOpenAIConfig(req *openai.ChatCompletionNewParams) *transformer.OpenAIConfig {
-	config := &transformer.OpenAIConfig{
-		HasThinking:     false,
-		ReasoningEffort: "",
-	}
-
-	// Check if request has thinking configuration in extra_fields
-	extraFields := req.ExtraFields()
-	if thinking, ok := extraFields["thinking"]; ok {
-		if _, ok := thinking.(map[string]interface{}); ok {
-			config.HasThinking = true
-			// Set default reasoning effort to "low" for OpenAI-compatible APIs
-			config.ReasoningEffort = "low"
-		}
-	}
-
-	return config
+	return buildOpenAIConfig(req)
 }
 
 // handleInterceptedToolCalls executes intercepted tool calls locally and returns final response
