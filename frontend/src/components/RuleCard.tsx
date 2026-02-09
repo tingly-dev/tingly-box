@@ -72,7 +72,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     const probeState = useRuleProbe(configRecord);
 
     // Export functionality
-    const { handleExport } = useRuleExport({ rule, showNotification });
+    const { handleExport, handleExportAsBase64ToClipboard } = useRuleExport({ rule, showNotification });
 
     // Smart routing handlers
     const { dialogState: smartDialogState, handlers: smartHandlers } = useSmartRoutingHandlers({
@@ -180,6 +180,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
             saving={saving}
             onProbe={probeState.handleProbe}
             onExport={handleExport}
+            onExportAsBase64ToClipboard={handleExportAsBase64ToClipboard}
             onDelete={handleDeleteButtonClick}
             onToggleActive={() => updateField(configRecord, setConfigRecord, 'active', !configRecord.active)}
         />
