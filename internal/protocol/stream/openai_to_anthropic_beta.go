@@ -12,6 +12,8 @@ import (
 	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
 // StreamEventRecorder is an interface for recording stream events during protocol conversion
@@ -19,8 +21,9 @@ type StreamEventRecorder interface {
 	RecordRawMapEvent(eventType string, event map[string]interface{})
 }
 
-// HandleOpenAIToAnthropicV1BetaStreamResponse processes OpenAI streaming events and converts them to Anthropic beta format
-func HandleOpenAIToAnthropicV1BetaStreamResponse(c *gin.Context, req *openai.ChatCompletionNewParams, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) error {
+// HandleOpenAIToAnthropicV1BetaStreamResponse processes OpenAI streaming events and converts them to Anthropic beta format.
+// Returns UsageStat containing token usage information for tracking.
+func HandleOpenAIToAnthropicV1BetaStreamResponse(c *gin.Context, req *openai.ChatCompletionNewParams, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) (protocol.UsageStat, error) {
 	logrus.Info("Starting OpenAI to Anthropic beta streaming response handler")
 	defer func() {
 		if r := recover(); r != nil {
@@ -49,7 +52,7 @@ func HandleOpenAIToAnthropicV1BetaStreamResponse(c *gin.Context, req *openai.Cha
 
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
-		return errors.New("Streaming not supported by this connection")
+		return protocol.ZeroUsageStat(), errors.New("streaming not supported by this connection")
 	}
 
 	// Generate message ID for Anthropic beta format
@@ -247,7 +250,7 @@ func HandleOpenAIToAnthropicV1BetaStreamResponse(c *gin.Context, req *openai.Cha
 			sendBetaStopEvents(c, state, flusher)
 			sendBetaMessageDelta(c, state, mapOpenAIFinishReasonToAnthropicBeta(choice.FinishReason), flusher)
 			sendBetaMessageStop(c, messageID, responseModel, state, mapOpenAIFinishReasonToAnthropicBeta(choice.FinishReason), flusher)
-			return nil
+			return protocol.NewUsageStat(int(state.inputTokens), int(state.outputTokens)), nil
 		}
 	}
 
@@ -263,14 +266,15 @@ func HandleOpenAIToAnthropicV1BetaStreamResponse(c *gin.Context, req *openai.Cha
 			},
 		}
 		sendAnthropicBetaStreamEvent(c, "error", errorEvent, flusher)
-		return err
+		return protocol.NewUsageStat(int(state.inputTokens), int(state.outputTokens)), err
 	}
-	return nil
+	return protocol.NewUsageStat(int(state.inputTokens), int(state.outputTokens)), nil
 }
 
 // HandleResponsesToAnthropicV1BetaStreamResponse processes OpenAI Responses API streaming events
-// and routes to the appropriate handler (v1 or beta) based on the original request format
-func HandleResponsesToAnthropicV1BetaStreamResponse(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) error {
+// and routes to the appropriate handler (v1 or beta) based on the original request format.
+// Returns UsageStat containing token usage information for tracking.
+func HandleResponsesToAnthropicV1BetaStreamResponse(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) (protocol.UsageStat, error) {
 	// Check if the original request was v1 format
 	originalFormat := "beta"
 	if fmt, exists := c.Get("original_request_format"); exists {
@@ -285,9 +289,10 @@ func HandleResponsesToAnthropicV1BetaStreamResponse(c *gin.Context, stream *open
 	return HandleResponsesToAnthropicBetaStreamResponse(c, stream, responseModel)
 }
 
-// HandleResponsesToAnthropicBetaStreamResponse processes OpenAI Responses API streaming events and converts them to Anthropic beta format
-// This is a thin wrapper that uses the shared core logic with beta event senders
-func HandleResponsesToAnthropicBetaStreamResponse(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) error {
+// HandleResponsesToAnthropicBetaStreamResponse processes OpenAI Responses API streaming events and converts them to Anthropic beta format.
+// This is a thin wrapper that uses the shared core logic with beta event senders.
+// Returns UsageStat containing token usage information for tracking.
+func HandleResponsesToAnthropicBetaStreamResponse(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) (protocol.UsageStat, error) {
 	return HandleResponsesToAnthropicStreamResponse(c, stream, responseModel, responsesAPIEventSenders{
 		SendMessageStart: func(event map[string]interface{}, flusher http.Flusher) {
 			sendAnthropicBetaStreamEvent(c, eventTypeMessageStart, event, flusher)
@@ -333,8 +338,9 @@ func mapOpenAIFinishReasonToAnthropicBeta(finishReason string) string {
 }
 
 // HandleResponsesToAnthropicStreamResponse is the shared core logic for processing OpenAI Responses API streams
-// and converting them to Anthropic format (v1 or beta depending on the senders provided)
-func HandleResponsesToAnthropicStreamResponse(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string, senders responsesAPIEventSenders) error {
+// and converting them to Anthropic format (v1 or beta depending on the senders provided).
+// Returns UsageStat containing token usage information for tracking.
+func HandleResponsesToAnthropicStreamResponse(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string, senders responsesAPIEventSenders) (protocol.UsageStat, error) {
 	logrus.Debugf("[ResponsesAPI] Starting Responses API to Anthropic streaming response handler, model=%s", responseModel)
 	defer func() {
 		if r := recover(); r != nil {
@@ -363,7 +369,7 @@ func HandleResponsesToAnthropicStreamResponse(c *gin.Context, stream *openaistre
 
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
-		return fmt.Errorf("streaming not supported by this connection")
+		return protocol.ZeroUsageStat(), fmt.Errorf("streaming not supported by this connection")
 	}
 
 	// Generate message ID
@@ -616,7 +622,7 @@ func HandleResponsesToAnthropicStreamResponse(c *gin.Context, stream *openaistre
 			senders.SendMessageStop(messageID, responseModel, state, stopReason, flusher)
 
 			logrus.Debugf("[ResponsesAPI] Sent message_stop event with stop_reason=%s, finishing stream", stopReason)
-			return nil
+			return protocol.NewUsageStat(int(state.inputTokens), int(state.outputTokens)), nil
 
 		case "error", "response.failed", "response.incomplete":
 			logrus.Errorf("Responses API error event: %v", currentEvent)
@@ -628,7 +634,7 @@ func HandleResponsesToAnthropicStreamResponse(c *gin.Context, stream *openaistre
 				},
 			}
 			senders.SendErrorEvent(errorEvent, flusher)
-			return fmt.Errorf("Responses API error: %v", currentEvent)
+			return protocol.NewUsageStat(int(state.inputTokens), int(state.outputTokens)), fmt.Errorf("Responses API error: %v", currentEvent)
 
 		default:
 			logrus.Debugf("Unhandled Responses API event type: %s", currentEvent.Type)
@@ -646,8 +652,8 @@ func HandleResponsesToAnthropicStreamResponse(c *gin.Context, stream *openaistre
 			},
 		}
 		senders.SendErrorEvent(errorEvent, flusher)
-		return err
+		return protocol.NewUsageStat(int(state.inputTokens), int(state.outputTokens)), err
 	}
 
-	return nil
+	return protocol.NewUsageStat(int(state.inputTokens), int(state.outputTokens)), nil
 }

@@ -450,9 +450,10 @@ type responsesAPIEventSenders struct {
 	SendErrorEvent        func(event map[string]interface{}, flusher http.Flusher)
 }
 
-// HandleResponsesToAnthropicV1StreamResponse processes OpenAI Responses API streaming events and converts them to Anthropic v1 format
-// This is a thin wrapper that uses the shared core logic with v1 event senders
-func HandleResponsesToAnthropicV1StreamResponse(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) error {
+// HandleResponsesToAnthropicV1StreamResponse processes OpenAI Responses API streaming events and converts them to Anthropic v1 format.
+// This is a thin wrapper that uses the shared core logic with v1 event senders.
+// Returns UsageStat containing token usage information for tracking.
+func HandleResponsesToAnthropicV1StreamResponse(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) (protocol.UsageStat, error) {
 	return HandleResponsesToAnthropicStreamResponse(c, stream, responseModel, responsesAPIEventSenders{
 		SendMessageStart: func(event map[string]interface{}, flusher http.Flusher) {
 			sendAnthropicStreamEvent(c, eventTypeMessageStart, event, flusher)
