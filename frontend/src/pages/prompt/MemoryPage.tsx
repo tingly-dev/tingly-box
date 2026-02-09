@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -29,12 +29,14 @@ import {
 import PageLayout from '@/components/PageLayout';
 import {
   RecordingCalendar,
-  RecordingTimeline,
+  SessionList,
   MemoryDetailView,
 } from '@/components/prompt';
-import type { PromptRoundListItem, SessionGroup } from '@/types/prompt';
+import type {
+  PromptRoundListItem,
+  MemorySessionItem,
+} from '@/types/prompt';
 import api from '@/services/api';
-import { groupBySession, filterSessionGroups } from '@/utils/sessionUtils';
 
 // Available scenarios for filtering
 const SCENARIOS = [
@@ -56,19 +58,18 @@ const PROTOCOLS: { value: string | undefined; label: string }[] = [
   const MemoryPage = () => {
   const [loading, setLoading] = useState(true);
 
-  // List state - lightweight items
-  const [memoryList, setMemoryList] = useState<PromptRoundListItem[]>([]);
+  // Session list state
+  const [sessionList, setSessionList] = useState<MemorySessionItem[]>([]);
+  const [filteredSessionList, setFilteredSessionList] = useState<MemorySessionItem[]>([]);
 
-  // Session grouped state
-  const [sessionGroups, setSessionGroups] = useState<SessionGroup[]>([]);
-  const [filteredSessionGroups, setFilteredSessionGroups] = useState<SessionGroup[]>([]);
+  // Session detail state
+  const [selectedSessionId, setSelectedSessionId] = useState<string>('');
+  const [selectedSessionItem, setSelectedSessionItem] = useState<MemorySessionItem | null>(null);
+  const [sessionRounds, setSessionRounds] = useState<PromptRoundListItem[]>([]);
+  const [loadingRounds, setLoadingRounds] = useState(false);
 
-  // Selection state
-  const [selectedGroupId, setSelectedGroupId] = useState<string>('');
-  const [selectedSession, setSelectedSession] = useState<SessionGroup | null>(null);
-
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [calendarDate, setCalendarDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
+  const [calendarDate, setCalendarDate] = useState<Date>(() => new Date());
   const [rangeMode, setRangeMode] = useState<number | null>(null);
   const [calendarAnchorEl, setCalendarAnchorEl] = useState<HTMLElement | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -78,8 +79,8 @@ const PROTOCOLS: { value: string | undefined; label: string }[] = [
   const [memoryToDelete, setMemoryToDelete] = useState<PromptRoundListItem | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Fetch lightweight list from API
-  const fetchMemoryList = async () => {
+  // Fetch session list from API
+  const fetchSessionList = useCallback(async () => {
     setLoading(true);
     try {
       // Calculate date range for API call
@@ -92,102 +93,118 @@ const PROTOCOLS: { value: string | undefined; label: string }[] = [
         startDate.setDate(startDate.getDate() - rangeMode);
         startDate.setHours(0, 0, 0, 0);
       } else {
-        startDate = new Date(selectedDate);
+        // Clone the date to avoid mutating the state
+        startDate = new Date(selectedDate.getTime());
         startDate.setHours(0, 0, 0, 0);
-        endDate = new Date(selectedDate);
+        endDate = new Date(selectedDate.getTime());
         endDate.setHours(23, 59, 59, 999);
       }
 
-      // TODO: Once backend implements /api/v1/memory/user-inputs/list endpoint,
-      // use the following parameters:
-      const result = await api.getMemoryUserInputsList({
-        scenario: scenarioFilter || undefined,
-        protocol: protocolFilter,
+      const result = await api.getMemorySessions({
         start_date: startDate ? startDate.toISOString() : undefined,
         end_date: endDate ? endDate.toISOString() : undefined,
         limit: 100,
       });
 
       if (result.success && result.data) {
-        // Backend returns { success: true, data: { rounds: [...], total: ... } }
-        setMemoryList(result.data.rounds || []);
+        setSessionList(result.data.sessions || []);
       } else {
-        console.error('Failed to fetch memory list:', result.error);
-        setMemoryList([]);
+        console.error('Failed to fetch session list:', result.error);
+        setSessionList([]);
       }
     } catch (error) {
-      console.error('Error fetching memory list:', error);
-      setMemoryList([]);
+      console.error('Error fetching session list:', error);
+      setSessionList([]);
     } finally {
       setLoading(false);
       setIsRefreshing(false);
     }
-  };
+  }, [selectedDate, rangeMode]);
 
-  // Initial fetch and refetch when date/filter changes
+  // Fetch rounds for a specific session
+  const fetchSessionRounds = useCallback(async (sessionId: string) => {
+    setLoadingRounds(true);
+    try {
+      const result = await api.getMemorySessionRounds(sessionId, { limit: 100 });
+
+      if (result.success && result.data) {
+        setSessionRounds(result.data);
+      } else {
+        console.error('Failed to fetch session rounds:', result.error);
+        setSessionRounds([]);
+      }
+    } catch (error) {
+      console.error('Error fetching session rounds:', error);
+      setSessionRounds([]);
+    } finally {
+      setLoadingRounds(false);
+    }
+  }, []);
+
+  // Initial fetch and refetch when date changes
   useEffect(() => {
-    fetchMemoryList();
+    fetchSessionList();
     // Clear selected session when list changes
-    setSelectedSession(null);
-    setSelectedGroupId('');
-  }, [selectedDate, rangeMode, scenarioFilter, protocolFilter]);
+    setSelectedSessionItem(null);
+    setSelectedSessionId('');
+    setSessionRounds([]);
+  }, [selectedDate, rangeMode]); // Fetch on date/range changes
 
   const handleRefresh = () => {
     setIsRefreshing(true);
-    fetchMemoryList();
+    fetchSessionList();
   };
 
-  // Group memories by session
+  // Filter sessions based on search query and scenario/protocol filters
   useEffect(() => {
-    const groups = groupBySession(memoryList);
-    setSessionGroups(groups);
-  }, [memoryList]);
+    let filtered = sessionList;
 
-  // Filter session groups based on search query
-  useEffect(() => {
-    const filtered = filterSessionGroups(sessionGroups, searchQuery);
-    setFilteredSessionGroups(filtered);
-  }, [sessionGroups, searchQuery]);
+    // Apply scenario filter
+    if (scenarioFilter) {
+      filtered = filtered.filter((s) => s.scenario === scenarioFilter);
+    }
 
-  // Calculate memory counts per date for calendar
+    // Apply protocol filter
+    if (protocolFilter) {
+      filtered = filtered.filter((s) => s.protocol === protocolFilter);
+    }
+
+    // Apply search query - search in account_name and provider_name
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter((s) =>
+        s.account_name.toLowerCase().includes(query) ||
+        s.provider_name.toLowerCase().includes(query) ||
+        s.model.toLowerCase().includes(query)
+      );
+    }
+
+    setFilteredSessionList(filtered);
+  }, [sessionList, searchQuery, scenarioFilter, protocolFilter]);
+
+  // Calculate memory counts per date for calendar (based on session count)
   const memoryCounts = useMemo(() => {
     const counts = new Map<string, number>();
-    memoryList.forEach((item) => {
+    sessionList.forEach((item) => {
       const date = new Date(item.created_at);
       const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
       counts.set(dateKey, (counts.get(dateKey) || 0) + 1);
     });
     return counts;
-  }, [memoryList]);
+  }, [sessionList]);
 
-  const handleSelectGroup = (groupId: string) => {
-    setSelectedGroupId(groupId);
-    // Find the session from filtered groups (or all groups if not found)
-    const session = filteredSessionGroups.find((g) => g.groupKey === groupId)
-      || sessionGroups.find((g) => g.groupKey === groupId);
-    if (session) {
-      setSelectedSession(session);
-    }
+  const handleSelectSession = (sessionItem: MemorySessionItem) => {
+    setSelectedSessionId(sessionItem.id);
+    setSelectedSessionItem(sessionItem);
+    // Fetch rounds for this session
+    fetchSessionRounds(sessionItem.session_id);
   };
 
   const handleDeleteConfirm = async () => {
     if (!memoryToDelete) return;
     // Note: Individual delete is not implemented in API yet
     // For now, just remove from local state
-    setMemoryList(memoryList.filter((m) => m.id !== memoryToDelete.id));
-    if (selectedSession) {
-      setSelectedSession((prev) => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          rounds: prev.rounds.filter((r) => r.id !== memoryToDelete.id),
-          stats: {
-            ...prev.stats,
-            totalRounds: prev.stats.totalRounds - 1,
-          },
-        };
-      });
-    }
+    setSessionRounds(sessionRounds.filter((m) => m.id !== memoryToDelete.id));
     setDeleteDialogOpen(false);
     setMemoryToDelete(null);
   };
@@ -382,7 +399,7 @@ const PROTOCOLS: { value: string | undefined; label: string }[] = [
           >
             <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                {getDateLabel()} ({filteredSessionGroups.length} sessions)
+                {getDateLabel()} ({filteredSessionList.length} sessions)
               </Typography>
             </Box>
             <Box sx={{ flex: 1, overflow: 'auto' }}>
@@ -403,7 +420,7 @@ const PROTOCOLS: { value: string | undefined; label: string }[] = [
                     Loading sessions...
                   </Typography>
                 </Box>
-              ) : filteredSessionGroups.length === 0 ? (
+              ) : filteredSessionList.length === 0 ? (
                 <Box
                   sx={{
                     display: 'flex',
@@ -417,14 +434,14 @@ const PROTOCOLS: { value: string | undefined; label: string }[] = [
                 >
                   <FolderOpen sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
                   <Typography variant="body2" color="text.secondary">
-                    {memoryList.length === 0 ? 'No memories found' : 'No memories match your filters'}
+                    {sessionList.length === 0 ? 'No memories found' : 'No memories match your filters'}
                   </Typography>
                 </Box>
               ) : (
-                <RecordingTimeline
-                  sessionGroups={filteredSessionGroups}
-                  selectedGroupId={selectedGroupId}
-                  onSelectGroup={handleSelectGroup}
+                <SessionList
+                  sessions={filteredSessionList}
+                  selectedSessionId={selectedSessionId}
+                  onSelectSession={handleSelectSession}
                 />
               )}
             </Box>
@@ -443,7 +460,7 @@ const PROTOCOLS: { value: string | undefined; label: string }[] = [
             }}
           >
             <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
-              {!selectedSession ? (
+              {!selectedSessionItem ? (
                 <Box
                   sx={{
                     display: 'flex',
@@ -460,11 +477,33 @@ const PROTOCOLS: { value: string | undefined; label: string }[] = [
                     Select a session to view the conversation
                   </Typography>
                 </Box>
+              ) : loadingRounds ? (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: '100%',
+                    p: 3,
+                    textAlign: 'center',
+                  }}
+                >
+                  <CircularProgress size={32} sx={{ mb: 2 }} />
+                  <Typography variant="body2" color="text.secondary">
+                    Loading conversation...
+                  </Typography>
+                </Box>
               ) : (
-                <MemoryDetailView session={selectedSession} onClose={() => {
-                  setSelectedSession(null);
-                  setSelectedGroupId('');
-                }} />
+                <MemoryDetailView
+                  sessionItem={selectedSessionItem}
+                  rounds={sessionRounds}
+                  onClose={() => {
+                    setSelectedSessionItem(null);
+                    setSelectedSessionId('');
+                    setSessionRounds([]);
+                  }}
+                />
               )}
             </Box>
           </Paper>

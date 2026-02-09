@@ -153,6 +153,8 @@ export interface PromptRoundListItem {
   created_at: string;
   is_streaming: boolean;
   has_tool_use: boolean;
+  // Session information for grouping
+  session_id?: string;
   // Full user_input for search and preview (truncated in UI only)
   user_input: string;
   // Preview of AI response (truncated, for list display)
@@ -222,4 +224,39 @@ export interface PromptFilters {
   session_id?: string;
   limit?: number;
   offset?: number;
+}
+
+// ============================================
+// Session Types (from backend /api/v1/memory/sessions)
+// ============================================
+
+export interface MemorySessionItem {
+  id: string;
+  session_id: string;
+  scenario: string;
+  provider_name: string;
+  protocol: ProtocolType;
+  model: string;
+  account_id: string;
+  account_name: string;
+  created_at: string;
+  total_rounds: number;
+  total_tokens: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
+}
+
+export interface MemorySessionListResponse {
+  success: boolean;
+  data: {
+    sessions: MemorySessionItem[];
+    total: number;
+  };
+  error?: string;
+}
+
+export interface MemorySessionRoundsResponse {
+  success: boolean;
+  data: PromptRoundItem[];
+  error?: string;
 }
