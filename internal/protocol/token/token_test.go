@@ -54,7 +54,12 @@ func TestCountTokensWithTiktoken(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			count, err := CountTokensViaTiktoken(tt.model, tt.messages, anthropic.MessageCountTokensParamsSystemUnion{OfTextBlockArray: tt.system})
+			params := &anthropic.MessageCountTokensParams{
+				Model:       anthropic.Model(tt.model),
+				Messages:    tt.messages,
+				System:      anthropic.MessageCountTokensParamsSystemUnion{OfTextBlockArray: tt.system},
+			}
+			count, err := CountTokensViaTiktoken(params)
 			fmt.Printf("t: %s, count: %d\n", tt.name, count)
 			require.NoError(t, err)
 			assert.GreaterOrEqual(t, count, tt.wantMin, "token count should be at least %d", tt.wantMin)
