@@ -294,10 +294,10 @@ func (ps *MemoryStore) GetUserInputsList(scenario, protocol string, startDate, e
 	defer ps.mu.Unlock()
 
 	var records []MemoryRoundRecord
-	// Select only minimal fields for list display
+	// Select fields for list display including round_result for preview
 	// Include full user_input for search and preview functionality
 	query := ps.db.Model(&MemoryRoundRecord{}).
-		Select("id, scenario, provider_name, model, protocol, created_at, is_streaming, tool_use_count, user_input")
+		Select("id, scenario, provider_name, model, protocol, created_at, is_streaming, tool_use_count, user_input, round_result")
 
 	if scenario != "" {
 		query = query.Where("scenario = ?", scenario)
