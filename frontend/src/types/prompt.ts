@@ -98,6 +98,46 @@ export interface RecordingFilter {
 }
 
 // ============================================
+// Session Aggregation Types
+// ============================================
+
+// Account information extracted from metadata
+export interface AccountInfo {
+  id: string;
+  name?: string;
+  // For claude_code: the hash part of user_id
+  claudeCodeUserId?: string;
+  // For other scenarios: anthropic_user_id or similar
+  anthropicUserId?: string;
+}
+
+// A group of rounds belonging to the same account + session
+export interface SessionGroup {
+  // Unique key for this group (account_id + session_id)
+  groupKey: string;
+  // Account information
+  account: AccountInfo;
+  // Session ID
+  sessionId: string;
+  // Project ID (optional)
+  projectId?: string;
+  // All rounds in this session, sorted by created_at
+  rounds: PromptRoundListItem[];
+  // Statistics
+  stats: {
+    totalRounds: number;
+    totalTokens: number;
+    firstMessageTime: string;
+    lastMessageTime: string;
+    models: string[];
+    scenario: string;
+  };
+}
+
+// Map of group keys to SessionGroups
+export type SessionGroupMap = Map<string, SessionGroup>;
+
+// ============================================
 // Prompt Recording Types (Database-based)
 // ============================================
 

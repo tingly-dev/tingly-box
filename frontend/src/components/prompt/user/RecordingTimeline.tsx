@@ -1,46 +1,87 @@
-import { Box, Typography, Card, CardContent } from '@mui/material';
-import { ChevronRight } from '@mui/icons-material';
-import type { Recording, RecordingType } from '@/types/prompt';
-
-const RECORDING_TYPE_LABELS: Record<RecordingType, string> = {
-  'code-review': 'Code Review',
-  'debug': 'Debug',
-  'refactor': 'Refactor',
-  'test': 'Test',
-  'custom': 'Custom',
-};
+import { useState } from 'react';
+import { Box, Typography, Card, CardContent, Collapse, Chip } from '@mui/material';
+import { ExpandMore, ExpandLess, ChevronRight } from '@mui/icons-material';
+import type { SessionGroup, PromptRoundListItem } from '@/types/prompt';
 
 interface RecordingTimelineProps {
-  recordings: Recording[];
-  onPlay: (recording: Recording) => void;
-  onViewDetails: (recording: Recording) => void;
-  onDelete: (recording: Recording) => void;
-  onSelectRecording: (recording: Recording | null) => void;
-  selectedRecording: Recording | null;
+  sessionGroups: SessionGroup[];
+  onPlay: (round: PromptRoundListItem) => void;
+  onViewDetails: (round: PromptRoundListItem) => void;
+  onDelete: (round: PromptRoundListItem) => void;
+  onSelectRound: (round: PromptRoundListItem | null) => void;
+  selectedRound: PromptRoundListItem | null;
 }
 
 const RecordingTimeline: React.FC<RecordingTimelineProps> = ({
-  recordings,
+  sessionGroups,
   onPlay,
   onViewDetails,
   onDelete,
-  onSelectRecording,
-  selectedRecording,
+  onSelectRound,
+  selectedRound,
 }) => {
-  const formatTime = (date: Date): string => {
+  // Track which session groups are expanded
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+  const formatTime = (dateString: string): string => {
+    const date = new Date(dateString);
     return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
   };
 
-  const handleCardClick = (recording: Recording) => {
-    if (selectedRecording?.id === recording.id) {
-      onSelectRecording(null);
+  const formatDateTime = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const toggleGroupExpansion = (groupKey: string) => {
+    setExpandedGroups((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(groupKey)) {
+        newSet.delete(groupKey);
+      } else {
+        newSet.add(groupKey);
+      }
+      return newSet;
+    });
+  };
+
+  const handleRoundClick = (round: PromptRoundListItem) => {
+    if (selectedRound?.id === round.id) {
+      onSelectRound(null);
     } else {
-      onSelectRecording(recording);
-      onViewDetails(recording);
+      onSelectRound(round);
+      onViewDetails(round);
     }
   };
 
-  if (recordings.length === 0) {
+  const getScenarioLabel = (scenario: string): string => {
+    const labels: Record<string, string> = {
+      claude_code: 'Claude Code',
+      opencode: 'OpenCode',
+      anthropic: 'Anthropic',
+      openai: 'OpenAI',
+      google: 'Google',
+    };
+    return labels[scenario] || scenario;
+  };
+
+  const getScenarioColor = (scenario: string): string => {
+    const colors: Record<string, string> = {
+      claude_code: 'info',
+      opencode: 'success',
+      anthropic: 'secondary',
+      openai: 'warning',
+      google: 'error',
+    };
+    return colors[scenario] || 'default';
+  };
+
+  if (sessionGroups.length === 0) {
     return null;
   }
 
@@ -52,79 +93,177 @@ const RecordingTimeline: React.FC<RecordingTimelineProps> = ({
         gap: 1,
       }}
     >
-      {recordings.map((recording) => (
-        <Card
-          key={recording.id}
-          onClick={() => handleCardClick(recording)}
-          sx={{
-            border: '1px solid',
-            borderColor: selectedRecording?.id === recording.id ? 'primary.main' : 'divider',
-            borderRadius: 2,
-            cursor: 'pointer',
-            transition: 'all 0.2s',
-            backgroundColor: selectedRecording?.id === recording.id ? 'action.selected' : 'background.paper',
-            '&:hover': {
-              borderColor: 'primary.main',
-              boxShadow: 1,
-            },
-          }}
-        >
-          <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              {/* Time */}
-              <Box sx={{ minWidth: 50 }}>
-                <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                  {formatTime(recording.timestamp)}
-                </Typography>
+      {sessionGroups.map((group) => {
+        const isExpanded = expandedGroups.has(group.groupKey);
+
+        return (
+          <Card
+            key={group.groupKey}
+            sx={{
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: 2,
+              overflow: 'hidden',
+              backgroundColor: 'background.paper',
+            }}
+          >
+            {/* Session Header - Always Visible */}
+            <Box
+              onClick={() => toggleGroupExpansion(group.groupKey)}
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                p: 1.5,
+                cursor: 'pointer',
+                bgcolor: 'action.hover',
+                '&:hover': { bgcolor: 'action.selected' },
+              }}
+            >
+              {/* Expand Icon */}
+              <Box sx={{ mr: 1 }}>
+                {isExpanded ? (
+                  <ExpandLess sx={{ fontSize: 18, color: 'text.secondary' }} />
+                ) : (
+                  <ExpandMore sx={{ fontSize: 18, color: 'text.secondary' }} />
+                )}
               </Box>
 
-              {/* Content */}
+              {/* Session Info */}
               <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography
-                  variant="body2"
-                  sx={{
-                    fontWeight: 500,
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  }}
-                >
-                  {recording.summary || recording.content.substring(0, 30) + '...'}
-                </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      px: 0.5,
-                      py: 0.1,
-                      borderRadius: 0.5,
-                      backgroundColor: 'primary.100',
-                      color: 'primary.dark',
-                      fontSize: '0.65rem',
-                      fontWeight: 500,
-                    }}
-                  >
-                    {RECORDING_TYPE_LABELS[recording.type]}
+                {/* Account and Session */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    {group.account.name || group.account.id}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    ·
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                    {group.sessionId.slice(-8)}
+                  </Typography>
+                </Box>
+
+                {/* Stats */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+                  <Chip
+                    label={getScenarioLabel(group.stats.scenario)}
+                    size="small"
+                    color={getScenarioColor(group.stats.scenario) as any}
+                    sx={{ height: 18, fontSize: '0.65rem', fontWeight: 500 }}
+                  />
+                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                    {group.stats.totalRounds} message{group.stats.totalRounds > 1 ? 's' : ''}
                   </Typography>
                   <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                    {recording.user.name}
+                    · {group.stats.totalTokens.toLocaleString()} tokens
                   </Typography>
+                  {group.stats.models.length > 0 && (
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                      · {group.stats.models[0]}
+                    </Typography>
+                  )}
                 </Box>
               </Box>
 
-              {/* Expand Icon */}
-              <ChevronRight
-                sx={{
-                  fontSize: 18,
-                  color: 'text.secondary',
-                  transition: 'transform 0.2s',
-                  transform: selectedRecording?.id === recording.id ? 'rotate(90deg)' : 'rotate(0deg)',
-                }}
-              />
+              {/* Time Range */}
+              <Box sx={{ textAlign: 'right' }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                  {formatDateTime(group.stats.lastMessageTime)}
+                </Typography>
+              </Box>
             </Box>
-          </CardContent>
-        </Card>
-      ))}
+
+            {/* Rounds List - Expandable */}
+            <Collapse in={isExpanded}>
+              <Box sx={{ p: 1 }}>
+                {group.rounds.map((round, index) => {
+                  const isSelected = selectedRound?.id === round.id;
+
+                  return (
+                    <Card
+                      key={round.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRoundClick(round);
+                      }}
+                      sx={{
+                        mb: index < group.rounds.length - 1 ? 0.5 : 0,
+                        border: '1px solid',
+                        borderColor: isSelected ? 'primary.main' : 'divider',
+                        borderRadius: 1.5,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        backgroundColor: isSelected ? 'action.selected' : 'background.paper',
+                        '&:hover': {
+                          borderColor: 'primary.main',
+                          boxShadow: 1,
+                        },
+                      }}
+                    >
+                      <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          {/* Time */}
+                          <Box sx={{ minWidth: 45 }}>
+                            <Typography
+                              variant="body2"
+                              sx={{ fontWeight: 500, color: 'text.secondary', fontSize: '0.7rem' }}
+                            >
+                              {formatTime(round.created_at)}
+                            </Typography>
+                          </Box>
+
+                          {/* Content */}
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                fontWeight: 400,
+                                whiteSpace: 'pre-wrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                display: '-webkit-box',
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: 'vertical',
+                                fontSize: '0.8rem',
+                                lineHeight: 1.4,
+                              }}
+                            >
+                              {round.user_input}
+                            </Typography>
+
+                            {/* Meta Info */}
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
+                              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
+                                {round.model}
+                              </Typography>
+                              {round.is_streaming && (
+                                <Chip label="stream" size="small" sx={{ height: 14, fontSize: '0.55rem' }} />
+                              )}
+                              {round.has_tool_use && (
+                                <Chip label="tools" size="small" sx={{ height: 14, fontSize: '0.55rem' }} />
+                              )}
+                            </Box>
+                          </Box>
+
+                          {/* Expand Icon */}
+                          <ChevronRight
+                            sx={{
+                              fontSize: 16,
+                              color: 'text.secondary',
+                              transition: 'transform 0.2s',
+                              transform: isSelected ? 'rotate(90deg)' : 'rotate(0deg)',
+                            }}
+                          />
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </Box>
+            </Collapse>
+          </Card>
+        );
+      })}
     </Box>
   );
 };
