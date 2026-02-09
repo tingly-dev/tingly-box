@@ -7,31 +7,41 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/tingly-dev/tingly-box/internal/dataimport"
 )
 
 // ImportCommand represents the import rule command
 func ImportCommand(appManager *AppManager) *cobra.Command {
+	var format string
+
 	cmd := &cobra.Command{
 		Use:   "import [file.jsonl]",
-		Short: "Import a rule with providers from a JSONL file",
-		Long: `Import a routing rule with its associated providers from a JSONL file.
-The file should contain line-delimited JSON with:
-  - Line 1: metadata (type="metadata")
-  - Line 2: rule data (type="rule")
-  - Subsequent lines: provider data (type="provider")
+		Short: "Import a rule with providers from a file or stdin",
+		Long: `Import a routing rule with its associated providers from a file or stdin.
+The file can be in JSONL format (default) or Base64 format.
+The format is automatically detected based on the content.
+
+Supported formats:
+  - JSONL: Line-delimited JSON with type="metadata", type="rule", type="provider"
+  - Base64: Single-line Base64-encoded JSONL with TGB64:1.0: prefix
 
 If no file is specified, reads from stdin for pipe-friendly operation:
   cat export.jsonl | tingly-box import
-  tingly-box export-rule <uuid> | tingly-box import`,
+  tingly-box export --request-model gpt-4 --scenario general | tingly-box import
+
+You can also paste Base64 exports directly:
+  tingly-box import <<< "TGB64:1.0:..."`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runImport(appManager, args)
+			return runImport(appManager, format, args)
 		},
 	}
+
+	cmd.Flags().String("format", "auto", "Import format: auto, jsonl, or base64 (default: auto)")
 
 	return cmd
 }
 
-func runImport(appManager *AppManager, args []string) error {
+func runImport(appManager *AppManager, formatStr string, args []string) error {
 	var data string
 
 	if len(args) > 0 {
@@ -55,8 +65,21 @@ func runImport(appManager *AppManager, args []string) error {
 		data = builder.String()
 	}
 
+	// Parse format
+	var format import.Format
+	switch strings.ToLower(formatStr) {
+	case "auto":
+		format = import.FormatAuto
+	case "jsonl":
+		format = import.FormatJSONL
+	case "base64":
+		format = import.FormatBase64
+	default:
+		return fmt.Errorf("invalid format '%s': supported formats are auto, jsonl, and base64", formatStr)
+	}
+
 	// Import using AppManager with defaults for conflicts
-	result, err := appManager.ImportRuleFromJSONL(data, ImportOptions{
+	result, err := appManager.ImportRule(data, format, ImportOptions{
 		OnProviderConflict: "use",  // Use existing provider by default
 		OnRuleConflict:     "skip", // Skip existing rules by default
 		Quiet:              false,
