@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -76,11 +76,6 @@ const UserPage = () => {
   const [injectionSectionExpanded, setInjectionSectionExpanded] = useState(false);
   const [expandedInjections, setExpandedInjections] = useState<Record<number, boolean>>({});
 
-  // Format date to ISO string for API
-  const formatDateForAPI = useCallback((date: Date): string => {
-    return date.toISOString().split('T')[0];
-  }, []);
-
   // Fetch lightweight list from API
   const fetchMemoryList = async () => {
     setLoading(true);
@@ -93,6 +88,7 @@ const UserPage = () => {
         endDate = new Date();
         startDate = new Date();
         startDate.setDate(startDate.getDate() - rangeMode);
+        startDate.setHours(0, 0, 0, 0);
       } else {
         startDate = new Date(selectedDate);
         startDate.setHours(0, 0, 0, 0);
@@ -105,8 +101,8 @@ const UserPage = () => {
       const result = await api.getMemoryUserInputsList({
         scenario: scenarioFilter || undefined,
         protocol: protocolFilter,
-        start_date: startDate ? formatDateForAPI(startDate) : undefined,
-        end_date: endDate ? formatDateForAPI(endDate) : undefined,
+        start_date: startDate ? startDate.toISOString() : undefined,
+        end_date: endDate ? endDate.toISOString() : undefined,
         limit: 100,
       });
 
