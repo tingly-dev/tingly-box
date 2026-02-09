@@ -137,7 +137,7 @@ export default {
     "keyName": {
       "label": "API Key Name",
       "placeholder": "e.g., OpenAI",
-      "autoFill": "Key For {{title}}"
+      "autoFill": "{{title}}"
     },
     "providerOrUrl": {
       "label": "Provider or Custom Base URL",
