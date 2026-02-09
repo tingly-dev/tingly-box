@@ -8,6 +8,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/export"
+	exportpkg "github.com/tingly-dev/tingly-box/internal/export"
+	"github.com/tingly-dev/tingly-box/internal/dataimport"
+	importpkg "github.com/tingly-dev/tingly-box/internal/dataimport"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server"
@@ -422,4 +426,89 @@ func (am *AppManager) ImportRuleFromJSONL(data string, opts ImportOptions) (*Imp
 	}
 
 	return result, nil
+}
+
+// ============
+// Export
+// ============
+
+// ExportRule exports a rule with its providers in the specified format
+func (am *AppManager) ExportRule(rule *typ.Rule, format export.Format) (string, error) {
+	if rule == nil {
+		return "", fmt.Errorf("rule is required for export")
+	}
+
+	globalConfig := am.appConfig.GetGlobalConfig()
+
+	// Collect providers referenced in the rule
+	providerUUIDs := am.getProviderUUIDsFromRule(rule)
+	providers := make([]*typ.Provider, 0, len(providerUUIDs))
+
+	for _, providerUUID := range providerUUIDs {
+		provider, err := globalConfig.GetProviderByUUID(providerUUID)
+		if err == nil && provider != nil {
+			providers = append(providers, provider)
+		}
+	}
+
+	// Build export request
+	req := &exportpkg.ExportRequest{
+		Rule:      rule,
+		Providers: providers,
+	}
+
+	// Perform export
+	result, err := exportpkg.Export(req, format)
+	if err != nil {
+		return "", fmt.Errorf("failed to export rule: %w", err)
+	}
+
+	return result.Content, nil
+}
+
+// getProviderUUIDsFromRule extracts all provider UUIDs from the rule's services
+func (am *AppManager) getProviderUUIDsFromRule(rule *typ.Rule) []string {
+	uuids := make(map[string]bool)
+	for _, service := range rule.Services {
+		if service.Provider != "" {
+			uuids[service.Provider] = true
+		}
+	}
+
+	result := make([]string, 0, len(uuids))
+	for uuid := range uuids {
+		result = append(result, uuid)
+	}
+	return result
+}
+
+// ============
+// Import
+// ============
+
+// ImportRule imports a rule from data in the specified format
+func (am *AppManager) ImportRule(data string, format import.Format, opts ImportOptions) (*ImportResult, error) {
+	globalConfig := am.appConfig.GetGlobalConfig()
+
+	// Convert command.ImportOptions to import.ImportOptions
+	importOpts := importpkg.ImportOptions{
+		OnProviderConflict: opts.OnProviderConflict,
+		OnRuleConflict:     opts.OnRuleConflict,
+		Quiet:              opts.Quiet,
+	}
+
+	// Perform import
+	result, err := importpkg.Import(data, globalConfig, format, importOpts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to import rule: %w", err)
+	}
+
+	// Convert import.ImportResult to command.ImportResult
+	return &ImportResult{
+		RuleCreated:      result.RuleCreated,
+		RuleUpdated:      result.RuleUpdated,
+		ProvidersCreated: result.ProvidersCreated,
+		ProvidersUsed:    result.ProvidersUsed,
+		ProviderMap:      result.ProviderMap,
+	}, nil
 }
