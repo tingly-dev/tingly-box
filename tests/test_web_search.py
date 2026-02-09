@@ -5,6 +5,9 @@ import os
 import json
 import sys
 import uuid
+import subprocess
+import tempfile
+import time
 from datetime import datetime
 
 # Install requirements: pip install openai requests
@@ -17,13 +20,28 @@ CURRENT_DATE = datetime.now().strftime("%Y-%m-%d")
 BASE_URL = "http://127.0.0.1:12580"
 OPENAI_ENDPOINT = f"{BASE_URL}/tingly/openai/v1"
 ANTHROPIC_ENDPOINT = f"{BASE_URL}/tingly/anthropic/v1"
-API_KEY = "tingly-box-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiJ0ZXN0LWNsaWVudCIsImV4cCI6MTc2NjU2ODc4MywiaWF0IjoxNzY2NDgyMzgzfQ.Dp5YAV2ibWe2pYaO9sP2nzTAPTGOgNQ9ykHfz1QNs9c"
+CONFIG_PATH = os.path.expanduser("~/.tingly-box/config.json")
+DEFAULT_SERVER_BIN = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "build", "tingly-box")
+)
 
 
-def test_openai_explicit_tool_call():
+def load_model_token(path: str) -> str:
+    with open(path, "r", encoding="utf-8") as f:
+        cfg = json.load(f)
+    token = cfg.get("model_token")
+    if not token:
+        raise RuntimeError("model_token not found in config.json")
+    return token
+
+
+API_KEY = os.environ.get("TINGLY_BOX_API_KEY") or load_model_token(CONFIG_PATH)
+
+
+def test_openai_explicit_tool_call(label=""):
     """Test OpenAI-style endpoint with tool definitions - let provider decide."""
     print("\n" + "="*70)
-    print("Testing OpenAI-style endpoint with tool definitions")
+    print(f"Testing OpenAI-style endpoint with tool definitions {label}")
     print("Expected: Provider calls web_search, server intercepts and executes locally")
     print("="*70)
 
@@ -193,10 +211,10 @@ def test_openai_baseline():
         return False
 
 
-def test_anthropic_explicit_tool_call():
+def test_anthropic_explicit_tool_call(label=""):
     """Test Anthropic-style endpoint - GLM has built-in web_search."""
     print("\n" + "="*70)
-    print("Testing Anthropic-style endpoint (GLM has built-in web_search)")
+    print(f"Testing Anthropic-style endpoint (GLM has built-in web_search) {label}")
     print("Expected: Provider uses native web_search (no tool definition sent)")
     print("="*70)
 
@@ -263,6 +281,72 @@ def test_anthropic_explicit_tool_call():
         return False
 
 
+def _read_config(path: str) -> dict:
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _write_config(path: str, cfg: dict) -> None:
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, indent=2, ensure_ascii=False)
+
+
+def _restart_server(bin_path: str, config_dir: str) -> bool:
+    if not os.path.exists(bin_path):
+        print(f"⚠️  Server binary not found: {bin_path}")
+        return False
+    try:
+        subprocess.run(
+            [bin_path, "stop", "--config-dir", config_dir],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        subprocess.run(
+            [bin_path, "start", "--config-dir", config_dir, "--port", "12580", "--daemon"],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        time.sleep(2)
+        return True
+    except Exception as exc:
+        print(f"⚠️  Failed to restart server: {exc}")
+        return False
+
+
+def run_with_prefer_local_search(enabled: bool, server_bin: str) -> bool:
+    config_dir = os.path.dirname(CONFIG_PATH)
+    cfg = _read_config(CONFIG_PATH)
+    tool_cfg = cfg.get("tool_interceptor")
+    if tool_cfg is None:
+        tool_cfg = {}
+    tool_cfg["prefer_local_search"] = bool(enabled)
+    cfg["tool_interceptor"] = tool_cfg
+
+    with tempfile.NamedTemporaryFile("w+", delete=False, encoding="utf-8") as tmp:
+        json.dump(cfg, tmp, indent=2, ensure_ascii=False)
+        tmp_path = tmp.name
+
+    # Backup original config
+    backup_path = CONFIG_PATH + ".bak"
+    os.replace(CONFIG_PATH, backup_path)
+    os.replace(tmp_path, CONFIG_PATH)
+
+    try:
+        if not _restart_server(server_bin, config_dir):
+            return False
+        label = "(prefer_local_search=on)" if enabled else "(prefer_local_search=off)"
+        ok1 = test_openai_explicit_tool_call(label=label)
+        ok2 = test_anthropic_explicit_tool_call(label=label)
+        return ok1, ok2
+    finally:
+        # Restore original config
+        if os.path.exists(backup_path):
+            os.replace(backup_path, CONFIG_PATH)
+            _restart_server(server_bin, config_dir)
+
+
 def main():
     """Run all tests."""
     print("\n" + "="*70)
@@ -274,11 +358,15 @@ def main():
 
     results = {}
 
-    # Test OpenAI-style explicit tool call
-    results['openai_explicit_tool'] = test_openai_explicit_tool_call()
+    # Comparison tests toggling prefer_local_search (qwen + glm)
+    server_bin = os.environ.get("TINGLY_BOX_BIN", DEFAULT_SERVER_BIN)
+    qwen_off, glm_off = run_with_prefer_local_search(False, server_bin)
+    qwen_on, glm_on = run_with_prefer_local_search(True, server_bin)
 
-    # Test Anthropic-style explicit tool call
-    results['anthropic_explicit_tool'] = test_anthropic_explicit_tool_call()
+    results['qwen_prefer_local_off'] = qwen_off
+    results['glm_prefer_local_off'] = glm_off
+    results['qwen_prefer_local_on'] = qwen_on
+    results['glm_prefer_local_on'] = glm_on
 
     # Summary
     print("\n" + "="*70)

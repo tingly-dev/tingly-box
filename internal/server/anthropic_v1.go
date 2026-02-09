@@ -47,22 +47,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 	hasBuiltInWebSearch := s.templateManager.ProviderHasBuiltInWebSearch(provider)
 
 	// === Tool Interceptor: Check if enabled and should be used ===
-	var interceptorConfig *typ.ToolInterceptorConfig
-	if s.toolInterceptor != nil {
-		interceptorConfig = s.toolInterceptor.GetConfigForProvider(provider)
-	}
-	shouldIntercept := interceptorConfig != nil && (interceptorConfig.PreferLocalSearch || !hasBuiltInWebSearch)
-	shouldStripTools := interceptorConfig == nil && !hasBuiltInWebSearch
-
-	if interceptorConfig != nil && interceptorConfig.PreferLocalSearch {
-		logrus.Infof("Tool interceptor active for provider %s (prefer_local_search enabled)", provider.Name)
-	} else if shouldIntercept {
-		logrus.Infof("Tool interceptor active for provider %s (no built-in web_search)", provider.Name)
-	} else if shouldStripTools {
-		logrus.Infof("Tool interceptor disabled and provider %s has no built-in web_search; stripping search/fetch tools", provider.Name)
-	} else if hasBuiltInWebSearch {
-		logrus.Infof("Provider %s has built-in web_search, using native implementation", provider.Name)
-	}
+	shouldIntercept, shouldStripTools, _ := s.resolveToolInterceptor(provider, hasBuiltInWebSearch)
 
 	// Ensure max_tokens is set (Anthropic API requires this)
 	// and cap it at the model's maximum allowed value
