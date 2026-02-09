@@ -23,17 +23,17 @@ import {
   Description,
   FolderOpen,
   Search as SearchIcon,
-  Delete,
   Close,
   Refresh,
   ExpandMore,
   ExpandLess,
 } from '@mui/icons-material';
 import PageLayout from '@/components/PageLayout';
-import { RecordingCalendar } from '@/components/prompt';
-import type { PromptRoundItem, PromptRoundListItem } from '@/types/prompt';
+import { RecordingCalendar, RecordingTimeline } from '@/components/prompt';
+import type { PromptRoundItem, PromptRoundListItem, SessionGroup } from '@/types/prompt';
 import { useTranslation } from 'react-i18next';
 import api from '@/services/api';
+import { groupBySession, filterSessionGroups } from '@/utils/sessionUtils';
 
 // Available scenarios for filtering
 const SCENARIOS = [
@@ -59,10 +59,14 @@ const UserPage = () => {
 
   // List state - lightweight items
   const [memoryList, setMemoryList] = useState<PromptRoundListItem[]>([]);
-  const [filteredMemories, setFilteredMemories] = useState<PromptRoundListItem[]>([]);
+
+  // Session grouped state
+  const [sessionGroups, setSessionGroups] = useState<SessionGroup[]>([]);
+  const [filteredSessionGroups, setFilteredSessionGroups] = useState<SessionGroup[]>([]);
 
   // Detail state - full item data
   const [selectedMemory, setSelectedMemory] = useState<PromptRoundItem | null>(null);
+  const [selectedRound, setSelectedRound] = useState<PromptRoundListItem | null>(null);
 
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [calendarDate, setCalendarDate] = useState(new Date());
@@ -153,24 +157,17 @@ const UserPage = () => {
     fetchMemoryList();
   };
 
-  // Filter memories based on selected date/range and filters
-  // Note: With the new API flow, most filtering should happen on the backend
-  // This is mainly for search query filtering since it's client-side
+  // Group memories by session
   useEffect(() => {
-    let filtered = [...memoryList];
+    const groups = groupBySession(memoryList);
+    setSessionGroups(groups);
+  }, [memoryList]);
 
-    // Search filter (client-side since backend doesn't support it yet)
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        (item) =>
-          item.user_input_preview.toLowerCase().includes(query) ||
-          item.model.toLowerCase().includes(query)
-      );
-    }
-
-    setFilteredMemories(filtered);
-  }, [memoryList, searchQuery]);
+  // Filter session groups based on search query
+  useEffect(() => {
+    const filtered = filterSessionGroups(sessionGroups, searchQuery);
+    setFilteredSessionGroups(filtered);
+  }, [sessionGroups, searchQuery]);
 
   // Calculate memory counts per date for calendar
   const memoryCounts = useMemo(() => {
@@ -196,11 +193,6 @@ const UserPage = () => {
     fetchMemoryDetail(memory.id);
   };
 
-  const handleDeleteClick = (memory: PromptRoundListItem) => {
-    setMemoryToDelete(memory);
-    setDeleteDialogOpen(true);
-  };
-
   const handleDeleteConfirm = async () => {
     if (!memoryToDelete) return;
     // Note: Individual delete is not implemented in API yet
@@ -208,6 +200,9 @@ const UserPage = () => {
     setMemoryList(memoryList.filter((m) => m.id !== memoryToDelete.id));
     if (selectedMemory?.id === memoryToDelete.id) {
       setSelectedMemory(null);
+    }
+    if (selectedRound?.id === memoryToDelete.id) {
+      setSelectedRound(null);
     }
     setDeleteDialogOpen(false);
     setMemoryToDelete(null);
@@ -411,11 +406,11 @@ const UserPage = () => {
           >
             <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                {getDateLabel()} ({filteredMemories.length})
+                {getDateLabel()} ({filteredSessionGroups.length} sessions)
               </Typography>
             </Box>
             <Box sx={{ flex: 1, overflow: 'auto' }}>
-              {filteredMemories.length === 0 ? (
+              {filteredSessionGroups.length === 0 ? (
                 <Box
                   sx={{
                     display: 'flex',
@@ -433,93 +428,17 @@ const UserPage = () => {
                   </Typography>
                 </Box>
               ) : (
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  {filteredMemories.map((memory) => (
-                    <Paper
-                      key={memory.id}
-                      onClick={() => handleViewDetails(memory)}
-                      sx={{
-                        mx: 1,
-                        mt: 1,
-                        mb: 0,
-                        p: 1.5,
-                        border: '1px solid',
-                        borderColor: selectedMemory?.id === memory.id ? 'primary.main' : 'divider',
-                        borderRadius: 2,
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                        backgroundColor: selectedMemory?.id === memory.id ? 'action.selected' : 'background.paper',
-                        '&:hover': {
-                          borderColor: 'primary.main',
-                          boxShadow: 1,
-                        },
-                      }}
-                    >
-                      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                        {/* Time */}
-                        <Box sx={{ minWidth: 45, mt: 0.25, flexShrink: 0 }}>
-                          <Typography variant="body2" sx={{ fontWeight: 500, color: 'text.secondary', fontSize: '0.7rem' }}>
-                            {new Date(memory.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                          </Typography>
-                        </Box>
-
-                        {/* Content */}
-                        <Box sx={{ flex: 1, minWidth: 0 }}>
-                          <Typography
-                            variant="body2"
-                            sx={{
-                              fontWeight: 500,
-                              whiteSpace: 'pre-wrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              display: '-webkit-box',
-                              WebkitLineClamp: 3,
-                              WebkitBoxOrient: 'vertical',
-                              fontSize: '0.8rem',
-                              lineHeight: 1.4,
-                              mb: 0.5,
-                            }}
-                          >
-                            {memory.scenario === 'claude_code'
-                              ? parseClaudeCodeInput(memory.user_input).remainingInput || memory.user_input.slice(0, 100)
-                              : memory.user_input}
-                          </Typography>
-
-                          {/* Compact Meta Info */}
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
-                              {memory.model}
-                            </Typography>
-                            <Box sx={{ display: 'flex', gap: 0.25 }}>
-                              {memory.is_streaming && (
-                                <Typography variant="caption" sx={{ fontSize: '0.6rem', color: 'info.main', fontWeight: 500 }}>
-                                  stream
-                                </Typography>
-                              )}
-                              {memory.has_tool_use && (
-                                <Typography variant="caption" sx={{ fontSize: '0.6rem', color: 'warning.main', fontWeight: 500 }}>
-                                  tools
-                                </Typography>
-                              )}
-                            </Box>
-                          </Box>
-                        </Box>
-
-                        {/* Delete Button */}
-                        <IconButton
-                          size="small"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteClick(memory);
-                          }}
-                          sx={{ opacity: 0.6, '&:hover': { opacity: 1 }, flexShrink: 0 }}
-                        >
-                          <Delete sx={{ fontSize: 16 }} />
-                        </IconButton>
-                      </Box>
-                    </Paper>
-                  ))}
-                </Box>
+                <RecordingTimeline
+                  sessionGroups={filteredSessionGroups}
+                  onPlay={(round) => console.log('Play:', round)}
+                  onViewDetails={handleViewDetails}
+                  onDelete={(round) => {
+                    setMemoryToDelete(round);
+                    setDeleteDialogOpen(true);
+                  }}
+                  onSelectRound={setSelectedRound}
+                  selectedRound={selectedRound}
+                />
               )}
             </Box>
           </Paper>
