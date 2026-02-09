@@ -116,12 +116,10 @@ func (s *Server) GetToken(c *gin.Context) {
 
 // DetermineProviderAndModelWithScenario
 func (s *Server) DetermineProviderAndModelWithScenario(scenario typ.RuleScenario, rule *typ.Rule, req interface{}) (*typ.Provider, *loadbalance.Service, error) {
-	if rule == nil {
-		return nil, nil, fmt.Errorf("rule not found for scenario %s", scenario)
-	}
-
 	modelName := rule.RequestModel
 	c := s.config
+	var selectedService *loadbalance.Service
+	var err error
 
 	// Smart routing: check if enabled and try to match rules
 	if rule.SmartEnabled && len(rule.SmartRouting) > 0 && req != nil {
@@ -136,8 +134,8 @@ func (s *Server) DetermineProviderAndModelWithScenario(scenario typ.RuleScenario
 				if matchedServices, matched := router.EvaluateRequest(ctx); matched && len(matchedServices) > 0 {
 					logrus.Debugf("[smart_routing] rule matched for model %s, selecting from %d services", modelName, len(matchedServices))
 					// Select service from matched services using load balancing
-					selectedService, err := s.SelectServiceFromSmartRouting(matchedServices, rule)
-					if err == nil && selectedService != nil && c != nil {
+					selectedService, err = s.SelectServiceFromSmartRouting(matchedServices, rule)
+					if err == nil && selectedService != nil {
 						// Verify the provider exists and is enabled
 						provider, err := c.GetProviderByUUID(selectedService.Provider)
 						if err == nil && provider.Enabled {
@@ -158,17 +156,13 @@ func (s *Server) DetermineProviderAndModelWithScenario(scenario typ.RuleScenario
 	}
 
 	// Normal load balancing path
-	selectedService, err := s.loadBalancer.SelectService(rule)
+	selectedService, err = s.loadBalancer.SelectService(rule)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to select service: %w", err)
 	}
 
 	if selectedService == nil {
 		return nil, nil, fmt.Errorf("no available service for request model '%s'", modelName)
-	}
-
-	if c == nil {
-		return nil, nil, fmt.Errorf("config is not initialized")
 	}
 
 	// Verify the provider exists and is enabled
@@ -197,12 +191,12 @@ func (s *Server) DetermineProviderAndModelWithScenario(scenario typ.RuleScenario
 
 // DetermineProviderAndModel resolves the model name and finds the appropriate provider using load balancing
 func (s *Server) DetermineProviderAndModel(rule *typ.Rule) (*typ.Provider, *loadbalance.Service, error) {
-	if rule == nil {
-		return nil, nil, fmt.Errorf("rule is nil")
-	}
-
 	modelName := rule.RequestModel
 	c := s.config
+
+	// Set the rule in the context so middleware can use the same rule
+	// We need to pass this context to the actual HTTP handler, but this function
+	// doesn't have access to the Gin context. For now, we'll use a different approach.
 
 	// Use the load balancer to select service
 	selectedService, err := s.loadBalancer.SelectService(rule)
@@ -212,10 +206,6 @@ func (s *Server) DetermineProviderAndModel(rule *typ.Rule) (*typ.Provider, *load
 
 	if selectedService == nil {
 		return nil, nil, fmt.Errorf("no available service for request model '%s'", modelName)
-	}
-
-	if c == nil {
-		return nil, nil, fmt.Errorf("config is not initialized")
 	}
 
 	// Verify the provider exists and is enabled

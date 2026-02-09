@@ -25,6 +25,7 @@ func NewInterceptor(globalConfig *typ.ToolInterceptorConfig) *Interceptor {
 	if globalConfig == nil {
 		globalConfig = &typ.ToolInterceptorConfig{
 			Enabled:      false,
+			PreferLocalSearch: false,
 			SearchAPI:    "duckduckgo",
 			MaxResults:   10,
 			MaxFetchSize: 1 * 1024 * 1024, // 1MB
@@ -248,6 +249,68 @@ func (i *Interceptor) InterceptAnthropicRequest(provider *typ.Provider, req *ant
 	return intercepted, results, toolsToForward
 }
 
+// InterceptAnthropicBetaRequest intercepts tool calls in an Anthropic beta request
+func (i *Interceptor) InterceptAnthropicBetaRequest(provider *typ.Provider, req *anthropic.BetaMessageNewParams) (intercepted bool, results []ToolResult, modifiedTools []anthropic.BetaToolUnionParam) {
+	// Check if enabled for this provider
+	if !i.IsEnabledForProvider(provider) || len(req.Tools) == 0 {
+		return false, nil, req.Tools
+	}
+
+	results = []ToolResult{}
+	toolsToForward := []anthropic.BetaToolUnionParam{}
+
+	// Filter tools - forward non-intercepted tools
+	for _, toolUnion := range req.Tools {
+		tool := toolUnion.OfTool
+		if tool == nil {
+			toolsToForward = append(toolsToForward, toolUnion)
+			continue
+		}
+
+		// Check if this tool should be intercepted
+		if !ShouldInterceptTool(tool.Name) {
+			toolsToForward = append(toolsToForward, toolUnion)
+			continue
+		}
+		// This tool should be intercepted - don't forward
+	}
+
+	// Check for tool_use blocks in messages that need to be executed
+	for _, msg := range req.Messages {
+		if msg.Role != anthropic.BetaMessageParamRoleAssistant {
+			continue
+		}
+
+		for _, block := range msg.Content {
+			if block.OfToolUse == nil {
+				continue
+			}
+
+			name := block.OfToolUse.Name
+			if !ShouldInterceptTool(name) {
+				continue
+			}
+
+			id := block.OfToolUse.ID
+			argsBytes, err := json.Marshal(block.OfToolUse.Input)
+			if err != nil {
+				continue
+			}
+
+			result := i.executeTool(provider, name, string(argsBytes))
+			results = append(results, ToolResult{
+				ToolCallID: id,
+				Content:    result.Content,
+				Error:      result.Error,
+				IsError:    result.IsError,
+			})
+		}
+	}
+
+	intercepted = len(results) > 0
+	return intercepted, results, toolsToForward
+}
+
 // ExecuteTool executes a tool by name with JSON arguments (public method for server use)
 func (i *Interceptor) ExecuteTool(provider *typ.Provider, toolName string, argsJSON string) ToolResult {
 	return i.executeTool(provider, toolName, argsJSON)
@@ -326,6 +389,42 @@ func (i *Interceptor) PrepareAnthropicRequest(provider *typ.Provider, originalRe
 			resultBlock := CreateAnthropicToolResultBlock(result.ToolCallID, result.Content, result.IsError)
 			// Wrap in a message
 			resultMsg := anthropic.NewUserMessage(resultBlock)
+			newMessages = append(newMessages, resultMsg)
+		}
+		modifiedReq.Messages = newMessages
+		return modifiedReq, true
+	}
+
+	return modifiedReq, false
+}
+
+// PrepareAnthropicBetaRequest pre-processes an Anthropic beta request before sending to provider
+// Returns:
+// - modifiedReq: the request with tools stripped and pre-injected results
+// - hasPreInjectedResults: whether tool results were injected
+func (i *Interceptor) PrepareAnthropicBetaRequest(provider *typ.Provider, originalReq *anthropic.BetaMessageNewParams) (modifiedReq *anthropic.BetaMessageNewParams, hasPreInjectedResults bool) {
+	// Create a mutable copy of the request
+	modifiedReq = originalReq
+
+	// Check if interception is enabled
+	if !i.IsEnabledForProvider(provider) || len(originalReq.Tools) == 0 {
+		return modifiedReq, false
+	}
+
+	// Intercept to strip tools and check for pre-existing tool calls
+	intercepted, results, modifiedTools := i.InterceptAnthropicBetaRequest(provider, originalReq)
+	modifiedReq.Tools = modifiedTools
+
+	// If there were pre-existing tool calls that were executed, inject results
+	if intercepted && len(results) > 0 {
+		// Build new messages list with original messages
+		newMessages := make([]anthropic.BetaMessageParam, len(originalReq.Messages))
+		copy(newMessages, originalReq.Messages)
+
+		// Inject tool result blocks
+		for _, result := range results {
+			resultBlock := CreateAnthropicBetaToolResultBlock(result.ToolCallID, result.Content, result.IsError)
+			resultMsg := anthropic.NewBetaUserMessage(resultBlock)
 			newMessages = append(newMessages, resultMsg)
 		}
 		modifiedReq.Messages = newMessages
@@ -507,6 +606,28 @@ func CreateAnthropicToolResultBlock(toolUseID, content string, isError bool) ant
 	return anthropic.NewToolResultBlock(toolUseID, resultContent, isError)
 }
 
+// CreateAnthropicBetaToolResultBlock creates an Anthropic beta tool_result content block
+func CreateAnthropicBetaToolResultBlock(toolUseID, content string, isError bool) anthropic.BetaContentBlockParamUnion {
+	resultContent := content
+	if isError {
+		resultContent = fmt.Sprintf("Error: %s", content)
+	}
+
+	block := anthropic.NewBetaToolResultBlock(toolUseID)
+	if block.OfToolResult != nil {
+		block.OfToolResult.IsError = anthropic.Bool(isError)
+		block.OfToolResult.Content = []anthropic.BetaToolResultBlockParamContentUnion{
+			{
+				OfText: &anthropic.BetaTextBlockParam{
+					Text: resultContent,
+				},
+			},
+		}
+	}
+
+	return block
+}
+
 // StripSearchFetchToolsAnthropic removes search/fetch tool definitions from Anthropic tools array
 func StripSearchFetchToolsAnthropic(tools []anthropic.ToolUnionParam) []anthropic.ToolUnionParam {
 	if tools == nil {
@@ -514,6 +635,28 @@ func StripSearchFetchToolsAnthropic(tools []anthropic.ToolUnionParam) []anthropi
 	}
 
 	filtered := make([]anthropic.ToolUnionParam, 0, len(tools))
+	for _, tool := range tools {
+		t := tool.OfTool
+		if t == nil {
+			filtered = append(filtered, tool)
+			continue
+		}
+
+		if !ShouldInterceptTool(t.Name) {
+			filtered = append(filtered, tool)
+		}
+	}
+
+	return filtered
+}
+
+// StripSearchFetchToolsAnthropicBeta removes search/fetch tool definitions from Anthropic beta tools array
+func StripSearchFetchToolsAnthropicBeta(tools []anthropic.BetaToolUnionParam) []anthropic.BetaToolUnionParam {
+	if tools == nil {
+		return nil
+	}
+
+	filtered := make([]anthropic.BetaToolUnionParam, 0, len(tools))
 	for _, tool := range tools {
 		t := tool.OfTool
 		if t == nil {

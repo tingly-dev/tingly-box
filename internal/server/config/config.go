@@ -1,7 +1,6 @@
 package config
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -36,9 +35,6 @@ type Config struct {
 	Scenarios         []typ.ScenarioConfig `yaml:"scenarios" json:"scenarios"`                     // Scenario-specific configurations
 	GUI               GUIConfig            `json:"gui"`                                            // GUI-specific settings
 
-	// Tool interceptor configuration (global)
-	ToolInterceptor *typ.ToolInterceptorConfig `json:"tool_interceptor,omitempty"` // Global tool interceptor config
-
 	// Merged fields from Config struct
 	ProvidersV1 map[string]*typ.Provider `json:"providers"`
 	Providers   []*typ.Provider          `json:"providers_v2,omitempty"`
@@ -50,6 +46,8 @@ type Config struct {
 	Verbose          bool `json:"verbose"`            // Verbose mode for detailed logging
 	Debug            bool `json:"-"`                  // Debug mode for Gin debug level logging
 	OpenBrowser      bool `yaml:"-" json:"-"`         // Auto-open browser in web UI mode (default: true)
+	// Tool interceptor (local web_search/web_fetch)
+	ToolInterceptor *typ.ToolInterceptorConfig `json:"tool_interceptor,omitempty"`
 
 	// Error log settings
 	ErrorLogFilterExpression string `json:"error_log_filter_expression"` // Expression for filtering error log entries (default: "StatusCode >= 400 && Path matches '^/api/'")
@@ -184,16 +182,6 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 		cfg.ErrorLogFilterExpression = "StatusCode >= 400 && Path matches '^/api/'"
 		updated = true
 	}
-	// Set default tool interceptor configuration
-	if cfg.ToolInterceptor == nil {
-		cfg.ToolInterceptor = &typ.ToolInterceptorConfig{
-			Enabled:    false,
-			SearchAPI:  "duckduckgo",
-			MaxResults: 10,
-			ProxyURL:   "http://127.0.0.1:7890",
-		}
-		updated = true
-	}
 	// Default OpenBrowser to true (runtime-only setting, not persisted)
 	if !cfg.OpenBrowser {
 		cfg.OpenBrowser = true
@@ -246,18 +234,12 @@ func (c *Config) Save() error {
 	if c.ConfigFile == "" {
 		return fmt.Errorf("ConfigFile is empty")
 	}
-
-	// Use encoder with DisableHTMLEscape for human-readable output
-	var buf bytes.Buffer
-	encoder := json.NewEncoder(&buf)
-	encoder.SetEscapeHTML(false)
-	encoder.SetIndent("", "    ")
-
-	if err := encoder.Encode(c); err != nil {
+	data, err := json.MarshalIndent(c, "", "    ")
+	if err != nil {
 		return err
 	}
-
-	if err := os.WriteFile(c.ConfigFile, buf.Bytes(), 0644); err != nil {
+	err = os.WriteFile(c.ConfigFile, data, 0644)
+	if err != nil {
 		return err
 	}
 	return nil
@@ -678,23 +660,6 @@ func (c *Config) HasVirtualModelToken() bool {
 	return c.VirtualModelToken != ""
 }
 
-// GetToolInterceptor returns the global tool interceptor configuration
-func (c *Config) GetToolInterceptor() *typ.ToolInterceptorConfig {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	return c.ToolInterceptor
-}
-
-// SetToolInterceptor sets the global tool interceptor configuration
-func (c *Config) SetToolInterceptor(config *typ.ToolInterceptorConfig) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.ToolInterceptor = config
-	return c.Save()
-}
-
 // Legacy compatibility methods for backward compatibility
 
 // SetToken sets the user token (for backward compatibility)
@@ -878,6 +843,14 @@ func (c *Config) GetDefaultMaxTokens() int {
 	defer c.mu.RUnlock()
 
 	return c.DefaultMaxTokens
+}
+
+// GetToolInterceptorConfig returns the global tool interceptor config
+func (c *Config) GetToolInterceptorConfig() *typ.ToolInterceptorConfig {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.ToolInterceptor
 }
 
 // SetDefaultMaxTokens updates the default max_tokens
@@ -1339,17 +1312,6 @@ func (c *Config) CreateDefaultConfig() error {
 	if c.ErrorLogFilterExpression == "" {
 		c.ErrorLogFilterExpression = "StatusCode >= 400 && Path matches '^/api/'"
 	}
-
-	// Set default tool interceptor configuration
-	if c.ToolInterceptor == nil {
-		c.ToolInterceptor = &typ.ToolInterceptorConfig{
-			Enabled:    true,
-			SearchAPI:  "duckduckgo",
-			MaxResults: 10,
-			ProxyURL:   "http://127.0.0.1:7890",
-		}
-	}
-
 	if err := c.Save(); err != nil {
 		return fmt.Errorf("failed to create default global cfg: %w", err)
 	}

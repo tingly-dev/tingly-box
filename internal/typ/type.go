@@ -68,6 +68,7 @@ type OAuthDetail struct {
 // ToolInterceptorConfig contains configuration for tool interceptor (search & fetch)
 type ToolInterceptorConfig struct {
 	Enabled    bool   `json:"enabled"`               // Master switch for tool interceptor
+	PreferLocalSearch bool `json:"prefer_local_search,omitempty"` // Prefer local tool interception even if provider has built-in search
 	SearchAPI  string `json:"search_api,omitempty"`  // "brave" or "google"
 	SearchKey  string `json:"search_key,omitempty"`  // API key for search service
 	MaxResults int    `json:"max_results,omitempty"` // Max search results to return (default: 10)
@@ -106,6 +107,7 @@ func (p *Provider) GetEffectiveConfig(global *ToolInterceptorConfig) (*ToolInter
 
 		effective := &ToolInterceptorConfig{
 			Enabled:      true,
+			PreferLocalSearch: base.PreferLocalSearch,
 			SearchAPI:    base.SearchAPI,
 			SearchKey:    base.SearchKey,
 			MaxResults:   base.MaxResults,
@@ -115,6 +117,9 @@ func (p *Provider) GetEffectiveConfig(global *ToolInterceptorConfig) (*ToolInter
 			MaxURLLength: base.MaxURLLength,
 		}
 
+		if p.ToolInterceptor.PreferLocalSearch {
+			effective.PreferLocalSearch = true
+		}
 		if p.ToolInterceptor.SearchAPI != "" {
 			effective.SearchAPI = p.ToolInterceptor.SearchAPI
 		}
@@ -159,6 +164,7 @@ func (p *Provider) GetEffectiveConfig(global *ToolInterceptorConfig) (*ToolInter
 	// Start with global config
 	effective := &ToolInterceptorConfig{
 		Enabled:      global.Enabled,
+		PreferLocalSearch: global.PreferLocalSearch,
 		SearchAPI:    global.SearchAPI,
 		SearchKey:    global.SearchKey,
 		MaxResults:   global.MaxResults,

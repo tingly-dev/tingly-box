@@ -72,14 +72,14 @@ type Server struct {
 	// skill manager for skill locations
 	skillManager *data.SkillManager
 
-	// tool interceptor for search & fetch
-	toolInterceptor *toolinterceptor.Interceptor
-
 	// probe cache for model endpoint capabilities
 	probeCache *ProbeCache
 
 	// capability store for persistent model capabilities
 	capabilityStore *db.ModelCapabilityStore
+
+	// tool interceptor for local tool execution
+	toolInterceptor *toolinterceptor.Interceptor
 
 	// recording sinks
 	recordSink *obs.Sink
@@ -403,6 +403,9 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Set template manager in config for model fetching fallback
 	server.config.SetTemplateManager(templateManager)
 
+	// Initialize tool interceptor (local web_search/web_fetch)
+	server.toolInterceptor = toolinterceptor.NewInterceptor(cfg.GetToolInterceptorConfig())
+
 	// Initialize skill manager for skill locations
 	skillManager, err := data.NewSkillManager(cfg.ConfigDir)
 	if err != nil {
@@ -411,15 +414,6 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	} else {
 		server.skillManager = skillManager
 		log.Printf("Skill manager initialized")
-	}
-
-	// Initialize tool interceptor with global config
-	globalToolConfig := cfg.GetToolInterceptor()
-	server.toolInterceptor = toolinterceptor.NewInterceptor(globalToolConfig)
-	if globalToolConfig != nil && globalToolConfig.Enabled {
-		log.Printf("Tool interceptor enabled (search API: %s)", globalToolConfig.SearchAPI)
-	} else {
-		log.Printf("Tool interceptor disabled")
 	}
 
 	// Initialize probe cache with 24-hour TTL
@@ -487,10 +481,6 @@ func (s *Server) setupConfigWatcher() {
 		// Update JWT manager with new secret if changed
 		s.jwtManager = auth.NewJWTManager(newConfig.JWTSecret)
 		logrus.Debugln("JWT manager reloaded with new secret")
-
-		// Update tool interceptor with new config
-		globalToolConfig := s.config.GetToolInterceptor()
-		s.toolInterceptor = toolinterceptor.NewInterceptor(globalToolConfig)
 
 		// Update error log filter expression if changed
 		if s.errorMW != nil {

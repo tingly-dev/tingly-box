@@ -22,6 +22,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
+	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -44,6 +45,27 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 	// Set tracking context with all metadata (eliminates need for explicit parameter passing)
 	SetTrackingContext(c, rule, provider, actualModel, proxyModel, isStreaming)
 
+	// === Check if provider has built-in web_search ===
+	hasBuiltInWebSearch := s.templateManager.ProviderHasBuiltInWebSearch(provider)
+
+	// === Tool Interceptor: Check if enabled and should be used ===
+	var interceptorConfig *typ.ToolInterceptorConfig
+	if s.toolInterceptor != nil {
+		interceptorConfig = s.toolInterceptor.GetConfigForProvider(provider)
+	}
+	shouldIntercept := interceptorConfig != nil && interceptorConfig.Enabled && (interceptorConfig.PreferLocalSearch || !hasBuiltInWebSearch)
+	shouldStripTools := !shouldIntercept && !hasBuiltInWebSearch
+
+	if interceptorConfig != nil && interceptorConfig.Enabled && interceptorConfig.PreferLocalSearch {
+		logrus.Infof("Tool interceptor active for provider %s (prefer_local_search enabled)", provider.Name)
+	} else if shouldIntercept {
+		logrus.Infof("Tool interceptor active for provider %s (no built-in web_search)", provider.Name)
+	} else if shouldStripTools {
+		logrus.Infof("Tool interceptor disabled and provider %s has no built-in web_search; stripping search/fetch tools", provider.Name)
+	} else if hasBuiltInWebSearch {
+		logrus.Infof("Provider %s has built-in web_search, using native implementation", provider.Name)
+	}
+
 	// Ensure max_tokens is set (Anthropic API requires this)
 	// and cap it at the model's maximum allowed value
 	if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil {
@@ -62,6 +84,14 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 	// Set provider UUID in context (Service.Provider uses UUID, not name)
 	c.Set("provider", provider.UUID)
 	c.Set("model", actualModel)
+
+	// === PRE-REQUEST INTERCEPTION: Strip tools before sending to provider ===
+	if shouldIntercept {
+		preparedReq, _ := s.toolInterceptor.PrepareAnthropicBetaRequest(provider, &req.BetaMessageNewParams)
+		req.BetaMessageNewParams = *preparedReq
+	} else if shouldStripTools {
+		req.BetaMessageNewParams.Tools = toolinterceptor.StripSearchFetchToolsAnthropicBeta(req.BetaMessageNewParams.Tools)
+	}
 
 	// Check provider's API style to decide which path to take
 	apiStyle := provider.APIStyle
@@ -217,8 +247,8 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 					streamRec.SetupStreamRecorderInContext(c, "stream_event_recorder")
 				}
 
-				// Create streaming request
-				streamResp, err := s.forwardOpenAIStreamRequest(provider, openaiReq)
+				// Create streaming request with request context for proper cancellation
+				streamResp, _, err := s.forwardOpenAIStreamRequest(c.Request.Context(), provider, openaiReq)
 				if err != nil {
 					SendStreamingError(c, err)
 					if streamRec != nil {
