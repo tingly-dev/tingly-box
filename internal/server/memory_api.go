@@ -25,6 +25,19 @@ func NewMemoryAPI(memoryStore *db.MemoryStore) *MemoryAPI {
 	}
 }
 
+// truncateString returns a truncated version of the string with ellipsis if needed
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	// For UTF-8 strings, we should truncate by runes, not bytes
+	runes := []rune(s)
+	if len(runes) <= maxLen {
+		return s
+	}
+	return string(runes[:maxLen]) + "..."
+}
+
 // RegisterMemoryRoutes registers the memory recording API routes with swagger documentation
 func (s *Server) RegisterMemoryRoutes(manager *swagger.RouteManager) {
 	// Create API for memory
@@ -270,15 +283,16 @@ type MemoryRoundDetailResponse struct {
 // MemoryRoundListItem represents a lightweight item for list display
 // Contains only minimal fields to reduce data transfer
 type MemoryRoundListItem struct {
-	ID           uint   `json:"id"`
-	Scenario     string `json:"scenario"`
-	ProviderName string `json:"provider_name"`
-	Model        string `json:"model"`
-	Protocol     string `json:"protocol"`
-	CreatedAt    string `json:"created_at"`
-	IsStreaming  bool   `json:"is_streaming"`
-	HasToolUse   bool   `json:"has_tool_use"`
-	UserInput    string `json:"user_input"`
+	ID                 uint   `json:"id"`
+	Scenario           string `json:"scenario"`
+	ProviderName       string `json:"provider_name"`
+	Model              string `json:"model"`
+	Protocol           string `json:"protocol"`
+	CreatedAt          string `json:"created_at"`
+	IsStreaming        bool   `json:"is_streaming"`
+	HasToolUse         bool   `json:"has_tool_use"`
+	UserInput          string `json:"user_input"`
+	RoundResultPreview string `json:"round_result_preview,omitempty"` // Truncated output for list display
 }
 
 // MemoryDeleteOldRecordsResponse represents the response for deleting old records
@@ -293,25 +307,26 @@ type MemoryDeleteOldRecordsResponse struct {
 
 // MemoryRoundItem represents a single memory round in the list response
 type MemoryRoundItem struct {
-	ID           uint              `json:"id"`
-	Scenario     string            `json:"scenario"`
-	ProviderUUID string            `json:"provider_uuid"`
-	ProviderName string            `json:"provider_name"`
-	Model        string            `json:"model"`
-	Protocol     string            `json:"protocol"`
-	RequestID    string            `json:"request_id,omitempty"`
-	ProjectID    string            `json:"project_id,omitempty"`
-	SessionID    string            `json:"session_id,omitempty"`
-	Metadata     map[string]string `json:"metadata,omitempty"`
-	RoundIndex   int               `json:"round_index"`
-	UserInput    string            `json:"user_input"`
-	RoundResult  string            `json:"round_result"`
-	InputTokens  int               `json:"input_tokens"`
-	OutputTokens int               `json:"output_tokens"`
-	TotalTokens  int               `json:"total_tokens"`
-	CreatedAt    string            `json:"created_at"`
-	IsStreaming  bool              `json:"is_streaming"`
-	HasToolUse   bool              `json:"has_tool_use"`
+	ID                 uint              `json:"id"`
+	Scenario           string            `json:"scenario"`
+	ProviderUUID       string            `json:"provider_uuid"`
+	ProviderName       string            `json:"provider_name"`
+	Model              string            `json:"model"`
+	Protocol           string            `json:"protocol"`
+	RequestID          string            `json:"request_id,omitempty"`
+	ProjectID          string            `json:"project_id,omitempty"`
+	SessionID          string            `json:"session_id,omitempty"`
+	Metadata           map[string]string `json:"metadata,omitempty"`
+	RoundIndex         int               `json:"round_index"`
+	UserInput          string            `json:"user_input"`
+	RoundResult        string            `json:"round_result"`
+	RoundResultPreview string            `json:"round_result_preview,omitempty"` // Truncated output for list display
+	InputTokens        int               `json:"input_tokens"`
+	OutputTokens       int               `json:"output_tokens"`
+	TotalTokens        int               `json:"total_tokens"`
+	CreatedAt          string            `json:"created_at"`
+	IsStreaming        bool              `json:"is_streaming"`
+	HasToolUse         bool              `json:"has_tool_use"`
 }
 
 // MemoryAPI handler methods
@@ -686,15 +701,16 @@ func (api *MemoryAPI) GetUserInputsList(c *gin.Context) {
 	items := make([]MemoryRoundListItem, len(records))
 	for i, r := range records {
 		items[i] = MemoryRoundListItem{
-			ID:           r.ID,
-			Scenario:     r.Scenario,
-			ProviderName: r.ProviderName,
-			Model:        r.Model,
-			Protocol:     string(r.Protocol),
-			CreatedAt:    r.CreatedAt.Format("2006-01-02T15:04:05Z"),
-			IsStreaming:  r.IsStreaming,
-			HasToolUse:   r.ToolUseCount > 0,
-			UserInput:    r.UserInput,
+			ID:                 r.ID,
+			Scenario:           r.Scenario,
+			ProviderName:       r.ProviderName,
+			Model:              r.Model,
+			Protocol:           string(r.Protocol),
+			CreatedAt:          r.CreatedAt.Format("2006-01-02T15:04:05Z"),
+			IsStreaming:        r.IsStreaming,
+			HasToolUse:         r.ToolUseCount > 0,
+			UserInput:          r.UserInput,
+			RoundResultPreview: truncateString(r.RoundResult, 200), // Preview up to 200 chars
 		}
 	}
 
@@ -779,15 +795,16 @@ func convertToListItems(items []MemoryRoundListItem) []MemoryRoundItem {
 	result := make([]MemoryRoundItem, len(items))
 	for i, item := range items {
 		result[i] = MemoryRoundItem{
-			ID:           item.ID,
-			Scenario:     item.Scenario,
-			ProviderName: item.ProviderName,
-			Model:        item.Model,
-			Protocol:     item.Protocol,
-			CreatedAt:    item.CreatedAt,
-			IsStreaming:  item.IsStreaming,
-			HasToolUse:   item.HasToolUse,
-			UserInput:    item.UserInput,
+			ID:                 item.ID,
+			Scenario:           item.Scenario,
+			ProviderName:       item.ProviderName,
+			Model:              item.Model,
+			Protocol:           item.Protocol,
+			CreatedAt:          item.CreatedAt,
+			IsStreaming:        item.IsStreaming,
+			HasToolUse:         item.HasToolUse,
+			UserInput:          item.UserInput,
+			RoundResultPreview: item.RoundResultPreview,
 		}
 	}
 	return result
