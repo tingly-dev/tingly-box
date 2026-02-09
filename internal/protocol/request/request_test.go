@@ -855,15 +855,11 @@ func TestConvertOpenAIToGoogleToolChoice(t *testing.T) {
 	})
 
 	t.Run("specific function", func(t *testing.T) {
-		// Create tool choice with specific function using JSON
-		tcRaw := json.RawMessage(`{
-			"type": "function",
-			"function": {
-				"name": "get_weather"
-			}
-		}`)
-		var tc openai.ChatCompletionToolChoiceOptionUnionParam
-		_ = json.Unmarshal(tcRaw, &tc)
+		// Create tool choice with specific function using the SDK helper
+		function := openai.ChatCompletionNamedToolChoiceFunctionParam{
+			Name: "get_weather",
+		}
+		tc := openai.ToolChoiceOptionFunctionToolChoice(function)
 
 		result := ConvertOpenAIToGoogleToolChoice(&tc)
 
