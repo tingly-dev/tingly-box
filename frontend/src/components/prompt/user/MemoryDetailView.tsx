@@ -5,27 +5,42 @@ import {
   Paper,
   Grid,
   IconButton,
-  Collapse,
   Button,
   Tooltip,
+  Chip,
+  Avatar,
+  Divider,
 } from '@mui/material';
 import {
   Close,
   ContentCopy,
   Check,
-  ExpandMore,
-  ExpandLess,
   Person,
   SmartToy,
 } from '@mui/icons-material';
-import type { PromptRoundItem } from '@/types/prompt';
+import type { SessionGroup } from '@/types/prompt';
 
-interface MemoryDetailViewProps {
-  memory: PromptRoundItem;
+interface SessionDetailViewProps {
+  session: SessionGroup;
   onClose: () => void;
 }
 
 // Utility functions
+const formatTime = (dateString: string): string => {
+  const date = new Date(dateString);
+  return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+};
+
+const formatDateTime = (dateString: string): string => {
+  const date = new Date(dateString);
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
 const formatTokens = (count: number): string => {
   if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
   if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
@@ -38,157 +53,41 @@ const getContentStats = (content: string): { words: number; chars: number } => {
   return { words, chars };
 };
 
-// Reusable Content Section Component
-interface ContentSectionProps {
-  title: string;
-  icon: React.ReactElement;
-  content: string;
-  color: 'primary' | 'secondary';
-  copyLabel: string;
-  maxHeight?: number;
-}
+const getInitials = (name: string): string => {
+  return name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+};
 
-const ContentSection: React.FC<ContentSectionProps> = ({
-  title,
-  icon,
-  content,
-  color,
-  copyLabel,
-  maxHeight = 400,
-}) => {
-  const [copied, setCopied] = useState(false);
+// Scenario configuration
+const SCENARIO_CONFIG: Record<string, { color: string; label: string }> = {
+  claude_code: { color: 'primary', label: 'Claude Code' },
+  opencode: { color: 'success', label: 'OpenCode' },
+  anthropic: { color: 'secondary', label: 'Anthropic' },
+  openai: { color: 'warning', label: 'OpenAI' },
+  google: { color: 'error', label: 'Google' },
+};
 
-  const handleCopy = useCallback(() => {
+const SessionDetailView: React.FC<SessionDetailViewProps> = ({ session, onClose }) => {
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopy = useCallback((content: string, id: string) => {
     navigator.clipboard.writeText(content);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }, [content]);
-
-  const stats = getContentStats(content);
-
-  return (
-    <Box>
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          mb: 1,
-        }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-          <Box sx={{ color: `${color}.main`, fontSize: 18 }}>{icon}</Box>
-          <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
-            {title}
-          </Typography>
-        </Box>
-        <Tooltip title={copied ? 'Copied!' : copyLabel}>
-          <IconButton size="small" onClick={handleCopy} sx={{ p: 0.5 }}>
-            {copied ? (
-              <Check fontSize="small" color="success" />
-            ) : (
-              <ContentCopy fontSize="small" />
-            )}
-          </IconButton>
-        </Tooltip>
-      </Box>
-      <Paper
-        variant="outlined"
-        sx={{
-          p: 2,
-          bgcolor:
-            color === 'primary'
-              ? 'primary.50'
-              : 'secondary.50',
-          borderLeft: 3,
-          borderLeftColor: `${color}.main`,
-          borderRadius: 1.5,
-          maxHeight,
-          overflow: 'auto',
-        }}
-      >
-        <Typography
-          variant="body1"
-          sx={{
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-            lineHeight: 1.6,
-            fontSize: '0.9rem',
-          }}
-        >
-          {content || (
-            <Typography
-              variant="body2"
-              sx={{ color: 'text.disabled', fontStyle: 'italic' }}
-            >
-              No content
-            </Typography>
-          )}
-        </Typography>
-      </Paper>
-      <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-        {stats.words} words · {stats.chars} characters
-      </Typography>
-    </Box>
-  );
-};
-
-// Parse Claude Code input to extract XML-like tagged injections
-const parseClaudeCodeInput = (
-  input: string
-): { injections: { tag: string; content: string }[]; remainingInput: string } => {
-  const injections: { tag: string; content: string }[] = [];
-  let remainingInput = input;
-
-  const tagRegex = /<([a-zA-Z_][a-zA-Z0-9_-]*)>([\s\S]*?)<\/\1>/g;
-  let match;
-
-  while ((match = tagRegex.exec(input)) !== null) {
-    injections.push({
-      tag: match[1],
-      content: match[2].trim(),
-    });
-  }
-
-  remainingInput = input.replace(tagRegex, '').trim();
-
-  return { injections, remainingInput };
-};
-
-const MemoryDetailView: React.FC<MemoryDetailViewProps> = ({ memory, onClose }) => {
-  const [injectionSectionExpanded, setInjectionSectionExpanded] = useState(false);
-  const [expandedInjections, setExpandedInjections] = useState<
-    Record<number, boolean>
-  >({});
-
-  // Toggle injection expansion
-  const toggleInjection = useCallback((idx: number) => {
-    setExpandedInjections((prev) => ({
-      ...prev,
-      [idx]: !prev[idx],
-    }));
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
   }, []);
 
-  // Scenario badge color
-  const getScenarioColor = (scenario: string): 'primary' | 'secondary' | 'success' | 'warning' | 'error' => {
-    const colors: Record<string, 'primary' | 'secondary' | 'success' | 'warning' | 'error'> = {
-      claude_code: 'primary',
-      opencode: 'success',
-      anthropic: 'secondary',
-      openai: 'warning',
-      google: 'error',
-    };
-    return colors[scenario] || 'primary';
+  const scenarioConfig = SCENARIO_CONFIG[session.stats.scenario] || {
+    color: 'default',
+    label: session.stats.scenario,
   };
-
-  const isClaudeCode = memory.scenario === 'claude_code';
-  const { injections, remainingInput } = isClaudeCode
-    ? parseClaudeCodeInput(memory.user_input)
-    : { injections: [], remainingInput: memory.user_input };
 
   return (
     <Box>
-      {/* Header with Actions */}
+      {/* Header with Session Info */}
       <Box
         sx={{
           display: 'flex',
@@ -200,267 +99,224 @@ const MemoryDetailView: React.FC<MemoryDetailViewProps> = ({ memory, onClose }) 
           borderColor: 'divider',
         }}
       >
-        <Box>
-          <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
-            Memory Details
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            Round #{memory.round_index} · {new Date(memory.created_at).toLocaleString()}
-          </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, minWidth: 0 }}>
+          {/* Avatar */}
+          <Avatar
+            sx={{
+              width: 36,
+              height: 36,
+              bgcolor: `${scenarioConfig.color}.main`,
+              fontSize: '0.8rem',
+              fontWeight: 600,
+            }}
+          >
+            {getInitials(session.account.name || session.account.id)}
+          </Avatar>
+
+          {/* Session Info */}
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
+              <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                {session.account.name || session.account.id}
+              </Typography>
+              <Chip
+                label={scenarioConfig.label}
+                size="small"
+                sx={{
+                  height: 18,
+                  fontSize: '0.65rem',
+                  bgcolor: `${scenarioConfig.color}.light`,
+                  color: `${scenarioConfig.color}.dark`,
+                }}
+              />
+            </Box>
+            <Typography variant="caption" color="text.secondary">
+              {session.sessionId.slice(-12)} · {session.stats.totalRounds} messages · {formatTokens(session.stats.totalTokens)} tokens
+            </Typography>
+          </Box>
         </Box>
+
         <IconButton size="small" onClick={onClose}>
           <Close />
         </IconButton>
       </Box>
 
-      {/* Quick Actions Bar */}
-      <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-        <Tooltip title="Copy All">
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<ContentCopy fontSize="small" />}
-            onClick={() => {
-              const fullText = `User: ${memory.user_input}\n\nAI: ${memory.round_result || ''}`;
-              navigator.clipboard.writeText(fullText);
-            }}
-          >
-            Copy All
-          </Button>
-        </Tooltip>
-      </Box>
-
-      {/* Token Usage Card */}
-      <Paper
-        variant="outlined"
+      {/* Chat-style Messages */}
+      <Box
         sx={{
-          p: 1.5,
-          mb: 2,
-          borderRadius: 2,
-          bgcolor: 'background.default',
+          flex: 1,
+          overflow: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 2,
         }}
       >
-        <Grid container spacing={1.5}>
-          <Grid item xs={4}>
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: 'block', mb: 0.25 }}>
-              INPUT
-            </Typography>
-            <Typography variant="h6" sx={{ fontWeight: 600, color: 'primary.main', fontSize: '1.1rem' }}>
-              {formatTokens(memory.input_tokens)}
-            </Typography>
-          </Grid>
-          <Grid item xs={4}>
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: 'block', mb: 0.25 }}>
-              OUTPUT
-            </Typography>
-            <Typography variant="h6" sx={{ fontWeight: 600, color: 'success.main', fontSize: '1.1rem' }}>
-              {formatTokens(memory.output_tokens)}
-            </Typography>
-          </Grid>
-          <Grid item xs={4}>
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: 'block', mb: 0.25 }}>
-              TOTAL
-            </Typography>
-            <Typography variant="h6" sx={{ fontWeight: 600, color: 'info.main', fontSize: '1.1rem' }}>
-              {formatTokens(memory.total_tokens)}
-            </Typography>
-          </Grid>
-        </Grid>
-      </Paper>
+        {session.rounds.map((round, index) => {
+          const inputStats = getContentStats(round.user_input);
+          const outputStats = round.round_result_preview
+            ? getContentStats(round.round_result_preview)
+            : null;
 
-      {/* Metadata Card */}
-      <Paper
-        variant="outlined"
-        sx={{
-          p: 1.5,
-          mb: 2,
-          borderRadius: 2,
-          bgcolor: 'background.default',
-        }}
-      >
-        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, mb: 1, display: 'block' }}>
-          CONTEXT
-        </Typography>
-        <Grid container spacing={1.5}>
-          <Grid item xs={6}>
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
-              Protocol
-            </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
-              {memory.protocol}
-            </Typography>
-          </Grid>
-          <Grid item xs={6}>
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
-              Scenario
-            </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
-              {memory.scenario}
-            </Typography>
-          </Grid>
-          <Grid item xs={6}>
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
-              Provider
-            </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
-              {memory.provider_name}
-            </Typography>
-          </Grid>
-          <Grid item xs={6}>
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
-              Model
-            </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
-              {memory.model}
-            </Typography>
-          </Grid>
-          {memory.project_id && (
-            <Grid item xs={6}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
-                Project
-              </Typography>
-              <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.7rem', fontWeight: 500 }}>
-                {memory.project_id.slice(0, 12)}...
-              </Typography>
-            </Grid>
-          )}
-          {memory.session_id && (
-            <Grid item xs={6}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
-                Session
-              </Typography>
-              <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.7rem', fontWeight: 500 }}>
-                {memory.session_id.slice(0, 12)}...
-              </Typography>
-            </Grid>
-          )}
-          <Grid item xs={6}>
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
-              Streaming
-            </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
-              {memory.is_streaming ? 'Yes' : 'No'}
-            </Typography>
-          </Grid>
-          <Grid item xs={6}>
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
-              Tool Use
-            </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
-              {memory.has_tool_use ? 'Yes' : 'No'}
-            </Typography>
-          </Grid>
-        </Grid>
-      </Paper>
+          return (
+            <Box key={round.id}>
+              {/* Round Header */}
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                  Round {index + 1}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {formatDateTime(round.created_at)}
+                </Typography>
+              </Box>
 
-      {/* Input Injections Section (Claude Code only) */}
-      {injections.length > 0 && (
-        <Box sx={{ mb: 2 }}>
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              cursor: 'pointer',
-              mb: 1,
-            }}
-            onClick={() => setInjectionSectionExpanded(!injectionSectionExpanded)}
-          >
-            <IconButton size="small" sx={{ p: 0, mr: 0.5 }}>
-              {injectionSectionExpanded ? <ExpandLess /> : <ExpandMore />}
-            </IconButton>
-            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
-              INPUT INJECTIONS ({injections.length})
-            </Typography>
-          </Box>
-
-          <Collapse in={injectionSectionExpanded}>
-            {injections.map((inj, idx) => {
-              const isExpanded = expandedInjections[idx] ?? false;
-              return (
-                <Paper
-                  key={idx}
-                  variant="outlined"
-                  sx={{
-                    mb: idx < injections.length - 1 ? 1 : 0,
-                    bgcolor: 'primary.50',
-                    border: '1px solid',
-                    borderColor: 'primary.200',
-                    borderRadius: 1,
-                    overflow: 'hidden',
-                  }}
-                >
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      p: 1,
-                      cursor: 'pointer',
-                      '&:hover': { bgcolor: 'primary.100' },
-                    }}
-                    onClick={() => toggleInjection(idx)}
-                  >
-                    <IconButton size="small" sx={{ p: 0, mr: 0.5 }}>
-                      {isExpanded ? <ExpandLess /> : <ExpandMore />}
-                    </IconButton>
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        color: 'primary.main',
-                        fontWeight: 600,
-                        fontSize: '0.7rem',
-                        textTransform: 'uppercase',
-                      }}
-                    >
-                      &lt;{inj.tag}&gt;
+              {/* User Message */}
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  mb: 1.5,
+                }}
+              >
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', maxWidth: '85%' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 600, color: 'primary.main', fontSize: '0.7rem' }}>
+                      You
                     </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
+                      {formatTime(round.created_at)}
+                    </Typography>
+                    {round.is_streaming && (
+                      <Chip label="streaming" size="small" sx={{ height: 16, fontSize: '0.6rem' }} />
+                    )}
+                    <Tooltip title={copiedId === `input-${round.id}` ? 'Copied!' : 'Copy'}>
+                      <IconButton
+                        size="small"
+                        onClick={() => handleCopy(round.user_input, `input-${round.id}`)}
+                        sx={{ p: 0.5 }}
+                      >
+                        {copiedId === `input-${round.id}` ? (
+                          <Check fontSize="small" color="success" sx={{ fontSize: 14 }} />
+                        ) : (
+                          <ContentCopy fontSize="small" sx={{ fontSize: 14 }} />
+                        )}
+                      </IconButton>
+                    </Tooltip>
                   </Box>
 
-                  <Collapse in={isExpanded}>
-                    <Box sx={{ px: 1.5, pb: 1.5 }}>
-                      <Typography
-                        variant="body2"
+                  <Paper
+                    sx={{
+                      p: 1.5,
+                      px: 2,
+                      bgcolor: 'primary.main',
+                      color: 'white',
+                      borderRadius: '12px 12px 0 12px',
+                      maxWidth: '100%',
+                    }}
+                  >
+                    <Typography
+                      variant="body1"
+                      sx={{
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word',
+                        fontSize: '0.9rem',
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {round.user_input}
+                    </Typography>
+                    <Typography variant="caption" sx={{ fontSize: '0.65rem', opacity: 0.8, mt: 0.5, display: 'block' }}>
+                      {inputStats.words} words · {inputStats.chars} chars
+                    </Typography>
+                  </Paper>
+                </Box>
+              </Box>
+
+              {/* AI Response */}
+              {round.round_result_preview && (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'flex-start',
+                  }}
+                >
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', maxWidth: '85%' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                      {/* AI Avatar */}
+                      <Avatar
                         sx={{
-                          fontFamily: 'monospace',
-                          fontSize: '0.8rem',
-                          whiteSpace: 'pre-wrap',
-                          wordBreak: 'break-word',
-                          color: 'text.primary',
-                          lineHeight: 1.5,
+                          width: 20,
+                          height: 20,
+                          bgcolor: 'success.main',
+                          fontSize: '0.65rem',
                         }}
                       >
-                        {inj.content}
+                        <SmartToy sx={{ fontSize: 12 }} />
+                      </Avatar>
+                      <Typography variant="caption" sx={{ fontWeight: 600, color: 'success.main', fontSize: '0.7rem' }}>
+                        AI
                       </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
+                        {round.model}
+                      </Typography>
+                      {round.has_tool_use && (
+                        <Chip label="tool use" size="small" sx={{ height: 16, fontSize: '0.6rem', bgcolor: 'warning.light', color: 'warning.dark' }} />
+                      )}
+                      <Tooltip title={copiedId === `output-${round.id}` ? 'Copied!' : 'Copy'}>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleCopy(round.round_result_preview || '', `output-${round.id}`)}
+                          sx={{ p: 0.5 }}
+                        >
+                          {copiedId === `output-${round.id}` ? (
+                            <Check fontSize="small" color="success" sx={{ fontSize: 14 }} />
+                          ) : (
+                            <ContentCopy fontSize="small" sx={{ fontSize: 14 }} />
+                          )}
+                        </IconButton>
+                      </Tooltip>
                     </Box>
-                  </Collapse>
-                </Paper>
-              );
-            })}
-          </Collapse>
-        </Box>
-      )}
 
-      {/* Your Input Section */}
-      <ContentSection
-        title="YOUR INPUT"
-        icon={<Person />}
-        content={remainingInput || (isClaudeCode ? '(Only injection tags, no additional input)' : memory.user_input)}
-        color="primary"
-        copyLabel="Copy input"
-        maxHeight={250}
-      />
+                    <Paper
+                      sx={{
+                        p: 1.5,
+                        px: 2,
+                        bgcolor: 'background.paper',
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: '0 12px 12px 12px',
+                        maxWidth: '100%',
+                      }}
+                    >
+                      <Typography
+                        variant="body1"
+                        sx={{
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-word',
+                          fontSize: '0.9rem',
+                          lineHeight: 1.5,
+                          color: 'text.primary',
+                        }}
+                      >
+                        {round.round_result_preview}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem', mt: 0.5, display: 'block' }}>
+                        {outputStats?.words || 0} words · {outputStats?.chars || 0} chars
+                      </Typography>
+                    </Paper>
+                  </Box>
+                </Box>
+              )}
 
-      {/* AI Response Section */}
-      <ContentSection
-        title="AI RESPONSE"
-        icon={<SmartToy />}
-        content={memory.round_result || 'No response text available (may contain only tool calls or be empty)'}
-        color="secondary"
-        copyLabel="Copy response"
-        maxHeight={400}
-        sx={{ mt: 2 }}
-      />
+              {/* Divider between rounds */}
+              {index < session.rounds.length - 1 && (
+                <Divider sx={{ my: 1, opacity: 0.5 }} />
+              )}
+            </Box>
+          );
+        })}
+      </Box>
     </Box>
   );
 };
 
-export default MemoryDetailView;
+export default SessionDetailView;

@@ -17,6 +17,7 @@ import {
   MenuItem,
   TextField,
   Popover,
+  CircularProgress,
 } from '@mui/material';
 import {
   Description,
@@ -30,10 +31,8 @@ import {
   RecordingCalendar,
   RecordingTimeline,
   MemoryDetailView,
-  SessionListSkeleton,
-  MemoryDetailSkeleton,
 } from '@/components/prompt';
-import type { PromptRoundItem, PromptRoundListItem, SessionGroup } from '@/types/prompt';
+import type { PromptRoundListItem, SessionGroup } from '@/types/prompt';
 import api from '@/services/api';
 import { groupBySession, filterSessionGroups } from '@/utils/sessionUtils';
 
@@ -54,9 +53,8 @@ const PROTOCOLS: { value: string | undefined; label: string }[] = [
   { value: 'google', label: 'Google' },
 ];
 
-const MemoryPage = () => {
+  const MemoryPage = () => {
   const [loading, setLoading] = useState(true);
-  const [detailLoading, setDetailLoading] = useState(false);
 
   // List state - lightweight items
   const [memoryList, setMemoryList] = useState<PromptRoundListItem[]>([]);
@@ -65,9 +63,9 @@ const MemoryPage = () => {
   const [sessionGroups, setSessionGroups] = useState<SessionGroup[]>([]);
   const [filteredSessionGroups, setFilteredSessionGroups] = useState<SessionGroup[]>([]);
 
-  // Detail state - full item data
-  const [selectedMemory, setSelectedMemory] = useState<PromptRoundItem | null>(null);
-  const [selectedRound, setSelectedRound] = useState<PromptRoundListItem | null>(null);
+  // Selection state
+  const [selectedGroupId, setSelectedGroupId] = useState<string>('');
+  const [selectedSession, setSelectedSession] = useState<SessionGroup | null>(null);
 
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [calendarDate, setCalendarDate] = useState(new Date());
@@ -126,30 +124,12 @@ const MemoryPage = () => {
     }
   };
 
-  // Fetch full details for a specific memory
-  const fetchMemoryDetail = async (id: number) => {
-    setDetailLoading(true);
-    try {
-      const result = await api.getMemoryRoundDetail(id);
-      if (result.success && result.data) {
-        setSelectedMemory(result.data);
-      } else {
-        console.error('Failed to fetch memory detail:', result.error);
-        setSelectedMemory(null);
-      }
-    } catch (error) {
-      console.error('Error fetching memory detail:', error);
-      setSelectedMemory(null);
-    } finally {
-      setDetailLoading(false);
-    }
-  };
-
   // Initial fetch and refetch when date/filter changes
   useEffect(() => {
     fetchMemoryList();
-    // Clear selected memory when list changes
-    setSelectedMemory(null);
+    // Clear selected session when list changes
+    setSelectedSession(null);
+    setSelectedGroupId('');
   }, [selectedDate, rangeMode, scenarioFilter, protocolFilter]);
 
   const handleRefresh = () => {
@@ -180,9 +160,14 @@ const MemoryPage = () => {
     return counts;
   }, [memoryList]);
 
-  const handleViewDetails = (memory: PromptRoundListItem) => {
-    // Fetch full details when clicking an item
-    fetchMemoryDetail(memory.id);
+  const handleSelectGroup = (groupId: string) => {
+    setSelectedGroupId(groupId);
+    // Find the session from filtered groups (or all groups if not found)
+    const session = filteredSessionGroups.find((g) => g.groupKey === groupId)
+      || sessionGroups.find((g) => g.groupKey === groupId);
+    if (session) {
+      setSelectedSession(session);
+    }
   };
 
   const handleDeleteConfirm = async () => {
@@ -190,11 +175,18 @@ const MemoryPage = () => {
     // Note: Individual delete is not implemented in API yet
     // For now, just remove from local state
     setMemoryList(memoryList.filter((m) => m.id !== memoryToDelete.id));
-    if (selectedMemory?.id === memoryToDelete.id) {
-      setSelectedMemory(null);
-    }
-    if (selectedRound?.id === memoryToDelete.id) {
-      setSelectedRound(null);
+    if (selectedSession) {
+      setSelectedSession((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          rounds: prev.rounds.filter((r) => r.id !== memoryToDelete.id),
+          stats: {
+            ...prev.stats,
+            totalRounds: prev.stats.totalRounds - 1,
+          },
+        };
+      });
     }
     setDeleteDialogOpen(false);
     setMemoryToDelete(null);
@@ -395,7 +387,22 @@ const MemoryPage = () => {
             </Box>
             <Box sx={{ flex: 1, overflow: 'auto' }}>
               {loading ? (
-                <SessionListSkeleton count={3} />
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: '100%',
+                    p: 3,
+                    textAlign: 'center',
+                  }}
+                >
+                  <CircularProgress size={32} sx={{ mb: 2 }} />
+                  <Typography variant="body2" color="text.secondary">
+                    Loading sessions...
+                  </Typography>
+                </Box>
               ) : filteredSessionGroups.length === 0 ? (
                 <Box
                   sx={{
@@ -416,14 +423,8 @@ const MemoryPage = () => {
               ) : (
                 <RecordingTimeline
                   sessionGroups={filteredSessionGroups}
-                  onPlay={(round) => console.log('Play:', round)}
-                  onViewDetails={handleViewDetails}
-                  onDelete={(round) => {
-                    setMemoryToDelete(round);
-                    setDeleteDialogOpen(true);
-                  }}
-                  onSelectRound={setSelectedRound}
-                  selectedRound={selectedRound}
+                  selectedGroupId={selectedGroupId}
+                  onSelectGroup={handleSelectGroup}
                 />
               )}
             </Box>
@@ -442,9 +443,7 @@ const MemoryPage = () => {
             }}
           >
             <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
-              {detailLoading ? (
-                <MemoryDetailSkeleton hasHeader={false} />
-              ) : !selectedMemory ? (
+              {!selectedSession ? (
                 <Box
                   sx={{
                     display: 'flex',
@@ -458,11 +457,14 @@ const MemoryPage = () => {
                 >
                   <Description sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
                   <Typography variant="body2" color="text.secondary">
-                    Select a memory to view its details
+                    Select a session to view the conversation
                   </Typography>
                 </Box>
               ) : (
-                <MemoryDetailView memory={selectedMemory} onClose={() => setSelectedMemory(null)} />
+                <MemoryDetailView session={selectedSession} onClose={() => {
+                  setSelectedSession(null);
+                  setSelectedGroupId('');
+                }} />
               )}
             </Box>
           </Paper>
