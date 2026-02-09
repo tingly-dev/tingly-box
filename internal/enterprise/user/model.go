@@ -141,6 +141,11 @@ func (m *Model) ExistsByEmail(email string) (bool, error) {
 	return m.repo.ExistsByEmail(email)
 }
 
+// CountByRole counts active users by role
+func (m *Model) CountByRole(role db.Role) (int64, error) {
+	return m.repo.CountByRole(role)
+}
+
 // IsValidRole checks if a role is valid
 func IsValidRole(role db.Role) bool {
 	switch role {

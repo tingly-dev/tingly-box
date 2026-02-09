@@ -43,6 +43,8 @@ type Repository interface {
 	ExistsByUsername(username string) (bool, error)
 	// ExistsByEmail checks if an email exists
 	ExistsByEmail(email string) (bool, error)
+	// CountByRole counts users by role
+	CountByRole(role db.Role) (int64, error)
 }
 
 // repositoryImpl implements the Repository interface
@@ -170,4 +172,10 @@ func (r *repositoryImpl) ExistsByEmail(email string) (bool, error) {
 	var count int64
 	err := r.db.Model(&db.User{}).Where("email = ?", email).Count(&count).Error
 	return count > 0, err
+}
+
+func (r *repositoryImpl) CountByRole(role db.Role) (int64, error) {
+	var count int64
+	err := r.db.Model(&db.User{}).Where("role = ? AND is_active = ?", role, true).Count(&count).Error
+	return count, err
 }

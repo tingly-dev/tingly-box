@@ -42,11 +42,11 @@ type Service interface {
 
 // CreateUserRequest contains data for creating a user
 type CreateUserRequest struct {
-	Username string    `json:"username" binding:"required,min=3,max=64"`
-	Email    string    `json:"email" binding:"required,email"`
-	Password string    `json:"password" binding:"required,min=8"`
-	FullName string    `json:"full_name"`
-	Role     db.Role   `json:"role"`
+	Username string  `json:"username" binding:"required,min=3,max=64"`
+	Email    string  `json:"email" binding:"required,email"`
+	Password string  `json:"password" binding:"required,min=8"`
+	FullName string  `json:"full_name"`
+	Role     db.Role `json:"role"`
 }
 
 // UpdateUserRequest contains data for updating a user
@@ -71,9 +71,9 @@ type UserListResponse struct {
 
 // serviceImpl implements the Service interface
 type serviceImpl struct {
-	userModel    *Model
-	passwordSvc  *auth.PasswordService
-	auditRepo    db.AuditLogRepository
+	userModel   *Model
+	passwordSvc *auth.PasswordService
+	auditRepo   db.AuditLogRepository
 }
 
 // NewService creates a new user service
@@ -178,18 +178,10 @@ func (s *serviceImpl) DeleteUser(ctx context.Context, id int64, actor *db.User) 
 
 	// Check if user is the last admin
 	if user.Role == db.RoleAdmin {
-		// Count admin users
-		admins, _, err := s.userModel.List(1, 1000)
-		if err == nil {
-			adminCount := 0
-			for _, u := range admins {
-				if u.Role == db.RoleAdmin && u.IsActive {
-					adminCount++
-				}
-			}
-			if adminCount <= 1 {
-				return ErrLastAdmin
-			}
+		// Count active admin users
+		adminCount, err := s.userModel.CountByRole(db.RoleAdmin)
+		if err == nil && adminCount <= 1 {
+			return ErrLastAdmin
 		}
 	}
 
@@ -229,17 +221,9 @@ func (s *serviceImpl) DeactivateUser(ctx context.Context, id int64, actor *db.Us
 
 	// Check if user is the last admin
 	if user.Role == db.RoleAdmin {
-		admins, _, err := s.userModel.List(1, 1000)
-		if err == nil {
-			adminCount := 0
-			for _, u := range admins {
-				if u.Role == db.RoleAdmin && u.IsActive {
-					adminCount++
-				}
-			}
-			if adminCount <= 1 {
-				return ErrLastAdmin
-			}
+		adminCount, err := s.userModel.CountByRole(db.RoleAdmin)
+		if err == nil && adminCount <= 1 {
+			return ErrLastAdmin
 		}
 	}
 
