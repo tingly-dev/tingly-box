@@ -240,8 +240,9 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 				}
 
 				// Handle the streaming response
-				err = stream.HandleOpenAIToAnthropicV1BetaStreamResponse(c, openaiReq, streamResp, proxyModel)
+				usage, err := stream.HandleOpenAIToAnthropicV1BetaStreamResponse(c, openaiReq, streamResp, proxyModel)
 				if err != nil {
+					s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, err)
 					SendInternalError(c, err.Error())
 					if streamRec != nil {
 						streamRec.RecordError(err)
@@ -249,9 +250,12 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 					return
 				}
 
+				// Track usage from stream handler
+				s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, nil)
+
 				// Finish recording and assemble response
 				if streamRec != nil {
-					streamRec.Finish(proxyModel, 0, 0) // Usage is tracked internally
+					streamRec.Finish(proxyModel, usage.InputTokens, usage.OutputTokens)
 					streamRec.RecordResponse(provider, actualModel)
 				}
 
@@ -410,21 +414,22 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPIStreaming(c *gin.Context, r
 
 	// Handle the streaming response
 	// Use the dedicated stream handler to convert Responses API to Anthropic beta format
-	err = stream.HandleResponsesToAnthropicV1BetaStreamResponse(c, streamResp, proxyModel)
+	usage, err := stream.HandleResponsesToAnthropicV1BetaStreamResponse(c, streamResp, proxyModel)
 
-	// Track usage from stream (would be accumulated in handler)
-	// For now, we'll track minimal usage since the handler manages it
+	// Track usage from stream handler
 	if err != nil {
-		s.trackUsageFromContext(c, 0, 0, err)
+		s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, err)
 		if streamRec != nil {
 			streamRec.RecordError(err)
 		}
 		return
 	}
 
+	s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, nil)
+
 	// Finish recording and assemble response
 	if streamRec != nil {
-		streamRec.Finish(proxyModel, 0, 0) // Usage is tracked internally
+		streamRec.Finish(proxyModel, usage.InputTokens, usage.OutputTokens)
 		streamRec.RecordResponse(provider, actualModel)
 	}
 

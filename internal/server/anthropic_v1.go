@@ -420,23 +420,22 @@ func (s *Server) handleAnthropicV1ViaResponsesAPIStreaming(c *gin.Context, req p
 
 	// Handle the streaming response
 	// Use the dedicated stream handler to convert Responses API to Anthropic v1 format
-	err = stream.HandleResponsesToAnthropicV1StreamResponse(c, streamResp, proxyModel)
+	usage, err := stream.HandleResponsesToAnthropicV1StreamResponse(c, streamResp, proxyModel)
 
-	// Track usage from stream (would be accumulated in handler)
+	// Track usage from stream handler
 	if err != nil {
-		s.trackUsageFromContext(c, 0, 0, err)
+		s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, err)
 		if streamRec != nil {
 			streamRec.RecordError(err)
 		}
 		return
 	}
 
+	s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, nil)
+
 	// Finish recording and assemble response
 	if streamRec != nil {
-		streamRec.Finish(proxyModel, 0, 0) // Usage is tracked internally
+		streamRec.Finish(proxyModel, usage.InputTokens, usage.OutputTokens)
 		streamRec.RecordResponse(provider, actualModel)
 	}
-
-	// Success - usage tracking is handled inside the stream handler
-	// Note: The handler tracks usage when response.completed event is received
 }
