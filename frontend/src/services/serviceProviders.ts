@@ -3,6 +3,7 @@ import api from "@/services/api.ts";
 export interface ServiceProvider {
     id: string;
     name: string;
+    alias?: string; // Display name with locale information
     status: string;
     valid: boolean;
     website: string;
@@ -38,10 +39,13 @@ export function getServiceProviderOptions(): ServiceProviderOption[] {
         const hasOpenAi = !!(provider as ServiceProvider).base_url_openai;
         const hasAnthropic = !!(provider as ServiceProvider).base_url_anthropic;
 
+        // Use alias if available, otherwise fallback to name
+        const displayName = (provider as ServiceProvider).alias || (provider as ServiceProvider).name;
+
         // If provider supports both APIs, create separate options for each
         if (hasOpenAi) {
             options.push({
-                title: `${provider.name}`,
+                title: displayName,
                 value: `${provider.id}:openai`,
                 api_style: 'openai',
                 baseUrl: (provider as ServiceProvider).base_url_openai!
@@ -49,7 +53,7 @@ export function getServiceProviderOptions(): ServiceProviderOption[] {
         }
         if (hasAnthropic) {
             options.push({
-                title: `${provider.name}`,
+                title: displayName,
                 value: `${provider.id}:anthropic`,
                 api_style: 'anthropic',
                 baseUrl: (provider as ServiceProvider).base_url_anthropic!

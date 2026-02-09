@@ -33,6 +33,7 @@ const TemplateGitHubURL = "https://raw.githubusercontent.com/tingly-dev/tingly-b
 type ProviderTemplate struct {
 	ID                     string            `json:"id"`
 	Name                   string            `json:"name"`
+	Alias                  string            `json:"alias,omitempty"` // Display name with locale information
 	Status                 string            `json:"status"` // "active", "deprecated", etc.
 	Valid                  bool              `json:"valid"`
 	Website                string            `json:"website"`
