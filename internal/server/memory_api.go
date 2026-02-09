@@ -693,7 +693,7 @@ func (api *MemoryAPI) GetUserInputsList(c *gin.Context) {
 			Protocol:     string(r.Protocol),
 			CreatedAt:    r.CreatedAt.Format("2006-01-02T15:04:05Z"),
 			IsStreaming:  r.IsStreaming,
-			HasToolUse:   r.HasToolUse,
+			HasToolUse:   r.ToolUseCount > 0,
 			UserInput:    r.UserInput,
 		}
 	}
@@ -769,7 +769,7 @@ func convertToMemoryRoundItem(r db.MemoryRoundRecord) MemoryRoundItem {
 		TotalTokens:  r.TotalTokens,
 		CreatedAt:    r.CreatedAt.Format("2006-01-02T15:04:05Z"),
 		IsStreaming:  r.IsStreaming,
-		HasToolUse:   r.HasToolUse,
+		HasToolUse:   r.ToolUseCount > 0,
 	}
 }
 

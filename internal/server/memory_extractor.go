@@ -65,6 +65,7 @@ func (e *AnthropicPromptExtractor) extractFromV1Messages(messages []anthropic.Me
 			UserInput:    e.extractUserInputFromV1(round.Messages),
 			RoundResult:  e.extractRoundResultFromV1(round.Messages),
 			FullMessages: e.normalizeV1Messages(round.Messages),
+			ToolUseCount: e.countToolUseInV1(round.Messages),
 		}
 	}
 	return result
@@ -82,6 +83,7 @@ func (e *AnthropicPromptExtractor) extractFromBetaMessages(messages []anthropic.
 			UserInput:    e.extractUserInputFromBeta(round.Messages),
 			RoundResult:  e.extractRoundResultFromBeta(round.Messages),
 			FullMessages: e.normalizeBetaMessages(round.Messages),
+			ToolUseCount: e.countToolUseInBeta(round.Messages),
 		}
 	}
 	return result
@@ -297,6 +299,36 @@ func (e *AnthropicPromptExtractor) normalizeBetaContentBlock(block anthropic.Bet
 		result["content"] = block.OfToolResult.Content
 	}
 	return result
+}
+
+// countToolUseInV1 counts the number of tool_use blocks in v1 messages
+func (e *AnthropicPromptExtractor) countToolUseInV1(messages []anthropic.MessageParam) int {
+	count := 0
+	for _, msg := range messages {
+		if string(msg.Role) == "assistant" {
+			for _, block := range msg.Content {
+				if block.OfToolUse != nil {
+					count++
+				}
+			}
+		}
+	}
+	return count
+}
+
+// countToolUseInBeta counts the number of tool_use blocks in beta messages
+func (e *AnthropicPromptExtractor) countToolUseInBeta(messages []anthropic.BetaMessageParam) int {
+	count := 0
+	for _, msg := range messages {
+		if string(msg.Role) == "assistant" {
+			for _, block := range msg.Content {
+				if block.OfToolUse != nil {
+					count++
+				}
+			}
+		}
+	}
+	return count
 }
 
 // OpenAIPromptExtractor extracts rounds from OpenAI API requests
