@@ -293,11 +293,48 @@ func (b *Bot) handleMessage(msg *tgbotapi.Message) {
 	b.EmitMessage(message)
 }
 
-// handleCallbackQuery handles a callback query
+// handleCallbackQuery handles a callback query (button click)
 func (b *Bot) handleCallbackQuery(query *tgbotapi.CallbackQuery) {
-	b.Logger().Debug("Received callback query from %d", query.From.ID)
+	b.Logger().Debug("Received callback query from %d: %s", query.From.ID, query.Data)
 
-	// Answer the callback query
+	// Create sender
+	sender := core.Sender{
+		ID:       strconv.FormatInt(query.From.ID, 10),
+		Username: query.From.UserName,
+	}
+	if query.From.FirstName != "" || query.From.LastName != "" {
+		sender.DisplayName = fmt.Sprintf("%s %s", query.From.FirstName, query.From.LastName)
+	}
+
+	// Create recipient - use the message's chat ID
+	recipient := core.Recipient{
+		ID:   strconv.FormatInt(query.Message.Chat.ID, 10),
+		Type: "direct",
+	}
+
+	// Create callback content as a special reaction type
+	// Format: callback:data
+	callbackContent := fmt.Sprintf("callback:%s", query.Data)
+
+	// Create message for callback
+	message := core.Message{
+		ID:        strconv.Itoa(query.Message.MessageID),
+		Platform:  core.PlatformTelegram,
+		Timestamp: int64(query.Message.Date),
+		Sender:    sender,
+		Recipient: recipient,
+		Content:   core.NewTextContent(callbackContent),
+		ChatType:  core.ChatTypeDirect,
+		Metadata: map[string]interface{}{
+			"callbackQueryID": query.ID,
+			"callbackData":    query.Data,
+			"isCallback":      true,
+		},
+	}
+
+	b.EmitMessage(message)
+
+	// Answer the callback query to remove loading state
 	callbackCfg := tgbotapi.NewCallback(query.ID, "")
 	if _, err := b.api.Request(callbackCfg); err != nil {
 		b.Logger().Error("Failed to answer callback query: %v", err)
@@ -351,6 +388,15 @@ func (b *Bot) sendText(ctx context.Context, chatID int64, opts *core.SendMessage
 		// Disable notification if silent
 		if opts.Silent {
 			msg.DisableNotification = true
+		}
+
+		// Set reply markup (inline keyboard) from metadata
+		if opts.Metadata != nil {
+			if markup, ok := opts.Metadata["replyMarkup"]; ok {
+				if replyMarkup, ok := markup.(tgbotapi.InlineKeyboardMarkup); ok {
+					msg.ReplyMarkup = replyMarkup
+				}
+			}
 		}
 
 		sentMsg, err := b.api.Send(msg)
