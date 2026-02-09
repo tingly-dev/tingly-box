@@ -155,6 +155,8 @@ export interface PromptRoundListItem {
   has_tool_use: boolean;
   // Full user_input for search and preview (truncated in UI only)
   user_input: string;
+  // Preview of AI response (truncated, for list display)
+  round_result_preview?: string;
 }
 
 export interface PromptRoundItem {

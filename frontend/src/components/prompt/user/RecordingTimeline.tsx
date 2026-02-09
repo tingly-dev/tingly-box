@@ -201,9 +201,9 @@ const RecordingTimeline: React.FC<RecordingTimelineProps> = ({
                       }}
                     >
                       <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Box sx={{ display: 'flex', gap: 1 }}>
                           {/* Time */}
-                          <Box sx={{ minWidth: 45 }}>
+                          <Box sx={{ minWidth: 45, flexShrink: 0 }}>
                             <Typography
                               variant="body2"
                               sx={{ fontWeight: 500, color: 'text.secondary', fontSize: '0.7rem' }}
@@ -212,24 +212,71 @@ const RecordingTimeline: React.FC<RecordingTimelineProps> = ({
                             </Typography>
                           </Box>
 
-                          {/* Content */}
+                          {/* Content - Two row conversation style */}
                           <Box sx={{ flex: 1, minWidth: 0 }}>
-                            <Typography
-                              variant="body2"
-                              sx={{
-                                fontWeight: 400,
-                                whiteSpace: 'pre-wrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                display: '-webkit-box',
-                                WebkitLineClamp: 2,
-                                WebkitBoxOrient: 'vertical',
-                                fontSize: '0.8rem',
-                                lineHeight: 1.4,
-                              }}
-                            >
-                              {round.user_input}
-                            </Typography>
+                            {/* User Input Row */}
+                            <Box sx={{ display: 'flex', gap: 0.5, mb: 0.5 }}>
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  fontWeight: 600,
+                                  color: 'primary.main',
+                                  fontSize: '0.65rem',
+                                  flexShrink: 0,
+                                }}
+                              >
+                                You:
+                              </Typography>
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  fontWeight: 400,
+                                  whiteSpace: 'pre-wrap',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  display: '-webkit-box',
+                                  WebkitLineClamp: 2,
+                                  WebkitBoxOrient: 'vertical',
+                                  fontSize: '0.8rem',
+                                  lineHeight: 1.3,
+                                }}
+                              >
+                                {round.user_input}
+                              </Typography>
+                            </Box>
+
+                            {/* AI Output Row */}
+                            {round.round_result_preview && (
+                              <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                <Typography
+                                  variant="caption"
+                                  sx={{
+                                    fontWeight: 600,
+                                    color: 'success.main',
+                                    fontSize: '0.65rem',
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  AI:
+                                </Typography>
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    color: 'text.secondary',
+                                    whiteSpace: 'pre-wrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    display: '-webkit-box',
+                                    WebkitLineClamp: 2,
+                                    WebkitBoxOrient: 'vertical',
+                                    fontSize: '0.75rem',
+                                    lineHeight: 1.3,
+                                  }}
+                                >
+                                  {round.round_result_preview}
+                                </Typography>
+                              </Box>
+                            )}
 
                             {/* Meta Info */}
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
@@ -252,6 +299,7 @@ const RecordingTimeline: React.FC<RecordingTimelineProps> = ({
                               color: 'text.secondary',
                               transition: 'transform 0.2s',
                               transform: isSelected ? 'rotate(90deg)' : 'rotate(0deg)',
+                              flexShrink: 0,
                             }}
                           />
                         </Box>
