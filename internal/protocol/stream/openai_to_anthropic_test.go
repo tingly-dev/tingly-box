@@ -126,8 +126,8 @@ func TestSendAnthropicStreamEvent(t *testing.T) {
 	sendAnthropicStreamEvent(c, "message_start", eventData, w)
 
 	body := w.Body.String()
-	assert.Contains(t, body, "event: message_start")
-	assert.Contains(t, body, "data: ")
+	assert.Contains(t, body, "event:message_start")
+	assert.Contains(t, body, "data:")
 	assert.Contains(t, body, `"type":"message_start"`)
 }
 
