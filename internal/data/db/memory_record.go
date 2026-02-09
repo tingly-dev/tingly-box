@@ -65,6 +65,23 @@ func (MemoryRoundRecord) TableName() string {
 	return "vibe_memory"
 }
 
+// MemorySessionRecord represents a unique session with aggregated stats
+type MemorySessionRecord struct {
+	ID                uint      `json:"id"`
+	SessionID         string    `json:"session_id"`
+	Scenario          string    `json:"scenario"`
+	ProviderName      string    `json:"provider_name"`
+	Protocol          string    `json:"protocol"`
+	Model             string    `json:"model"`
+	AccountID         string    `json:"account_id"`   // User ID from metadata
+	AccountName       string    `json:"account_name"` // Display name for account
+	CreatedAt         time.Time `json:"created_at"`
+	TotalRounds       int       `json:"total_rounds"`
+	TotalTokens       int       `json:"total_tokens"`
+	TotalInputTokens  int       `json:"total_input_tokens"`
+	TotalOutputTokens int       `json:"total_output_tokens"`
+}
+
 // PromptMetadata represents protocol-specific metadata in JSON format
 type PromptMetadata struct {
 	// Anthropic-specific fields (not in top-level fields)

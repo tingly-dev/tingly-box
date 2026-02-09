@@ -406,6 +406,189 @@ func GetMetadata(record *MemoryRoundRecord) (map[string]interface{}, error) {
 	return metadata, nil
 }
 
+// GetSessionsByDate retrieves sessions grouped by date with account deduplication
+// Returns a list of unique sessions with their metadata and stats
+func (ps *MemoryStore) GetSessionsByDate(startDate, endDate string, limit int) ([]MemorySessionRecord, error) {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+
+	// First, get the first round ID for each session (with date filtering)
+	// Use raw SQL for the subquery since GORM doesn't handle this well
+	subQuerySQL := `
+		SELECT MIN(id) as min_id, session_id
+		FROM vibe_memory
+		WHERE 1=1
+	`
+	args := []interface{}{}
+
+	if startDate != "" {
+		subQuerySQL += " AND created_at >= ?"
+		args = append(args, startDate)
+	}
+	if endDate != "" {
+		subQuerySQL += " AND created_at <= ?"
+		args = append(args, endDate)
+	}
+
+	subQuerySQL += " GROUP BY session_id"
+
+	type FirstRound struct {
+		MinID     uint
+		SessionID string
+	}
+
+	var firstRounds []FirstRound
+	if err := ps.db.Raw(subQuerySQL, args...).Find(&firstRounds).Error; err != nil {
+		return nil, fmt.Errorf("failed to get first rounds: %w", err)
+	}
+
+	if len(firstRounds) == 0 {
+		return []MemorySessionRecord{}, nil
+	}
+
+	// Get the IDs from the subquery result
+	minIDs := make([]uint, len(firstRounds))
+	for i, fr := range firstRounds {
+		minIDs[i] = fr.MinID
+	}
+
+	// Get the actual records using those IDs
+	var records []MemoryRoundRecord
+	query := ps.db.Where("id IN ?", minIDs)
+
+	// Note: The date filtering is already applied in the subquery,
+	// but we should still filter here for the aggregations to be correct
+	if startDate != "" {
+		query = query.Where("created_at >= ?", startDate)
+	}
+	if endDate != "" {
+		query = query.Where("created_at <= ?", endDate)
+	}
+
+	if err := query.Find(&records).Error; err != nil {
+		return nil, fmt.Errorf("failed to get session records: %w", err)
+	}
+
+	// Now get stats for each session by aggregating all rounds in the date range
+	// Build a map of session_id to its record
+	sessionMap := make(map[string]*MemoryRoundRecord)
+	for i := range records {
+		sessionMap[records[i].SessionID] = &records[i]
+	}
+
+	// For each session, get the aggregated stats
+	sessionIDs := make([]string, len(sessionMap))
+	i := 0
+	for sessionID := range sessionMap {
+		sessionIDs[i] = sessionID
+		i++
+	}
+
+	// Get aggregations for each session
+	type SessionStats struct {
+		SessionID         string
+		RoundCount        int64
+		TotalInputTokens  int64
+		TotalOutputTokens int64
+		TotalTokens       int64
+	}
+
+	var stats []SessionStats
+	statsQuery := ps.db.Model(&MemoryRoundRecord{}).
+		Select("session_id, COUNT(*) as round_count, "+
+			"SUM(input_tokens) as total_input_tokens, "+
+			"SUM(output_tokens) as total_output_tokens, "+
+			"SUM(total_tokens) as total_tokens").
+		Where("session_id IN ?", sessionIDs)
+
+	if startDate != "" {
+		statsQuery = statsQuery.Where("created_at >= ?", startDate)
+	}
+	if endDate != "" {
+		statsQuery = statsQuery.Where("created_at <= ?", endDate)
+	}
+
+	statsQuery = statsQuery.Group("session_id")
+
+	if err := statsQuery.Find(&stats).Error; err != nil {
+		return nil, fmt.Errorf("failed to get session stats: %w", err)
+	}
+
+	// Build stats map
+	statsMap := make(map[string]SessionStats)
+	for _, s := range stats {
+		statsMap[s.SessionID] = s
+	}
+
+	// Convert to MemorySessionRecord
+	result := make([]MemorySessionRecord, len(records))
+	for i, record := range records {
+		// Extract account info from metadata
+		var metadata map[string]interface{}
+		if record.Metadata != "" {
+			json.Unmarshal([]byte(record.Metadata), &metadata)
+		}
+
+		accountID := ""
+		accountName := ""
+
+		// Try to get account info from metadata
+		if v, ok := metadata["anthropic_user_id"].(string); ok {
+			accountID = v
+			accountName = v
+		} else if v, ok := metadata["user_id"].(string); ok {
+			accountID = v
+			accountName = v
+		} else if v, ok := metadata["openai_user"].(string); ok {
+			accountID = v
+			accountName = v
+		}
+
+		// Fallback to session_id if no account info found
+		if accountID == "" {
+			accountID = record.SessionID
+			accountName = record.SessionID
+		}
+
+		// Get stats for this session
+		sessionStats := statsMap[record.SessionID]
+
+		result[i] = MemorySessionRecord{
+			ID:                record.ID,
+			SessionID:         record.SessionID,
+			Scenario:          record.Scenario,
+			ProviderName:      record.ProviderName,
+			Protocol:          string(record.Protocol),
+			Model:             record.Model,
+			AccountID:         accountID,
+			AccountName:       accountName,
+			CreatedAt:         record.CreatedAt,
+			TotalRounds:       int(sessionStats.RoundCount),
+			TotalTokens:       int(sessionStats.TotalTokens),
+			TotalInputTokens:  int(sessionStats.TotalInputTokens),
+			TotalOutputTokens: int(sessionStats.TotalOutputTokens),
+		}
+	}
+
+	return result, nil
+}
+
+// GetRoundsBySession retrieves all rounds for a specific session
+func (ps *MemoryStore) GetRoundsBySession(sessionID string, limit int) ([]MemoryRoundRecord, error) {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+
+	var records []MemoryRoundRecord
+	if err := ps.db.Where("session_id = ?", sessionID).
+		Order("created_at ASC").
+		Limit(limit).
+		Find(&records).Error; err != nil {
+		return nil, err
+	}
+
+	return records, nil
+}
+
 // ComputeUserInputHash calculates SHA256 hash of user input for deduplication
 func ComputeUserInputHash(userInput string) string {
 	hash := sha256.Sum256([]byte(userInput))
