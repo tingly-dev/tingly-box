@@ -1,6 +1,6 @@
-import React, { useState, useCallback } from 'react';
-import { Add as AddIcon, Key as KeyIcon, ExpandMore as ExpandMoreIcon, UnfoldMore as UnfoldMoreIcon, Settings as SettingsIcon, Upload as ImportIcon } from '@mui/icons-material';
-import { Button, IconButton, Menu, MenuItem, Stack, Tooltip } from '@mui/material';
+import React from 'react';
+import { Add as AddIcon, Key as KeyIcon, ExpandMore as ExpandMoreIcon, UnfoldMore as UnfoldMoreIcon, Upload as ImportIcon } from '@mui/icons-material';
+import { Button, Stack, Tooltip } from '@mui/material';
 
 export interface TemplatePageActionsProps {
     collapsible: boolean;
@@ -25,27 +25,6 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
     showExpandCollapseButton,
     onImportFromClipboard,
 }) => {
-    const [settingsMenuAnchorEl, setSettingsMenuAnchorEl] = useState<null | HTMLElement>(null);
-    const settingsMenuOpen = Boolean(settingsMenuAnchorEl);
-
-    const handleSettingsMenuOpen = useCallback((event: React.MouseEvent<HTMLElement>) => {
-        setSettingsMenuAnchorEl(event.currentTarget);
-    }, []);
-
-    const handleSettingsMenuClose = useCallback(() => {
-        setSettingsMenuAnchorEl(null);
-    }, []);
-
-    const handleAddApiKeyClick = useCallback(() => {
-        handleSettingsMenuClose();
-        onAddApiKeyClick();
-    }, [onAddApiKeyClick, handleSettingsMenuClose]);
-
-    const handleImportFromClipboard = useCallback(() => {
-        handleSettingsMenuClose();
-        onImportFromClipboard?.();
-    }, [onImportFromClipboard, handleSettingsMenuClose]);
-
     return (
         <Stack direction="row" spacing={1}>
             {showExpandCollapseButton && collapsible && (
@@ -57,6 +36,30 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
                         size="small"
                     >
                         {allExpanded ? "Collapse" : "Expand"}
+                    </Button>
+                </Tooltip>
+            )}
+            {showAddApiKeyButton && (
+                <Tooltip title="Add new API Key">
+                    <Button
+                        variant="outlined"
+                        startIcon={<KeyIcon />}
+                        onClick={onAddApiKeyClick}
+                        size="small"
+                    >
+                        New Key
+                    </Button>
+                </Tooltip>
+            )}
+            {onImportFromClipboard && (
+                <Tooltip title="Import rule and keys from file or clipboard">
+                    <Button
+                        variant="outlined"
+                        startIcon={<ImportIcon />}
+                        onClick={onImportFromClipboard}
+                        size="small"
+                    >
+                        Import
                     </Button>
                 </Tooltip>
             )}
@@ -72,46 +75,6 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
                     </Button>
                 </Tooltip>
             )}
-            <Tooltip title="Settings">
-                <IconButton
-                    size="small"
-                    onClick={handleSettingsMenuOpen}
-                    sx={{
-                        color: 'text.secondary',
-                        '&:hover': {
-                            backgroundColor: 'action.hover',
-                        },
-                    }}
-                >
-                    <SettingsIcon fontSize="small" />
-                </IconButton>
-            </Tooltip>
-            <Menu
-                anchorEl={settingsMenuAnchorEl}
-                open={settingsMenuOpen}
-                onClose={handleSettingsMenuClose}
-                anchorOrigin={{
-                    vertical: 'bottom',
-                    horizontal: 'right',
-                }}
-                transformOrigin={{
-                    vertical: 'top',
-                    horizontal: 'right',
-                }}
-            >
-                {showAddApiKeyButton && (
-                    <MenuItem onClick={handleAddApiKeyClick}>
-                        <KeyIcon fontSize="small" sx={{ mr: 1 }} />
-                        New Key
-                    </MenuItem>
-                )}
-                {onImportFromClipboard && (
-                    <MenuItem onClick={handleImportFromClipboard}>
-                        <ImportIcon fontSize="small" sx={{ mr: 1 }} />
-                        Import Rule & Key
-                    </MenuItem>
-                )}
-            </Menu>
         </Stack>
     );
 };
