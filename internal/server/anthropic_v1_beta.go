@@ -23,8 +23,6 @@ import (
 
 // anthropicMessagesV1Beta implements beta messages API
 func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, proxyModel string, provider *typ.Provider, actualModel string, rule *typ.Rule) {
-	// Extract scenario from URL path for recording
-	scenario := c.Param("scenario")
 
 	// Get scenario recorder if exists (set by AnthropicMessages)
 	var recorder *ScenarioRecorder
@@ -81,7 +79,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 		// Use direct Anthropic SDK call
 		if isStreaming {
 			// Handle streaming request with request context for proper cancellation
-			streamResp, cancel, err := s.forwardAnthropicStreamRequestV1Beta(c.Request.Context(), provider, req.BetaMessageNewParams, scenario)
+			streamResp, cancel, err := s.forwardAnthropicStreamRequestV1Beta(c.Request.Context(), provider, req.BetaMessageNewParams)
 			if err != nil {
 				s.trackUsageFromContext(c, 0, 0, err)
 				SendStreamingError(c, err)
@@ -95,7 +93,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			s.handleAnthropicStreamResponseV1Beta(c, req.BetaMessageNewParams, streamResp, proxyModel, actualModel, rule, provider, recorder)
 		} else {
 			// Handle non-streaming request
-			anthropicResp, cancel, err := s.forwardAnthropicRequestV1Beta(provider, req.BetaMessageNewParams, scenario)
+			anthropicResp, cancel, err := s.forwardAnthropicRequestV1Beta(provider, req.BetaMessageNewParams)
 			if err != nil {
 				s.trackUsageFromContext(c, 0, 0, err)
 				SendForwardingError(c, err)
@@ -293,16 +291,14 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 }
 
 // forwardAnthropicRequestV1Beta forwards request using Anthropic SDK with proper types (beta)
-func (s *Server) forwardAnthropicRequestV1Beta(provider *typ.Provider, req anthropic.BetaMessageNewParams, scenario string) (*anthropic.BetaMessage, context.CancelFunc, error) {
-	fc := NewForwardContext(nil, s.clientPool, provider, string(req.Model)).
-		WithScenario(scenario)
+func (s *Server) forwardAnthropicRequestV1Beta(provider *typ.Provider, req anthropic.BetaMessageNewParams) (*anthropic.BetaMessage, context.CancelFunc, error) {
+	fc := NewForwardContext(nil, s.clientPool, provider, string(req.Model))
 	return ForwardAnthropicV1Beta(fc, req)
 }
 
 // forwardAnthropicStreamRequestV1Beta forwards streaming request using Anthropic SDK (beta)
-func (s *Server) forwardAnthropicStreamRequestV1Beta(ctx context.Context, provider *typ.Provider, req anthropic.BetaMessageNewParams, scenario string) (*anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], context.CancelFunc, error) {
-	fc := NewForwardContext(ctx, s.clientPool, provider, string(req.Model)).
-		WithScenario(scenario)
+func (s *Server) forwardAnthropicStreamRequestV1Beta(ctx context.Context, provider *typ.Provider, req anthropic.BetaMessageNewParams) (*anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], context.CancelFunc, error) {
+	fc := NewForwardContext(ctx, s.clientPool, provider, string(req.Model))
 	return ForwardAnthropicV1BetaStream(fc, req)
 }
 

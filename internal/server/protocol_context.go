@@ -22,8 +22,7 @@ type ForwardContext struct {
 	BaseCtx    context.Context // Base context (e.g., request context for cancellation support)
 
 	// Optional configuration
-	Timeout  time.Duration
-	Scenario string
+	Timeout time.Duration
 
 	// Hooks (chainable - multiple hooks can be added)
 	BeforeRequestHooks []func(ctx context.Context, req interface{}) (context.Context, error)
@@ -55,12 +54,6 @@ func (fc *ForwardContext) WithTimeout(timeout time.Duration) *ForwardContext {
 	return fc
 }
 
-// WithScenario sets the scenario for recording purposes.
-func (fc *ForwardContext) WithScenario(scenario string) *ForwardContext {
-	fc.Scenario = scenario
-	return fc
-}
-
 // WithBeforeRequest adds a hook that is called before the request is sent.
 // Multiple hooks can be added and will be called in order.
 // Each hook can modify the context and return an error to abort the request.
@@ -84,8 +77,7 @@ func (fc *ForwardContext) WithAfterRequest(hook func(context.Context, interface{
 //
 // The order of operations matches the original implementation:
 // 1. Apply BeforeRequest hooks
-// 2. Add scenario (for recording)
-// 3. Add timeout
+// 2. Add timeout
 func (fc *ForwardContext) PrepareContext(req interface{}) (context.Context, context.CancelFunc, error) {
 	ctx := fc.BaseCtx
 	if ctx == nil {
@@ -103,12 +95,6 @@ func (fc *ForwardContext) PrepareContext(req interface{}) (context.Context, cont
 
 	// Add timeout FIRST (matching old code order for stream)
 	ctx, cancel := context.WithTimeout(ctx, fc.Timeout)
-
-	// Add scenario AFTER timeout (matching old code order for stream)
-	// This ensures scenario is available in the timeout context
-	if fc.Scenario != "" {
-		ctx = context.WithValue(ctx, client.ScenarioContextKey, fc.Scenario)
-	}
 
 	return ctx, cancel, nil
 }
