@@ -248,6 +248,7 @@ func ConvertAnthropicBetaToolsToResponses(tools []anthropic.BetaToolUnionParam) 
 			Name:        tool.Name,
 			Description: ParamOpt(tool.Description.Value),
 			Parameters:  parameters,
+			Type:        "function",
 		}
 
 		out = append(out, responses.ToolUnionParam{

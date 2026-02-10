@@ -255,12 +255,10 @@ func ConvertAnthropicV1ToolsToResponses(tools []anthropic.ToolUnionParam) []resp
 
 		// Create function tool
 		fn := &responses.FunctionToolParam{
-			Name:       tool.Name,
-			Parameters: parameters,
-		}
-
-		if tool.Description.Value != "" {
-			fn.Description = param.NewOpt(tool.Description.Value)
+			Name:        tool.Name,
+			Description: ParamOpt(tool.Description.Value),
+			Parameters:  parameters,
+			Type:        "function",
 		}
 
 		out = append(out, responses.ToolUnionParam{
