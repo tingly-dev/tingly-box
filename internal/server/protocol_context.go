@@ -110,7 +110,6 @@ type HandleContext struct {
 	GinContext *gin.Context
 
 	// Model info
-	ActualModel   string
 	ResponseModel string
 
 	// Hooks for stream processing (chainable - multiple hooks can be added)
@@ -120,10 +119,9 @@ type HandleContext struct {
 }
 
 // NewHandleContext creates a new HandleContext with required dependencies.
-func NewHandleContext(c *gin.Context, actualModel, responseModel string) *HandleContext {
+func NewHandleContext(c *gin.Context, responseModel string) *HandleContext {
 	return &HandleContext{
 		GinContext:    c,
-		ActualModel:   actualModel,
 		ResponseModel: responseModel,
 	}
 }

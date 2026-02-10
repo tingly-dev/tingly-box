@@ -306,7 +306,7 @@ func (s *Server) forwardAnthropicStreamRequestV1Beta(ctx context.Context, provid
 
 // handleAnthropicStreamResponseV1Beta processes the Anthropic beta streaming response and sends it to the client
 func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthropic.BetaMessageNewParams, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], respModel, actualModel string, rule *typ.Rule, provider *typ.Provider, recorder *ScenarioRecorder) {
-	hc := NewHandleContext(c, actualModel, respModel)
+	hc := NewHandleContext(c, respModel)
 
 	// Add recorder hooks if recorder is available
 	if recorder != nil {
