@@ -926,6 +926,8 @@ func (s *Server) GetPreferredEndpointForModel(provider *typ.Provider, modelID st
 	if strings.Contains(strings.ToLower(modelID), "codex") {
 		return string(db.EndpointTypeResponses)
 	}
+	return "chat"
+	// TODO: we use chat as default unless the model do not support chat, e.g. codex
 	adaptiveProbe := NewAdaptiveProbe(s)
 	return adaptiveProbe.GetPreferredEndpoint(provider, modelID)
 }
