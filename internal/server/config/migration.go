@@ -31,6 +31,7 @@ func Migrate(c *Config) error {
 	migrate20260103(c)
 	migrate20260110(c)
 	migrate20260114(c)
+	migrate20260210(c)
 	return nil
 }
 
@@ -264,5 +265,64 @@ func migrate20260114(c *Config) {
 	if len(valid) != len(c.Rules) {
 		c.Rules = valid
 		c.Save()
+	}
+}
+
+// migrate20260210 ensures the subagent rule exists and mirrors the haiku model.
+func migrate20260210(c *Config) {
+	// Find required rules.
+	var haikuRule *typ.Rule
+	var subagentRule *typ.Rule
+	for i := range c.Rules {
+		rule := &c.Rules[i]
+		if rule.UUID == RuleUUIDBuiltinCCHaiku {
+			haikuRule = rule
+			continue
+		}
+		if rule.UUID == RuleUUIDBuiltinCCSubagent {
+			subagentRule = rule
+		}
+	}
+
+	// Without a haiku model, there's nothing to mirror.
+	if haikuRule == nil {
+		return
+	}
+
+	needsSave := false
+
+	// Ensure subagent rule exists (add default if missing).
+	if subagentRule == nil {
+		for _, defaultRule := range DefaultRules {
+			if defaultRule.UUID == RuleUUIDBuiltinCCSubagent {
+				c.Rules = append(c.Rules, defaultRule)
+				subagentRule = &c.Rules[len(c.Rules)-1]
+				needsSave = true
+				break
+			}
+		}
+		if subagentRule == nil {
+			if needsSave {
+				_ = c.Save()
+			}
+			return
+		}
+	}
+
+	// Mirror haiku's request model onto subagent.
+	if haikuRule.RequestModel != "" && subagentRule.RequestModel != haikuRule.RequestModel {
+		subagentRule.RequestModel = haikuRule.RequestModel
+		needsSave = true
+	}
+
+	// Mirror haiku's services if subagent has none.
+	if len(subagentRule.Services) == 0 && len(haikuRule.Services) > 0 {
+		subagentRule.Services = make([]*loadbalance.Service, len(haikuRule.Services))
+		copy(subagentRule.Services, haikuRule.Services)
+		needsSave = true
+	}
+
+	if needsSave {
+		_ = c.Save()
 	}
 }

@@ -1367,7 +1367,7 @@ func init() {
 			Scenario:      typ.ScenarioClaudeCode,
 			RequestModel:  "tingly/cc-haiku",
 			ResponseModel: "",
-			Description:   "Claude Code - Haiku model - small / cheap / for background and summary task",
+			Description:   "Claude Code - Haiku mode The model to use for haiku , or background functionality",
 			Services:      []*loadbalance.Service{},
 			LBTactic: typ.Tactic{
 				Type:   loadbalance.TacticRoundRobin,
@@ -1380,7 +1380,7 @@ func init() {
 			Scenario:      typ.ScenarioClaudeCode,
 			RequestModel:  "tingly/cc-sonnet",
 			ResponseModel: "",
-			Description:   "Claude Code - Sonnet model - medium / for general task",
+			Description:   "Claude Code - Sonnet model - model to use for sonnet , or for opusplan when Plan Mode is not active.",
 			Services:      []*loadbalance.Service{},
 			LBTactic: typ.Tactic{
 				Type:   loadbalance.TacticRoundRobin,
@@ -1393,7 +1393,7 @@ func init() {
 			Scenario:      typ.ScenarioClaudeCode,
 			RequestModel:  "tingly/cc-opus",
 			ResponseModel: "",
-			Description:   "Claude Code - Opus model - large / expensive / for high level task",
+			Description:   "Claude Code - Opus model - to use for opus , or for opusplan when Plan Mode is active.",
 			Services:      []*loadbalance.Service{},
 			LBTactic: typ.Tactic{
 				Type:   loadbalance.TacticRoundRobin,
@@ -1419,7 +1419,7 @@ func init() {
 			Scenario:      typ.ScenarioClaudeCode,
 			RequestModel:  "tingly/cc-subagent",
 			ResponseModel: "",
-			Description:   "Claude Code - Subagent model - for background agents",
+			Description:   "Claude Code - Subagent model - model to use for subagents",
 			Services:      []*loadbalance.Service{},
 			LBTactic: typ.Tactic{
 				Type:   loadbalance.TacticRoundRobin,
