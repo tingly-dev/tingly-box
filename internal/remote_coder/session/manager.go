@@ -28,16 +28,16 @@ type Config struct {
 
 // Session represents an execution session
 type Session struct {
-	ID            string                 // Unique session identifier
-	Status        Status                 // Current session status
-	Request       string                 // User's request payload
-	Response      string                 // Claude Code response summary
-	Error         string                 // Error message if failed
-	CreatedAt     time.Time              // Session creation timestamp
-	LastActivity  time.Time              // Last activity timestamp
-	ExpiresAt     time.Time              // Session expiration timestamp
-	Context       map[string]interface{} // Request context for continued communication
-	Messages      []Message              // Chat message history
+	ID           string                 // Unique session identifier
+	Status       Status                 // Current session status
+	Request      string                 // User's request payload
+	Response     string                 // Claude Code response summary
+	Error        string                 // Error message if failed
+	CreatedAt    time.Time              // Session creation timestamp
+	LastActivity time.Time              // Last activity timestamp
+	ExpiresAt    time.Time              // Session expiration timestamp
+	Context      map[string]interface{} // Request context for continued communication
+	Messages     []Message              // Chat message history
 }
 
 // Message represents a chat message within a session
@@ -50,13 +50,13 @@ type Message struct {
 
 // Manager handles session lifecycle
 type Manager struct {
-	mu       sync.RWMutex
-	sessions map[string]*Session
-	config   Config
-	stopCh   chan struct{}
-	wg       sync.WaitGroup
+	mu        sync.RWMutex
+	sessions  map[string]*Session
+	config    Config
+	stopCh    chan struct{}
+	wg        sync.WaitGroup
 	startTime time.Time
-	store    *MessageStore
+	store     *MessageStore
 }
 
 // NewManager creates a new session manager
@@ -64,9 +64,9 @@ func NewManager(cfg Config, store *MessageStore) *Manager {
 	mgr := &Manager{
 		sessions:  make(map[string]*Session),
 		config:    cfg,
-		stopCh:   make(chan struct{}),
+		stopCh:    make(chan struct{}),
 		startTime: time.Now(),
-		store:    store,
+		store:     store,
 	}
 
 	if store != nil {

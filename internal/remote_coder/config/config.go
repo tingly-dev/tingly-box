@@ -14,8 +14,8 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
+	"github.com/tingly-dev/tingly-box/internal/remote_coder/middleware"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
-	"github.com/tingly-dev/tingly-box/cmd/remote-cc/internal/middleware"
 )
 
 // readJWTSecretFromMainConfig reads the JWT secret from the main service's config database or JSON config
@@ -108,16 +108,16 @@ func readConfigJSONValue(key string) string {
 
 // Config holds the configuration for remote-cc service
 type Config struct {
-	Port              int           // HTTP server port
-	JWTSecret         string        // JWT secret for token validation
-	UserToken         string        // User token from main service (legacy auth)
-	DBPath            string        // SQLite database path for remote-cc
-	SessionTimeout    time.Duration // Session timeout duration
-	MessageRetention  time.Duration // How long to retain messages
-	RateLimitMax      int           // Max auth attempts before block
-	RateLimitWindow   time.Duration // Time window for rate limiting
-	RateLimitBlock    time.Duration // Block duration after exceeding limit
-	jwtManager        *auth.JWTManager
+	Port             int           // HTTP server port
+	JWTSecret        string        // JWT secret for token validation
+	UserToken        string        // User token from main service (legacy auth)
+	DBPath           string        // SQLite database path for remote-cc
+	SessionTimeout   time.Duration // Session timeout duration
+	MessageRetention time.Duration // How long to retain messages
+	RateLimitMax     int           // Max auth attempts before block
+	RateLimitWindow  time.Duration // Time window for rate limiting
+	RateLimitBlock   time.Duration // Block duration after exceeding limit
+	jwtManager       *auth.JWTManager
 }
 
 // Load reads configuration from environment variables and database

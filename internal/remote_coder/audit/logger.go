@@ -25,17 +25,17 @@ func (l Level) String() string {
 
 // Entry represents an audit log entry
 type Entry struct {
-	Timestamp   time.Time              `json:"timestamp"`
-	Level       Level                 `json:"level"`
-	Action      string                `json:"action"`
-	UserID      string                `json:"user_id,omitempty"`
-	ClientIP    string                `json:"client_ip,omitempty"`
-	SessionID   string                `json:"session_id,omitempty"`
-	RequestID   string                `json:"request_id,omitempty"`
-	Success     bool                  `json:"success"`
-	Message     string                `json:"message,omitempty"`
-	Details     map[string]interface{} `json:"details,omitempty"`
-	DurationMs  int64                 `json:"duration_ms,omitempty"`
+	Timestamp  time.Time              `json:"timestamp"`
+	Level      Level                  `json:"level"`
+	Action     string                 `json:"action"`
+	UserID     string                 `json:"user_id,omitempty"`
+	ClientIP   string                 `json:"client_ip,omitempty"`
+	SessionID  string                 `json:"session_id,omitempty"`
+	RequestID  string                 `json:"request_id,omitempty"`
+	Success    bool                   `json:"success"`
+	Message    string                 `json:"message,omitempty"`
+	Details    map[string]interface{} `json:"details,omitempty"`
+	DurationMs int64                  `json:"duration_ms,omitempty"`
 }
 
 // Logger handles audit logging

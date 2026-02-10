@@ -10,11 +10,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
-	"github.com/tingly-dev/tingly-box/cmd/remote-cc/internal/audit"
-	"github.com/tingly-dev/tingly-box/cmd/remote-cc/internal/config"
-	"github.com/tingly-dev/tingly-box/cmd/remote-cc/internal/launcher"
-	"github.com/tingly-dev/tingly-box/cmd/remote-cc/internal/session"
-	"github.com/tingly-dev/tingly-box/cmd/remote-cc/internal/summarizer"
+	"github.com/tingly-dev/tingly-box/internal/remote_coder/audit"
+	"github.com/tingly-dev/tingly-box/internal/remote_coder/config"
+	"github.com/tingly-dev/tingly-box/internal/remote_coder/launcher"
+	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
+	"github.com/tingly-dev/tingly-box/internal/remote_coder/summarizer"
 )
 
 // RemoteCCHandler handles remote Claude Code requests
