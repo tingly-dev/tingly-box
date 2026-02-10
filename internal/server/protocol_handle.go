@@ -39,7 +39,9 @@ func HandleAnthropicV1Stream(hc *HandleContext, req anthropic.MessageNewParams, 
 			if !streamResp.Next() {
 				return false, nil, nil
 			}
-			return true, nil, streamResp.Current()
+			// Current() returns a value, but we need a pointer for modification
+			evt := streamResp.Current()
+			return true, nil, &evt
 		},
 		func(event interface{}) error {
 			evt := event.(*anthropic.MessageStreamEventUnion)
@@ -99,7 +101,9 @@ func HandleAnthropicV1BetaStream(hc *HandleContext, req anthropic.BetaMessageNew
 			if !streamResp.Next() {
 				return false, nil, nil
 			}
-			return true, nil, streamResp.Current()
+			// Current() returns a value, but we need a pointer for modification
+			evt := streamResp.Current()
+			return true, nil, &evt
 		},
 		func(event interface{}) error {
 			evt := event.(*anthropic.BetaRawMessageStreamEventUnion)
@@ -208,7 +212,9 @@ func HandleOpenAIChatStream(hc *HandleContext, stream *openaistream.Stream[opena
 			if !stream.Next() {
 				return false, nil, nil
 			}
-			return true, nil, stream.Current()
+			// Current() returns a value, but we need a pointer for modification
+			chunk := stream.Current()
+			return true, nil, &chunk
 		},
 		func(event interface{}) error {
 			chunk := event.(*openai.ChatCompletionChunk)
@@ -342,7 +348,9 @@ func HandleOpenAIResponsesStream(hc *HandleContext, stream *openaistream.Stream[
 			if !stream.Next() {
 				return false, nil, nil
 			}
-			return true, nil, stream.Current()
+			// Current() returns a value, but we need a pointer for modification
+			evt := stream.Current()
+			return true, nil, &evt
 		},
 		func(event interface{}) error {
 			// Handle Responses API stream event
