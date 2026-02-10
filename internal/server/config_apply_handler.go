@@ -90,12 +90,14 @@ func (s *Server) ApplyClaudeConfig(c *gin.Context) {
 		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "tingly/cc-haiku"
 		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = "tingly/cc-opus"
 		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = "tingly/cc-sonnet"
+		env["CLAUDE_CODE_SUBAGENT_MODEL"] = "tingly/cc-subagent"
 	} else {
 		// Unified mode - all point to same model
 		env["ANTHROPIC_MODEL"] = "tingly/cc"
 		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "tingly/cc"
 		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = "tingly/cc"
 		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = "tingly/cc"
+		env["CLAUDE_CODE_SUBAGENT_MODEL"] = "tingly/cc"
 	}
 
 	// Apply settings.json
