@@ -259,6 +259,29 @@ type DeleteRuleResponse struct {
 	Message string `json:"message" example:"Rule deleted successfully"`
 }
 
+// ImportRuleRequest represents request to import a rule from base64 encoded data
+type ImportRuleRequest struct {
+	Data string `json:"data" binding:"required" description:"Base64 encoded rule export data" example:"TGB64:1.0:..."`
+	// OnProviderConflict specifies what to do when a provider already exists.
+	// "use" - use existing provider, "skip" - skip this provider, "suffix" - create with suffixed name
+	OnProviderConflict string `json:"on_provider_conflict" description:"How to handle provider conflicts" example:"use"`
+	// OnRuleConflict specifies what to do when a rule already exists.
+	// "skip" - skip import, "update" - update existing rule, "new" - create with new name
+	OnRuleConflict string `json:"on_rule_conflict" description:"How to handle rule conflicts" example:"new"`
+}
+
+// ImportRuleResponse represents the response for importing a rule
+type ImportRuleResponse struct {
+	Success bool   `json:"success" example:"true"`
+	Message string `json:"message" example:"Rule imported successfully"`
+	Data    struct {
+		RuleCreated      bool `json:"rule_created" example:"true"`
+		RuleUpdated      bool `json:"rule_updated" example:"false"`
+		ProvidersCreated int  `json:"providers_created" example:"1"`
+		ProvidersUsed    int  `json:"providers_used" example:"0"`
+	} `json:"data"`
+}
+
 // CreateProviderRequest represents the request to add a new provider
 type CreateProviderRequest struct {
 	Name          string `json:"name" binding:"required" description:"Provider name" example:"openai"`
