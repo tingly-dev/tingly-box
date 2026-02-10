@@ -1,4 +1,4 @@
-import { Block as InactiveIcon, CheckCircle as ActiveIcon, ContentCopy as CopyIcon, Delete as DeleteIcon, Download as DownloadIcon, Download as ExportIcon, PlayArrow as ProbeIcon, Settings as SettingsIcon, SmartDisplay as SmartIcon, UnfoldMore as ExportMenuIcon } from '@mui/icons-material';
+import { Block as InactiveIcon, CheckCircle as ActiveIcon, ContentCopy as CopyIcon, Delete as DeleteIcon, Download as DownloadIcon, Download as ExportIcon, PlayArrow as ProbeIcon, Settings as SettingsIcon, SmartDisplay as SmartIcon, UnfoldMore as ExportMenuIcon, Upload as ImportIcon } from '@mui/icons-material';
 import { IconButton, Menu, MenuItem, Tooltip } from '@mui/material';
 import React, { useCallback, useState } from 'react';
 import type { ExportFormat } from '@/components/rule-card/utils';
