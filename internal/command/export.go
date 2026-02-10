@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/tingly-dev/tingly-box/internal/export"
+	"github.com/tingly-dev/tingly-box/internal/dataexport"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -54,12 +54,12 @@ func runExport(appManager *AppManager, cmd *cobra.Command) error {
 	scenarioStr, _ := cmd.Flags().GetString("scenario")
 
 	// Parse format
-	var format export.Format
+	var format dataexport.Format
 	switch strings.ToLower(formatStr) {
 	case "jsonl":
-		format = export.FormatJSONL
+		format = dataexport.FormatJSONL
 	case "base64":
-		format = export.FormatBase64
+		format = dataexport.FormatBase64
 	default:
 		return fmt.Errorf("invalid format '%s': supported formats are jsonl and base64", formatStr)
 	}

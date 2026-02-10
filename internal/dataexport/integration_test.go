@@ -1,4 +1,4 @@
-package export
+package dataexport
 
 import (
 	"testing"
@@ -33,16 +33,16 @@ func TestExportRoundTrip(t *testing.T) {
 
 	providers := []*typ.Provider{
 		{
-			UUID:      "provider-1",
-			Name:      "Test Provider",
-			APIBase:   "https://api.example.com",
-			APIStyle:  protocol.APIStyleOpenAI,
-			AuthType:  typ.AuthTypeAPIKey,
-			Token:     "test-token",
-			Enabled:   true,
-			Timeout:   30,
-			Tags:      []string{"test"},
-			Models:    []string{"gpt-4"},
+			UUID:     "provider-1",
+			Name:     "Test Provider",
+			APIBase:  "https://api.example.com",
+			APIStyle: protocol.APIStyleOpenAI,
+			AuthType: typ.AuthTypeAPIKey,
+			Token:    "test-token",
+			Enabled:  true,
+			Timeout:  30,
+			Tags:     []string{"test"},
+			Models:   []string{"gpt-4"},
 		},
 	}
 

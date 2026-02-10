@@ -8,9 +8,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/dataexport"
+	exportpkg "github.com/tingly-dev/tingly-box/internal/dataexport"
 	importpkg "github.com/tingly-dev/tingly-box/internal/dataimport"
-	"github.com/tingly-dev/tingly-box/internal/export"
-	exportpkg "github.com/tingly-dev/tingly-box/internal/export"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server"
@@ -432,7 +432,7 @@ func (am *AppManager) ImportRuleFromJSONL(data string, opts ImportOptions) (*Imp
 // ============
 
 // ExportRule exports a rule with its providers in the specified format
-func (am *AppManager) ExportRule(rule *typ.Rule, format export.Format) (string, error) {
+func (am *AppManager) ExportRule(rule *typ.Rule, format dataexport.Format) (string, error) {
 	if rule == nil {
 		return "", fmt.Errorf("rule is required for export")
 	}
