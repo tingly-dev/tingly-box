@@ -109,8 +109,7 @@ type HandleContext struct {
 	// Gin context
 	GinContext *gin.Context
 
-	// Provider info
-	Provider      *typ.Provider
+	// Model info
 	ActualModel   string
 	ResponseModel string
 
@@ -121,10 +120,9 @@ type HandleContext struct {
 }
 
 // NewHandleContext creates a new HandleContext with required dependencies.
-func NewHandleContext(c *gin.Context, provider *typ.Provider, actualModel, responseModel string) *HandleContext {
+func NewHandleContext(c *gin.Context, actualModel, responseModel string) *HandleContext {
 	return &HandleContext{
 		GinContext:    c,
-		Provider:      provider,
 		ActualModel:   actualModel,
 		ResponseModel: responseModel,
 	}
