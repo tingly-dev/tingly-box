@@ -277,10 +277,11 @@ func ConvertAnthropicBetaToolChoiceToResponses(tc *anthropic.BetaToolChoiceUnion
 		}
 	}
 
-	// OfAny (Anthropic's "required") - map to auto as Responses API doesn't have direct equivalent
+	// OfAny (Anthropic's "required" - force model to call at least one tool)
+	// Map to "required" in Responses API
 	if tc.OfAny != nil {
 		return responses.ResponseNewParamsToolChoiceUnion{
-			OfToolChoiceMode: ParamOpt(responses.ToolChoiceOptions("auto")),
+			OfToolChoiceMode: ParamOpt(responses.ToolChoiceOptions("required")),
 		}
 	}
 

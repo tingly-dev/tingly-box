@@ -271,17 +271,17 @@ func ConvertAnthropicV1ToolsToResponses(tools []anthropic.ToolUnionParam) []resp
 
 // ConvertAnthropicV1ToolChoiceToResponses converts Anthropic v1 tool_choice to Responses API format
 func ConvertAnthropicV1ToolChoiceToResponses(tc *anthropic.ToolChoiceUnionParam) responses.ResponseNewParamsToolChoiceUnion {
-	// Handle "auto" mode
+	// Handle "auto" mode (model decides whether to call tools)
 	if tc.OfAuto != nil {
 		return responses.ResponseNewParamsToolChoiceUnion{
 			OfToolChoiceMode: param.NewOpt(responses.ToolChoiceOptions("auto")),
 		}
 	}
 
-	// Handle "any" mode (required)
+	// Handle "any" mode (required - force model to call at least one tool)
 	if tc.OfAny != nil {
 		return responses.ResponseNewParamsToolChoiceUnion{
-			OfToolChoiceMode: param.NewOpt(responses.ToolChoiceOptions("auto")),
+			OfToolChoiceMode: param.NewOpt(responses.ToolChoiceOptions("required")),
 		}
 	}
 
