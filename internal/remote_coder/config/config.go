@@ -17,7 +17,6 @@ import (
 )
 
 // Config holds the configuration for remote-coder service
-// (legacy name remote-cc retained for compatibility)
 type Config struct {
 	Port             int           // HTTP server port
 	JWTSecret        string        // JWT secret for token validation
@@ -95,7 +94,7 @@ func LoadFromAppConfig(appCfg *serverconfig.Config, opts Options) (*Config, erro
 	dbPath := remoteCfg.DBPath
 	if dbPath == "" {
 		if appCfg.ConfigDir != "" {
-			dbPath = filepath.Join(appCfg.ConfigDir, "remote-cc.db")
+			dbPath = filepath.Join(appCfg.ConfigDir, "remote-coder.db")
 		}
 	}
 	if env := os.Getenv("RCC_DB_PATH"); env != "" {

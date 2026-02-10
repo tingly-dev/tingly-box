@@ -76,7 +76,7 @@ func NewManager(cfg Config, store *MessageStore) *Manager {
 			}
 			logrus.Debugf("Loaded %d remote-coder sessions from DB", len(sessions))
 		} else {
-			logrus.Warnf("Failed to load remote-cc sessions from DB: %v", err)
+			logrus.Warnf("Failed to load remote-coder sessions from DB: %v", err)
 		}
 	}
 
