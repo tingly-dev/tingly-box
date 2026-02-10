@@ -114,9 +114,6 @@ type HandleContext struct {
 	ActualModel   string
 	ResponseModel string
 
-	// Optional dependencies
-	Recorder *ScenarioRecorder
-
 	// Hooks for stream processing (chainable - multiple hooks can be added)
 	OnStreamEventHooks    []func(event interface{}) error
 	OnStreamCompleteHooks []func(inputTokens, outputTokens int)
@@ -131,12 +128,6 @@ func NewHandleContext(c *gin.Context, provider *typ.Provider, actualModel, respo
 		ActualModel:   actualModel,
 		ResponseModel: responseModel,
 	}
-}
-
-// WithRecorder sets the scenario recorder for recording requests/responses.
-func (hc *HandleContext) WithRecorder(recorder *ScenarioRecorder) *HandleContext {
-	hc.Recorder = recorder
-	return hc
 }
 
 // WithOnStreamEvent adds a hook that is called for each stream event.
@@ -191,8 +182,9 @@ func (hc *HandleContext) ProcessStream(nextFunc func() (bool, error), eventFunc 
 		return fmt.Errorf("streaming not supported")
 	}
 
-	// Use gin.Stream for proper streaming handling
 	var processErr error
+
+	// Use gin.Stream for proper streaming handling
 	c.Stream(func(w io.Writer) bool {
 		// Check context cancellation first
 		select {
@@ -219,9 +211,89 @@ func (hc *HandleContext) ProcessStream(nextFunc func() (bool, error), eventFunc 
 		for _, hook := range hc.OnStreamErrorHooks {
 			hook(processErr)
 		}
+		return processErr
 	}
 
-	return processErr
+	// Call OnStreamComplete hooks on success
+	for _, hook := range hc.OnStreamCompleteHooks {
+		hook(0, 0) // Usage should be tracked externally or via event hooks
+	}
+
+	return nil
+}
+
+// ProcessStreamWithEvents is like ProcessStream but also provides the current event to the stream loop.
+// The caller must call InvokeEventHooks for each event after retrieving it.
+func (hc *HandleContext) ProcessStreamWithEvents(nextFunc func() (bool, error, interface{}), handleFunc func(interface{}) error) error {
+	c := hc.GinContext
+
+	// Check if streaming is supported
+	_, ok := c.Writer.(http.Flusher)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Streaming not supported by this connection",
+				Type:    "api_error",
+				Code:    "streaming_unsupported",
+			},
+		})
+		return fmt.Errorf("streaming not supported")
+	}
+
+	var processErr error
+
+	// Use gin.Stream for proper streaming handling
+	c.Stream(func(w io.Writer) bool {
+		// Check context cancellation first
+		select {
+		case <-c.Request.Context().Done():
+			return false
+		default:
+		}
+
+		// Get next event
+		cont, err, event := nextFunc()
+		if err != nil {
+			processErr = err
+			return false
+		}
+		if !cont {
+			return false
+		}
+
+		// Call OnStreamEvent hooks
+		for _, hook := range hc.OnStreamEventHooks {
+			if hookErr := hook(event); hookErr != nil {
+				processErr = hookErr
+				return false
+			}
+		}
+
+		// Call the provided handler function (e.g., to send to client)
+		if handleFunc != nil {
+			if handleErr := handleFunc(event); handleErr != nil {
+				processErr = handleErr
+				return false
+			}
+		}
+
+		return true
+	})
+
+	// Call OnStreamError hooks if there was an error
+	if processErr != nil {
+		for _, hook := range hc.OnStreamErrorHooks {
+			hook(processErr)
+		}
+		return processErr
+	}
+
+	// Call OnStreamComplete hooks on success
+	for _, hook := range hc.OnStreamCompleteHooks {
+		hook(0, 0) // Usage should be tracked externally or via event hooks
+	}
+
+	return nil
 }
 
 // SendError sends an error response to the client.

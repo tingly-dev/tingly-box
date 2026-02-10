@@ -320,8 +320,21 @@ func (s *Server) forwardAnthropicStreamRequestV1(ctx context.Context, provider *
 
 // handleAnthropicStreamResponseV1 processes the Anthropic streaming response and sends it to the client (v1)
 func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.MessageNewParams, streamResp *anthropicstream.Stream[anthropic.MessageStreamEventUnion], respModel, actualModel string, rule *typ.Rule, provider *typ.Provider, recorder *ScenarioRecorder) {
-	hc := NewHandleContext(c, provider, actualModel, respModel).
-		WithRecorder(recorder)
+	hc := NewHandleContext(c, provider, actualModel, respModel)
+
+	// Add recorder hooks if recorder is available
+	if recorder != nil {
+		onEvent, onComplete, onError := NewRecorderHooksWithModel(recorder, actualModel, provider)
+		if onEvent != nil {
+			hc.WithOnStreamEvent(onEvent)
+		}
+		if onComplete != nil {
+			hc.WithOnStreamComplete(onComplete)
+		}
+		if onError != nil {
+			hc.WithOnStreamError(onError)
+		}
+	}
 
 	usageStat, err := HandleAnthropicV1Stream(hc, req, streamResp)
 	s.trackUsageFromContext(c, usageStat.InputTokens, usageStat.OutputTokens, err)

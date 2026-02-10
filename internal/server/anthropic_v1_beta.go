@@ -306,8 +306,21 @@ func (s *Server) forwardAnthropicStreamRequestV1Beta(ctx context.Context, provid
 
 // handleAnthropicStreamResponseV1Beta processes the Anthropic beta streaming response and sends it to the client
 func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthropic.BetaMessageNewParams, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], respModel, actualModel string, rule *typ.Rule, provider *typ.Provider, recorder *ScenarioRecorder) {
-	hc := NewHandleContext(c, provider, actualModel, respModel).
-		WithRecorder(recorder)
+	hc := NewHandleContext(c, provider, actualModel, respModel)
+
+	// Add recorder hooks if recorder is available
+	if recorder != nil {
+		onEvent, onComplete, onError := NewRecorderHooksWithModel(recorder, actualModel, provider)
+		if onEvent != nil {
+			hc.WithOnStreamEvent(onEvent)
+		}
+		if onComplete != nil {
+			hc.WithOnStreamComplete(onComplete)
+		}
+		if onError != nil {
+			hc.WithOnStreamError(onError)
+		}
+	}
 
 	usageStat, err := HandleAnthropicV1BetaStream(hc, req, streamResp)
 	s.trackUsageFromContext(c, usageStat.InputTokens, usageStat.OutputTokens, err)

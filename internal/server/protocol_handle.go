@@ -33,7 +33,6 @@ func HandleAnthropicV1Stream(hc *HandleContext, req anthropic.MessageNewParams, 
 
 	var inputTokens, outputTokens int
 	var hasUsage bool
-	streamRec := newStreamRecorder(hc.Recorder)
 
 	err := hc.ProcessStream(
 		func() (bool, error) {
@@ -46,7 +45,12 @@ func HandleAnthropicV1Stream(hc *HandleContext, req anthropic.MessageNewParams, 
 			evt := event.(*anthropic.MessageStreamEventUnion)
 			evt.Message.Model = anthropic.Model(hc.ResponseModel)
 
-			streamRec.RecordV1Event(evt)
+			// Call OnStreamEvent hooks for recording
+			for _, hook := range hc.OnStreamEventHooks {
+				if err := hook(evt); err != nil {
+					return err
+				}
+			}
 
 			if evt.Usage.InputTokens > 0 {
 				inputTokens = int(evt.Usage.InputTokens)
@@ -68,26 +72,26 @@ func HandleAnthropicV1Stream(hc *HandleContext, req anthropic.MessageNewParams, 
 		},
 	)
 
-	streamRec.Finish(hc.ResponseModel, inputTokens, outputTokens)
-
 	// Handle errors
 	if err != nil {
 		if errors.Is(err, context.Canceled) || IsContextCanceled(err) {
 			logrus.Debug("Anthropic v1 stream canceled by client")
-			streamRec.RecordError(err)
 			if !hasUsage {
 				return protocol.ZeroUsageStat(), nil
 			}
 			return protocol.NewUsageStat(inputTokens, outputTokens), nil
 		}
 
-		streamRec.RecordError(err)
 		MarshalAndSendErrorEvent(hc.GinContext, err.Error(), "stream_error", "stream_failed")
 		return protocol.NewUsageStat(inputTokens, outputTokens), err
 	}
 
 	SendFinishEvent(hc.GinContext)
-	streamRec.RecordResponse(hc.Provider, hc.ActualModel)
+
+	// Call OnStreamComplete hooks with usage
+	for _, hook := range hc.OnStreamCompleteHooks {
+		hook(inputTokens, outputTokens)
+	}
 
 	return protocol.NewUsageStat(inputTokens, outputTokens), nil
 }
@@ -101,7 +105,6 @@ func HandleAnthropicV1BetaStream(hc *HandleContext, req anthropic.BetaMessageNew
 
 	var inputTokens, outputTokens int
 	var hasUsage bool
-	streamRec := newStreamRecorder(hc.Recorder)
 
 	err := hc.ProcessStream(
 		func() (bool, error) {
@@ -114,7 +117,12 @@ func HandleAnthropicV1BetaStream(hc *HandleContext, req anthropic.BetaMessageNew
 			evt := event.(*anthropic.BetaRawMessageStreamEventUnion)
 			evt.Message.Model = anthropic.Model(hc.ResponseModel)
 
-			streamRec.RecordV1BetaEvent(evt)
+			// Call OnStreamEvent hooks for recording
+			for _, hook := range hc.OnStreamEventHooks {
+				if err := hook(evt); err != nil {
+					return err
+				}
+			}
 
 			if evt.Usage.InputTokens > 0 {
 				inputTokens = int(evt.Usage.InputTokens)
@@ -136,26 +144,26 @@ func HandleAnthropicV1BetaStream(hc *HandleContext, req anthropic.BetaMessageNew
 		},
 	)
 
-	streamRec.Finish(hc.ResponseModel, inputTokens, outputTokens)
-
 	// Handle errors
 	if err != nil {
 		if errors.Is(err, context.Canceled) || IsContextCanceled(err) {
 			logrus.Debug("Anthropic v1 beta stream canceled by client")
-			streamRec.RecordError(err)
 			if !hasUsage {
 				return protocol.ZeroUsageStat(), nil
 			}
 			return protocol.NewUsageStat(inputTokens, outputTokens), nil
 		}
 
-		streamRec.RecordError(err)
 		MarshalAndSendErrorEvent(hc.GinContext, err.Error(), "stream_error", "stream_failed")
 		return protocol.NewUsageStat(inputTokens, outputTokens), err
 	}
 
 	SendFinishEvent(hc.GinContext)
-	streamRec.RecordResponse(hc.Provider, hc.ActualModel)
+
+	// Call OnStreamComplete hooks with usage
+	for _, hook := range hc.OnStreamCompleteHooks {
+		hook(inputTokens, outputTokens)
+	}
 
 	return protocol.NewUsageStat(inputTokens, outputTokens), nil
 }
@@ -168,9 +176,10 @@ func HandleAnthropicV1NonStream(hc *HandleContext, resp *anthropic.Message) (pro
 
 	resp.Model = anthropic.Model(hc.ResponseModel)
 
-	if hc.Recorder != nil {
-		hc.Recorder.SetAssembledResponse(resp)
-		hc.Recorder.RecordResponse(hc.Provider, hc.ActualModel)
+	// Call OnStreamComplete hooks (using complete hooks for non-stream finalization)
+	// This allows recorder hooks to capture the response
+	for _, hook := range hc.OnStreamCompleteHooks {
+		hook(inputTokens, outputTokens)
 	}
 
 	hc.GinContext.JSON(http.StatusOK, resp)
@@ -185,9 +194,10 @@ func HandleAnthropicV1BetaNonStream(hc *HandleContext, resp *anthropic.BetaMessa
 
 	resp.Model = anthropic.Model(hc.ResponseModel)
 
-	if hc.Recorder != nil {
-		hc.Recorder.SetAssembledResponse(resp)
-		hc.Recorder.RecordResponse(hc.Provider, hc.ActualModel)
+	// Call OnStreamComplete hooks (using complete hooks for non-stream finalization)
+	// This allows recorder hooks to capture the response
+	for _, hook := range hc.OnStreamCompleteHooks {
+		hook(inputTokens, outputTokens)
 	}
 
 	hc.GinContext.JSON(http.StatusOK, resp)
@@ -362,7 +372,6 @@ func HandleOpenAIResponsesStream(hc *HandleContext, stream *openaistream.Stream[
 	hc.SetupSSEHeaders()
 
 	var inputTokens, outputTokens int
-	streamRec := newStreamRecorder(hc.Recorder)
 
 	err := hc.ProcessStream(
 		func() (bool, error) {
@@ -378,14 +387,9 @@ func HandleOpenAIResponsesStream(hc *HandleContext, stream *openaistream.Stream[
 		},
 	)
 
-	streamRec.Finish(hc.ResponseModel, inputTokens, outputTokens)
-
 	if err != nil {
-		streamRec.RecordError(err)
 		return protocol.NewUsageStat(inputTokens, outputTokens), err
 	}
-
-	streamRec.RecordResponse(hc.Provider, hc.ActualModel)
 
 	return protocol.NewUsageStat(inputTokens, outputTokens), nil
 }

@@ -401,3 +401,124 @@ func (sr *streamRecorder) SetupStreamRecorderInContext(c *gin.Context, key strin
 	}
 	c.Set(key, sr)
 }
+
+// ===================================================================
+// Recorder Hook Builders
+// ===================================================================
+
+// NewRecorderHooks creates hook functions from a ScenarioRecorder for use with HandleContext.
+// This allows decoupling the recorder from the handle context while maintaining recording functionality.
+//
+// Returns:
+// - onStreamEvent: Hook for each stream event
+// - onStreamComplete: Hook for stream completion
+// - onStreamError: Hook for stream errors
+func NewRecorderHooks(recorder *ScenarioRecorder) (onStreamEvent func(event interface{}) error, onStreamComplete func(inputTokens, outputTokens int), onStreamError func(err error)) {
+	if recorder == nil {
+		return nil, nil, nil
+	}
+
+	streamRec := newStreamRecorder(recorder)
+
+	// OnStreamEvent hook - records each stream event
+	onStreamEvent = func(event interface{}) error {
+		if streamRec == nil {
+			return nil
+		}
+		switch evt := event.(type) {
+		case *anthropic.MessageStreamEventUnion:
+			streamRec.RecordV1Event(evt)
+		case *anthropic.BetaRawMessageStreamEventUnion:
+			streamRec.RecordV1BetaEvent(evt)
+		case map[string]interface{}:
+			// For raw map events (protocol conversion scenarios)
+			if eventType, ok := evt["type"].(string); ok {
+				streamRec.RecordRawMapEvent(eventType, evt)
+			}
+		}
+		return nil
+	}
+
+	// OnStreamComplete hook - finalizes recording
+	onStreamComplete = func(inputTokens, outputTokens int) {
+		if streamRec == nil {
+			return
+		}
+		// Model is not available here, it needs to be set externally
+		// or we can retrieve it from the recorder's gin context
+		model := ""
+		if recorder.c != nil {
+			model = recorder.c.Query("model")
+		}
+		streamRec.Finish(model, inputTokens, outputTokens)
+	}
+
+	// OnStreamError hook - records errors
+	onStreamError = func(err error) {
+		if streamRec == nil {
+			return
+		}
+		streamRec.RecordError(err)
+	}
+
+	return onStreamEvent, onStreamComplete, onStreamError
+}
+
+// NewRecorderHooksWithModel creates hook functions with an explicit model parameter.
+// This is preferred when the model is known at hook creation time.
+func NewRecorderHooksWithModel(recorder *ScenarioRecorder, model string, provider *typ.Provider) (onStreamEvent func(event interface{}) error, onStreamComplete func(inputTokens, outputTokens int), onStreamError func(err error)) {
+	if recorder == nil {
+		return nil, nil, nil
+	}
+
+	streamRec := newStreamRecorder(recorder)
+
+	// OnStreamEvent hook - records each stream event
+	onStreamEvent = func(event interface{}) error {
+		if streamRec == nil {
+			return nil
+		}
+		switch evt := event.(type) {
+		case *anthropic.MessageStreamEventUnion:
+			streamRec.RecordV1Event(evt)
+		case *anthropic.BetaRawMessageStreamEventUnion:
+			streamRec.RecordV1BetaEvent(evt)
+		case map[string]interface{}:
+			// For raw map events (protocol conversion scenarios)
+			if eventType, ok := evt["type"].(string); ok {
+				streamRec.RecordRawMapEvent(eventType, evt)
+			}
+		}
+		return nil
+	}
+
+	// OnStreamComplete hook - finalizes recording with model and provider
+	onStreamComplete = func(inputTokens, outputTokens int) {
+		if streamRec == nil {
+			return
+		}
+		streamRec.Finish(model, inputTokens, outputTokens)
+		streamRec.RecordResponse(provider, model)
+	}
+
+	// OnStreamError hook - records errors
+	onStreamError = func(err error) {
+		if streamRec == nil {
+			return
+		}
+		streamRec.RecordError(err)
+	}
+
+	return onStreamEvent, onStreamComplete, onStreamError
+}
+
+// NewNonStreamRecorderHook creates a hook for non-streaming responses.
+func NewNonStreamRecorderHook(recorder *ScenarioRecorder, provider *typ.Provider, model string) func() {
+	if recorder == nil {
+		return nil
+	}
+
+	return func() {
+		recorder.RecordResponse(provider, model)
+	}
+}
