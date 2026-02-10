@@ -214,7 +214,6 @@ const UseOpenCodePage: React.FC = () => {
                     newlyCreatedRuleUuids={newlyCreatedRuleUuids}
                     allowDeleteRule={true}
                     onRuleDelete={handleRuleDelete}
-                    showAddApiKeyButton={false}
                     headerHeight={headerHeight}
                     emptyStateTitle="No Providers Configured"
                     emptyStateDescription="Add an API key or OAuth provider to start routing requests"

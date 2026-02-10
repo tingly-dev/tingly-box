@@ -1,47 +1,53 @@
 import ApiKeyModal from '@/components/ApiKeyModal';
+import React, {useCallback, useEffect, useState} from 'react';
+import {Alert, Box, Fab, Snackbar} from '@mui/material';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import {useNavigate} from 'react-router-dom';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
 import RuleCard from '@/components/RuleCard.tsx';
+import ImportModal from '@/components/ImportModal';
 import UnifiedCard from '@/components/UnifiedCard';
-import { useScrollToNewRule } from '@/components/hooks/useScrollToNewRule';
-import { useModelSelectDialog } from '@/hooks/useModelSelectDialog';
-import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
-import { Box, Fab } from '@mui/material';
-import React, { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import type { TabTemplatePageProps } from './TemplatePage.types';
-import { TemplatePageActions } from './TemplatePageActions';
-import { useTemplatePageRules } from './hooks/useTemplatePageRules';
+import type {TabTemplatePageProps} from './TemplatePage.types';
+import {TemplatePageActions} from './TemplatePageActions';
+import {useTemplatePageRules} from './hooks/useTemplatePageRules';
+import {useScrollToNewRule} from '@/components/hooks/useScrollToNewRule';
+import {useModelSelectDialog} from '@/hooks/useModelSelectDialog';
+import api from '@/services/api';
 
 const TemplatePage: React.FC<TabTemplatePageProps> = ({
-    rules,
-    showTokenModal,
-    setShowTokenModal,
-    token,
-    showNotification,
-    providers,
-    onRulesChange,
-    title = "",
-    collapsible = false,
-    allowDeleteRule = false,
-    onRuleDelete,
-    allowToggleRule = true,
-    newlyCreatedRuleUuids: _newlyCreatedRuleUuids,
-    scenario,
-    showAddApiKeyButton = true,
-    showCreateRuleButton = true,
-    showExpandCollapseButton = true,
-    rightAction: customRightAction,
-    headerHeight = 0,
-    showEmptyState = true,
-    emptyStateTitle = "No Providers Configured",
-    emptyStateDescription = "Add an API key or OAuth provider to start routing requests",
-    onAddApiKeyClick,
-    onAddOAuthClick,
-}) => {
+                                                          rules,
+                                                          showTokenModal,
+                                                          setShowTokenModal,
+                                                          token,
+                                                          showNotification,
+                                                          providers,
+                                                          onRulesChange,
+                                                          title = "",
+                                                          collapsible = false,
+                                                          allowDeleteRule = false,
+                                                          onRuleDelete,
+                                                          allowToggleRule = true,
+                                                          newlyCreatedRuleUuids: _newlyCreatedRuleUuids,
+                                                          scenario,
+                                                          showAddApiKeyButton = true,
+                                                          showAddOAuthButton = true,
+                                                          showCreateRuleButton = true,
+                                                          showExpandCollapseButton = true,
+                                                          rightAction: customRightAction,
+                                                          headerHeight = 0,
+                                                          showEmptyState = true,
+                                                          emptyStateTitle = "No Providers Configured",
+                                                          emptyStateDescription = "Add an API key or OAuth provider to start routing requests",
+                                                          onAddApiKeyClick,
+                                                          onAddOAuthClick,
+                                                      }) => {
     const navigate = useNavigate();
     const [allExpanded, setAllExpanded] = useState<boolean>(true);
     const [expandedStates, setExpandedStates] = useState<Record<string, boolean>>({});
     const [showScrollTop, setShowScrollTop] = useState<boolean>(false);
+    const [showImportModal, setShowImportModal] = useState<boolean>(false);
+    const [importing, setImporting] = useState<boolean>(false);
+    const [importError, setImportError] = useState<{ open: boolean; message: string }>({open: false, message: ''});
 
     // Custom hooks
     const {
@@ -63,10 +69,10 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
         lastRuleRef,
         newRuleUuid,
         setNewRuleUuid,
-    } = useScrollToNewRule({ rules });
+    } = useScrollToNewRule({rules});
 
     // Model select dialog
-    const { openModelSelect, ModelSelectDialog, isOpen: modelSelectDialogOpen } = useModelSelectDialog({
+    const {openModelSelect, ModelSelectDialog, isOpen: modelSelectDialogOpen} = useModelSelectDialog({
         providers,
         rules,
         onRuleChange: handleRuleChange,
@@ -80,7 +86,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
         mode: 'edit' | 'add',
         providerUuid?: string
     ) => {
-        openModelSelect({ ruleUuid, configRecord, providerUuid, mode });
+        openModelSelect({ruleUuid, configRecord, providerUuid, mode});
     }, [openModelSelect]);
 
     // Unified action handlers
@@ -115,7 +121,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
     // Handle individual rule expand/collapse
     const handleRuleExpandToggle = useCallback((ruleUuid: string) => {
         setExpandedStates(prev => {
-            const newStates = { ...prev, [ruleUuid]: !prev[ruleUuid] };
+            const newStates = {...prev, [ruleUuid]: !prev[ruleUuid]};
             // Check if all rules have the same expanded state
             const states = Object.values(newStates);
             const allSame = states.every(s => s === states[0]);
@@ -136,7 +142,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
                 }
             });
             if (Object.keys(initialStates).length > 0) {
-                setExpandedStates(prev => ({ ...prev, ...initialStates }));
+                setExpandedStates(prev => ({...prev, ...initialStates}));
             }
         }
     }, [rules, collapsible, allExpanded]);
@@ -185,9 +191,46 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
 
         const scrollContainer = findScrollContainer();
         if (scrollContainer) {
-            scrollContainer.scrollTo({ top: 0, behavior: 'smooth' });
+            scrollContainer.scrollTo({top: 0, behavior: 'smooth'});
         }
     }, []);
+
+    // Import from clipboard handler
+    const handleImportFromClipboard = useCallback(() => {
+        setShowImportModal(true);
+    }, []);
+
+    // Handle import data (from modal)
+    const handleImportData = useCallback(async (data: string) => {
+        setImporting(true);
+        try {
+            const result = await api.importRule(data);
+            if (result.success) {
+                showNotification(
+                    `Rule imported successfully! ${result.data.rule_created ? 'Created.' : 'Updated.'}`,
+                    'success'
+                );
+                setShowImportModal(false);
+                // Refresh rules by calling parent's onRulesChange
+                // Only refresh if scenario is available (required by backend API)
+                if (onRulesChange && scenario) {
+                    const updatedRules = await api.getRules(scenario);
+                    if (updatedRules.success) {
+                        onRulesChange(updatedRules.data);
+                    }
+                } else if (onRulesChange) {
+                    // If no scenario, trigger parent to refresh by calling without data
+                    onRulesChange([] as any);
+                }
+            } else {
+                setImportError({open: true, message: result.error || 'Import failed'});
+            }
+        } catch (err) {
+            setImportError({open: true, message: (err as Error).message || 'Import failed'});
+        } finally {
+            setImporting(false);
+        }
+    }, [showNotification, scenario, onRulesChange]);
 
     // Generate unified rightAction if not provided
     const rightAction = customRightAction ?? (
@@ -197,9 +240,12 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
             onToggleExpandAll={handleToggleExpandAll}
             showAddApiKeyButton={showAddApiKeyButton}
             onAddApiKeyClick={handleAddApiKeyClick}
+            onAddOAuthClick={onAddOAuthClick}
             showCreateRuleButton={showCreateRuleButton}
             onCreateRule={handleCreateRule}
             showExpandCollapseButton={showExpandCollapseButton}
+            showImportButton={true}
+            onImportFromClipboard={handleImportFromClipboard}
         />
     );
 
@@ -267,7 +313,8 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
                 </Box>
             </UnifiedCard>
 
-            <ModelSelectDialog open={modelSelectDialogOpen} onClose={() => { }} />
+            <ModelSelectDialog open={modelSelectDialogOpen} onClose={() => {
+            }}/>
 
             <ApiKeyModal
                 open={showTokenModal}
@@ -283,6 +330,13 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
                 }}
             />
 
+            <ImportModal
+                open={showImportModal}
+                onClose={() => setShowImportModal(false)}
+                onImport={handleImportData}
+                loading={importing}
+            />
+
             {showScrollTop && (
                 <Fab
                     color="primary"
@@ -295,9 +349,19 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
                         zIndex: 1000,
                     }}
                 >
-                    <KeyboardArrowUpIcon />
+                    <KeyboardArrowUpIcon/>
                 </Fab>
             )}
+            <Snackbar
+                open={importError.open}
+                autoHideDuration={6000}
+                onClose={() => setImportError({open: false, message: ''})}
+                anchorOrigin={{vertical: 'bottom', horizontal: 'center'}}
+            >
+                <Alert severity="error" onClose={() => setImportError({open: false, message: ''})}>
+                    {importError.message}
+                </Alert>
+            </Snackbar>
         </>
     );
 };

@@ -1,5 +1,7 @@
 import { ApiStyleBadge } from '@/components/ApiStyleBadge.tsx';
 import ModelListDialog from '@/components/ModelListDialog';
+import ProviderExportMenu from '@/components/ProviderExportMenu';
+import { exportProvider, exportProviderAsBase64ToClipboard } from '@/components/rule-card/utils';
 import { Delete, Edit, ListAlt, Refresh as RefreshIcon, Route, Schedule, VpnKey } from '@mui/icons-material';
 import {
     Box,
@@ -22,7 +24,8 @@ import {
     Tooltip,
     Typography,
 } from '@mui/material';
-import { useState } from 'react';
+import type { ExportFormat } from '@/components/rule-card/utils';
+import {useCallback, useState} from 'react';
 import type { Provider } from '../types/provider';
 
 interface OAuthTableProps {
@@ -32,6 +35,7 @@ interface OAuthTableProps {
     onDelete?: (providerUuid: string) => void;
     onReauthorize?: (providerUuid: string) => void;
     onRefreshToken?: (providerUuid: string) => Promise<void>;
+    onNotification?: (message: string, severity: 'success' | 'error') => void;
 }
 
 interface DeleteModalState {
@@ -51,7 +55,7 @@ interface ModelListDialogState {
     provider: Provider | null;
 }
 
-const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRefreshToken }: OAuthTableProps) => {
+const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRefreshToken, onNotification }: OAuthTableProps) => {
     const [deleteModal, setDeleteModal] = useState<DeleteModalState>({
         open: false,
         providerUuid: '',
@@ -127,6 +131,18 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
         setModelListDialog({ open: false, provider: null });
     };
 
+    const handleExportProvider = useCallback(async (provider: Provider, format: ExportFormat) => {
+        await exportProvider(provider, format, (message, severity) => {
+            onNotification?.(message, severity);
+        });
+    }, [onNotification]);
+
+    const handleCopyProviderBase64 = useCallback(async (provider: Provider) => {
+        await exportProviderAsBase64ToClipboard(provider, (message, severity) => {
+            onNotification?.(message, severity);
+        });
+    }, [onNotification]);
+
     const formatExpiresAt = (expiresAt?: string) => {
         if (!expiresAt) return 'Never';
         const date = new Date(expiresAt);
@@ -177,7 +193,7 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
                         <TableCell sx={{ fontWeight: 600, minWidth: 180 }}>Provider</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 180 }}>Expires At</TableCell>
                         <TableCell sx={{ fontWeight: 600, minWidth: 80 }}>Proxy</TableCell>
-                        <TableCell sx={{ fontWeight: 600, width: 220 }}>Actions</TableCell>
+                        <TableCell sx={{ fontWeight: 600, width: 240 }}>Actions</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -260,9 +276,14 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
                                             borderRadius: 1.5,
                                             p: 0.5,
                                             pr: 1,
-                                            width: 200,
+                                            width: 240,
                                         }}
                                     >
+                                        <ProviderExportMenu
+                                            provider={provider}
+                                            onExport={handleExportProvider}
+                                            onCopyBase64={handleCopyProviderBase64}
+                                        />
                                         {onEdit && (
                                             <Tooltip title="View Details">
                                                 <IconButton size="small" color="primary" onClick={() => onEdit(provider.uuid)}>

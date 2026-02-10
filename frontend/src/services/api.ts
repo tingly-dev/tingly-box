@@ -530,6 +530,28 @@ export const api = {
         }
     },
 
+    importRule: async (data: string, onProviderConflict: string = 'use', onRuleConflict: string = 'new'): Promise<any> => {
+        return fetchUIAPI('/rule/import', {
+            method: 'POST',
+            body: JSON.stringify({
+                data,
+                on_provider_conflict: onProviderConflict,
+                on_rule_conflict: onRuleConflict,
+            }),
+        });
+    },
+
+    importProvider: async (data: string, onProviderConflict: string = 'use'): Promise<any> => {
+        return fetchUIAPI('/rule/import', {
+            method: 'POST',
+            body: JSON.stringify({
+                data,
+                on_provider_conflict: onProviderConflict,
+                on_rule_conflict: 'skip',
+            }),
+        });
+    },
+
     // Scenario API
     getScenarios: async (): Promise<any> => {
         return fetchUIAPI('/scenarios');

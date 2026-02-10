@@ -156,8 +156,11 @@ const UseCodexPage: React.FC = () => {
                         newlyCreatedRuleUuids={newlyCreatedRuleUuids}
                         allowDeleteRule={true}
                         onRuleDelete={handleRuleDelete}
-                        showAddApiKeyButton={false}
                         headerHeight={headerHeight}
+                        emptyStateTitle="No Providers Configured"
+                        emptyStateDescription="Add an API key or OAuth provider to start routing requests"
+                        onAddApiKeyClick={() => navigate('/api-keys?dialog=add')}
+                        onAddOAuthClick={handleAddOAuthClick}
                     />
 
                     <CodexConfigModal

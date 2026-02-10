@@ -20,6 +20,7 @@ export interface TabTemplatePageProps {
     showAddApiKeyButton?: boolean;
     showCreateRuleButton?: boolean;
     showExpandCollapseButton?: boolean;
+    showImportButton?: boolean;
     // Allow custom rightAction for backward compatibility
     rightAction?: React.ReactNode;
     // Header height from parent component for calculating available space
