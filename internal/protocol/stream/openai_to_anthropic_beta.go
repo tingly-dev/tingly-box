@@ -303,8 +303,8 @@ func HandleResponsesToAnthropicBetaStreamResponse(c *gin.Context, stream *openai
 		SendContentBlockDelta: func(index int, content map[string]interface{}, flusher http.Flusher) {
 			sendBetaContentBlockDelta(c, index, content, flusher)
 		},
-		SendContentBlockStop: func(index int, flusher http.Flusher) {
-			sendBetaContentBlockStop(c, index, flusher)
+		SendContentBlockStop: func(state *streamState, index int, flusher http.Flusher) {
+			sendBetaContentBlockStop(c, state, index, flusher)
 		},
 		SendStopEvents: func(state *streamState, flusher http.Flusher) {
 			sendBetaStopEvents(c, state, flusher)
@@ -453,8 +453,7 @@ func HandleResponsesToAnthropicStreamResponse(c *gin.Context, stream *openaistre
 
 		case "response.output_text.done", "response.content_part.done":
 			if textBlockIndex != -1 {
-				senders.SendContentBlockStop(textBlockIndex, flusher)
-				state.stoppedBlocks[textBlockIndex] = true
+				senders.SendContentBlockStop(state, textBlockIndex, flusher)
 				textBlockIndex = -1
 			}
 
@@ -472,8 +471,7 @@ func HandleResponsesToAnthropicStreamResponse(c *gin.Context, stream *openaistre
 
 		case "response.reasoning_text.done":
 			if state.thinkingBlockIndex != -1 {
-				senders.SendContentBlockStop(state.thinkingBlockIndex, flusher)
-				state.stoppedBlocks[state.thinkingBlockIndex] = true
+				senders.SendContentBlockStop(state, state.thinkingBlockIndex, flusher)
 				state.thinkingBlockIndex = -1
 			}
 
@@ -491,8 +489,7 @@ func HandleResponsesToAnthropicStreamResponse(c *gin.Context, stream *openaistre
 
 		case "response.reasoning_summary_text.done":
 			if textBlockIndex != -1 {
-				senders.SendContentBlockStop(textBlockIndex, flusher)
-				state.stoppedBlocks[textBlockIndex] = true
+				senders.SendContentBlockStop(state, textBlockIndex, flusher)
 				textBlockIndex = -1
 			}
 
@@ -510,8 +507,7 @@ func HandleResponsesToAnthropicStreamResponse(c *gin.Context, stream *openaistre
 
 		case "response.refusal.done":
 			if textBlockIndex != -1 {
-				senders.SendContentBlockStop(textBlockIndex, flusher)
-				state.stoppedBlocks[textBlockIndex] = true
+				senders.SendContentBlockStop(state, textBlockIndex, flusher)
 				textBlockIndex = -1
 			}
 
@@ -560,8 +556,7 @@ func HandleResponsesToAnthropicStreamResponse(c *gin.Context, stream *openaistre
 				if toolCall.name == "" && argsDone.Name != "" {
 					toolCall.name = argsDone.Name
 				}
-				senders.SendContentBlockStop(toolCall.blockIndex, flusher)
-				state.stoppedBlocks[toolCall.blockIndex] = true
+				senders.SendContentBlockStop(state, toolCall.blockIndex, flusher)
 				delete(pendingToolCalls, argsDone.ItemID)
 			}
 
@@ -578,8 +573,7 @@ func HandleResponsesToAnthropicStreamResponse(c *gin.Context, stream *openaistre
 		case "response.custom_tool_call_input.done":
 			customDone := currentEvent.AsResponseCustomToolCallInputDone()
 			if toolCall, exists := pendingToolCalls[customDone.ItemID]; exists {
-				senders.SendContentBlockStop(toolCall.blockIndex, flusher)
-				state.stoppedBlocks[toolCall.blockIndex] = true
+				senders.SendContentBlockStop(state, toolCall.blockIndex, flusher)
 				delete(pendingToolCalls, customDone.ItemID)
 			}
 
@@ -596,8 +590,7 @@ func HandleResponsesToAnthropicStreamResponse(c *gin.Context, stream *openaistre
 		case "response.mcp_call_arguments.done":
 			mcpDone := currentEvent.AsResponseMcpCallArgumentsDone()
 			if toolCall, exists := pendingToolCalls[mcpDone.ItemID]; exists {
-				senders.SendContentBlockStop(toolCall.blockIndex, flusher)
-				state.stoppedBlocks[toolCall.blockIndex] = true
+				senders.SendContentBlockStop(state, toolCall.blockIndex, flusher)
 				delete(pendingToolCalls, mcpDone.ItemID)
 			}
 

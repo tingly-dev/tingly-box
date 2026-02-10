@@ -443,7 +443,7 @@ type responsesAPIEventSenders struct {
 	SendMessageStart      func(event map[string]interface{}, flusher http.Flusher)
 	SendContentBlockStart func(index int, blockType string, content map[string]interface{}, flusher http.Flusher)
 	SendContentBlockDelta func(index int, content map[string]interface{}, flusher http.Flusher)
-	SendContentBlockStop  func(index int, flusher http.Flusher)
+	SendContentBlockStop  func(state *streamState, index int, flusher http.Flusher)
 	SendStopEvents        func(state *streamState, flusher http.Flusher)
 	SendMessageDelta      func(state *streamState, stopReason string, flusher http.Flusher)
 	SendMessageStop       func(messageID, model string, state *streamState, stopReason string, flusher http.Flusher)
@@ -464,8 +464,8 @@ func HandleResponsesToAnthropicV1StreamResponse(c *gin.Context, stream *openaist
 		SendContentBlockDelta: func(index int, content map[string]interface{}, flusher http.Flusher) {
 			sendContentBlockDelta(c, index, content, flusher)
 		},
-		SendContentBlockStop: func(index int, flusher http.Flusher) {
-			sendContentBlockStop(c, index, flusher)
+		SendContentBlockStop: func(state *streamState, index int, flusher http.Flusher) {
+			sendContentBlockStop(c, state, index, flusher)
 		},
 		SendStopEvents: func(state *streamState, flusher http.Flusher) {
 			sendStopEvents(c, state, flusher)
