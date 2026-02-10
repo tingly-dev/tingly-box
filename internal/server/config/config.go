@@ -1415,6 +1415,19 @@ func init() {
 			Active: true,
 		},
 		{
+			UUID:          "built-in-cc-subagent",
+			Scenario:      typ.ScenarioClaudeCode,
+			RequestModel:  "tingly/cc-subagent",
+			ResponseModel: "",
+			Description:   "Claude Code - Subagent model - for background agents",
+			Services:      []*loadbalance.Service{},
+			LBTactic: typ.Tactic{
+				Type:   loadbalance.TacticRoundRobin,
+				Params: typ.DefaultRoundRobinParams(),
+			},
+			Active: true,
+		},
+		{
 			UUID:          "built-in-opencode",
 			Scenario:      typ.ScenarioOpenCode,
 			RequestModel:  "tingly-opencode",

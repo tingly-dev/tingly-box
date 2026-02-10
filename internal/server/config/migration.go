@@ -12,15 +12,16 @@ import (
 
 // Built-in rule UUID constants
 const (
-	RuleUUIDTingly           = "tingly"
-	RuleUUIDBuiltinOpenAI    = "built-in-openai"
-	RuleUUIDBuiltinAnthropic = "built-in-anthropic"
-	RuleUUIDBuiltinCC        = "built-in-cc"
-	RuleUUIDClaudeCode       = "claude-code"
-	RuleUUIDBuiltinCCHaiku   = "built-in-cc-haiku"
-	RuleUUIDBuiltinCCSonnet  = "built-in-cc-sonnet"
-	RuleUUIDBuiltinCCOpus    = "built-in-cc-opus"
-	RuleUUIDBuiltinCCDefault = "built-in-cc-default"
+	RuleUUIDTingly            = "tingly"
+	RuleUUIDBuiltinOpenAI     = "built-in-openai"
+	RuleUUIDBuiltinAnthropic  = "built-in-anthropic"
+	RuleUUIDBuiltinCC         = "built-in-cc"
+	RuleUUIDClaudeCode        = "claude-code"
+	RuleUUIDBuiltinCCHaiku    = "built-in-cc-haiku"
+	RuleUUIDBuiltinCCSonnet   = "built-in-cc-sonnet"
+	RuleUUIDBuiltinCCOpus     = "built-in-cc-opus"
+	RuleUUIDBuiltinCCDefault  = "built-in-cc-default"
+	RuleUUIDBuiltinCCSubagent = "built-in-cc-subagent"
 )
 
 func Migrate(c *Config) error {
@@ -153,15 +154,16 @@ func migrate20260103(c *Config) {
 
 	// Map of default rule UUIDs to their scenarios
 	scenarioMap := map[string]typ.RuleScenario{
-		RuleUUIDTingly:           typ.ScenarioOpenAI,
-		RuleUUIDBuiltinOpenAI:    typ.ScenarioOpenAI,
-		RuleUUIDBuiltinAnthropic: typ.ScenarioAnthropic,
-		RuleUUIDBuiltinCC:        typ.ScenarioClaudeCode,
-		RuleUUIDClaudeCode:       typ.ScenarioClaudeCode,
-		RuleUUIDBuiltinCCHaiku:   typ.ScenarioClaudeCode,
-		RuleUUIDBuiltinCCSonnet:  typ.ScenarioClaudeCode,
-		RuleUUIDBuiltinCCOpus:    typ.ScenarioClaudeCode,
-		RuleUUIDBuiltinCCDefault: typ.ScenarioClaudeCode,
+		RuleUUIDTingly:            typ.ScenarioOpenAI,
+		RuleUUIDBuiltinOpenAI:     typ.ScenarioOpenAI,
+		RuleUUIDBuiltinAnthropic:  typ.ScenarioAnthropic,
+		RuleUUIDBuiltinCC:         typ.ScenarioClaudeCode,
+		RuleUUIDClaudeCode:        typ.ScenarioClaudeCode,
+		RuleUUIDBuiltinCCHaiku:    typ.ScenarioClaudeCode,
+		RuleUUIDBuiltinCCSonnet:   typ.ScenarioClaudeCode,
+		RuleUUIDBuiltinCCOpus:     typ.ScenarioClaudeCode,
+		RuleUUIDBuiltinCCDefault:  typ.ScenarioClaudeCode,
+		RuleUUIDBuiltinCCSubagent: typ.ScenarioClaudeCode,
 	}
 
 	for i := range c.Rules {
@@ -208,6 +210,7 @@ func migrate20260110(c *Config) {
 		RuleUUIDBuiltinCCSonnet,
 		RuleUUIDBuiltinCCOpus,
 		RuleUUIDBuiltinCCDefault,
+		RuleUUIDBuiltinCCSubagent,
 	}
 
 	defaultMap := map[string]typ.Rule{}
