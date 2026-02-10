@@ -214,7 +214,7 @@ const UseClaudeCodePage: React.FC = () => {
     const getSubagentModel = (): string => {
         return configMode === 'unified'
             ? (rules[0]?.request_model || '')
-            : (getModelForVariant('subagent') || getModelForVariant('haiku'));
+            : (getModelForVariant('subagent') || 'tingly/cc-subagent');
     };
 
     // Generate settings.json JSON (from backend)

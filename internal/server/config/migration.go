@@ -309,12 +309,7 @@ func migrate20260210(c *Config) {
 		}
 	}
 
-	// Mirror haiku's request model onto subagent.
-	if haikuRule.RequestModel != "" && subagentRule.RequestModel != haikuRule.RequestModel {
-		subagentRule.RequestModel = haikuRule.RequestModel
-		needsSave = true
-	}
-
+	// Keep subagent request model as-is; only mirror services.
 	// Mirror haiku's services if subagent has none.
 	if len(subagentRule.Services) == 0 && len(haikuRule.Services) > 0 {
 		subagentRule.Services = make([]*loadbalance.Service, len(haikuRule.Services))
