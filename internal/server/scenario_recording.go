@@ -408,19 +408,20 @@ func (sr *streamRecorder) SetupStreamRecorderInContext(c *gin.Context, key strin
 
 // NewRecorderHooks creates hook functions from a ScenarioRecorder for use with HandleContext.
 // This allows decoupling the recorder from the handle context while maintaining recording functionality.
+// Usage is tracked internally in the event hook, so complete hooks don't need usage parameters.
 //
 // Returns:
 // - onStreamEvent: Hook for each stream event
 // - onStreamComplete: Hook for stream completion
 // - onStreamError: Hook for stream errors
-func NewRecorderHooks(recorder *ScenarioRecorder) (onStreamEvent func(event interface{}) error, onStreamComplete func(inputTokens, outputTokens int), onStreamError func(err error)) {
+func NewRecorderHooks(recorder *ScenarioRecorder) (onStreamEvent func(event interface{}) error, onStreamComplete func(), onStreamError func(err error)) {
 	if recorder == nil {
 		return nil, nil, nil
 	}
 
 	streamRec := newStreamRecorder(recorder)
 
-	// OnStreamEvent hook - records each stream event
+	// OnStreamEvent hook - records each stream event and tracks usage
 	onStreamEvent = func(event interface{}) error {
 		if streamRec == nil {
 			return nil
@@ -428,8 +429,26 @@ func NewRecorderHooks(recorder *ScenarioRecorder) (onStreamEvent func(event inte
 		switch evt := event.(type) {
 		case *anthropic.MessageStreamEventUnion:
 			streamRec.RecordV1Event(evt)
+			// Track usage from events
+			if evt.Usage.InputTokens > 0 {
+				streamRec.inputTokens = int(evt.Usage.InputTokens)
+				streamRec.hasUsage = true
+			}
+			if evt.Usage.OutputTokens > 0 {
+				streamRec.outputTokens = int(evt.Usage.OutputTokens)
+				streamRec.hasUsage = true
+			}
 		case *anthropic.BetaRawMessageStreamEventUnion:
 			streamRec.RecordV1BetaEvent(evt)
+			// Track usage from events
+			if evt.Usage.InputTokens > 0 {
+				streamRec.inputTokens = int(evt.Usage.InputTokens)
+				streamRec.hasUsage = true
+			}
+			if evt.Usage.OutputTokens > 0 {
+				streamRec.outputTokens = int(evt.Usage.OutputTokens)
+				streamRec.hasUsage = true
+			}
 		case map[string]interface{}:
 			// For raw map events (protocol conversion scenarios)
 			if eventType, ok := evt["type"].(string); ok {
@@ -439,8 +458,8 @@ func NewRecorderHooks(recorder *ScenarioRecorder) (onStreamEvent func(event inte
 		return nil
 	}
 
-	// OnStreamComplete hook - finalizes recording
-	onStreamComplete = func(inputTokens, outputTokens int) {
+	// OnStreamComplete hook - finalizes recording using internally tracked usage
+	onStreamComplete = func() {
 		if streamRec == nil {
 			return
 		}
@@ -450,7 +469,7 @@ func NewRecorderHooks(recorder *ScenarioRecorder) (onStreamEvent func(event inte
 		if recorder.c != nil {
 			model = recorder.c.Query("model")
 		}
-		streamRec.Finish(model, inputTokens, outputTokens)
+		streamRec.Finish(model, streamRec.inputTokens, streamRec.outputTokens)
 	}
 
 	// OnStreamError hook - records errors
@@ -466,14 +485,15 @@ func NewRecorderHooks(recorder *ScenarioRecorder) (onStreamEvent func(event inte
 
 // NewRecorderHooksWithModel creates hook functions with an explicit model parameter.
 // This is preferred when the model is known at hook creation time.
-func NewRecorderHooksWithModel(recorder *ScenarioRecorder, model string, provider *typ.Provider) (onStreamEvent func(event interface{}) error, onStreamComplete func(inputTokens, outputTokens int), onStreamError func(err error)) {
+// Usage is tracked internally in the event hook.
+func NewRecorderHooksWithModel(recorder *ScenarioRecorder, model string, provider *typ.Provider) (onStreamEvent func(event interface{}) error, onStreamComplete func(), onStreamError func(err error)) {
 	if recorder == nil {
 		return nil, nil, nil
 	}
 
 	streamRec := newStreamRecorder(recorder)
 
-	// OnStreamEvent hook - records each stream event
+	// OnStreamEvent hook - records each stream event and tracks usage
 	onStreamEvent = func(event interface{}) error {
 		if streamRec == nil {
 			return nil
@@ -481,8 +501,26 @@ func NewRecorderHooksWithModel(recorder *ScenarioRecorder, model string, provide
 		switch evt := event.(type) {
 		case *anthropic.MessageStreamEventUnion:
 			streamRec.RecordV1Event(evt)
+			// Track usage from events
+			if evt.Usage.InputTokens > 0 {
+				streamRec.inputTokens = int(evt.Usage.InputTokens)
+				streamRec.hasUsage = true
+			}
+			if evt.Usage.OutputTokens > 0 {
+				streamRec.outputTokens = int(evt.Usage.OutputTokens)
+				streamRec.hasUsage = true
+			}
 		case *anthropic.BetaRawMessageStreamEventUnion:
 			streamRec.RecordV1BetaEvent(evt)
+			// Track usage from events
+			if evt.Usage.InputTokens > 0 {
+				streamRec.inputTokens = int(evt.Usage.InputTokens)
+				streamRec.hasUsage = true
+			}
+			if evt.Usage.OutputTokens > 0 {
+				streamRec.outputTokens = int(evt.Usage.OutputTokens)
+				streamRec.hasUsage = true
+			}
 		case map[string]interface{}:
 			// For raw map events (protocol conversion scenarios)
 			if eventType, ok := evt["type"].(string); ok {
@@ -492,12 +530,12 @@ func NewRecorderHooksWithModel(recorder *ScenarioRecorder, model string, provide
 		return nil
 	}
 
-	// OnStreamComplete hook - finalizes recording with model and provider
-	onStreamComplete = func(inputTokens, outputTokens int) {
+	// OnStreamComplete hook - finalizes recording with model and provider using internally tracked usage
+	onStreamComplete = func() {
 		if streamRec == nil {
 			return
 		}
-		streamRec.Finish(model, inputTokens, outputTokens)
+		streamRec.Finish(model, streamRec.inputTokens, streamRec.outputTokens)
 		streamRec.RecordResponse(provider, model)
 	}
 

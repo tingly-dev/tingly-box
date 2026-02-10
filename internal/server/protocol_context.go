@@ -116,7 +116,7 @@ type HandleContext struct {
 
 	// Hooks for stream processing (chainable - multiple hooks can be added)
 	OnStreamEventHooks    []func(event interface{}) error
-	OnStreamCompleteHooks []func(inputTokens, outputTokens int)
+	OnStreamCompleteHooks []func()
 	OnStreamErrorHooks    []func(err error)
 }
 
@@ -139,7 +139,7 @@ func (hc *HandleContext) WithOnStreamEvent(hook func(interface{}) error) *Handle
 
 // WithOnStreamComplete adds a hook that is called when stream completes successfully.
 // Multiple hooks can be added and will be called in order.
-func (hc *HandleContext) WithOnStreamComplete(hook func(int, int)) *HandleContext {
+func (hc *HandleContext) WithOnStreamComplete(hook func()) *HandleContext {
 	hc.OnStreamCompleteHooks = append(hc.OnStreamCompleteHooks, hook)
 	return hc
 }
@@ -234,10 +234,18 @@ func (hc *HandleContext) ProcessStream(nextFunc func() (bool, error, interface{}
 
 	// Call OnStreamComplete hooks on success
 	for _, hook := range hc.OnStreamCompleteHooks {
-		hook(0, 0) // Usage should be tracked externally or via event hooks
+		hook()
 	}
 
 	return nil
+}
+
+// CallOnStreamComplete calls all OnStreamComplete hooks.
+// This is useful for non-streaming handlers that still need to invoke complete hooks.
+func (hc *HandleContext) CallOnStreamComplete() {
+	for _, hook := range hc.OnStreamCompleteHooks {
+		hook()
+	}
 }
 
 // SendError sends an error response to the client.

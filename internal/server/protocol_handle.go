@@ -81,11 +81,6 @@ func HandleAnthropicV1Stream(hc *HandleContext, req anthropic.MessageNewParams, 
 
 	SendFinishEvent(hc.GinContext)
 
-	// Call OnStreamComplete hooks with usage
-	for _, hook := range hc.OnStreamCompleteHooks {
-		hook(inputTokens, outputTokens)
-	}
-
 	return protocol.NewUsageStat(inputTokens, outputTokens), nil
 }
 
@@ -146,11 +141,6 @@ func HandleAnthropicV1BetaStream(hc *HandleContext, req anthropic.BetaMessageNew
 
 	SendFinishEvent(hc.GinContext)
 
-	// Call OnStreamComplete hooks with usage
-	for _, hook := range hc.OnStreamCompleteHooks {
-		hook(inputTokens, outputTokens)
-	}
-
 	return protocol.NewUsageStat(inputTokens, outputTokens), nil
 }
 
@@ -161,12 +151,6 @@ func HandleAnthropicV1NonStream(hc *HandleContext, resp *anthropic.Message) (pro
 	outputTokens := int(resp.Usage.OutputTokens)
 
 	resp.Model = anthropic.Model(hc.ResponseModel)
-
-	// Call OnStreamComplete hooks (using complete hooks for non-stream finalization)
-	// This allows recorder hooks to capture the response
-	for _, hook := range hc.OnStreamCompleteHooks {
-		hook(inputTokens, outputTokens)
-	}
 
 	hc.GinContext.JSON(http.StatusOK, resp)
 	return protocol.NewUsageStat(inputTokens, outputTokens), nil
@@ -179,12 +163,6 @@ func HandleAnthropicV1BetaNonStream(hc *HandleContext, resp *anthropic.BetaMessa
 	outputTokens := int(resp.Usage.OutputTokens)
 
 	resp.Model = anthropic.Model(hc.ResponseModel)
-
-	// Call OnStreamComplete hooks (using complete hooks for non-stream finalization)
-	// This allows recorder hooks to capture the response
-	for _, hook := range hc.OnStreamCompleteHooks {
-		hook(inputTokens, outputTokens)
-	}
 
 	hc.GinContext.JSON(http.StatusOK, resp)
 	return protocol.NewUsageStat(inputTokens, outputTokens), nil
