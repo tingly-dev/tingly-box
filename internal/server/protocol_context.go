@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -16,10 +15,8 @@ import (
 // It uses the builder pattern for optional configuration and hooks.
 type ForwardContext struct {
 	// Required dependencies
-	ClientPool *client.ClientPool
-	Provider   *typ.Provider
-	Model      string
-	BaseCtx    context.Context // Base context (e.g., request context for cancellation support)
+	Provider *typ.Provider
+	BaseCtx  context.Context // Base context (e.g., request context for cancellation support)
 
 	// Optional configuration
 	Timeout time.Duration
@@ -34,16 +31,14 @@ type ForwardContext struct {
 // baseCtx is the base context for the request:
 //   - Use context.Background() for non-streaming requests
 //   - Use c.Request.Context() for streaming requests to support client cancellation
-func NewForwardContext(baseCtx context.Context, pool *client.ClientPool, provider *typ.Provider, model string) *ForwardContext {
+func NewForwardContext(baseCtx context.Context, provider *typ.Provider) *ForwardContext {
 	if baseCtx == nil {
 		baseCtx = context.Background()
 	}
 	return &ForwardContext{
-		ClientPool: pool,
-		Provider:   provider,
-		Model:      model,
-		BaseCtx:    baseCtx,
-		Timeout:    time.Duration(provider.Timeout) * time.Second,
+		Provider: provider,
+		BaseCtx:  baseCtx,
+		Timeout:  time.Duration(provider.Timeout) * time.Second,
 	}
 }
 

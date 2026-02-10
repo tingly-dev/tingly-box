@@ -292,14 +292,16 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 
 // forwardAnthropicRequestV1Beta forwards request using Anthropic SDK with proper types (beta)
 func (s *Server) forwardAnthropicRequestV1Beta(provider *typ.Provider, req anthropic.BetaMessageNewParams) (*anthropic.BetaMessage, context.CancelFunc, error) {
-	fc := NewForwardContext(nil, s.clientPool, provider, string(req.Model))
-	return ForwardAnthropicV1Beta(fc, req)
+	wrapper := s.clientPool.GetAnthropicClient(provider, string(req.Model))
+	fc := NewForwardContext(nil, provider)
+	return ForwardAnthropicV1Beta(fc, wrapper, req)
 }
 
 // forwardAnthropicStreamRequestV1Beta forwards streaming request using Anthropic SDK (beta)
 func (s *Server) forwardAnthropicStreamRequestV1Beta(ctx context.Context, provider *typ.Provider, req anthropic.BetaMessageNewParams) (*anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], context.CancelFunc, error) {
-	fc := NewForwardContext(ctx, s.clientPool, provider, string(req.Model))
-	return ForwardAnthropicV1BetaStream(fc, req)
+	wrapper := s.clientPool.GetAnthropicClient(provider, string(req.Model))
+	fc := NewForwardContext(ctx, provider)
+	return ForwardAnthropicV1BetaStream(fc, wrapper, req)
 }
 
 // handleAnthropicStreamResponseV1Beta processes the Anthropic beta streaming response and sends it to the client
@@ -314,14 +316,16 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthrop
 
 // forwardGoogleRequest forwards request to Google API
 func (s *Server) forwardGoogleRequest(provider *typ.Provider, model string, contents []*genai.Content, config *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
-	fc := NewForwardContext(nil, s.clientPool, provider, model)
-	return ForwardGoogle(fc, model, contents, config)
+	wrapper := s.clientPool.GetGoogleClient(provider, model)
+	fc := NewForwardContext(nil, provider)
+	return ForwardGoogle(fc, wrapper, model, contents, config)
 }
 
 // forwardGoogleStreamRequest forwards streaming request to Google API
 func (s *Server) forwardGoogleStreamRequest(ctx context.Context, provider *typ.Provider, model string, contents []*genai.Content, config *genai.GenerateContentConfig) (iter.Seq2[*genai.GenerateContentResponse, error], context.CancelFunc, error) {
-	fc := NewForwardContext(ctx, s.clientPool, provider, model)
-	return ForwardGoogleStream(fc, model, contents, config)
+	wrapper := s.clientPool.GetGoogleClient(provider, model)
+	fc := NewForwardContext(ctx, provider)
+	return ForwardGoogleStream(fc, wrapper, model, contents, config)
 }
 
 // handleAnthropicV1BetaViaChatCompletions handles Anthropic v1beta request using OpenAI Chat Completions API

@@ -159,14 +159,16 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 
 // forwardOpenAIRequest forwards the request to the selected provider using OpenAI library
 func (s *Server) forwardOpenAIRequest(provider *typ.Provider, req *openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
-	fc := NewForwardContext(nil, s.clientPool, provider, req.Model)
-	return ForwardOpenAIChat(fc, req)
+	wrapper := s.clientPool.GetOpenAIClient(provider, string(req.Model))
+	fc := NewForwardContext(nil, provider)
+	return ForwardOpenAIChat(fc, wrapper, req)
 }
 
 // forwardOpenAIStreamRequest forwards the streaming request to the selected provider using OpenAI library
 func (s *Server) forwardOpenAIStreamRequest(ctx context.Context, provider *typ.Provider, req *openai.ChatCompletionNewParams) (*ssestream.Stream[openai.ChatCompletionChunk], context.CancelFunc, error) {
-	fc := NewForwardContext(ctx, s.clientPool, provider, req.Model)
-	return ForwardOpenAIChatStream(fc, req)
+	wrapper := s.clientPool.GetOpenAIClient(provider, string(req.Model))
+	fc := NewForwardContext(ctx, provider)
+	return ForwardOpenAIChatStream(fc, wrapper, req)
 }
 
 // buildOpenAIConfig builds the OpenAIConfig for provider transformations

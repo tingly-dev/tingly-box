@@ -13,6 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/genai"
 
+	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request/transformer"
 )
 
@@ -21,13 +22,12 @@ import (
 // ===================================================================
 
 // ForwardAnthropicV1 sends a non-streaming Anthropic v1 message request.
-func ForwardAnthropicV1(fc *ForwardContext, req anthropic.MessageNewParams) (*anthropic.Message, context.CancelFunc, error) {
+func ForwardAnthropicV1(fc *ForwardContext, wrapper *client.AnthropicClient, req anthropic.MessageNewParams) (*anthropic.Message, context.CancelFunc, error) {
 	ctx, cancel, err := fc.PrepareContext(req)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	wrapper := fc.ClientPool.GetAnthropicClient(fc.Provider, fc.Model)
 	if wrapper == nil {
 		cancel()
 		return nil, nil, fmt.Errorf("failed to get Anthropic client for provider: %s", fc.Provider.Name)
@@ -46,13 +46,12 @@ func ForwardAnthropicV1(fc *ForwardContext, req anthropic.MessageNewParams) (*an
 
 // ForwardAnthropicV1Stream sends a streaming Anthropic v1 message request.
 // Note: Set BaseCtx via WithBaseCtx() to support client cancellation.
-func ForwardAnthropicV1Stream(fc *ForwardContext, req anthropic.MessageNewParams) (*anthropicstream.Stream[anthropic.MessageStreamEventUnion], context.CancelFunc, error) {
+func ForwardAnthropicV1Stream(fc *ForwardContext, wrapper *client.AnthropicClient, req anthropic.MessageNewParams) (*anthropicstream.Stream[anthropic.MessageStreamEventUnion], context.CancelFunc, error) {
 	ctx, cancel, err := fc.PrepareContext(req)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	wrapper := fc.ClientPool.GetAnthropicClient(fc.Provider, fc.Model)
 	if wrapper == nil {
 		cancel()
 		return nil, nil, fmt.Errorf("failed to get Anthropic client for provider: %s", fc.Provider.Name)
@@ -64,13 +63,12 @@ func ForwardAnthropicV1Stream(fc *ForwardContext, req anthropic.MessageNewParams
 }
 
 // ForwardAnthropicV1Beta sends a non-streaming Anthropic v1 beta message request.
-func ForwardAnthropicV1Beta(fc *ForwardContext, req anthropic.BetaMessageNewParams) (*anthropic.BetaMessage, context.CancelFunc, error) {
+func ForwardAnthropicV1Beta(fc *ForwardContext, wrapper *client.AnthropicClient, req anthropic.BetaMessageNewParams) (*anthropic.BetaMessage, context.CancelFunc, error) {
 	ctx, cancel, err := fc.PrepareContext(req)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	wrapper := fc.ClientPool.GetAnthropicClient(fc.Provider, fc.Model)
 	if wrapper == nil {
 		cancel()
 		return nil, nil, fmt.Errorf("failed to get Anthropic client for provider: %s", fc.Provider.Name)
@@ -89,13 +87,12 @@ func ForwardAnthropicV1Beta(fc *ForwardContext, req anthropic.BetaMessageNewPara
 
 // ForwardAnthropicV1BetaStream sends a streaming Anthropic v1 beta message request.
 // Note: Set BaseCtx via WithBaseCtx() to support client cancellation.
-func ForwardAnthropicV1BetaStream(fc *ForwardContext, req anthropic.BetaMessageNewParams) (*anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], context.CancelFunc, error) {
+func ForwardAnthropicV1BetaStream(fc *ForwardContext, wrapper *client.AnthropicClient, req anthropic.BetaMessageNewParams) (*anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], context.CancelFunc, error) {
 	ctx, cancel, err := fc.PrepareContext(req)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	wrapper := fc.ClientPool.GetAnthropicClient(fc.Provider, fc.Model)
 	if wrapper == nil {
 		cancel()
 		return nil, nil, fmt.Errorf("failed to get Anthropic client for provider: %s", fc.Provider.Name)
@@ -111,21 +108,20 @@ func ForwardAnthropicV1BetaStream(fc *ForwardContext, req anthropic.BetaMessageN
 // ===================================================================
 
 // ForwardOpenAIChat sends a non-streaming OpenAI chat completion request.
-func ForwardOpenAIChat(fc *ForwardContext, req *openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
+func ForwardOpenAIChat(fc *ForwardContext, wrapper *client.OpenAIClient, req *openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
 	ctx, cancel, err := fc.PrepareContext(req)
 	if err != nil {
 		return nil, err
 	}
 	defer cancel()
 
-	wrapper := fc.ClientPool.GetOpenAIClient(fc.Provider, fc.Model)
 	if wrapper == nil {
 		return nil, fmt.Errorf("failed to get OpenAI client for provider: %s", fc.Provider.Name)
 	}
 
 	// Apply provider-specific transformations
 	config := buildOpenAIConfig(req)
-	transformedReq := transformer.ApplyProviderTransforms(req, fc.Provider, fc.Model, config)
+	transformedReq := transformer.ApplyProviderTransforms(req, fc.Provider, req.Model, config)
 	*req = *transformedReq
 
 	// Clear empty tools array
@@ -143,13 +139,12 @@ func ForwardOpenAIChat(fc *ForwardContext, req *openai.ChatCompletionNewParams) 
 
 // ForwardOpenAIChatStream sends a streaming OpenAI chat completion request.
 // Note: Pass request context (c.Request.Context()) as baseCtx in NewForwardContext for client cancellation support.
-func ForwardOpenAIChatStream(fc *ForwardContext, req *openai.ChatCompletionNewParams) (*openaistream.Stream[openai.ChatCompletionChunk], context.CancelFunc, error) {
+func ForwardOpenAIChatStream(fc *ForwardContext, wrapper *client.OpenAIClient, req *openai.ChatCompletionNewParams) (*openaistream.Stream[openai.ChatCompletionChunk], context.CancelFunc, error) {
 	ctx, cancel, err := fc.PrepareContext(req)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	wrapper := fc.ClientPool.GetOpenAIClient(fc.Provider, fc.Model)
 	if wrapper == nil {
 		cancel()
 		return nil, nil, fmt.Errorf("failed to get OpenAI client for provider: %s", fc.Provider.Name)
@@ -159,7 +154,7 @@ func ForwardOpenAIChatStream(fc *ForwardContext, req *openai.ChatCompletionNewPa
 
 	// Apply provider-specific transformations
 	config := buildOpenAIConfig(req)
-	transformedReq := transformer.ApplyProviderTransforms(req, fc.Provider, fc.Model, config)
+	transformedReq := transformer.ApplyProviderTransforms(req, fc.Provider, req.Model, config)
 	*req = *transformedReq
 
 	// Clear empty tools array
@@ -172,14 +167,13 @@ func ForwardOpenAIChatStream(fc *ForwardContext, req *openai.ChatCompletionNewPa
 }
 
 // ForwardOpenAIResponses sends a non-streaming OpenAI Responses API request.
-func ForwardOpenAIResponses(fc *ForwardContext, params responses.ResponseNewParams) (*responses.Response, error) {
+func ForwardOpenAIResponses(fc *ForwardContext, wrapper *client.OpenAIClient, params responses.ResponseNewParams) (*responses.Response, error) {
 	ctx, cancel, err := fc.PrepareContext(params)
 	if err != nil {
 		return nil, err
 	}
 	defer cancel()
 
-	wrapper := fc.ClientPool.GetOpenAIClient(fc.Provider, fc.Model)
 	if wrapper == nil {
 		return nil, fmt.Errorf("failed to get OpenAI client for provider: %s", fc.Provider.Name)
 	}
@@ -192,13 +186,12 @@ func ForwardOpenAIResponses(fc *ForwardContext, params responses.ResponseNewPara
 
 // ForwardOpenAIResponsesStream sends a streaming OpenAI Responses API request.
 // Note: Pass request context (c.Request.Context()) as baseCtx in NewForwardContext for client cancellation support.
-func ForwardOpenAIResponsesStream(fc *ForwardContext, params responses.ResponseNewParams) (*openaistream.Stream[responses.ResponseStreamEventUnion], context.CancelFunc, error) {
+func ForwardOpenAIResponsesStream(fc *ForwardContext, wrapper *client.OpenAIClient, params responses.ResponseNewParams) (*openaistream.Stream[responses.ResponseStreamEventUnion], context.CancelFunc, error) {
 	ctx, cancel, err := fc.PrepareContext(params)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	wrapper := fc.ClientPool.GetOpenAIClient(fc.Provider, fc.Model)
 	if wrapper == nil {
 		cancel()
 		return nil, nil, fmt.Errorf("failed to get OpenAI client for provider: %s", fc.Provider.Name)
@@ -213,14 +206,13 @@ func ForwardOpenAIResponsesStream(fc *ForwardContext, params responses.ResponseN
 // ===================================================================
 
 // ForwardGoogle sends a non-streaming Google Generative AI request.
-func ForwardGoogle(fc *ForwardContext, model string, contents []*genai.Content, config *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
+func ForwardGoogle(fc *ForwardContext, wrapper *client.GoogleClient, model string, contents []*genai.Content, config *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
 	ctx, cancel, err := fc.PrepareContext(nil)
 	if err != nil {
 		return nil, err
 	}
 	defer cancel()
 
-	wrapper := fc.ClientPool.GetGoogleClient(fc.Provider, model)
 	if wrapper == nil {
 		return nil, fmt.Errorf("failed to get Google client for provider: %s", fc.Provider.Name)
 	}
@@ -233,13 +225,12 @@ func ForwardGoogle(fc *ForwardContext, model string, contents []*genai.Content, 
 
 // ForwardGoogleStream sends a streaming Google Generative AI request.
 // Note: Pass request context (c.Request.Context()) as baseCtx in NewForwardContext for client cancellation support.
-func ForwardGoogleStream(fc *ForwardContext, model string, contents []*genai.Content, config *genai.GenerateContentConfig) (iter.Seq2[*genai.GenerateContentResponse, error], context.CancelFunc, error) {
+func ForwardGoogleStream(fc *ForwardContext, wrapper *client.GoogleClient, model string, contents []*genai.Content, config *genai.GenerateContentConfig) (iter.Seq2[*genai.GenerateContentResponse, error], context.CancelFunc, error) {
 	ctx, cancel, err := fc.PrepareContext(nil)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	wrapper := fc.ClientPool.GetGoogleClient(fc.Provider, model)
 	if wrapper == nil {
 		cancel()
 		return nil, nil, fmt.Errorf("failed to get Google client for provider: %s", fc.Provider.Name)

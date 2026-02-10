@@ -306,14 +306,16 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 
 // forwardAnthropicRequestV1 forwards request using Anthropic SDK with proper types (v1)
 func (s *Server) forwardAnthropicRequestV1(provider *typ.Provider, req anthropic.MessageNewParams) (*anthropic.Message, context.CancelFunc, error) {
-	fc := NewForwardContext(nil, s.clientPool, provider, string(req.Model))
-	return ForwardAnthropicV1(fc, req)
+	wrapper := s.clientPool.GetAnthropicClient(provider, string(req.Model))
+	fc := NewForwardContext(nil, provider)
+	return ForwardAnthropicV1(fc, wrapper, req)
 }
 
 // forwardAnthropicStreamRequestV1 forwards streaming request using Anthropic SDK (v1)
 func (s *Server) forwardAnthropicStreamRequestV1(ctx context.Context, provider *typ.Provider, req anthropic.MessageNewParams) (*anthropicstream.Stream[anthropic.MessageStreamEventUnion], context.CancelFunc, error) {
-	fc := NewForwardContext(ctx, s.clientPool, provider, string(req.Model))
-	return ForwardAnthropicV1Stream(fc, req)
+	wrapper := s.clientPool.GetAnthropicClient(provider, string(req.Model))
+	fc := NewForwardContext(ctx, provider)
+	return ForwardAnthropicV1Stream(fc, wrapper, req)
 }
 
 // handleAnthropicStreamResponseV1 processes the Anthropic streaming response and sends it to the client (v1)

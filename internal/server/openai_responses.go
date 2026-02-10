@@ -353,16 +353,18 @@ func (s *Server) forwardResponsesRequest(provider *typ.Provider, params response
 		return s.forwardChatGPTBackendRequest(provider, params)
 	}
 
-	fc := NewForwardContext(nil, s.clientPool, provider, params.Model)
-	return ForwardOpenAIResponses(fc, params)
+	wrapper := s.clientPool.GetOpenAIClient(provider, string(params.Model))
+	fc := NewForwardContext(nil, provider)
+	return ForwardOpenAIResponses(fc, wrapper, params)
 }
 
 // forwardResponsesStreamRequest forwards a streaming Responses API request to the provider
 func (s *Server) forwardResponsesStreamRequest(ctx context.Context, provider *typ.Provider, params responses.ResponseNewParams) (*ssestream.Stream[responses.ResponseStreamEventUnion], context.CancelFunc, error) {
 	// Note: ChatGPT backend API providers are handled separately in the Anthropic beta handler
 
-	fc := NewForwardContext(ctx, s.clientPool, provider, params.Model)
-	return ForwardOpenAIResponsesStream(fc, params)
+	wrapper := s.clientPool.GetOpenAIClient(provider, string(params.Model))
+	fc := NewForwardContext(ctx, provider)
+	return ForwardOpenAIResponsesStream(fc, wrapper, params)
 }
 
 // convertToResponsesParams converts raw JSON to OpenAI SDK params format
