@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -11,107 +10,19 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
 
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/middleware"
+	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
 )
 
-// readJWTSecretFromMainConfig reads the JWT secret from the main service's config database or JSON config
-func readJWTSecretFromMainConfig() string {
-	// Try to find the main service's config database
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-
-	configPaths := []string{
-		filepath.Join(homeDir, ".tingly-box", "db", "tingly.db"),
-		filepath.Join(homeDir, ".tingly-box", "tingly.db"),
-		"./data/tingly.db",
-	}
-
-	for _, configPath := range configPaths {
-		if _, err := os.Stat(configPath); os.IsNotExist(err) {
-			continue
-		}
-
-		// Open database connection
-		db, err := gorm.Open(sqlite.Open(configPath), &gorm.Config{})
-		if err != nil {
-			logrus.Debugf("Failed to open main service config db at %s: %v", configPath, err)
-			continue
-		}
-
-		// Get underlying SQL DB for proper cleanup
-		sqlDB, err := db.DB()
-		if err != nil {
-			logrus.Debugf("Failed to get SQL DB from GORM: %v", err)
-			continue
-		}
-
-		// Query for JWT secret
-		type ConfigRow struct {
-			Key   string
-			Value string
-		}
-		var result ConfigRow
-		if err := db.Table("config").Where("key = ?", "jwt_secret").Select("value").First(&result).Error; err == nil && result.Value != "" {
-			sqlDB.Close()
-			logrus.Infof("Loaded JWT secret from main service config")
-			return result.Value
-		}
-
-		sqlDB.Close()
-	}
-
-	logrus.Warn("Could not find JWT secret in main service config, using default or environment variable")
-	// Fallback to JSON config
-	if secret := readConfigJSONValue("jwt_secret"); secret != "" {
-		logrus.Infof("Loaded JWT secret from main service config.json")
-		return secret
-	}
-	return ""
-}
-
-// readUserTokenFromMainConfig reads the user token from the main service's JSON config
-func readUserTokenFromMainConfig() string {
-	if token := readConfigJSONValue("user_token"); token != "" {
-		logrus.Infof("Loaded user token from main service config.json")
-		return token
-	}
-	return ""
-}
-
-func readConfigJSONValue(key string) string {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	configPath := filepath.Join(homeDir, ".tingly-box", "config.json")
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return ""
-	}
-	var cfg map[string]interface{}
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return ""
-	}
-	if val, ok := cfg[key]; ok {
-		if s, ok := val.(string); ok {
-			return s
-		}
-	}
-	return ""
-}
-
-// Config holds the configuration for remote-cc service
+// Config holds the configuration for remote-coder service
+// (legacy name remote-cc retained for compatibility)
 type Config struct {
 	Port             int           // HTTP server port
 	JWTSecret        string        // JWT secret for token validation
 	UserToken        string        // User token from main service (legacy auth)
-	DBPath           string        // SQLite database path for remote-cc
+	DBPath           string        // SQLite database path for remote-coder
 	SessionTimeout   time.Duration // Session timeout duration
 	MessageRetention time.Duration // How long to retain messages
 	RateLimitMax     int           // Max auth attempts before block
@@ -120,137 +31,216 @@ type Config struct {
 	jwtManager       *auth.JWTManager
 }
 
-// Load reads configuration from environment variables and database
-func Load() (*Config, error) {
-	// Port - required
-	portStr := os.Getenv("RCC_PORT")
-	if portStr == "" {
-		portStr = "18080" // default port
+// Options allows overrides when building remote-coder configuration.
+type Options struct {
+	Port                 *int
+	DBPath               *string
+	SessionTimeout       *time.Duration
+	MessageRetentionDays *int
+	RateLimitMax         *int
+	RateLimitWindow      *time.Duration
+	RateLimitBlock       *time.Duration
+	JWTSecret            *string
+}
+
+// LoadFromAppConfig builds remote-coder config from the main app config with env/override support.
+func LoadFromAppConfig(appCfg *serverconfig.Config, opts Options) (*Config, error) {
+	if appCfg == nil {
+		return nil, &ConfigError{
+			Field:   "app_config",
+			Message: "must be provided",
+		}
 	}
-	port, err := strconv.Atoi(portStr)
-	if err != nil || port <= 0 || port > 65535 {
+
+	remoteCfg := appCfg.RemoteCoder
+
+	port := remoteCfg.Port
+	if port == 0 {
+		port = 18080
+	}
+	if env := os.Getenv("RCC_PORT"); env != "" {
+		if parsed, err := strconv.Atoi(env); err == nil {
+			port = parsed
+		} else {
+			return nil, &ConfigError{
+				Field:   "port",
+				Message: "must be a valid port number (1-65535)",
+			}
+		}
+	}
+	if opts.Port != nil {
+		port = *opts.Port
+	}
+	if port <= 0 || port > 65535 {
 		return nil, &ConfigError{
 			Field:   "port",
 			Message: "must be a valid port number (1-65535)",
 		}
 	}
 
-	// JWT Secret - try RCC_JWT_SECRET first, then read from main service's config
-	jwtSecret := os.Getenv("RCC_JWT_SECRET")
+	jwtSecret := appCfg.JWTSecret
+	if env := os.Getenv("RCC_JWT_SECRET"); env != "" {
+		jwtSecret = env
+	}
+	if opts.JWTSecret != nil {
+		jwtSecret = *opts.JWTSecret
+	}
 	if jwtSecret == "" {
-		// Try to read from main service's config database
-		jwtSecret = readJWTSecretFromMainConfig()
-		if jwtSecret == "" {
-			return nil, &ConfigError{
-				Field:   "jwt_secret",
-				Message: "must be set (environment variable RCC_JWT_SECRET or main service config)",
-			}
-		}
-	}
-
-	// User token - optional, for legacy auth fallback
-	userToken := readUserTokenFromMainConfig()
-
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
 		return nil, &ConfigError{
-			Field:   "home_dir",
-			Message: "could not resolve user home directory",
+			Field:   "jwt_secret",
+			Message: "must be set (main config or RCC_JWT_SECRET)",
 		}
 	}
 
-	// Session timeout - optional, defaults to 30 minutes
-	sessionTimeoutStr := os.Getenv("RCC_SESSION_TIMEOUT")
-	var sessionTimeout time.Duration
-	if sessionTimeoutStr == "" {
-		sessionTimeout = 30 * time.Minute
-	} else {
-		timeout, err := time.ParseDuration(sessionTimeoutStr)
+	dbPath := remoteCfg.DBPath
+	if dbPath == "" {
+		if appCfg.ConfigDir != "" {
+			dbPath = filepath.Join(appCfg.ConfigDir, "remote-cc.db")
+		}
+	}
+	if env := os.Getenv("RCC_DB_PATH"); env != "" {
+		dbPath = env
+	}
+	if opts.DBPath != nil {
+		dbPath = *opts.DBPath
+	}
+	if dbPath == "" {
+		return nil, &ConfigError{
+			Field:   "db_path",
+			Message: "must be set",
+		}
+	}
+
+	sessionTimeout := 30 * time.Minute
+	if remoteCfg.SessionTimeout != "" {
+		parsed, err := time.ParseDuration(remoteCfg.SessionTimeout)
 		if err != nil {
 			return nil, &ConfigError{
 				Field:   "session_timeout",
 				Message: "must be a valid duration (e.g., 30m, 1h)",
 			}
 		}
-		sessionTimeout = timeout
+		sessionTimeout = parsed
+	}
+	if env := os.Getenv("RCC_SESSION_TIMEOUT"); env != "" {
+		parsed, err := time.ParseDuration(env)
+		if err != nil {
+			return nil, &ConfigError{
+				Field:   "session_timeout",
+				Message: "must be a valid duration (e.g., 30m, 1h)",
+			}
+		}
+		sessionTimeout = parsed
+	}
+	if opts.SessionTimeout != nil {
+		sessionTimeout = *opts.SessionTimeout
 	}
 
-	// DB Path - optional, defaults to ~/.tingly-box/remote-cc.db
-	defaultDBPath := filepath.Join(homeDir, ".tingly-box", "remote-cc.db")
-	dbPath := os.Getenv("RCC_DB_PATH")
-	if dbPath == "" {
-		dbPath = defaultDBPath
+	retentionDays := remoteCfg.MessageRetentionDays
+	if retentionDays == 0 {
+		retentionDays = 7
 	}
-
-	// Message retention - optional, defaults to 7 days
-	retentionDaysStr := os.Getenv("RCC_MESSAGE_RETENTION_DAYS")
-	retention := 7 * 24 * time.Hour
-	if retentionDaysStr != "" {
-		days, err := strconv.Atoi(retentionDaysStr)
-		if err != nil || days <= 0 {
+	if env := os.Getenv("RCC_MESSAGE_RETENTION_DAYS"); env != "" {
+		if parsed, err := strconv.Atoi(env); err == nil {
+			retentionDays = parsed
+		} else {
 			return nil, &ConfigError{
 				Field:   "message_retention_days",
 				Message: "must be a positive integer",
 			}
 		}
-		retention = time.Duration(days) * 24 * time.Hour
 	}
+	if opts.MessageRetentionDays != nil {
+		retentionDays = *opts.MessageRetentionDays
+	}
+	if retentionDays <= 0 {
+		return nil, &ConfigError{
+			Field:   "message_retention_days",
+			Message: "must be a positive integer",
+		}
+	}
+	retention := time.Duration(retentionDays) * 24 * time.Hour
 
-	// Rate limit max attempts - optional, defaults to 5
-	rateLimitMaxStr := os.Getenv("RCC_RATE_LIMIT_MAX")
-	var rateLimitMax int
-	if rateLimitMaxStr == "" {
+	rateLimitMax := remoteCfg.RateLimitMax
+	if rateLimitMax == 0 {
 		rateLimitMax = 5
-	} else {
-		max, err := strconv.Atoi(rateLimitMaxStr)
-		if err != nil || max <= 0 {
+	}
+	if env := os.Getenv("RCC_RATE_LIMIT_MAX"); env != "" {
+		if parsed, err := strconv.Atoi(env); err == nil {
+			rateLimitMax = parsed
+		} else {
 			return nil, &ConfigError{
 				Field:   "rate_limit_max",
 				Message: "must be a positive integer",
 			}
 		}
-		rateLimitMax = max
+	}
+	if opts.RateLimitMax != nil {
+		rateLimitMax = *opts.RateLimitMax
+	}
+	if rateLimitMax <= 0 {
+		return nil, &ConfigError{
+			Field:   "rate_limit_max",
+			Message: "must be a positive integer",
+		}
 	}
 
-	// Rate limit window - optional, defaults to 5 minutes
-	rateLimitWindowStr := os.Getenv("RCC_RATE_LIMIT_WINDOW")
-	var rateLimitWindow time.Duration
-	if rateLimitWindowStr == "" {
-		rateLimitWindow = 5 * time.Minute
-	} else {
-		window, err := time.ParseDuration(rateLimitWindowStr)
+	rateLimitWindow := 5 * time.Minute
+	if remoteCfg.RateLimitWindow != "" {
+		parsed, err := time.ParseDuration(remoteCfg.RateLimitWindow)
 		if err != nil {
 			return nil, &ConfigError{
 				Field:   "rate_limit_window",
 				Message: "must be a valid duration (e.g., 5m, 10m)",
 			}
 		}
-		rateLimitWindow = window
+		rateLimitWindow = parsed
+	}
+	if env := os.Getenv("RCC_RATE_LIMIT_WINDOW"); env != "" {
+		parsed, err := time.ParseDuration(env)
+		if err != nil {
+			return nil, &ConfigError{
+				Field:   "rate_limit_window",
+				Message: "must be a valid duration (e.g., 5m, 10m)",
+			}
+		}
+		rateLimitWindow = parsed
+	}
+	if opts.RateLimitWindow != nil {
+		rateLimitWindow = *opts.RateLimitWindow
 	}
 
-	// Rate limit block duration - optional, defaults to 5 minutes
-	rateLimitBlockStr := os.Getenv("RCC_RATE_LIMIT_BLOCK")
-	var rateLimitBlock time.Duration
-	if rateLimitBlockStr == "" {
-		rateLimitBlock = 5 * time.Minute
-	} else {
-		block, err := time.ParseDuration(rateLimitBlockStr)
+	rateLimitBlock := 5 * time.Minute
+	if remoteCfg.RateLimitBlock != "" {
+		parsed, err := time.ParseDuration(remoteCfg.RateLimitBlock)
 		if err != nil {
 			return nil, &ConfigError{
 				Field:   "rate_limit_block",
 				Message: "must be a valid duration (e.g., 5m, 10m)",
 			}
 		}
-		rateLimitBlock = block
+		rateLimitBlock = parsed
+	}
+	if env := os.Getenv("RCC_RATE_LIMIT_BLOCK"); env != "" {
+		parsed, err := time.ParseDuration(env)
+		if err != nil {
+			return nil, &ConfigError{
+				Field:   "rate_limit_block",
+				Message: "must be a valid duration (e.g., 5m, 10m)",
+			}
+		}
+		rateLimitBlock = parsed
+	}
+	if opts.RateLimitBlock != nil {
+		rateLimitBlock = *opts.RateLimitBlock
 	}
 
-	// Create JWT manager
 	jwtManager := auth.NewJWTManager(jwtSecret)
 
 	cfg := &Config{
 		Port:             port,
 		JWTSecret:        jwtSecret,
-		UserToken:        userToken,
+		UserToken:        appCfg.UserToken,
 		DBPath:           dbPath,
 		SessionTimeout:   sessionTimeout,
 		MessageRetention: retention,
@@ -260,7 +250,7 @@ func Load() (*Config, error) {
 		jwtManager:       jwtManager,
 	}
 
-	logrus.Infof("Configuration loaded: port=%d, session_timeout=%v, db_path=%s, message_retention=%v, rate_limit_max=%d, rate_limit_window=%v, rate_limit_block=%v",
+	logrus.Infof("Remote-coder config: port=%d, session_timeout=%v, db_path=%s, message_retention=%v, rate_limit_max=%d, rate_limit_window=%v, rate_limit_block=%v",
 		port, sessionTimeout, dbPath, retention, rateLimitMax, rateLimitWindow, rateLimitBlock)
 
 	return cfg, nil
