@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
@@ -185,6 +184,11 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 	SetTrackingContext(c, rule, provider, actualModel, responseModel, isStreaming)
 
 	apiStyle := provider.APIStyle
+	// === Check if provider has built-in web_search ===
+	hasBuiltInWebSearch := s.templateManager.ProviderHasBuiltInWebSearch(provider)
+
+	// === Tool Interceptor: Check if enabled and should be used ===
+	shouldIntercept, shouldStripTools, _ := s.resolveToolInterceptor(provider, hasBuiltInWebSearch)
 
 	switch apiStyle {
 	default:
@@ -285,9 +289,9 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 		}
 
 		if isStreaming {
-			s.handleStreamingRequest(c, provider, &req.ChatCompletionNewParams, responseModel, rule)
+			s.handleStreamingRequest(c, provider, &req.ChatCompletionNewParams, responseModel, rule, shouldIntercept, shouldStripTools)
 		} else {
-			s.handleNonStreamingRequest(c, provider, &req.ChatCompletionNewParams, responseModel, rule)
+			s.handleNonStreamingRequest(c, provider, &req.ChatCompletionNewParams, responseModel, rule, shouldIntercept, shouldStripTools)
 		}
 	}
 }

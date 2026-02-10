@@ -46,6 +46,8 @@ type Config struct {
 	Verbose          bool `json:"verbose"`            // Verbose mode for detailed logging
 	Debug            bool `json:"-"`                  // Debug mode for Gin debug level logging
 	OpenBrowser      bool `yaml:"-" json:"-"`         // Auto-open browser in web UI mode (default: true)
+	// Tool interceptor (local web_search/web_fetch)
+	ToolInterceptor *typ.ToolInterceptorConfig `json:"tool_interceptor,omitempty"`
 
 	// Error log settings
 	ErrorLogFilterExpression string `json:"error_log_filter_expression"` // Expression for filtering error log entries (default: "StatusCode >= 400 && Path matches '^/api/'")
@@ -841,6 +843,14 @@ func (c *Config) GetDefaultMaxTokens() int {
 	defer c.mu.RUnlock()
 
 	return c.DefaultMaxTokens
+}
+
+// GetToolInterceptorConfig returns the global tool interceptor config
+func (c *Config) GetToolInterceptorConfig() *typ.ToolInterceptorConfig {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.ToolInterceptor
 }
 
 // SetDefaultMaxTokens updates the default max_tokens

@@ -22,6 +22,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request/transformer"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
+	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -36,7 +37,16 @@ func generateObfuscationString() string {
 }
 
 // handleNonStreamingRequest handles non-streaming chat completion requests
-func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, req *openai.ChatCompletionNewParams, responseModel string, rule *typ.Rule) {
+func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, rule *typ.Rule, shouldIntercept, shouldStripTools bool) {
+	// === PRE-REQUEST INTERCEPTION: Strip tools before sending to provider ===
+	req := originalReq
+	if shouldIntercept {
+		preparedReq, _ := s.toolInterceptor.PrepareOpenAIRequest(provider, originalReq)
+		req = preparedReq
+	} else if shouldStripTools {
+		req = toolinterceptor.StripSearchFetchToolsOpenAI(originalReq)
+	}
+
 	// Forward request to provider
 	response, err := s.forwardOpenAIRequest(provider, req)
 	if err != nil {
@@ -49,6 +59,50 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 			},
 		})
 		return
+	}
+
+	// === POST-RESPONSE INTERCEPTION: Handle tool calls from provider ===
+	if shouldIntercept && len(response.Choices) > 0 {
+		choice := response.Choices[0]
+		if len(choice.Message.ToolCalls) > 0 {
+			// Check if any tool calls should be intercepted
+			hasInterceptedCalls := false
+			for _, tc := range choice.Message.ToolCalls {
+				fn := tc.Function
+				if fn.Name != "" && toolinterceptor.ShouldInterceptTool(fn.Name) {
+					hasInterceptedCalls = true
+					break
+				}
+			}
+
+			if hasInterceptedCalls {
+				// Execute intercepted tool calls locally and get final response
+				finalResponse, err := s.handleInterceptedToolCalls(provider, originalReq, response)
+				if err != nil {
+					s.trackUsageFromContext(c, 0, 0, err)
+					c.JSON(http.StatusInternalServerError, ErrorResponse{
+						Error: ErrorDetail{
+							Message: "Failed to handle tool calls: " + err.Error(),
+							Type:    "api_error",
+						},
+					})
+					return
+				}
+
+				// Extract usage from final response
+				inputTokens := int(finalResponse.Usage.PromptTokens)
+				outputTokens := int(finalResponse.Usage.CompletionTokens)
+				s.trackUsageFromContext(c, inputTokens, outputTokens, nil)
+
+				// Convert to JSON and return
+				responseJSON, _ := json.Marshal(finalResponse)
+				var responseMap map[string]interface{}
+				json.Unmarshal(responseJSON, &responseMap)
+				responseMap["model"] = responseModel
+				c.JSON(http.StatusOK, responseMap)
+				return
+			}
+		}
 	}
 
 	// Extract usage from response
@@ -173,8 +227,70 @@ func (s *Server) buildOpenAIConfig(req *openai.ChatCompletionNewParams) *transfo
 	return config
 }
 
+// handleInterceptedToolCalls executes intercepted tool calls locally and returns final response
+func (s *Server) handleInterceptedToolCalls(provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, toolCallResponse *openai.ChatCompletion) (*openai.ChatCompletion, error) {
+	logrus.Debugf("Handling %d intercepted tool calls for provider %s", len(toolCallResponse.Choices[0].Message.ToolCalls), provider.Name)
+
+	// Build new messages list with original messages
+	newMessages := make([]openai.ChatCompletionMessageParamUnion, len(originalReq.Messages))
+	copy(newMessages, originalReq.Messages)
+
+	// Add assistant message with tool calls
+	newMessages = append(newMessages, toolCallResponse.Choices[0].Message.ToParam())
+
+	// Execute each intercepted tool call
+	for _, tc := range toolCallResponse.Choices[0].Message.ToolCalls {
+		fn := tc.Function
+		// Check if this tool should be intercepted
+		if !toolinterceptor.ShouldInterceptTool(fn.Name) {
+			continue
+		}
+
+		// Execute the tool using the interceptor
+		result := s.toolInterceptor.ExecuteTool(provider, fn.Name, fn.Arguments)
+
+		// Add tool result message
+		var toolResultMsg openai.ChatCompletionMessageParamUnion
+		if result.IsError {
+			toolResultMsg = openai.ToolMessage(
+				fmt.Sprintf("Error: %s", result.Error),
+				tc.ID,
+			)
+		} else {
+			toolResultMsg = openai.ToolMessage(
+				result.Content,
+				tc.ID,
+			)
+		}
+		newMessages = append(newMessages, toolResultMsg)
+		logrus.Debugf("Executed tool %s locally: %s", fn.Name, fn.Arguments)
+	}
+
+	// Create new request with updated messages
+	followUpReq := *originalReq
+	followUpReq.Messages = newMessages
+	followUpReq = *toolinterceptor.StripSearchFetchToolsOpenAI(&followUpReq)
+
+	// Forward to provider for final response (may contain more tool calls or final answer)
+	finalResponse, err := s.forwardOpenAIRequest(provider, &followUpReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get final response after tool execution: %w", err)
+	}
+
+	return finalResponse, nil
+}
+
 // handleStreamingRequest handles streaming chat completion requests
-func (s *Server) handleStreamingRequest(c *gin.Context, provider *typ.Provider, req *openai.ChatCompletionNewParams, responseModel string, rule *typ.Rule) {
+func (s *Server) handleStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, rule *typ.Rule, shouldIntercept, shouldStripTools bool) {
+	// === PRE-REQUEST INTERCEPTION: Strip tools before sending to provider ===
+	req := originalReq
+	if shouldIntercept {
+		preparedReq, _ := s.toolInterceptor.PrepareOpenAIRequest(provider, originalReq)
+		req = preparedReq
+	} else if shouldStripTools {
+		req = toolinterceptor.StripSearchFetchToolsOpenAI(originalReq)
+	}
+
 	// Create streaming request with request context for proper cancellation
 	stream, _, err := s.forwardOpenAIStreamRequest(c.Request.Context(), provider, req)
 	if err != nil {

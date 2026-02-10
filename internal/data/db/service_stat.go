@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -55,6 +56,12 @@ func NewStatsStore(baseDir string) (*StatsStore, error) {
 	}
 
 	dbPath := constant.GetDBFile(baseDir)
+	// Ensure the db subdirectory exists
+	dbDir := filepath.Dir(dbPath)
+	if err := os.MkdirAll(dbDir, 0700); err != nil {
+		return nil, fmt.Errorf("failed to create db directory: %w", err)
+	}
+
 	log.Printf("Opening SQLite database: %s", dbPath)
 	// Configure SQLite with busy timeout and other settings to prevent hangs
 	// Use pure Go driver by ensuring modernc.org/sqlite is used

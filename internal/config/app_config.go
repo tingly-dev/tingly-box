@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"crypto/cipher"
 	"encoding/json"
 	"fmt"
@@ -117,12 +118,17 @@ func (ac *AppConfig) DeleteProvider(name string) error {
 // Save saves the configuration to file
 func (ac *AppConfig) Save() error {
 	// Save as plaintext JSON with pretty formatting
-	fileData, err := json.MarshalIndent(ac.config, "", "  ")
-	if err != nil {
+	// Use encoder with DisableHTMLEscape for human-readable output
+	var buf bytes.Buffer
+	encoder := json.NewEncoder(&buf)
+	encoder.SetEscapeHTML(false)
+	encoder.SetIndent("", "  ")
+
+	if err := encoder.Encode(ac.config); err != nil {
 		return fmt.Errorf("failed to marshal config with indentation: %w", err)
 	}
 
-	if err := os.WriteFile(ac.configFile, fileData, 0600); err != nil {
+	if err := os.WriteFile(ac.configFile, buf.Bytes(), 0600); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 

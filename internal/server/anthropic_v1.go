@@ -19,6 +19,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
+	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -42,6 +43,12 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 	// Set tracking context with all metadata (eliminates need for explicit parameter passing)
 	SetTrackingContext(c, rule, provider, actualModel, proxyModel, isStreaming)
 
+	// === Check if provider has built-in web_search ===
+	hasBuiltInWebSearch := s.templateManager.ProviderHasBuiltInWebSearch(provider)
+
+	// === Tool Interceptor: Check if enabled and should be used ===
+	shouldIntercept, shouldStripTools, _ := s.resolveToolInterceptor(provider, hasBuiltInWebSearch)
+
 	// Ensure max_tokens is set (Anthropic API requires this)
 	// and cap it at the model's maximum allowed value
 	if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil {
@@ -60,6 +67,14 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 	// Set provider UUID in context (Service.Provider uses UUID, not name)
 	c.Set("provider", provider.UUID)
 	c.Set("model", actualModel)
+
+	// === PRE-REQUEST INTERCEPTION: Strip tools before sending to provider ===
+	if shouldIntercept {
+		preparedReq, _ := s.toolInterceptor.PrepareAnthropicRequest(provider, &req.MessageNewParams)
+		req.MessageNewParams = *preparedReq
+	} else if shouldStripTools {
+		req.MessageNewParams.Tools = toolinterceptor.StripSearchFetchToolsAnthropic(req.MessageNewParams.Tools)
+	}
 
 	// Check provider's API style to decide which path to take
 	apiStyle := provider.APIStyle

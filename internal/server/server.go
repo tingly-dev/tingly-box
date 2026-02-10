@@ -25,6 +25,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
 	servertls "github.com/tingly-dev/tingly-box/internal/server/tls"
+	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/internal/virtualmodel"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
@@ -76,6 +77,9 @@ type Server struct {
 
 	// capability store for persistent model capabilities
 	capabilityStore *db.ModelCapabilityStore
+
+	// tool interceptor for local tool execution
+	toolInterceptor *toolinterceptor.Interceptor
 
 	// recording sinks
 	recordSink *obs.Sink
@@ -398,6 +402,9 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 
 	// Set template manager in config for model fetching fallback
 	server.config.SetTemplateManager(templateManager)
+
+	// Initialize tool interceptor (local web_search/web_fetch)
+	server.toolInterceptor = toolinterceptor.NewInterceptor(cfg.GetToolInterceptorConfig())
 
 	// Initialize skill manager for skill locations
 	skillManager, err := data.NewSkillManager(cfg.ConfigDir)
