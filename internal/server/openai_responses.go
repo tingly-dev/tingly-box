@@ -284,7 +284,6 @@ func (s *Server) handleResponsesStreamResponse(c *gin.Context, stream *ssestream
 		}
 
 		event := stream.Current()
-		event.Response.Model = responseModel
 
 		// Accumulate usage from completed events
 		if event.Response.Usage.InputTokens > 0 {
@@ -295,7 +294,8 @@ func (s *Server) handleResponsesStreamResponse(c *gin.Context, stream *ssestream
 			outputTokens = event.Response.Usage.OutputTokens
 		}
 
-		c.SSEvent("", event)
+		// Use the event type as the SSE event type (e.g., "response.created", "response.output_text.delta")
+		SSEventOpenAI(c, event.Type, event, responseModel)
 		flusher.Flush()
 		return true
 	})
@@ -343,6 +343,55 @@ func (s *Server) handleResponsesStreamResponse(c *gin.Context, stream *ssestream
 	// Send the final [DONE] message
 	c.Writer.Write([]byte("data: [DONE]\n\n"))
 	flusher.Flush()
+}
+
+// SSEventOpenAI sends an SSE event with the given data
+// If the data is a ResponseStreamEventUnion, it uses the raw JSON to avoid
+// serializing empty fields from the union type
+// If modelOverride is provided and the event contains a response object with a model field,
+// it will be overridden in the JSON output
+func SSEventOpenAI(c *gin.Context, t string, data any, modelOverride ...string) error {
+	var jsonBytes []byte
+
+	// For ResponseStreamEventUnion, use RawJSON() to avoid serializing all empty union fields
+	if event, ok := data.(responses.ResponseStreamEventUnion); ok {
+		rawJSON := event.RawJSON()
+		if rawJSON != "" {
+			jsonBytes = []byte(rawJSON)
+			// Apply model override if provided
+			if len(modelOverride) > 0 && modelOverride[0] != "" {
+				var parsed map[string]any
+				if err := json.Unmarshal(jsonBytes, &parsed); err == nil {
+					// Check if this event has a response field with a model
+					if response, ok := parsed["response"].(map[string]any); ok {
+						if model, ok := response["model"].(string); ok && model != "" {
+							response["model"] = modelOverride[0]
+							modified, err := json.Marshal(parsed)
+							if err == nil {
+								jsonBytes = modified
+							}
+						}
+					}
+				}
+			}
+		} else {
+			// Fallback to regular marshaling if RawJSON is empty
+			var err error
+			jsonBytes, err = json.Marshal(event)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		var err error
+		jsonBytes, err = json.Marshal(data)
+		if err != nil {
+			return err
+		}
+	}
+
+	c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", jsonBytes))
+	return nil
 }
 
 // forwardResponsesRequest forwards a Responses API request to the provider
