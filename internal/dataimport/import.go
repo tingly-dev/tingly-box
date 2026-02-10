@@ -3,11 +3,11 @@ package dataimport
 import (
 	"fmt"
 
-	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/server/config"
 )
 
 // Import imports a rule with providers from data in the specified format
-func Import(data string, globalConfig *config.GlobalConfig, format Format, opts ImportOptions) (*ImportResult, error) {
+func Import(data string, globalConfig *config.Config, format Format, opts ImportOptions) (*ImportResult, error) {
 	importer, err := NewImporter(format)
 	if err != nil {
 		return nil, err
