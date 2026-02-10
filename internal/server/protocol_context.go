@@ -164,67 +164,11 @@ func (hc *HandleContext) SetupSSEHeaders() {
 // ProcessStream provides a generic framework for processing streaming responses.
 // It handles context cancellation, error checking, and event processing.
 //
-// nextFunc should return (true, nil) to continue, (false, nil) to stop, or (false, err) on error.
-// eventFunc is called for each event and should return an error to stop processing.
-func (hc *HandleContext) ProcessStream(nextFunc func() (bool, error), eventFunc func(interface{}) error) error {
-	c := hc.GinContext
-
-	// Check if streaming is supported
-	_, ok := c.Writer.(http.Flusher)
-	if !ok {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Streaming not supported by this connection",
-				Type:    "api_error",
-				Code:    "streaming_unsupported",
-			},
-		})
-		return fmt.Errorf("streaming not supported")
-	}
-
-	var processErr error
-
-	// Use gin.Stream for proper streaming handling
-	c.Stream(func(w io.Writer) bool {
-		// Check context cancellation first
-		select {
-		case <-c.Request.Context().Done():
-			return false
-		default:
-		}
-
-		// Get next event
-		cont, err := nextFunc()
-		if err != nil {
-			processErr = err
-			return false
-		}
-		if !cont {
-			return false
-		}
-
-		return true
-	})
-
-	// Call OnStreamError hooks if there was an error
-	if processErr != nil {
-		for _, hook := range hc.OnStreamErrorHooks {
-			hook(processErr)
-		}
-		return processErr
-	}
-
-	// Call OnStreamComplete hooks on success
-	for _, hook := range hc.OnStreamCompleteHooks {
-		hook(0, 0) // Usage should be tracked externally or via event hooks
-	}
-
-	return nil
-}
-
-// ProcessStreamWithEvents is like ProcessStream but also provides the current event to the stream loop.
-// The caller must call InvokeEventHooks for each event after retrieving it.
-func (hc *HandleContext) ProcessStreamWithEvents(nextFunc func() (bool, error, interface{}), handleFunc func(interface{}) error) error {
+// nextFunc should return (true, nil, event) to continue, (false, nil, nil) to stop,
+// or (false, err, nil) on error.
+// handleFunc is called for each event after OnStreamEventHooks are invoked.
+// It can be used to send the event to the client.
+func (hc *HandleContext) ProcessStream(nextFunc func() (bool, error, interface{}), handleFunc func(interface{}) error) error {
 	c := hc.GinContext
 
 	// Check if streaming is supported
@@ -261,7 +205,7 @@ func (hc *HandleContext) ProcessStreamWithEvents(nextFunc func() (bool, error, i
 			return false
 		}
 
-		// Call OnStreamEvent hooks
+		// Call OnStreamEvent hooks first
 		for _, hook := range hc.OnStreamEventHooks {
 			if hookErr := hook(event); hookErr != nil {
 				processErr = hookErr

@@ -35,22 +35,15 @@ func HandleAnthropicV1Stream(hc *HandleContext, req anthropic.MessageNewParams, 
 	var hasUsage bool
 
 	err := hc.ProcessStream(
-		func() (bool, error) {
+		func() (bool, error, interface{}) {
 			if !streamResp.Next() {
-				return false, nil
+				return false, nil, nil
 			}
-			return true, nil
+			return true, nil, streamResp.Current()
 		},
 		func(event interface{}) error {
 			evt := event.(*anthropic.MessageStreamEventUnion)
 			evt.Message.Model = anthropic.Model(hc.ResponseModel)
-
-			// Call OnStreamEvent hooks for recording
-			for _, hook := range hc.OnStreamEventHooks {
-				if err := hook(evt); err != nil {
-					return err
-				}
-			}
 
 			if evt.Usage.InputTokens > 0 {
 				inputTokens = int(evt.Usage.InputTokens)
@@ -107,22 +100,15 @@ func HandleAnthropicV1BetaStream(hc *HandleContext, req anthropic.BetaMessageNew
 	var hasUsage bool
 
 	err := hc.ProcessStream(
-		func() (bool, error) {
+		func() (bool, error, interface{}) {
 			if !streamResp.Next() {
-				return false, nil
+				return false, nil, nil
 			}
-			return true, nil
+			return true, nil, streamResp.Current()
 		},
 		func(event interface{}) error {
 			evt := event.(*anthropic.BetaRawMessageStreamEventUnion)
 			evt.Message.Model = anthropic.Model(hc.ResponseModel)
-
-			// Call OnStreamEvent hooks for recording
-			for _, hook := range hc.OnStreamEventHooks {
-				if err := hook(evt); err != nil {
-					return err
-				}
-			}
 
 			if evt.Usage.InputTokens > 0 {
 				inputTokens = int(evt.Usage.InputTokens)
@@ -240,11 +226,11 @@ func HandleOpenAIChatStream(hc *HandleContext, stream *openaistream.Stream[opena
 	}
 
 	err := hc.ProcessStream(
-		func() (bool, error) {
+		func() (bool, error, interface{}) {
 			if !stream.Next() {
-				return false, nil
+				return false, nil, nil
 			}
-			return true, nil
+			return true, nil, stream.Current()
 		},
 		func(event interface{}) error {
 			chunk := event.(*openai.ChatCompletionChunk)
@@ -374,11 +360,11 @@ func HandleOpenAIResponsesStream(hc *HandleContext, stream *openaistream.Stream[
 	var inputTokens, outputTokens int
 
 	err := hc.ProcessStream(
-		func() (bool, error) {
+		func() (bool, error, interface{}) {
 			if !stream.Next() {
-				return false, nil
+				return false, nil, nil
 			}
-			return true, nil
+			return true, nil, stream.Current()
 		},
 		func(event interface{}) error {
 			// Handle Responses API stream event
