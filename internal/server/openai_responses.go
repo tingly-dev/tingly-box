@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3/packages/param"
@@ -354,37 +353,18 @@ func (s *Server) forwardResponsesRequest(provider *typ.Provider, params response
 		return s.forwardChatGPTBackendRequest(provider, params)
 	}
 
-	wrapper := s.clientPool.GetOpenAIClient(provider, params.Model)
-	logrus.Infof("provider: %s (responses)", provider.Name)
-
-	// Make the request using wrapper method with provider timeout
-	timeout := time.Duration(provider.Timeout) * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	resp, err := wrapper.Client().Responses.New(ctx, params)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create response: %w", err)
-	}
-
-	return resp, nil
+	wrapper := s.clientPool.GetOpenAIClient(provider, string(params.Model))
+	fc := NewForwardContext(nil, provider)
+	return ForwardOpenAIResponses(fc, wrapper, params)
 }
 
 // forwardResponsesStreamRequest forwards a streaming Responses API request to the provider
 func (s *Server) forwardResponsesStreamRequest(ctx context.Context, provider *typ.Provider, params responses.ResponseNewParams) (*ssestream.Stream[responses.ResponseStreamEventUnion], context.CancelFunc, error) {
 	// Note: ChatGPT backend API providers are handled separately in the Anthropic beta handler
 
-	wrapper := s.clientPool.GetOpenAIClient(provider, params.Model)
-	logrus.Debugf("provider: %s (responses streaming)", provider.Name)
-
-	// Use request context with timeout for streaming
-	// The context will be canceled if client disconnects
-	timeout := time.Duration(provider.Timeout) * time.Second
-	streamCtx, cancel := context.WithTimeout(ctx, timeout)
-
-	stream := wrapper.Client().Responses.NewStreaming(streamCtx, params)
-
-	return stream, cancel, nil
+	wrapper := s.clientPool.GetOpenAIClient(provider, string(params.Model))
+	fc := NewForwardContext(ctx, provider)
+	return ForwardOpenAIResponsesStream(fc, wrapper, params)
 }
 
 // convertToResponsesParams converts raw JSON to OpenAI SDK params format

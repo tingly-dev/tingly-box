@@ -30,8 +30,7 @@ func sendBetaStopEvents(c *gin.Context, state *streamState, flusher http.Flusher
 
 	// Send stop events in sorted order and mark as stopped
 	for _, idx := range blockIndices {
-		sendBetaContentBlockStop(c, idx, flusher)
-		state.stoppedBlocks[idx] = true
+		sendBetaContentBlockStop(c, state, idx, flusher)
 	}
 }
 
@@ -81,7 +80,7 @@ func sendBetaMessageStop(c *gin.Context, messageID, model string, state *streamS
 	sendAnthropicBetaStreamEvent(c, eventTypeMessageStop, event, flusher)
 
 	// Send final simple data with type (without event, aka empty)
-    c.SSEvent("", map[string]interface{}{"type": eventTypeMessageStop})
+	c.SSEvent("", map[string]interface{}{"type": eventTypeMessageStop})
 	flusher.Flush()
 }
 
@@ -133,11 +132,12 @@ func sendBetaContentBlockDelta(c *gin.Context, index int, content map[string]int
 	sendAnthropicBetaStreamEvent(c, eventTypeContentBlockDelta, event, flusher)
 }
 
-// sendBetaContentBlockStop sends a content_block_stop event for beta
-func sendBetaContentBlockStop(c *gin.Context, index int, flusher http.Flusher) {
+// sendBetaContentBlockStop sends a content_block_stop event for beta and marks the block as stopped
+func sendBetaContentBlockStop(c *gin.Context, state *streamState, index int, flusher http.Flusher) {
 	event := map[string]interface{}{
 		"type":  eventTypeContentBlockStop,
 		"index": index,
 	}
 	sendAnthropicBetaStreamEvent(c, eventTypeContentBlockStop, event, flusher)
+	state.stoppedBlocks[index] = true
 }

@@ -11,22 +11,24 @@ import (
 func sendStopEvents(c *gin.Context, state *streamState, flusher http.Flusher) {
 	// Collect block indices to stop
 	var blockIndices []int
-	if state.thinkingBlockIndex != -1 {
+	if state.thinkingBlockIndex != -1 && !state.stoppedBlocks[state.thinkingBlockIndex] {
 		blockIndices = append(blockIndices, state.thinkingBlockIndex)
 	}
-	if state.hasTextContent {
+	if state.hasTextContent && !state.stoppedBlocks[state.textBlockIndex] {
 		blockIndices = append(blockIndices, state.textBlockIndex)
 	}
 	for i := range state.pendingToolCalls {
-		blockIndices = append(blockIndices, i)
+		if !state.stoppedBlocks[i] {
+			blockIndices = append(blockIndices, i)
+		}
 	}
 
 	// Sort by index to stop in order
 	sort.Ints(blockIndices)
 
-	// Send stop events in sorted order
+	// Send stop events in sorted order and mark as stopped
 	for _, idx := range blockIndices {
-		sendContentBlockStop(c, idx, flusher)
+		sendContentBlockStop(c, state, idx, flusher)
 	}
 }
 
@@ -76,7 +78,7 @@ func sendMessageStop(c *gin.Context, messageID, model string, state *streamState
 	sendAnthropicStreamEvent(c, eventTypeMessageStop, event, flusher)
 
 	// Send final simple data with type (without event, aka empty)
-    c.SSEvent("", map[string]interface{}{"type": eventTypeMessageStop})
+	c.SSEvent("", map[string]interface{}{"type": eventTypeMessageStop})
 	flusher.Flush()
 }
 
@@ -107,11 +109,12 @@ func sendContentBlockDelta(c *gin.Context, index int, content map[string]interfa
 	sendAnthropicStreamEvent(c, eventTypeContentBlockDelta, event, flusher)
 }
 
-// sendContentBlockStop sends a content_block_stop event
-func sendContentBlockStop(c *gin.Context, index int, flusher http.Flusher) {
+// sendContentBlockStop sends a content_block_stop event and marks the block as stopped
+func sendContentBlockStop(c *gin.Context, state *streamState, index int, flusher http.Flusher) {
 	event := map[string]interface{}{
 		"type":  eventTypeContentBlockStop,
 		"index": index,
 	}
 	sendAnthropicStreamEvent(c, eventTypeContentBlockStop, event, flusher)
+	state.stoppedBlocks[index] = true
 }
