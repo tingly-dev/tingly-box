@@ -11,6 +11,7 @@ export interface TemplatePageActionsProps {
     showCreateRuleButton: boolean;
     onCreateRule: () => void;
     showExpandCollapseButton: boolean;
+    showImportButton: boolean;
     onImportFromClipboard?: () => void;
 }
 
@@ -23,6 +24,7 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
     showCreateRuleButton,
     onCreateRule,
     showExpandCollapseButton,
+    showImportButton,
     onImportFromClipboard,
 }) => {
     return (
@@ -51,7 +53,7 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
                     </Button>
                 </Tooltip>
             )}
-            {onImportFromClipboard && (
+            {showImportButton && onImportFromClipboard && (
                 <Tooltip title="Import rule and keys from file or clipboard">
                     <Button
                         variant="outlined"

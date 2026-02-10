@@ -16,7 +16,7 @@ import {
 } from '@mui/material';
 import InfoOutlined from '@mui/icons-material/InfoOutlined';
 import InfoIcon from '@mui/icons-material/Info';
-import React, { useEffect, useRef } from 'react';
+import React, {useCallback, useEffect, useRef} from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import ClaudeCodeConfigModal from '@/components/ClaudeCodeConfigModal';
@@ -147,6 +147,10 @@ const UseClaudeCodePage: React.FC = () => {
     const handleShowConfigGuide = () => {
         setConfigModalOpen(true);
     };
+
+    const handleRuleDelete = useCallback((deletedRuleUuid: string) => {
+        setRules((prevRules) => prevRules.filter(r => r.uuid !== deletedRuleUuid));
+    }, []);
 
     const copyToClipboard = async (text: string, label: string) => {
         try {
@@ -588,6 +592,8 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                         collapsible={true}
                         showAddApiKeyButton={false}
                         showCreateRuleButton={false}
+                        showImportButton={false}
+                        // onRuleDelete={handleRuleDelete}
                         headerHeight={headerHeight}
                     />
 

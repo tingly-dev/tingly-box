@@ -32,6 +32,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
     showAddApiKeyButton = true,
     showCreateRuleButton = true,
     showExpandCollapseButton = true,
+    showImportButton = true,
     rightAction: customRightAction,
     headerHeight = 0,
 }) => {
@@ -237,6 +238,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
             showCreateRuleButton={showCreateRuleButton}
             onCreateRule={handleCreateRule}
             showExpandCollapseButton={showExpandCollapseButton}
+            showImportButton={showImportButton}
             onImportFromClipboard={handleImportFromClipboard}
         />
     );
