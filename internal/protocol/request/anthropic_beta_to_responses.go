@@ -78,10 +78,8 @@ func ConvertAnthropicBetaToResponsesRequest(anthropicReq *anthropic.BetaMessageN
 	}
 
 	// Convert tool choice
-	if anthropicReq.ToolChoice.OfAuto != nil || anthropicReq.ToolChoice.OfTool != nil ||
-		anthropicReq.ToolChoice.OfAny != nil {
-		params.ToolChoice = ConvertAnthropicBetaToolChoiceToResponses(&anthropicReq.ToolChoice)
-	}
+	// for some providers (like `vllm`), they require tool choice like `auto` in general usage
+	params.ToolChoice = ConvertAnthropicBetaToolChoiceToResponses(&anthropicReq.ToolChoice)
 
 	//// Convert stop sequences
 	//if len(anthropicReq.StopSequences) > 0 {
