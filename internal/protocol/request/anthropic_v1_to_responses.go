@@ -239,18 +239,19 @@ func ConvertAnthropicV1ToolsToResponses(tools []anthropic.ToolUnionParam) []resp
 		}
 
 		// Convert Anthropic input schema to OpenAI function parameters
-		var parameters map[string]interface{}
-		if tool.InputSchema.Properties != nil || len(tool.InputSchema.Required) > 0 {
-			parameters = make(map[string]interface{})
-			parameters["type"] = "object"
+		// Always initialize parameters to avoid omitting the field (omitzero tag)
+		parameters := make(map[string]interface{})
+		parameters["type"] = "object"
 
-			if tool.InputSchema.Properties != nil {
-				parameters["properties"] = tool.InputSchema.Properties
-			}
+		if tool.InputSchema.Properties != nil {
+			parameters["properties"] = tool.InputSchema.Properties
+		} else {
+			// Initialize empty properties if none provided
+			parameters["properties"] = make(map[string]interface{})
+		}
 
-			if len(tool.InputSchema.Required) > 0 {
-				parameters["required"] = tool.InputSchema.Required
-			}
+		if len(tool.InputSchema.Required) > 0 {
+			parameters["required"] = tool.InputSchema.Required
 		}
 
 		// Create function tool
