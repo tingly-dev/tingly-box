@@ -381,3 +381,90 @@ function downloadBlob(blob: Blob, filename: string): void {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 }
+
+/**
+ * Exports a single provider to the specified format
+ */
+export async function exportProvider(
+    provider: any,
+    format: ExportFormat,
+    onNotification: (message: string, severity: 'success' | 'error') => void
+): Promise<void> {
+    try {
+        // Build JSONL content for single provider
+        const jsonlContent = buildProviderJsonlExport(provider);
+
+        if (format === 'jsonl') {
+            // Download as JSONL file
+            downloadJsonlFile(jsonlContent, `${provider.name || 'provider'}-${provider.api_style}.jsonl`);
+            onNotification('Provider exported successfully!', 'success');
+        } else {
+            // Convert to Base64 format
+            const base64Content = encodeBase64Export(jsonlContent);
+            // Download as text file
+            downloadTextFile(base64Content, `${provider.name || 'provider'}-${provider.api_style}.txt`);
+            onNotification('Provider exported as Base64! You can copy and share this file.', 'success');
+        }
+    } catch (error) {
+        console.error('Error exporting provider:', error);
+        onNotification('Failed to export provider', 'error');
+    }
+}
+
+/**
+ * Exports a provider as Base64 and copies to clipboard
+ */
+export async function exportProviderAsBase64ToClipboard(
+    provider: any,
+    onNotification: (message: string, severity: 'success' | 'error') => void
+): Promise<void> {
+    try {
+        // Build JSONL content
+        const jsonlContent = buildProviderJsonlExport(provider);
+
+        // Convert to Base64 format
+        const base64Content = encodeBase64Export(jsonlContent);
+
+        // Copy to clipboard
+        await copyToClipboard(base64Content);
+        onNotification('Base64 export copied to clipboard! You can now paste it anywhere.', 'success');
+    } catch (error) {
+        console.error('Error exporting provider to clipboard:', error);
+        onNotification('Failed to copy to clipboard', 'error');
+    }
+}
+
+/**
+ * Builds the JSONL export content for a single provider
+ */
+function buildProviderJsonlExport(provider: any): string {
+    const lines: string[] = [];
+
+    // Line 1: Metadata
+    const metadata: ExportMetadata = {
+        type: 'metadata',
+        version: CURRENT_VERSION,
+        exported_at: new Date().toISOString(),
+    };
+    lines.push(JSON.stringify(metadata));
+
+    // Line 2: Provider
+    const providerExport: ExportProvider = {
+        type: 'provider',
+        uuid: provider.uuid,
+        name: provider.name,
+        api_base: provider.api_base,
+        api_style: provider.api_style,
+        auth_type: provider.auth_type,
+        token: provider.token,
+        oauth_detail: provider.oauth_detail,
+        enabled: provider.enabled,
+        proxy_url: provider.proxy_url,
+        timeout: provider.timeout,
+        tags: provider.tags,
+        models: provider.models,
+    };
+    lines.push(JSON.stringify(providerExport));
+
+    return lines.join('\n');
+}

@@ -657,8 +657,6 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                     onRulesChange={setRules}
                     allowToggleRule={false}
                     collapsible={true}
-                    showAddApiKeyButton={false}
-                    showCreateRuleButton={false}
                     headerHeight={headerHeight}
                     emptyStateTitle="No Providers Configured"
                     emptyStateDescription="Add an API key or OAuth provider to start routing requests"

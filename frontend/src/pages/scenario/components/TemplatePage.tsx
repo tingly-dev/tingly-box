@@ -6,13 +6,12 @@ import {useNavigate} from 'react-router-dom';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
 import RuleCard from '@/components/RuleCard.tsx';
 import ImportModal from '@/components/ImportModal';
-import RuleCard from './RuleCard.tsx';
 import UnifiedCard from '@/components/UnifiedCard';
 import type {TabTemplatePageProps} from './TemplatePage.types';
 import {TemplatePageActions} from './TemplatePageActions';
 import {useTemplatePageRules} from './hooks/useTemplatePageRules';
-import {useScrollToNewRule} from './hooks/useScrollToNewRule';
-import {useModelSelectDialog} from '../hooks/useModelSelectDialog';
+import {useScrollToNewRule} from '@/components/hooks/useScrollToNewRule';
+import {useModelSelectDialog} from '@/hooks/useModelSelectDialog';
 import api from '@/services/api';
 
 const TemplatePage: React.FC<TabTemplatePageProps> = ({
@@ -31,6 +30,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
                                                           newlyCreatedRuleUuids: _newlyCreatedRuleUuids,
                                                           scenario,
                                                           showAddApiKeyButton = true,
+                                                          showAddOAuthButton = true,
                                                           showCreateRuleButton = true,
                                                           showExpandCollapseButton = true,
                                                           rightAction: customRightAction,
@@ -212,11 +212,15 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
                 );
                 setShowImportModal(false);
                 // Refresh rules by calling parent's onRulesChange
-                if (onRulesChange) {
-                    const updatedRules = await api.getRules(scenario || '');
+                // Only refresh if scenario is available (required by backend API)
+                if (onRulesChange && scenario) {
+                    const updatedRules = await api.getRules(scenario);
                     if (updatedRules.success) {
                         onRulesChange(updatedRules.data);
                     }
+                } else if (onRulesChange) {
+                    // If no scenario, trigger parent to refresh by calling without data
+                    onRulesChange([] as any);
                 }
             } else {
                 setImportError({open: true, message: result.error || 'Import failed'});
@@ -236,9 +240,11 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
             onToggleExpandAll={handleToggleExpandAll}
             showAddApiKeyButton={showAddApiKeyButton}
             onAddApiKeyClick={handleAddApiKeyClick}
+            onAddOAuthClick={onAddOAuthClick}
             showCreateRuleButton={showCreateRuleButton}
             onCreateRule={handleCreateRule}
             showExpandCollapseButton={showExpandCollapseButton}
+            showImportButton={true}
             onImportFromClipboard={handleImportFromClipboard}
         />
     );

@@ -4,6 +4,7 @@ import {
     ContentCopy as CopyIcon,
     Delete as DeleteIcon,
     Download as ExportIcon,
+    Download as DownloadIcon,
     PlayArrow as ProbeIcon,
     Settings as SettingsIcon,
     UnfoldMore as ExportMenuIcon
@@ -200,12 +201,6 @@ export const GraphSettingsMenu: React.FC<GraphSettingsMenuProps> = ({
                     <DownloadIcon fontSize="small" sx={{mr: 1}}/>
                     Download as Base64
                 </MenuItem>
-                {onExportAsBase64ToClipboard && (
-                    <MenuItem onClick={handleExportAsBase64ToClipboard}>
-                        <CopyIcon fontSize="small" sx={{mr: 1}}/>
-                        Copy Base64 to Clipboard
-                    </MenuItem>
-                )}
             </Menu>
         </>
     );
