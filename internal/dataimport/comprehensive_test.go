@@ -6,8 +6,6 @@ import (
 	"testing"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
-	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // TestFormatDetectionEdgeCases tests format detection with various edge cases
@@ -77,9 +75,9 @@ func TestFormatCompatibilityWithExistingJSONL(t *testing.T) {
 	}
 
 	// Test that it can be parsed by the JSONL importer
-	importer := NewJSONLImporter()
+	_ = NewJSONLImporter()
 
-	// Note: This would require a mock GlobalConfig to fully test
+	// Note: This would require a mock Config to fully test
 	// For now, we just verify the format is correctly detected
 }
 
@@ -298,16 +296,8 @@ func TestExportDataStructureValidation(t *testing.T) {
 
 // TestCrossFormatCompatibility tests that JSONL and Base64 produce equivalent results
 func TestCrossFormatCompatibility(t *testing.T) {
-	// This test verifies that encoding JSONL as Base64 and decoding it
-	// produces the original JSONL
-
-	originalJSONL := `{"type":"metadata","version":"1.0"}
-{"type":"rule","uuid":"test-uuid","request_model":"gpt-4"}
-{"type":"provider","uuid":"prov-1","name":"Test"}`
-
-	// Encode as Base64 (simulating what the exporter does)
-	// In a real test, we'd use the actual encoder
-	// For now, we test the decode part
+	// This test verifies that Base64 encoding/decoding works correctly
+	// by using a pre-encoded Base64 string
 
 	base64Content := "TGB64:1.0:eyJ0eXBlIjoibWV0YWRhdGEiLCJ2ZXJzaW9uIjoiMS4wIn0KeyJ0eXBlIjoicnVsZSIsInV1aWQiOiJ0ZXN0LXV1aWQiLCJyZXF1ZXN0X21vZGVsIjoiZ3B0LTQifQp7InR5cGUiOiJwcm92aWRlciIsInV1aWQiOiJwcm92LTEiLCJuYW1lIjoiVGVzdCJ9"
 
@@ -390,7 +380,7 @@ func TestRuleConflictHandling(t *testing.T) {
 // TestProviderNameSuffixGeneration tests the suffix generation logic
 func TestProviderNameSuffixGeneration(t *testing.T) {
 	existingNames := map[string]bool{
-		"provider": true,
+		"provider":   true,
 		"provider-2": true,
 		"provider-3": true,
 	}

@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/tingly-dev/tingly-box/internal/dataimport"
+	dataimportpkg "github.com/tingly-dev/tingly-box/internal/dataimport"
 )
 
 // ImportCommand represents the import rule command
@@ -66,14 +66,14 @@ func runImport(appManager *AppManager, formatStr string, args []string) error {
 	}
 
 	// Parse format
-	var format import.Format
+	var format dataimportpkg.Format
 	switch strings.ToLower(formatStr) {
 	case "auto":
-		format = import.FormatAuto
+		format = dataimportpkg.FormatAuto
 	case "jsonl":
-		format = import.FormatJSONL
+		format = dataimportpkg.FormatJSONL
 	case "base64":
-		format = import.FormatBase64
+		format = dataimportpkg.FormatBase64
 	default:
 		return fmt.Errorf("invalid format '%s': supported formats are auto, jsonl, and base64", formatStr)
 	}

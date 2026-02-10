@@ -8,10 +8,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/tingly-dev/tingly-box/internal/config"
+	importpkg "github.com/tingly-dev/tingly-box/internal/dataimport"
 	"github.com/tingly-dev/tingly-box/internal/export"
 	exportpkg "github.com/tingly-dev/tingly-box/internal/export"
-	"github.com/tingly-dev/tingly-box/internal/dataimport"
-	importpkg "github.com/tingly-dev/tingly-box/internal/dataimport"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server"
@@ -487,7 +486,7 @@ func (am *AppManager) getProviderUUIDsFromRule(rule *typ.Rule) []string {
 // ============
 
 // ImportRule imports a rule from data in the specified format
-func (am *AppManager) ImportRule(data string, format import.Format, opts ImportOptions) (*ImportResult, error) {
+func (am *AppManager) ImportRule(data string, format importpkg.Format, opts ImportOptions) (*ImportResult, error) {
 	globalConfig := am.appConfig.GetGlobalConfig()
 
 	// Convert command.ImportOptions to import.ImportOptions

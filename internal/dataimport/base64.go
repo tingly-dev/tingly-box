@@ -4,6 +4,8 @@ import (
 	"encoding/base64"
 	"fmt"
 	"strings"
+
+	"github.com/tingly-dev/tingly-box/internal/server/config"
 )
 
 // Base64Importer imports data from Base64-encoded JSONL format
@@ -24,7 +26,7 @@ func (i *Base64Importer) Format() Format {
 }
 
 // Import imports data from Base64 format
-func (i *Base64Importer) Import(data string, globalConfig *config.GlobalConfig, opts ImportOptions) (*ImportResult, error) {
+func (i *Base64Importer) Import(data string, globalConfig *config.Config, opts ImportOptions) (*ImportResult, error) {
 	// Decode Base64 to JSONL
 	jsonlData, err := i.decodeBase64Export(data)
 	if err != nil {

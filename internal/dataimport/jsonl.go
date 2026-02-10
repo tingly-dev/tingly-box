@@ -7,9 +7,9 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -80,7 +80,7 @@ type ImportResult struct {
 
 // Importer defines the interface for import implementations
 type Importer interface {
-	Import(data string, globalConfig *config.GlobalConfig, opts ImportOptions) (*ImportResult, error)
+	Import(data string, globalConfig *config.Config, opts ImportOptions) (*ImportResult, error)
 	Format() Format
 }
 
@@ -98,7 +98,7 @@ func (i *JSONLImporter) Format() Format {
 }
 
 // Import imports data from JSONL format
-func (i *JSONLImporter) Import(data string, globalConfig *config.GlobalConfig, opts ImportOptions) (*ImportResult, error) {
+func (i *JSONLImporter) Import(data string, globalConfig *config.Config, opts ImportOptions) (*ImportResult, error) {
 	result := &ImportResult{
 		ProviderMap: make(map[string]string),
 	}
@@ -233,7 +233,7 @@ type providerImportResult struct {
 	used    bool
 }
 
-func (i *JSONLImporter) importProvider(globalConfig *config.GlobalConfig, p *ImportProviderData, onConflict string, providerMap map[string]string) (*providerImportResult, error) {
+func (i *JSONLImporter) importProvider(globalConfig *config.Config, p *ImportProviderData, onConflict string, providerMap map[string]string) (*providerImportResult, error) {
 	result := &providerImportResult{}
 
 	// Check if provider with same name exists
