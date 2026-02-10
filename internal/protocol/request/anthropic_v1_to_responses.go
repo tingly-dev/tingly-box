@@ -70,10 +70,8 @@ func ConvertAnthropicV1ToResponsesRequest(anthropicReq *anthropic.MessageNewPara
 	}
 
 	// Convert tool choice
-	if anthropicReq.ToolChoice.OfAuto != nil || anthropicReq.ToolChoice.OfTool != nil ||
-		anthropicReq.ToolChoice.OfAny != nil {
-		params.ToolChoice = ConvertAnthropicV1ToolChoiceToResponses(&anthropicReq.ToolChoice)
-	}
+	// for some providers (like `vllm`), they require tool choice like `auto` in general usage
+	params.ToolChoice = ConvertAnthropicV1ToolChoiceToResponses(&anthropicReq.ToolChoice)
 
 	return params
 }
