@@ -75,11 +75,11 @@ func ConvertAnthropicBetaToResponsesRequest(anthropicReq *anthropic.BetaMessageN
 	// Convert tools from Anthropic format to Responses API format
 	if len(anthropicReq.Tools) > 0 {
 		params.Tools = ConvertAnthropicBetaToolsToResponses(anthropicReq.Tools)
-	}
 
-	// Convert tool choice
-	// for some providers (like `vllm`), they require tool choice like `auto` in general usage
-	params.ToolChoice = ConvertAnthropicBetaToolChoiceToResponses(&anthropicReq.ToolChoice)
+		// Convert tool choice
+		// for some providers (like `vllm`), they require tool choice like `auto` in general usage
+		params.ToolChoice = ConvertAnthropicBetaToolChoiceToResponses(&anthropicReq.ToolChoice)
+	}
 
 	//// Convert stop sequences
 	//if len(anthropicReq.StopSequences) > 0 {

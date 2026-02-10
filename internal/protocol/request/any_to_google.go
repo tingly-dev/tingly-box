@@ -227,12 +227,11 @@ func ConvertOpenAIToGoogleRequest(req *openai.ChatCompletionNewParams, defaultMa
 				FunctionDeclarations: ConvertOpenAIToGoogleTools(req.Tools),
 			},
 		}
-	}
-
-	// Convert tool choice
-	if req.ToolChoice.OfAuto.Value != "" || req.ToolChoice.OfAllowedTools != nil ||
-		req.ToolChoice.OfFunctionToolChoice != nil || req.ToolChoice.OfCustomToolChoice != nil {
-		config.ToolConfig = ConvertOpenAIToGoogleToolChoice(&req.ToolChoice)
+		// Convert tool choice
+		if req.ToolChoice.OfAuto.Value != "" || req.ToolChoice.OfAllowedTools != nil ||
+			req.ToolChoice.OfFunctionToolChoice != nil || req.ToolChoice.OfCustomToolChoice != nil {
+			config.ToolConfig = ConvertOpenAIToGoogleToolChoice(&req.ToolChoice)
+		}
 	}
 
 	return model, contents, config

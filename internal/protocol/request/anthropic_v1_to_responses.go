@@ -67,11 +67,11 @@ func ConvertAnthropicV1ToResponsesRequest(anthropicReq *anthropic.MessageNewPara
 	// Convert tools
 	if len(anthropicReq.Tools) > 0 {
 		params.Tools = ConvertAnthropicV1ToolsToResponses(anthropicReq.Tools)
-	}
 
-	// Convert tool choice
-	// for some providers (like `vllm`), they require tool choice like `auto` in general usage
-	params.ToolChoice = ConvertAnthropicV1ToolChoiceToResponses(&anthropicReq.ToolChoice)
+		// Convert tool choice
+		// for some providers (like `vllm`), they require tool choice like `auto` in general usage
+		params.ToolChoice = ConvertAnthropicV1ToolChoiceToResponses(&anthropicReq.ToolChoice)
+	}
 
 	return params
 }
