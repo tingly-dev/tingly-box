@@ -186,6 +186,12 @@ export const GraphSettingsMenu: React.FC<GraphSettingsMenuProps> = ({
                     horizontal: 'left',
                 }}
             >
+                {onExportAsBase64ToClipboard && (
+                    <MenuItem onClick={handleExportAsBase64ToClipboard}>
+                        <CopyIcon fontSize="small" sx={{ mr: 1 }} />
+                        Copy Base64 to Clipboard
+                    </MenuItem>
+                )}
                 <MenuItem onClick={handleExportAsJsonl}>
                     <DownloadIcon fontSize="small" sx={{mr: 1}}/>
                     Download as JSONL
