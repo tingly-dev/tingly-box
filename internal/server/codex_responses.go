@@ -18,6 +18,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/client"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	streamhandler "github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -299,16 +300,17 @@ func (s *Server) handleChatGPTBackendStreamingRequest(c *gin.Context, provider *
 
 	// Process the SSE stream using the proper handler based on original request format
 	var streamErr error
+	var usage protocol.UsageStat
 	if originalFormat == "v1" {
 		// Original request was v1 format, send response in v1 format
-		streamErr = streamhandler.HandleResponsesToAnthropicV1StreamResponse(c, sseStream, responseModel)
+		usage, streamErr = streamhandler.HandleResponsesToAnthropicV1StreamResponse(c, sseStream, responseModel)
 	} else {
 		// Original request was beta format, send response in beta format
-		streamErr = streamhandler.HandleResponsesToAnthropicV1BetaStreamResponse(c, sseStream, responseModel)
+		usage, streamErr = streamhandler.HandleResponsesToAnthropicV1BetaStreamResponse(c, sseStream, responseModel)
 	}
 
 	if streamErr != nil {
-		s.trackUsageFromContext(c, 0, 0, err)
+		s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, streamErr)
 		logrus.Errorf("[ChatGPT] Stream handler error: %v", streamErr)
 		if streamRec != nil {
 			streamRec.RecordError(streamErr)
@@ -316,9 +318,12 @@ func (s *Server) handleChatGPTBackendStreamingRequest(c *gin.Context, provider *
 		return
 	}
 
+	// Track usage from stream handler
+	s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, nil)
+
 	// Finish recording and assemble response
 	if streamRec != nil {
-		streamRec.Finish(responseModel, 0, 0) // Usage is tracked internally
+		streamRec.Finish(responseModel, usage.InputTokens, usage.OutputTokens)
 		streamRec.RecordResponse(provider, actualModel)
 	}
 }

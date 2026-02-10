@@ -682,12 +682,14 @@ func (s *Server) UseAIEndpoints() {
 	passthroughOpenaiV1 := s.engine.Group("/passthrough/openai/v1")
 	s.SetupPassthroughOpenAIEndpoints(passthroughOpenaiV1)
 
-	// scenario
+	// scenario routes with middleware to inject scenario into context
 	scenario := s.engine.Group("/tingly/:scenario")
+	scenario.Use(contextMiddleware)
 	s.SetupMixinEndpoints(scenario)
 
-	// scenario
+	// scenario v1 routes with middleware
 	scenarioV1 := s.engine.Group("/tingly/:scenario/v1")
+	scenarioV1.Use(contextMiddleware)
 	s.SetupMixinEndpoints(scenarioV1)
 }
 
@@ -738,6 +740,15 @@ func (s *Server) SetupPassthroughOpenAIEndpoints(group *gin.RouterGroup) {
 	group.GET("/responses/*path", s.authMW.ModelAuthMiddleware(), s.PassthroughOpenAI)
 	// Models endpoint returns tingly-box's model list (not passthrough)
 	group.GET("/models", s.authMW.ModelAuthMiddleware(), s.OpenAIListModels)
+}
+
+// contextMiddleware is a middleware that extracts the scenario parameter from the URL path
+// and injects it into the request context for use by downstream components (e.g., RecordRoundTripper).
+func contextMiddleware(c *gin.Context) {
+	scenario := c.Param("scenario")
+	ctx := context.WithValue(c.Request.Context(), client.ScenarioContextKey, scenario)
+	c.Request = c.Request.WithContext(ctx)
+	c.Next()
 }
 
 // SetupPassthroughAnthropicEndpoints sets up pass-through endpoints for Anthropic-style requests

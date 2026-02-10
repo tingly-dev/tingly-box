@@ -15,6 +15,8 @@ import (
 	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
 const (
@@ -53,8 +55,9 @@ const (
 	deltaTypeInputJSONDelta = "input_json_delta"
 )
 
-// HandleOpenAIToAnthropicStreamResponse processes OpenAI streaming events and converts them to Anthropic format
-func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompletionNewParams, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) error {
+// HandleOpenAIToAnthropicStreamResponse processes OpenAI streaming events and converts them to Anthropic format.
+// Returns UsageStat containing token usage information for tracking.
+func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompletionNewParams, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) (protocol.UsageStat, error) {
 	logrus.Info("Starting OpenAI to Anthropic streaming response handler")
 	defer func() {
 		if r := recover(); r != nil {
@@ -84,8 +87,7 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompl
 
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
-
-		return errors.New("Streaming not supported by this connection")
+		return protocol.ZeroUsageStat(), errors.New("streaming not supported by this connection")
 	}
 
 	// Generate message ID for Anthropic format
@@ -308,7 +310,7 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompl
 		// Check if it was a client cancellation
 		if errors.Is(err, context.Canceled) {
 			logrus.Debug("OpenAI to Anthropic stream canceled by client")
-			return nil
+			return protocol.NewUsageStat(int(state.inputTokens), int(state.outputTokens)), nil
 		}
 		logrus.Errorf("OpenAI stream error: %v", err)
 		errorEvent := map[string]interface{}{
@@ -320,9 +322,9 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompl
 			},
 		}
 		sendAnthropicStreamEvent(c, "error", errorEvent, flusher)
-		return err
+		return protocol.NewUsageStat(int(state.inputTokens), int(state.outputTokens)), err
 	}
-	return nil
+	return protocol.NewUsageStat(int(state.inputTokens), int(state.outputTokens)), nil
 }
 
 // sendAnthropicStreamEvent helper function to send an event in Anthropic SSE format
@@ -441,16 +443,17 @@ type responsesAPIEventSenders struct {
 	SendMessageStart      func(event map[string]interface{}, flusher http.Flusher)
 	SendContentBlockStart func(index int, blockType string, content map[string]interface{}, flusher http.Flusher)
 	SendContentBlockDelta func(index int, content map[string]interface{}, flusher http.Flusher)
-	SendContentBlockStop  func(index int, flusher http.Flusher)
+	SendContentBlockStop  func(state *streamState, index int, flusher http.Flusher)
 	SendStopEvents        func(state *streamState, flusher http.Flusher)
 	SendMessageDelta      func(state *streamState, stopReason string, flusher http.Flusher)
 	SendMessageStop       func(messageID, model string, state *streamState, stopReason string, flusher http.Flusher)
 	SendErrorEvent        func(event map[string]interface{}, flusher http.Flusher)
 }
 
-// HandleResponsesToAnthropicV1StreamResponse processes OpenAI Responses API streaming events and converts them to Anthropic v1 format
-// This is a thin wrapper that uses the shared core logic with v1 event senders
-func HandleResponsesToAnthropicV1StreamResponse(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) error {
+// HandleResponsesToAnthropicV1StreamResponse processes OpenAI Responses API streaming events and converts them to Anthropic v1 format.
+// This is a thin wrapper that uses the shared core logic with v1 event senders.
+// Returns UsageStat containing token usage information for tracking.
+func HandleResponsesToAnthropicV1StreamResponse(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) (protocol.UsageStat, error) {
 	return HandleResponsesToAnthropicStreamResponse(c, stream, responseModel, responsesAPIEventSenders{
 		SendMessageStart: func(event map[string]interface{}, flusher http.Flusher) {
 			sendAnthropicStreamEvent(c, eventTypeMessageStart, event, flusher)
@@ -461,8 +464,8 @@ func HandleResponsesToAnthropicV1StreamResponse(c *gin.Context, stream *openaist
 		SendContentBlockDelta: func(index int, content map[string]interface{}, flusher http.Flusher) {
 			sendContentBlockDelta(c, index, content, flusher)
 		},
-		SendContentBlockStop: func(index int, flusher http.Flusher) {
-			sendContentBlockStop(c, index, flusher)
+		SendContentBlockStop: func(state *streamState, index int, flusher http.Flusher) {
+			sendContentBlockStop(c, state, index, flusher)
 		},
 		SendStopEvents: func(state *streamState, flusher http.Flusher) {
 			sendStopEvents(c, state, flusher)
