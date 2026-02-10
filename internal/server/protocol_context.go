@@ -118,10 +118,6 @@ type HandleContext struct {
 	Recorder *ScenarioRecorder
 	Server   *Server // For usage tracking
 
-	// Configuration
-	EnableUsageTracking bool
-	EnableRecording     bool
-
 	// Hooks for stream processing (chainable - multiple hooks can be added)
 	OnStreamEventHooks    []func(event interface{}) error
 	OnStreamCompleteHooks []func(inputTokens, outputTokens int)
@@ -141,14 +137,12 @@ func NewHandleContext(c *gin.Context, provider *typ.Provider, actualModel, respo
 // WithRecorder sets the scenario recorder for recording requests/responses.
 func (hc *HandleContext) WithRecorder(recorder *ScenarioRecorder) *HandleContext {
 	hc.Recorder = recorder
-	hc.EnableRecording = true
 	return hc
 }
 
 // WithServer sets the server for usage tracking.
 func (hc *HandleContext) WithServer(server *Server) *HandleContext {
 	hc.Server = server
-	hc.EnableUsageTracking = true
 	return hc
 }
 
@@ -240,7 +234,7 @@ func (hc *HandleContext) ProcessStream(nextFunc func() (bool, error), eventFunc 
 // TrackUsage tracks token usage if usage tracking is enabled.
 // This uses the server's trackUsageFromContext method.
 func (hc *HandleContext) TrackUsage(inputTokens, outputTokens int, err error) {
-	if !hc.EnableUsageTracking || hc.Server == nil {
+	if hc.Server == nil {
 		return
 	}
 
