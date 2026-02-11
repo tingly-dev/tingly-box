@@ -20,7 +20,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/protocol/request/transformer"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
 	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -214,8 +213,8 @@ func (s *Server) handleInterceptedToolCalls(provider *typ.Provider, originalReq 
 	return finalResponse, nil
 }
 
-// handleStreamingRequest handles streaming chat completion requests
-func (s *Server) handleStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, rule *typ.Rule, shouldIntercept, shouldStripTools bool) {
+// handleOpenAIChatStreamingRequest handles streaming chat completion requests
+func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, shouldIntercept, shouldStripTools bool) {
 	// === PRE-REQUEST INTERCEPTION: Strip tools before sending to provider ===
 	req := originalReq
 	if shouldIntercept {
@@ -225,8 +224,9 @@ func (s *Server) handleStreamingRequest(c *gin.Context, provider *typ.Provider, 
 		req = toolinterceptor.StripSearchFetchToolsOpenAI(originalReq)
 	}
 
-	// Create streaming request with request context for proper cancellation
-	stream, _, err := s.forwardOpenAIStreamRequest(c.Request.Context(), provider, req)
+	wrapper := s.clientPool.GetOpenAIClient(provider, string(req.Model))
+	fc := NewForwardContext(c.Request.Context(), provider)
+	stream, _, err := ForwardOpenAIChatStream(fc, wrapper, req)
 	if err != nil {
 		// Track error with no usage
 		s.trackUsageFromContext(c, 0, 0, err)
@@ -239,8 +239,12 @@ func (s *Server) handleStreamingRequest(c *gin.Context, provider *typ.Provider, 
 		return
 	}
 
-	// Handle the streaming response
-	s.handleOpenAIStreamResponse(c, stream, req, responseModel, rule, provider)
+	// Create handle context and handle stream
+	hc := NewHandleContext(c, responseModel)
+	usage, err := HandleOpenAIChatStream(hc, stream, req)
+
+	// Track usage from stream handler
+	s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, err)
 }
 
 // handleOpenAIStreamResponse processes the streaming response and sends it to the client
