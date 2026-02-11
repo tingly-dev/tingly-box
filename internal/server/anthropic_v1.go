@@ -113,8 +113,8 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			// FIXME: now we use req model as resp model
 			anthropicResp.Model = anthropic.Model(proxyModel)
 
-			if shouldRoundtripResponse(c, "openai") {
-				roundtripped, err := roundtripAnthropicResponseViaOpenAI(anthropicResp, proxyModel, provider, actualModel)
+			if nonstream.ShouldRoundtripResponse(c, "openai") {
+				roundtripped, err := nonstream.RoundtripAnthropicResponseViaOpenAI(anthropicResp, proxyModel, provider, actualModel)
 				if err != nil {
 					SendInternalError(c, "Failed to roundtrip response: "+err.Error())
 					return
@@ -177,8 +177,8 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 
 			// Convert Google response to Anthropic format
 			anthropicResp := nonstream.ConvertGoogleToAnthropicResponse(response, proxyModel)
-			if shouldRoundtripResponse(c, "openai") {
-				roundtripped, err := roundtripAnthropicResponseViaOpenAI(&anthropicResp, proxyModel, provider, actualModel)
+			if nonstream.ShouldRoundtripResponse(c, "openai") {
+				roundtripped, err := nonstream.RoundtripAnthropicResponseViaOpenAI(&anthropicResp, proxyModel, provider, actualModel)
 				if err != nil {
 					SendInternalError(c, "Failed to roundtrip response: "+err.Error())
 					return
@@ -286,8 +286,8 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			}
 			// Convert OpenAI response back to Anthropic format
 			anthropicResp := nonstream.ConvertOpenAIToAnthropicResponse(response, proxyModel)
-			if shouldRoundtripResponse(c, "openai") {
-				roundtripped, err := roundtripAnthropicResponseViaOpenAI(&anthropicResp, proxyModel, provider, actualModel)
+			if nonstream.ShouldRoundtripResponse(c, "openai") {
+				roundtripped, err := nonstream.RoundtripAnthropicResponseViaOpenAI(&anthropicResp, proxyModel, provider, actualModel)
 				if err != nil {
 					SendInternalError(c, "Failed to roundtrip response: "+err.Error())
 					return
@@ -378,8 +378,8 @@ func (s *Server) handleAnthropicV1ViaResponsesAPINonStreaming(c *gin.Context, re
 
 	// Convert Responses API response back to Anthropic v1 format
 	anthropicResp := nonstream.ConvertResponsesToAnthropicV1Response(response, proxyModel)
-	if shouldRoundtripResponse(c, "openai") {
-		roundtripped, err := roundtripAnthropicResponseViaOpenAI(&anthropicResp, proxyModel, provider, actualModel)
+	if nonstream.ShouldRoundtripResponse(c, "openai") {
+		roundtripped, err := nonstream.RoundtripAnthropicResponseViaOpenAI(&anthropicResp, proxyModel, provider, actualModel)
 		if err != nil {
 			SendInternalError(c, "Failed to roundtrip response: "+err.Error())
 			return

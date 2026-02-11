@@ -16,6 +16,7 @@ import (
 	"github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
@@ -127,8 +128,8 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 	// Update response model if configured
 	responseMap["model"] = responseModel
 
-	if shouldRoundtripResponse(c, "anthropic") {
-		roundtripped, err := roundtripOpenAIResponseViaAnthropic(response, responseModel, provider, req.Model)
+	if nonstream.ShouldRoundtripResponse(c, "anthropic") {
+		roundtripped, err := nonstream.RoundtripOpenAIResponseViaAnthropic(response, responseModel, provider, req.Model)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, ErrorResponse{
 				Error: ErrorDetail{
