@@ -201,12 +201,6 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 		return
 	case protocol.APIStyleAnthropic:
 		anthropicReq := request.ConvertOpenAIToAnthropicRequest(&req.ChatCompletionNewParams, int64(maxAllowed))
-
-		// 🔥 REQUIRED: forward tool_choice
-		if req.ToolChoice.OfAuto.Value != "" || req.ToolChoice.OfAllowedTools != nil || req.ToolChoice.OfFunctionToolChoice != nil || req.ToolChoice.OfCustomToolChoice != nil {
-			anthropicReq.ToolChoice = request.ConvertOpenAIToAnthropicToolChoice(&req.ToolChoice)
-		}
-
 		if isStreaming {
 			streamResp, cancel, err := s.forwardAnthropicStreamRequestV1(c.Request.Context(), provider, anthropicReq)
 			if err != nil {

@@ -377,7 +377,6 @@ func HandleResponsesToAnthropicStreamResponse(c *gin.Context, stream *openaistre
 
 	// Initialize streaming state
 	state := newStreamState()
-	textBlockIndex := -1
 
 	// Track tool calls by item ID for Responses API
 	type pendingToolCall struct {
@@ -389,8 +388,8 @@ func HandleResponsesToAnthropicStreamResponse(c *gin.Context, stream *openaistre
 	}
 	pendingToolCalls := make(map[string]*pendingToolCall) // key: itemID
 
-	// Track if any tool calls were processed during the stream
-	hasToolCalls := false
+	// Track the last output item type to determine correct stop reason
+	lastOutputItemType := "" // "text", "function_call", etc.
 
 	// Send message_start event first
 	messageStartEvent := map[string]interface{}{
@@ -426,35 +425,39 @@ func HandleResponsesToAnthropicStreamResponse(c *gin.Context, stream *openaistre
 		case "response.content_part.added":
 			partAdded := currentEvent.AsResponseContentPartAdded()
 			if partAdded.Part.Type == "output_text" {
-				if textBlockIndex == -1 {
-					textBlockIndex = state.nextBlockIndex
+				if state.textBlockIndex == -1 {
+					state.textBlockIndex = state.nextBlockIndex
+					state.hasTextContent = true
 					state.nextBlockIndex++
-					senders.SendContentBlockStart(textBlockIndex, blockTypeText, map[string]interface{}{"text": ""}, flusher)
+					senders.SendContentBlockStart(state.textBlockIndex, blockTypeText, map[string]interface{}{"text": ""}, flusher)
 				}
 				if partAdded.Part.Text != "" {
-					senders.SendContentBlockDelta(textBlockIndex, map[string]interface{}{
+					senders.SendContentBlockDelta(state.textBlockIndex, map[string]interface{}{
 						"type": deltaTypeTextDelta,
 						"text": partAdded.Part.Text,
 					}, flusher)
 				}
+				lastOutputItemType = "text"
 			}
 
 		case "response.output_text.delta":
-			if textBlockIndex == -1 {
-				textBlockIndex = state.nextBlockIndex
+			if state.textBlockIndex == -1 {
+				state.textBlockIndex = state.nextBlockIndex
+				state.hasTextContent = true
 				state.nextBlockIndex++
-				senders.SendContentBlockStart(textBlockIndex, blockTypeText, map[string]interface{}{"text": ""}, flusher)
+				senders.SendContentBlockStart(state.textBlockIndex, blockTypeText, map[string]interface{}{"text": ""}, flusher)
 			}
 			textDelta := currentEvent.AsResponseOutputTextDelta()
-			senders.SendContentBlockDelta(textBlockIndex, map[string]interface{}{
+			senders.SendContentBlockDelta(state.textBlockIndex, map[string]interface{}{
 				"type": deltaTypeTextDelta,
 				"text": textDelta.Delta,
 			}, flusher)
+			lastOutputItemType = "text"
 
 		case "response.output_text.done", "response.content_part.done":
-			if textBlockIndex != -1 {
-				senders.SendContentBlockStop(state, textBlockIndex, flusher)
-				textBlockIndex = -1
+			if state.textBlockIndex != -1 {
+				senders.SendContentBlockStop(state, state.textBlockIndex, flusher)
+				state.textBlockIndex = -1
 			}
 
 		case "response.reasoning_text.delta":
@@ -477,38 +480,42 @@ func HandleResponsesToAnthropicStreamResponse(c *gin.Context, stream *openaistre
 
 		case "response.reasoning_summary_text.delta":
 			summaryDelta := currentEvent.AsResponseReasoningSummaryTextDelta()
-			if textBlockIndex == -1 {
-				textBlockIndex = state.nextBlockIndex
+			// Reasoning summary is condensed reasoning shown to user as visible text
+			// This is separate from both hidden thinking (reasoning_text) and main output text
+			if state.reasoningSummaryBlockIndex == -1 {
+				state.reasoningSummaryBlockIndex = state.nextBlockIndex
+				state.hasTextContent = true
 				state.nextBlockIndex++
-				senders.SendContentBlockStart(textBlockIndex, blockTypeText, map[string]interface{}{"text": ""}, flusher)
+				senders.SendContentBlockStart(state.reasoningSummaryBlockIndex, blockTypeText, map[string]interface{}{"text": ""}, flusher)
 			}
-			senders.SendContentBlockDelta(textBlockIndex, map[string]interface{}{
+			senders.SendContentBlockDelta(state.reasoningSummaryBlockIndex, map[string]interface{}{
 				"type": deltaTypeTextDelta,
 				"text": summaryDelta.Delta,
 			}, flusher)
 
 		case "response.reasoning_summary_text.done":
-			if textBlockIndex != -1 {
-				senders.SendContentBlockStop(state, textBlockIndex, flusher)
-				textBlockIndex = -1
+			if state.reasoningSummaryBlockIndex != -1 {
+				senders.SendContentBlockStop(state, state.reasoningSummaryBlockIndex, flusher)
+				state.reasoningSummaryBlockIndex = -1
 			}
 
 		case "response.refusal.delta":
 			refusalDelta := currentEvent.AsResponseRefusalDelta()
-			if textBlockIndex == -1 {
-				textBlockIndex = state.nextBlockIndex
+			// Refusal should be sent as a separate text block
+			if state.refusalBlockIndex == -1 {
+				state.refusalBlockIndex = state.nextBlockIndex
 				state.nextBlockIndex++
-				senders.SendContentBlockStart(textBlockIndex, blockTypeText, map[string]interface{}{"text": ""}, flusher)
+				senders.SendContentBlockStart(state.refusalBlockIndex, blockTypeText, map[string]interface{}{"text": ""}, flusher)
 			}
-			senders.SendContentBlockDelta(textBlockIndex, map[string]interface{}{
+			senders.SendContentBlockDelta(state.refusalBlockIndex, map[string]interface{}{
 				"type": deltaTypeTextDelta,
 				"text": refusalDelta.Delta,
 			}, flusher)
 
 		case "response.refusal.done":
-			if textBlockIndex != -1 {
-				senders.SendContentBlockStop(state, textBlockIndex, flusher)
-				textBlockIndex = -1
+			if state.refusalBlockIndex != -1 {
+				senders.SendContentBlockStop(state, state.refusalBlockIndex, flusher)
+				state.refusalBlockIndex = -1
 			}
 
 		case "response.output_item.added":
@@ -532,7 +539,7 @@ func HandleResponsesToAnthropicStreamResponse(c *gin.Context, stream *openaistre
 					name:        toolName,
 					arguments:   "",
 				}
-				hasToolCalls = true
+				lastOutputItemType = "function_call"
 
 				senders.SendContentBlockStart(blockIndex, blockTypeToolUse, map[string]interface{}{
 					"id":   truncatedID,
@@ -606,8 +613,11 @@ func HandleResponsesToAnthropicStreamResponse(c *gin.Context, stream *openaistre
 
 			senders.SendStopEvents(state, flusher)
 
+			// Determine stop reason based on the last output item type
+			// tool_use: response ended with a function call (expecting tool response)
+			// end_turn: response ended with text content
 			stopReason := anthropicStopReasonEndTurn
-			if hasToolCalls || state.thinkingBlockIndex != -1 {
+			if lastOutputItemType == "function_call" {
 				stopReason = anthropicStopReasonToolUse
 			}
 

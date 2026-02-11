@@ -75,11 +75,9 @@ func ConvertAnthropicBetaToResponsesRequest(anthropicReq *anthropic.BetaMessageN
 	// Convert tools from Anthropic format to Responses API format
 	if len(anthropicReq.Tools) > 0 {
 		params.Tools = ConvertAnthropicBetaToolsToResponses(anthropicReq.Tools)
-	}
 
-	// Convert tool choice
-	if anthropicReq.ToolChoice.OfAuto != nil || anthropicReq.ToolChoice.OfTool != nil ||
-		anthropicReq.ToolChoice.OfAny != nil {
+		// Convert tool choice
+		// for some providers (like `vllm`), they require tool choice like `auto` in general usage
 		params.ToolChoice = ConvertAnthropicBetaToolChoiceToResponses(&anthropicReq.ToolChoice)
 	}
 
@@ -250,6 +248,7 @@ func ConvertAnthropicBetaToolsToResponses(tools []anthropic.BetaToolUnionParam) 
 			Name:        tool.Name,
 			Description: ParamOpt(tool.Description.Value),
 			Parameters:  parameters,
+			Type:        "function",
 		}
 
 		out = append(out, responses.ToolUnionParam{
@@ -278,10 +277,11 @@ func ConvertAnthropicBetaToolChoiceToResponses(tc *anthropic.BetaToolChoiceUnion
 		}
 	}
 
-	// OfAny (Anthropic's "required") - map to auto as Responses API doesn't have direct equivalent
+	// OfAny (Anthropic's "required" - force model to call at least one tool)
+	// Map to "required" in Responses API
 	if tc.OfAny != nil {
 		return responses.ResponseNewParamsToolChoiceUnion{
-			OfToolChoiceMode: ParamOpt(responses.ToolChoiceOptions("auto")),
+			OfToolChoiceMode: ParamOpt(responses.ToolChoiceOptions("required")),
 		}
 	}
 

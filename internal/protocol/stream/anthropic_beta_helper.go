@@ -16,6 +16,12 @@ func sendBetaStopEvents(c *gin.Context, state *streamState, flusher http.Flusher
 	if state.thinkingBlockIndex != -1 && !state.stoppedBlocks[state.thinkingBlockIndex] {
 		blockIndices = append(blockIndices, state.thinkingBlockIndex)
 	}
+	if state.refusalBlockIndex != -1 && !state.stoppedBlocks[state.refusalBlockIndex] {
+		blockIndices = append(blockIndices, state.refusalBlockIndex)
+	}
+	if state.reasoningSummaryBlockIndex != -1 && !state.stoppedBlocks[state.reasoningSummaryBlockIndex] {
+		blockIndices = append(blockIndices, state.reasoningSummaryBlockIndex)
+	}
 	if state.hasTextContent && !state.stoppedBlocks[state.textBlockIndex] {
 		blockIndices = append(blockIndices, state.textBlockIndex)
 	}

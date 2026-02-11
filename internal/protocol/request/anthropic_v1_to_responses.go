@@ -67,11 +67,9 @@ func ConvertAnthropicV1ToResponsesRequest(anthropicReq *anthropic.MessageNewPara
 	// Convert tools
 	if len(anthropicReq.Tools) > 0 {
 		params.Tools = ConvertAnthropicV1ToolsToResponses(anthropicReq.Tools)
-	}
 
-	// Convert tool choice
-	if anthropicReq.ToolChoice.OfAuto != nil || anthropicReq.ToolChoice.OfTool != nil ||
-		anthropicReq.ToolChoice.OfAny != nil {
+		// Convert tool choice
+		// for some providers (like `vllm`), they require tool choice like `auto` in general usage
 		params.ToolChoice = ConvertAnthropicV1ToolChoiceToResponses(&anthropicReq.ToolChoice)
 	}
 
@@ -257,12 +255,10 @@ func ConvertAnthropicV1ToolsToResponses(tools []anthropic.ToolUnionParam) []resp
 
 		// Create function tool
 		fn := &responses.FunctionToolParam{
-			Name:       tool.Name,
-			Parameters: parameters,
-		}
-
-		if tool.Description.Value != "" {
-			fn.Description = param.NewOpt(tool.Description.Value)
+			Name:        tool.Name,
+			Description: ParamOpt(tool.Description.Value),
+			Parameters:  parameters,
+			Type:        "function",
 		}
 
 		out = append(out, responses.ToolUnionParam{
@@ -275,17 +271,17 @@ func ConvertAnthropicV1ToolsToResponses(tools []anthropic.ToolUnionParam) []resp
 
 // ConvertAnthropicV1ToolChoiceToResponses converts Anthropic v1 tool_choice to Responses API format
 func ConvertAnthropicV1ToolChoiceToResponses(tc *anthropic.ToolChoiceUnionParam) responses.ResponseNewParamsToolChoiceUnion {
-	// Handle "auto" mode
+	// Handle "auto" mode (model decides whether to call tools)
 	if tc.OfAuto != nil {
 		return responses.ResponseNewParamsToolChoiceUnion{
 			OfToolChoiceMode: param.NewOpt(responses.ToolChoiceOptions("auto")),
 		}
 	}
 
-	// Handle "any" mode (required)
+	// Handle "any" mode (required - force model to call at least one tool)
 	if tc.OfAny != nil {
 		return responses.ResponseNewParamsToolChoiceUnion{
-			OfToolChoiceMode: param.NewOpt(responses.ToolChoiceOptions("auto")),
+			OfToolChoiceMode: param.NewOpt(responses.ToolChoiceOptions("required")),
 		}
 	}
 

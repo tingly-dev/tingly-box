@@ -188,10 +188,9 @@ func ConvertAnthropicToOpenAIRequest(anthropicReq *anthropic.MessageNewParams, c
 		} else {
 			openaiReq.Tools = ConvertAnthropicToolsToOpenAI(anthropicReq.Tools)
 		}
+		// Convert tool choice
+		openaiReq.ToolChoice = ConvertAnthropicToolChoiceToOpenAI(&anthropicReq.ToolChoice)
 	}
-
-	// Convert tool choice
-	openaiReq.ToolChoice = ConvertAnthropicToolChoiceToOpenAI(&anthropicReq.ToolChoice)
 
 	config := &transformer.OpenAIConfig{
 		HasThinking:     isThinking,
@@ -433,10 +432,10 @@ func ConvertAnthropicBetaToOpenAIRequest(anthropicReq *anthropic.BetaMessageNewP
 		} else {
 			openaiReq.Tools = ConvertAnthropicBetaToolsToOpenAI(anthropicReq.Tools)
 		}
-	}
 
-	// Convert tool choice
-	openaiReq.ToolChoice = ConvertAnthropicBetaToolChoiceToOpenAI(&anthropicReq.ToolChoice)
+		// Convert tool choice
+		openaiReq.ToolChoice = ConvertAnthropicBetaToolChoiceToOpenAI(&anthropicReq.ToolChoice)
+	}
 
 	config := &transformer.OpenAIConfig{
 		HasThinking:     isThinking,
