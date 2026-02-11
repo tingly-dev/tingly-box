@@ -1,9 +1,12 @@
 package stream
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -14,6 +17,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/token"
 )
 
 // StreamEventRecorder is an interface for recording stream events during protocol conversion
@@ -29,7 +33,8 @@ func HandleOpenAIToAnthropicV1BetaStreamResponse(c *gin.Context, req *openai.Cha
 		if r := recover(); r != nil {
 			logrus.Errorf("Panic in OpenAI to Anthropic beta streaming handler: %v", r)
 			if c.Writer != nil {
-				c.SSEvent("error", "{\"error\":{\"message\":\"Internal streaming error\",\"type\":\"internal_error\"}}")
+				c.Writer.WriteHeader(http.StatusInternalServerError)
+				c.Writer.Write([]byte("event: error\ndata: {\"error\":{\"message\":\"Internal streaming error\",\"type\":\"internal_error\"}}\n\n"))
 				if flusher, ok := c.Writer.(http.Flusher); ok {
 					flusher.Flush()
 				}
@@ -61,6 +66,10 @@ func HandleOpenAIToAnthropicV1BetaStreamResponse(c *gin.Context, req *openai.Cha
 	// Initialize streaming state
 	state := newStreamState()
 
+	// Track accumulated content for usage estimation
+	var contentBuilder strings.Builder
+	var hasUsageFromUpstream bool = false
+
 	// Send message_start event first
 	messageStartEvent := map[string]interface{}{
 		"type": eventTypeMessageStart,
@@ -80,9 +89,22 @@ func HandleOpenAIToAnthropicV1BetaStreamResponse(c *gin.Context, req *openai.Cha
 	}
 	sendAnthropicBetaStreamEvent(c, eventTypeMessageStart, messageStartEvent, flusher)
 
-	// Process the stream
+	// Process the stream with context cancellation checking
 	chunkCount := 0
-	for stream.Next() {
+	c.Stream(func(w io.Writer) bool {
+		// Check context cancellation first
+		select {
+		case <-c.Request.Context().Done():
+			logrus.Debug("Client disconnected, stopping OpenAI to Anthropic beta stream")
+			return false
+		default:
+		}
+
+		// Try to get next chunk
+		if !stream.Next() {
+			return false
+		}
+
 		chunkCount++
 		chunk := stream.Current()
 
@@ -92,8 +114,9 @@ func HandleOpenAIToAnthropicV1BetaStreamResponse(c *gin.Context, req *openai.Cha
 			if chunk.Usage.PromptTokens > 0 || chunk.Usage.CompletionTokens > 0 {
 				state.inputTokens = chunk.Usage.PromptTokens
 				state.outputTokens = chunk.Usage.CompletionTokens
+				hasUsageFromUpstream = true
 			}
-			continue
+			return true
 		}
 
 		choice := chunk.Choices[0]
@@ -157,6 +180,9 @@ func HandleOpenAIToAnthropicV1BetaStreamResponse(c *gin.Context, req *openai.Cha
 			}
 			state.hasTextContent = true
 
+			// Accumulate refusal content for usage estimation
+			contentBuilder.WriteString(delta.Refusal)
+
 			sendBetaContentBlockDelta(c, state.textBlockIndex, map[string]interface{}{
 				"type": deltaTypeTextDelta,
 				"text": delta.Refusal,
@@ -166,6 +192,9 @@ func HandleOpenAIToAnthropicV1BetaStreamResponse(c *gin.Context, req *openai.Cha
 		// Handle content delta
 		if delta.Content != "" {
 			state.hasTextContent = true
+
+			// Accumulate content for usage estimation
+			contentBuilder.WriteString(delta.Content)
 
 			// Initialize text block on first content
 			if state.textBlockIndex == -1 {
@@ -213,15 +242,18 @@ func HandleOpenAIToAnthropicV1BetaStreamResponse(c *gin.Context, req *openai.Cha
 					state.toolIndexToBlockIndex[openaiIndex] = anthropicIndex
 					state.nextBlockIndex++
 
+					// Truncate tool call ID to meet OpenAI's 40 character limit
+					truncatedID := truncateToolCallID(toolCall.ID)
+
 					// Initialize pending tool call
 					state.pendingToolCalls[anthropicIndex] = &pendingToolCall{
-						id:   toolCall.ID,
+						id:   truncatedID,
 						name: toolCall.Function.Name,
 					}
 
 					// Send content_block_start for tool_use
 					sendBetaContentBlockStart(c, anthropicIndex, blockTypeToolUse, map[string]interface{}{
-						"id":   toolCall.ID,
+						"id":   truncatedID,
 						"name": toolCall.Function.Name,
 					}, flusher)
 				}
@@ -243,19 +275,34 @@ func HandleOpenAIToAnthropicV1BetaStreamResponse(c *gin.Context, req *openai.Cha
 		if chunk.Usage.CompletionTokens > 0 {
 			state.inputTokens = chunk.Usage.PromptTokens
 			state.outputTokens = chunk.Usage.CompletionTokens
+			hasUsageFromUpstream = true
 		}
 
 		// Handle finish_reason (last chunk for this choice)
 		if choice.FinishReason != "" {
+			// Estimate usage if upstream didn't provide it
+			if !hasUsageFromUpstream {
+				inputTokens, _ := token.EstimateInputTokens(req)
+				state.outputTokens = int64(token.EstimateOutputTokens(contentBuilder.String()))
+				state.inputTokens = int64(inputTokens)
+			}
+
 			sendBetaStopEvents(c, state, flusher)
 			sendBetaMessageDelta(c, state, mapOpenAIFinishReasonToAnthropicBeta(choice.FinishReason), flusher)
 			sendBetaMessageStop(c, messageID, responseModel, state, mapOpenAIFinishReasonToAnthropicBeta(choice.FinishReason), flusher)
-			return protocol.NewUsageStat(int(state.inputTokens), int(state.outputTokens)), nil
+			return false
 		}
-	}
+
+		return true
+	})
 
 	// Check for stream errors
 	if err := stream.Err(); err != nil {
+		// Check if it was a client cancellation
+		if errors.Is(err, context.Canceled) {
+			logrus.Debug("OpenAI to Anthropic beta stream canceled by client")
+			return protocol.NewUsageStat(int(state.inputTokens), int(state.outputTokens)), nil
+		}
 		logrus.Errorf("OpenAI stream error: %v", err)
 		errorEvent := map[string]interface{}{
 			"type": "error",

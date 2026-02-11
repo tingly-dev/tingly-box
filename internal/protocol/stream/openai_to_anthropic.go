@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -17,6 +18,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/token"
 )
 
 const (
@@ -96,6 +98,10 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompl
 	// Initialize streaming state
 	state := newStreamState()
 
+	// Track accumulated content for usage estimation
+	var contentBuilder strings.Builder
+	var hasUsageFromUpstream bool
+
 	// Send message_start event first
 	messageStartEvent := map[string]interface{}{
 		"type": eventTypeMessageStart,
@@ -140,6 +146,7 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompl
 			if chunk.Usage.PromptTokens > 0 || chunk.Usage.CompletionTokens > 0 {
 				state.inputTokens = chunk.Usage.PromptTokens
 				state.outputTokens = chunk.Usage.CompletionTokens
+				hasUsageFromUpstream = true
 			}
 			return true
 		}
@@ -156,6 +163,13 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompl
 		}
 
 		delta := choice.Delta
+
+		// Check for server_tool_use at chunk level (not delta level)
+		if chunk.JSON.ExtraFields != nil {
+			if serverToolUse, exists := chunk.JSON.ExtraFields["server_tool_use"]; exists && serverToolUse.Valid() {
+				state.deltaExtras["server_tool_use"] = serverToolUse.Raw()
+			}
+		}
 
 		// Collect extra fields from this delta (for final message_delta)
 		// Handle special fields that need dedicated content blocks
@@ -203,6 +217,9 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompl
 			}
 			state.hasTextContent = true
 
+			// Accumulate refusal content for usage estimation
+			contentBuilder.WriteString(delta.Refusal)
+
 			sendContentBlockDelta(c, state.textBlockIndex, map[string]interface{}{
 				"type": deltaTypeTextDelta,
 				"text": delta.Refusal,
@@ -212,6 +229,9 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompl
 		// Handle content delta
 		if delta.Content != "" {
 			state.hasTextContent = true
+
+			// Accumulate content for usage estimation
+			contentBuilder.WriteString(delta.Content)
 
 			// Initialize text block on first content
 			if state.textBlockIndex == -1 {
@@ -292,10 +312,18 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompl
 		if chunk.Usage.CompletionTokens > 0 {
 			state.inputTokens = chunk.Usage.PromptTokens
 			state.outputTokens = chunk.Usage.CompletionTokens
+			hasUsageFromUpstream = true
 		}
 
 		// Handle finish_reason (last chunk for this choice)
 		if choice.FinishReason != "" {
+			// Estimate usage if upstream didn't provide it
+			if !hasUsageFromUpstream {
+				inputTokens, _ := token.EstimateInputTokens(req)
+				state.outputTokens = int64(token.EstimateOutputTokens(contentBuilder.String()))
+				state.inputTokens = int64(inputTokens)
+			}
+
 			sendStopEvents(c, state, flusher)
 			sendMessageDelta(c, state, mapOpenAIFinishReasonToAnthropic(choice.FinishReason), flusher)
 			sendMessageStop(c, messageID, responseModel, state, mapOpenAIFinishReasonToAnthropic(choice.FinishReason), flusher)
