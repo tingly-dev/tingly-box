@@ -419,8 +419,14 @@ func (s *Server) forwardResponsesStreamRequest(ctx context.Context, provider *ty
 // convertToResponsesParams converts raw JSON to OpenAI SDK params format
 // This handles the model override and forwards the rest as-is
 func (s *Server) convertToResponsesParams(bodyBytes []byte, actualModel string) (responses.ResponseNewParams, error) {
+	// Preprocess to add type fields to input items (needed for union deserialization)
+	processedData, err := addTypeFieldToInputItems(bodyBytes)
+	if err != nil {
+		return responses.ResponseNewParams{}, err
+	}
+
 	var raw map[string]any
-	if err := json.Unmarshal(bodyBytes, &raw); err != nil {
+	if err := json.Unmarshal(processedData, &raw); err != nil {
 		return responses.ResponseNewParams{}, err
 	}
 

@@ -39,15 +39,72 @@ func (r *ResponseCreateRequest) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
+	// Preprocess the JSON to add "type": "message" to input items that don't have it
+	// This is needed because the OpenAI SDK's union deserializer requires the type field
+	processedData, err := addTypeFieldToInputItems(data)
+	if err != nil {
+		return err
+	}
+
 	// Then, unmarshal into the embedded ResponseNewParams
 	var inner responses.ResponseNewParams
-	if err := json.Unmarshal(data, &inner); err != nil {
+	if err := json.Unmarshal(processedData, &inner); err != nil {
 		return err
 	}
 
 	r.Stream = aux.Stream
 	r.ResponseNewParams = inner
 	return nil
+}
+
+// addTypeFieldToInputItems preprocesses the JSON to add "type": "message" to input items
+// that don't have a type field. This is necessary because the OpenAI SDK's union
+// deserializer requires the type field to correctly match variants.
+func addTypeFieldToInputItems(data []byte) ([]byte, error) {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+
+	inputRaw, ok := raw["input"]
+	if !ok {
+		return data, nil
+	}
+
+	// Check if input is an array
+	var inputArray []json.RawMessage
+	if err := json.Unmarshal(inputRaw, &inputArray); err != nil {
+		// Input is not an array (might be a string), return as-is
+		return data, nil
+	}
+
+	// Process each input item
+	for i, item := range inputArray {
+		var itemObj map[string]any
+		if err := json.Unmarshal(item, &itemObj); err != nil {
+			continue
+		}
+
+		// If type field is missing and role field exists, add "type": "message"
+		if _, hasType := itemObj["type"]; !hasType {
+			if _, hasRole := itemObj["role"]; hasRole {
+				itemObj["type"] = "message"
+				modified, err := json.Marshal(itemObj)
+				if err != nil {
+					continue
+				}
+				inputArray[i] = modified
+			}
+		}
+	}
+
+	modifiedInput, err := json.Marshal(inputArray)
+	if err != nil {
+		return data, nil
+	}
+
+	raw["input"] = modifiedInput
+	return json.Marshal(raw)
 }
 
 // =============================================
