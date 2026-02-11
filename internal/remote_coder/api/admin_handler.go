@@ -8,10 +8,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
-	"github.com/tingly-dev/tingly-box/cmd/remote-cc/internal/audit"
-	"github.com/tingly-dev/tingly-box/cmd/remote-cc/internal/config"
-	"github.com/tingly-dev/tingly-box/cmd/remote-cc/internal/middleware"
-	"github.com/tingly-dev/tingly-box/cmd/remote-cc/internal/session"
+	"github.com/tingly-dev/tingly-box/internal/remote_coder/audit"
+	"github.com/tingly-dev/tingly-box/internal/remote_coder/config"
+	"github.com/tingly-dev/tingly-box/internal/remote_coder/middleware"
+	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
 )
 
 // AdminHandler handles admin API requests
@@ -34,16 +34,16 @@ func NewAdminHandler(sessionMgr *session.Manager, auditLogger *audit.Logger, rat
 
 // AuditLogEntry represents an audit log entry for API response
 type AuditLogEntry struct {
-	Timestamp   string                 `json:"timestamp"`
-	Level       string                 `json:"level"`
-	Action      string                 `json:"action"`
-	UserID      string                 `json:"user_id"`
-	ClientIP    string                 `json:"client_ip"`
-	SessionID   string                 `json:"session_id"`
-	RequestID   string                 `json:"request_id"`
-	Success     bool                   `json:"success"`
-	DurationMs  int64                  `json:"duration_ms"`
-	Details     map[string]interface{} `json:"details,omitempty"`
+	Timestamp  string                 `json:"timestamp"`
+	Level      string                 `json:"level"`
+	Action     string                 `json:"action"`
+	UserID     string                 `json:"user_id"`
+	ClientIP   string                 `json:"client_ip"`
+	SessionID  string                 `json:"session_id"`
+	RequestID  string                 `json:"request_id"`
+	Success    bool                   `json:"success"`
+	DurationMs int64                  `json:"duration_ms"`
+	Details    map[string]interface{} `json:"details,omitempty"`
 }
 
 // GetAuditLogs handles GET /admin/logs
@@ -113,16 +113,16 @@ func (h *AdminHandler) GetAuditLogs(c *gin.Context) {
 	entries := make([]AuditLogEntry, len(filteredLogs))
 	for i, entry := range filteredLogs {
 		entries[i] = AuditLogEntry{
-			Timestamp:   entry.Timestamp.Format(time.RFC3339),
-			Level:       entry.Level.String(),
-			Action:      entry.Action,
-			UserID:      entry.UserID,
-			ClientIP:    entry.ClientIP,
-			SessionID:   entry.SessionID,
-			RequestID:   entry.RequestID,
-			Success:     entry.Success,
-			DurationMs:  entry.DurationMs,
-			Details:     entry.Details,
+			Timestamp:  entry.Timestamp.Format(time.RFC3339),
+			Level:      entry.Level.String(),
+			Action:     entry.Action,
+			UserID:     entry.UserID,
+			ClientIP:   entry.ClientIP,
+			SessionID:  entry.SessionID,
+			RequestID:  entry.RequestID,
+			Success:    entry.Success,
+			DurationMs: entry.DurationMs,
+			Details:    entry.Details,
 		}
 	}
 
@@ -270,17 +270,17 @@ func parseDate(s string) time.Time {
 
 // TokenInfo represents token information for response
 type TokenInfo struct {
-	Token    string `json:"token"`
-	ClientID string `json:"client_id"`
+	Token     string `json:"token"`
+	ClientID  string `json:"client_id"`
 	ExpiresAt string `json:"expires_at"`
 	CreatedAt string `json:"created_at"`
 }
 
 // GenerateTokenRequest represents the request body for generating a token
 type GenerateTokenRequest struct {
-	ClientID string `json:"client_id" binding:"required"`
+	ClientID    string `json:"client_id" binding:"required"`
 	Description string `json:"description,omitempty"`
-	ExpiryHours int `json:"expiry_hours,omitempty"` // 0 = no expiry
+	ExpiryHours int    `json:"expiry_hours,omitempty"` // 0 = no expiry
 }
 
 // GenerateToken handles POST /admin/tokens/generate
@@ -308,8 +308,8 @@ func (h *AdminHandler) GenerateToken(c *gin.Context) {
 	token, err := h.config.GenerateToken(req.ClientID, req.ExpiryHours)
 	if err != nil {
 		h.auditLogger.LogRequest("admin_token_generate", userID, clientIP, "", getRequestID(c), false, time.Since(start), map[string]interface{}{
-			"error":      err.Error(),
-			"client_id":  req.ClientID,
+			"error":     err.Error(),
+			"client_id": req.ClientID,
 		})
 
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -324,7 +324,7 @@ func (h *AdminHandler) GenerateToken(c *gin.Context) {
 	logrus.Infof("Admin generated token for client: %s", req.ClientID)
 
 	h.auditLogger.LogRequest("admin_token_generate", userID, clientIP, "", getRequestID(c), true, time.Since(start), map[string]interface{}{
-		"client_id":  req.ClientID,
+		"client_id":    req.ClientID,
 		"expiry_hours": req.ExpiryHours,
 	})
 
@@ -339,8 +339,8 @@ func (h *AdminHandler) GenerateToken(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"token": response,
-		"status": "success",
+		"token":   response,
+		"status":  "success",
 		"message": "Token generated successfully. Save this token - it cannot be retrieved again.",
 	})
 }

@@ -58,111 +58,18 @@ const RemoteCoderPage: React.FC = () => {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const [projectPath, setProjectPath] = useState('');
     const [projectPathDialogOpen, setProjectPathDialogOpen] = useState(true);
-    const [expandedBySession, setExpandedBySession] = useState<Record<string, Set<number>>>({});
-    const [projectPathBySession, setProjectPathBySession] = useState<Record<string, string>>({});
+    const [expandedMessages, setExpandedMessages] = useState<Set<number>>(new Set());
     const [projectPathNewSession, setProjectPathNewSession] = useState<string>('');
-    const [lastSelectedSessionId, setLastSelectedSessionId] = useState<string>('');
     const [sessionsLoaded, setSessionsLoaded] = useState(false);
 
-    const sessionKey = selectedSession?.id || 'new';
-    const expandedMessages = expandedBySession[sessionKey] || new Set<number>();
     const isSessionThinking = !!selectedSession?.id
         && selectedSession.status === 'running'
         && (chatHistory.length === 0 || chatHistory[chatHistory.length - 1].role === 'user');
     const isChatBusy = sending || isSessionThinking;
 
     useEffect(() => {
-        const storedNewPath = localStorage.getItem('remotecoder.projectPath.new')
-            || localStorage.getItem('remotecc.projectPath.new')
-            || '';
-        const storedPathsRaw = localStorage.getItem('remotecoder.projectPaths')
-            || localStorage.getItem('remotecc.projectPaths')
-            || '';
-        let storedPaths: Record<string, string> = {};
-        if (storedPathsRaw) {
-            try {
-                storedPaths = JSON.parse(storedPathsRaw);
-            } catch {
-                storedPaths = {};
-            }
-        }
-        const storedLastSessionId = localStorage.getItem('remotecoder.lastSessionId')
-            || localStorage.getItem('remotecc.lastSessionId')
-            || '';
-        if (storedNewPath) {
-            setProjectPathNewSession(storedNewPath);
-        }
-        if (Object.keys(storedPaths).length > 0) {
-            setProjectPathBySession(storedPaths);
-        }
-        if (storedLastSessionId) {
-            setLastSelectedSessionId(storedLastSessionId);
-        }
-    }, []);
-
-    useEffect(() => {
-        localStorage.setItem('remotecoder.projectPath.new', projectPathNewSession);
-    }, [projectPathNewSession]);
-
-    useEffect(() => {
-        localStorage.setItem('remotecoder.projectPaths', JSON.stringify(projectPathBySession));
-    }, [projectPathBySession]);
-
-    useEffect(() => {
-        localStorage.setItem('remotecoder.lastSessionId', lastSelectedSessionId);
-    }, [lastSelectedSessionId]);
-
-    useEffect(() => {
-        const raw = localStorage.getItem('remotecoder.expandedMessages')
-            || localStorage.getItem('remotecc.expandedMessages')
-            || '';
-        if (!raw) return;
-        try {
-            const data = JSON.parse(raw) as Record<string, number[]>;
-            const next: Record<string, Set<number>> = {};
-            for (const [key, values] of Object.entries(data)) {
-                if (Array.isArray(values)) {
-                    next[key] = new Set(values.filter((v) => Number.isInteger(v)));
-                }
-            }
-            setExpandedBySession(next);
-        } catch {
-            // ignore parse errors
-        }
-    }, []);
-
-    useEffect(() => {
-        const payload: Record<string, number[]> = {};
-        for (const [key, value] of Object.entries(expandedBySession)) {
-            payload[key] = Array.from(value);
-        }
-        localStorage.setItem('remotecoder.expandedMessages', JSON.stringify(payload));
-    }, [expandedBySession]);
-
-    useEffect(() => {
-        if (!sessionKey) return;
-        const raw = localStorage.getItem(`remotecoder.chatHistory.${sessionKey}`)
-            || localStorage.getItem(`remotecc.chatHistory.${sessionKey}`)
-            || '';
-        if (!raw) return;
-        try {
-            const parsed = JSON.parse(raw) as ChatMessage[];
-            if (Array.isArray(parsed)) {
-                setChatHistory(parsed);
-            }
-        } catch {
-            // ignore parse errors
-        }
-    }, [sessionKey]);
-
-    useEffect(() => {
-        if (!sessionKey) return;
-        localStorage.setItem(`remotecoder.chatHistory.${sessionKey}`, JSON.stringify(chatHistory));
-    }, [chatHistory, sessionKey]);
-
-    useEffect(() => {
         if (selectedSession?.id) {
-            const stored = projectPathBySession[selectedSession.id] || '';
+            const stored = selectedSession.project_path || '';
             setProjectPath(stored);
             setProjectPathDialogOpen(!stored.trim());
         } else {
@@ -170,7 +77,7 @@ const RemoteCoderPage: React.FC = () => {
             setProjectPath(stored);
             setProjectPathDialogOpen(!stored.trim());
         }
-    }, [selectedSession?.id, projectPathBySession, projectPathNewSession]);
+    }, [selectedSession?.id, selectedSession?.project_path, projectPathNewSession]);
 
     const fetchSessions = async () => {
         try {
@@ -186,24 +93,17 @@ const RemoteCoderPage: React.FC = () => {
             }
 
             if (data.sessions) {
-                setSessions(data.sessions);
+                const sortedSessions = [...data.sessions].sort((a: Session, b: Session) => {
+                    const aTime = new Date(a.last_activity).getTime();
+                    const bTime = new Date(b.last_activity).getTime();
+                    return bTime - aTime;
+                });
+                setSessions(sortedSessions);
                 if (selectedSession?.id) {
-                    const updated = data.sessions.find((s: Session) => s.id === selectedSession.id);
+                    const updated = sortedSessions.find((s: Session) => s.id === selectedSession.id);
                     if (updated) {
                         setSelectedSession(updated);
                     }
-                }
-                data.sessions.forEach((s: Session) => {
-                    if (s.project_path) {
-                        setProjectPathBySession((prev) => ({
-                            ...prev,
-                            [s.id]: s.project_path as string,
-                        }));
-                    }
-                });
-                if (lastSelectedSessionId && !data.sessions.some((s: Session) => s.id === lastSelectedSessionId)) {
-                    setLastSelectedSessionId('');
-                    localStorage.removeItem(`remotecoder.chatHistory.${lastSelectedSessionId}`);
                 }
             }
         } catch (err) {
@@ -215,71 +115,33 @@ const RemoteCoderPage: React.FC = () => {
         }
     };
 
+    const loadSessionState = async (sessionId: string) => {
+        try {
+            const state = await api.getRemoteCCSessionState(sessionId);
+            if (state?.success === false) return;
+            if (Array.isArray(state?.expanded_messages)) {
+                const next = new Set(state.expanded_messages.filter((v: any) => Number.isInteger(v)));
+                setExpandedMessages(next);
+            } else {
+                setExpandedMessages(new Set());
+            }
+            if (typeof state?.project_path === 'string' && state.project_path.trim()) {
+                setProjectPath(state.project_path);
+                setProjectPathDialogOpen(false);
+            }
+        } catch (err) {
+            console.error('Failed to load session state:', err);
+        }
+    };
+
     useEffect(() => {
         fetchSessions();
     }, []);
 
     useEffect(() => {
-        if (!sessionsLoaded || !lastSelectedSessionId || selectedSession) return;
-        api.getRemoteCCSession(lastSelectedSessionId)
-            .then(async (sessionData) => {
-                if (!sessionData?.id) {
-                    setLastSelectedSessionId('');
-                    localStorage.removeItem(`remotecoder.chatHistory.${lastSelectedSessionId}`);
-                    return;
-                }
-                setSelectedSession(sessionData);
-                if (sessionData.project_path) {
-                    setProjectPathBySession((prev) => ({
-                        ...prev,
-                        [sessionData.id]: sessionData.project_path as string,
-                    }));
-                }
-                setSessions((prev) => {
-                    if (prev.some((s) => s.id === sessionData.id)) return prev;
-                    return [sessionData, ...prev];
-                });
-                const messages = await api.getRemoteCCSessionMessages(sessionData.id);
-                if (messages?.messages && Array.isArray(messages.messages)) {
-                    setChatHistory(messages.messages.map((m: any) => ({
-                        role: m.role,
-                        content: m.content || '',
-                        summary: m.summary,
-                        timestamp: m.timestamp || new Date().toISOString(),
-                    })));
-                    return;
-                }
-
-                if (sessionData.request || sessionData.response) {
-                    setChatHistory([
-                        {
-                            role: 'user',
-                            content: sessionData.request || '',
-                            timestamp: sessionData.created_at,
-                        },
-                        {
-                            role: 'assistant',
-                            content: sessionData.response || '',
-                            summary: sessionData.response || '',
-                            timestamp: sessionData.last_activity,
-                        },
-                    ]);
-                }
-            })
-            .catch((err) => {
-                console.error('Failed to restore last session:', err);
-            });
-    }, [lastSelectedSessionId, selectedSession]);
-
-    useEffect(() => {
-        if (!sessions.length || selectedSession) return;
-        const saved = lastSelectedSessionId
-            ? sessions.find((s) => s.id === lastSelectedSessionId)
-            : undefined;
-        if (saved) {
-            handleSessionSelect(saved);
-        }
-    }, [sessions, selectedSession, lastSelectedSessionId]);
+        if (!sessionsLoaded || selectedSession || !sessions.length) return;
+        handleSessionSelect(sessions[0]);
+    }, [sessionsLoaded, sessions, selectedSession]);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -288,6 +150,30 @@ const RemoteCoderPage: React.FC = () => {
     useEffect(() => {
         scrollToBottom();
     }, [chatHistory]);
+
+    useEffect(() => {
+        if (!selectedSession?.id) return;
+        const timer = window.setTimeout(() => {
+            api.updateRemoteCCSessionState(selectedSession.id, {
+                project_path: projectPath.trim(),
+            }).catch((err: any) => {
+                console.error('Failed to update project path:', err);
+            });
+        }, 400);
+        return () => window.clearTimeout(timer);
+    }, [projectPath, selectedSession?.id]);
+
+    useEffect(() => {
+        if (!selectedSession?.id) return;
+        const timer = window.setTimeout(() => {
+            api.updateRemoteCCSessionState(selectedSession.id, {
+                expanded_messages: Array.from(expandedMessages),
+            }).catch((err: any) => {
+                console.error('Failed to update expanded messages:', err);
+            });
+        }, 250);
+        return () => window.clearTimeout(timer);
+    }, [expandedMessages, selectedSession?.id]);
 
     const handleSendMessage = async () => {
         if (!message.trim() || isChatBusy) return;
@@ -343,11 +229,7 @@ const RemoteCoderPage: React.FC = () => {
                 const sessionData = await api.getRemoteCCSession(data.session_id);
                 if (sessionData.id) {
                     setSelectedSession(sessionData);
-                    setLastSelectedSessionId(sessionData.id);
-                    setProjectPathBySession((prev) => ({
-                        ...prev,
-                        [sessionData.id]: projectPath.trim(),
-                    }));
+                    setExpandedMessages(new Set());
                 }
             }
 
@@ -364,16 +246,12 @@ const RemoteCoderPage: React.FC = () => {
     const handleSessionSelect = async (session: Session) => {
         setSelectedSession(session);
         setChatHistory([]);
-        const path = session.project_path || projectPathBySession[session.id] || '';
+        setExpandedMessages(new Set());
+        const path = session.project_path || '';
         setProjectPath(path);
-        if (session.project_path) {
-            setProjectPathBySession((prev) => ({
-                ...prev,
-                [session.id]: session.project_path as string,
-            }));
-        }
-        setLastSelectedSessionId(session.id);
         setProjectPathDialogOpen(!path.trim());
+
+        loadSessionState(session.id);
 
         const messages = await api.getRemoteCCSessionMessages(session.id);
         if (messages?.messages && Array.isArray(messages.messages)) {
@@ -407,13 +285,7 @@ const RemoteCoderPage: React.FC = () => {
     const handleNewChat = () => {
         setSelectedSession(null);
         setChatHistory([]);
-        setLastSelectedSessionId('');
-        setExpandedBySession((prev) => {
-            const next = { ...prev };
-            delete next['new'];
-            return next;
-        });
-        localStorage.removeItem('remotecoder.chatHistory.new');
+        setExpandedMessages(new Set());
         if (projectPathNewSession.trim()) {
             setProjectPath(projectPathNewSession.trim());
             setProjectPathDialogOpen(false);
@@ -491,11 +363,6 @@ const RemoteCoderPage: React.FC = () => {
                                 if (projectPath.trim()) {
                                     if (!selectedSession) {
                                         setProjectPathNewSession(projectPath.trim());
-                                    } else if (selectedSession?.id) {
-                                        setProjectPathBySession((prev) => ({
-                                            ...prev,
-                                            [selectedSession.id]: projectPath.trim(),
-                                        }));
                                     }
                                     setProjectPathDialogOpen(false);
                                 }
@@ -505,15 +372,16 @@ const RemoteCoderPage: React.FC = () => {
                 </DialogContent>
                 <DialogActions>
                     <Button
+                        variant="text"
+                        onClick={() => setProjectPathDialogOpen(false)}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
                         variant="contained"
                         onClick={() => {
                             if (!selectedSession) {
                                 setProjectPathNewSession(projectPath.trim());
-                            } else if (selectedSession?.id) {
-                                setProjectPathBySession((prev) => ({
-                                    ...prev,
-                                    [selectedSession.id]: projectPath.trim(),
-                                }));
                             }
                             setProjectPathDialogOpen(false);
                         }}
@@ -532,12 +400,7 @@ const RemoteCoderPage: React.FC = () => {
                         onChange={(e) => {
                             const next = e.target.value;
                             setProjectPath(next);
-                            if (selectedSession?.id) {
-                                setProjectPathBySession((prev) => ({
-                                    ...prev,
-                                    [selectedSession.id]: next,
-                                }));
-                            } else {
+                            if (!selectedSession?.id) {
                                 setProjectPathNewSession(next);
                             }
                         }}
@@ -621,15 +484,14 @@ const RemoteCoderPage: React.FC = () => {
                                             color="text.secondary"
                                             sx={{ display: 'block', mt: 1, cursor: 'pointer', textDecoration: 'underline' }}
                                             onClick={() => {
-                                                setExpandedBySession((prev) => {
-                                                    const current = prev[sessionKey] || new Set<number>();
-                                                    const next = new Set(current);
+                                                setExpandedMessages((prev) => {
+                                                    const next = new Set(prev);
                                                     if (next.has(index)) {
                                                         next.delete(index);
                                                     } else {
                                                         next.add(index);
                                                     }
-                                                    return { ...prev, [sessionKey]: next };
+                                                    return next;
                                                 });
                                             }}
                                         >

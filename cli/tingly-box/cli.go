@@ -115,6 +115,7 @@ func init() {
 	rootCmd.AddCommand(command.StopCommand(appManager))
 	rootCmd.AddCommand(command.RestartCommand(appManager))
 	rootCmd.AddCommand(command.StatusCommand(appManager))
+	rootCmd.AddCommand(command.RemoteCoderCommand(appManager))
 }
 
 func main() {
