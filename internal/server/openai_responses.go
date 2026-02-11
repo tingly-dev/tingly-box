@@ -149,7 +149,18 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 // handleResponsesNonStreamingRequest handles non-streaming Responses API requests
 func (s *Server) handleResponsesNonStreamingRequest(c *gin.Context, provider *typ.Provider, params responses.ResponseNewParams, responseModel, actualModel string, rule *typ.Rule) {
 	// Forward request to provider
-	response, err := s.forwardResponsesRequest(provider, params)
+	var response *responses.Response
+	var err error
+
+	// Check if this is a ChatGPT backend API provider
+	if provider.APIBase == protocol.ChatGPTBackendAPIBase {
+		response, err = s.forwardChatGPTBackendRequest(provider, params)
+	} else {
+		wrapper := s.clientPool.GetOpenAIClient(provider, string(params.Model))
+		fc := NewForwardContext(nil, provider)
+		response, err = ForwardOpenAIResponses(fc, wrapper, params)
+	}
+
 	if err != nil {
 		// Track error with no usage
 		s.trackUsageFromContext(c, 0, 0, err)
@@ -204,7 +215,9 @@ func (s *Server) handleResponsesStreamingRequest(c *gin.Context, provider *typ.P
 	}
 
 	// Create streaming request with request context for proper cancellation
-	stream, _, err := s.forwardResponsesStreamRequest(c.Request.Context(), provider, params)
+	wrapper := s.clientPool.GetOpenAIClient(provider, string(params.Model))
+	fc := NewForwardContext(c.Request.Context(), provider)
+	stream, _, err := ForwardOpenAIResponsesStream(fc, wrapper, params)
 	if err != nil {
 		// Track error with no usage
 		s.trackUsageFromContext(c, 0, 0, err)
@@ -392,28 +405,6 @@ func SSEventOpenAI(c *gin.Context, t string, data any, modelOverride ...string) 
 
 	c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", jsonBytes))
 	return nil
-}
-
-// forwardResponsesRequest forwards a Responses API request to the provider
-func (s *Server) forwardResponsesRequest(provider *typ.Provider, params responses.ResponseNewParams) (*responses.Response, error) {
-	// Check if this is a ChatGPT backend API provider (Codex OAuth)
-	// ChatGPT backend API requires a different request format than standard OpenAI Responses API
-	if provider.APIBase == protocol.ChatGPTBackendAPIBase {
-		return s.forwardChatGPTBackendRequest(provider, params)
-	}
-
-	wrapper := s.clientPool.GetOpenAIClient(provider, string(params.Model))
-	fc := NewForwardContext(nil, provider)
-	return ForwardOpenAIResponses(fc, wrapper, params)
-}
-
-// forwardResponsesStreamRequest forwards a streaming Responses API request to the provider
-func (s *Server) forwardResponsesStreamRequest(ctx context.Context, provider *typ.Provider, params responses.ResponseNewParams) (*ssestream.Stream[responses.ResponseStreamEventUnion], context.CancelFunc, error) {
-	// Note: ChatGPT backend API providers are handled separately in the Anthropic beta handler
-
-	wrapper := s.clientPool.GetOpenAIClient(provider, string(params.Model))
-	fc := NewForwardContext(ctx, provider)
-	return ForwardOpenAIResponsesStream(fc, wrapper, params)
 }
 
 // convertToResponsesParams converts raw JSON to OpenAI SDK params format

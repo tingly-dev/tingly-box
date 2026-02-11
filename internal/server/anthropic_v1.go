@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 
@@ -77,7 +76,9 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 		// Use direct Anthropic SDK call
 		if isStreaming {
 			// Handle streaming request with request context for proper cancellation
-			streamResp, cancel, err := s.forwardAnthropicStreamRequestV1(c.Request.Context(), provider, req.MessageNewParams)
+			wrapper := s.clientPool.GetAnthropicClient(provider, string(req.MessageNewParams.Model))
+			fc := NewForwardContext(c.Request.Context(), provider)
+			streamResp, cancel, err := ForwardAnthropicV1Stream(fc, wrapper, req.MessageNewParams)
 			if err != nil {
 				s.trackUsageFromContext(c, 0, 0, err)
 				SendStreamingError(c, err)
@@ -91,7 +92,9 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			s.handleAnthropicStreamResponseV1(c, req.MessageNewParams, streamResp, proxyModel, actualModel, rule, provider, recorder)
 		} else {
 			// Handle non-streaming request
-			anthropicResp, cancel, err := s.forwardAnthropicRequestV1(provider, req.MessageNewParams)
+			wrapper := s.clientPool.GetAnthropicClient(provider, string(req.MessageNewParams.Model))
+			fc := NewForwardContext(nil, provider)
+			anthropicResp, cancel, err := ForwardAnthropicV1(fc, wrapper, req.MessageNewParams)
 			if err != nil {
 				s.trackUsageFromContext(c, 0, 0, err)
 				SendForwardingError(c, err)
@@ -134,7 +137,9 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 
 		if isStreaming {
 			// Create streaming request with request context for proper cancellation
-			streamResp, _, err := s.forwardGoogleStreamRequest(c.Request.Context(), provider, model, googleReq, cfg)
+			wrapper := s.clientPool.GetGoogleClient(provider, model)
+			fc := NewForwardContext(c.Request.Context(), provider)
+			streamResp, _, err := ForwardGoogleStream(fc, wrapper, model, googleReq, cfg)
 			if err != nil {
 				SendStreamingError(c, err)
 				if recorder != nil {
@@ -159,7 +164,9 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 
 		} else {
 			// Handle non-streaming request
-			response, err := s.forwardGoogleRequest(provider, model, googleReq, cfg)
+			wrapper := s.clientPool.GetGoogleClient(provider, model)
+			fc := NewForwardContext(nil, provider)
+			response, err := ForwardGoogle(fc, wrapper, model, googleReq, cfg)
 			if err != nil {
 				SendForwardingError(c, err)
 				if recorder != nil {
@@ -238,7 +245,9 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			openaiReq := request.ConvertAnthropicToOpenAIRequestWithProvider(&req.MessageNewParams, true, provider, actualModel)
 
 			// Create streaming request with request context for proper cancellation
-			streamResp, _, err := s.forwardOpenAIStreamRequest(c.Request.Context(), provider, openaiReq)
+			wrapper := s.clientPool.GetOpenAIClient(provider, string(openaiReq.Model))
+			fc := NewForwardContext(c.Request.Context(), provider)
+			streamResp, _, err := ForwardOpenAIChatStream(fc, wrapper, openaiReq)
 			if err != nil {
 				SendStreamingError(c, err)
 				if recorder != nil {
@@ -265,7 +274,9 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			// Handle non-streaming request
 			// Convert Anthropic request to OpenAI format with provider transforms
 			openaiReq := request.ConvertAnthropicToOpenAIRequestWithProvider(&req.MessageNewParams, true, provider, actualModel)
-			response, err := s.forwardOpenAIRequest(provider, openaiReq)
+			wrapper := s.clientPool.GetOpenAIClient(provider, string(openaiReq.Model))
+			fc := NewForwardContext(nil, provider)
+			response, err := ForwardOpenAIChat(fc, wrapper, openaiReq)
 			if err != nil {
 				SendForwardingError(c, err)
 				if recorder != nil {
@@ -302,20 +313,6 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			recorder.RecordError(fmt.Errorf("invalid api style: %s", apiStyle))
 		}
 	}
-}
-
-// forwardAnthropicRequestV1 forwards request using Anthropic SDK with proper types (v1)
-func (s *Server) forwardAnthropicRequestV1(provider *typ.Provider, req anthropic.MessageNewParams) (*anthropic.Message, context.CancelFunc, error) {
-	wrapper := s.clientPool.GetAnthropicClient(provider, string(req.Model))
-	fc := NewForwardContext(nil, provider)
-	return ForwardAnthropicV1(fc, wrapper, req)
-}
-
-// forwardAnthropicStreamRequestV1 forwards streaming request using Anthropic SDK (v1)
-func (s *Server) forwardAnthropicStreamRequestV1(ctx context.Context, provider *typ.Provider, req anthropic.MessageNewParams) (*anthropicstream.Stream[anthropic.MessageStreamEventUnion], context.CancelFunc, error) {
-	wrapper := s.clientPool.GetAnthropicClient(provider, string(req.Model))
-	fc := NewForwardContext(ctx, provider)
-	return ForwardAnthropicV1Stream(fc, wrapper, req)
 }
 
 // handleAnthropicStreamResponseV1 processes the Anthropic streaming response and sends it to the client (v1)
@@ -358,7 +355,9 @@ func (s *Server) handleAnthropicV1ViaResponsesAPINonStreaming(c *gin.Context, re
 		response, err = s.forwardChatGPTBackendRequest(provider, responsesReq)
 	} else {
 		// Use standard OpenAI Responses API
-		response, err = s.forwardResponsesRequest(provider, responsesReq)
+		wrapper := s.clientPool.GetOpenAIClient(provider, string(responsesReq.Model))
+		fc := NewForwardContext(nil, provider)
+		response, err = ForwardOpenAIResponses(fc, wrapper, responsesReq)
 	}
 
 	if err != nil {
@@ -416,7 +415,9 @@ func (s *Server) handleAnthropicV1ViaResponsesAPIStreaming(c *gin.Context, req p
 	}
 
 	// For standard OpenAI providers, use the OpenAI SDK
-	streamResp, cancel, err := s.forwardResponsesStreamRequest(c.Request.Context(), provider, responsesReq)
+	wrapper := s.clientPool.GetOpenAIClient(provider, string(responsesReq.Model))
+	fc := NewForwardContext(c.Request.Context(), provider)
+	streamResp, cancel, err := ForwardOpenAIResponsesStream(fc, wrapper, responsesReq)
 	if err != nil {
 		s.trackUsageFromContext(c, 0, 0, err)
 		SendStreamingError(c, err)

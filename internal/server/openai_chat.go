@@ -48,7 +48,9 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 	}
 
 	// Forward request to provider
-	response, err := s.forwardOpenAIRequest(provider, req)
+	wrapper := s.clientPool.GetOpenAIClient(provider, string(req.Model))
+	fc := NewForwardContext(nil, provider)
+	response, err := ForwardOpenAIChat(fc, wrapper, req)
 	if err != nil {
 		// Track error with no usage
 		s.trackUsageFromContext(c, 0, 0, err)
@@ -157,26 +159,6 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 	c.JSON(http.StatusOK, responseMap)
 }
 
-// forwardOpenAIRequest forwards the request to the selected provider using OpenAI library
-func (s *Server) forwardOpenAIRequest(provider *typ.Provider, req *openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
-	wrapper := s.clientPool.GetOpenAIClient(provider, string(req.Model))
-	fc := NewForwardContext(nil, provider)
-	return ForwardOpenAIChat(fc, wrapper, req)
-}
-
-// forwardOpenAIStreamRequest forwards the streaming request to the selected provider using OpenAI library
-func (s *Server) forwardOpenAIStreamRequest(ctx context.Context, provider *typ.Provider, req *openai.ChatCompletionNewParams) (*ssestream.Stream[openai.ChatCompletionChunk], context.CancelFunc, error) {
-	wrapper := s.clientPool.GetOpenAIClient(provider, string(req.Model))
-	fc := NewForwardContext(ctx, provider)
-	return ForwardOpenAIChatStream(fc, wrapper, req)
-}
-
-// buildOpenAIConfig builds the OpenAIConfig for provider transformations
-// Deprecated: Use buildOpenAIConfig in protocol_forward.go instead
-func (s *Server) buildOpenAIConfig(req *openai.ChatCompletionNewParams) *transformer.OpenAIConfig {
-	return buildOpenAIConfig(req)
-}
-
 // handleInterceptedToolCalls executes intercepted tool calls locally and returns final response
 func (s *Server) handleInterceptedToolCalls(provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, toolCallResponse *openai.ChatCompletion) (*openai.ChatCompletion, error) {
 	logrus.Debugf("Handling %d intercepted tool calls for provider %s", len(toolCallResponse.Choices[0].Message.ToolCalls), provider.Name)
@@ -222,7 +204,9 @@ func (s *Server) handleInterceptedToolCalls(provider *typ.Provider, originalReq 
 	followUpReq = *toolinterceptor.StripSearchFetchToolsOpenAI(&followUpReq)
 
 	// Forward to provider for final response (may contain more tool calls or final answer)
-	finalResponse, err := s.forwardOpenAIRequest(provider, &followUpReq)
+	wrapper := s.clientPool.GetOpenAIClient(provider, string(followUpReq.Model))
+	fc := NewForwardContext(nil, provider)
+	finalResponse, err := ForwardOpenAIChat(fc, wrapper, &followUpReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get final response after tool execution: %w", err)
 	}

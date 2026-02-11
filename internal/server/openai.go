@@ -202,7 +202,9 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 	case protocol.APIStyleAnthropic:
 		anthropicReq := request.ConvertOpenAIToAnthropicRequest(&req.ChatCompletionNewParams, int64(maxAllowed))
 		if isStreaming {
-			streamResp, cancel, err := s.forwardAnthropicStreamRequestV1(c.Request.Context(), provider, anthropicReq)
+			wrapper := s.clientPool.GetAnthropicClient(provider, string(anthropicReq.Model))
+			fc := NewForwardContext(c.Request.Context(), provider)
+			streamResp, cancel, err := ForwardAnthropicV1Stream(fc, wrapper, anthropicReq)
 			if err != nil {
 				// Track error with no usage
 				s.trackUsageFromContext(c, 0, 0, err)
@@ -237,7 +239,9 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 			}
 			return
 		} else {
-			anthropicResp, cancel, err := s.forwardAnthropicRequestV1(provider, anthropicReq)
+			wrapper := s.clientPool.GetAnthropicClient(provider, string(anthropicReq.Model))
+			fc := NewForwardContext(nil, provider)
+			anthropicResp, cancel, err := ForwardAnthropicV1(fc, wrapper, anthropicReq)
 			if err != nil {
 				// Track error with no usage
 				s.trackUsageFromContext(c, 0, 0, err)
@@ -283,7 +287,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 		}
 
 		if isStreaming {
-			s.handleStreamingRequest(c, provider, &req.ChatCompletionNewParams, responseModel, rule, shouldIntercept, shouldStripTools)
+			s.handleOpenAIChatStreamingRequest(c, provider, &req.ChatCompletionNewParams, responseModel)
 		} else {
 			s.handleNonStreamingRequest(c, provider, &req.ChatCompletionNewParams, responseModel, rule, shouldIntercept, shouldStripTools)
 		}
