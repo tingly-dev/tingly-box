@@ -1144,6 +1144,53 @@ export const api = {
             return { success: false, error: error.message };
         }
     },
+
+    // Get remote-coder bot settings
+    getRemoteCCBotSettings: async (): Promise<any> => {
+        try {
+            const token = await getRemoteCCAuthToken();
+            const baseUrl = api.getRemoteCCBaseUrl();
+            const response = await fetch(`${baseUrl}/remote-coder/bot/settings`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+            });
+
+            if (response.status === 401) {
+                return { success: false, error: 'Authentication required' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Update remote-coder bot settings
+    updateRemoteCCBotSettings: async (data: { token: string; allowlist: string[] }): Promise<any> => {
+        try {
+            const token = await getRemoteCCAuthToken();
+            const baseUrl = api.getRemoteCCBaseUrl();
+            const response = await fetch(`${baseUrl}/remote-coder/bot/settings`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+                body: JSON.stringify(data),
+            });
+
+            if (response.status === 401) {
+                return { success: false, error: 'Authentication required' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
 };
 
 export default api;

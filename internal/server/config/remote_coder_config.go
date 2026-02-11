@@ -21,7 +21,7 @@ func (c *Config) applyRemoteCoderDefaults() bool {
 	}
 	if c.RemoteCoder.DBPath == "" {
 		if c.ConfigDir != "" {
-			c.RemoteCoder.DBPath = filepath.Join(c.ConfigDir, "remote-coder.db")
+			c.RemoteCoder.DBPath = filepath.Join(c.ConfigDir, "tingly-remote-coder.db")
 			updated = true
 		}
 	}
