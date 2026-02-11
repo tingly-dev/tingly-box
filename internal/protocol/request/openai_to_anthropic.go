@@ -123,10 +123,7 @@ func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams, defaul
 		params.Tools = ConvertOpenAIToAnthropicTools(req.Tools)
 		// Convert tool choice
 		// ToolChoice is a Union type, check if any field is set
-		if req.ToolChoice.OfAuto.Value != "" || req.ToolChoice.OfAllowedTools != nil ||
-			req.ToolChoice.OfFunctionToolChoice != nil || req.ToolChoice.OfCustomToolChoice != nil {
-			params.ToolChoice = ConvertOpenAIToAnthropicToolChoice(&req.ToolChoice)
-		}
+		params.ToolChoice = ConvertOpenAIToAnthropicToolChoice(&req.ToolChoice)
 	}
 
 	return params
