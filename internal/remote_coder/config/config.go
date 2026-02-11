@@ -94,7 +94,7 @@ func LoadFromAppConfig(appCfg *serverconfig.Config, opts Options) (*Config, erro
 	dbPath := remoteCfg.DBPath
 	if dbPath == "" {
 		if appCfg.ConfigDir != "" {
-			dbPath = filepath.Join(appCfg.ConfigDir, "remote-coder.db")
+			dbPath = filepath.Join(appCfg.ConfigDir, "tingly-remote-coder.db")
 		}
 	}
 	if env := os.Getenv("RCC_DB_PATH"); env != "" {
