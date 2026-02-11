@@ -227,11 +227,7 @@ func ConvertOpenAIToGoogleRequest(req *openai.ChatCompletionNewParams, defaultMa
 				FunctionDeclarations: ConvertOpenAIToGoogleTools(req.Tools),
 			},
 		}
-	}
-
-	// Convert tool choice
-	if req.ToolChoice.OfAuto.Value != "" || req.ToolChoice.OfAllowedTools != nil ||
-		req.ToolChoice.OfFunctionToolChoice != nil || req.ToolChoice.OfCustomToolChoice != nil {
+		// Convert tool choice
 		config.ToolConfig = ConvertOpenAIToGoogleToolChoice(&req.ToolChoice)
 	}
 
