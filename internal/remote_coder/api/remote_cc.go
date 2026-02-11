@@ -10,20 +10,20 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
-	"github.com/tingly-dev/tingly-box/cmd/remote-cc/internal/audit"
-	"github.com/tingly-dev/tingly-box/cmd/remote-cc/internal/config"
-	"github.com/tingly-dev/tingly-box/cmd/remote-cc/internal/launcher"
-	"github.com/tingly-dev/tingly-box/cmd/remote-cc/internal/session"
-	"github.com/tingly-dev/tingly-box/cmd/remote-cc/internal/summarizer"
+	"github.com/tingly-dev/tingly-box/internal/remote_coder/audit"
+	"github.com/tingly-dev/tingly-box/internal/remote_coder/config"
+	"github.com/tingly-dev/tingly-box/internal/remote_coder/launcher"
+	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
+	"github.com/tingly-dev/tingly-box/internal/remote_coder/summarizer"
 )
 
 // RemoteCCHandler handles remote Claude Code requests
 type RemoteCCHandler struct {
-	sessionMgr    *session.Manager
+	sessionMgr     *session.Manager
 	claudeLauncher *launcher.ClaudeCodeLauncher
-	summaryEngine *summarizer.Engine
-	auditLogger   *audit.Logger
-	config        *config.Config
+	summaryEngine  *summarizer.Engine
+	auditLogger    *audit.Logger
+	config         *config.Config
 }
 
 // NewRemoteCCHandler creates a new remote-coder handler
@@ -32,39 +32,39 @@ func NewRemoteCCHandler(sessionMgr *session.Manager, claudeLauncher *launcher.Cl
 		sessionMgr:     sessionMgr,
 		claudeLauncher: claudeLauncher,
 		summaryEngine:  summaryEngine,
-		auditLogger:   auditLogger,
-		config:        cfg,
+		auditLogger:    auditLogger,
+		config:         cfg,
 	}
 }
 
 // RemoteSession represents a remote session for API response
 type RemoteSession struct {
-	ID           string    `json:"id"`
-	Status       string    `json:"status"`
-	Request      string    `json:"request,omitempty"`
-	Response     string    `json:"response,omitempty"`
-	Error        string    `json:"error,omitempty"`
-	CreatedAt    string    `json:"created_at"`
-	LastActivity string    `json:"last_activity"`
-	ExpiresAt    string    `json:"expires_at"`
-	ProjectPath  string    `json:"project_path,omitempty"`
+	ID           string `json:"id"`
+	Status       string `json:"status"`
+	Request      string `json:"request,omitempty"`
+	Response     string `json:"response,omitempty"`
+	Error        string `json:"error,omitempty"`
+	CreatedAt    string `json:"created_at"`
+	LastActivity string `json:"last_activity"`
+	ExpiresAt    string `json:"expires_at"`
+	ProjectPath  string `json:"project_path,omitempty"`
 }
 
 // RemoteChatRequest represents a chat request to Claude Code
 type RemoteChatRequest struct {
-	SessionID string `json:"session_id,omitempty"`
-	Message   string `json:"message" binding:"required"`
+	SessionID string                 `json:"session_id,omitempty"`
+	Message   string                 `json:"message" binding:"required"`
 	Context   map[string]interface{} `json:"context,omitempty"`
 }
 
 // RemoteChatResponse represents a chat response from Claude Code
 type RemoteChatResponse struct {
-	SessionID  string `json:"session_id"`
-	Message    string `json:"message"`
-	Summary    string `json:"summary"` // Chopped/summarized response
+	SessionID    string `json:"session_id"`
+	Message      string `json:"message"`
+	Summary      string `json:"summary"`                 // Chopped/summarized response
 	FullResponse string `json:"full_response,omitempty"` // Full response (if requested)
-	Success    bool   `json:"success"`
-	Error      string `json:"error,omitempty"`
+	Success      bool   `json:"success"`
+	Error        string `json:"error,omitempty"`
 }
 
 // RemoteChatMessage represents a chat message for API response
@@ -73,6 +73,18 @@ type RemoteChatMessage struct {
 	Content   string `json:"content"`
 	Summary   string `json:"summary,omitempty"`
 	Timestamp string `json:"timestamp"`
+}
+
+// RemoteSessionState represents persisted UI/session state
+type RemoteSessionState struct {
+	ProjectPath      string `json:"project_path,omitempty"`
+	ExpandedMessages []int  `json:"expanded_messages,omitempty"`
+}
+
+// RemoteSessionStateUpdate represents a partial update to session state
+type RemoteSessionStateUpdate struct {
+	ProjectPath      *string `json:"project_path,omitempty"`
+	ExpandedMessages *[]int  `json:"expanded_messages,omitempty"`
 }
 
 // GetSessions handles GET /remote-coder/sessions
@@ -153,12 +165,12 @@ func (h *RemoteCCHandler) GetSessions(c *gin.Context) {
 	})
 
 	c.JSON(http.StatusOK, gin.H{
-		"sessions":   entries,
-		"page":       page,
-		"limit":      limit,
-		"total":      total,
+		"sessions":    entries,
+		"page":        page,
+		"limit":       limit,
+		"total":       total,
 		"total_pages": (total + limit - 1) / limit,
-		"stats":      stats,
+		"stats":       stats,
 	})
 }
 
@@ -333,15 +345,15 @@ func (h *RemoteCCHandler) Chat(c *gin.Context) {
 
 	h.auditLogger.LogRequest("remote_cc_chat", userID, clientIP, sessionID, getRequestID(c), true, time.Since(start), map[string]interface{}{
 		"response_length": len(response),
-		"summary_length": len(summary),
+		"summary_length":  len(summary),
 	})
 
 	c.JSON(http.StatusOK, RemoteChatResponse{
-		SessionID:     sessionID,
-		Message:       req.Message,
-		Summary:       summary,
+		SessionID:    sessionID,
+		Message:      req.Message,
+		Summary:      summary,
 		FullResponse: response,
-		Success:     true,
+		Success:      true,
 	})
 }
 
@@ -386,6 +398,110 @@ func (h *RemoteCCHandler) GetSessionMessages(c *gin.Context) {
 	})
 }
 
+// GetSessionState handles GET /remote-coder/sessions/:id/state
+func (h *RemoteCCHandler) GetSessionState(c *gin.Context) {
+	start := time.Now()
+	clientIP := c.ClientIP()
+	userID := getUserID(c)
+	sessionID := c.Param("id")
+
+	session, exists := h.sessionMgr.GetOrLoad(sessionID)
+	if !exists {
+		h.auditLogger.LogRequest("remote_cc_session_state_get", userID, clientIP, sessionID, getRequestID(c), false, time.Since(start), map[string]interface{}{
+			"error": "session not found",
+		})
+
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": gin.H{
+				"message": "Session not found",
+				"type":    "not_found_error",
+			},
+		})
+		return
+	}
+
+	projectPath := ""
+	if session.Context != nil {
+		if v, ok := session.Context["project_path"]; ok {
+			if pv, ok := v.(string); ok {
+				projectPath = pv
+			}
+		}
+	}
+
+	expanded := []int{}
+	if session.Context != nil {
+		if v, ok := session.Context["ui_expanded_messages"]; ok {
+			expanded = parseExpandedMessages(v)
+		}
+	}
+
+	h.auditLogger.LogRequest("remote_cc_session_state_get", userID, clientIP, sessionID, getRequestID(c), true, time.Since(start), nil)
+
+	c.JSON(http.StatusOK, RemoteSessionState{
+		ProjectPath:      projectPath,
+		ExpandedMessages: expanded,
+	})
+}
+
+// UpdateSessionState handles PUT /remote-coder/sessions/:id/state
+func (h *RemoteCCHandler) UpdateSessionState(c *gin.Context) {
+	start := time.Now()
+	clientIP := c.ClientIP()
+	userID := getUserID(c)
+	sessionID := c.Param("id")
+
+	var req RemoteSessionStateUpdate
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.auditLogger.LogRequest("remote_cc_session_state_update", userID, clientIP, sessionID, getRequestID(c), false, time.Since(start), map[string]interface{}{
+			"error": "invalid request body",
+		})
+
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"message": "Invalid request body",
+				"type":    "invalid_request_error",
+			},
+		})
+		return
+	}
+
+	if _, exists := h.sessionMgr.GetOrLoad(sessionID); !exists {
+		h.auditLogger.LogRequest("remote_cc_session_state_update", userID, clientIP, sessionID, getRequestID(c), false, time.Since(start), map[string]interface{}{
+			"error": "session not found",
+		})
+
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": gin.H{
+				"message": "Session not found",
+				"type":    "not_found_error",
+			},
+		})
+		return
+	}
+
+	if req.ProjectPath != nil {
+		projectPath := strings.TrimSpace(*req.ProjectPath)
+		h.sessionMgr.SetContext(sessionID, "project_path", projectPath)
+	}
+
+	if req.ExpandedMessages != nil {
+		cleaned := make([]int, 0, len(*req.ExpandedMessages))
+		for _, v := range *req.ExpandedMessages {
+			if v >= 0 {
+				cleaned = append(cleaned, v)
+			}
+		}
+		h.sessionMgr.SetContext(sessionID, "ui_expanded_messages", cleaned)
+	}
+
+	h.auditLogger.LogRequest("remote_cc_session_state_update", userID, clientIP, sessionID, getRequestID(c), true, time.Since(start), nil)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+	})
+}
+
 // ClearSessions handles POST /remote-coder/sessions/clear
 func (h *RemoteCCHandler) ClearSessions(c *gin.Context) {
 	start := time.Now()
@@ -407,4 +523,28 @@ func (h *RemoteCCHandler) ClearSessions(c *gin.Context) {
 // getAllSessions returns all sessions (helper function)
 func (h *RemoteCCHandler) getAllSessions() []*session.Session {
 	return h.sessionMgr.List()
+}
+
+func parseExpandedMessages(value interface{}) []int {
+	switch data := value.(type) {
+	case []int:
+		return append([]int{}, data...)
+	case []interface{}:
+		out := make([]int, 0, len(data))
+		for _, v := range data {
+			switch n := v.(type) {
+			case int:
+				out = append(out, n)
+			case int32:
+				out = append(out, int(n))
+			case int64:
+				out = append(out, int(n))
+			case float64:
+				out = append(out, int(n))
+			}
+		}
+		return out
+	default:
+		return []int{}
+	}
 }

@@ -11,21 +11,21 @@ import (
 
 // RateLimiter provides rate limiting functionality
 type RateLimiter struct {
-	attempts    map[string][]time.Time // IP -> list of attempt times
-	blockUntil  map[string]time.Time  // IP -> unblock time
-	mu          sync.RWMutex
-	maxAttempts int
-	windowSize  time.Duration
+	attempts      map[string][]time.Time // IP -> list of attempt times
+	blockUntil    map[string]time.Time   // IP -> unblock time
+	mu            sync.RWMutex
+	maxAttempts   int
+	windowSize    time.Duration
 	blockDuration time.Duration
 }
 
 // NewRateLimiter creates a new rate limiter
 func NewRateLimiter(maxAttempts int, windowSize, blockDuration time.Duration) *RateLimiter {
 	return &RateLimiter{
-		attempts:     make(map[string][]time.Time),
-		blockUntil:   make(map[string]time.Time),
-		maxAttempts:  maxAttempts,
-		windowSize:   windowSize,
+		attempts:      make(map[string][]time.Time),
+		blockUntil:    make(map[string]time.Time),
+		maxAttempts:   maxAttempts,
+		windowSize:    windowSize,
 		blockDuration: blockDuration,
 	}
 }
@@ -135,8 +135,8 @@ func RateLimitMiddleware(rl *RateLimiter, authPaths ...string) gin.HandlerFunc {
 			c.Header("Retry-After", "300")
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
 				"error": gin.H{
-					"message": "Too many failed attempts. Please try again in 5 minutes.",
-					"type":    "rate_limit_error",
+					"message":     "Too many failed attempts. Please try again in 5 minutes.",
+					"type":        "rate_limit_error",
 					"retry_after": 300,
 				},
 			})
@@ -158,8 +158,8 @@ func RateLimitMiddleware(rl *RateLimiter, authPaths ...string) gin.HandlerFunc {
 				c.Header("Retry-After", "300")
 				c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
 					"error": gin.H{
-						"message": "Too many failed attempts. Please try again in 5 minutes.",
-						"type":    "rate_limit_error",
+						"message":     "Too many failed attempts. Please try again in 5 minutes.",
+						"type":        "rate_limit_error",
 						"retry_after": 300,
 					},
 				})

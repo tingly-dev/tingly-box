@@ -5,21 +5,21 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 
-	"github.com/tingly-dev/tingly-box/cmd/remote-cc/internal/audit"
-	"github.com/tingly-dev/tingly-box/cmd/remote-cc/internal/launcher"
-	"github.com/tingly-dev/tingly-box/cmd/remote-cc/internal/session"
-	"github.com/tingly-dev/tingly-box/cmd/remote-cc/internal/summarizer"
+	"github.com/tingly-dev/tingly-box/internal/remote_coder/audit"
+	"github.com/tingly-dev/tingly-box/internal/remote_coder/launcher"
+	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
+	"github.com/tingly-dev/tingly-box/internal/remote_coder/summarizer"
 )
 
 // Handler handles API requests
 type Handler struct {
-	sessionMgr   *session.Manager
-	claude       *launcher.ClaudeCodeLauncher
-	summarizer   *summarizer.Engine
-	auditLogger  *audit.Logger
+	sessionMgr  *session.Manager
+	claude      *launcher.ClaudeCodeLauncher
+	summarizer  *summarizer.Engine
+	auditLogger *audit.Logger
 }
 
 // NewHandler creates a new API handler
@@ -40,7 +40,7 @@ type HandshakeRequest struct {
 // HandshakeResponse represents the handshake response
 type HandshakeResponse struct {
 	SessionID string `json:"session_id"`
-	Status   string `json:"status"`
+	Status    string `json:"status"`
 	ExpiresAt string `json:"expires_at"`
 }
 
@@ -53,21 +53,21 @@ type ExecuteRequest struct {
 // ExecuteResponse represents the execute response
 type ExecuteResponse struct {
 	SessionID string `json:"session_id"`
-	Status   string `json:"status"`
-	Summary  string `json:"summary"`
-	Error    string `json:"error,omitempty"`
+	Status    string `json:"status"`
+	Summary   string `json:"summary"`
+	Error     string `json:"error,omitempty"`
 }
 
 // StatusResponse represents the status response
 type StatusResponse struct {
-	SessionID   string `json:"session_id"`
-	Status     string `json:"status"`
-	Request    string `json:"request,omitempty"`
-	Summary    string `json:"summary,omitempty"`
-	Error     string `json:"error,omitempty"`
-	CreatedAt  string `json:"created_at"`
+	SessionID    string `json:"session_id"`
+	Status       string `json:"status"`
+	Request      string `json:"request,omitempty"`
+	Summary      string `json:"summary,omitempty"`
+	Error        string `json:"error,omitempty"`
+	CreatedAt    string `json:"created_at"`
 	LastActivity string `json:"last_activity"`
-	ExpiresAt  string `json:"expires_at"`
+	ExpiresAt    string `json:"expires_at"`
 }
 
 // CloseRequest represents the close request body
@@ -78,8 +78,8 @@ type CloseRequest struct {
 // CloseResponse represents the close response
 type CloseResponse struct {
 	SessionID string `json:"session_id"`
-	Status   string `json:"status"`
-	Message  string `json:"message,omitempty"`
+	Status    string `json:"status"`
+	Message   string `json:"message,omitempty"`
 }
 
 // getClientIP extracts client IP from context
@@ -137,7 +137,7 @@ func (h *Handler) Handshake(c *gin.Context) {
 
 	response := HandshakeResponse{
 		SessionID: s.ID,
-		Status:   string(s.Status),
+		Status:    string(s.Status),
 		ExpiresAt: s.ExpiresAt.Format(time.RFC3339),
 	}
 
@@ -192,8 +192,8 @@ func (h *Handler) Execute(c *gin.Context) {
 	// Check if session is still valid
 	if s.Status == session.StatusClosed || s.Status == session.StatusExpired {
 		h.auditLogger.LogRequest("execute", userID, clientIP, req.SessionID, requestID, false, time.Since(start), map[string]interface{}{
-			"error":    "session no longer active",
-			"status":   string(s.Status),
+			"error":  "session no longer active",
+			"status": string(s.Status),
 		})
 
 		c.JSON(http.StatusGone, gin.H{
@@ -216,7 +216,7 @@ func (h *Handler) Execute(c *gin.Context) {
 
 	response := ExecuteResponse{
 		SessionID: req.SessionID,
-		Status:   string(session.StatusRunning),
+		Status:    string(session.StatusRunning),
 	}
 
 	if err != nil {
@@ -226,7 +226,7 @@ func (h *Handler) Execute(c *gin.Context) {
 		response.Error = err.Error()
 
 		h.auditLogger.LogRequest("execute", userID, clientIP, req.SessionID, requestID, false, time.Since(start), map[string]interface{}{
-			"error":      err.Error(),
+			"error":       err.Error(),
 			"request_len": len(req.Request),
 		})
 
@@ -245,9 +245,9 @@ func (h *Handler) Execute(c *gin.Context) {
 
 	// Audit log
 	h.auditLogger.LogRequest("execute", userID, clientIP, req.SessionID, requestID, true, time.Since(start), map[string]interface{}{
-		"duration_ms":   result.Duration.Milliseconds(),
-		"output_len":    len(result.Output),
-		"summary_len":  len(summary),
+		"duration_ms": result.Duration.Milliseconds(),
+		"output_len":  len(result.Output),
+		"summary_len": len(summary),
 	})
 
 	c.JSON(http.StatusOK, response)
@@ -279,10 +279,10 @@ func (h *Handler) Status(c *gin.Context) {
 
 	response := StatusResponse{
 		SessionID:    s.ID,
-		Status:      string(s.Status),
-		CreatedAt:   s.CreatedAt.Format(time.RFC3339),
+		Status:       string(s.Status),
+		CreatedAt:    s.CreatedAt.Format(time.RFC3339),
 		LastActivity: s.LastActivity.Format(time.RFC3339),
-		ExpiresAt:  s.ExpiresAt.Format(time.RFC3339),
+		ExpiresAt:    s.ExpiresAt.Format(time.RFC3339),
 	}
 
 	// Include request if available
@@ -351,8 +351,8 @@ func (h *Handler) Close(c *gin.Context) {
 
 	response := CloseResponse{
 		SessionID: req.SessionID,
-		Status:   string(session.StatusClosed),
-		Message:  "Session closed successfully",
+		Status:    string(session.StatusClosed),
+		Message:   "Session closed successfully",
 	}
 
 	logrus.Infof("Session closed: session_id=%s", req.SessionID)

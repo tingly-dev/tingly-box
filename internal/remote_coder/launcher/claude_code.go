@@ -21,9 +21,9 @@ type Result struct {
 
 // ClaudeCodeLauncher handles Claude Code CLI execution
 type ClaudeCodeLauncher struct {
-	defaultTimeout time.Duration
-	cliPath       string // Path to Claude CLI (defaults to "claude")
-	skipPermissions bool  // Whether to skip permission prompts
+	defaultTimeout  time.Duration
+	cliPath         string // Path to Claude CLI (defaults to "claude")
+	skipPermissions bool   // Whether to skip permission prompts
 }
 
 // ExecuteOptions controls Claude Code execution
@@ -34,7 +34,7 @@ type ExecuteOptions struct {
 // NewClaudeCodeLauncher creates a new Claude Code launcher
 func NewClaudeCodeLauncher() *ClaudeCodeLauncher {
 	return &ClaudeCodeLauncher{
-		defaultTimeout:   5 * time.Minute,
+		defaultTimeout:  5 * time.Minute,
 		cliPath:         "claude",
 		skipPermissions: false,
 	}

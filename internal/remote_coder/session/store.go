@@ -293,7 +293,7 @@ func (s *MessageStore) PurgeOlderThan(cutoff time.Time) error {
 		return err
 	}
 	if n, err := res.RowsAffected(); err == nil && n > 0 {
-		logrus.Infof("Purged %d remote-cc messages older than %s", n, cutoff.Format(time.RFC3339))
+		logrus.Infof("Purged %d remote-coder messages older than %s", n, cutoff.Format(time.RFC3339))
 	}
 	return nil
 }
@@ -308,7 +308,7 @@ func (s *MessageStore) PurgeSessionsOlderThan(cutoff time.Time) error {
 		return err
 	}
 	if n, err := res.RowsAffected(); err == nil && n > 0 {
-		logrus.Infof("Purged %d remote-cc sessions older than %s", n, cutoff.Format(time.RFC3339))
+		logrus.Infof("Purged %d remote-coder sessions older than %s", n, cutoff.Format(time.RFC3339))
 	}
 	return nil
 }

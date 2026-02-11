@@ -1,4 +1,4 @@
-package main
+package remote_coder
 
 import (
 	"context"
@@ -13,13 +13,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
-	"github.com/tingly-dev/tingly-box/cmd/remote-cc/internal/api"
-	"github.com/tingly-dev/tingly-box/cmd/remote-cc/internal/audit"
-	"github.com/tingly-dev/tingly-box/cmd/remote-cc/internal/config"
-	"github.com/tingly-dev/tingly-box/cmd/remote-cc/internal/launcher"
-	"github.com/tingly-dev/tingly-box/cmd/remote-cc/internal/middleware"
-	"github.com/tingly-dev/tingly-box/cmd/remote-cc/internal/session"
-	"github.com/tingly-dev/tingly-box/cmd/remote-cc/internal/summarizer"
+	"github.com/tingly-dev/tingly-box/internal/remote_coder/api"
+	"github.com/tingly-dev/tingly-box/internal/remote_coder/audit"
+	"github.com/tingly-dev/tingly-box/internal/remote_coder/config"
+	"github.com/tingly-dev/tingly-box/internal/remote_coder/launcher"
+	"github.com/tingly-dev/tingly-box/internal/remote_coder/middleware"
+	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
+	"github.com/tingly-dev/tingly-box/internal/remote_coder/summarizer"
 )
 
 // CORSMiddleware adds CORS headers to allow cross-origin requests
@@ -40,30 +40,21 @@ func CORSMiddleware() gin.HandlerFunc {
 	}
 }
 
-func main() {
-	// Load configuration
-	cfg, err := config.Load()
-	if err != nil {
-		logrus.Fatalf("Failed to load configuration: %v", err)
+// Run starts the remote-coder service and blocks until shutdown.
+func Run(ctx context.Context, cfg *config.Config) error {
+	if cfg == nil {
+		return fmt.Errorf("remote-coder config is nil")
 	}
 
-	// Setup logging
-	logLevel := logrus.InfoLevel
-	if v := strings.ToLower(strings.TrimSpace(os.Getenv("RCC_DEBUG"))); v == "1" || v == "true" || v == "yes" {
-		logLevel = logrus.DebugLevel
+	if ctx == nil {
+		ctx = context.Background()
 	}
-	logrus.SetLevel(logLevel)
-	logrus.SetFormatter(&logrus.TextFormatter{
-		TimestampFormat: "2006-01-02 15:04:05",
-		FullTimestamp:   true,
-	})
 
-	logrus.Infof("Starting remote-cc on port %d", cfg.Port)
+	logrus.Infof("Starting remote-coder on port %d", cfg.Port)
 
-	// Initialize components
 	store, err := session.NewMessageStore(cfg.DBPath)
 	if err != nil {
-		logrus.Fatalf("Failed to initialize remote-cc message store: %v", err)
+		return fmt.Errorf("failed to initialize remote-coder message store: %w", err)
 	}
 
 	sessionMgr := session.NewManager(session.Config{
@@ -80,16 +71,12 @@ func main() {
 	}
 	summaryEngine := summarizer.NewEngine()
 
-	// Initialize audit logger
 	auditLogger := audit.NewLogger(audit.Config{
 		Console:    true,
 		MaxEntries: 10000,
 	})
 
-	// Initialize rate limiter
 	rateLimiter := cfg.NewRateLimiter()
-
-	// Start rate limiter cleanup goroutine
 	go func() {
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
@@ -98,14 +85,12 @@ func main() {
 		}
 	}()
 
-	// Setup Gin
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(gin.Logger())
 	router.Use(CORSMiddleware())
 
-	// Health check endpoint (no auth required, no rate limit)
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"status":    "healthy",
@@ -113,7 +98,6 @@ func main() {
 		})
 	})
 
-	// Availability check endpoint (no auth required, for frontend to detect if service is running)
 	router.GET("/remote-coder/available", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"available": true,
@@ -122,10 +106,8 @@ func main() {
 		})
 	})
 
-	// Rate limit middleware for auth endpoints (before auth middleware)
 	authRateLimit := middleware.RateLimitMiddleware(rateLimiter, "/remote-coder/handshake", "/remote-coder/execute")
 
-	// RemoteCoder legacy-compatible API routes
 	remoteCCLegacyAPI := router.Group("/remote-coder")
 	remoteCCLegacyAPI.Use(authRateLimit)
 	remoteCCLegacyAPI.Use(config.AuthMiddleware(cfg))
@@ -136,7 +118,6 @@ func main() {
 	remoteCCLegacyAPI.GET("/status/:session_id", apiHandler.Status)
 	remoteCCLegacyAPI.POST("/close", apiHandler.Close)
 
-	// Admin endpoints (separate auth for admin token)
 	adminAPI := router.Group("/admin")
 	adminAPI.Use(config.AuthMiddleware(cfg))
 
@@ -149,49 +130,51 @@ func main() {
 	adminAPI.POST("/tokens/validate", adminHandler.ValidateToken)
 	adminAPI.POST("/tokens/revoke", adminHandler.RevokeToken)
 
-	// Remote Coder endpoints (always enabled)
 	remoteCCAPI := router.Group("/remote-coder")
 	remoteCCAPI.Use(config.AuthMiddleware(cfg))
 
 	remoteCCHandler := api.NewRemoteCCHandler(sessionMgr, claudeLauncher, summaryEngine, auditLogger, cfg)
 	remoteCCAPI.GET("/sessions", remoteCCHandler.GetSessions)
 	remoteCCAPI.GET("/sessions/:id", remoteCCHandler.GetSession)
+	remoteCCAPI.GET("/sessions/:id/state", remoteCCHandler.GetSessionState)
+	remoteCCAPI.PUT("/sessions/:id/state", remoteCCHandler.UpdateSessionState)
 	remoteCCAPI.GET("/sessions/:id/messages", remoteCCHandler.GetSessionMessages)
 	remoteCCAPI.POST("/chat", remoteCCHandler.Chat)
 	remoteCCAPI.POST("/sessions/clear", remoteCCHandler.ClearSessions)
 
-	// Create HTTP server
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
 		Handler:      router,
 		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 300 * time.Second, // Long timeout for Claude Code execution
+		WriteTimeout: 300 * time.Second,
 	}
 
-	// Start server in goroutine
+	errCh := make(chan error, 1)
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logrus.Fatalf("Failed to start server: %v", err)
+			errCh <- err
 		}
 	}()
 
-	logrus.Infof("remote-cc started successfully")
-	logrus.Infof("Admin endpoints available at http://localhost:%d/admin/*", cfg.Port)
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
-	// Wait for interrupt signal
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-
-	logrus.Info("Shutting down server...")
-
-	// Graceful shutdown with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if err := srv.Shutdown(ctx); err != nil {
-		logrus.Errorf("Server forced to shutdown: %v", err)
+	select {
+	case <-ctx.Done():
+		logrus.Info("Remote-coder shutting down (context canceled)...")
+	case sig := <-sigCh:
+		logrus.Infof("Remote-coder shutting down (%s)...", sig.String())
+	case err := <-errCh:
+		return fmt.Errorf("remote-coder server error: %w", err)
 	}
 
-	logrus.Info("Server stopped")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		return fmt.Errorf("remote-coder shutdown failed: %w", err)
+	}
+
+	logrus.Info("Remote-coder stopped")
+	return nil
 }

@@ -34,6 +34,7 @@ type Config struct {
 	EncryptProviders  bool                 `yaml:"encrypt_providers" json:"encrypt_providers"`     // Whether to encrypt provider info (default false)
 	Scenarios         []typ.ScenarioConfig `yaml:"scenarios" json:"scenarios"`                     // Scenario-specific configurations
 	GUI               GUIConfig            `json:"gui"`                                            // GUI-specific settings
+	RemoteCoder       RemoteCoderConfig    `json:"remote_coder"`                                   // Remote-coder service settings
 
 	// Merged fields from Config struct
 	ProvidersV1 map[string]*typ.Provider `json:"providers"`
@@ -180,6 +181,9 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 	}
 	if cfg.ErrorLogFilterExpression == "" {
 		cfg.ErrorLogFilterExpression = "StatusCode >= 400 && Path matches '^/api/'"
+		updated = true
+	}
+	if cfg.applyRemoteCoderDefaults() {
 		updated = true
 	}
 	// Default OpenBrowser to true (runtime-only setting, not persisted)
@@ -1312,6 +1316,7 @@ func (c *Config) CreateDefaultConfig() error {
 	if c.ErrorLogFilterExpression == "" {
 		c.ErrorLogFilterExpression = "StatusCode >= 400 && Path matches '^/api/'"
 	}
+	c.applyRemoteCoderDefaults()
 	if err := c.Save(); err != nil {
 		return fmt.Errorf("failed to create default global cfg: %w", err)
 	}
