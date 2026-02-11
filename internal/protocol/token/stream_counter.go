@@ -20,10 +20,12 @@ import (
 //	}
 //	input, output := counter.GetCounts()
 type StreamTokenCounter struct {
-	mu           sync.Mutex
-	encoder      tokenizer.Codec
-	inputTokens  int
-	outputTokens int
+	mu                   sync.Mutex
+	encoder              tokenizer.Codec
+	inputTokens          int
+	outputTokens         int
+	upstreamInputTokens  int64
+	upstreamOutputTokens int64
 }
 
 // NewStreamTokenCounter creates a new streaming token counter.
@@ -83,11 +85,13 @@ func (c *StreamTokenCounter) ConsumeOpenAIChunk(chunk *openai.ChatCompletionChun
 		if usage.CompletionTokens > 0 {
 			c.outputTokens = int(usage.CompletionTokens)
 		}
-		if usage.TotalTokens > 0 && c.inputTokens == 0 {
-			// Estimate input if only total is provided
-			c.inputTokens = int(usage.TotalTokens) - c.outputTokens
+		if chunk.Usage.PromptTokens > 0 {
+			c.upstreamOutputTokens = chunk.Usage.PromptTokens
 		}
-		return c.inputTokens, c.outputTokens, nil
+		if chunk.Usage.CompletionTokens > 0 {
+			c.upstreamOutputTokens = chunk.Usage.CompletionTokens
+		}
+		return int(c.upstreamInputTokens), int(c.upstreamOutputTokens), nil
 	}
 
 	// Incremental counting for each delta in choices
@@ -134,7 +138,15 @@ func (c *StreamTokenCounter) ConsumeOpenAIChunk(chunk *openai.ChatCompletionChun
 func (c *StreamTokenCounter) GetCounts() (inputTokens, outputTokens int) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.inputTokens, c.outputTokens
+
+	i, o := c.inputTokens, c.outputTokens
+	if c.upstreamInputTokens > 0 {
+		i = int(c.upstreamInputTokens)
+	}
+	if c.upstreamOutputTokens > 0 {
+		o = int(c.upstreamOutputTokens)
+	}
+	return i, o
 }
 
 // SetInputTokens sets the input token count.

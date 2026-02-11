@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -66,9 +65,20 @@ func HandleOpenAIToAnthropicV1BetaStreamResponse(c *gin.Context, req *openai.Cha
 	// Initialize streaming state
 	state := newStreamState()
 
-	// Track accumulated content for usage estimation
-	var contentBuilder strings.Builder
-	var hasUsageFromUpstream bool = false
+	// Initialize token counter for accurate usage tracking
+	tokenCounter, err := token.NewStreamTokenCounter()
+	if err != nil {
+		logrus.Errorf("Failed to create token counter: %v", err)
+		// Continue without token counter - will fall back to estimation
+		tokenCounter = nil
+	}
+
+	// Estimate input tokens from request if counter available
+	if tokenCounter != nil && req != nil {
+		if inputTokens, err := token.EstimateInputTokens(req); err == nil {
+			tokenCounter.SetInputTokens(inputTokens)
+		}
+	}
 
 	// Send message_start event first
 	messageStartEvent := map[string]interface{}{
@@ -110,11 +120,16 @@ func HandleOpenAIToAnthropicV1BetaStreamResponse(c *gin.Context, req *openai.Cha
 
 		// Skip empty chunks (no choices)
 		if len(chunk.Choices) == 0 {
-			// Check for usage info in the last chunk
-			if chunk.Usage.PromptTokens > 0 || chunk.Usage.CompletionTokens > 0 {
-				state.inputTokens = chunk.Usage.PromptTokens
-				state.outputTokens = chunk.Usage.CompletionTokens
-				hasUsageFromUpstream = true
+			// Token counter will handle usage tracking if present in chunk
+			if tokenCounter != nil {
+				_, _, _ = tokenCounter.ConsumeOpenAIChunk(&chunk)
+				inputTokens, outputTokens := tokenCounter.GetCounts()
+				if inputTokens > 0 {
+					state.inputTokens = int64(inputTokens)
+				}
+				if outputTokens > 0 {
+					state.outputTokens = int64(outputTokens)
+				}
 			}
 			return true
 		}
@@ -180,9 +195,6 @@ func HandleOpenAIToAnthropicV1BetaStreamResponse(c *gin.Context, req *openai.Cha
 			}
 			state.hasTextContent = true
 
-			// Accumulate refusal content for usage estimation
-			contentBuilder.WriteString(delta.Refusal)
-
 			sendBetaContentBlockDelta(c, state.textBlockIndex, map[string]interface{}{
 				"type": deltaTypeTextDelta,
 				"text": delta.Refusal,
@@ -192,9 +204,6 @@ func HandleOpenAIToAnthropicV1BetaStreamResponse(c *gin.Context, req *openai.Cha
 		// Handle content delta
 		if delta.Content != "" {
 			state.hasTextContent = true
-
-			// Accumulate content for usage estimation
-			contentBuilder.WriteString(delta.Content)
 
 			// Initialize text block on first content
 			if state.textBlockIndex == -1 {
@@ -271,20 +280,25 @@ func HandleOpenAIToAnthropicV1BetaStreamResponse(c *gin.Context, req *openai.Cha
 			}
 		}
 
-		// Track usage from chunk
-		if chunk.Usage.CompletionTokens > 0 {
-			state.inputTokens = chunk.Usage.PromptTokens
-			state.outputTokens = chunk.Usage.CompletionTokens
-			hasUsageFromUpstream = true
+		// Track usage from chunk using token counter
+		if tokenCounter != nil {
+			_, _, _ = tokenCounter.ConsumeOpenAIChunk(&chunk)
+			inputTokens, outputTokens := tokenCounter.GetCounts()
+			if inputTokens > 0 {
+				state.inputTokens = int64(inputTokens)
+			}
+			if outputTokens > 0 {
+				state.outputTokens = int64(outputTokens)
+			}
 		}
 
 		// Handle finish_reason (last chunk for this choice)
 		if choice.FinishReason != "" {
-			// Estimate usage if upstream didn't provide it
-			if !hasUsageFromUpstream {
-				inputTokens, _ := token.EstimateInputTokens(req)
-				state.outputTokens = int64(token.EstimateOutputTokens(contentBuilder.String()))
+			// Get final token counts from counter
+			if tokenCounter != nil {
+				inputTokens, outputTokens := tokenCounter.GetCounts()
 				state.inputTokens = int64(inputTokens)
+				state.outputTokens = int64(outputTokens)
 			}
 
 			sendBetaStopEvents(c, state, flusher)
