@@ -611,6 +611,61 @@ func HandleResponsesToAnthropicStreamResponse(c *gin.Context, stream *openaistre
 
 			logrus.Debugf("[ResponsesAPI] Response completed: input_tokens=%d, output_tokens=%d", state.inputTokens, state.outputTokens)
 
+			// Process any tool calls from the output array that weren't already handled via streaming events
+			// This handles cases where tool calls come in the final response without intermediate events
+			for _, outputItem := range completed.Response.Output {
+				if outputItem.Type == "function_call" || outputItem.Type == "custom_tool_call" || outputItem.Type == "mcp_call" {
+					itemID := outputItem.ID
+
+					// Check if we already processed this tool call via streaming events
+					if _, wasProcessed := pendingToolCalls[itemID]; wasProcessed {
+						continue
+					}
+
+					// This is a new tool call that wasn't streamed - process it now
+					truncatedID := truncateToolCallID(itemID)
+					blockIndex := state.nextBlockIndex
+					state.nextBlockIndex++
+
+					var toolName string
+					var arguments string
+
+					switch outputItem.Type {
+					case "function_call":
+						fnCall := outputItem.AsFunctionCall()
+						toolName = fnCall.Name
+						arguments = fnCall.Arguments
+					case "custom_tool_call":
+						customCall := outputItem.AsCustomToolCall()
+						toolName = customCall.Name
+						arguments = customCall.Input
+					case "mcp_call":
+						mcpCall := outputItem.AsMcpCall()
+						toolName = mcpCall.Name
+						arguments = mcpCall.Arguments
+					}
+
+					lastOutputItemType = "function_call"
+
+					// Send content_block_start for this tool
+					senders.SendContentBlockStart(blockIndex, blockTypeToolUse, map[string]interface{}{
+						"id":   truncatedID,
+						"name": toolName,
+					}, flusher)
+
+					// Send the arguments as content_block_delta
+					if arguments != "" {
+						senders.SendContentBlockDelta(blockIndex, map[string]interface{}{
+							"type":         deltaTypeInputJSONDelta,
+							"partial_json": arguments,
+						}, flusher)
+					}
+
+					// Send content_block_stop
+					senders.SendContentBlockStop(state, blockIndex, flusher)
+				}
+			}
+
 			senders.SendStopEvents(state, flusher)
 
 			// Determine stop reason based on the last output item type
