@@ -288,9 +288,10 @@ func TestHandleGoogleToAnthropicStreamResponse(t *testing.T) {
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest("GET", "/", nil)
 
-		err := HandleGoogleToAnthropicStreamResponse(c, stream, "gemini-pro")
+		usage, err := HandleGoogleToAnthropicStreamResponse(c, stream, "gemini-pro")
 
 		assert.NoError(t, err)
+		_ = usage // Ignore usage check for this test
 		assert.Equal(t, "text/event-stream", w.Header().Get("Content-Type"))
 
 		body := w.Body.String()
@@ -341,9 +342,10 @@ func TestHandleGoogleToAnthropicStreamResponse(t *testing.T) {
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest("GET", "/", nil)
 
-		err := HandleGoogleToAnthropicStreamResponse(c, stream, "gemini-pro")
+		usage, err := HandleGoogleToAnthropicStreamResponse(c, stream, "gemini-pro")
 
 		assert.NoError(t, err)
+		_ = usage // Ignore usage check for this test
 		body := w.Body.String()
 		assert.Contains(t, body, `"type":"tool_use"`)
 		assert.Contains(t, body, "toolu_123")
@@ -360,9 +362,11 @@ func TestHandleGoogleToAnthropicStreamResponse(t *testing.T) {
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest("GET", "/", nil)
 
-		err := HandleGoogleToAnthropicStreamResponse(c, stream, "gemini-pro")
+		usage, err := HandleGoogleToAnthropicStreamResponse(c, stream, "gemini-pro")
 
-		assert.NoError(t, err)
+		assert.Error(t, err)
+		assert.Equal(t, 0, usage.InputTokens)
+		assert.Equal(t, 0, usage.OutputTokens)
 		body := w.Body.String()
 		assert.Contains(t, body, "event: error")
 		assert.Contains(t, body, "stream_error")
@@ -384,9 +388,10 @@ func TestHandleGoogleToAnthropicStreamResponse(t *testing.T) {
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest("GET", "/", nil)
 
-		err := HandleGoogleToAnthropicStreamResponse(c, stream, "gemini-pro")
+		usage, err := HandleGoogleToAnthropicStreamResponse(c, stream, "gemini-pro")
 
 		assert.NoError(t, err)
+		_ = usage // Ignore usage check for this test
 		body := w.Body.String()
 		assert.Contains(t, body, `"stop_reason":"max_tokens"`)
 	})
@@ -440,9 +445,10 @@ func TestHandleGoogleToAnthropicStreamResponse(t *testing.T) {
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest("GET", "/", nil)
 
-		err := HandleGoogleToAnthropicStreamResponse(c, stream, "gemini-pro")
+		usage, err := HandleGoogleToAnthropicStreamResponse(c, stream, "gemini-pro")
 
 		assert.NoError(t, err)
+		_ = usage // Ignore usage check for this test
 		body := w.Body.String()
 		assert.Contains(t, body, "I'll search")
 		assert.Contains(t, body, "tool_use")
@@ -486,9 +492,10 @@ func TestHandleGoogleToAnthropicBetaStreamResponse(t *testing.T) {
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest("GET", "/", nil)
 
-		err := HandleGoogleToAnthropicBetaStreamResponse(c, stream, "gemini-pro")
+		usage, err := HandleGoogleToAnthropicBetaStreamResponse(c, stream, "gemini-pro")
 
 		assert.NoError(t, err)
+		_ = usage // Ignore usage check for this test
 		body := w.Body.String()
 		// Beta format uses different event types
 		assert.Contains(t, body, "message_start")
@@ -526,7 +533,7 @@ func TestHandleGoogleToAnthropicBetaStreamResponse(t *testing.T) {
 				c, _ := gin.CreateTestContext(w)
 				c.Request = httptest.NewRequest("GET", "/", nil)
 
-				err := HandleGoogleToAnthropicBetaStreamResponse(c, stream, "gemini-pro")
+				_, err := HandleGoogleToAnthropicBetaStreamResponse(c, stream, "gemini-pro")
 
 				assert.NoError(t, err)
 				body := w.Body.String()
@@ -576,9 +583,10 @@ func TestHandleGoogleToAnthropicBetaStreamResponse(t *testing.T) {
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest("GET", "/", nil)
 
-		err := HandleGoogleToAnthropicBetaStreamResponse(c, stream, "gemini-pro")
+		usage, err := HandleGoogleToAnthropicBetaStreamResponse(c, stream, "gemini-pro")
 
 		assert.NoError(t, err)
+		_ = usage // Ignore usage check for this test
 		body := w.Body.String()
 		assert.Contains(t, body, "func1")
 		assert.Contains(t, body, "func2")

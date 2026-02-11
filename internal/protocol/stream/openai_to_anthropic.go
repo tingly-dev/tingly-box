@@ -17,6 +17,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/token"
 )
 
 const (
@@ -96,6 +97,21 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompl
 	// Initialize streaming state
 	state := newStreamState()
 
+	// Initialize token counter for accurate usage tracking
+	tokenCounter, err := token.NewStreamTokenCounter()
+	if err != nil {
+		logrus.Errorf("Failed to create token counter: %v", err)
+		// Continue without token counter - will fall back to estimation
+		tokenCounter = nil
+	}
+
+	// Estimate input tokens from request if counter available
+	if tokenCounter != nil && req != nil {
+		if inputTokens, err := token.EstimateInputTokens(req); err == nil {
+			tokenCounter.SetInputTokens(inputTokens)
+		}
+	}
+
 	// Send message_start event first
 	messageStartEvent := map[string]interface{}{
 		"type": eventTypeMessageStart,
@@ -134,12 +150,20 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompl
 		chunkCount++
 		chunk := stream.Current()
 
+		logrus.Infof("[Stream] Got chunk #%d: len(choices)=%d", chunkCount, len(chunk.Choices))
+
 		// Skip empty chunks (no choices)
 		if len(chunk.Choices) == 0 {
-			// Check for usage info in the last chunk
-			if chunk.Usage.PromptTokens > 0 || chunk.Usage.CompletionTokens > 0 {
-				state.inputTokens = chunk.Usage.PromptTokens
-				state.outputTokens = chunk.Usage.CompletionTokens
+			// Token counter will handle usage tracking if present in chunk
+			if tokenCounter != nil {
+				_, _, _ = tokenCounter.ConsumeOpenAIChunk(&chunk)
+				inputTokens, outputTokens := tokenCounter.GetCounts()
+				if inputTokens > 0 {
+					state.inputTokens = int64(inputTokens)
+				}
+				if outputTokens > 0 {
+					state.outputTokens = int64(outputTokens)
+				}
 			}
 			return true
 		}
@@ -156,6 +180,13 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompl
 		}
 
 		delta := choice.Delta
+
+		// Check for server_tool_use at chunk level (not delta level)
+		if chunk.JSON.ExtraFields != nil {
+			if serverToolUse, exists := chunk.JSON.ExtraFields["server_tool_use"]; exists && serverToolUse.Valid() {
+				state.deltaExtras["server_tool_use"] = serverToolUse.Raw()
+			}
+		}
 
 		// Collect extra fields from this delta (for final message_delta)
 		// Handle special fields that need dedicated content blocks
@@ -288,14 +319,27 @@ func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompl
 			}
 		}
 
-		// Track usage from chunk
-		if chunk.Usage.CompletionTokens > 0 {
-			state.inputTokens = chunk.Usage.PromptTokens
-			state.outputTokens = chunk.Usage.CompletionTokens
+		// Track usage from chunk using token counter
+		if tokenCounter != nil {
+			_, _, _ = tokenCounter.ConsumeOpenAIChunk(&chunk)
+			inputTokens, outputTokens := tokenCounter.GetCounts()
+			if inputTokens > 0 {
+				state.inputTokens = int64(inputTokens)
+			}
+			if outputTokens > 0 {
+				state.outputTokens = int64(outputTokens)
+			}
 		}
 
 		// Handle finish_reason (last chunk for this choice)
 		if choice.FinishReason != "" {
+			// Get final token counts from counter
+			if tokenCounter != nil {
+				inputTokens, outputTokens := tokenCounter.GetCounts()
+				state.inputTokens = int64(inputTokens)
+				state.outputTokens = int64(outputTokens)
+			}
+
 			sendStopEvents(c, state, flusher)
 			sendMessageDelta(c, state, mapOpenAIFinishReasonToAnthropic(choice.FinishReason), flusher)
 			sendMessageStop(c, messageID, responseModel, state, mapOpenAIFinishReasonToAnthropic(choice.FinishReason), flusher)
