@@ -189,6 +189,7 @@ func ForwardOpenAIResponses(fc *ForwardContext, wrapper *client.OpenAIClient, pa
 func ForwardOpenAIResponsesStream(fc *ForwardContext, wrapper *client.OpenAIClient, params responses.ResponseNewParams) (*openaistream.Stream[responses.ResponseStreamEventUnion], context.CancelFunc, error) {
 	ctx, cancel, err := fc.PrepareContext(params)
 	if err != nil {
+		cancel()
 		return nil, nil, err
 	}
 
