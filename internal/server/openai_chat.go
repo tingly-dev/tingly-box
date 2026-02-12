@@ -2,8 +2,6 @@ package server
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,23 +16,13 @@ import (
 	"github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/protocol/request/transformer"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
 	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
-
-// generateObfuscationString generates a random string similar to "KOJz1A"
-func generateObfuscationString() string {
-	b := make([]byte, 4)
-	if _, err := rand.Read(b); err != nil {
-		// Fallback to timestamp-based if crypto rand fails
-		return base64.URLEncoding.EncodeToString([]byte(fmt.Sprintf("%d", time.Now().UnixNano())))[:6]
-	}
-	return base64.URLEncoding.EncodeToString(b)[:6]
-}
 
 // handleNonStreamingRequest handles non-streaming chat completion requests
 func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, rule *typ.Rule, shouldIntercept, shouldStripTools bool) {
@@ -48,7 +36,9 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 	}
 
 	// Forward request to provider
-	response, err := s.forwardOpenAIRequest(provider, req)
+	wrapper := s.clientPool.GetOpenAIClient(provider, string(req.Model))
+	fc := NewForwardContext(nil, provider)
+	response, err := ForwardOpenAIChat(fc, wrapper, req)
 	if err != nil {
 		// Track error with no usage
 		s.trackUsageFromContext(c, 0, 0, err)
@@ -138,8 +128,8 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 	// Update response model if configured
 	responseMap["model"] = responseModel
 
-	if shouldRoundtripResponse(c, "anthropic") {
-		roundtripped, err := roundtripOpenAIResponseViaAnthropic(response, responseModel, provider, req.Model)
+	if nonstream.ShouldRoundtripResponse(c, "anthropic") {
+		roundtripped, err := nonstream.RoundtripOpenAIResponseViaAnthropic(response, responseModel, provider, req.Model)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, ErrorResponse{
 				Error: ErrorDetail{
@@ -155,26 +145,6 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 
 	// Return modified response
 	c.JSON(http.StatusOK, responseMap)
-}
-
-// forwardOpenAIRequest forwards the request to the selected provider using OpenAI library
-func (s *Server) forwardOpenAIRequest(provider *typ.Provider, req *openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
-	wrapper := s.clientPool.GetOpenAIClient(provider, string(req.Model))
-	fc := NewForwardContext(nil, provider)
-	return ForwardOpenAIChat(fc, wrapper, req)
-}
-
-// forwardOpenAIStreamRequest forwards the streaming request to the selected provider using OpenAI library
-func (s *Server) forwardOpenAIStreamRequest(ctx context.Context, provider *typ.Provider, req *openai.ChatCompletionNewParams) (*ssestream.Stream[openai.ChatCompletionChunk], context.CancelFunc, error) {
-	wrapper := s.clientPool.GetOpenAIClient(provider, string(req.Model))
-	fc := NewForwardContext(ctx, provider)
-	return ForwardOpenAIChatStream(fc, wrapper, req)
-}
-
-// buildOpenAIConfig builds the OpenAIConfig for provider transformations
-// Deprecated: Use buildOpenAIConfig in protocol_forward.go instead
-func (s *Server) buildOpenAIConfig(req *openai.ChatCompletionNewParams) *transformer.OpenAIConfig {
-	return buildOpenAIConfig(req)
 }
 
 // handleInterceptedToolCalls executes intercepted tool calls locally and returns final response
@@ -222,7 +192,9 @@ func (s *Server) handleInterceptedToolCalls(provider *typ.Provider, originalReq 
 	followUpReq = *toolinterceptor.StripSearchFetchToolsOpenAI(&followUpReq)
 
 	// Forward to provider for final response (may contain more tool calls or final answer)
-	finalResponse, err := s.forwardOpenAIRequest(provider, &followUpReq)
+	wrapper := s.clientPool.GetOpenAIClient(provider, string(followUpReq.Model))
+	fc := NewForwardContext(nil, provider)
+	finalResponse, err := ForwardOpenAIChat(fc, wrapper, &followUpReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get final response after tool execution: %w", err)
 	}
@@ -230,8 +202,8 @@ func (s *Server) handleInterceptedToolCalls(provider *typ.Provider, originalReq 
 	return finalResponse, nil
 }
 
-// handleStreamingRequest handles streaming chat completion requests
-func (s *Server) handleStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, rule *typ.Rule, shouldIntercept, shouldStripTools bool) {
+// handleOpenAIChatStreamingRequest handles streaming chat completion requests
+func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, shouldIntercept, shouldStripTools bool) {
 	// === PRE-REQUEST INTERCEPTION: Strip tools before sending to provider ===
 	req := originalReq
 	if shouldIntercept {
@@ -241,8 +213,9 @@ func (s *Server) handleStreamingRequest(c *gin.Context, provider *typ.Provider, 
 		req = toolinterceptor.StripSearchFetchToolsOpenAI(originalReq)
 	}
 
-	// Create streaming request with request context for proper cancellation
-	stream, _, err := s.forwardOpenAIStreamRequest(c.Request.Context(), provider, req)
+	wrapper := s.clientPool.GetOpenAIClient(provider, string(req.Model))
+	fc := NewForwardContext(c.Request.Context(), provider)
+	stream, _, err := ForwardOpenAIChatStream(fc, wrapper, req)
 	if err != nil {
 		// Track error with no usage
 		s.trackUsageFromContext(c, 0, 0, err)
@@ -255,8 +228,12 @@ func (s *Server) handleStreamingRequest(c *gin.Context, provider *typ.Provider, 
 		return
 	}
 
-	// Handle the streaming response
-	s.handleOpenAIStreamResponse(c, stream, req, responseModel, rule, provider)
+	// Create handle context and handle stream
+	hc := NewHandleContext(c, responseModel)
+	usage, err := HandleOpenAIChatStream(hc, stream, req)
+
+	// Track usage from stream handler
+	s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, err)
 }
 
 // handleOpenAIStreamResponse processes the streaming response and sends it to the client
