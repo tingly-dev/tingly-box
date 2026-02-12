@@ -81,7 +81,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			streamResp, cancel, err := ForwardAnthropicV1BetaStream(fc, wrapper, req.BetaMessageNewParams)
 			if err != nil {
 				s.trackUsageFromContext(c, 0, 0, err)
-				SendStreamingError(c, err)
+				stream.SendStreamingError(c, err)
 				if recorder != nil {
 					recorder.RecordError(err)
 				}
@@ -97,7 +97,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			anthropicResp, cancel, err := ForwardAnthropicV1Beta(fc, wrapper, req.BetaMessageNewParams)
 			if err != nil {
 				s.trackUsageFromContext(c, 0, 0, err)
-				SendForwardingError(c, err)
+				stream.SendForwardingError(c, err)
 				if recorder != nil {
 					recorder.RecordError(err)
 				}
@@ -132,7 +132,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			fc := NewForwardContext(c.Request.Context(), provider)
 			streamResp, cancel, err := ForwardGoogleStream(fc, wrapper, model, googleReq, cfg)
 			if err != nil {
-				SendStreamingError(c, err)
+				stream.SendStreamingError(c, err)
 				if recorder != nil {
 					recorder.RecordError(err)
 				}
@@ -144,7 +144,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			usage, err := stream.HandleGoogleToAnthropicBetaStreamResponse(c, streamResp, proxyModel)
 			if err != nil {
 				s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, err)
-				SendInternalError(c, err.Error())
+				stream.SendInternalError(c, err.Error())
 				if recorder != nil {
 					recorder.RecordError(err)
 				}
@@ -160,7 +160,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			fc := NewForwardContext(nil, provider)
 			resp, err := ForwardGoogle(fc, wrapper, model, googleReq, cfg)
 			if err != nil {
-				SendForwardingError(c, err)
+				stream.SendForwardingError(c, err)
 				if recorder != nil {
 					recorder.RecordError(err)
 				}
@@ -237,7 +237,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 				fc := NewForwardContext(c.Request.Context(), provider)
 				streamResp, _, err := ForwardOpenAIChatStream(fc, wrapper, openaiReq)
 				if err != nil {
-					SendStreamingError(c, err)
+					stream.SendStreamingError(c, err)
 					if streamRec != nil {
 						streamRec.RecordError(err)
 					}
@@ -248,7 +248,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 				usage, err := stream.HandleOpenAIToAnthropicV1BetaStreamResponse(c, openaiReq, streamResp, proxyModel)
 				if err != nil {
 					s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, err)
-					SendInternalError(c, err.Error())
+					stream.SendInternalError(c, err.Error())
 					if streamRec != nil {
 						streamRec.RecordError(err)
 					}
@@ -269,7 +269,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 				fc := NewForwardContext(nil, provider)
 				resp, err := ForwardOpenAIChat(fc, wrapper, openaiReq)
 				if err != nil {
-					SendForwardingError(c, err)
+					stream.SendForwardingError(c, err)
 					if recorder != nil {
 						recorder.RecordError(err)
 					}
@@ -301,7 +301,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 
 // handleAnthropicStreamResponseV1Beta processes the Anthropic beta streaming response and sends it to the client
 func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthropic.BetaMessageNewParams, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], respModel, actualModel string, rule *typ.Rule, provider *typ.Provider, recorder *ScenarioRecorder) {
-	hc := NewHandleContext(c, respModel)
+	hc := protocol.NewHandleContext(c, respModel)
 
 	// Add recorder hooks if recorder is available
 	if recorder != nil {
@@ -317,7 +317,7 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthrop
 		}
 	}
 
-	usageStat, err := HandleAnthropicV1BetaStream(hc, req, streamResp)
+	usageStat, err := stream.HandleAnthropicV1BetaStream(hc, req, streamResp)
 	s.trackUsageFromContext(c, usageStat.InputTokens, usageStat.OutputTokens, err)
 }
 
@@ -350,7 +350,7 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPINonStreaming(c *gin.Context
 
 	if err != nil {
 		s.trackUsageFromContext(c, 0, 0, err)
-		SendForwardingError(c, err)
+		stream.SendForwardingError(c, err)
 		if recorder != nil {
 			recorder.RecordError(err)
 		}
@@ -401,7 +401,7 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPIStreaming(c *gin.Context, r
 	streamResp, cancel, err := ForwardOpenAIResponsesStream(fc, wrapper, responsesReq)
 	if err != nil {
 		s.trackUsageFromContext(c, 0, 0, err)
-		SendStreamingError(c, err)
+		stream.SendStreamingError(c, err)
 		if streamRec != nil {
 			streamRec.RecordError(err)
 		}

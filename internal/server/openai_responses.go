@@ -13,6 +13,7 @@ import (
 	"github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
+	. "github.com/tingly-dev/tingly-box/internal/protocol/stream"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -231,7 +232,7 @@ func (s *Server) handleResponsesStreamingRequest(c *gin.Context, provider *typ.P
 	}
 
 	// Handle the streaming response
-	hc := NewHandleContext(c, responseModel)
+	hc := protocol.NewHandleContext(c, responseModel)
 	usage, err := HandleOpenAIResponsesStream(hc, stream, responseModel)
 
 	// Track usage from stream handler

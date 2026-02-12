@@ -1,4 +1,4 @@
-package server
+package stream
 
 import (
 	"encoding/json"
@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
 // SSEEventWriter is an interface for writing SSE events
@@ -50,8 +51,8 @@ func SetupSSEHeaders(c *gin.Context) {
 func CheckSSESupport(c *gin.Context) bool {
 	_, ok := c.Writer.(http.Flusher)
 	if !ok {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorDetail{
+		c.JSON(http.StatusInternalServerError, protocol.ErrorResponse{
+			Error: protocol.ErrorDetail{
 				Message: "Streaming not supported by this connection",
 				Type:    "api_error",
 				Code:    "streaming_unsupported",
@@ -128,8 +129,8 @@ func ParseAndSendStreamError(c *gin.Context, err error) {
 
 // SendInvalidRequestBodyError sends an error response for invalid request body
 func SendInvalidRequestBodyError(c *gin.Context, err error) {
-	c.JSON(http.StatusBadRequest, ErrorResponse{
-		Error: ErrorDetail{
+	c.JSON(http.StatusBadRequest, protocol.ErrorResponse{
+		Error: protocol.ErrorDetail{
 			Message: "Invalid request body: " + err.Error(),
 			Type:    "invalid_request_error",
 		},
@@ -138,8 +139,8 @@ func SendInvalidRequestBodyError(c *gin.Context, err error) {
 
 // SendStreamingError sends an error response for streaming request failures
 func SendStreamingError(c *gin.Context, err error) {
-	c.JSON(http.StatusInternalServerError, ErrorResponse{
-		Error: ErrorDetail{
+	c.JSON(http.StatusInternalServerError, protocol.ErrorResponse{
+		Error: protocol.ErrorDetail{
 			Message: "Failed to create streaming request: " + err.Error(),
 			Type:    "api_error",
 		},
@@ -148,8 +149,8 @@ func SendStreamingError(c *gin.Context, err error) {
 
 // SendForwardingError sends an error response for request forwarding failures
 func SendForwardingError(c *gin.Context, err error) {
-	c.JSON(http.StatusInternalServerError, ErrorResponse{
-		Error: ErrorDetail{
+	c.JSON(http.StatusInternalServerError, protocol.ErrorResponse{
+		Error: protocol.ErrorDetail{
 			Message: "Failed to forward request: " + err.Error(),
 			Type:    "api_error",
 		},
@@ -158,8 +159,8 @@ func SendForwardingError(c *gin.Context, err error) {
 
 // SendAdapterDisabledError sends an error response when adapter is disabled
 func SendAdapterDisabledError(c *gin.Context, providerName string) {
-	c.JSON(http.StatusUnprocessableEntity, ErrorResponse{
-		Error: ErrorDetail{
+	c.JSON(http.StatusUnprocessableEntity, protocol.ErrorResponse{
+		Error: protocol.ErrorDetail{
 			Message: fmt.Sprintf("Request format adaptation is disabled. Cannot send Anthropic request to OpenAI-style provider '%s'. Use --adapter flag to enable format conversion.", providerName),
 			Type:    "adapter_disabled",
 		},
@@ -168,8 +169,8 @@ func SendAdapterDisabledError(c *gin.Context, providerName string) {
 
 // SendInternalError sends an error response for internal errors
 func SendInternalError(c *gin.Context, errMsg string) {
-	c.JSON(http.StatusInternalServerError, ErrorResponse{
-		Error: ErrorDetail{
+	c.JSON(http.StatusInternalServerError, protocol.ErrorResponse{
+		Error: protocol.ErrorDetail{
 			Message: errMsg,
 			Type:    "api_error",
 			Code:    "streaming_unsupported",
