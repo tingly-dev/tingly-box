@@ -142,6 +142,10 @@ func handleTelegramMessage(
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to load session mapping")
 	}
+	if !ok || sessionID == "" {
+		sendText(bot, chatID, "No session mapped. Use /new <project_path> or /use <session_id> first.")
+		return
+	}
 
 	var sess *session.Session
 	if ok {
@@ -156,6 +160,18 @@ func handleTelegramMessage(
 		_ = store.SetSessionForChat(chatID, sessionID)
 		sessionMgr.SetRequest(sessionID, text)
 	}
+	projectPath := ""
+	if sess != nil && sess.Context != nil {
+		if v, ok := sess.Context["project_path"]; ok {
+			if pv, ok := v.(string); ok {
+				projectPath = strings.TrimSpace(pv)
+			}
+		}
+	}
+	if projectPath == "" {
+		sendText(bot, chatID, "Project path is required. Use /new <project_path> or /bash cd <path>.")
+		return
+	}
 
 	sessionMgr.AppendMessage(sessionID, session.Message{
 		Role:      "user",
@@ -168,7 +184,9 @@ func handleTelegramMessage(
 	execCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 
-	result, err := ccLauncher.Execute(execCtx, text, launcher.ExecuteOptions{})
+	result, err := ccLauncher.Execute(execCtx, text, launcher.ExecuteOptions{
+		ProjectPath: projectPath,
+	})
 	response := result.Output
 	if err != nil && result.Error != "" {
 		response = result.Error
