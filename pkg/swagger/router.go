@@ -13,20 +13,23 @@ type Handler func(c *gin.Context)
 
 // RouteConfig defines configuration for a single route
 type RouteConfig struct {
-	Method         string
-	Path           string
-	Handler        Handler
-	Description    string
-	Tags           []string
-	AuthRequired   bool
-	RequestModel   interface{} // For swagger documentation
-	ResponseModel  interface{} // For swagger documentation
-	ErrorResponses []ErrorResponseConfig
-	Middleware     []gin.HandlerFunc
-	Deprecated     bool
-	DeprecatedMsg  string
-	QueryParams    []QueryParamConfig // Query parameters
-	QueryModel     interface{}        // Query model for swagger documentation
+	Method            string
+	Path              string
+	Handler           Handler
+	Description       string
+	Tags              []string
+	AuthRequired      bool
+	RequestModel      interface{} // For swagger documentation
+	ResponseModel     interface{} // For swagger documentation
+	RequestModelName  string      // Optional explicit name for anonymous request struct
+	ResponseModelName string      // Optional explicit name for anonymous response struct
+	ErrorResponses    []ErrorResponseConfig
+	Middleware        []gin.HandlerFunc
+	Deprecated        bool
+	DeprecatedMsg     string
+	QueryParams       []QueryParamConfig // Query parameters
+	QueryModel        interface{}        // Query model for swagger documentation
+	QueryModelName    string             // Optional explicit name for anonymous query struct
 }
 
 // ErrorResponseConfig defines error response configuration for swagger
@@ -344,6 +347,27 @@ func WithQueryModel(model interface{}) func(*RouteConfig) {
 	}
 }
 
+// WithRequestModelName sets an explicit name for the request model (useful for anonymous structs)
+func WithRequestModelName(name string) func(*RouteConfig) {
+	return func(rc *RouteConfig) {
+		rc.RequestModelName = name
+	}
+}
+
+// WithResponseModelName sets an explicit name for the response model (useful for anonymous structs)
+func WithResponseModelName(name string) func(*RouteConfig) {
+	return func(rc *RouteConfig) {
+		rc.ResponseModelName = name
+	}
+}
+
+// WithQueryModelName sets an explicit name for the query model (useful for anonymous structs)
+func WithQueryModelName(name string) func(*RouteConfig) {
+	return func(rc *RouteConfig) {
+		rc.QueryModelName = name
+	}
+}
+
 // authMiddleware is a placeholder for authentication middleware
 func (rg *RouteGroup) authMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -454,13 +478,13 @@ func (rm *RouteManager) generateRouteAnnotations(group *RouteGroup, route RouteC
 
 	// Add query model if specified
 	if route.QueryModel != nil {
-		modelName := getModelName(route.QueryModel)
+		modelName := rm.getModelNameWithFallback(route.QueryModel, route.QueryModelName, route.Method, fullPath, "Query")
 		annotations.WriteString("// @Param " + modelName + " query " + modelName + " true \"Query parameters\"\n")
 	}
 
 	// Add request model if specified
 	if route.RequestModel != nil {
-		modelName := getModelName(route.RequestModel)
+		modelName := rm.getModelNameWithFallback(route.RequestModel, route.RequestModelName, route.Method, fullPath, "Request")
 		if route.Method == http.MethodGet {
 			annotations.WriteString("// @Param " + modelName + " query " + modelName + " true \"Request parameters\"\n")
 		} else {
@@ -470,7 +494,7 @@ func (rm *RouteManager) generateRouteAnnotations(group *RouteGroup, route RouteC
 
 	// Add response model if specified
 	if route.ResponseModel != nil {
-		modelName := getModelName(route.ResponseModel)
+		modelName := rm.getModelNameWithFallback(route.ResponseModel, route.ResponseModelName, route.Method, fullPath, "Response")
 		annotations.WriteString("// @Success 200 {object} " + modelName + "\n")
 	} else {
 		annotations.WriteString("// @Success 200 {object} map[string]interface{}\n")
@@ -479,7 +503,7 @@ func (rm *RouteManager) generateRouteAnnotations(group *RouteGroup, route RouteC
 	// Add error responses
 	for _, errorResp := range route.ErrorResponses {
 		if errorResp.Model != nil {
-			modelName := getModelName(errorResp.Model)
+			modelName := rm.getModelNameWithFallback(errorResp.Model, "", route.Method, fullPath, fmt.Sprintf("Error%d", errorResp.Code))
 			annotations.WriteString("// @Failure " + string(rune(errorResp.Code)) + " {object} " + modelName + "\n")
 		} else {
 			annotations.WriteString("// @Failure " + string(rune(errorResp.Code)) + " {object} map[string]interface{}\n")
