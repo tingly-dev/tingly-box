@@ -86,7 +86,7 @@ func (c *StreamTokenCounter) ConsumeOpenAIChunk(chunk *openai.ChatCompletionChun
 			c.outputTokens = int(usage.CompletionTokens)
 		}
 		if chunk.Usage.PromptTokens > 0 {
-			c.upstreamOutputTokens = chunk.Usage.PromptTokens
+			c.upstreamInputTokens = chunk.Usage.PromptTokens
 		}
 		if chunk.Usage.CompletionTokens > 0 {
 			c.upstreamOutputTokens = chunk.Usage.CompletionTokens
