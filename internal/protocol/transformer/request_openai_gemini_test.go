@@ -37,7 +37,7 @@ func TestApplyGeminiTransform(t *testing.T) {
 		// Add thinking config to extra fields
 		extraFields := map[string]interface{}{
 			"thinking": map[string]interface{}{
-				"type":            "high",
+				"type":             "high",
 				"include_thoughts": true,
 			},
 		}
@@ -94,11 +94,11 @@ func TestApplyGeminiToolSchemaFilter(t *testing.T) {
 						"type": "object",
 						"properties": map[string]interface{}{
 							"value": map[string]interface{}{
-								"type":               "number",
-								"exclusiveMinimum":   0,
-								"exclusiveMaximum":   100,
-								"description":        "A numeric value",
-								"unsupported_field":  "should be removed",
+								"type":              "number",
+								"exclusiveMinimum":  0,
+								"exclusiveMaximum":  100,
+								"description":       "A numeric value",
+								"unsupported_field": "should be removed",
 							},
 						},
 					},
@@ -363,7 +363,7 @@ func TestApplyGeminiThinkingConfig(t *testing.T) {
 
 		extraFields := map[string]interface{}{}
 		extraFields["thinking"] = map[string]interface{}{
-			"type":            "medium",
+			"type":             "medium",
 			"include_thoughts": true,
 		}
 		req.SetExtraFields(extraFields)
@@ -541,10 +541,10 @@ func TestBuildGeminiThinkingConfig(t *testing.T) {
 func TestFilterGeminiSchema(t *testing.T) {
 	t.Run("removes unsupported fields", func(t *testing.T) {
 		schema := map[string]interface{}{
-			"type":                 "object",
-			"description":          "Test schema",
-			"unsupported_field":    "should be removed",
-			"another_unsupported":  123,
+			"type":                "object",
+			"description":         "Test schema",
+			"unsupported_field":   "should be removed",
+			"another_unsupported": 123,
 		}
 
 		result := filterGeminiSchema(schema)
@@ -562,9 +562,9 @@ func TestFilterGeminiSchema(t *testing.T) {
 
 	t.Run("transforms field names", func(t *testing.T) {
 		schema := map[string]interface{}{
-			"type":               "object",
-			"exclusiveMinimum":   0,
-			"exclusiveMaximum":   100,
+			"type":             "object",
+			"exclusiveMinimum": 0,
+			"exclusiveMaximum": 100,
 		}
 
 		result := filterGeminiSchema(schema)

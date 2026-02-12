@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/openai/openai-go/v3/packages/param"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
 func TestResponseCreateRequestUnmarshalJSON(t *testing.T) {
@@ -17,7 +18,7 @@ func TestResponseCreateRequestUnmarshalJSON(t *testing.T) {
 		"stream": true
 	}`
 
-	var req ResponseCreateRequest
+	var req protocol.ResponseCreateRequest
 	err := json.Unmarshal([]byte(jsonData), &req)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal: %v", err)
@@ -76,7 +77,7 @@ func TestResponseCreateRequestUnmarshalJSONWithTools(t *testing.T) {
 		}]
 	}`
 
-	var req ResponseCreateRequest
+	var req protocol.ResponseCreateRequest
 	err := json.Unmarshal([]byte(jsonData), &req)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal: %v", err)
