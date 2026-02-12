@@ -81,7 +81,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			streamResp, cancel, err := ForwardAnthropicV1Stream(fc, wrapper, req.MessageNewParams)
 			if err != nil {
 				s.trackUsageFromContext(c, 0, 0, err)
-				SendStreamingError(c, err)
+				stream.SendStreamingError(c, err)
 				if recorder != nil {
 					recorder.RecordError(err)
 				}
@@ -89,7 +89,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			}
 			defer cancel()
 			// Handle the streaming response
-			s.handleAnthropicStreamResponseV1(c, req.MessageNewParams, streamResp, proxyModel, actualModel, rule, provider, recorder)
+			s.handleAnthropicStreamResponseV1(c, req.MessageNewParams, streamResp, proxyModel, actualModel, provider, recorder)
 		} else {
 			// Handle non-streaming request
 			wrapper := s.clientPool.GetAnthropicClient(provider, string(req.MessageNewParams.Model))
@@ -97,7 +97,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			anthropicResp, cancel, err := ForwardAnthropicV1(fc, wrapper, req.MessageNewParams)
 			if err != nil {
 				s.trackUsageFromContext(c, 0, 0, err)
-				SendForwardingError(c, err)
+				stream.SendForwardingError(c, err)
 				if recorder != nil {
 					recorder.RecordError(err)
 				}
@@ -116,7 +116,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			if nonstream.ShouldRoundtripResponse(c, "openai") {
 				roundtripped, err := nonstream.RoundtripAnthropicResponseViaOpenAI(anthropicResp, proxyModel, provider, actualModel)
 				if err != nil {
-					SendInternalError(c, "Failed to roundtrip response: "+err.Error())
+					stream.SendInternalError(c, "Failed to roundtrip response: "+err.Error())
 					return
 				}
 				anthropicResp = roundtripped
@@ -141,7 +141,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			fc := NewForwardContext(c.Request.Context(), provider)
 			streamResp, _, err := ForwardGoogleStream(fc, wrapper, model, googleReq, cfg)
 			if err != nil {
-				SendStreamingError(c, err)
+				stream.SendStreamingError(c, err)
 				if recorder != nil {
 					recorder.RecordError(err)
 				}
@@ -152,7 +152,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			usage, err := stream.HandleGoogleToAnthropicStreamResponse(c, streamResp, proxyModel)
 			if err != nil {
 				s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, err)
-				SendInternalError(c, err.Error())
+				stream.SendInternalError(c, err.Error())
 				if recorder != nil {
 					recorder.RecordError(err)
 				}
@@ -168,7 +168,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			fc := NewForwardContext(nil, provider)
 			response, err := ForwardGoogle(fc, wrapper, model, googleReq, cfg)
 			if err != nil {
-				SendForwardingError(c, err)
+				stream.SendForwardingError(c, err)
 				if recorder != nil {
 					recorder.RecordError(err)
 				}
@@ -180,7 +180,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			if nonstream.ShouldRoundtripResponse(c, "openai") {
 				roundtripped, err := nonstream.RoundtripAnthropicResponseViaOpenAI(&anthropicResp, proxyModel, provider, actualModel)
 				if err != nil {
-					SendInternalError(c, "Failed to roundtrip response: "+err.Error())
+					stream.SendInternalError(c, "Failed to roundtrip response: "+err.Error())
 					return
 				}
 				anthropicResp = *roundtripped
@@ -231,9 +231,9 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			logrus.Debugf("[AnthropicV1] Using direct v1->Responses API conversion for model=%s", actualModel)
 
 			if isStreaming {
-				s.handleAnthropicV1ViaResponsesAPIStreaming(c, req, proxyModel, actualModel, provider, rule, responsesReq)
+				s.handleAnthropicV1ViaResponsesAPIStreaming(c, req, proxyModel, actualModel, provider, responsesReq)
 			} else {
-				s.handleAnthropicV1ViaResponsesAPINonStreaming(c, req, proxyModel, actualModel, provider, rule, responsesReq)
+				s.handleAnthropicV1ViaResponsesAPINonStreaming(c, req, proxyModel, actualModel, provider, responsesReq)
 			}
 			return
 		}
@@ -249,7 +249,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			fc := NewForwardContext(c.Request.Context(), provider)
 			streamResp, _, err := ForwardOpenAIChatStream(fc, wrapper, openaiReq)
 			if err != nil {
-				SendStreamingError(c, err)
+				stream.SendStreamingError(c, err)
 				if recorder != nil {
 					recorder.RecordError(err)
 				}
@@ -260,7 +260,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			usage, err := stream.HandleOpenAIToAnthropicStreamResponse(c, openaiReq, streamResp, proxyModel)
 			if err != nil {
 				s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, err)
-				SendInternalError(c, err.Error())
+				stream.SendInternalError(c, err.Error())
 				if recorder != nil {
 					recorder.RecordError(err)
 				}
@@ -278,7 +278,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			fc := NewForwardContext(nil, provider)
 			response, err := ForwardOpenAIChat(fc, wrapper, openaiReq)
 			if err != nil {
-				SendForwardingError(c, err)
+				stream.SendForwardingError(c, err)
 				if recorder != nil {
 					recorder.RecordError(err)
 				}
@@ -289,7 +289,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 			if nonstream.ShouldRoundtripResponse(c, "openai") {
 				roundtripped, err := nonstream.RoundtripAnthropicResponseViaOpenAI(&anthropicResp, proxyModel, provider, actualModel)
 				if err != nil {
-					SendInternalError(c, "Failed to roundtrip response: "+err.Error())
+					stream.SendInternalError(c, "Failed to roundtrip response: "+err.Error())
 					return
 				}
 				anthropicResp = *roundtripped
@@ -316,8 +316,8 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 }
 
 // handleAnthropicStreamResponseV1 processes the Anthropic streaming response and sends it to the client (v1)
-func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.MessageNewParams, streamResp *anthropicstream.Stream[anthropic.MessageStreamEventUnion], respModel, actualModel string, rule *typ.Rule, provider *typ.Provider, recorder *ScenarioRecorder) {
-	hc := NewHandleContext(c, respModel)
+func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.MessageNewParams, streamResp *anthropicstream.Stream[anthropic.MessageStreamEventUnion], respModel, actualModel string, provider *typ.Provider, recorder *ScenarioRecorder) {
+	hc := protocol.NewHandleContext(c, respModel)
 
 	// Add recorder hooks if recorder is available
 	if recorder != nil {
@@ -333,13 +333,13 @@ func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.M
 		}
 	}
 
-	usageStat, err := HandleAnthropicV1Stream(hc, req, streamResp)
+	usageStat, err := stream.HandleAnthropicV1Stream(hc, req, streamResp)
 	s.trackUsageFromContext(c, usageStat.InputTokens, usageStat.OutputTokens, err)
 }
 
 // handleAnthropicV1ViaResponsesAPINonStreaming handles non-streaming Responses API request for v1
 // This converts Anthropic v1 request directly to Responses API format, calls the API, and converts back to v1
-func (s *Server) handleAnthropicV1ViaResponsesAPINonStreaming(c *gin.Context, req protocol.AnthropicMessagesRequest, proxyModel string, actualModel string, provider *typ.Provider, rule *typ.Rule, responsesReq responses.ResponseNewParams) {
+func (s *Server) handleAnthropicV1ViaResponsesAPINonStreaming(c *gin.Context, req protocol.AnthropicMessagesRequest, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
 	// Get scenario recorder if exists
 	var recorder *ScenarioRecorder
 	if r, exists := c.Get("scenario_recorder"); exists {
@@ -362,7 +362,7 @@ func (s *Server) handleAnthropicV1ViaResponsesAPINonStreaming(c *gin.Context, re
 
 	if err != nil {
 		s.trackUsageFromContext(c, 0, 0, err)
-		SendForwardingError(c, err)
+		stream.SendForwardingError(c, err)
 		if recorder != nil {
 			recorder.RecordError(err)
 		}
@@ -381,7 +381,7 @@ func (s *Server) handleAnthropicV1ViaResponsesAPINonStreaming(c *gin.Context, re
 	if nonstream.ShouldRoundtripResponse(c, "openai") {
 		roundtripped, err := nonstream.RoundtripAnthropicResponseViaOpenAI(&anthropicResp, proxyModel, provider, actualModel)
 		if err != nil {
-			SendInternalError(c, "Failed to roundtrip response: "+err.Error())
+			stream.SendInternalError(c, "Failed to roundtrip response: "+err.Error())
 			return
 		}
 		anthropicResp = *roundtripped
@@ -397,7 +397,7 @@ func (s *Server) handleAnthropicV1ViaResponsesAPINonStreaming(c *gin.Context, re
 
 // handleAnthropicV1ViaResponsesAPIStreaming handles streaming Responses API request for v1
 // This converts Anthropic v1 request directly to Responses API format, calls the API, and streams back in v1 format
-func (s *Server) handleAnthropicV1ViaResponsesAPIStreaming(c *gin.Context, req protocol.AnthropicMessagesRequest, proxyModel string, actualModel string, provider *typ.Provider, rule *typ.Rule, responsesReq responses.ResponseNewParams) {
+func (s *Server) handleAnthropicV1ViaResponsesAPIStreaming(c *gin.Context, req protocol.AnthropicMessagesRequest, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
 	// Get scenario recorder and set up stream recorder
 	var recorder *ScenarioRecorder
 	if r, exists := c.Get("scenario_recorder"); exists {
@@ -410,7 +410,7 @@ func (s *Server) handleAnthropicV1ViaResponsesAPIStreaming(c *gin.Context, req p
 	if provider.APIBase == protocol.ChatGPTBackendAPIBase {
 		// Use the ChatGPT backend API streaming handler
 		// This handler currently sends the stream in beta format, so we need to adapt it
-		s.handleChatGPTBackendStreamingRequest(c, provider, responsesReq, proxyModel, actualModel, rule)
+		s.handleChatGPTBackendStreamingRequest(c, provider, responsesReq, proxyModel, actualModel)
 		return
 	}
 
@@ -420,7 +420,7 @@ func (s *Server) handleAnthropicV1ViaResponsesAPIStreaming(c *gin.Context, req p
 	streamResp, cancel, err := ForwardOpenAIResponsesStream(fc, wrapper, responsesReq)
 	if err != nil {
 		s.trackUsageFromContext(c, 0, 0, err)
-		SendStreamingError(c, err)
+		stream.SendStreamingError(c, err)
 		if streamRec != nil {
 			streamRec.RecordError(err)
 		}

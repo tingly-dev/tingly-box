@@ -16,16 +16,17 @@ import (
 	"github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
+	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
 	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // handleNonStreamingRequest handles non-streaming chat completion requests
-func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, rule *typ.Rule, shouldIntercept, shouldStripTools bool) {
+func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, shouldIntercept, shouldStripTools bool) {
 	// === PRE-REQUEST INTERCEPTION: Strip tools before sending to provider ===
 	req := originalReq
 	if shouldIntercept {
@@ -215,7 +216,7 @@ func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.
 
 	wrapper := s.clientPool.GetOpenAIClient(provider, string(req.Model))
 	fc := NewForwardContext(c.Request.Context(), provider)
-	stream, _, err := ForwardOpenAIChatStream(fc, wrapper, req)
+	streamResp, _, err := ForwardOpenAIChatStream(fc, wrapper, req)
 	if err != nil {
 		// Track error with no usage
 		s.trackUsageFromContext(c, 0, 0, err)
@@ -229,15 +230,15 @@ func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.
 	}
 
 	// Create handle context and handle stream
-	hc := NewHandleContext(c, responseModel)
-	usage, err := HandleOpenAIChatStream(hc, stream, req)
+	hc := protocol.NewHandleContext(c, responseModel)
+	usage, err := stream.HandleOpenAIChatStream(hc, streamResp, req)
 
 	// Track usage from stream handler
 	s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, err)
 }
 
 // handleOpenAIStreamResponse processes the streaming response and sends it to the client
-func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.Stream[openai.ChatCompletionChunk], req *openai.ChatCompletionNewParams, responseModel string, rule *typ.Rule, provider *typ.Provider) {
+func (s *Server) handleOpenAIStreamResponse(c *gin.Context, streamResp *ssestream.Stream[openai.ChatCompletionChunk], req *openai.ChatCompletionNewParams, responseModel string) {
 	// Accumulate usage from stream chunks
 	var inputTokens, outputTokens int
 	var hasUsage bool
@@ -266,8 +267,8 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 			}
 		}
 		// Ensure stream is always closed
-		if stream != nil {
-			if err := stream.Close(); err != nil {
+		if streamResp != nil {
+			if err := streamResp.Close(); err != nil {
 				logrus.Errorf("Error closing stream: %v", err)
 			}
 		}
@@ -305,13 +306,13 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 		}
 
 		// Try to get next chunk
-		if !stream.Next() {
+		if !streamResp.Next() {
 			// Stream ended
 			return false
 		}
 
-		chatChunk := stream.Current()
-		obfuscationValue := generateObfuscationString() // Generate obfuscation value once per stream
+		chatChunk := streamResp.Current()
+		obfuscationValue := stream.GenerateObfuscationString() // Generate obfuscation value once per stream
 
 		// Store the first chunk ID for usage estimation
 		if firstChunkID == "" && chatChunk.ID != "" {
@@ -428,9 +429,9 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 	})
 
 	// Check for stream errors
-	if err := stream.Err(); err != nil {
+	if err := streamResp.Err(); err != nil {
 		// Check if it was a client cancellation
-		if IsContextCanceled(err) || errors.Is(err, context.Canceled) {
+		if errors.Is(err, context.Canceled) {
 			logrus.Debug("OpenAI stream canceled by client")
 			// Estimate usage if we don't have it
 			if !hasUsage {
@@ -551,14 +552,14 @@ func (s *Server) ListModelsByScenario(c *gin.Context) {
 
 // handleResponsesForChatRequest handles chat completion requests by converting them to Responses API requests
 // This is used for models that prefer the Responses API over the Chat Completions API
-func (s *Server) handleResponsesForChatRequest(c *gin.Context, provider *typ.Provider, req *protocol.OpenAIChatCompletionRequest, responseModel, actualModel string, rule *typ.Rule, isStreaming bool) {
+func (s *Server) handleResponsesForChatRequest(c *gin.Context, provider *typ.Provider, req *protocol.OpenAIChatCompletionRequest, responseModel, actualModel string, isStreaming bool) {
 	// Convert chat completion request to responses request
 	params := s.convertChatCompletionToResponsesParams(req, actualModel)
 
 	if isStreaming {
-		s.handleResponsesStreamingRequest(c, provider, params, responseModel, actualModel, rule)
+		s.handleResponsesStreamingRequest(c, provider, params, responseModel, actualModel)
 	} else {
-		s.handleResponsesNonStreamingRequest(c, provider, params, responseModel, actualModel, rule)
+		s.handleResponsesNonStreamingRequest(c, provider, params, responseModel, actualModel)
 	}
 }
 

@@ -13,6 +13,7 @@ import (
 	"github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
+	. "github.com/tingly-dev/tingly-box/internal/protocol/stream"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -36,7 +37,7 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 	}
 
 	// Parse request (minimal parsing for validation)
-	var req ResponseCreateRequest
+	var req protocol.ResponseCreateRequest
 	if err := json.Unmarshal(bodyBytes, &req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -59,7 +60,7 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 	}
 
 	// Check if input is provided (either string or array)
-	inputValue := GetInputValue(req.Input)
+	inputValue := protocol.GetInputValue(req.Input)
 	if inputValue == nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -140,14 +141,14 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 
 	// Handle streaming or non-streaming
 	if req.Stream {
-		s.handleResponsesStreamingRequest(c, provider, params, req.Model, actualModel, rule)
+		s.handleResponsesStreamingRequest(c, provider, params, req.Model, actualModel)
 	} else {
-		s.handleResponsesNonStreamingRequest(c, provider, params, req.Model, actualModel, rule)
+		s.handleResponsesNonStreamingRequest(c, provider, params, req.Model, actualModel)
 	}
 }
 
 // handleResponsesNonStreamingRequest handles non-streaming Responses API requests
-func (s *Server) handleResponsesNonStreamingRequest(c *gin.Context, provider *typ.Provider, params responses.ResponseNewParams, responseModel, actualModel string, rule *typ.Rule) {
+func (s *Server) handleResponsesNonStreamingRequest(c *gin.Context, provider *typ.Provider, params responses.ResponseNewParams, responseModel, actualModel string) {
 	// Forward request to provider
 	var response *responses.Response
 	var err error
@@ -206,16 +207,16 @@ func (s *Server) handleResponsesNonStreamingRequest(c *gin.Context, provider *ty
 }
 
 // handleResponsesStreamingRequest handles streaming Responses API requests
-func (s *Server) handleResponsesStreamingRequest(c *gin.Context, provider *typ.Provider, params responses.ResponseNewParams, responseModel, actualModel string, rule *typ.Rule) {
+func (s *Server) handleResponsesStreamingRequest(c *gin.Context, provider *typ.Provider, params responses.ResponseNewParams, responseModel, actualModel string) {
 	// Check if this is a ChatGPT backend API provider (Codex OAuth)
 	// These providers use a custom streaming handler
 	if provider.APIBase == protocol.ChatGPTBackendAPIBase {
-		s.handleChatGPTBackendStreamingRequest(c, provider, params, responseModel, actualModel, rule)
+		s.handleChatGPTBackendStreamingRequest(c, provider, params, responseModel, actualModel)
 		return
 	}
 
 	// Create streaming request with request context for proper cancellation
-	wrapper := s.clientPool.GetOpenAIClient(provider, string(params.Model))
+	wrapper := s.clientPool.GetOpenAIClient(provider, params.Model)
 	fc := NewForwardContext(c.Request.Context(), provider)
 	stream, _, err := ForwardOpenAIResponsesStream(fc, wrapper, params)
 	if err != nil {
@@ -231,7 +232,7 @@ func (s *Server) handleResponsesStreamingRequest(c *gin.Context, provider *typ.P
 	}
 
 	// Handle the streaming response
-	hc := NewHandleContext(c, responseModel)
+	hc := protocol.NewHandleContext(c, responseModel)
 	usage, err := HandleOpenAIResponsesStream(hc, stream, responseModel)
 
 	// Track usage from stream handler
@@ -239,7 +240,7 @@ func (s *Server) handleResponsesStreamingRequest(c *gin.Context, provider *typ.P
 }
 
 // handleResponsesStreamResponse processes the streaming response and sends it to the client
-func (s *Server) handleResponsesStreamResponse(c *gin.Context, stream *ssestream.Stream[responses.ResponseStreamEventUnion], responseModel, actualModel string, rule *typ.Rule, provider *typ.Provider) {
+func (s *Server) handleResponsesStreamResponse(c *gin.Context, stream *ssestream.Stream[responses.ResponseStreamEventUnion], responseModel, actualModel string) {
 	// Accumulate usage from stream chunks
 	var inputTokens, outputTokens int64
 	var hasUsage bool
@@ -320,7 +321,7 @@ func (s *Server) handleResponsesStreamResponse(c *gin.Context, stream *ssestream
 	// Check for stream errors
 	if err := stream.Err(); err != nil {
 		// Check if it was a client cancellation
-		if IsContextCanceled(err) || errors.Is(err, context.Canceled) {
+		if errors.Is(err, context.Canceled) {
 			logrus.Debug("Responses stream canceled by client")
 			if hasUsage {
 				s.trackUsageFromContext(c, int(inputTokens), int(outputTokens), err)
@@ -415,7 +416,7 @@ func SSEventOpenAI(c *gin.Context, t string, data any, modelOverride ...string) 
 // This handles the model override and forwards the rest as-is
 func (s *Server) convertToResponsesParams(bodyBytes []byte, actualModel string) (responses.ResponseNewParams, error) {
 	// Preprocess to add type fields to input items (needed for union deserialization)
-	processedData, err := addTypeFieldToInputItems(bodyBytes)
+	processedData, err := protocol.AddTypeFieldToInputItems(bodyBytes)
 	if err != nil {
 		return responses.ResponseNewParams{}, err
 	}
