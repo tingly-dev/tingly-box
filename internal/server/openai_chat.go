@@ -552,7 +552,7 @@ func (s *Server) ListModelsByScenario(c *gin.Context) {
 
 // handleResponsesForChatRequest handles chat completion requests by converting them to Responses API requests
 // This is used for models that prefer the Responses API over the Chat Completions API
-func (s *Server) handleResponsesForChatRequest(c *gin.Context, provider *typ.Provider, req *protocol.OpenAIChatCompletionRequest, responseModel, actualModel string, rule *typ.Rule, isStreaming bool) {
+func (s *Server) handleResponsesForChatRequest(c *gin.Context, provider *typ.Provider, req *protocol.OpenAIChatCompletionRequest, responseModel, actualModel string, isStreaming bool) {
 	// Convert chat completion request to responses request
 	params := s.convertChatCompletionToResponsesParams(req, actualModel)
 

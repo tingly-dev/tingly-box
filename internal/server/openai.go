@@ -282,7 +282,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 		// Check if model prefers responses endpoint (for models like Codex)
 		if selectedService.PreferCompletions() {
 			// Convert chat request to responses request
-			s.handleResponsesForChatRequest(c, provider, &req, responseModel, actualModel, rule, isStreaming)
+			s.handleResponsesForChatRequest(c, provider, &req, responseModel, actualModel, isStreaming)
 			return
 		}
 
