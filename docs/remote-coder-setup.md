@@ -20,35 +20,46 @@ By default it listens on port `18080`. You can override this with flags:
 
 Remote Coder can proxy chats from Telegram. The bot settings are managed in the Remote Coder GUI.
 
-### Bot Token and Allowlist
+### Create a Telegram Bot
 
-1. Open the Remote Coder GUI page: `Remote Coder Chat`.
-2. In the **Telegram Bot** panel:
-   - Paste your Telegram bot token.
-   - Add allowlisted chat IDs (one per line).
-   - Click **Save Bot Settings**.
+1. Open Telegram and start a chat with `@BotFather`.
+2. Send `/newbot` and follow the prompts to name your bot.
+3. Copy the bot token provided by BotFather.
 
-Settings are stored in `tingly-remote-coder.db` in plain text.
+### Bot Token Settings
+
+1. Open the Credentials page.
+2. Select the `bot token` tab.
+3. Click **Edit** and configure:
+   - **Platform**: `telegram`
+   - **Telegram Bot Token**
+   - **Proxy URL** 
+   - **Chat ID Lock** (optional; only this chat can use the bot)
+4. Click **Save Bot Token**.
+
+Settings are stored in `remote-cc.db.` in plain text.
 
 ### Start the Bot
 
 The bot starts automatically when you run `tingly-box rc`, as long as a Telegram bot token is configured.
 
-## 3. Get Telegram Chat ID
+## 3. Get Telegram Chat ID (Optional)
 
-You must allowlist the chat ID before the bot will respond.
+Only required if you set **Chat ID Lock**.
 
-Options:
+1. Send a message to your bot.
+2. Fetch the latest update from the Bot API and copy `chat.id` from the response.
 
-- **Use @RawDataBot**:
-  1. In Telegram, search for `@RawDataBot` and start it.
-  2. Send any message.
-  3. The bot replies with JSON; copy the `chat.id` value.
+Example (replace `BOT_TOKEN`):
+```bash
+curl "https://api.telegram.org/botBOT_TOKEN/getUpdates"
+```
 
-- **Group chat ID**:
-  - Add `@RawDataBot` to the group and send a message there. Use the returned `chat.id`.
+Refer to Telegram Bot API docs for `getUpdates` and the `chat` object if you need more details.
 
-## 4. Use Remote Coder GUI
+## 4. Use Remote Coder GUI (Optional)
+
+You can use either the GUI or the Telegram bot commands. Both control the same remote-coder sessions.
 
 1. Open the Remote Coder GUI page in the sidebar.
 2. Set a **Project Path** when prompted (required for Claude Code context).
@@ -56,9 +67,17 @@ Options:
 4. Send messages and view responses.
 5. Manage sessions from the **Manage Sessions** button.
 
+## 5. Telegram Bot Commands (Optional)
+
+You can use either the GUI or the Telegram bot commands. Both control the same remote-coder sessions.
+
+- `/info` - Show current session ID, project path, and last assistant summary.
+- `/list` - List all sessions with ID, status, project path, and last assistant summary.
+- `/use <session_id>` - Switch this chat to a specific session.
+- `/new <project_path>` - Create a new session and set its project path (required).
+
 ## 5. Quick Checklist
 
 - `tingly-box rc` is running
 - Bot token saved in GUI
-- Chat ID allowlisted
-- `tingly-box rc bot` is running
+- Chat ID lock set (optional)
