@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
@@ -18,42 +17,6 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
-)
-
-const (
-	// OpenAI finish reasons not defined in openai package
-	openaiFinishReasonToolCalls = "tool_calls"
-
-	// Anthropic stop reasons
-	anthropicStopReasonEndTurn       = string(anthropic.BetaStopReasonEndTurn)
-	anthropicStopReasonMaxTokens     = string(anthropic.BetaStopReasonMaxTokens)
-	anthropicStopReasonToolUse       = string(anthropic.BetaStopReasonToolUse)
-	anthropicStopReasonContentFilter = string(anthropic.BetaStopReasonRefusal) // "content_filter"
-
-	// OpenAI extra field names that map to Anthropic content blocks
-	OpenaiFieldReasoningContent = "reasoning_content"
-
-	// OpenAI tool call ID max length (40 characters per OpenAI API spec)
-	maxToolCallIDLength = 40
-
-	// Anthropic event types
-	eventTypeMessageStart      = "message_start"
-	eventTypeContentBlockStart = "content_block_start"
-	eventTypeContentBlockDelta = "content_block_delta"
-	eventTypeContentBlockStop  = "content_block_stop"
-	eventTypeMessageDelta      = "message_delta"
-	eventTypeMessageStop       = "message_stop"
-	eventTypeError             = "error"
-
-	// Anthropic block types
-	blockTypeText     = "text"
-	blockTypeThinking = "thinking"
-	blockTypeToolUse  = "tool_use"
-
-	// Anthropic delta types
-	deltaTypeTextDelta      = "text_delta"
-	deltaTypeThinkingDelta  = "thinking_delta"
-	deltaTypeInputJSONDelta = "input_json_delta"
 )
 
 // HandleOpenAIToAnthropicStreamResponse processes OpenAI streaming events and converts them to Anthropic format.

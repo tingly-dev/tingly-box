@@ -218,7 +218,7 @@ func (s *Server) handleResponsesStreamingRequest(c *gin.Context, provider *typ.P
 	// Create streaming request with request context for proper cancellation
 	wrapper := s.clientPool.GetOpenAIClient(provider, params.Model)
 	fc := NewForwardContext(c.Request.Context(), provider)
-	stream, _, err := ForwardOpenAIResponsesStream(fc, wrapper, params)
+	stream, cancel, err := ForwardOpenAIResponsesStream(fc, wrapper, params)
 	if err != nil {
 		// Track error with no usage
 		s.trackUsageFromContext(c, 0, 0, err)
@@ -230,6 +230,7 @@ func (s *Server) handleResponsesStreamingRequest(c *gin.Context, provider *typ.P
 		})
 		return
 	}
+	defer cancel()
 
 	// Handle the streaming response
 	hc := protocol.NewHandleContext(c, responseModel)

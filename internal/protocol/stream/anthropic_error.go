@@ -2,7 +2,6 @@ package stream
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -18,17 +17,6 @@ func SendSSErrorEvent(c *gin.Context, message, errorType string) {
 // SendSSErrorEventJSON sends a JSON error event through SSE
 func SendSSErrorEventJSON(c *gin.Context, errorJSON []byte) {
 	c.SSEvent("error", string(errorJSON))
-}
-
-// SendSSEEvent sends a generic SSE event with JSON data
-func SendSSEEvent(c *gin.Context, eventType string, data interface{}) error {
-	eventJSON, err := json.Marshal(data)
-	if err != nil {
-		logrus.Debugf("Failed to marshal SSE event: %v", err)
-		return err
-	}
-	c.SSEvent(eventType, string(eventJSON))
-	return nil
 }
 
 // BuildErrorEvent builds a standard error event map
@@ -94,16 +82,6 @@ func SendForwardingError(c *gin.Context, err error) {
 		Error: protocol.ErrorDetail{
 			Message: "Failed to forward request: " + err.Error(),
 			Type:    "api_error",
-		},
-	})
-}
-
-// SendAdapterDisabledError sends an error response when adapter is disabled
-func SendAdapterDisabledError(c *gin.Context, providerName string) {
-	c.JSON(http.StatusUnprocessableEntity, protocol.ErrorResponse{
-		Error: protocol.ErrorDetail{
-			Message: fmt.Sprintf("Request format adaptation is disabled. Cannot send Anthropic request to OpenAI-style provider '%s'. Use --adapter flag to enable format conversion.", providerName),
-			Type:    "adapter_disabled",
 		},
 	})
 }
