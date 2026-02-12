@@ -193,7 +193,7 @@ func handleTelegramMessage(
 	if strings.HasPrefix(text, "/") {
 		// Check for agent commands (/cc, /claude) first
 		if agent, msgText, matched := parseAgentCommand(text); matched {
-			handleAgentMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agent, msgText)
+			handleAgentMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agent, msgText, msg.Sender.ID)
 			return
 		}
 		handleTelegramCommand(ctx, bot, store, sessionMgr, chatID, text, msg.Sender.ID)
@@ -202,7 +202,7 @@ func handleTelegramMessage(
 
 	// Check for @agent mention pattern
 	if agent, msgText := parseAgentMention(text); agent != "" {
-		handleAgentMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agent, msgText)
+		handleAgentMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agent, msgText, msg.Sender.ID)
 		return
 	}
 
@@ -247,15 +247,17 @@ func handleAgentMessage(
 	chatID string,
 	agent string,
 	text string,
+	senderID string,
 ) {
 	logrus.WithFields(logrus.Fields{
-		"agent":  agent,
-		"chatID": chatID,
+		"agent":    agent,
+		"chatID":   chatID,
+		"senderID": senderID,
 	}).Infof("Agent call: %s", text)
 
 	switch agent {
 	case agentClaudeCode:
-		handleClaudeCodeMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, text)
+		handleClaudeCodeMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, text, senderID)
 	default:
 		sendText(bot, chatID, fmt.Sprintf("Unknown agent: %s", agent))
 	}
@@ -271,6 +273,7 @@ func handleClaudeCodeMessage(
 	summaryEngine *summarizer.Engine,
 	chatID string,
 	text string,
+	senderID string,
 ) {
 	if strings.TrimSpace(text) == "" {
 		sendText(bot, chatID, "Please provide a message for Claude Code. Usage: /cc <message> or @cc <message>")
@@ -334,7 +337,7 @@ func handleClaudeCodeMessage(
 	if err != nil {
 		sessionMgr.SetFailed(sessionID, response)
 		logrus.WithError(err).Warn("Remote-coder execution failed")
-		sendText(bot, chatID, response)
+		sendText(bot, chatID, formatResponseWithMeta(projectPath, sessionID, senderID, response))
 		return
 	}
 
@@ -348,7 +351,7 @@ func handleClaudeCodeMessage(
 		Timestamp: time.Now(),
 	})
 
-	sendText(bot, chatID, response)
+	sendText(bot, chatID, formatResponseWithMeta(projectPath, sessionID, senderID, response))
 }
 
 func handleTelegramCommand(ctx context.Context, bot imbot.Bot, store *Store, sessionMgr *session.Manager, chatID string, text string, senderID string) {
@@ -689,6 +692,29 @@ func lastAssistantSummary(sessionMgr *session.Manager, sessionID string) string 
 		return text
 	}
 	return ""
+}
+
+// formatResponseWithMeta adds project/session/user metadata to the response for better readability.
+func formatResponseWithMeta(projectPath, sessionID, userID, response string) string {
+	var meta strings.Builder
+	meta.WriteString("━━━━━━━━━━━━━━━━━━━━\n")
+	if projectPath != "" {
+		// Show only the last 2 directories for brevity
+		shortPath := projectPath
+		parts := strings.Split(projectPath, string(filepath.Separator))
+		if len(parts) > 2 {
+			shortPath = filepath.Join(parts[len(parts)-2], parts[len(parts)-1])
+		}
+		meta.WriteString(fmt.Sprintf("📁 %s\n", shortPath))
+	}
+	if sessionID != "" {
+		meta.WriteString(fmt.Sprintf("🔄 %s\n", sessionID))
+	}
+	if userID != "" {
+		meta.WriteString(fmt.Sprintf("👤 %s\n", userID))
+	}
+	meta.WriteString("━━━━━━━━━━━━━━━━━━━━\n\n")
+	return meta.String() + response
 }
 
 func sendText(bot imbot.Bot, chatID string, text string) {
