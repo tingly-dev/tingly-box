@@ -248,6 +248,11 @@ func handleAgentMessage(
 	agent string,
 	text string,
 ) {
+	logrus.WithFields(logrus.Fields{
+		"agent":  agent,
+		"chatID": chatID,
+	}).Infof("Agent call: %s", text)
+
 	switch agent {
 	case agentClaudeCode:
 		handleClaudeCodeMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, text)
