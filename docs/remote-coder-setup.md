@@ -85,6 +85,7 @@ You can use either the GUI or the Telegram bot commands. Both control the same r
 - `/list` - List all sessions with ID, status, project path, and last assistant summary.
 - `/use <session_id>` - Switch this chat to a specific session.
 - `/new <project_path>` - Create a new session and set its project path (required).
+- `/bash <command>` - Run allowlisted shell commands (`pwd`, `ls`, `cd <path>`) without requiring a session.
 
 ## 6. Quick Checklist
 
