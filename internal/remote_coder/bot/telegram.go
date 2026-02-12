@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -352,21 +353,36 @@ func handleBashCommand(ctx context.Context, bot imbot.Bot, store *Store, session
 		return
 	}
 	projectPath := ""
+	bashCwd := ""
 	if sess.Context != nil {
 		if v, ok := sess.Context["project_path"]; ok {
 			if pv, ok := v.(string); ok {
 				projectPath = pv
 			}
 		}
+		if v, ok := sess.Context["bash_cwd"]; ok {
+			if pv, ok := v.(string); ok {
+				bashCwd = pv
+			}
+		}
+	}
+	baseDir := bashCwd
+	if baseDir == "" {
+		baseDir = projectPath
 	}
 
 	switch subcommand {
 	case "pwd":
-		if projectPath == "" {
-			sendText(bot, chatID, "(none)")
-		} else {
-			sendText(bot, chatID, projectPath)
+		if baseDir == "" {
+			cwd, err := os.Getwd()
+			if err != nil {
+				sendText(bot, chatID, "Unable to resolve working directory.")
+				return
+			}
+			sendText(bot, chatID, cwd)
+			return
 		}
+		sendText(bot, chatID, baseDir)
 	case "cd":
 		if len(fields) < 3 {
 			sendText(bot, chatID, "Usage: /bash cd <path>")
@@ -377,16 +393,36 @@ func handleBashCommand(ctx context.Context, bot imbot.Bot, store *Store, session
 			sendText(bot, chatID, "Usage: /bash cd <path>")
 			return
 		}
+		cdBase := baseDir
+		if cdBase == "" {
+			cwd, err := os.Getwd()
+			if err != nil {
+				sendText(bot, chatID, "Unable to resolve working directory.")
+				return
+			}
+			cdBase = cwd
+		}
+		if !filepath.IsAbs(nextPath) {
+			nextPath = filepath.Join(cdBase, nextPath)
+		}
 		if stat, err := os.Stat(nextPath); err != nil || !stat.IsDir() {
 			sendText(bot, chatID, "Directory not found.")
 			return
 		}
-		sessionMgr.SetContext(sessionID, "project_path", nextPath)
-		sendText(bot, chatID, fmt.Sprintf("Project path set to %s", nextPath))
+		absPath, err := filepath.Abs(nextPath)
+		if err == nil {
+			nextPath = absPath
+		}
+		sessionMgr.SetContext(sessionID, "bash_cwd", nextPath)
+		sendText(bot, chatID, fmt.Sprintf("Bash working directory set to %s", nextPath))
 	case "ls":
-		if projectPath == "" {
-			sendText(bot, chatID, "Project path not set. Use /new <path> or /bash cd <path>.")
-			return
+		if baseDir == "" {
+			cwd, err := os.Getwd()
+			if err != nil {
+				sendText(bot, chatID, "Unable to resolve working directory.")
+				return
+			}
+			baseDir = cwd
 		}
 		args := []string{}
 		if len(fields) > 2 {
@@ -395,7 +431,7 @@ func handleBashCommand(ctx context.Context, bot imbot.Bot, store *Store, session
 		execCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 		cmd := exec.CommandContext(execCtx, "ls", args...)
-		cmd.Dir = projectPath
+		cmd.Dir = baseDir
 		output, err := cmd.CombinedOutput()
 		if err != nil && len(output) == 0 {
 			sendText(bot, chatID, fmt.Sprintf("Command failed: %v", err))
