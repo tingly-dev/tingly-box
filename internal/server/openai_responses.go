@@ -37,7 +37,7 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 	}
 
 	// Parse request (minimal parsing for validation)
-	var req ResponseCreateRequest
+	var req protocol.ResponseCreateRequest
 	if err := json.Unmarshal(bodyBytes, &req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -60,7 +60,7 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 	}
 
 	// Check if input is provided (either string or array)
-	inputValue := GetInputValue(req.Input)
+	inputValue := protocol.GetInputValue(req.Input)
 	if inputValue == nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -416,7 +416,7 @@ func SSEventOpenAI(c *gin.Context, t string, data any, modelOverride ...string) 
 // This handles the model override and forwards the rest as-is
 func (s *Server) convertToResponsesParams(bodyBytes []byte, actualModel string) (responses.ResponseNewParams, error) {
 	// Preprocess to add type fields to input items (needed for union deserialization)
-	processedData, err := addTypeFieldToInputItems(bodyBytes)
+	processedData, err := protocol.AddTypeFieldToInputItems(bodyBytes)
 	if err != nil {
 		return responses.ResponseNewParams{}, err
 	}
