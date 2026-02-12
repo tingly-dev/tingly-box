@@ -54,20 +54,6 @@ func TestMemoryTokenStorage(t *testing.T) {
 		}
 	})
 
-	// Test ListProviders
-	t.Run("ListProviders", func(t *testing.T) {
-		providers, err := storage.ListProviders(userID)
-		if err != nil {
-			t.Fatalf("ListProviders failed: %v", err)
-		}
-		if len(providers) != 1 {
-			t.Errorf("Expected 1 provider, got %d", len(providers))
-		}
-		if providers[0] != provider {
-			t.Errorf("Expected provider %s, got %s", provider, providers[0])
-		}
-	})
-
 	// Test DeleteToken
 	t.Run("DeleteToken", func(t *testing.T) {
 		err := storage.DeleteToken(userID, provider)
@@ -611,30 +597,3 @@ func TestRevokeToken(t *testing.T) {
 	}
 }
 
-// TestListProviders tests listing providers with tokens
-func TestListProviders(t *testing.T) {
-	storage := NewMemoryTokenStorage()
-
-	// Add tokens for multiple providers
-	storage.SaveToken("user123", ProviderClaudeCode, &Token{
-		AccessToken: "anthropic-token",
-		Provider:    ProviderClaudeCode,
-	})
-	storage.SaveToken("user123", ProviderOpenAI, &Token{
-		AccessToken: "openai-token",
-		Provider:    ProviderOpenAI,
-	})
-
-	config := DefaultConfig()
-	config.TokenStorage = storage
-	manager := NewManager(config, nil)
-
-	providers, err := manager.ListProviders("user123")
-	if err != nil {
-		t.Fatalf("ListProviders failed: %v", err)
-	}
-
-	if len(providers) != 2 {
-		t.Errorf("Expected 2 providers, got %d", len(providers))
-	}
-}

@@ -218,30 +218,25 @@ func (h *Handler) ListTokens(c *gin.Context) {
 		userID = DefaultUserID
 	}
 
-	providers, err := h.manager.ListProviders(userID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
-		return
-	}
-
 	type TokenInfo struct {
 		Provider  oauth.ProviderType `json:"provider"`
 		Valid     bool               `json:"valid"`
 		ExpiresAt string             `json:"expires_at,omitempty"`
 	}
 
-	tokens := make([]TokenInfo, 0, len(providers))
-	for _, provider := range providers {
-		token, err := h.manager.GetToken(c.Request.Context(), userID, provider)
+	tokens := make([]TokenInfo, 0)
+
+	// Try to get tokens from all registered providers
+	registry := h.manager.GetRegistry()
+	for _, providerType := range registry.List() {
+		token, err := h.manager.GetToken(c.Request.Context(), userID, providerType)
 		if err == nil && token != nil {
 			expiresAt := ""
 			if !token.Expiry.IsZero() {
 				expiresAt = token.Expiry.Format("2006-01-02T15:04:05Z07:00")
 			}
 			tokens = append(tokens, TokenInfo{
-				Provider:  provider,
+				Provider:  providerType,
 				Valid:     token.Valid(),
 				ExpiresAt: expiresAt,
 			})

@@ -31,4 +31,7 @@ var (
 
 	// ErrInvalidCallback is returned when the callback parameters are invalid
 	ErrInvalidCallback = errors.New("oauth: invalid callback")
+
+	// ErrSessionNotFound is returned when a session is not found in storage
+	ErrSessionNotFound = errors.New("oauth: session not found")
 )
