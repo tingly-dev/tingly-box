@@ -18,8 +18,11 @@ import (
 )
 
 const (
-	telegramMessageLimit = 4000
-	listSummaryLimit     = 160
+	telegramMessageLimit  = 4000
+	listSummaryLimit      = 160
+	telegramStartRetries  = 10
+	telegramStartDelay    = 5 * time.Second
+	telegramStartMaxDelay = 5 * time.Minute
 )
 
 var defaultBashAllowlist = map[string]struct{}{
@@ -30,6 +33,31 @@ var defaultBashAllowlist = map[string]struct{}{
 
 // RunTelegramBot starts a Telegram bot that proxies messages to remote-coder sessions.
 func RunTelegramBot(ctx context.Context, store *Store, sessionMgr *session.Manager) error {
+	delay := telegramStartDelay
+	for attempt := 1; attempt <= telegramStartRetries; attempt++ {
+		if ctx.Err() != nil {
+			return nil
+		}
+		if err := runTelegramBotOnce(ctx, store, sessionMgr); err != nil {
+			if attempt == telegramStartRetries {
+				return err
+			}
+			logrus.WithError(err).Warnf("Remote-coder Telegram bot failed to start; retrying in %s (%d/%d)", delay, attempt, telegramStartRetries)
+			if !sleepWithContext(ctx, delay) {
+				return nil
+			}
+			delay *= 2
+			if delay > telegramStartMaxDelay {
+				delay = telegramStartMaxDelay
+			}
+			continue
+		}
+		return nil
+	}
+	return nil
+}
+
+func runTelegramBotOnce(ctx context.Context, store *Store, sessionMgr *session.Manager) error {
 	if store == nil {
 		return fmt.Errorf("bot store is nil")
 	}
@@ -95,6 +123,17 @@ func RunTelegramBot(ctx context.Context, store *Store, sessionMgr *session.Manag
 
 	<-ctx.Done()
 	return nil
+}
+
+func sleepWithContext(ctx context.Context, delay time.Duration) bool {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
 }
 
 func handleTelegramMessage(
