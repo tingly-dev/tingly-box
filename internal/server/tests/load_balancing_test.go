@@ -30,8 +30,11 @@ func TestLoadBalancer_RoundRobin(t *testing.T) {
 	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
+	// Create health filter (nil for tests - all services healthy)
+	healthFilter := typ.NewHealthFilter(nil)
+
 	// Create load balancer
-	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig())
+	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig(), healthFilter)
 	defer lb.Stop()
 
 	// Create test rule with multiple services using new LBTactic format
@@ -124,8 +127,11 @@ func TestLoadBalancer_EnabledFilter(t *testing.T) {
 	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
+	// Create health filter (nil for tests - all services healthy)
+	healthFilter := typ.NewHealthFilter(nil)
+
 	// Create load balancer
-	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig())
+	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig(), healthFilter)
 	defer lb.Stop()
 
 	// Create test rule with mixed enabled/disabled services
@@ -190,8 +196,11 @@ func TestLoadBalancer_RecordUsage(t *testing.T) {
 	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
+	// Create health filter (nil for tests - all services healthy)
+	healthFilter := typ.NewHealthFilter(nil)
+
 	// Create load balancer
-	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig())
+	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig(), healthFilter)
 	defer lb.Stop()
 
 	// Create a test service
@@ -228,8 +237,11 @@ func TestLoadBalancer_ValidateRule(t *testing.T) {
 	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
+	// Create health filter (nil for tests - all services healthy)
+	healthFilter := typ.NewHealthFilter(nil)
+
 	// Create load balancer
-	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig())
+	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig(), healthFilter)
 	defer lb.Stop()
 
 	// Test valid rule
@@ -291,8 +303,11 @@ func TestLoadBalancer_GetRuleSummary(t *testing.T) {
 	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
+	// Create health filter (nil for tests - all services healthy)
+	healthFilter := typ.NewHealthFilter(nil)
+
 	// Create load balancer
-	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig())
+	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig(), healthFilter)
 	defer lb.Stop()
 
 	// Create test rule
@@ -813,8 +828,11 @@ func TestLoadBalancer_WeightedRandom(t *testing.T) {
 	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
+	// Create health filter (nil for tests - all services healthy)
+	healthFilter := typ.NewHealthFilter(nil)
+
 	// Create load balancer - it already has all default tactics
-	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig())
+	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig(), healthFilter)
 	defer lb.Stop()
 
 	// Create test rule with weighted services using new LBTactic format
@@ -930,8 +948,11 @@ func TestLoadBalancer_WithMockProvider(t *testing.T) {
 		t.Fatalf("Failed to add rule: %v", err)
 	}
 
+	// Create health filter (nil for tests - all services healthy)
+	healthFilter := typ.NewHealthFilter(nil)
+
 	// Create load balancer
-	lb := server.NewLoadBalancer(ts.appConfig.GetGlobalConfig())
+	lb := server.NewLoadBalancer(ts.appConfig.GetGlobalConfig(), healthFilter)
 	defer lb.Stop()
 
 	// Test service selection
@@ -966,8 +987,11 @@ func TestLoadBalancer_RoundRobinThreshold2(t *testing.T) {
 	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
+	// Create health filter (nil for tests - all services healthy)
+	healthFilter := typ.NewHealthFilter(nil)
+
 	// Create load balancer
-	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig())
+	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig(), healthFilter)
 	defer lb.Stop()
 
 	// Create test rule with 3 services to make the rotation more interesting

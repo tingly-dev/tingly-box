@@ -19,6 +19,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/data"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/obs/otel"
 	remote_coder "github.com/tingly-dev/tingly-box/internal/remote_coder"
@@ -51,6 +52,7 @@ type Server struct {
 	loadBalancer    *LoadBalancer
 	loadBalancerAPI *LoadBalancerAPI
 	usageAPI        *UsageAPI
+	healthMonitor   *loadbalance.HealthMonitor
 
 	// client pool for caching
 	clientPool *client.ClientPool
@@ -354,8 +356,14 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize auth middleware
 	authMW := middleware.NewAuthMiddleware(cfg, jwtManager)
 
+	// Initialize health monitor
+	healthMonitor := loadbalance.NewHealthMonitor(cfg.HealthMonitor)
+
+	// Initialize health filter
+	healthFilter := typ.NewHealthFilter(healthMonitor)
+
 	// Initialize load balancer
-	loadBalancer := NewLoadBalancer(cfg)
+	loadBalancer := NewLoadBalancer(cfg, healthFilter)
 
 	// Initialize load balancer API
 	loadBalancerAPI := NewLoadBalancerAPI(loadBalancer, cfg)
@@ -390,6 +398,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.loadBalancer = loadBalancer
 	server.loadBalancerAPI = loadBalancerAPI
 	server.usageAPI = usageAPI
+	server.healthMonitor = healthMonitor
 	server.oauthManager = oauthManager
 	server.oauthRefresher = tokenRefresher
 
@@ -463,6 +472,41 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 
 	// Initialize dynamic callback servers map
 	server.callbackServers = make(map[string]*oauth2.CallbackServer)
+
+	// Set up health monitor probe function using existing probe infrastructure
+	if server.healthMonitor != nil {
+		server.healthMonitor.SetProbeFunc(func(serviceID string) bool {
+			// Extract provider UUID from serviceID (format: providerUUID:model)
+			parts := strings.Split(serviceID, ":")
+			if len(parts) < 2 {
+				return false
+			}
+			providerUUID := parts[0]
+			modelID := parts[1]
+
+			// Get provider from config
+			provider, err := cfg.GetProviderByUUID(providerUUID)
+			if err != nil || provider == nil {
+				return false
+			}
+
+			// Use adaptive probe to check health
+			adaptiveProbe := NewAdaptiveProbe(server)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			result, err := adaptiveProbe.ProbeModelEndpoints(ctx, ModelProbeRequest{
+				ProviderUUID: providerUUID,
+				ModelID:      modelID,
+			})
+			if err != nil {
+				return false
+			}
+
+			// Service is healthy if chat endpoint is available
+			return result.ChatEndpoint.Available
+		})
+	}
 
 	return server
 }
@@ -948,6 +992,11 @@ func (s *Server) GetPreferredEndpointForModel(provider *typ.Provider, modelID st
 	// TODO: we use chat as default unless the model do not support chat, e.g. codex
 	adaptiveProbe := NewAdaptiveProbe(s)
 	return adaptiveProbe.GetPreferredEndpoint(provider, modelID)
+}
+
+// HealthMonitor returns the server's health monitor
+func (s *Server) HealthMonitor() *loadbalance.HealthMonitor {
+	return s.healthMonitor
 }
 
 // Stop gracefully stops the HTTP server

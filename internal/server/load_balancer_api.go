@@ -45,6 +45,10 @@ func (api *LoadBalancerAPI) RegisterRoutes(loadBalancer *gin.RouterGroup) {
 
 		// Current service information
 		loadBalancer.GET("/rules/:ruleId/current-service", api.GetCurrentService)
+
+		// Health monitoring
+		loadBalancer.GET("/rules/:ruleId/health", api.GetServicesHealth)
+		loadBalancer.POST("/services/:serviceId/health/reset", api.ResetServiceHealth)
 	}
 }
 
@@ -343,5 +347,89 @@ func (api *LoadBalancerAPI) GetMetrics(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"metrics":        metrics,
 		"total_services": len(allStats),
+	})
+}
+
+// GetServicesHealth returns health status for all services in a rule
+func (api *LoadBalancerAPI) GetServicesHealth(c *gin.Context) {
+	ruleId := c.Param("ruleId")
+
+	rule := api.config.GetRuleByUUID(ruleId)
+	if rule == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
+		return
+	}
+
+	services := rule.GetServices()
+	healthData := make(map[string]interface{})
+
+	for _, service := range services {
+		serviceID := service.ServiceID()
+		serviceHealth := gin.H{
+			"service_id":   serviceID,
+			"provider":     service.Provider,
+			"model":        service.Model,
+			"active":       service.Active,
+			"health_known": false,
+		}
+
+		// Get health from load balancer's health filter
+		healthFilter := api.loadBalancer.HealthFilter()
+		if healthFilter != nil {
+			isHealthy := healthFilter.IsHealthy(serviceID)
+			serviceHealth["healthy"] = isHealthy
+			serviceHealth["health_known"] = true
+
+			// Get detailed health info if available
+			if monitor := healthFilter.GetHealthMonitor(); monitor != nil {
+				health := monitor.GetHealth(serviceID)
+				if health != nil {
+					serviceHealth["status"] = health.Status.String()
+					serviceHealth["consecutive_errors"] = health.ConsecutiveErrors
+					serviceHealth["rate_limited"] = health.RateLimited
+					serviceHealth["auth_error"] = health.AuthError
+					if !health.LastErrorTime.IsZero() {
+						serviceHealth["last_error_time"] = health.LastErrorTime
+					}
+					if health.LastError != nil {
+						serviceHealth["last_error"] = health.LastError.Error()
+					}
+				}
+			}
+		} else {
+			// No health filter, assume healthy
+			serviceHealth["healthy"] = true
+		}
+
+		healthData[serviceID] = serviceHealth
+	}
+
+	c.JSON(http.StatusOK, ServiceHealthResponse{
+		Rule:   ruleId,
+		Health: healthData,
+	})
+}
+
+// ResetServiceHealth manually resets a service's health to healthy
+func (api *LoadBalancerAPI) ResetServiceHealth(c *gin.Context) {
+	serviceId := c.Param("serviceId")
+
+	healthFilter := api.loadBalancer.HealthFilter()
+	if healthFilter == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Health monitoring not available"})
+		return
+	}
+
+	monitor := healthFilter.GetHealthMonitor()
+	if monitor == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Health monitoring not available"})
+		return
+	}
+
+	monitor.ResetHealth(serviceId)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":    "Service health reset successfully",
+		"service_id": serviceId,
 	})
 }
