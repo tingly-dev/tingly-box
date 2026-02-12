@@ -66,6 +66,12 @@ func initSchema(db *sql.DB) error {
 			session_id TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		);
+
+		CREATE TABLE IF NOT EXISTS remote_coder_bot_bash_cwd (
+			chat_id TEXT PRIMARY KEY,
+			cwd TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		);
 	`)
 	if err != nil {
 		return err
@@ -220,5 +226,37 @@ func (s *Store) SetSessionForChat(chatID, sessionID string) error {
 			session_id = excluded.session_id,
 			updated_at = excluded.updated_at
 	`, chatID, sessionID, time.Now().UTC().Format(time.RFC3339))
+	return err
+}
+
+func (s *Store) GetBashCwd(chatID string) (string, bool, error) {
+	chatID = strings.TrimSpace(chatID)
+	if chatID == "" || s == nil || s.db == nil {
+		return "", false, nil
+	}
+	row := s.db.QueryRow(`SELECT cwd FROM remote_coder_bot_bash_cwd WHERE chat_id = ?`, chatID)
+	var cwd string
+	if err := row.Scan(&cwd); err != nil {
+		if err == sql.ErrNoRows {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	return cwd, true, nil
+}
+
+func (s *Store) SetBashCwd(chatID, cwd string) error {
+	chatID = strings.TrimSpace(chatID)
+	cwd = strings.TrimSpace(cwd)
+	if chatID == "" || cwd == "" || s == nil || s.db == nil {
+		return nil
+	}
+	_, err := s.db.Exec(`
+		INSERT INTO remote_coder_bot_bash_cwd (chat_id, cwd, updated_at)
+		VALUES (?, ?, ?)
+		ON CONFLICT(chat_id) DO UPDATE SET
+			cwd = excluded.cwd,
+			updated_at = excluded.updated_at
+	`, chatID, cwd, time.Now().UTC().Format(time.RFC3339))
 	return err
 }

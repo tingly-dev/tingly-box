@@ -37,11 +37,21 @@ Remote Coder can proxy chats from Telegram. The bot settings are managed in the 
    - **Chat ID Lock** (optional; only this chat can use the bot)
 4. Click **Save Bot Token**.
 
-Settings are stored in `remote-cc.db.` in plain text.
+Settings are stored in `tingly-remote-coder.db` in plain text.
 
 ### Start the Bot
 
 The bot starts automatically when you run `tingly-box rc`, as long as a Telegram bot token is configured.
+
+### Test Bot Connectivity (Optional)
+
+If you use a SOCKS5 proxy, verify Telegram API connectivity:
+
+```bash
+curl --socks5-hostname 127.0.0.1:7897 -sS "https://api.telegram.org/botBOT_TOKEN/getMe"
+```
+
+Replace `BOT_TOKEN` with your bot token.
 
 ## 3. Get Telegram Chat ID (Optional)
 
@@ -76,7 +86,7 @@ You can use either the GUI or the Telegram bot commands. Both control the same r
 - `/use <session_id>` - Switch this chat to a specific session.
 - `/new <project_path>` - Create a new session and set its project path (required).
 
-## 5. Quick Checklist
+## 6. Quick Checklist
 
 - `tingly-box rc` is running
 - Bot token saved in GUI

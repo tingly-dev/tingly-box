@@ -343,28 +343,23 @@ func handleBashCommand(ctx context.Context, bot imbot.Bot, store *Store, session
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to load session mapping")
 	}
-	if !ok || sessionID == "" {
-		sendText(bot, chatID, "No session mapped. Send a message or use /new to create one.")
-		return
-	}
-	sess, exists := sessionMgr.GetOrLoad(sessionID)
-	if !exists {
-		sendText(bot, chatID, "Session not found.")
-		return
+	var sess *session.Session
+	if ok && sessionID != "" {
+		if s, exists := sessionMgr.GetOrLoad(sessionID); exists {
+			sess = s
+		}
 	}
 	projectPath := ""
-	bashCwd := ""
-	if sess.Context != nil {
+	if sess != nil && sess.Context != nil {
 		if v, ok := sess.Context["project_path"]; ok {
 			if pv, ok := v.(string); ok {
 				projectPath = pv
 			}
 		}
-		if v, ok := sess.Context["bash_cwd"]; ok {
-			if pv, ok := v.(string); ok {
-				bashCwd = pv
-			}
-		}
+	}
+	bashCwd, _, err := store.GetBashCwd(chatID)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to load bash cwd")
 	}
 	baseDir := bashCwd
 	if baseDir == "" {
@@ -413,7 +408,9 @@ func handleBashCommand(ctx context.Context, bot imbot.Bot, store *Store, session
 		if err == nil {
 			nextPath = absPath
 		}
-		sessionMgr.SetContext(sessionID, "bash_cwd", nextPath)
+		if err := store.SetBashCwd(chatID, nextPath); err != nil {
+			logrus.WithError(err).Warn("Failed to update bash cwd")
+		}
 		sendText(bot, chatID, fmt.Sprintf("Bash working directory set to %s", nextPath))
 	case "ls":
 		if baseDir == "" {
