@@ -289,7 +289,7 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 		if isStreaming {
 			s.handleOpenAIChatStreamingRequest(c, provider, &req.ChatCompletionNewParams, responseModel, shouldIntercept, shouldStripTools)
 		} else {
-			s.handleNonStreamingRequest(c, provider, &req.ChatCompletionNewParams, responseModel, rule, shouldIntercept, shouldStripTools)
+			s.handleNonStreamingRequest(c, provider, &req.ChatCompletionNewParams, responseModel, shouldIntercept, shouldStripTools)
 		}
 	}
 }

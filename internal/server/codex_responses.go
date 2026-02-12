@@ -200,7 +200,7 @@ func (s *Server) accumulateChatGPTBackendStream(reader io.Reader, params respons
 }
 
 // handleChatGPTBackendStreamingRequest handles streaming requests for ChatGPT backend API providers
-func (s *Server) handleChatGPTBackendStreamingRequest(c *gin.Context, provider *typ.Provider, params responses.ResponseNewParams, responseModel, actualModel string, rule *typ.Rule) {
+func (s *Server) handleChatGPTBackendStreamingRequest(c *gin.Context, provider *typ.Provider, params responses.ResponseNewParams, responseModel, actualModel string) {
 	// Get scenario recorder and set up stream recorder
 	var recorder *ScenarioRecorder
 	if r, exists := c.Get("scenario_recorder"); exists {

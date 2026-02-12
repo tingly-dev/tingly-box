@@ -141,14 +141,14 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 
 	// Handle streaming or non-streaming
 	if req.Stream {
-		s.handleResponsesStreamingRequest(c, provider, params, req.Model, actualModel, rule)
+		s.handleResponsesStreamingRequest(c, provider, params, req.Model, actualModel)
 	} else {
-		s.handleResponsesNonStreamingRequest(c, provider, params, req.Model, actualModel, rule)
+		s.handleResponsesNonStreamingRequest(c, provider, params, req.Model, actualModel)
 	}
 }
 
 // handleResponsesNonStreamingRequest handles non-streaming Responses API requests
-func (s *Server) handleResponsesNonStreamingRequest(c *gin.Context, provider *typ.Provider, params responses.ResponseNewParams, responseModel, actualModel string, rule *typ.Rule) {
+func (s *Server) handleResponsesNonStreamingRequest(c *gin.Context, provider *typ.Provider, params responses.ResponseNewParams, responseModel, actualModel string) {
 	// Forward request to provider
 	var response *responses.Response
 	var err error
@@ -207,16 +207,16 @@ func (s *Server) handleResponsesNonStreamingRequest(c *gin.Context, provider *ty
 }
 
 // handleResponsesStreamingRequest handles streaming Responses API requests
-func (s *Server) handleResponsesStreamingRequest(c *gin.Context, provider *typ.Provider, params responses.ResponseNewParams, responseModel, actualModel string, rule *typ.Rule) {
+func (s *Server) handleResponsesStreamingRequest(c *gin.Context, provider *typ.Provider, params responses.ResponseNewParams, responseModel, actualModel string) {
 	// Check if this is a ChatGPT backend API provider (Codex OAuth)
 	// These providers use a custom streaming handler
 	if provider.APIBase == protocol.ChatGPTBackendAPIBase {
-		s.handleChatGPTBackendStreamingRequest(c, provider, params, responseModel, actualModel, rule)
+		s.handleChatGPTBackendStreamingRequest(c, provider, params, responseModel, actualModel)
 		return
 	}
 
 	// Create streaming request with request context for proper cancellation
-	wrapper := s.clientPool.GetOpenAIClient(provider, string(params.Model))
+	wrapper := s.clientPool.GetOpenAIClient(provider, params.Model)
 	fc := NewForwardContext(c.Request.Context(), provider)
 	stream, _, err := ForwardOpenAIResponsesStream(fc, wrapper, params)
 	if err != nil {
@@ -240,7 +240,7 @@ func (s *Server) handleResponsesStreamingRequest(c *gin.Context, provider *typ.P
 }
 
 // handleResponsesStreamResponse processes the streaming response and sends it to the client
-func (s *Server) handleResponsesStreamResponse(c *gin.Context, stream *ssestream.Stream[responses.ResponseStreamEventUnion], responseModel, actualModel string, rule *typ.Rule, provider *typ.Provider) {
+func (s *Server) handleResponsesStreamResponse(c *gin.Context, stream *ssestream.Stream[responses.ResponseStreamEventUnion], responseModel, actualModel string) {
 	// Accumulate usage from stream chunks
 	var inputTokens, outputTokens int64
 	var hasUsage bool

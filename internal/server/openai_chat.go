@@ -26,7 +26,7 @@ import (
 )
 
 // handleNonStreamingRequest handles non-streaming chat completion requests
-func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, rule *typ.Rule, shouldIntercept, shouldStripTools bool) {
+func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, shouldIntercept, shouldStripTools bool) {
 	// === PRE-REQUEST INTERCEPTION: Strip tools before sending to provider ===
 	req := originalReq
 	if shouldIntercept {
@@ -238,7 +238,7 @@ func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.
 }
 
 // handleOpenAIStreamResponse processes the streaming response and sends it to the client
-func (s *Server) handleOpenAIStreamResponse(c *gin.Context, streamResp *ssestream.Stream[openai.ChatCompletionChunk], req *openai.ChatCompletionNewParams, responseModel string, rule *typ.Rule, provider *typ.Provider) {
+func (s *Server) handleOpenAIStreamResponse(c *gin.Context, streamResp *ssestream.Stream[openai.ChatCompletionChunk], req *openai.ChatCompletionNewParams, responseModel string) {
 	// Accumulate usage from stream chunks
 	var inputTokens, outputTokens int
 	var hasUsage bool
@@ -557,9 +557,9 @@ func (s *Server) handleResponsesForChatRequest(c *gin.Context, provider *typ.Pro
 	params := s.convertChatCompletionToResponsesParams(req, actualModel)
 
 	if isStreaming {
-		s.handleResponsesStreamingRequest(c, provider, params, responseModel, actualModel, rule)
+		s.handleResponsesStreamingRequest(c, provider, params, responseModel, actualModel)
 	} else {
-		s.handleResponsesNonStreamingRequest(c, provider, params, responseModel, actualModel, rule)
+		s.handleResponsesNonStreamingRequest(c, provider, params, responseModel, actualModel)
 	}
 }
 
