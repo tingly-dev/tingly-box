@@ -3,7 +3,6 @@ package config
 import (
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -11,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/middleware"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
@@ -94,7 +94,7 @@ func LoadFromAppConfig(appCfg *serverconfig.Config, opts Options) (*Config, erro
 	dbPath := remoteCfg.DBPath
 	if dbPath == "" {
 		if appCfg.ConfigDir != "" {
-			dbPath = filepath.Join(appCfg.ConfigDir, "tingly-remote-coder.db")
+			dbPath = constant.GetDBFile(appCfg.ConfigDir)
 		}
 	}
 	if env := os.Getenv("RCC_DB_PATH"); env != "" {

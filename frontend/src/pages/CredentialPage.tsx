@@ -812,7 +812,7 @@ const CredentialPage = () => {
                         onChange={(e) => setBotTokenDraft(e.target.value)}
                         fullWidth
                         size="small"
-                        helperText="Stored in tingly-remote-coder.db in plain text."
+                        helperText="Stored in tingly.db in plain text."
                     />
                     <TextField
                         label="Proxy URL"

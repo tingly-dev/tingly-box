@@ -20,7 +20,7 @@ func TestLoadFromAppConfigDefaults(t *testing.T) {
 	cfg, err := LoadFromAppConfig(appCfg, Options{})
 	require.NoError(t, err)
 	require.Equal(t, 18080, cfg.Port)
-	require.Equal(t, filepath.Join(appCfg.ConfigDir, "tingly-remote-coder.db"), cfg.DBPath)
+	require.Equal(t, filepath.Join(appCfg.ConfigDir, "db", "tingly.db"), cfg.DBPath)
 	require.Equal(t, 336*time.Hour, cfg.SessionTimeout)
 	require.Equal(t, 14*24*time.Hour, cfg.MessageRetention)
 	require.Equal(t, 5, cfg.RateLimitMax)

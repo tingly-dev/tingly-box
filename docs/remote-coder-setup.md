@@ -4,7 +4,17 @@ This guide explains how to run Remote Coder, configure the Telegram bot, and use
 
 ## 1. Run Remote Coder Service
 
-Remote Coder runs as a subcommand of `tingly-box` and starts the Telegram bot automatically if configured.
+Remote Coder can run standalone or auto-start inside the main tingly-box server when enabled.
+
+### Option A: Auto-start with tingly-box
+
+Enable Remote Coder in global flags (`enable_remote_coder`). When tingly-box starts, it also starts Remote Coder and the Telegram bot (if configured).
+
+```bash
+./build/tingly-box start
+```
+
+### Option B: Run standalone
 
 ```bash
 ./build/tingly-box rc
@@ -37,7 +47,7 @@ Remote Coder can proxy chats from Telegram. The bot settings are managed in the 
    - **Chat ID Lock** (optional; only this chat can use the bot)
 4. Click **Save Bot Token**.
 
-Settings are stored in `tingly-remote-coder.db` in plain text.
+Settings are stored in `tingly.db` (under `~/.tingly-box/db/`) in plain text.
 
 ### Start the Bot
 
@@ -89,6 +99,6 @@ You can use either the GUI or the Telegram bot commands. Both control the same r
 
 ## 6. Quick Checklist
 
-- `tingly-box rc` is running
+- `tingly-box start` is running with `enable_remote_coder` enabled, or `tingly-box rc` is running
 - Bot token saved in GUI
 - Chat ID lock set (optional)

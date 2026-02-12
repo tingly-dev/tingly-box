@@ -1,6 +1,6 @@
 package config
 
-import "path/filepath"
+import "github.com/tingly-dev/tingly-box/internal/constant"
 
 // RemoteCoderConfig holds configuration for the remote-coder service.
 type RemoteCoderConfig struct {
@@ -21,7 +21,7 @@ func (c *Config) applyRemoteCoderDefaults() bool {
 	}
 	if c.RemoteCoder.DBPath == "" {
 		if c.ConfigDir != "" {
-			c.RemoteCoder.DBPath = filepath.Join(c.ConfigDir, "tingly-remote-coder.db")
+			c.RemoteCoder.DBPath = constant.GetDBFile(c.ConfigDir)
 			updated = true
 		}
 	}

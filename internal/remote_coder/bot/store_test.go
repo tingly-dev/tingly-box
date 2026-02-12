@@ -10,7 +10,7 @@ import (
 
 func TestStoreSettingsRoundTrip(t *testing.T) {
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "tingly-remote-coder.db")
+	dbPath := filepath.Join(dir, "tingly.db")
 	store, err := NewStore(dbPath)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = store.Close() })
@@ -38,7 +38,7 @@ func TestStoreSettingsRoundTrip(t *testing.T) {
 
 func TestStoreSessionMapping(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewStore(filepath.Join(dir, "tingly-remote-coder.db"))
+	store, err := NewStore(filepath.Join(dir, "tingly.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = store.Close() })
 
