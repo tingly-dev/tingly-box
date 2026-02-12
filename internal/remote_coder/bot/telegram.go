@@ -25,6 +25,23 @@ const (
 	telegramStartMaxDelay = 5 * time.Minute
 )
 
+// Agent routing constants
+const (
+	agentClaudeCode = "claude_code"
+)
+
+// agentPatterns maps agent aliases to their internal identifier
+var agentPatterns = map[string]string{
+	"@claude": agentClaudeCode,
+	"@cc":     agentClaudeCode,
+}
+
+// agentCommands maps command aliases to their internal identifier
+var agentCommands = map[string]string{
+	"/claude": agentClaudeCode,
+	"/cc":     agentClaudeCode,
+}
+
 var defaultBashAllowlist = map[string]struct{}{
 	"cd":  {},
 	"ls":  {},
@@ -174,7 +191,84 @@ func handleTelegramMessage(
 	}
 
 	if strings.HasPrefix(text, "/") {
-		handleTelegramCommand(ctx, bot, store, sessionMgr, chatID, text)
+		// Check for agent commands (/cc, /claude) first
+		if agent, msgText, matched := parseAgentCommand(text); matched {
+			handleAgentMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agent, msgText)
+			return
+		}
+		handleTelegramCommand(ctx, bot, store, sessionMgr, chatID, text, msg.Sender.ID)
+		return
+	}
+
+	// Check for @agent mention pattern
+	if agent, msgText := parseAgentMention(text); agent != "" {
+		handleAgentMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agent, msgText)
+		return
+	}
+
+	// No agent mentioned - show guidance
+	sendText(bot, chatID, "No agent mentioned. Use /cc <message> or @cc <message> to start.")
+}
+
+// parseAgentMention checks if text starts with @agent pattern and returns the agent and remaining message.
+func parseAgentMention(text string) (agent string, message string) {
+	text = strings.TrimSpace(text)
+	for pattern, agentID := range agentPatterns {
+		if strings.HasPrefix(text, pattern) {
+			remaining := strings.TrimSpace(strings.TrimPrefix(text, pattern))
+			return agentID, remaining
+		}
+	}
+	return "", ""
+}
+
+// parseAgentCommand checks if text is an agent command (e.g., /cc <message>) and returns the agent and message.
+func parseAgentCommand(text string) (agent string, message string, matched bool) {
+	fields := strings.Fields(text)
+	if len(fields) == 0 {
+		return "", "", false
+	}
+	cmd := strings.ToLower(fields[0])
+	if agentID, ok := agentCommands[cmd]; ok {
+		remaining := strings.TrimSpace(strings.TrimPrefix(text, fields[0]))
+		return agentID, remaining, true
+	}
+	return "", "", false
+}
+
+// handleAgentMessage routes message to the appropriate agent handler.
+func handleAgentMessage(
+	ctx context.Context,
+	bot imbot.Bot,
+	store *Store,
+	sessionMgr *session.Manager,
+	ccLauncher *launcher.ClaudeCodeLauncher,
+	summaryEngine *summarizer.Engine,
+	chatID string,
+	agent string,
+	text string,
+) {
+	switch agent {
+	case agentClaudeCode:
+		handleClaudeCodeMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, text)
+	default:
+		sendText(bot, chatID, fmt.Sprintf("Unknown agent: %s", agent))
+	}
+}
+
+// handleClaudeCodeMessage executes a message through Claude Code.
+func handleClaudeCodeMessage(
+	ctx context.Context,
+	bot imbot.Bot,
+	store *Store,
+	sessionMgr *session.Manager,
+	ccLauncher *launcher.ClaudeCodeLauncher,
+	summaryEngine *summarizer.Engine,
+	chatID string,
+	text string,
+) {
+	if strings.TrimSpace(text) == "" {
+		sendText(bot, chatID, "Please provide a message for Claude Code. Usage: /cc <message> or @cc <message>")
 		return
 	}
 
@@ -252,14 +346,32 @@ func handleTelegramMessage(
 	sendText(bot, chatID, response)
 }
 
-func handleTelegramCommand(ctx context.Context, bot imbot.Bot, store *Store, sessionMgr *session.Manager, chatID string, text string) {
+func handleTelegramCommand(ctx context.Context, bot imbot.Bot, store *Store, sessionMgr *session.Manager, chatID string, text string, senderID string) {
 	fields := strings.Fields(text)
 	if len(fields) == 0 {
 		return
 	}
 	cmd := strings.ToLower(fields[0])
 
+	// Check for agent commands (/claude, /cc)
+	if _, ok := agentCommands[cmd]; ok {
+		// Agent commands need special handling with launcher
+		// Fall through to switch for now, will be handled in default case
+	}
+
 	switch cmd {
+	case "/help", "/start":
+		helpText := fmt.Sprintf(`Your User ID: %s
+
+Available commands:
+/help - Show this help message
+/cc <message> - Send message to Claude Code
+/info - Show current session info
+/list - List all sessions
+/use <session_id> - Switch to a session
+/new <project_path> - Create a new session
+/bash <cmd> - Execute allowed bash commands (cd, ls, pwd)`, senderID)
+		sendText(bot, chatID, helpText)
 	case "/info":
 		sessionID, ok, err := store.GetSessionForChat(chatID)
 		if err != nil {
@@ -355,7 +467,7 @@ func handleTelegramCommand(ctx context.Context, bot imbot.Bot, store *Store, ses
 	case "/bash":
 		handleBashCommand(ctx, bot, store, sessionMgr, chatID, fields)
 	default:
-		sendText(bot, chatID, "Unknown command. Try /info, /list, /use <session_id>, /new <path>, /bash <cmd>.")
+		sendText(bot, chatID, "Unknown command. Use /help to see available commands.")
 	}
 }
 
@@ -460,7 +572,7 @@ func handleBashCommand(ctx context.Context, bot imbot.Bot, store *Store, session
 			}
 			baseDir = cwd
 		}
-		args := []string{}
+		var args []string
 		if len(fields) > 2 {
 			args = append(args, fields[2:]...)
 		}
