@@ -19,6 +19,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/data"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/obs/otel"
 	"github.com/tingly-dev/tingly-box/internal/server/background"
@@ -49,6 +50,7 @@ type Server struct {
 	loadBalancer    *LoadBalancer
 	loadBalancerAPI *LoadBalancerAPI
 	usageAPI        *UsageAPI
+	healthMonitor   *loadbalance.HealthMonitor
 
 	// client pool for caching
 	clientPool *client.ClientPool
@@ -352,8 +354,14 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize auth middleware
 	authMW := middleware.NewAuthMiddleware(cfg, jwtManager)
 
+	// Initialize health monitor
+	healthMonitor := loadbalance.NewHealthMonitor(cfg.HealthMonitor)
+
+	// Initialize health filter
+	healthFilter := typ.NewHealthFilter(healthMonitor)
+
 	// Initialize load balancer
-	loadBalancer := NewLoadBalancer(cfg)
+	loadBalancer := NewLoadBalancer(cfg, healthFilter)
 
 	// Initialize load balancer API
 	loadBalancerAPI := NewLoadBalancerAPI(loadBalancer, cfg)
@@ -388,6 +396,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.loadBalancer = loadBalancer
 	server.loadBalancerAPI = loadBalancerAPI
 	server.usageAPI = usageAPI
+	server.healthMonitor = healthMonitor
 	server.oauthManager = oauthManager
 	server.oauthRefresher = tokenRefresher
 
@@ -930,6 +939,11 @@ func (s *Server) GetPreferredEndpointForModel(provider *typ.Provider, modelID st
 	// TODO: we use chat as default unless the model do not support chat, e.g. codex
 	adaptiveProbe := NewAdaptiveProbe(s)
 	return adaptiveProbe.GetPreferredEndpoint(provider, modelID)
+}
+
+// HealthMonitor returns the server's health monitor
+func (s *Server) HealthMonitor() *loadbalance.HealthMonitor {
+	return s.healthMonitor
 }
 
 // Stop gracefully stops the HTTP server
