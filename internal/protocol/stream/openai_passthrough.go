@@ -2,8 +2,6 @@ package stream
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,20 +17,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
 )
-
-// ===================================================================
-// Helper Functions
-// ===================================================================
-
-// GenerateObfuscationString generates a random string similar to "KOJz1A"
-func GenerateObfuscationString() string {
-	b := make([]byte, 4)
-	if _, err := rand.Read(b); err != nil {
-		// Fallback to timestamp-based if crypto rand fails
-		return base64.URLEncoding.EncodeToString([]byte(fmt.Sprintf("%d", time.Now().UnixNano())))[:6]
-	}
-	return base64.URLEncoding.EncodeToString(b)[:6]
-}
 
 // ===================================================================
 // OpenAI Handle Functions
