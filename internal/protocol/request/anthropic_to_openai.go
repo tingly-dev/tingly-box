@@ -197,6 +197,8 @@ func ConvertAnthropicToOpenAIRequest(anthropicReq *anthropic.MessageNewParams, c
 		ReasoningEffort: "low", // Default to "low" for OpenAI-compatible APIs
 	}
 
+	// force to return usage
+	openaiReq.StreamOptions.IncludeUsage = param.Opt[bool]{Value: true}
 	return openaiReq, config
 }
 
@@ -442,6 +444,8 @@ func ConvertAnthropicBetaToOpenAIRequest(anthropicReq *anthropic.BetaMessageNewP
 		ReasoningEffort: "low", // Default to "low" for OpenAI-compatible APIs
 	}
 
+	// force to return usage
+	openaiReq.StreamOptions.IncludeUsage = param.Opt[bool]{Value: true}
 	return openaiReq, config
 }
 
