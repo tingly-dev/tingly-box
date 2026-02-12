@@ -431,7 +431,7 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, streamResp *ssestrea
 	// Check for stream errors
 	if err := streamResp.Err(); err != nil {
 		// Check if it was a client cancellation
-		if IsContextCanceled(err) || errors.Is(err, context.Canceled) {
+		if errors.Is(err, context.Canceled) {
 			logrus.Debug("OpenAI stream canceled by client")
 			// Estimate usage if we don't have it
 			if !hasUsage {

@@ -9,7 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3/responses"
 
-	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
@@ -319,11 +318,6 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthrop
 
 	usageStat, err := stream.HandleAnthropicV1BetaStream(hc, req, streamResp)
 	s.trackUsageFromContext(c, usageStat.InputTokens, usageStat.OutputTokens, err)
-}
-
-// handleAnthropicV1BetaViaChatCompletions handles Anthropic v1beta request using OpenAI Chat Completions API
-func (s *Server) handleAnthropicV1BetaViaChatCompletions(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, proxyModel string, actualModel string, provider *typ.Provider, selectedService *loadbalance.Service, rule *typ.Rule, isStreaming bool) {
-
 }
 
 // handleAnthropicV1BetaViaResponsesAPINonStreaming handles non-streaming Responses API request

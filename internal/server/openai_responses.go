@@ -321,7 +321,7 @@ func (s *Server) handleResponsesStreamResponse(c *gin.Context, stream *ssestream
 	// Check for stream errors
 	if err := stream.Err(); err != nil {
 		// Check if it was a client cancellation
-		if IsContextCanceled(err) || errors.Is(err, context.Canceled) {
+		if errors.Is(err, context.Canceled) {
 			logrus.Debug("Responses stream canceled by client")
 			if hasUsage {
 				s.trackUsageFromContext(c, int(inputTokens), int(outputTokens), err)
