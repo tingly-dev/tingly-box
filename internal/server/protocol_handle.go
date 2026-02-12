@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -441,34 +442,145 @@ func HandleOpenAIChatNonStream(hc *HandleContext, resp *openai.ChatCompletion) (
 
 // HandleOpenAIResponsesStream handles OpenAI Responses API streaming response.
 // Returns (UsageStat, error)
-func HandleOpenAIResponsesStream(hc *HandleContext, stream *openaistream.Stream[responses.ResponseStreamEventUnion]) (protocol.UsageStat, error) {
+func HandleOpenAIResponsesStream(hc *HandleContext, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) (protocol.UsageStat, error) {
 	defer stream.Close()
 
-	hc.SetupSSEHeaders()
+	// Set SSE headers for Responses API (different from Chat Completions)
+	c := hc.GinContext
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("Access-Control-Allow-Origin", "*")
+	c.Header("Access-Control-Allow-Headers", "Cache-Control")
 
-	var inputTokens, outputTokens int
+	var inputTokens, outputTokens int64
+	var hasUsage bool
 
-	err := hc.ProcessStream(
-		func() (bool, error, interface{}) {
-			if !stream.Next() {
-				return false, nil, nil
+	// Panic recovery
+	defer func() {
+		if r := recover(); r != nil {
+			logrus.Errorf("Panic in Responses streaming handler: %v", r)
+			if hasUsage {
+				// Track panic as error with any usage we accumulated
+				// Usage tracking will be handled by caller
 			}
-			// Current() returns a value, but we need a pointer for modification
-			evt := stream.Current()
-			return true, nil, &evt
-		},
-		func(event interface{}) error {
-			// Handle Responses API stream event
-			// TODO: Implement proper event handling
-			return nil
-		},
-	)
+			// Try to send an error event if possible
+			if c.Writer != nil {
+				c.Writer.WriteHeader(http.StatusInternalServerError)
+				c.Writer.Write([]byte("data: {\"error\":{\"message\":\"Internal streaming error\",\"type\":\"internal_error\"}}\n\n"))
+				if flusher, ok := c.Writer.(http.Flusher); ok {
+					flusher.Flush()
+				}
+			}
+		}
+	}()
 
-	if err != nil {
-		return protocol.NewUsageStat(inputTokens, outputTokens), err
+	flusher, ok := c.Writer.(http.Flusher)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Streaming not supported by this connection",
+				Type:    "api_error",
+				Code:    "streaming_unsupported",
+			},
+		})
+		return protocol.ZeroUsageStat(), fmt.Errorf("streaming not supported")
 	}
 
-	return protocol.NewUsageStat(inputTokens, outputTokens), nil
+	// Process the stream with context cancellation checking
+	c.Stream(func(w io.Writer) bool {
+		// Check context cancellation first
+		select {
+		case <-c.Request.Context().Done():
+			logrus.Debug("Client disconnected, stopping Responses stream")
+			return false
+		default:
+		}
+
+		// Try to get next event
+		if !stream.Next() {
+			// Stream ended naturally
+			return false
+		}
+
+		evt := stream.Current()
+
+		// Accumulate usage from completed events
+		if evt.Response.Usage.InputTokens > 0 {
+			inputTokens = evt.Response.Usage.InputTokens
+			hasUsage = true
+		}
+		if evt.Response.Usage.OutputTokens > 0 {
+			outputTokens = evt.Response.Usage.OutputTokens
+		}
+
+		// Marshal event using RawJSON() to avoid serializing empty union fields
+		jsonBytes := []byte(evt.RawJSON())
+
+		// Apply model override if the event contains a response object with a model field
+		if len(jsonBytes) > 0 {
+			var parsed map[string]interface{}
+			if err := json.Unmarshal(jsonBytes, &parsed); err == nil {
+				// Check if this event has a response field with a model
+				if response, ok := parsed["response"].(map[string]interface{}); ok {
+					if model, ok2 := response["model"].(string); ok2 && model != "" {
+						response["model"] = responseModel
+						modified, err := json.Marshal(parsed)
+						if err == nil {
+							jsonBytes = modified
+						}
+					}
+				}
+			}
+		}
+
+		// Send SSE event with event type (e.g., "response.created", "response.output_text.delta")
+		c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", jsonBytes))
+		flusher.Flush()
+		return true
+	})
+
+	// Check for stream errors after loop completes
+	if err := stream.Err(); err != nil {
+		// Check if it was a client cancellation
+		if errors.Is(err, context.Canceled) || IsContextCanceled(err) {
+			logrus.Debug("Responses stream canceled by client")
+			if hasUsage {
+				return protocol.NewUsageStat(int(inputTokens), int(outputTokens)), nil
+			}
+			return protocol.ZeroUsageStat(), nil
+		}
+
+		logrus.Errorf("Responses stream error: %v", err)
+		if hasUsage {
+			return protocol.NewUsageStat(int(inputTokens), int(outputTokens)), err
+		}
+
+		// Send error chunk
+		errorChunk := map[string]interface{}{
+			"error": map[string]interface{}{
+				"message": err.Error(),
+				"type":    "stream_error",
+				"code":    "stream_failed",
+			},
+		}
+
+		errorJSON, _ := json.Marshal(errorChunk)
+		c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", string(errorJSON)))
+		flusher.Flush()
+		return protocol.NewUsageStat(int(inputTokens), int(outputTokens)), err
+	}
+
+	// Send final [DONE] message
+	c.Writer.WriteString("data: [DONE]\n\n")
+	flusher.Flush()
+
+	// Track successful streaming completion
+	if hasUsage {
+		return protocol.NewUsageStat(int(inputTokens), int(outputTokens)), nil
+	}
+
+	return protocol.ZeroUsageStat(), nil
 }
 
 // HandleOpenAIResponsesNonStream handles OpenAI Responses API non-streaming response.

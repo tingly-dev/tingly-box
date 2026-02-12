@@ -231,7 +231,11 @@ func (s *Server) handleResponsesStreamingRequest(c *gin.Context, provider *typ.P
 	}
 
 	// Handle the streaming response
-	s.handleResponsesStreamResponse(c, stream, responseModel, actualModel, rule, provider)
+	hc := NewHandleContext(c, responseModel)
+	usage, err := HandleOpenAIResponsesStream(hc, stream, responseModel)
+
+	// Track usage from stream handler
+	s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, err)
 }
 
 // handleResponsesStreamResponse processes the streaming response and sends it to the client
