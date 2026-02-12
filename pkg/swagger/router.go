@@ -273,16 +273,24 @@ func WithAuth() func(*RouteConfig) {
 }
 
 // WithRequestModel sets the request model for swagger documentation
-func WithRequestModel(model interface{}) func(*RouteConfig) {
+// Optional name parameter can be provided to specify an explicit model name for anonymous structs
+func WithRequestModel(model interface{}, name ...string) func(*RouteConfig) {
 	return func(rc *RouteConfig) {
 		rc.RequestModel = model
+		if len(name) > 0 {
+			rc.RequestModelName = name[0]
+		}
 	}
 }
 
 // WithResponseModel sets the response model for swagger documentation
-func WithResponseModel(model interface{}) func(*RouteConfig) {
+// Optional name parameter can be provided to specify an explicit model name for anonymous structs
+func WithResponseModel(model interface{}, name ...string) func(*RouteConfig) {
 	return func(rc *RouteConfig) {
 		rc.ResponseModel = model
+		if len(name) > 0 {
+			rc.ResponseModelName = name[0]
+		}
 	}
 }
 
@@ -341,9 +349,13 @@ func WithQueryConfig(name string, config QueryParamConfig) func(*RouteConfig) {
 }
 
 // WithQueryModel sets a query model for swagger documentation
-func WithQueryModel(model interface{}) func(*RouteConfig) {
+// Optional name parameter can be provided to specify an explicit model name for anonymous structs
+func WithQueryModel(model interface{}, name ...string) func(*RouteConfig) {
 	return func(rc *RouteConfig) {
 		rc.QueryModel = model
+		if len(name) > 0 {
+			rc.QueryModelName = name[0]
+		}
 	}
 }
 

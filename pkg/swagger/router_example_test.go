@@ -387,7 +387,7 @@ func TestRouteManager_anonymousStructNaming(t *testing.T) {
 		}{}),
 	)
 
-	// Test 2: Anonymous struct with explicit name
+	// Test 2: Anonymous struct with explicit name (using extended API)
 	v1.POST("/users", func(c *gin.Context) {
 		c.JSON(200, gin.H{"success": true})
 	},
@@ -396,13 +396,11 @@ func TestRouteManager_anonymousStructNaming(t *testing.T) {
 		WithRequestModel(struct {
 			Username string `json:"username" binding:"required"`
 			Email    string `json:"email" binding:"required,email"`
-		}{}),
-		WithRequestModelName("CreateUserRequest"),
+		}{}, "CreateUserRequest"),
 		WithResponseModel(struct {
 			ID      string `json:"id"`
 			Success bool   `json:"success"`
-		}{}),
-		WithResponseModelName("CreateUserResponse"),
+		}{}, "CreateUserResponse"),
 	)
 
 	// Test 3: Named struct (should use struct name as before)
