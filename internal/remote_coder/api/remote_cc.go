@@ -296,6 +296,18 @@ func (h *RemoteCCHandler) Chat(c *gin.Context) {
 			}
 		}
 	}
+	if req.SessionID == "" && projectPath == "" {
+		h.auditLogger.LogRequest("remote_cc_chat", userID, clientIP, "", getRequestID(c), false, time.Since(start), map[string]interface{}{
+			"error": "project_path required",
+		})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"message": "Project path is required to start a new session",
+				"type":    "invalid_request_error",
+			},
+		})
+		return
+	}
 	if projectPath != "" {
 		h.sessionMgr.SetContext(sessionID, "project_path", projectPath)
 	}

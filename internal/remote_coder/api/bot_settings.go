@@ -14,8 +14,10 @@ type BotSettingsHandler struct {
 }
 
 type BotSettingsPayload struct {
-	Token     string   `json:"token"`
-	Allowlist []string `json:"allowlist"`
+	Token    string `json:"token"`
+	Platform string `json:"platform"`
+	ProxyURL string `json:"proxy_url"`
+	ChatID   string `json:"chat_id"`
 }
 
 func NewBotSettingsHandler(store *bot.Store) *BotSettingsHandler {
@@ -37,7 +39,9 @@ func (h *BotSettingsHandler) GetSettings(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success":   true,
 		"token":     settings.Token,
-		"allowlist": settings.Allowlist,
+		"platform":  settings.Platform,
+		"proxy_url": settings.ProxyURL,
+		"chat_id":   settings.ChatIDLock,
 	})
 }
 
@@ -53,18 +57,16 @@ func (h *BotSettingsHandler) UpdateSettings(c *gin.Context) {
 		return
 	}
 
-	cleanAllowlist := make([]string, 0, len(payload.Allowlist))
-	for _, entry := range payload.Allowlist {
-		entry = strings.TrimSpace(entry)
-		if entry == "" {
-			continue
-		}
-		cleanAllowlist = append(cleanAllowlist, entry)
+	platform := strings.TrimSpace(payload.Platform)
+	if platform == "" {
+		platform = "telegram"
 	}
 
 	if err := h.store.SaveSettings(bot.Settings{
-		Token:     strings.TrimSpace(payload.Token),
-		Allowlist: cleanAllowlist,
+		Token:      strings.TrimSpace(payload.Token),
+		Platform:   platform,
+		ProxyURL:   strings.TrimSpace(payload.ProxyURL),
+		ChatIDLock: strings.TrimSpace(payload.ChatID),
 	}); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return

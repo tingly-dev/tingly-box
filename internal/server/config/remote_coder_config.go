@@ -26,11 +26,11 @@ func (c *Config) applyRemoteCoderDefaults() bool {
 		}
 	}
 	if c.RemoteCoder.SessionTimeout == "" {
-		c.RemoteCoder.SessionTimeout = "30m"
+		c.RemoteCoder.SessionTimeout = "336h"
 		updated = true
 	}
 	if c.RemoteCoder.MessageRetentionDays == 0 {
-		c.RemoteCoder.MessageRetentionDays = 7
+		c.RemoteCoder.MessageRetentionDays = 14
 		updated = true
 	}
 	if c.RemoteCoder.RateLimitMax == 0 {

@@ -1,14 +1,27 @@
-import { Add, ArrowDropDown, ExpandMore, VpnKey } from '@mui/icons-material';
+import { Add, ContentCopy, Edit, ExpandMore, Route, Visibility, VpnKey } from '@mui/icons-material';
 import {
     Alert,
     Button,
     Chip,
+    CircularProgress,
+    IconButton,
+    Modal,
     Menu,
     MenuItem,
+    Paper,
+    Select,
     Snackbar,
     Stack,
     Tab,
     Tabs,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+    TextField,
+    Tooltip,
     Typography,
 } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
@@ -34,7 +47,7 @@ interface OAuthEditFormData {
     proxyUrl?: string;
 }
 
-type CredentialTab = 'api-keys' | 'oauth';
+type CredentialTab = 'api-keys' | 'oauth' | 'bot-token';
 
 const CredentialPage = () => {
     const navigate = useNavigate();
@@ -69,6 +82,20 @@ const CredentialPage = () => {
     const [oauthDialogOpen, setOAuthDialogOpen] = useState(false);
     const [oauthDetailProvider, setOAuthDetailProvider] = useState<any | null>(null);
     const [oauthDetailDialogOpen, setOAuthDetailDialogOpen] = useState(false);
+    const [botToken, setBotToken] = useState('');
+    const [botTokenDraft, setBotTokenDraft] = useState('');
+    const [botPlatform, setBotPlatform] = useState('telegram');
+    const [botPlatformDraft, setBotPlatformDraft] = useState('telegram');
+    const [botProxyUrl, setBotProxyUrl] = useState('');
+    const [botProxyDraft, setBotProxyDraft] = useState('');
+    const [botChatId, setBotChatId] = useState('');
+    const [botChatIdDraft, setBotChatIdDraft] = useState('');
+    const [botLoading, setBotLoading] = useState(false);
+    const [botSaving, setBotSaving] = useState(false);
+    const [botNotice, setBotNotice] = useState<string | null>(null);
+    const [botError, setBotError] = useState<string | null>(null);
+    const [botTokenDialogOpen, setBotTokenDialogOpen] = useState(false);
+    const [botTokenModalOpen, setBotTokenModalOpen] = useState(false);
 
     // URL param handling for auto-opening dialogs
     useEffect(() => {
@@ -79,6 +106,8 @@ const CredentialPage = () => {
         // Set tab from URL
         if (tab === 'oauth') {
             setActiveTab('oauth');
+        } else if (tab === 'bot-token') {
+            setActiveTab('bot-token');
         } else if (tab === 'api-keys' || tab === null) {
             setActiveTab('api-keys');
         }
@@ -113,6 +142,48 @@ const CredentialPage = () => {
     useEffect(() => {
         loadProviders();
     }, []);
+
+    useEffect(() => {
+        const loadBotSettings = async () => {
+            try {
+                setBotLoading(true);
+                const data = await api.getRemoteCCBotSettings();
+                if (data?.success === false) {
+                    setBotError(data.error || 'Failed to load bot token');
+                    return;
+                }
+                if (typeof data?.token === 'string') {
+                    setBotToken(data.token);
+                }
+                if (typeof data?.platform === 'string' && data.platform.trim()) {
+                    setBotPlatform(data.platform);
+                }
+                if (typeof data?.proxy_url === 'string') {
+                    setBotProxyUrl(data.proxy_url);
+                }
+                if (typeof data?.chat_id === 'string') {
+                    setBotChatId(data.chat_id);
+                }
+            } catch (err) {
+                console.error('Failed to load bot token:', err);
+                setBotError('Failed to load bot token');
+            } finally {
+                setBotLoading(false);
+            }
+        };
+
+        loadBotSettings();
+    }, []);
+
+    const botTokenConfigured = botToken.trim().length > 0;
+
+    const formatBotTokenDisplay = (token: string) => {
+        if (!token) return 'Not set';
+        if (token.length <= 12) return token;
+        const prefix = token.substring(0, 4);
+        const suffix = token.substring(token.length - 4);
+        return `${prefix}${'*'.repeat(4)}${suffix}`;
+    };
 
     const showNotification = (message: string, severity: 'success' | 'error') => {
         setSnackbar({ open: true, message, severity });
@@ -170,6 +241,44 @@ const CredentialPage = () => {
             showNotification(`Failed to load providers: ${result.error}`, 'error');
         }
         setLoading(false);
+    };
+
+    const handleOpenBotTokenDialog = () => {
+        setBotTokenDraft(botToken);
+        setBotPlatformDraft(botPlatform);
+        setBotProxyDraft(botProxyUrl);
+        setBotChatIdDraft(botChatId);
+        setBotTokenDialogOpen(true);
+    };
+
+    const handleSaveBotToken = async () => {
+        setBotSaving(true);
+        setBotNotice(null);
+        setBotError(null);
+
+        try {
+            const result = await api.updateRemoteCCBotSettings({
+                token: botTokenDraft.trim(),
+                platform: botPlatformDraft,
+                proxy_url: botProxyDraft.trim(),
+                chat_id: botChatIdDraft.trim(),
+            });
+            if (result?.success === false) {
+                setBotError(result.error || 'Failed to save bot token');
+                return;
+            }
+            setBotToken(botTokenDraft.trim());
+            setBotPlatform(botPlatformDraft);
+            setBotProxyUrl(botProxyDraft.trim());
+            setBotChatId(botChatIdDraft.trim());
+            setBotNotice('Bot token saved.');
+            setBotTokenDialogOpen(false);
+        } catch (err) {
+            console.error('Failed to save bot token:', err);
+            setBotError('Failed to save bot token');
+        } finally {
+            setBotSaving(false);
+        }
     };
 
     // API Key handlers
@@ -323,78 +432,54 @@ const CredentialPage = () => {
             credentialCounts: {
                 apiKeys: apiKeys.length,
                 oauth: oauth.length,
-                total: providers.length,
+                botToken: botTokenConfigured ? 1 : 0,
+                total: providers.length + (botTokenConfigured ? 1 : 0),
             },
         };
-    }, [providers]);
-
-    const isEmpty = credentialCounts.total === 0;
-    const isCurrentTabEmpty = activeTab === 'api-keys'
-        ? credentialCounts.apiKeys === 0
-        : credentialCounts.oauth === 0;
+    }, [providers, botTokenConfigured]);
 
     return (
         <PageLayout loading={loading}>
-            {isEmpty ? (
-                // Empty state - no credentials at all
-                <UnifiedCard
-                    title="Credentials"
-                    subtitle="Manage your API keys and OAuth providers"
-                    size="large"
-                >
-                    <EmptyStateGuide
-                        title="No Credentials Configured"
-                        description="Get started by adding your first credential to access AI services"
-                        showOAuthButton={true}
-                        showHeroIcon={true}
-                        primaryButtonLabel="Add API Key"
-                        secondaryButtonLabel="Add OAuth Provider"
-                        onAddApiKeyClick={handleAddApiKey}
-                        onAddOAuthClick={handleAddOAuth}
-                    />
-                </UnifiedCard>
-            ) : (
-                // Main content with tabs
-                <UnifiedCard
-                    title="Credentials"
-                    subtitle={`Managing ${credentialCounts.total} credential${credentialCounts.total > 1 ? 's' : ''}`}
-                    size="full"
-                    rightAction={
-                        <Stack direction="row" spacing={1}>
-                            <Button
-                                variant="contained"
-                                startIcon={<Add />}
-                                onClick={handleAddClick}
-                                size="small"
-                                endIcon={<ExpandMore />}
-                            >
-                                Add Credential
-                            </Button>
-                            <Menu
-                                anchorEl={addMenuAnchorEl}
-                                open={Boolean(addMenuAnchorEl)}
-                                onClose={handleAddMenuClose}
-                                anchorOrigin={{
-                                    vertical: 'bottom',
-                                    horizontal: 'right',
-                                }}
-                                transformOrigin={{
-                                    vertical: 'top',
-                                    horizontal: 'right',
-                                }}
-                            >
-                                <MenuItem onClick={handleAddApiKey}>
-                                    <Add sx={{ mr: 1 }} fontSize="small" />
-                                    Add API Key
-                                </MenuItem>
-                                <MenuItem onClick={handleAddOAuth}>
-                                    <VpnKey sx={{ mr: 1 }} fontSize="small" />
-                                    Add OAuth Provider
-                                </MenuItem>
-                            </Menu>
-                        </Stack>
-                    }
-                >
+            <UnifiedCard
+                title="Credentials"
+                subtitle={`Managing ${credentialCounts.total} credential${credentialCounts.total > 1 ? 's' : ''}`}
+                size="full"
+                rightAction={
+                    <Stack direction="row" spacing={1}>
+                        <Button
+                            variant="contained"
+                            startIcon={<Add />}
+                            onClick={handleAddClick}
+                            size="small"
+                            endIcon={<ExpandMore />}
+                        >
+                            Add Credential
+                        </Button>
+                        <Menu
+                            anchorEl={addMenuAnchorEl}
+                            open={Boolean(addMenuAnchorEl)}
+                            onClose={handleAddMenuClose}
+                            anchorOrigin={{
+                                vertical: 'bottom',
+                                horizontal: 'right',
+                            }}
+                            transformOrigin={{
+                                vertical: 'top',
+                                horizontal: 'right',
+                            }}
+                        >
+                            <MenuItem onClick={handleAddApiKey}>
+                                <Add sx={{ mr: 1 }} fontSize="small" />
+                                Add API Key
+                            </MenuItem>
+                            <MenuItem onClick={handleAddOAuth}>
+                                <VpnKey sx={{ mr: 1 }} fontSize="small" />
+                                Add OAuth Provider
+                            </MenuItem>
+                        </Menu>
+                    </Stack>
+                }
+            >
                     {/* Tab Navigation */}
                     <Tabs
                         value={activeTab}
@@ -441,6 +526,21 @@ const CredentialPage = () => {
                                 </Stack>
                             }
                             value="oauth"
+                        />
+                        <Tab
+                            label={
+                                <Stack direction="row" alignItems="center" spacing={1}>
+                                    <span>bot token</span>
+                                    <Chip
+                                        label={credentialCounts.botToken}
+                                        size="small"
+                                        color={activeTab === 'bot-token' ? 'primary' : 'default'}
+                                        variant={activeTab === 'bot-token' ? 'filled' : 'outlined'}
+                                        sx={{ height: 20, minWidth: 20, fontSize: '0.7rem' }}
+                                    />
+                                </Stack>
+                            }
+                            value="bot-token"
                         />
                     </Tabs>
 
@@ -489,8 +589,251 @@ const CredentialPage = () => {
                             )}
                         </>
                     )}
+
+                    {activeTab === 'bot-token' && (
+                        <Stack spacing={2}>
+                            {botNotice && (
+                                <Alert severity="success" onClose={() => setBotNotice(null)}>
+                                    {botNotice}
+                                </Alert>
+                            )}
+                            {botError && (
+                                <Alert severity="error" onClose={() => setBotError(null)}>
+                                    {botError}
+                                </Alert>
+                            )}
+                            <Typography variant="h6" fontWeight={600}>
+                                tg token
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                Telegram bot token used to proxy chats into remote-coder sessions.
+                            </Typography>
+                            {botTokenConfigured ? (
+                                <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
+                                    <Table>
+                                        <TableHead>
+                                    <TableRow>
+                                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Status</TableCell>
+                                        <TableCell sx={{ fontWeight: 600, minWidth: 140 }}>Name</TableCell>
+                                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Platform</TableCell>
+                                        <TableCell sx={{ fontWeight: 600, minWidth: 200 }}>Bot Token</TableCell>
+                                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Proxy</TableCell>
+                                        <TableCell sx={{ fontWeight: 600, minWidth: 140 }}>Chat ID</TableCell>
+                                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Actions</TableCell>
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                    <TableRow>
+                                                <TableCell>
+                                                    <Typography variant="body2" color="success.main">
+                                                        Configured
+                                                    </Typography>
+                                                </TableCell>
+                                                <TableCell>
+                                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                                tg token
+                                            </Typography>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Typography variant="body2">
+                                                {botPlatform}
+                                            </Typography>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Stack direction="row" alignItems="center" spacing={1}>
+                                                <Tooltip title="View Token">
+                                                    <IconButton size="small" onClick={() => setBotTokenModalOpen(true)} sx={{ p: 0.25 }}>
+                                                        <Visibility fontSize="small" />
+                                                    </IconButton>
+                                                </Tooltip>
+                                                <Typography
+                                                    variant="body2"
+                                                    sx={{
+                                                        fontFamily: 'monospace',
+                                                        wordBreak: 'break-all',
+                                                        flex: 1,
+                                                        minWidth: 0,
+                                                    }}
+                                                >
+                                                    {formatBotTokenDisplay(botToken)}
+                                                </Typography>
+                                            </Stack>
+                                        </TableCell>
+                                        <TableCell align="center">
+                                            {botProxyUrl ? (
+                                                <Tooltip title={botProxyUrl} arrow>
+                                                    <Route fontSize="small" sx={{ color: 'text.secondary' }} />
+                                                </Tooltip>
+                                            ) : (
+                                                <Typography variant="body2" color="text.secondary">
+                                                    -
+                                                </Typography>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>
+                                            <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                                                {botChatId || '-'}
+                                            </Typography>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Stack direction="row" spacing={0.5}>
+                                                <Tooltip title="Edit">
+                                                    <IconButton size="small" color="primary" onClick={handleOpenBotTokenDialog}>
+                                                        <Edit fontSize="small" />
+                                                            </IconButton>
+                                                        </Tooltip>
+                                                    </Stack>
+                                                </TableCell>
+                                            </TableRow>
+                                        </TableBody>
+                                    </Table>
+                                </TableContainer>
+                            ) : (
+                                <EmptyStateGuide
+                                    title="No Bot Token Configured"
+                                    description="Add a Telegram bot token to enable remote-coder chat proxying."
+                                    showOAuthButton={false}
+                                    showHeroIcon={false}
+                                    primaryButtonLabel="Add Bot Token"
+                                    onAddApiKeyClick={handleOpenBotTokenDialog}
+                                />
+                            )}
+                            {botLoading && (
+                                <Stack direction="row" spacing={1} alignItems="center">
+                                    <CircularProgress size={16} />
+                                    <Typography variant="body2" color="text.secondary">
+                                        Loading bot token...
+                                    </Typography>
+                                </Stack>
+                            )}
+                        </Stack>
+                    )}
                 </UnifiedCard>
-            )}
+
+            {/* Bot Token Modals */}
+            <Modal open={botTokenModalOpen} onClose={() => setBotTokenModalOpen(false)}>
+                <Stack
+                    sx={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        width: 600,
+                        maxWidth: '80vw',
+                        bgcolor: 'background.paper',
+                        boxShadow: 24,
+                        p: 4,
+                        borderRadius: 2,
+                        gap: 2,
+                    }}
+                >
+                    <Typography variant="h6">Bot Token - tg token</Typography>
+                    <Stack
+                        sx={{
+                            p: 2,
+                            bgcolor: 'action.hover',
+                            borderRadius: 1,
+                            fontFamily: 'monospace',
+                            fontSize: '0.875rem',
+                            wordBreak: 'break-all',
+                            border: '1px solid',
+                            borderColor: 'divider',
+                        }}
+                    >
+                        {botToken || 'Not set'}
+                    </Stack>
+                    <Stack direction="row" spacing={2} justifyContent="flex-end">
+                        <IconButton
+                            color="primary"
+                            disabled={!botToken}
+                            onClick={async () => {
+                                if (botToken) {
+                                    try {
+                                        await navigator.clipboard.writeText(botToken);
+                                    } catch (err) {
+                                        console.error('Failed to copy token:', err);
+                                    }
+                                }
+                            }}
+                            title={botToken ? 'Copy Token' : 'Token not set'}
+                        >
+                            <ContentCopy />
+                        </IconButton>
+                        <Button onClick={() => setBotTokenModalOpen(false)}>Close</Button>
+                    </Stack>
+                </Stack>
+            </Modal>
+
+            <Modal open={botTokenDialogOpen} onClose={() => setBotTokenDialogOpen(false)}>
+                <Stack
+                    sx={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        width: 600,
+                        maxWidth: '80vw',
+                        bgcolor: 'background.paper',
+                        boxShadow: 24,
+                        p: 4,
+                        borderRadius: 2,
+                        gap: 2,
+                    }}
+                >
+                    <Typography variant="h6">{botTokenConfigured ? 'Edit Bot Token' : 'Add Bot Token'}</Typography>
+                    <Stack spacing={1}>
+                        <Typography variant="body2" color="text.secondary">
+                            Platform
+                        </Typography>
+                        <Select
+                            size="small"
+                            value={botPlatformDraft}
+                            onChange={(event) => setBotPlatformDraft(event.target.value)}
+                        >
+                            <MenuItem value="telegram">telegram</MenuItem>
+                        </Select>
+                    </Stack>
+                    <TextField
+                        label="Telegram Bot Token"
+                        type="password"
+                        value={botTokenDraft}
+                        onChange={(e) => setBotTokenDraft(e.target.value)}
+                        fullWidth
+                        size="small"
+                        helperText="Stored in tingly-remote-coder.db in plain text."
+                    />
+                    <TextField
+                        label="Proxy URL"
+                        placeholder="http://user:pass@host:port"
+                        value={botProxyDraft}
+                        onChange={(e) => setBotProxyDraft(e.target.value)}
+                        fullWidth
+                        size="small"
+                        helperText="Optional HTTP/HTTPS proxy for Telegram API."
+                    />
+                    <TextField
+                        label="Chat ID Lock"
+                        placeholder="e.g. 123456789"
+                        value={botChatIdDraft}
+                        onChange={(e) => setBotChatIdDraft(e.target.value)}
+                        fullWidth
+                        size="small"
+                        helperText="Optional: when set, only this chat ID can use the bot."
+                    />
+                    <Stack direction="row" spacing={2} justifyContent="flex-end">
+                        <Button onClick={() => setBotTokenDialogOpen(false)} color="inherit">
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="contained"
+                            onClick={handleSaveBotToken}
+                            disabled={botSaving || botLoading}
+                        >
+                            {botSaving ? 'Saving...' : 'Save Bot Token'}
+                        </Button>
+                    </Stack>
+                </Stack>
+            </Modal>
 
             {/* API Key Provider Dialog */}
             <ProviderFormDialog

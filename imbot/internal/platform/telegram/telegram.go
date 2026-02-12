@@ -3,6 +3,8 @@ package telegram
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/url"
 	"strconv"
 	"sync"
 
@@ -36,7 +38,21 @@ func NewTelegramBot(config *core.Config) (*Bot, error) {
 		return nil, core.NewAuthFailedError(config.Platform, "failed to get token", err)
 	}
 
-	api, err := tgbotapi.NewBotAPI(token)
+	apiEndpoint := config.GetOptionString("apiURL", tgbotapi.APIEndpoint)
+	proxyURL := config.GetOptionString("proxy", "")
+
+	client := &http.Client{}
+	if proxyURL != "" {
+		parsed, err := url.Parse(proxyURL)
+		if err != nil {
+			return nil, core.NewAuthFailedError(core.PlatformTelegram, "invalid proxy url", err)
+		}
+		client.Transport = &http.Transport{
+			Proxy: http.ProxyURL(parsed),
+		}
+	}
+
+	api, err := tgbotapi.NewBotAPIWithClient(token, apiEndpoint, client)
 	if err != nil {
 		return nil, core.NewAuthFailedError(core.PlatformTelegram, "failed to create telegram bot", err)
 	}

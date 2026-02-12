@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -13,8 +12,10 @@ import (
 )
 
 type Settings struct {
-	Token     string   `json:"token"`
-	Allowlist []string `json:"allowlist"`
+	Token      string `json:"token"`
+	Platform   string `json:"platform"`
+	ProxyURL   string `json:"proxy_url"`
+	ChatIDLock string `json:"chat_id"`
 }
 
 type Store struct {
@@ -51,12 +52,10 @@ func initSchema(db *sql.DB) error {
 		CREATE TABLE IF NOT EXISTS remote_coder_bot_settings (
 			id INTEGER PRIMARY KEY CHECK (id = 1),
 			telegram_token TEXT,
+			platform TEXT,
+			proxy_url TEXT,
+			chat_id_lock TEXT,
 			updated_at TEXT NOT NULL
-		);
-
-		CREATE TABLE IF NOT EXISTS remote_coder_bot_allowlist (
-			chat_id TEXT PRIMARY KEY,
-			added_at TEXT NOT NULL
 		);
 
 		CREATE TABLE IF NOT EXISTS remote_coder_bot_sessions (
@@ -65,7 +64,21 @@ func initSchema(db *sql.DB) error {
 			updated_at TEXT NOT NULL
 		);
 	`)
-	return err
+	if err != nil {
+		return err
+	}
+
+	if err := ensureColumn(db, "remote_coder_bot_settings", "platform", "TEXT"); err != nil {
+		return err
+	}
+	if err := ensureColumn(db, "remote_coder_bot_settings", "proxy_url", "TEXT"); err != nil {
+		return err
+	}
+	if err := ensureColumn(db, "remote_coder_bot_settings", "chat_id_lock", "TEXT"); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (s *Store) GetSettings() (Settings, error) {
@@ -74,21 +87,28 @@ func (s *Store) GetSettings() (Settings, error) {
 		return settings, nil
 	}
 
-	row := s.db.QueryRow(`SELECT telegram_token FROM remote_coder_bot_settings WHERE id = 1`)
+	row := s.db.QueryRow(`SELECT telegram_token, platform, proxy_url, chat_id_lock FROM remote_coder_bot_settings WHERE id = 1`)
 	var token sql.NullString
-	if err := row.Scan(&token); err != nil {
+	var platform sql.NullString
+	var proxyURL sql.NullString
+	var chatIDLock sql.NullString
+	if err := row.Scan(&token, &platform, &proxyURL, &chatIDLock); err != nil {
 		if err != sql.ErrNoRows {
 			return settings, err
 		}
 	} else if token.Valid {
 		settings.Token = token.String
 	}
-
-	allowlist, err := s.getAllowlist()
-	if err != nil {
-		return settings, err
+	if platform.Valid {
+		settings.Platform = platform.String
 	}
-	settings.Allowlist = allowlist
+	if proxyURL.Valid {
+		settings.ProxyURL = proxyURL.String
+	}
+	if chatIDLock.Valid {
+		settings.ChatIDLock = chatIDLock.String
+	}
+
 	return settings, nil
 }
 
@@ -96,9 +116,6 @@ func (s *Store) SaveSettings(settings Settings) error {
 	if s == nil || s.db == nil {
 		return nil
 	}
-
-	cleanAllowlist := normalizeAllowlist(settings.Allowlist)
-	settings.Allowlist = cleanAllowlist
 
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -111,31 +128,17 @@ func (s *Store) SaveSettings(settings Settings) error {
 	}()
 
 	_, err = tx.Exec(`
-		INSERT INTO remote_coder_bot_settings (id, telegram_token, updated_at)
-		VALUES (1, ?, ?)
+		INSERT INTO remote_coder_bot_settings (id, telegram_token, platform, proxy_url, chat_id_lock, updated_at)
+		VALUES (1, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			telegram_token = excluded.telegram_token,
+			platform = excluded.platform,
+			proxy_url = excluded.proxy_url,
+			chat_id_lock = excluded.chat_id_lock,
 			updated_at = excluded.updated_at
-	`, settings.Token, time.Now().UTC().Format(time.RFC3339))
+	`, settings.Token, settings.Platform, settings.ProxyURL, settings.ChatIDLock, time.Now().UTC().Format(time.RFC3339))
 	if err != nil {
 		return err
-	}
-
-	if _, err = tx.Exec(`DELETE FROM remote_coder_bot_allowlist`); err != nil {
-		return err
-	}
-
-	if len(settings.Allowlist) > 0 {
-		stmt, errPrepare := tx.Prepare(`INSERT INTO remote_coder_bot_allowlist (chat_id, added_at) VALUES (?, ?)`)
-		if errPrepare != nil {
-			return errPrepare
-		}
-		defer stmt.Close()
-		for _, chatID := range settings.Allowlist {
-			if _, err = stmt.Exec(chatID, time.Now().UTC().Format(time.RFC3339)); err != nil {
-				return err
-			}
-		}
 	}
 
 	if err = tx.Commit(); err != nil {
@@ -144,49 +147,30 @@ func (s *Store) SaveSettings(settings Settings) error {
 	return nil
 }
 
-func (s *Store) getAllowlist() ([]string, error) {
-	if s == nil || s.db == nil {
-		return nil, nil
-	}
-
-	rows, err := s.db.Query(`SELECT chat_id FROM remote_coder_bot_allowlist`)
+func ensureColumn(db *sql.DB, tableName, columnName, columnType string) error {
+	rows, err := db.Query(fmt.Sprintf(`PRAGMA table_info(%s)`, tableName))
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer rows.Close()
 
-	var out []string
 	for rows.Next() {
-		var chatID string
-		if err := rows.Scan(&chatID); err != nil {
-			return nil, err
+		var cid int
+		var name string
+		var colType string
+		var notNull int
+		var defaultValue sql.NullString
+		var pk int
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &defaultValue, &pk); err != nil {
+			return err
 		}
-		if strings.TrimSpace(chatID) == "" {
-			continue
+		if strings.EqualFold(name, columnName) {
+			return nil
 		}
-		out = append(out, chatID)
 	}
-	sort.Strings(out)
-	return out, nil
-}
 
-func (s *Store) IsAllowed(chatID string) (bool, error) {
-	chatID = strings.TrimSpace(chatID)
-	if chatID == "" {
-		return false, nil
-	}
-	if s == nil || s.db == nil {
-		return false, nil
-	}
-	row := s.db.QueryRow(`SELECT 1 FROM remote_coder_bot_allowlist WHERE chat_id = ?`, chatID)
-	var exists int
-	if err := row.Scan(&exists); err != nil {
-		if err == sql.ErrNoRows {
-			return false, nil
-		}
-		return false, err
-	}
-	return true, nil
+	_, err = db.Exec(fmt.Sprintf(`ALTER TABLE %s ADD COLUMN %s %s`, tableName, columnName, columnType))
+	return err
 }
 
 func (s *Store) GetSessionForChat(chatID string) (string, bool, error) {
@@ -219,21 +203,4 @@ func (s *Store) SetSessionForChat(chatID, sessionID string) error {
 			updated_at = excluded.updated_at
 	`, chatID, sessionID, time.Now().UTC().Format(time.RFC3339))
 	return err
-}
-
-func normalizeAllowlist(allowlist []string) []string {
-	seen := make(map[string]struct{})
-	var out []string
-	for _, entry := range allowlist {
-		entry = strings.TrimSpace(entry)
-		if entry == "" {
-			continue
-		}
-		if _, exists := seen[entry]; exists {
-			continue
-		}
-		seen[entry] = struct{}{}
-		out = append(out, entry)
-	}
-	return out
 }

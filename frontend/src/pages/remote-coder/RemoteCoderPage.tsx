@@ -57,17 +57,10 @@ const RemoteCoderPage: React.FC = () => {
     const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const [projectPath, setProjectPath] = useState('');
-    const [projectPathDialogOpen, setProjectPathDialogOpen] = useState(true);
+    const [projectPathDialogOpen, setProjectPathDialogOpen] = useState(false);
     const [expandedMessages, setExpandedMessages] = useState<Set<number>>(new Set());
     const [projectPathNewSession, setProjectPathNewSession] = useState<string>('');
     const [sessionsLoaded, setSessionsLoaded] = useState(false);
-    const [botToken, setBotToken] = useState('');
-    const [botAllowlist, setBotAllowlist] = useState('');
-    const [botLoading, setBotLoading] = useState(false);
-    const [botSaving, setBotSaving] = useState(false);
-    const [botNotice, setBotNotice] = useState<string | null>(null);
-    const [botError, setBotError] = useState<string | null>(null);
-
     const isSessionThinking = !!selectedSession?.id
         && selectedSession.status === 'running'
         && (chatHistory.length === 0 || chatHistory[chatHistory.length - 1].role === 'user');
@@ -77,11 +70,11 @@ const RemoteCoderPage: React.FC = () => {
         if (selectedSession?.id) {
             const stored = selectedSession.project_path || '';
             setProjectPath(stored);
-            setProjectPathDialogOpen(!stored.trim());
+            setProjectPathDialogOpen(false);
         } else {
             const stored = projectPathNewSession || '';
             setProjectPath(stored);
-            setProjectPathDialogOpen(!stored.trim());
+            setProjectPathDialogOpen(false);
         }
     }, [selectedSession?.id, selectedSession?.project_path, projectPathNewSession]);
 
@@ -144,31 +137,6 @@ const RemoteCoderPage: React.FC = () => {
         fetchSessions();
     }, []);
 
-    const loadBotSettings = async () => {
-        try {
-            setBotLoading(true);
-            const data = await api.getRemoteCCBotSettings();
-            if (data?.success === false) {
-                setBotError(data.error || 'Failed to load bot settings');
-                return;
-            }
-            if (typeof data?.token === 'string') {
-                setBotToken(data.token);
-            }
-            if (Array.isArray(data?.allowlist)) {
-                setBotAllowlist(data.allowlist.join('\n'));
-            }
-        } catch (err) {
-            console.error('Failed to load bot settings:', err);
-            setBotError('Failed to load bot settings');
-        } finally {
-            setBotLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        loadBotSettings();
-    }, []);
 
     useEffect(() => {
         if (!sessionsLoaded || selectedSession || !sessions.length) return;
@@ -281,7 +249,7 @@ const RemoteCoderPage: React.FC = () => {
         setExpandedMessages(new Set());
         const path = session.project_path || '';
         setProjectPath(path);
-        setProjectPathDialogOpen(!path.trim());
+        setProjectPathDialogOpen(false);
 
         loadSessionState(session.id);
 
@@ -323,35 +291,7 @@ const RemoteCoderPage: React.FC = () => {
             setProjectPathDialogOpen(false);
         } else {
             setProjectPath('');
-            setProjectPathDialogOpen(true);
-        }
-    };
-
-    const handleSaveBotSettings = async () => {
-        setBotSaving(true);
-        setBotNotice(null);
-        setBotError(null);
-
-        const allowlist = botAllowlist
-            .split(/[\n,]+/)
-            .map((entry) => entry.trim())
-            .filter((entry) => entry.length > 0);
-
-        try {
-            const result = await api.updateRemoteCCBotSettings({
-                token: botToken.trim(),
-                allowlist,
-            });
-            if (result?.success === false) {
-                setBotError(result.error || 'Failed to save bot settings');
-                return;
-            }
-            setBotNotice('Telegram bot settings saved.');
-        } catch (err) {
-            console.error('Failed to save bot settings:', err);
-            setBotError('Failed to save bot settings');
-        } finally {
-            setBotSaving(false);
+            setProjectPathDialogOpen(false);
         }
     };
 
@@ -401,18 +341,6 @@ const RemoteCoderPage: React.FC = () => {
             {error && (
                 <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
                     {error}
-                </Alert>
-            )}
-
-            {botNotice && (
-                <Alert severity="success" sx={{ mb: 3 }} onClose={() => setBotNotice(null)}>
-                    {botNotice}
-                </Alert>
-            )}
-
-            {botError && (
-                <Alert severity="error" sx={{ mb: 3 }} onClose={() => setBotError(null)}>
-                    {botError}
                 </Alert>
             )}
 
@@ -514,54 +442,6 @@ const RemoteCoderPage: React.FC = () => {
                 </CardContent>
             </Card>
 
-            <Card sx={{ mb: 3 }}>
-                <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <Typography variant="h6" fontWeight={600}>
-                        Telegram Bot
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                        Configure a Telegram bot token and allowlist to proxy chats into remote-coder sessions.
-                    </Typography>
-                    <TextField
-                        label="Telegram Bot Token"
-                        type="password"
-                        value={botToken}
-                        onChange={(e) => setBotToken(e.target.value)}
-                        fullWidth
-                        size="small"
-                        helperText="Stored in tingly-remote-coder.db in plain text."
-                    />
-                    <TextField
-                        label="Allowlisted Chat IDs"
-                        placeholder="One chat ID per line"
-                        value={botAllowlist}
-                        onChange={(e) => setBotAllowlist(e.target.value)}
-                        fullWidth
-                        multiline
-                        minRows={3}
-                        size="small"
-                        helperText="Only these chats can use the bot."
-                    />
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Button
-                            variant="contained"
-                            onClick={handleSaveBotSettings}
-                            disabled={botSaving || botLoading}
-                        >
-                            {botSaving ? 'Saving...' : 'Save Bot Settings'}
-                        </Button>
-                        {botLoading && (
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <CircularProgress size={16} />
-                                <Typography variant="body2" color="text.secondary">
-                                    Loading bot settings...
-                                </Typography>
-                            </Box>
-                        )}
-                    </Box>
-                </CardContent>
-            </Card>
-
             <Card sx={{ height: 'calc(100vh - 320px)', minHeight: 400, display: 'flex', flexDirection: 'column' }}>
                 <CardContent sx={{ p: 2, flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                     {/* Chat Messages */}
@@ -626,14 +506,14 @@ const RemoteCoderPage: React.FC = () => {
                                 </Typography>
                             </Box>
                         ))}
-                            {isChatBusy && (
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <CircularProgress size={16} />
-                                    <Typography variant="body2" color="text.secondary">
-                                        Claude Code is thinking...
-                                    </Typography>
-                                </Box>
-                            )}
+                        {isChatBusy && (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <CircularProgress size={16} />
+                                <Typography variant="body2" color="text.secondary">
+                                    Claude Code is thinking...
+                                </Typography>
+                            </Box>
+                        )}
                         <div ref={messagesEndRef} />
                     </Box>
 
@@ -654,14 +534,14 @@ const RemoteCoderPage: React.FC = () => {
                             }}
                             size="small"
                         />
-                            <IconButton
-                                color="primary"
-                                onClick={handleSendMessage}
-                                disabled={!message.trim() || isChatBusy}
-                                sx={{ alignSelf: 'flex-end' }}
-                            >
-                                {isChatBusy ? <CircularProgress size={24} /> : <SendIcon />}
-                            </IconButton>
+                        <IconButton
+                            color="primary"
+                            onClick={handleSendMessage}
+                            disabled={!message.trim() || isChatBusy}
+                            sx={{ alignSelf: 'flex-end' }}
+                        >
+                            {isChatBusy ? <CircularProgress size={24} /> : <SendIcon />}
+                        </IconButton>
                     </Box>
                 </CardContent>
             </Card>

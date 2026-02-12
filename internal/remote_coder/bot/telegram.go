@@ -16,6 +16,7 @@ import (
 
 const (
 	telegramMessageLimit = 4000
+	listSummaryLimit     = 160
 )
 
 // RunTelegramBot starts a Telegram bot that proxies messages to remote-coder sessions.
@@ -31,6 +32,13 @@ func RunTelegramBot(ctx context.Context, store *Store, sessionMgr *session.Manag
 	if strings.TrimSpace(settings.Token) == "" {
 		return fmt.Errorf("telegram bot token is not configured")
 	}
+	platform := strings.TrimSpace(settings.Platform)
+	if platform == "" {
+		platform = "telegram"
+	}
+	if platform != "telegram" {
+		return fmt.Errorf("unsupported bot platform: %s", platform)
+	}
 
 	if sessionMgr == nil {
 		return fmt.Errorf("session manager is nil")
@@ -45,6 +53,13 @@ func RunTelegramBot(ctx context.Context, store *Store, sessionMgr *session.Manag
 		imbot.WithReconnectDelay(3000),
 	)
 
+	options := map[string]interface{}{
+		"updateTimeout": 30,
+	}
+	if strings.TrimSpace(settings.ProxyURL) != "" {
+		options["proxy"] = strings.TrimSpace(settings.ProxyURL)
+	}
+
 	err = manager.AddBot(&imbot.Config{
 		Platform: imbot.PlatformTelegram,
 		Enabled:  true,
@@ -52,9 +67,7 @@ func RunTelegramBot(ctx context.Context, store *Store, sessionMgr *session.Manag
 			Type:  "token",
 			Token: settings.Token,
 		},
-		Options: map[string]interface{}{
-			"updateTimeout": 30,
-		},
+		Options: options,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to start telegram bot: %w", err)
@@ -94,12 +107,11 @@ func handleTelegramMessage(
 		return
 	}
 
-	allowed, err := store.IsAllowed(chatID)
+	settings, err := store.GetSettings()
 	if err != nil {
-		logrus.WithError(err).Warn("Failed to check allowlist")
+		logrus.WithError(err).Warn("Failed to load bot settings")
 	}
-	if !allowed {
-		sendText(bot, chatID, fmt.Sprintf("Access denied. Chat ID %s is not allowlisted.", chatID))
+	if settings.ChatIDLock != "" && chatID != settings.ChatIDLock {
 		return
 	}
 
@@ -110,6 +122,11 @@ func handleTelegramMessage(
 
 	text := strings.TrimSpace(msg.GetText())
 	if text == "" {
+		return
+	}
+
+	if strings.HasPrefix(text, "/") {
+		handleTelegramCommand(bot, store, sessionMgr, chatID, text)
 		return
 	}
 
@@ -167,6 +184,139 @@ func handleTelegramMessage(
 	})
 
 	sendText(bot, chatID, response)
+}
+
+func handleTelegramCommand(bot imbot.Bot, store *Store, sessionMgr *session.Manager, chatID string, text string) {
+	fields := strings.Fields(text)
+	if len(fields) == 0 {
+		return
+	}
+	cmd := strings.ToLower(fields[0])
+
+	switch cmd {
+	case "/info":
+		sessionID, ok, err := store.GetSessionForChat(chatID)
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to load session mapping")
+		}
+		if !ok || sessionID == "" {
+			sendText(bot, chatID, "No session mapped. Send a message or use /new to create one.")
+			return
+		}
+		projectPath := ""
+		summary := ""
+		if sess, exists := sessionMgr.GetOrLoad(sessionID); exists && sess.Context != nil {
+			if v, ok := sess.Context["project_path"]; ok {
+				if pv, ok := v.(string); ok {
+					projectPath = pv
+				}
+			}
+			summary = lastAssistantSummary(sessionMgr, sessionID)
+		}
+		if projectPath == "" {
+			projectPath = "(none)"
+		}
+		if summary == "" {
+			summary = "(no assistant summary yet)"
+		}
+		sendText(bot, chatID, fmt.Sprintf("Session: %s\nProject Path: %s\nLast Summary: %s", sessionID, projectPath, summary))
+	case "/list":
+		sessions := sessionMgr.List()
+		if len(sessions) == 0 {
+			sendText(bot, chatID, "No sessions available.")
+			return
+		}
+		lines := make([]string, 0, len(sessions)+1)
+		lines = append(lines, "Sessions:")
+		for _, sess := range sessions {
+			projectPath := ""
+			if sess.Context != nil {
+				if v, ok := sess.Context["project_path"]; ok {
+					if pv, ok := v.(string); ok {
+						projectPath = pv
+					}
+				}
+			}
+			summary := lastAssistantSummary(sessionMgr, sess.ID)
+			if summary == "" {
+				summary = "(no assistant summary yet)"
+			}
+			pathLabel := projectPath
+			if pathLabel == "" {
+				pathLabel = "(none)"
+			}
+			lines = append(lines, fmt.Sprintf("- %s [%s] %s: %s", sess.ID, sess.Status, pathLabel, summary))
+		}
+		sendText(bot, chatID, strings.Join(lines, "\n"))
+	case "/use":
+		if len(fields) < 2 {
+			sendText(bot, chatID, "Usage: /use <session_id>")
+			return
+		}
+		targetID := strings.TrimSpace(fields[1])
+		if targetID == "" {
+			sendText(bot, chatID, "Usage: /use <session_id>")
+			return
+		}
+		if _, exists := sessionMgr.GetOrLoad(targetID); !exists {
+			sendText(bot, chatID, "Session not found.")
+			return
+		}
+		if err := store.SetSessionForChat(chatID, targetID); err != nil {
+			logrus.WithError(err).Warn("Failed to update session mapping")
+			sendText(bot, chatID, "Failed to switch session.")
+			return
+		}
+		sendText(bot, chatID, fmt.Sprintf("Switched to session %s.", targetID))
+	case "/new":
+		if len(fields) < 2 {
+			sendText(bot, chatID, "Usage: /new <project_path>")
+			return
+		}
+		projectPath := strings.TrimSpace(strings.Join(fields[1:], " "))
+		if projectPath == "" {
+			sendText(bot, chatID, "Usage: /new <project_path>")
+			return
+		}
+		sess := sessionMgr.Create()
+		sessionMgr.SetContext(sess.ID, "project_path", projectPath)
+		if err := store.SetSessionForChat(chatID, sess.ID); err != nil {
+			logrus.WithError(err).Warn("Failed to update session mapping")
+			sendText(bot, chatID, "Failed to create new session.")
+			return
+		}
+		sendText(bot, chatID, fmt.Sprintf("New session created: %s", sess.ID))
+	default:
+		sendText(bot, chatID, "Unknown command. Try /info, /list, /use <session_id>, /new.")
+	}
+}
+
+func lastAssistantSummary(sessionMgr *session.Manager, sessionID string) string {
+	if sessionMgr == nil {
+		return ""
+	}
+	msgs, ok := sessionMgr.GetMessages(sessionID)
+	if !ok {
+		return ""
+	}
+	for i := len(msgs) - 1; i >= 0; i-- {
+		msg := msgs[i]
+		if msg.Role != "assistant" {
+			continue
+		}
+		text := strings.TrimSpace(msg.Summary)
+		if text == "" {
+			text = strings.TrimSpace(msg.Content)
+		}
+		if text == "" {
+			return ""
+		}
+		if len(text) > listSummaryLimit {
+			return text[:listSummaryLimit] + "..."
+		}
+		return text
+	}
+	return ""
 }
 
 func sendText(bot imbot.Bot, chatID string, text string) {

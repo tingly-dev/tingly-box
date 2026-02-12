@@ -20,7 +20,7 @@ require (
 	github.com/gobwas/glob v0.2.3
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
-	github.com/mattn/go-sqlite3 v1.14.32
+	github.com/mattn/go-sqlite3 v1.14.34
 	github.com/openai/openai-go/v3 v3.21.0
 	github.com/otiai10/copy v1.14.1
 	github.com/sirupsen/logrus v1.9.4
@@ -38,7 +38,6 @@ require (
 )
 
 require (
-	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 	golang.org/x/crypto v0.48.0 // indirect
@@ -53,7 +52,7 @@ require (
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	github.com/andybalholm/cascadia v1.3.3 // indirect
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de // indirect
-	github.com/bwmarrin/discordgo v0.28.1 // indirect
+	github.com/bwmarrin/discordgo v0.29.0 // indirect
 	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/bytedance/sonic v1.15.0 // indirect
 	github.com/bytedance/sonic/loader v0.5.0 // indirect
@@ -85,7 +84,6 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
-	github.com/mattn/go-sqlite3 v1.14.34 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/otiai10/mint v1.6.3 // indirect
@@ -93,8 +91,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/quic-go/quic-go v0.59.0 // indirect
-	github.com/rogpeppe/go-internal v1.14.1 // indirect
-	github.com/slack-go/slack v0.13.0 // indirect
+	github.com/slack-go/slack v0.17.3 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.2.0 // indirect
@@ -102,7 +99,6 @@ require (
 	github.com/tidwall/sjson v1.2.5 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.1 // indirect
-	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.65.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.40.0 // indirect
