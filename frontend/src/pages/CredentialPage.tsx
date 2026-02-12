@@ -90,6 +90,8 @@ const CredentialPage = () => {
     const [botProxyDraft, setBotProxyDraft] = useState('');
     const [botChatId, setBotChatId] = useState('');
     const [botChatIdDraft, setBotChatIdDraft] = useState('');
+    const [botAllowlist, setBotAllowlist] = useState<string[]>([]);
+    const [botAllowlistDraft, setBotAllowlistDraft] = useState('');
     const [botLoading, setBotLoading] = useState(false);
     const [botSaving, setBotSaving] = useState(false);
     const [botNotice, setBotNotice] = useState<string | null>(null);
@@ -163,6 +165,9 @@ const CredentialPage = () => {
                 }
                 if (typeof data?.chat_id === 'string') {
                     setBotChatId(data.chat_id);
+                }
+                if (Array.isArray(data?.bash_allowlist)) {
+                    setBotAllowlist(data.bash_allowlist);
                 }
             } catch (err) {
                 console.error('Failed to load bot token:', err);
@@ -248,6 +253,7 @@ const CredentialPage = () => {
         setBotPlatformDraft(botPlatform);
         setBotProxyDraft(botProxyUrl);
         setBotChatIdDraft(botChatId);
+        setBotAllowlistDraft(botAllowlist.join('\n'));
         setBotTokenDialogOpen(true);
     };
 
@@ -257,11 +263,16 @@ const CredentialPage = () => {
         setBotError(null);
 
         try {
+            const allowlist = botAllowlistDraft
+                .split(/[\n,]+/)
+                .map((entry) => entry.trim())
+                .filter((entry) => entry.length > 0);
             const result = await api.updateRemoteCCBotSettings({
                 token: botTokenDraft.trim(),
                 platform: botPlatformDraft,
                 proxy_url: botProxyDraft.trim(),
                 chat_id: botChatIdDraft.trim(),
+                bash_allowlist: allowlist,
             });
             if (result?.success === false) {
                 setBotError(result.error || 'Failed to save bot token');
@@ -271,6 +282,7 @@ const CredentialPage = () => {
             setBotPlatform(botPlatformDraft);
             setBotProxyUrl(botProxyDraft.trim());
             setBotChatId(botChatIdDraft.trim());
+            setBotAllowlist(allowlist);
             setBotNotice('Bot token saved.');
             setBotTokenDialogOpen(false);
         } catch (err) {
@@ -819,6 +831,17 @@ const CredentialPage = () => {
                         fullWidth
                         size="small"
                         helperText="Optional: when set, only this chat ID can use the bot."
+                    />
+                    <TextField
+                        label="Bash Allowlist"
+                        placeholder="cd\nls\npwd"
+                        value={botAllowlistDraft}
+                        onChange={(e) => setBotAllowlistDraft(e.target.value)}
+                        fullWidth
+                        multiline
+                        minRows={3}
+                        size="small"
+                        helperText="Allowlisted /bash subcommands. Default: cd, ls, pwd."
                     />
                     <Stack direction="row" spacing={2} justifyContent="flex-end">
                         <Button onClick={() => setBotTokenDialogOpen(false)} color="inherit">

@@ -3,6 +3,8 @@ package bot
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -18,6 +20,12 @@ const (
 	telegramMessageLimit = 4000
 	listSummaryLimit     = 160
 )
+
+var defaultBashAllowlist = map[string]struct{}{
+	"cd":  {},
+	"ls":  {},
+	"pwd": {},
+}
 
 // RunTelegramBot starts a Telegram bot that proxies messages to remote-coder sessions.
 func RunTelegramBot(ctx context.Context, store *Store, sessionMgr *session.Manager) error {
@@ -126,7 +134,7 @@ func handleTelegramMessage(
 	}
 
 	if strings.HasPrefix(text, "/") {
-		handleTelegramCommand(bot, store, sessionMgr, chatID, text)
+		handleTelegramCommand(ctx, bot, store, sessionMgr, chatID, text)
 		return
 	}
 
@@ -186,7 +194,7 @@ func handleTelegramMessage(
 	sendText(bot, chatID, response)
 }
 
-func handleTelegramCommand(bot imbot.Bot, store *Store, sessionMgr *session.Manager, chatID string, text string) {
+func handleTelegramCommand(ctx context.Context, bot imbot.Bot, store *Store, sessionMgr *session.Manager, chatID string, text string) {
 	fields := strings.Fields(text)
 	if len(fields) == 0 {
 		return
@@ -286,9 +294,111 @@ func handleTelegramCommand(bot imbot.Bot, store *Store, sessionMgr *session.Mana
 			return
 		}
 		sendText(bot, chatID, fmt.Sprintf("New session created: %s", sess.ID))
+	case "/bash":
+		handleBashCommand(ctx, bot, store, sessionMgr, chatID, fields)
 	default:
-		sendText(bot, chatID, "Unknown command. Try /info, /list, /use <session_id>, /new.")
+		sendText(bot, chatID, "Unknown command. Try /info, /list, /use <session_id>, /new <path>, /bash <cmd>.")
 	}
+}
+
+func handleBashCommand(ctx context.Context, bot imbot.Bot, store *Store, sessionMgr *session.Manager, chatID string, fields []string) {
+	if len(fields) < 2 {
+		sendText(bot, chatID, "Usage: /bash <command>")
+		return
+	}
+	settings, err := store.GetSettings()
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to load bot settings")
+	}
+	allowlist := normalizeAllowlistToMap(settings.BashAllowlist)
+	if len(allowlist) == 0 {
+		allowlist = defaultBashAllowlist
+	}
+	subcommand := strings.ToLower(strings.TrimSpace(fields[1]))
+	if _, ok := allowlist[subcommand]; !ok {
+		sendText(bot, chatID, "Command not allowed.")
+		return
+	}
+
+	sessionID, ok, err := store.GetSessionForChat(chatID)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to load session mapping")
+	}
+	if !ok || sessionID == "" {
+		sendText(bot, chatID, "No session mapped. Send a message or use /new to create one.")
+		return
+	}
+	sess, exists := sessionMgr.GetOrLoad(sessionID)
+	if !exists {
+		sendText(bot, chatID, "Session not found.")
+		return
+	}
+	projectPath := ""
+	if sess.Context != nil {
+		if v, ok := sess.Context["project_path"]; ok {
+			if pv, ok := v.(string); ok {
+				projectPath = pv
+			}
+		}
+	}
+
+	switch subcommand {
+	case "pwd":
+		if projectPath == "" {
+			sendText(bot, chatID, "(none)")
+		} else {
+			sendText(bot, chatID, projectPath)
+		}
+	case "cd":
+		if len(fields) < 3 {
+			sendText(bot, chatID, "Usage: /bash cd <path>")
+			return
+		}
+		nextPath := strings.TrimSpace(strings.Join(fields[2:], " "))
+		if nextPath == "" {
+			sendText(bot, chatID, "Usage: /bash cd <path>")
+			return
+		}
+		if stat, err := os.Stat(nextPath); err != nil || !stat.IsDir() {
+			sendText(bot, chatID, "Directory not found.")
+			return
+		}
+		sessionMgr.SetContext(sessionID, "project_path", nextPath)
+		sendText(bot, chatID, fmt.Sprintf("Project path set to %s", nextPath))
+	case "ls":
+		if projectPath == "" {
+			sendText(bot, chatID, "Project path not set. Use /new <path> or /bash cd <path>.")
+			return
+		}
+		args := []string{}
+		if len(fields) > 2 {
+			args = append(args, fields[2:]...)
+		}
+		execCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(execCtx, "ls", args...)
+		cmd.Dir = projectPath
+		output, err := cmd.CombinedOutput()
+		if err != nil && len(output) == 0 {
+			sendText(bot, chatID, fmt.Sprintf("Command failed: %v", err))
+			return
+		}
+		sendText(bot, chatID, strings.TrimSpace(string(output)))
+	default:
+		sendText(bot, chatID, "Command not allowed.")
+	}
+}
+
+func normalizeAllowlistToMap(values []string) map[string]struct{} {
+	out := make(map[string]struct{})
+	for _, entry := range values {
+		entry = strings.TrimSpace(strings.ToLower(entry))
+		if entry == "" {
+			continue
+		}
+		out[entry] = struct{}{}
+	}
+	return out
 }
 
 func lastAssistantSummary(sessionMgr *session.Manager, sessionID string) string {

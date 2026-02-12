@@ -14,10 +14,11 @@ type BotSettingsHandler struct {
 }
 
 type BotSettingsPayload struct {
-	Token    string `json:"token"`
-	Platform string `json:"platform"`
-	ProxyURL string `json:"proxy_url"`
-	ChatID   string `json:"chat_id"`
+	Token         string   `json:"token"`
+	Platform      string   `json:"platform"`
+	ProxyURL      string   `json:"proxy_url"`
+	ChatID        string   `json:"chat_id"`
+	BashAllowlist []string `json:"bash_allowlist"`
 }
 
 func NewBotSettingsHandler(store *bot.Store) *BotSettingsHandler {
@@ -37,11 +38,12 @@ func (h *BotSettingsHandler) GetSettings(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"success":   true,
-		"token":     settings.Token,
-		"platform":  settings.Platform,
-		"proxy_url": settings.ProxyURL,
-		"chat_id":   settings.ChatIDLock,
+		"success":        true,
+		"token":          settings.Token,
+		"platform":       settings.Platform,
+		"proxy_url":      settings.ProxyURL,
+		"chat_id":        settings.ChatIDLock,
+		"bash_allowlist": settings.BashAllowlist,
 	})
 }
 
@@ -63,14 +65,32 @@ func (h *BotSettingsHandler) UpdateSettings(c *gin.Context) {
 	}
 
 	if err := h.store.SaveSettings(bot.Settings{
-		Token:      strings.TrimSpace(payload.Token),
-		Platform:   platform,
-		ProxyURL:   strings.TrimSpace(payload.ProxyURL),
-		ChatIDLock: strings.TrimSpace(payload.ChatID),
+		Token:         strings.TrimSpace(payload.Token),
+		Platform:      platform,
+		ProxyURL:      strings.TrimSpace(payload.ProxyURL),
+		ChatIDLock:    strings.TrimSpace(payload.ChatID),
+		BashAllowlist: normalizeAllowlist(payload.BashAllowlist),
 	}); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+func normalizeAllowlist(values []string) []string {
+	seen := make(map[string]struct{})
+	var out []string
+	for _, entry := range values {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		if _, exists := seen[entry]; exists {
+			continue
+		}
+		seen[entry] = struct{}{}
+		out = append(out, entry)
+	}
+	return out
 }

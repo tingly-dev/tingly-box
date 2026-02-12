@@ -1169,7 +1169,7 @@ export const api = {
     },
 
     // Update remote-coder bot settings
-    updateRemoteCCBotSettings: async (data: { token: string; platform?: string; proxy_url?: string; chat_id?: string }): Promise<any> => {
+    updateRemoteCCBotSettings: async (data: { token: string; platform?: string; proxy_url?: string; chat_id?: string; bash_allowlist?: string[] }): Promise<any> => {
         try {
             const token = await getRemoteCCAuthToken();
             const baseUrl = api.getRemoteCCBaseUrl();

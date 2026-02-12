@@ -16,10 +16,11 @@ func TestStoreSettingsRoundTrip(t *testing.T) {
 	t.Cleanup(func() { _ = store.Close() })
 
 	settings := Settings{
-		Token:      "telegram-token",
-		Platform:   "telegram",
-		ProxyURL:   "http://proxy.test:8080",
-		ChatIDLock: "chat-123",
+		Token:         "telegram-token",
+		Platform:      "telegram",
+		ProxyURL:      "http://proxy.test:8080",
+		ChatIDLock:    "chat-123",
+		BashAllowlist: []string{"cd", "ls", "pwd"},
 	}
 	require.NoError(t, store.SaveSettings(settings))
 
@@ -29,6 +30,7 @@ func TestStoreSettingsRoundTrip(t *testing.T) {
 	require.Equal(t, "telegram", loaded.Platform)
 	require.Equal(t, "http://proxy.test:8080", loaded.ProxyURL)
 	require.Equal(t, "chat-123", loaded.ChatIDLock)
+	require.Equal(t, []string{"cd", "ls", "pwd"}, loaded.BashAllowlist)
 
 	_, err = os.Stat(dbPath)
 	require.NoError(t, err)
