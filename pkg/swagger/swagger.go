@@ -69,6 +69,7 @@ func (rm *RouteManager) GenerateSwaggerJSON() (string, error) {
 
 			// Create operation
 			operation := &Operation{
+				OperationID: rm.generateOperationID(route.Method, swaggerPath),
 				Summary:     route.Description,
 				Description: route.Description,
 				Responses:   make(map[string]Response),

@@ -144,3 +144,35 @@ func (rm *RouteManager) generateAutoModelName(method, path, modelType string) st
 
 	return methodName + pathName + modelType
 }
+
+// generateOperationID generates an operation ID from method and swagger path
+// Example: GET /api/v1/auth/validate -> apiV1AuthValidateGet
+func (rm *RouteManager) generateOperationID(method, swaggerPath string) string {
+	// Convert path to camelCase
+	// /api/v1/auth/validate -> apiV1AuthValidate
+	parts := strings.Split(swaggerPath, "/")
+	var nameParts []string
+	for i, part := range parts {
+		if part == "" {
+			continue
+		}
+		// Remove braces from path params: {id} -> Id
+		part = strings.Trim(part, "{}")
+		if len(part) == 0 {
+			continue
+		}
+		// First part lowercase, rest PascalCase
+		if i == 1 { // First non-empty part after leading /
+			nameParts = append(nameParts, strings.ToLower(part[:1])+part[1:])
+		} else {
+			nameParts = append(nameParts, strings.ToUpper(part[:1])+part[1:])
+		}
+	}
+
+	// Combine: pathName + Method (lowercase)
+	// e.g., apiV1AuthValidate + get -> apiV1AuthValidateGet
+	pathName := strings.Join(nameParts, "")
+	methodLower := strings.ToLower(method)
+
+	return pathName + strings.ToUpper(methodLower[:1]) + methodLower[1:]
+}
