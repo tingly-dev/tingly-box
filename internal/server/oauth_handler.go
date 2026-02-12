@@ -851,26 +851,19 @@ func (s *Server) ListOAuthTokens(c *gin.Context) {
 
 	userID := c.Query("user_id")
 
-	providers, err := s.oauthManager.ListProviders(userID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, OAuthErrorResponse{
-			Success: false,
-			Error:   err.Error(),
-		})
-		return
-	}
-
 	tokens := make([]TokenInfo, 0)
 
-	for _, provider := range providers {
-		token, err := s.oauthManager.GetToken(c.Request.Context(), userID, provider)
+	// Try to get tokens from all registered providers
+	registry := s.oauthManager.GetRegistry()
+	for _, providerType := range registry.List() {
+		token, err := s.oauthManager.GetToken(c.Request.Context(), userID, providerType)
 		if err == nil && token != nil {
 			expiresAt := ""
 			if !token.Expiry.IsZero() {
 				expiresAt = token.Expiry.Format("2006-01-02T15:04:05Z07:00")
 			}
 			tokens = append(tokens, TokenInfo{
-				Provider:  string(provider),
+				Provider:  string(providerType),
 				Valid:     token.Valid(),
 				ExpiresAt: expiresAt,
 			})
