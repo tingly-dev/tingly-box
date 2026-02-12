@@ -355,3 +355,153 @@ func TestRouteManager_nestedModelsWithPointers(t *testing.T) {
 		}
 	}
 }
+
+// Test anonymous struct naming with explicit name and auto-generation
+func TestRouteManager_anonymousStructNaming(t *testing.T) {
+	// Create gin engine
+	engine := gin.New()
+
+	// Create route manager
+	manager := NewRouteManager(engine)
+
+	// Set Swagger information
+	manager.SetSwaggerInfo(SwaggerInfo{
+		Title:       "Anonymous Struct API",
+		Description: "API demonstrating anonymous struct naming",
+		Version:     "1.0.0",
+		Host:        "localhost:15000",
+		BasePath:    "/",
+	})
+
+	// Create v1 group
+	v1 := manager.NewGroup("api", "v1", "")
+
+	// Test 1: Anonymous struct without explicit name (should auto-generate)
+	v1.GET("/ping", func(c *gin.Context) {
+		c.JSON(200, gin.H{"message": "pong"})
+	},
+		WithDescription("Ping endpoint"),
+		WithTags("health"),
+		WithResponseModel(struct {
+			Message string `json:"message"`
+		}{}),
+	)
+
+	// Test 2: Anonymous struct with explicit name
+	v1.POST("/users", func(c *gin.Context) {
+		c.JSON(200, gin.H{"success": true})
+	},
+		WithDescription("Create user"),
+		WithTags("users"),
+		WithRequestModel(struct {
+			Username string `json:"username" binding:"required"`
+			Email    string `json:"email" binding:"required,email"`
+		}{}),
+		WithRequestModelName("CreateUserRequest"),
+		WithResponseModel(struct {
+			ID      string `json:"id"`
+			Success bool   `json:"success"`
+		}{}),
+		WithResponseModelName("CreateUserResponse"),
+	)
+
+	// Test 3: Named struct (should use struct name as before)
+	v1.GET("/companies", func(c *gin.Context) {
+		c.JSON(200, []CompanyResponse{})
+	},
+		WithDescription("List companies"),
+		WithTags("companies"),
+		WithResponseModel(CompanyResponse{}),
+	)
+
+	swaggerJSON, err := manager.GenerateSwaggerJSON()
+	if err != nil {
+		t.Errorf("Failed to generate Swagger JSON: %v", err)
+		return
+	}
+
+	// Print the JSON for manual verification
+	fmt.Printf("\n=== Swagger JSON with Anonymous Struct Naming ===\n")
+	fmt.Printf("%s\n", swaggerJSON)
+
+	// Parse JSON to verify structure
+	var swaggerData map[string]interface{}
+	if err := json.Unmarshal([]byte(swaggerJSON), &swaggerData); err != nil {
+		t.Errorf("Failed to parse generated Swagger JSON: %v", err)
+		return
+	}
+
+	definitions, ok := swaggerData["definitions"].(map[string]interface{})
+	if !ok {
+		t.Error("Definitions section is missing or not a map")
+		return
+	}
+
+	// Test 1: Verify auto-generated name for anonymous struct
+	// GET /api/v1/ping -> GetApiV1PingResponse
+	autoGenName := "GetApiV1PingResponse"
+	if _, exists := definitions[autoGenName]; !exists {
+		t.Errorf("Auto-generated definition %s not found. Available: %v", autoGenName, getMapKeys(definitions))
+	}
+
+	// Test 2: Verify explicit name is used
+	if _, exists := definitions["CreateUserRequest"]; !exists {
+		t.Error("Explicit name 'CreateUserRequest' not found in definitions")
+	}
+	if _, exists := definitions["CreateUserResponse"]; !exists {
+		t.Error("Explicit name 'CreateUserResponse' not found in definitions")
+	}
+
+	// Test 3: Verify named struct still works
+	if _, exists := definitions["CompanyResponse"]; !exists {
+		t.Error("Named struct 'CompanyResponse' not found in definitions")
+	}
+
+	// Verify references are correct
+	paths, ok := swaggerData["paths"].(map[string]interface{})
+	if !ok {
+		t.Error("Paths section is missing")
+		return
+	}
+
+	// Check /api/v1/ping response reference
+	pingPath, ok := paths["/api/v1/ping"].(map[string]interface{})
+	if !ok {
+		t.Error("Ping path not found")
+		return
+	}
+	pingGet, ok := pingPath["get"].(map[string]interface{})
+	if !ok {
+		t.Error("Ping GET method not found")
+		return
+	}
+	pingResponses, ok := pingGet["responses"].(map[string]interface{})
+	if !ok {
+		t.Error("Ping responses not found")
+		return
+	}
+	ping200, ok := pingResponses["200"].(map[string]interface{})
+	if !ok {
+		t.Error("Ping 200 response not found")
+		return
+	}
+	pingSchema, ok := ping200["schema"].(map[string]interface{})
+	if !ok {
+		t.Error("Ping schema not found")
+		return
+	}
+	ref, _ := pingSchema["$ref"].(string)
+	expectedRef := "#/definitions/GetApiV1PingResponse"
+	if ref != expectedRef {
+		t.Errorf("Ping response $ref = %s, want %s", ref, expectedRef)
+	}
+}
+
+// Helper function to get map keys for debugging
+func getMapKeys(m map[string]interface{}) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
+}

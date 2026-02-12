@@ -361,14 +361,14 @@ func (rm *RouteManager) GenerateSwaggerJSON() (string, error) {
 
 			// Handle query model
 			if route.QueryModel != nil {
-				modelName := getModelName(route.QueryModel)
+				modelName := rm.getModelNameWithFallback(route.QueryModel, route.QueryModelName, route.Method, fullPath, "Query")
 				modelSet[modelName] = route.QueryModel
 				operation.Parameters = append(operation.Parameters, rm.generateQueryParameters(route.QueryModel)...)
 			}
 
 			// Handle request model
 			if route.RequestModel != nil {
-				modelName := getModelName(route.RequestModel)
+				modelName := rm.getModelNameWithFallback(route.RequestModel, route.RequestModelName, route.Method, fullPath, "Request")
 				modelSet[modelName] = route.RequestModel
 
 				if route.Method == http.MethodGet {
@@ -390,7 +390,7 @@ func (rm *RouteManager) GenerateSwaggerJSON() (string, error) {
 
 			// Handle response models
 			if route.ResponseModel != nil {
-				modelName := getModelName(route.ResponseModel)
+				modelName := rm.getModelNameWithFallback(route.ResponseModel, route.ResponseModelName, route.Method, fullPath, "Response")
 				modelSet[modelName] = route.ResponseModel
 				operation.Responses["200"] = Response{
 					Description: "Successful response",
@@ -418,7 +418,7 @@ func (rm *RouteManager) GenerateSwaggerJSON() (string, error) {
 				}
 
 				if errorResp.Model != nil {
-					modelName := getModelName(errorResp.Model)
+					modelName := rm.getModelNameWithFallback(errorResp.Model, "", route.Method, fullPath, fmt.Sprintf("Error%d", errorResp.Code))
 					modelSet[modelName] = errorResp.Model
 					response.Schema = &Schema{
 						Ref: fmt.Sprintf("#/definitions/%s", modelName),
@@ -1444,4 +1444,54 @@ func getModelName(model interface{}) string {
 		t = t.Elem()
 	}
 	return t.Name()
+}
+
+// getModelNameWithFallback extracts model name with fallback to auto-generation for anonymous structs
+// Priority: explicitName > struct name > auto-generated from route
+func (rm *RouteManager) getModelNameWithFallback(model interface{}, explicitName, method, path, modelType string) string {
+	// 1. Use explicit name if provided
+	if explicitName != "" {
+		return explicitName
+	}
+
+	// 2. Try struct name
+	t := reflect.TypeOf(model)
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	if name := t.Name(); name != "" {
+		return name
+	}
+
+	// 3. Auto-generate from route
+	return rm.generateAutoModelName(method, path, modelType)
+}
+
+// generateAutoModelName generates a model name from method, path, and model type
+// Example: POST /api/v1/users -> PostApiV1UsersRequest or PostApiV1UsersResponse
+func (rm *RouteManager) generateAutoModelName(method, path, modelType string) string {
+	// Clean path and convert to PascalCase
+	// /api/v1/users/:id -> ApiV1UsersId
+	parts := strings.Split(path, "/")
+	var nameParts []string
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		// Convert :param to Param
+		if strings.HasPrefix(part, ":") {
+			part = strings.TrimPrefix(part, ":")
+		}
+		// Convert to PascalCase (first letter uppercase)
+		if len(part) > 0 {
+			nameParts = append(nameParts, strings.ToUpper(part[:1])+part[1:])
+		}
+	}
+
+	// Combine: Method + PathParts + ModelType
+	// e.g., Post + ApiV1Users + Request -> PostApiV1UsersRequest
+	methodName := strings.ToUpper(method[:1]) + strings.ToLower(method[1:])
+	pathName := strings.Join(nameParts, "")
+
+	return methodName + pathName + modelType
 }
