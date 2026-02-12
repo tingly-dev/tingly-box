@@ -372,6 +372,7 @@ Available commands:
 /help - Show this help message
 /cc <message> - Send message to Claude Code
 /info - Show current session info
+/status - Show current task status
 /list - List all sessions
 /use <session_id> - Switch to a session
 /new <project_path> - Create a new session
@@ -403,6 +404,60 @@ Available commands:
 			summary = "(no assistant summary yet)"
 		}
 		sendText(bot, chatID, fmt.Sprintf("Session: %s\nProject Path: %s\nLast Summary: %s", sessionID, projectPath, summary))
+	case "/status":
+		sessionID, ok, err := store.GetSessionForChat(chatID)
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to load session mapping")
+		}
+		if !ok || sessionID == "" {
+			sendText(bot, chatID, "No session mapped. Use /new <project_path> to create one.")
+			return
+		}
+		sess, exists := sessionMgr.GetOrLoad(sessionID)
+		if !exists {
+			sendText(bot, chatID, "Session not found.")
+			return
+		}
+
+		// Build status message
+		var statusParts []string
+		statusParts = append(statusParts, fmt.Sprintf("Session: %s", sessionID))
+		statusParts = append(statusParts, fmt.Sprintf("Status: %s", sess.Status))
+
+		// Show running duration if running
+		if sess.Status == session.StatusRunning {
+			runningFor := time.Since(sess.LastActivity).Round(time.Second)
+			statusParts = append(statusParts, fmt.Sprintf("Running for: %s", runningFor))
+		}
+
+		// Show current request if any
+		if sess.Request != "" {
+			reqPreview := sess.Request
+			if len(reqPreview) > 100 {
+				reqPreview = reqPreview[:100] + "..."
+			}
+			statusParts = append(statusParts, fmt.Sprintf("Current task: %s", reqPreview))
+		}
+
+		// Show project path
+		if sess.Context != nil {
+			if v, ok := sess.Context["project_path"]; ok {
+				if pv, ok := v.(string); ok {
+					statusParts = append(statusParts, fmt.Sprintf("Project: %s", pv))
+				}
+			}
+		}
+
+		// Show error if failed
+		if sess.Status == session.StatusFailed && sess.Error != "" {
+			errPreview := sess.Error
+			if len(errPreview) > 100 {
+				errPreview = errPreview[:100] + "..."
+			}
+			statusParts = append(statusParts, fmt.Sprintf("Error: %s", errPreview))
+		}
+
+		sendText(bot, chatID, strings.Join(statusParts, "\n"))
 	case "/list":
 		sessions := sessionMgr.List()
 		if len(sessions) == 0 {
