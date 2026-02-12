@@ -1,6 +1,6 @@
 package config
 
-import "path/filepath"
+import "github.com/tingly-dev/tingly-box/internal/constant"
 
 // RemoteCoderConfig holds configuration for the remote-coder service.
 type RemoteCoderConfig struct {
@@ -21,16 +21,16 @@ func (c *Config) applyRemoteCoderDefaults() bool {
 	}
 	if c.RemoteCoder.DBPath == "" {
 		if c.ConfigDir != "" {
-			c.RemoteCoder.DBPath = filepath.Join(c.ConfigDir, "remote-coder.db")
+			c.RemoteCoder.DBPath = constant.GetDBFile(c.ConfigDir)
 			updated = true
 		}
 	}
 	if c.RemoteCoder.SessionTimeout == "" {
-		c.RemoteCoder.SessionTimeout = "30m"
+		c.RemoteCoder.SessionTimeout = "336h"
 		updated = true
 	}
 	if c.RemoteCoder.MessageRetentionDays == 0 {
-		c.RemoteCoder.MessageRetentionDays = 7
+		c.RemoteCoder.MessageRetentionDays = 14
 		updated = true
 	}
 	if c.RemoteCoder.RateLimitMax == 0 {

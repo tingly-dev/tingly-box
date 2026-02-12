@@ -3,11 +3,16 @@ package telegram
 import (
 	"context"
 	"fmt"
+	"net"
+	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/tingly-dev/tingly-box/imbot/internal/core"
+	"golang.org/x/net/proxy"
 )
 
 // Bot implements the Telegram bot
@@ -36,7 +41,36 @@ func NewTelegramBot(config *core.Config) (*Bot, error) {
 		return nil, core.NewAuthFailedError(config.Platform, "failed to get token", err)
 	}
 
-	api, err := tgbotapi.NewBotAPI(token)
+	apiEndpoint := config.GetOptionString("apiURL", tgbotapi.APIEndpoint)
+	proxyURL := config.GetOptionString("proxy", "")
+
+	client := &http.Client{}
+	if proxyURL != "" {
+		parsed, err := url.Parse(proxyURL)
+		if err != nil {
+			return nil, core.NewAuthFailedError(core.PlatformTelegram, "invalid proxy url", err)
+		}
+		switch strings.ToLower(parsed.Scheme) {
+		case "socks5", "socks5h":
+			dialer, err := proxy.FromURL(parsed, proxy.Direct)
+			if err != nil {
+				return nil, core.NewAuthFailedError(core.PlatformTelegram, "invalid socks5 proxy", err)
+			}
+			client.Transport = &http.Transport{
+				DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+					return dialer.Dial(network, addr)
+				},
+			}
+		case "http", "https":
+			client.Transport = &http.Transport{
+				Proxy: http.ProxyURL(parsed),
+			}
+		default:
+			return nil, core.NewAuthFailedError(core.PlatformTelegram, "unsupported proxy scheme", fmt.Errorf("%s", parsed.Scheme))
+		}
+	}
+
+	api, err := tgbotapi.NewBotAPIWithClient(token, apiEndpoint, client)
 	if err != nil {
 		return nil, core.NewAuthFailedError(core.PlatformTelegram, "failed to create telegram bot", err)
 	}

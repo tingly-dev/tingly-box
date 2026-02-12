@@ -57,11 +57,10 @@ const RemoteCoderPage: React.FC = () => {
     const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const [projectPath, setProjectPath] = useState('');
-    const [projectPathDialogOpen, setProjectPathDialogOpen] = useState(true);
+    const [projectPathDialogOpen, setProjectPathDialogOpen] = useState(false);
     const [expandedMessages, setExpandedMessages] = useState<Set<number>>(new Set());
     const [projectPathNewSession, setProjectPathNewSession] = useState<string>('');
     const [sessionsLoaded, setSessionsLoaded] = useState(false);
-
     const isSessionThinking = !!selectedSession?.id
         && selectedSession.status === 'running'
         && (chatHistory.length === 0 || chatHistory[chatHistory.length - 1].role === 'user');
@@ -71,11 +70,11 @@ const RemoteCoderPage: React.FC = () => {
         if (selectedSession?.id) {
             const stored = selectedSession.project_path || '';
             setProjectPath(stored);
-            setProjectPathDialogOpen(!stored.trim());
+            setProjectPathDialogOpen(false);
         } else {
             const stored = projectPathNewSession || '';
             setProjectPath(stored);
-            setProjectPathDialogOpen(!stored.trim());
+            setProjectPathDialogOpen(false);
         }
     }, [selectedSession?.id, selectedSession?.project_path, projectPathNewSession]);
 
@@ -137,6 +136,7 @@ const RemoteCoderPage: React.FC = () => {
     useEffect(() => {
         fetchSessions();
     }, []);
+
 
     useEffect(() => {
         if (!sessionsLoaded || selectedSession || !sessions.length) return;
@@ -249,7 +249,7 @@ const RemoteCoderPage: React.FC = () => {
         setExpandedMessages(new Set());
         const path = session.project_path || '';
         setProjectPath(path);
-        setProjectPathDialogOpen(!path.trim());
+        setProjectPathDialogOpen(false);
 
         loadSessionState(session.id);
 
@@ -291,7 +291,7 @@ const RemoteCoderPage: React.FC = () => {
             setProjectPathDialogOpen(false);
         } else {
             setProjectPath('');
-            setProjectPathDialogOpen(true);
+            setProjectPathDialogOpen(false);
         }
     };
 
@@ -506,14 +506,14 @@ const RemoteCoderPage: React.FC = () => {
                                 </Typography>
                             </Box>
                         ))}
-                            {isChatBusy && (
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <CircularProgress size={16} />
-                                    <Typography variant="body2" color="text.secondary">
-                                        Claude Code is thinking...
-                                    </Typography>
-                                </Box>
-                            )}
+                        {isChatBusy && (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <CircularProgress size={16} />
+                                <Typography variant="body2" color="text.secondary">
+                                    Claude Code is thinking...
+                                </Typography>
+                            </Box>
+                        )}
                         <div ref={messagesEndRef} />
                     </Box>
 
@@ -534,14 +534,14 @@ const RemoteCoderPage: React.FC = () => {
                             }}
                             size="small"
                         />
-                            <IconButton
-                                color="primary"
-                                onClick={handleSendMessage}
-                                disabled={!message.trim() || isChatBusy}
-                                sx={{ alignSelf: 'flex-end' }}
-                            >
-                                {isChatBusy ? <CircularProgress size={24} /> : <SendIcon />}
-                            </IconButton>
+                        <IconButton
+                            color="primary"
+                            onClick={handleSendMessage}
+                            disabled={!message.trim() || isChatBusy}
+                            sx={{ alignSelf: 'flex-end' }}
+                        >
+                            {isChatBusy ? <CircularProgress size={24} /> : <SendIcon />}
+                        </IconButton>
                     </Box>
                 </CardContent>
             </Card>

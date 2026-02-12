@@ -15,6 +15,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/api"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/audit"
+	"github.com/tingly-dev/tingly-box/internal/remote_coder/bot"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/config"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/launcher"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/middleware"
@@ -134,6 +135,14 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	remoteCCAPI.Use(config.AuthMiddleware(cfg))
 
 	remoteCCHandler := api.NewRemoteCCHandler(sessionMgr, claudeLauncher, summaryEngine, auditLogger, cfg)
+	botStore, err := bot.NewStore(cfg.DBPath)
+	if err != nil {
+		return fmt.Errorf("failed to initialize bot store: %w", err)
+	}
+	defer func() {
+		_ = botStore.Close()
+	}()
+	botSettingsHandler := api.NewBotSettingsHandler(botStore)
 	remoteCCAPI.GET("/sessions", remoteCCHandler.GetSessions)
 	remoteCCAPI.GET("/sessions/:id", remoteCCHandler.GetSession)
 	remoteCCAPI.GET("/sessions/:id/state", remoteCCHandler.GetSessionState)
@@ -141,6 +150,23 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	remoteCCAPI.GET("/sessions/:id/messages", remoteCCHandler.GetSessionMessages)
 	remoteCCAPI.POST("/chat", remoteCCHandler.Chat)
 	remoteCCAPI.POST("/sessions/clear", remoteCCHandler.ClearSessions)
+	remoteCCAPI.GET("/bot/settings", botSettingsHandler.GetSettings)
+	remoteCCAPI.PUT("/bot/settings", botSettingsHandler.UpdateSettings)
+
+	if settings, err := botStore.GetSettings(); err == nil {
+		if strings.TrimSpace(settings.Token) != "" {
+			go func() {
+				if err := bot.RunTelegramBot(ctx, botStore, sessionMgr); err != nil {
+					logrus.WithError(err).Warn("Remote-coder Telegram bot stopped")
+				}
+			}()
+			logrus.Info("Remote-coder Telegram bot started")
+		} else {
+			logrus.Info("Remote-coder Telegram bot not started: missing token")
+		}
+	} else {
+		logrus.WithError(err).Warn("Remote-coder Telegram bot not started: failed to load settings")
+	}
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),

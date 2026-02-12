@@ -21,6 +21,8 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/obs/otel"
+	remote_coder "github.com/tingly-dev/tingly-box/internal/remote_coder"
+	remoteconfig "github.com/tingly-dev/tingly-box/internal/remote_coder/config"
 	"github.com/tingly-dev/tingly-box/internal/server/background"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
@@ -795,6 +797,20 @@ func (s *Server) Start(port int) error {
 		} else {
 			log.Println("Configuration hot-reload enabled")
 		}
+	}
+
+	if s.config.GetScenarioFlag(typ.ScenarioGlobal, "enable_remote_coder") {
+		go func() {
+			rcCfg, err := remoteconfig.LoadFromAppConfig(s.config, remoteconfig.Options{})
+			if err != nil {
+				logrus.WithError(err).Warn("Remote-coder not started: invalid config")
+				return
+			}
+			if err := remote_coder.Run(ctx, rcCfg); err != nil {
+				logrus.WithError(err).Warn("Remote-coder stopped")
+			}
+		}()
+		logrus.Info("Remote-coder auto-start enabled")
 	}
 
 	// Determine scheme and handle HTTPS setup
