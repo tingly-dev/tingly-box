@@ -391,6 +391,17 @@ func (rm *RouteManager) generateAnonymousStructSchema(structType reflect.Type, c
 
 // generateSchemaFromModelWithCache generates schema using cached models to avoid duplication
 func (rm *RouteManager) generateSchemaFromModelWithCache(model interface{}, allModels map[string]interface{}) Schema {
+	// Get the actual type (handle pointers)
+	modelType := reflect.TypeOf(model)
+	if modelType.Kind() == reflect.Ptr {
+		modelType = modelType.Elem()
+	}
+
+	// If not a struct, use getSwaggerType (handles gin.H and other non-struct types)
+	if modelType.Kind() != reflect.Struct {
+		return rm.getSwaggerType(modelType)
+	}
+
 	// Otherwise, generate the schema normally
 	return rm.generateSchemaWithReferences(model)
 }
