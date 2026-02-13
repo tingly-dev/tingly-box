@@ -219,6 +219,12 @@ func useWebSystray(app *application.App, tinglyService *services.TinglyService) 
 		Hidden:           true, // Start hidden
 	})
 
+	// Prevent window from being destroyed on close - just hide it
+	WindowSlim.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
+		event.Cancel()
+		WindowSlim.Hide()
+	})
+
 	SystemTray.AttachWindow(WindowSlim)
 }
 
