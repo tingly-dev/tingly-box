@@ -157,10 +157,10 @@ func (s *Server) handleChatGPTBackendStreamingRequest(c *gin.Context, provider *
 	var usage protocol.UsageStat
 	if originalFormat == "v1" {
 		// Original request was v1 format, send response in v1 format
-		usage, streamErr = streamhandler.HandleResponsesToAnthropicV1StreamResponse(c, sseStream, responseModel)
+		usage, streamErr = streamhandler.HandleResponsesToAnthropicV1Stream(c, sseStream, responseModel)
 	} else {
 		// Original request was beta format, send response in beta format
-		usage, streamErr = streamhandler.HandleResponsesToAnthropicV1BetaStreamResponse(c, sseStream, responseModel)
+		usage, streamErr = streamhandler.HandleResponsesToAnthropicBetaStream(c, sseStream, responseModel)
 	}
 
 	if streamErr != nil {
