@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -18,6 +19,8 @@ var rootCmd = &cobra.Command{
 	Long: `Tingly Box is a provider-agnostic desktop AI model proxy and key manager.
 It provides a unified OpenAI-compatible endpoint that routes requests to multiple
 AI providers, with flexible configuration and secure credential management.`,
+	SilenceUsage:  true,
+	SilenceErrors: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Default to start command when no subcommand is provided
 		startCmd := command.StartCommand(appManager)
@@ -120,7 +123,27 @@ func init() {
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
+		// Only print usage for Cobra CLI errors (flag/argument errors), not runtime errors
+		if isCobraFlagError(err) {
+			rootCmd.PrintErrln(rootCmd.UsageString())
+		}
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+// isCobraFlagError checks if the error is a Cobra CLI parsing error
+func isCobraFlagError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	// Cobra flag/argument errors contain these patterns
+	return strings.Contains(errStr, "unknown flag") ||
+		strings.Contains(errStr, "unknown shorthand flag") ||
+		strings.Contains(errStr, "flag needs an argument") ||
+		strings.Contains(errStr, "bad flag syntax") ||
+		strings.Contains(errStr, "unknown command") ||
+		strings.Contains(errStr, "too many arguments") ||
+		strings.Contains(errStr, "required flag(s)")
 }

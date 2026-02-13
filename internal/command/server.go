@@ -164,12 +164,17 @@ func startServer(appManager *AppManager, opts options.StartServerOptions) error 
 		appConfig.SetServerPort(port)
 	}
 
+	// Check if port is available before proceeding
+	if !network.IsPortAvailable(port) {
+		return fmt.Errorf("port %d is already in use by another process", port)
+	}
+
 	// Create file lock
 	fileLock := lock.NewFileLock(appConfig.ConfigDir())
 
 	// Check if server is already running using file lock
 	if fileLock.IsLocked() {
-		fmt.Printf("Server is already running on port %d\n", port)
+		logrus.Printf("Server is already running on port %d\n", port)
 		printBanner(BannerConfig{
 			Port:         port,
 			Host:         opts.Host,

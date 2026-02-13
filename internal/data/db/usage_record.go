@@ -3,11 +3,11 @@ package db
 import (
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"sync"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -87,13 +87,13 @@ type UsageStore struct {
 
 // NewUsageStore creates or loads a usage store using SQLite database.
 func NewUsageStore(baseDir string) (*UsageStore, error) {
-	log.Printf("Initializing usage store in directory: %s", baseDir)
+	logrus.Printf("Initializing usage store in directory: %s", baseDir)
 	if err := os.MkdirAll(baseDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create usage store directory: %w", err)
 	}
 
 	dbPath := constant.GetDBFile(baseDir)
-	log.Printf("Opening SQLite database for usage store: %s", dbPath)
+	logrus.Printf("Opening SQLite database for usage store: %s", dbPath)
 	dsn := dbPath + "?_busy_timeout=5000&_journal_mode=WAL&_foreign_keys=1"
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
@@ -101,7 +101,7 @@ func NewUsageStore(baseDir string) (*UsageStore, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open usage database: %w", err)
 	}
-	log.Printf("SQLite database opened successfully for usage store")
+	logrus.Debugf("SQLite database opened successfully for usage store")
 
 	store := &UsageStore{
 		db:     db,
@@ -112,7 +112,7 @@ func NewUsageStore(baseDir string) (*UsageStore, error) {
 	if err := db.AutoMigrate(&UsageRecord{}, &UsageDailyRecord{}, &UsageMonthlyRecord{}); err != nil {
 		return nil, fmt.Errorf("failed to migrate usage database: %w", err)
 	}
-	log.Printf("Usage store initialization completed")
+	logrus.Debugf("Usage store initialization completed")
 
 	return store, nil
 }

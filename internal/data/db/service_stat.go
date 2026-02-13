@@ -3,12 +3,12 @@ package db
 import (
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -50,7 +50,7 @@ type StatsStore struct {
 
 // NewStatsStore creates or loads a stats store using SQLite database.
 func NewStatsStore(baseDir string) (*StatsStore, error) {
-	log.Printf("Initializing stats store in directory: %s", baseDir)
+	logrus.Debugf("Initializing stats store in directory: %s", baseDir)
 	if err := os.MkdirAll(baseDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create stats store directory: %w", err)
 	}
@@ -62,7 +62,7 @@ func NewStatsStore(baseDir string) (*StatsStore, error) {
 		return nil, fmt.Errorf("failed to create db directory: %w", err)
 	}
 
-	log.Printf("Opening SQLite database: %s", dbPath)
+	logrus.Debugf("Opening SQLite database: %s", dbPath)
 	// Configure SQLite with busy timeout and other settings to prevent hangs
 	// Use pure Go driver by ensuring modernc.org/sqlite is used
 	dsn := dbPath + "?_busy_timeout=5000&_journal_mode=WAL&_foreign_keys=1"
@@ -72,7 +72,7 @@ func NewStatsStore(baseDir string) (*StatsStore, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open stats database: %w", err)
 	}
-	log.Printf("SQLite database opened successfully")
+	logrus.Debugf("SQLite database opened successfully")
 
 	store := &StatsStore{
 		db:     db,
@@ -83,7 +83,7 @@ func NewStatsStore(baseDir string) (*StatsStore, error) {
 	if err := db.AutoMigrate(&ServiceStatsRecord{}); err != nil {
 		return nil, fmt.Errorf("failed to migrate stats database: %w", err)
 	}
-	log.Printf("Stats store initialization completed")
+	logrus.Debugf("Stats store initialization completed")
 
 	return store, nil
 }
