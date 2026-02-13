@@ -564,6 +564,13 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithResponseModel(DeleteRuleResponse{}),
 	)
 
+	apiV1.POST("/rule/import", s.ImportRule,
+		swagger.WithDescription("Import a rule from base64 encoded data"),
+		swagger.WithTags("rules"),
+		swagger.WithRequestModel(ImportRuleRequest{}),
+		swagger.WithResponseModel(ImportRuleResponse{}),
+	)
+
 	// Scenario Management
 	apiV1.GET("/scenarios", s.GetScenarios,
 		swagger.WithDescription("Get all scenario configurations"),

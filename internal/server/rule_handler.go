@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"github.com/tingly-dev/tingly-box/internal/dataimport"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -240,6 +241,71 @@ func (s *Server) DeleteRule(c *gin.Context) {
 	response := DeleteRuleResponse{
 		Success: true,
 		Message: "Rule deleted successfully",
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+// ImportRule imports a rule from base64 encoded data
+func (s *Server) ImportRule(c *gin.Context) {
+	cfg := s.config
+	if cfg == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Global config not available",
+		})
+		return
+	}
+
+	var req ImportRuleRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// Set default conflict handling
+	if req.OnProviderConflict == "" {
+		req.OnProviderConflict = "use"
+	}
+	if req.OnRuleConflict == "" {
+		req.OnRuleConflict = "new"
+	}
+
+	opts := dataimport.ImportOptions{
+		OnProviderConflict: req.OnProviderConflict,
+		OnRuleConflict:     req.OnRuleConflict,
+		Quiet:              true,
+	}
+
+	result, err := dataimport.Import(req.Data, cfg, dataimport.FormatAuto, opts)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Failed to import rule: " + err.Error(),
+		})
+		return
+	}
+
+	response := ImportRuleResponse{
+		Success: true,
+		Message: "Rule imported successfully",
+	}
+	response.Data.RuleCreated = result.RuleCreated
+	response.Data.RuleUpdated = result.RuleUpdated
+	response.Data.ProvidersCreated = result.ProvidersCreated
+	response.Data.ProvidersUsed = result.ProvidersUsed
+
+	// Log the action
+	if s.logger != nil {
+		s.logger.LogAction(obs.ActionUpdateProvider, map[string]interface{}{
+			"rule_created":      result.RuleCreated,
+			"rule_updated":      result.RuleUpdated,
+			"providers_created": result.ProvidersCreated,
+		}, true, fmt.Sprintf("Rule import completed: created=%v, updated=%v, providers=%d",
+			result.RuleCreated, result.RuleUpdated, result.ProvidersCreated))
 	}
 
 	c.JSON(http.StatusOK, response)

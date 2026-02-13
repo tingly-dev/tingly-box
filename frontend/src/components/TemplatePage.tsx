@@ -1,8 +1,9 @@
 import React, { useCallback, useState, useEffect } from 'react';
-import { Box, Fab } from '@mui/material';
+import { Box, Fab, Snackbar, Alert } from '@mui/material';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import { useNavigate } from 'react-router-dom';
 import ApiKeyModal from '@/components/ApiKeyModal';
+import ImportModal from '@/components/ImportModal';
 import RuleCard from './RuleCard.tsx';
 import UnifiedCard from '@/components/UnifiedCard';
 import { TemplatePageActions } from './TemplatePageActions';
@@ -11,6 +12,7 @@ import { SCROLLBOX_SX } from './TemplatePage.constants';
 import { useTemplatePageRules } from './hooks/useTemplatePageRules';
 import { useScrollToNewRule } from './hooks/useScrollToNewRule';
 import { useModelSelectDialog } from '../hooks/useModelSelectDialog';
+import api from '@/services/api';
 
 const TemplatePage: React.FC<TabTemplatePageProps> = ({
     rules,
@@ -37,6 +39,9 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
     const [allExpanded, setAllExpanded] = useState<boolean>(true);
     const [expandedStates, setExpandedStates] = useState<Record<string, boolean>>({});
     const [showScrollTop, setShowScrollTop] = useState<boolean>(false);
+    const [showImportModal, setShowImportModal] = useState<boolean>(false);
+    const [importing, setImporting] = useState<boolean>(false);
+    const [importError, setImportError] = useState<{ open: boolean; message: string }>({ open: false, message: '' });
 
     // Custom hooks
     const {
@@ -184,6 +189,43 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
         }
     }, []);
 
+    // Import from clipboard handler
+    const handleImportFromClipboard = useCallback(() => {
+        setShowImportModal(true);
+    }, []);
+
+    // Handle import data (from modal)
+    const handleImportData = useCallback(async (data: string) => {
+        setImporting(true);
+        try {
+            const result = await api.importRule(data);
+            if (result.success) {
+                showNotification(
+                    `Rule imported successfully! ${result.data.rule_created ? 'Created.' : 'Updated.'}`,
+                    'success'
+                );
+                setShowImportModal(false);
+                // Refresh rules by calling parent's onRulesChange
+                // Only refresh if scenario is available (required by backend API)
+                if (onRulesChange && scenario) {
+                    const updatedRules = await api.getRules(scenario);
+                    if (updatedRules.success) {
+                        onRulesChange(updatedRules.data);
+                    }
+                } else if (onRulesChange) {
+                    // If no scenario, trigger parent to refresh by calling without data
+                    onRulesChange([] as any);
+                }
+            } else {
+                setImportError({ open: true, message: result.error || 'Import failed' });
+            }
+        } catch (err) {
+            setImportError({ open: true, message: (err as Error).message || 'Import failed' });
+        } finally {
+            setImporting(false);
+        }
+    }, [showNotification, scenario, onRulesChange]);
+
     // Generate unified rightAction if not provided
     const rightAction = customRightAction ?? (
         <TemplatePageActions
@@ -195,6 +237,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
             showCreateRuleButton={showCreateRuleButton}
             onCreateRule={handleCreateRule}
             showExpandCollapseButton={showExpandCollapseButton}
+            onImportFromClipboard={handleImportFromClipboard}
         />
     );
 
@@ -265,6 +308,13 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
                 }}
             />
 
+            <ImportModal
+                open={showImportModal}
+                onClose={() => setShowImportModal(false)}
+                onImport={handleImportData}
+                loading={importing}
+            />
+
             {showScrollTop && (
                 <Fab
                     color="primary"
@@ -280,6 +330,16 @@ const TemplatePage: React.FC<TabTemplatePageProps> = ({
                     <KeyboardArrowUpIcon />
                 </Fab>
             )}
+            <Snackbar
+                open={importError.open}
+                autoHideDuration={6000}
+                onClose={() => setImportError({ open: false, message: '' })}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+            >
+                <Alert severity="error" onClose={() => setImportError({ open: false, message: '' })}>
+                    {importError.message}
+                </Alert>
+            </Snackbar>
         </>
     );
 };

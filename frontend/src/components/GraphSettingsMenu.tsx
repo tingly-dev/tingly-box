@@ -1,6 +1,7 @@
-import { Block as InactiveIcon, CheckCircle as ActiveIcon, Delete as DeleteIcon, Download as ExportIcon, PlayArrow as ProbeIcon, Settings as SettingsIcon, SmartDisplay as SmartIcon } from '@mui/icons-material';
+import { Block as InactiveIcon, CheckCircle as ActiveIcon, ContentCopy as CopyIcon, Delete as DeleteIcon, Download as DownloadIcon, Download as ExportIcon, PlayArrow as ProbeIcon, Settings as SettingsIcon, SmartDisplay as SmartIcon, UnfoldMore as ExportMenuIcon, Upload as ImportIcon } from '@mui/icons-material';
 import { IconButton, Menu, MenuItem, Tooltip } from '@mui/material';
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
+import type { ExportFormat } from '@/components/rule-card/utils';
 
 export interface GraphSettingsMenuProps {
     // Common props
@@ -15,7 +16,8 @@ export interface GraphSettingsMenuProps {
     // Callbacks
     onToggleSmartRouting: () => void;
     onProbe: () => void;
-    onExport: () => void;
+    onExport: (format: ExportFormat) => void;
+    onExportAsBase64ToClipboard?: () => void;
     onDelete: () => void;
     onToggleActive: () => void;
 }
@@ -31,11 +33,14 @@ export const GraphSettingsMenu: React.FC<GraphSettingsMenuProps> = ({
     onToggleSmartRouting,
     onProbe,
     onExport,
+    onExportAsBase64ToClipboard,
     onDelete,
     onToggleActive,
 }) => {
-    const [menuAnchorEl, setMenuAnchorEl] = React.useState<null | HTMLElement>(null);
+    const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
+    const [exportMenuAnchorEl, setExportMenuAnchorEl] = useState<null | HTMLElement>(null);
     const menuOpen = Boolean(menuAnchorEl);
+    const exportMenuOpen = Boolean(exportMenuAnchorEl);
 
     const handleMenuOpen = useCallback((event: React.MouseEvent<HTMLElement>) => {
         setMenuAnchorEl(event.currentTarget);
@@ -43,6 +48,14 @@ export const GraphSettingsMenu: React.FC<GraphSettingsMenuProps> = ({
 
     const handleMenuClose = useCallback(() => {
         setMenuAnchorEl(null);
+    }, []);
+
+    const handleExportMenuOpen = useCallback((event: React.MouseEvent<HTMLElement>) => {
+        setExportMenuAnchorEl(event.currentTarget);
+    }, []);
+
+    const handleExportMenuClose = useCallback(() => {
+        setExportMenuAnchorEl(null);
     }, []);
 
     const handleToggleSmartRouting = useCallback(() => {
@@ -55,10 +68,20 @@ export const GraphSettingsMenu: React.FC<GraphSettingsMenuProps> = ({
         onProbe();
     }, [onProbe]);
 
-    const handleExport = useCallback(() => {
+    const handleExportAsJsonl = useCallback(() => {
         handleMenuClose();
-        onExport();
+        onExport('jsonl');
     }, [onExport]);
+
+    const handleExportAsBase64File = useCallback(() => {
+        handleMenuClose();
+        onExport('base64');
+    }, [onExport]);
+
+    const handleExportAsBase64ToClipboard = useCallback(() => {
+        handleMenuClose();
+        onExportAsBase64ToClipboard?.();
+    }, [onExportAsBase64ToClipboard]);
 
     const handleDelete = useCallback(() => {
         handleMenuClose();
@@ -108,10 +131,11 @@ export const GraphSettingsMenu: React.FC<GraphSettingsMenuProps> = ({
                     Test Connection
                 </MenuItem>
 
-                {/* Export with API Keys */}
-                <MenuItem onClick={handleExport}>
+                {/* Export Submenu */}
+                <MenuItem onClick={handleExportMenuOpen}>
                     <ExportIcon fontSize="small" sx={{ mr: 1 }} />
-                    Export with API Keys
+                    Export
+                    <ExportMenuIcon fontSize="small" sx={{ ml: 1, fontSize: '1rem' }} />
                 </MenuItem>
 
                 {/* Toggle Active/Inactive */}
@@ -150,6 +174,36 @@ export const GraphSettingsMenu: React.FC<GraphSettingsMenuProps> = ({
                 <MenuItem onClick={handleToggleSmartRouting}>
                     <SmartIcon fontSize="small" sx={{ mr: 1 }} />
                     {smartEnabled ? 'Convert To Direct Routing' : 'Convert To Smart Routing'}
+                </MenuItem>
+            </Menu>
+
+            {/* Export Submenu */}
+            <Menu
+                anchorEl={exportMenuAnchorEl}
+                open={exportMenuOpen}
+                onClose={handleExportMenuClose}
+                anchorOrigin={{
+                    vertical: 'bottom',
+                    horizontal: 'right',
+                }}
+                transformOrigin={{
+                    vertical: 'top',
+                    horizontal: 'left',
+                }}
+            >
+                {onExportAsBase64ToClipboard && (
+                    <MenuItem onClick={handleExportAsBase64ToClipboard}>
+                        <CopyIcon fontSize="small" sx={{ mr: 1 }} />
+                        Copy Base64 to Clipboard
+                    </MenuItem>
+                )}
+                <MenuItem onClick={handleExportAsJsonl}>
+                    <DownloadIcon fontSize="small" sx={{ mr: 1 }} />
+                    Download as JSONL
+                </MenuItem>
+                <MenuItem onClick={handleExportAsBase64File}>
+                    <DownloadIcon fontSize="small" sx={{ mr: 1 }} />
+                    Download as Base64
                 </MenuItem>
             </Menu>
         </>
