@@ -429,6 +429,9 @@ func mapOpenAIFinishReasonToAnthropic(finishReason string) string {
 
 // extractString extracts string value from interface{}, handling different types
 func extractString(v interface{}) string {
+	if v == nil {
+		return ""
+	}
 	switch tv := v.(type) {
 	case string:
 		return tv

@@ -159,6 +159,7 @@ func HandleOpenAIToAnthropicV1BetaStreamResponse(c *gin.Context, req *openai.Cha
 					if state.thinkingBlockIndex == -1 {
 						state.thinkingBlockIndex = state.nextBlockIndex
 						state.nextBlockIndex++
+						logrus.Debugf("[Thinking] Initializing thinking block at index %d", state.thinkingBlockIndex)
 						sendBetaContentBlockStart(c, state.thinkingBlockIndex, blockTypeThinking, map[string]interface{}{
 							"thinking": "",
 						}, flusher)
@@ -167,6 +168,8 @@ func HandleOpenAIToAnthropicV1BetaStreamResponse(c *gin.Context, req *openai.Cha
 					// Extract thinking content (handle different types)
 					thinkingText := extractString(v)
 					if thinkingText != "" {
+						preview := thinkingText
+						logrus.Debugf("[Thinking] Sending thinking_delta: len=%d, preview=%q", len(thinkingText), preview)
 						// Send content_block_delta with thinking_delta
 						sendBetaContentBlockDelta(c, state.thinkingBlockIndex, map[string]interface{}{
 							"type":     deltaTypeThinkingDelta,
@@ -526,14 +529,18 @@ func HandleResponsesToAnthropicStreamResponse(c *gin.Context, stream *openaistre
 			if state.thinkingBlockIndex == -1 {
 				state.thinkingBlockIndex = state.nextBlockIndex
 				state.nextBlockIndex++
+				logrus.Debugf("[Thinking][ResponsesAPI] Initializing thinking block at index %d", state.thinkingBlockIndex)
 				senders.SendContentBlockStart(state.thinkingBlockIndex, blockTypeThinking, map[string]interface{}{"thinking": ""}, flusher)
 			}
+			preview := reasoningDelta.Delta
+			logrus.Debugf("[Thinking][ResponsesAPI] Sending thinking_delta: len=%d, preview=%q", len(reasoningDelta.Delta), preview)
 			senders.SendContentBlockDelta(state.thinkingBlockIndex, map[string]interface{}{
 				"type":     deltaTypeThinkingDelta,
 				"thinking": reasoningDelta.Delta,
 			}, flusher)
 
 		case "response.reasoning_text.done":
+			logrus.Debugf("[Thinking][ResponsesAPI] Thinking block done at index %d", state.thinkingBlockIndex)
 			if state.thinkingBlockIndex != -1 {
 				senders.SendContentBlockStop(state, state.thinkingBlockIndex, flusher)
 				state.thinkingBlockIndex = -1
