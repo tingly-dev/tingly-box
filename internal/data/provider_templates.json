@@ -203,6 +203,7 @@
         "MiniMax-M2"
       ],
       "model_limits": {
+        "MiniMax-M2.5": 8192,
         "MiniMax-M2.1": 8192,
         "MiniMax-M2.1-lightning": 8192,
         "MiniMax-M2": 8192
@@ -229,6 +230,7 @@
         "MiniMax-M2"
       ],
       "model_limits": {
+        "MiniMax-M2.5": 8192,
         "MiniMax-M2.1": 8192,
         "MiniMax-M2.1-lightning": 8192,
         "MiniMax-M2": 8192
