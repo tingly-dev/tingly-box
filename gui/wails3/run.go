@@ -137,54 +137,42 @@ func useWebSystray(app *application.App, tinglyService *services.TinglyService) 
 	// Create the SystemTray menu
 	menu := app.Menu.New()
 
-	// Dashboard menu item
+	// Dashboard menu item - show window and navigate to dashboard
 	_ = menu.
 		Add("Dashboard").
 		OnClick(func(ctx *application.Context) {
-			url := fmt.Sprintf("http://localhost:%d/?token=%s",
-				tinglyService.GetPort(),
-				tinglyService.GetUserAuthToken())
-			if err := openBrowser(url); err != nil {
-				log.Printf("Failed to open browser: %v\n", err)
-			}
+			WindowSlim.Show()
+			WindowSlim.Focus()
+			WindowSlim.EmitEvent("systray-navigate", "/")
 		})
 
 	menu.AddSeparator()
 
-	// OpenAI menu item
+	// OpenAI menu item - show window and navigate to OpenAI page
 	_ = menu.
 		Add("OpenAI").
 		OnClick(func(ctx *application.Context) {
-			url := fmt.Sprintf("http://localhost:%d/use-openai?token=%s",
-				tinglyService.GetPort(),
-				tinglyService.GetUserAuthToken())
-			if err := openBrowser(url); err != nil {
-				log.Printf("Failed to open browser: %v\n", err)
-			}
+			WindowSlim.Show()
+			WindowSlim.Focus()
+			WindowSlim.EmitEvent("systray-navigate", "/use-openai")
 		})
 
-	// Anthropic menu item
+	// Anthropic menu item - show window and navigate to Anthropic page
 	_ = menu.
 		Add("Anthropic").
 		OnClick(func(ctx *application.Context) {
-			url := fmt.Sprintf("http://localhost:%d/use-anthropic?token=%s",
-				tinglyService.GetPort(),
-				tinglyService.GetUserAuthToken())
-			if err := openBrowser(url); err != nil {
-				log.Printf("Failed to open browser: %v\n", err)
-			}
+			WindowSlim.Show()
+			WindowSlim.Focus()
+			WindowSlim.EmitEvent("systray-navigate", "/use-anthropic")
 		})
 
-	// Claude Code menu item
+	// Claude Code menu item - show window and navigate to Claude Code page
 	_ = menu.
 		Add("Claude Code").
 		OnClick(func(ctx *application.Context) {
-			url := fmt.Sprintf("http://localhost:%d/use-claude-code?token=%s",
-				tinglyService.GetPort(),
-				tinglyService.GetUserAuthToken())
-			if err := openBrowser(url); err != nil {
-				log.Printf("Failed to open browser: %v\n", err)
-			}
+			WindowSlim.Show()
+			WindowSlim.Focus()
+			WindowSlim.EmitEvent("systray-navigate", "/use-claude-code")
 		})
 
 	menu.AddSeparator()
@@ -218,6 +206,9 @@ func useWebSystray(app *application.App, tinglyService *services.TinglyService) 
 		URL:              fmt.Sprintf("/?token=%s", tinglyService.GetUserAuthToken()),
 		Hidden:           true, // Start hidden
 	})
+
+	// Maximize window to avoid UI confusion
+	WindowSlim.Maximise()
 
 	// Prevent window from being destroyed on close - just hide it
 	WindowSlim.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
