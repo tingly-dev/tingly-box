@@ -3,6 +3,10 @@ package virtualmodel
 import (
 	"fmt"
 	"sync"
+
+	"github.com/tingly-dev/tingly-box/internal/compact"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/smart_compact"
 )
 
 // Registry manages virtual models
@@ -83,6 +87,7 @@ func (r *Registry) Clear() {
 // RegisterDefaults registers default virtual models
 func (r *Registry) RegisterDefaults() {
 	defaultModels := []*VirtualModelConfig{
+		// Mock models for testing
 		{
 			ID:          "virtual-gpt-4",
 			Name:        "Virtual GPT-4",
@@ -113,4 +118,51 @@ func (r *Registry) RegisterDefaults() {
 			continue
 		}
 	}
+
+	// Register compact proxy models
+	r.registerCompactModels()
+}
+
+// registerCompactModels registers compact compression virtual models
+func (r *Registry) registerCompactModels() {
+	compactModels := []*VirtualModelConfig{
+		{
+			ID:            "compact-thinking",
+			Name:          "Compact Thinking",
+			Description:   "Removes thinking blocks from historical conversation rounds (10-20% compression)",
+			IsProxy:       true,
+			DelegateModel: "", // User should specify the real model
+			Transformer:   newSmartCompactTransformer(),
+		},
+		{
+			ID:            "compact-round-only",
+			Name:          "Compact Round Only",
+			Description:   "Keeps only user request + assistant conclusion, removes intermediate process (70-85% compression)",
+			IsProxy:       true,
+			DelegateModel: "",
+			Transformer:   compact.NewRoundOnlyTransformer(),
+		},
+		{
+			ID:            "compact-round-files",
+			Name:          "Compact Round Files",
+			Description:   "Keeps user/assistant + virtual file tools (75-88% compression)",
+			IsProxy:       true,
+			DelegateModel: "",
+			Transformer:   compact.NewRoundFilesTransformer(),
+		},
+	}
+
+	for _, cfg := range compactModels {
+		vm := NewVirtualModel(cfg)
+		if err := r.Register(vm); err != nil {
+			// Log but continue
+			continue
+		}
+	}
+}
+
+// newSmartCompactTransformer creates a smart_compact transformer with default settings
+func newSmartCompactTransformer() protocol.Transformer {
+	// Create smart_compact transformer with keepLastNRounds=2
+	return smart_compact.NewCompactTransformer(2)
 }

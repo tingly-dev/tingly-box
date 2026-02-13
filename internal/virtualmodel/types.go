@@ -1,6 +1,10 @@
 package virtualmodel
 
-import "time"
+import (
+	"time"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+)
 
 // Model represents a virtual model in the models list (OpenAI-compatible format)
 type Model struct {
@@ -20,6 +24,11 @@ type VirtualModelConfig struct {
 	FinishReason string
 	Delay        time.Duration
 	StreamChunks []string // For streaming: chunks to send
+
+	// Proxy mode fields
+	IsProxy      bool                // Is this a proxy virtual model?
+	DelegateModel string              // Real model to delegate to (e.g., "claude-3-5-sonnet-20241022")
+	Transformer  protocol.Transformer // Optional transformer for proxy mode
 }
 
 // VirtualModel represents a registered virtual model
@@ -68,6 +77,21 @@ func (vm *VirtualModel) GetStreamChunks() []string {
 		return splitIntoChunks(vm.config.Content)
 	}
 	return vm.config.StreamChunks
+}
+
+// IsProxy returns whether this is a proxy virtual model
+func (vm *VirtualModel) IsProxy() bool {
+	return vm.config.IsProxy
+}
+
+// GetDelegateModel returns the delegate model for proxy mode
+func (vm *VirtualModel) GetDelegateModel() string {
+	return vm.config.DelegateModel
+}
+
+// GetTransformer returns the transformer for proxy mode
+func (vm *VirtualModel) GetTransformer() protocol.Transformer {
+	return vm.config.Transformer
 }
 
 // ToModel converts to Model type for API response
