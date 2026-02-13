@@ -1,11 +1,26 @@
 package stream
 
 import (
+	"encoding/json"
 	"net/http"
 	"sort"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 )
+
+// sendAnthropicStreamEvent helper function to send an event in Anthropic SSE format
+func sendAnthropicStreamEvent(c *gin.Context, eventType string, eventData map[string]interface{}, flusher http.Flusher) {
+	eventJSON, err := json.Marshal(eventData)
+	if err != nil {
+		logrus.Errorf("Failed to marshal Anthropic stream event: %v", err)
+		return
+	}
+
+	// Anthropic SSE format: event: <type>\ndata: <json>\n\n
+	c.SSEvent(eventType, string(eventJSON))
+	flusher.Flush()
+}
 
 // sendStopEvents sends content_block_stop events for all active blocks in index order
 func sendStopEvents(c *gin.Context, state *streamState, flusher http.Flusher) {

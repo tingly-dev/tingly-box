@@ -244,7 +244,7 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 				}
 
 				// Handle the streaming response
-				usage, err := stream.HandleOpenAIToAnthropicV1BetaStreamResponse(c, openaiReq, streamResp, proxyModel)
+				usage, err := stream.HandleOpenAIToAnthropicBetaStream(c, openaiReq, streamResp, proxyModel)
 				if err != nil {
 					s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, err)
 					stream.SendInternalError(c, err.Error())
@@ -405,7 +405,7 @@ func (s *Server) handleAnthropicV1BetaViaResponsesAPIStreaming(c *gin.Context, r
 
 	// Handle the streaming response
 	// Use the dedicated stream handler to convert Responses API to Anthropic beta format
-	usage, err := stream.HandleResponsesToAnthropicV1BetaStreamResponse(c, streamResp, proxyModel)
+	usage, err := stream.HandleResponsesToAnthropicBetaStream(c, streamResp, proxyModel)
 
 	// Track usage from stream handler
 	if err != nil {

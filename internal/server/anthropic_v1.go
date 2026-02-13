@@ -430,7 +430,7 @@ func (s *Server) handleAnthropicV1ViaResponsesAPIStreaming(c *gin.Context, req p
 
 	// Handle the streaming response
 	// Use the dedicated stream handler to convert Responses API to Anthropic v1 format
-	usage, err := stream.HandleResponsesToAnthropicV1StreamResponse(c, streamResp, proxyModel)
+	usage, err := stream.HandleResponsesToAnthropicV1Stream(c, streamResp, proxyModel)
 
 	// Track usage from stream handler
 	if err != nil {
