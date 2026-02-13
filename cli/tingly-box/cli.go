@@ -114,6 +114,7 @@ func init() {
 	rootCmd.AddCommand(command.ListCommand(appManager))
 	rootCmd.AddCommand(command.DeleteCommand(appManager))
 	rootCmd.AddCommand(command.ImportCommand(appManager))
+	rootCmd.AddCommand(command.OAuthCommand(appManager).(*cobra.Command))
 	rootCmd.AddCommand(command.StartCommand(appManager))
 	rootCmd.AddCommand(command.StopCommand(appManager))
 	rootCmd.AddCommand(command.RestartCommand(appManager))
