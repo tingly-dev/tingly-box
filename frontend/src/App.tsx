@@ -8,6 +8,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { VersionProvider, useVersion } from './contexts/VersionContext';
 import { HealthProvider, useHealth } from './contexts/HealthContext';
 import { FeatureFlagsProvider } from './contexts/FeatureFlagsContext';
+import { EnterpriseAuthProvider } from './contexts/EnterpriseAuthContext';
 import Layout from './layout/Layout';
 import theme from './theme';
 import { CloudUpload, Refresh, Error as ErrorIcon, AppRegistration as NPM, GitHub, ContentCopy, UpgradeOutlined, CheckCircle } from '@mui/icons-material';
@@ -35,6 +36,10 @@ const CommandPage = lazy(() => import('./pages/prompt/CommandPage'));
 // Remote Coder page
 const RemoteCoderPage = lazy(() => import('./pages/remote-coder/RemoteCoderPage'));
 const RemoteCoderSessionsPage = lazy(() => import('./pages/remote-coder/RemoteCoderSessionsPage'));
+
+// Enterprise pages
+const EnterpriseLoginPage = lazy(() => import('./pages/enterprise/LoginPage'));
+const EnterpriseAdminPage = lazy(() => import('./pages/enterprise/AdminPage'));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -301,6 +306,19 @@ function AppContent() {
                         </ProtectedRoute>
                     }
                 />
+                {/* Enterprise routes */}
+                <Route path="/enterprise/login" element={
+                    <Suspense fallback={<PageLoader/>}>
+                        <EnterpriseLoginPage/>
+                    </Suspense>
+                }/>
+                <Route path="/enterprise/admin" element={
+                    <EnterpriseAuthProvider enabled={true}>
+                        <Suspense fallback={<PageLoader/>}>
+                            <EnterpriseAdminPage/>
+                        </Suspense>
+                    </EnterpriseAuthProvider>
+                }/>
             </Routes>
         </Suspense>
     )
