@@ -19,5 +19,8 @@ for managing the AI model proxy server. Supports both full GUI mode
 	rootCmd.AddCommand(GUICommand(appManager, launcher))
 	rootCmd.AddCommand(SlimCommand(appManager, launcher))
 	rootCmd.AddCommand(TrayCommand(appManager, launcher))
+	rootCmd.AddCommand(command.RestartCommand(appManager))
+	rootCmd.AddCommand(command.StartCommand(appManager))
+	rootCmd.AddCommand(command.StopCommand(appManager))
 	return rootCmd
 }
