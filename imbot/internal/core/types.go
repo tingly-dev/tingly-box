@@ -15,6 +15,7 @@ const (
 	PlatformBlueBubbles Platform = "bluebubbles"
 	PlatformFeishu      Platform = "feishu"
 	PlatformWebChat     Platform = "webchat"
+	PlatformDingTalk    Platform = "dingtalk"
 )
 
 // ChatType represents the type of chat
@@ -212,6 +213,13 @@ func GetPlatformCapabilities(platform Platform) *PlatformCapabilities {
 			Features:   []string{"reactions", "edit", "delete", "threads", "polls"},
 			TextLimit:  4096,
 			RateLimit:  60,
+		},
+		PlatformDingTalk: {
+			ChatTypes:  []ChatType{ChatTypeDirect, ChatTypeGroup},
+			MediaTypes: []string{"image", "video", "audio", "document"},
+			Features:   []string{"reactions", "delete", "threads"},
+			TextLimit:  4000,
+			RateLimit:  50,
 		},
 	}
 

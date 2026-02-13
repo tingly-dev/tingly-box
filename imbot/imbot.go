@@ -63,6 +63,7 @@ const (
 	PlatformBlueBubbles = core.PlatformBlueBubbles
 	PlatformFeishu      = core.PlatformFeishu
 	PlatformWebChat     = core.PlatformWebChat
+	PlatformDingTalk    = core.PlatformDingTalk
 
 	// Chat types
 	ChatTypeDirect  = core.ChatTypeDirect
