@@ -108,7 +108,7 @@ func useSlimSystray(app *application.App, tinglyService *services.TinglyService)
 		})
 
 	// Create SystemTray
-	SystemTray := app.SystemTray.New().
+	SystemTray = app.SystemTray.New().
 		SetMenu(menu).
 		OnRightClick(func() {
 			SystemTray.OpenMenu()
