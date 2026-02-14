@@ -1,0 +1,43 @@
+version: "v1"
+strategy: "most_severe"
+error_strategy: "review"
+rules:
+  - id: "dangerous-command"
+    name: "Block Dangerous Command"
+    type: "text_match"
+    enabled: true
+    scope:
+      scenarios: ["openai", "anthropic"]
+      directions: ["request"]
+      content_types: ["command"]
+    params:
+      patterns: ["rm -rf", "format c:"]
+      targets: ["command"]
+      verdict: "block"
+      reason: "dangerous command request"
+
+  - id: "risky-text"
+    name: "Review Risky Text"
+    type: "text_match"
+    enabled: true
+    scope:
+      directions: ["response"]
+      content_types: ["text", "messages"]
+    params:
+      patterns: ["exploit", "malware", "credential" ]
+      targets: ["text", "messages"]
+      verdict: "review"
+      reason: "risky content in response"
+
+  - id: "model-judge"
+    name: "Model Judge"
+    type: "model_judge"
+    enabled: true
+    scope:
+      directions: ["response"]
+      content_types: ["text"]
+    params:
+      model: "mini-judge"
+      targets: ["text"]
+      verdict_on_error: "review"
+      verdict_on_refuse: "review"
