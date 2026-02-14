@@ -159,6 +159,7 @@ npx tingly-box@latest
 ## Documentation
 
 **[User Manual](./docs/user-manual.md)** – Installation, configuration, and operational guide
+**[Guardrails](./docs/guardrails.md)** – Content-aware filtering and rule configuration
 
 
 ## **Philosophy**
