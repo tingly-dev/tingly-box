@@ -21,11 +21,15 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/obs/otel"
+	remote_coder "github.com/tingly-dev/tingly-box/internal/remote_coder"
+	remoteconfig "github.com/tingly-dev/tingly-box/internal/remote_coder/config"
 	"github.com/tingly-dev/tingly-box/internal/server/background"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
 	servertls "github.com/tingly-dev/tingly-box/internal/server/tls"
+	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/virtualmodel"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
 	"github.com/tingly-dev/tingly-box/pkg/network"
 	oauth2 "github.com/tingly-dev/tingly-box/pkg/oauth"
@@ -76,6 +80,9 @@ type Server struct {
 	// capability store for persistent model capabilities
 	capabilityStore *db.ModelCapabilityStore
 
+	// tool interceptor for local tool execution
+	toolInterceptor *toolinterceptor.Interceptor
+
 	// recording sinks
 	recordSink *obs.Sink
 
@@ -86,6 +93,9 @@ type Server struct {
 	// OTel meter setup for unified token tracking
 	meterSetup   *otel.MeterSetup
 	tokenTracker *otel.TokenTracker
+
+	// virtual model service for testing
+	virtualModelService *virtualmodel.Service
 
 	// options
 	enableUI      bool
@@ -395,6 +405,9 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Set template manager in config for model fetching fallback
 	server.config.SetTemplateManager(templateManager)
 
+	// Initialize tool interceptor (local web_search/web_fetch)
+	server.toolInterceptor = toolinterceptor.NewInterceptor(cfg.GetToolInterceptorConfig())
+
 	// Initialize skill manager for skill locations
 	skillManager, err := data.NewSkillManager(cfg.ConfigDir)
 	if err != nil {
@@ -434,6 +447,10 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 		server.tokenTracker = meterSetup.Tracker()
 		logrus.Debugf("OTel meter setup initialized")
 	}
+
+	// Initialize virtual model service
+	server.virtualModelService = virtualmodel.NewService()
+	logrus.Debugf("Virtual model service initialized with default models")
 
 	// Setup middleware
 	server.setupMiddleware()
@@ -637,6 +654,9 @@ func (s *Server) setupRoutes() {
 	s.UseAIEndpoints()
 
 	s.UseLoadBalanceEndpoints()
+
+	// Virtual model endpoints for testing
+	s.UseVirtualModelEndpoints()
 }
 
 func (s *Server) UseAIEndpoints() {
@@ -664,12 +684,14 @@ func (s *Server) UseAIEndpoints() {
 	passthroughOpenaiV1 := s.engine.Group("/passthrough/openai/v1")
 	s.SetupPassthroughOpenAIEndpoints(passthroughOpenaiV1)
 
-	// scenario
+	// scenario routes with middleware to inject scenario into context
 	scenario := s.engine.Group("/tingly/:scenario")
+	scenario.Use(contextMiddleware)
 	s.SetupMixinEndpoints(scenario)
 
-	// scenario
+	// scenario v1 routes with middleware
 	scenarioV1 := s.engine.Group("/tingly/:scenario/v1")
+	scenarioV1.Use(contextMiddleware)
 	s.SetupMixinEndpoints(scenarioV1)
 }
 
@@ -722,6 +744,15 @@ func (s *Server) SetupPassthroughOpenAIEndpoints(group *gin.RouterGroup) {
 	group.GET("/models", s.authMW.ModelAuthMiddleware(), s.OpenAIListModels)
 }
 
+// contextMiddleware is a middleware that extracts the scenario parameter from the URL path
+// and injects it into the request context for use by downstream components (e.g., RecordRoundTripper).
+func contextMiddleware(c *gin.Context) {
+	scenario := c.Param("scenario")
+	ctx := context.WithValue(c.Request.Context(), client.ScenarioContextKey, scenario)
+	c.Request = c.Request.WithContext(ctx)
+	c.Next()
+}
+
 // SetupPassthroughAnthropicEndpoints sets up pass-through endpoints for Anthropic-style requests
 // These endpoints bypass request/response transformations and only replace the model name
 func (s *Server) SetupPassthroughAnthropicEndpoints(group *gin.RouterGroup) {
@@ -730,6 +761,13 @@ func (s *Server) SetupPassthroughAnthropicEndpoints(group *gin.RouterGroup) {
 	group.POST("/messages/count_tokens", s.authMW.ModelAuthMiddleware(), s.PassthroughAnthropic)
 	// Models endpoint returns tingly-box's model list (not passthrough)
 	group.GET("/models", s.authMW.ModelAuthMiddleware(), s.AnthropicListModels)
+}
+
+// UseVirtualModelEndpoints sets up virtual model endpoints for testing
+func (s *Server) UseVirtualModelEndpoints() {
+	virtual := s.engine.Group("/virtual/v1")
+	virtual.GET("/models", s.authMW.VirtualModelAuthMiddleware(), s.virtualModelService.GetHandler().ListModels)
+	virtual.POST("/chat/completions", s.authMW.VirtualModelAuthMiddleware(), s.virtualModelService.GetHandler().ChatCompletions)
 }
 
 func (s *Server) UseLoadBalanceEndpoints() {
@@ -759,6 +797,20 @@ func (s *Server) Start(port int) error {
 		} else {
 			log.Println("Configuration hot-reload enabled")
 		}
+	}
+
+	if s.config.GetScenarioFlag(typ.ScenarioGlobal, "enable_remote_coder") {
+		go func() {
+			rcCfg, err := remoteconfig.LoadFromAppConfig(s.config, remoteconfig.Options{})
+			if err != nil {
+				logrus.WithError(err).Warn("Remote-coder not started: invalid config")
+				return
+			}
+			if err := remote_coder.Run(ctx, rcCfg); err != nil {
+				logrus.WithError(err).Warn("Remote-coder stopped")
+			}
+		}()
+		logrus.Info("Remote-coder auto-start enabled")
 	}
 
 	// Determine scheme and handle HTTPS setup
@@ -793,9 +845,11 @@ func (s *Server) Start(port int) error {
 	if !s.enableUI {
 		fmt.Printf("OpenAI v1 Chat API endpoint: %s://%s:%d/openai/v1/chat/completions\n", scheme, resolvedHost, port)
 		fmt.Printf("Anthropic v1 Message API endpoint: %s://%s:%d/anthropic/v1/messages\n", scheme, resolvedHost, port)
+		fmt.Printf("Virtual Model API endpoint: %s://%s:%d/virtual/v1/chat/completions\n", scheme, resolvedHost, port)
 		//Fixme:: we should not hardcode it here
 		fmt.Printf("Mode name: %s\n", "tingly")
 		fmt.Printf("Model API key: %s\n", s.config.GetModelToken())
+		fmt.Printf("Virtual Model API key: %s\n", s.config.GetVirtualModelToken())
 
 		if s.httpsEnabled {
 			certDir := s.httpsCertDir
@@ -888,6 +942,8 @@ func (s *Server) GetPreferredEndpointForModel(provider *typ.Provider, modelID st
 	if strings.Contains(strings.ToLower(modelID), "codex") {
 		return string(db.EndpointTypeResponses)
 	}
+	return "chat"
+	// TODO: we use chat as default unless the model do not support chat, e.g. codex
 	adaptiveProbe := NewAdaptiveProbe(s)
 	return adaptiveProbe.GetPreferredEndpoint(provider, modelID)
 }

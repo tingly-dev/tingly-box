@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/tingly-dev/tingly-box/internal/constant"
-	"github.com/tingly-dev/tingly-box/internal/typ"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+
+	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // RuleServiceRecord stores the current service for each rule using provider+model as ID
@@ -115,8 +116,10 @@ func (rs *RuleStateStore) HydrateRules(rules []typ.Rule) error {
 		// Find the service with matching provider:model and set it as current
 		for j := range rule.Services {
 			svc := rule.Services[j]
-			svcID := svc.Provider + ":" + svc.Model
-			if svcID == serviceID {
+			if svc == nil {
+				continue
+			}
+			if svc.ServiceID() == serviceID {
 				rule.SetCurrentServiceID(serviceID)
 				break
 			}

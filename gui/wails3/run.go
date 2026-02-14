@@ -6,7 +6,6 @@ import (
 	"log"
 	"os/exec"
 	"runtime"
-	"time"
 
 	commandgui "github.com/tingly-dev/tingly-box/gui/wails3/command"
 	"github.com/tingly-dev/tingly-box/gui/wails3/services"
@@ -16,6 +15,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server"
 	"github.com/tingly-dev/tingly-box/pkg/network"
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
 //go:embed icons.icns
@@ -108,7 +108,7 @@ func useSlimSystray(app *application.App, tinglyService *services.TinglyService)
 		})
 
 	// Create SystemTray
-	SystemTray := app.SystemTray.New().
+	SystemTray = app.SystemTray.New().
 		SetMenu(menu).
 		OnRightClick(func() {
 			SystemTray.OpenMenu()
@@ -133,8 +133,99 @@ func useSlimSystray(app *application.App, tinglyService *services.TinglyService)
 	//SystemTray.AttachWindow(WindowSlim)
 }
 
+func useWebSystray(app *application.App, tinglyService *services.TinglyService) {
+	// Create the SystemTray menu
+	menu := app.Menu.New()
+
+	// Dashboard menu item - show window and navigate to dashboard
+	_ = menu.
+		Add("Dashboard").
+		OnClick(func(ctx *application.Context) {
+			WindowSlim.Show()
+			WindowSlim.Focus()
+			WindowSlim.EmitEvent("systray-navigate", "/")
+		})
+
+	menu.AddSeparator()
+
+	// OpenAI menu item - show window and navigate to OpenAI page
+	_ = menu.
+		Add("OpenAI").
+		OnClick(func(ctx *application.Context) {
+			WindowSlim.Show()
+			WindowSlim.Focus()
+			WindowSlim.EmitEvent("systray-navigate", "/use-openai")
+		})
+
+	// Anthropic menu item - show window and navigate to Anthropic page
+	_ = menu.
+		Add("Anthropic").
+		OnClick(func(ctx *application.Context) {
+			WindowSlim.Show()
+			WindowSlim.Focus()
+			WindowSlim.EmitEvent("systray-navigate", "/use-anthropic")
+		})
+
+	// Claude Code menu item - show window and navigate to Claude Code page
+	_ = menu.
+		Add("Claude Code").
+		OnClick(func(ctx *application.Context) {
+			WindowSlim.Show()
+			WindowSlim.Focus()
+			WindowSlim.EmitEvent("systray-navigate", "/use-claude-code")
+		})
+
+	menu.AddSeparator()
+
+	// Exit menu item
+	_ = menu.
+		Add("Exit").
+		OnClick(func(ctx *application.Context) {
+			app.Quit()
+		})
+
+	// Create SystemTray
+	SystemTray = app.SystemTray.New().
+		SetMenu(menu).
+		OnRightClick(func() {
+			SystemTray.OpenMenu()
+		})
+
+	// Use custom icon
+	SystemTray.SetIcon(slimIcon)
+
+	// Create a window similar to GUI mode but hidden by default
+	WindowSlim = app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Name:  "menu-window",
+		Title: AppName,
+		Mac: application.MacWindow{
+			Backdrop: application.MacBackdropTranslucent,
+			TitleBar: application.MacTitleBarDefault,
+		},
+		BackgroundColour: application.NewRGB(27, 38, 54),
+		URL:              fmt.Sprintf("/?token=%s", tinglyService.GetUserAuthToken()),
+		Hidden:           true, // Start hidden
+	})
+
+	// Maximize window to avoid UI confusion
+	WindowSlim.Maximise()
+
+	// Prevent window from being destroyed on close - just hide it
+	WindowSlim.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
+		event.Cancel()
+		WindowSlim.Hide()
+	})
+
+	SystemTray.AttachWindow(WindowSlim)
+}
+
 // appLauncher implements the AppLauncher interface
 type appLauncher struct{}
+
+// NewAppLauncher creates a new AppLauncher instance
+func NewAppLauncher() commandgui.AppLauncher {
+	return &appLauncher{}
+}
 
 // StartGUI launches the full GUI application
 func (l *appLauncher) StartGUI(appManager *command.AppManager, opts options.StartServerOptions) error {
@@ -180,8 +271,59 @@ func (l *appLauncher) StartGUI(appManager *command.AppManager, opts options.Star
 	// Create Wails app with ServerManager embedded
 	app := newAppWithServerManager(appManager, serverManager, opts.EnableDebug)
 
-	// Note: Server is started by TinglyService.ServiceStartup() when the Wails app runs
-	// No need to call serverManager.Start() here
+	// IMPORTANT: Set up windows and systray after creating the app
+	useWindows(app)
+	useSystray(app)
+
+	// Run the Wails app
+	return app.Run()
+}
+
+// StartTray launches a systray only application with webui in menu
+func (l *appLauncher) StartTray(appManager *command.AppManager, opts options.StartServerOptions) error {
+	log.Printf("Starting tray GUI mode with options: port=%d, host=%s, debug=%v", opts.Port, opts.Host, opts.EnableDebug)
+
+	// Check if port is available before starting the app
+	available, info := network.IsPortAvailableWithInfo(opts.Host, opts.Port)
+	log.Printf("[Port Check] Port %d: available=%v, info=%s", opts.Port, available, info)
+
+	if !available {
+		runErrorApp(fmt.Sprintf("Port %d is already in use.\n\nPlease close the application using this port or use a different port with --port.\n\nDetails: %s", opts.Port, info))
+		return fmt.Errorf("port %d is already in use", opts.Port)
+	}
+
+	log.Printf("[Port Check] Port %d is available, starting tray application...", opts.Port)
+
+	// IMPORTANT: Tray mode should NOT auto-open browser (user opens via systray menu)
+	// Only CLI mode defaults to opening the browser
+	opts.EnableOpenBrowser = false
+
+	// Convert RecordMode string to obs.RecordMode
+	var recordMode obs.RecordMode
+	if opts.RecordMode != "" {
+		recordMode = obs.RecordMode(opts.RecordMode)
+	}
+
+	// Create ServerManager with options
+	serverManager := command.NewServerManager(
+		appManager.AppConfig(),
+		server.WithUI(opts.EnableUI),
+		server.WithDebug(opts.EnableDebug),
+		server.WithOpenBrowser(opts.EnableOpenBrowser),
+		server.WithHost(opts.Host),
+		server.WithHTTPSEnabled(opts.HTTPS.Enabled),
+		server.WithHTTPSCertDir(opts.HTTPS.CertDir),
+		server.WithHTTPSRegenerate(opts.HTTPS.Regenerate),
+		server.WithRecordMode(recordMode),
+		server.WithRecordDir(opts.RecordDir),
+		server.WithExperimentalFeatures(opts.ExperimentalFeatures),
+	)
+
+	// Create slim Wails app with ServerManager embedded
+	app := newAppWithServerManager(appManager, serverManager, opts.EnableDebug)
+
+	// IMPORTANT: Set up systray after creating the app
+	useWebSystray(app, tinglyService)
 
 	// Run the Wails app
 	return app.Run()
@@ -237,74 +379,4 @@ func (l *appLauncher) StartSlim(appManager *command.AppManager, opts options.Sta
 
 	// Run the Wails app
 	return app.Run()
-}
-
-// NewAppLauncher creates a new AppLauncher instance
-func NewAppLauncher() commandgui.AppLauncher {
-	return &appLauncher{}
-}
-
-// newSlimAppWithServerManager creates a new slim GUI app with a pre-configured ServerManager
-// This is in the main package because the slim package has its own main() and cannot be imported
-func newSlimAppWithServerManager(appManager *command.AppManager, serverManager *command.ServerManager, debug bool) *application.App {
-	// Create UI service with existing serverManager
-	tinglyService := services.NewTinglyServiceWithServerManager(appManager, serverManager)
-
-	// Create embedded assets handler (same as GUI mode)
-	//embdHandler := application.AssetFileServerFS(assets.GUIDistAssets)
-
-	// Create a new Wails application for slim version
-	// Now with embedded UI assets for the local window
-	app := application.New(application.Options{
-		Name:        AppName,
-		Description: AppDescription,
-		Services: []application.Service{
-			application.NewService(&services.GreetService{}),
-			application.NewService(tinglyService),
-		},
-		// No Assets handler - slim version opens browser instead
-		//Assets: application.AssetOptions{
-		//	Handler: tinglyService.GetGinEngine(),
-		//	Middleware: func(next http.Handler) http.Handler {
-		//		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		//			// Wails internal routes - let Wails handle them
-		//			if strings.HasPrefix(r.URL.Path, "/wails") {
-		//				next.ServeHTTP(w, r)
-		//				return
-		//			}
-		//
-		//			// API routes - forward to Gin engine (via TinglyService)
-		//			if strings.HasPrefix(r.URL.Path, "/api") || strings.HasPrefix(r.URL.Path, "/tingly") {
-		//				tinglyService.ServeHTTP(w, r)
-		//				return
-		//			}
-		//
-		//			// Serve embedded frontend assets
-		//			embdHandler.ServeHTTP(w, r)
-		//		})
-		//	},
-		//},
-		Mac: application.MacOptions{
-			ApplicationShouldTerminateAfterLastWindowClosed: false,
-			ActivationPolicy: application.ActivationPolicyAccessory, // Tray-only: no dock icon, no default window
-		},
-		Windows: application.WindowsOptions{},
-		SingleInstance: &application.SingleInstanceOptions{
-			UniqueID: "tingly-box.slim.single-instance",
-			OnSecondInstanceLaunch: func(data application.SecondInstanceData) {
-				// Just focus/notify - slim version has no window to restore
-				log.Printf("Second instance launch detected: %v", data)
-			},
-			AdditionalData: map[string]string{
-				"launchtime": time.Now().Local().String(),
-			},
-			ExitCode:      0,
-			EncryptionKey: [32]byte([]byte("Ml!Zjj@Lfw#Wqq$Wxb%Mjy^&*()_+1234567890-=")[:32]),
-		},
-	})
-
-	// IMPORTANT: Set up systray after creating the app
-	useSlimSystray(app, tinglyService)
-
-	return app
 }

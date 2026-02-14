@@ -2,8 +2,6 @@ package server
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,25 +18,31 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/protocol/request/transformer"
+	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
+	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
+	"github.com/tingly-dev/tingly-box/internal/toolinterceptor"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// generateObfuscationString generates a random string similar to "KOJz1A"
-func generateObfuscationString() string {
-	b := make([]byte, 4)
-	if _, err := rand.Read(b); err != nil {
-		// Fallback to timestamp-based if crypto rand fails
-		return base64.URLEncoding.EncodeToString([]byte(fmt.Sprintf("%d", time.Now().UnixNano())))[:6]
-	}
-	return base64.URLEncoding.EncodeToString(b)[:6]
-}
-
 // handleNonStreamingRequest handles non-streaming chat completion requests
-func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, req *openai.ChatCompletionNewParams, responseModel string, rule *typ.Rule) {
+func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, shouldIntercept, shouldStripTools bool) {
+	// === PRE-REQUEST INTERCEPTION: Strip tools before sending to provider ===
+	req := originalReq
+	if shouldIntercept {
+		preparedReq, _ := s.toolInterceptor.PrepareOpenAIRequest(provider, originalReq)
+		req = preparedReq
+	} else if shouldStripTools {
+		req = toolinterceptor.StripSearchFetchToolsOpenAI(originalReq)
+	}
+
+	// force to return usage
+	req.StreamOptions.IncludeUsage = param.Opt[bool]{Value: true}
+
 	// Forward request to provider
-	response, err := s.forwardOpenAIRequest(provider, req)
+	wrapper := s.clientPool.GetOpenAIClient(provider, string(req.Model))
+	fc := NewForwardContext(nil, provider)
+	response, err := ForwardOpenAIChat(fc, wrapper, req)
 	if err != nil {
 		// Track error with no usage
 		s.trackUsageFromContext(c, 0, 0, err)
@@ -49,6 +53,50 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 			},
 		})
 		return
+	}
+
+	// === POST-RESPONSE INTERCEPTION: Handle tool calls from provider ===
+	if shouldIntercept && len(response.Choices) > 0 {
+		choice := response.Choices[0]
+		if len(choice.Message.ToolCalls) > 0 {
+			// Check if any tool calls should be intercepted
+			hasInterceptedCalls := false
+			for _, tc := range choice.Message.ToolCalls {
+				fn := tc.Function
+				if fn.Name != "" && toolinterceptor.ShouldInterceptTool(fn.Name) {
+					hasInterceptedCalls = true
+					break
+				}
+			}
+
+			if hasInterceptedCalls {
+				// Execute intercepted tool calls locally and get final response
+				finalResponse, err := s.handleInterceptedToolCalls(provider, originalReq, response)
+				if err != nil {
+					s.trackUsageFromContext(c, 0, 0, err)
+					c.JSON(http.StatusInternalServerError, ErrorResponse{
+						Error: ErrorDetail{
+							Message: "Failed to handle tool calls: " + err.Error(),
+							Type:    "api_error",
+						},
+					})
+					return
+				}
+
+				// Extract usage from final response
+				inputTokens := int(finalResponse.Usage.PromptTokens)
+				outputTokens := int(finalResponse.Usage.CompletionTokens)
+				s.trackUsageFromContext(c, inputTokens, outputTokens, nil)
+
+				// Convert to JSON and return
+				responseJSON, _ := json.Marshal(finalResponse)
+				var responseMap map[string]interface{}
+				json.Unmarshal(responseJSON, &responseMap)
+				responseMap["model"] = responseModel
+				c.JSON(http.StatusOK, responseMap)
+				return
+			}
+		}
 	}
 
 	// Extract usage from response
@@ -84,8 +132,8 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 	// Update response model if configured
 	responseMap["model"] = responseModel
 
-	if shouldRoundtripResponse(c, "anthropic") {
-		roundtripped, err := roundtripOpenAIResponseViaAnthropic(response, responseModel, provider, req.Model)
+	if nonstream.ShouldRoundtripResponse(c, "anthropic") {
+		roundtripped, err := nonstream.RoundtripOpenAIResponseViaAnthropic(response, responseModel, provider, req.Model)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, ErrorResponse{
 				Error: ErrorDetail{
@@ -103,80 +151,75 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 	c.JSON(http.StatusOK, responseMap)
 }
 
-// forwardOpenAIRequest forwards the request to the selected provider using OpenAI library
-func (s *Server) forwardOpenAIRequest(provider *typ.Provider, req *openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
-	logrus.Infof("provider: %s, model: %s", provider.Name, req.Model)
+// handleInterceptedToolCalls executes intercepted tool calls locally and returns final response
+func (s *Server) handleInterceptedToolCalls(provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, toolCallResponse *openai.ChatCompletion) (*openai.ChatCompletion, error) {
+	logrus.Debugf("Handling %d intercepted tool calls for provider %s", len(toolCallResponse.Choices[0].Message.ToolCalls), provider.Name)
 
-	// Apply provider-specific transformations before forwarding
-	config := s.buildOpenAIConfig(req)
-	req = transformer.ApplyProviderTransforms(req, provider, req.Model, config)
+	// Build new messages list with original messages
+	newMessages := make([]openai.ChatCompletionMessageParamUnion, len(originalReq.Messages))
+	copy(newMessages, originalReq.Messages)
 
-	// Get or create OpenAI client wrapper from pool
-	wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
+	// Add assistant message with tool calls
+	newMessages = append(newMessages, toolCallResponse.Choices[0].Message.ToParam())
 
-	// Make the request using wrapper method with provider timeout
-	timeout := time.Duration(provider.Timeout) * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	chatCompletion, err := wrapper.ChatCompletionsNew(ctx, *req)
-	if err != nil {
-		logrus.Error(err)
-		return nil, fmt.Errorf("failed to create chat completion: %w", err)
-	}
-
-	return chatCompletion, nil
-}
-
-// forwardOpenAIStreamRequest forwards the streaming request to the selected provider using OpenAI library
-func (s *Server) forwardOpenAIStreamRequest(ctx context.Context, provider *typ.Provider, req *openai.ChatCompletionNewParams) (*ssestream.Stream[openai.ChatCompletionChunk], context.CancelFunc, error) {
-	logrus.Debugf("provider: %s (streaming)", provider.Name)
-
-	// Apply provider-specific transformations before forwarding
-	config := s.buildOpenAIConfig(req)
-	req = transformer.ApplyProviderTransforms(req, provider, req.Model, config)
-
-	if len(req.Tools) == 0 {
-		req.Tools = nil
-	}
-
-	// Get or create OpenAI client wrapper from pool
-	wrapper := s.clientPool.GetOpenAIClient(provider, req.Model)
-
-	// Use request context with timeout for streaming
-	// The context will be canceled if client disconnects
-	timeout := time.Duration(provider.Timeout) * time.Second
-	streamCtx, cancel := context.WithTimeout(ctx, timeout)
-
-	stream := wrapper.ChatCompletionsNewStreaming(streamCtx, *req)
-
-	return stream, cancel, nil
-}
-
-// buildOpenAIConfig builds the OpenAIConfig for provider transformations
-func (s *Server) buildOpenAIConfig(req *openai.ChatCompletionNewParams) *transformer.OpenAIConfig {
-	config := &transformer.OpenAIConfig{
-		HasThinking:     false,
-		ReasoningEffort: "",
-	}
-
-	// Check if request has thinking configuration in extra_fields
-	extraFields := req.ExtraFields()
-	if thinking, ok := extraFields["thinking"]; ok {
-		if _, ok := thinking.(map[string]interface{}); ok {
-			config.HasThinking = true
-			// Set default reasoning effort to "low" for OpenAI-compatible APIs
-			config.ReasoningEffort = "low"
+	// Execute each intercepted tool call
+	for _, tc := range toolCallResponse.Choices[0].Message.ToolCalls {
+		fn := tc.Function
+		// Check if this tool should be intercepted
+		if !toolinterceptor.ShouldInterceptTool(fn.Name) {
+			continue
 		}
+
+		// Execute the tool using the interceptor
+		result := s.toolInterceptor.ExecuteTool(provider, fn.Name, fn.Arguments)
+
+		// Add tool result message
+		var toolResultMsg openai.ChatCompletionMessageParamUnion
+		if result.IsError {
+			toolResultMsg = openai.ToolMessage(
+				fmt.Sprintf("Error: %s", result.Error),
+				tc.ID,
+			)
+		} else {
+			toolResultMsg = openai.ToolMessage(
+				result.Content,
+				tc.ID,
+			)
+		}
+		newMessages = append(newMessages, toolResultMsg)
+		logrus.Debugf("Executed tool %s locally: %s", fn.Name, fn.Arguments)
 	}
 
-	return config
+	// Create new request with updated messages
+	followUpReq := *originalReq
+	followUpReq.Messages = newMessages
+	followUpReq = *toolinterceptor.StripSearchFetchToolsOpenAI(&followUpReq)
+
+	// Forward to provider for final response (may contain more tool calls or final answer)
+	wrapper := s.clientPool.GetOpenAIClient(provider, string(followUpReq.Model))
+	fc := NewForwardContext(nil, provider)
+	finalResponse, err := ForwardOpenAIChat(fc, wrapper, &followUpReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get final response after tool execution: %w", err)
+	}
+
+	return finalResponse, nil
 }
 
-// handleStreamingRequest handles streaming chat completion requests
-func (s *Server) handleStreamingRequest(c *gin.Context, provider *typ.Provider, req *openai.ChatCompletionNewParams, responseModel string, rule *typ.Rule) {
-	// Create streaming request with request context for proper cancellation
-	stream, _, err := s.forwardOpenAIStreamRequest(c.Request.Context(), provider, req)
+// handleOpenAIChatStreamingRequest handles streaming chat completion requests
+func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, shouldIntercept, shouldStripTools bool) {
+	// === PRE-REQUEST INTERCEPTION: Strip tools before sending to provider ===
+	req := originalReq
+	if shouldIntercept {
+		preparedReq, _ := s.toolInterceptor.PrepareOpenAIRequest(provider, originalReq)
+		req = preparedReq
+	} else if shouldStripTools {
+		req = toolinterceptor.StripSearchFetchToolsOpenAI(originalReq)
+	}
+
+	wrapper := s.clientPool.GetOpenAIClient(provider, string(req.Model))
+	fc := NewForwardContext(c.Request.Context(), provider)
+	streamResp, _, err := ForwardOpenAIChatStream(fc, wrapper, req)
 	if err != nil {
 		// Track error with no usage
 		s.trackUsageFromContext(c, 0, 0, err)
@@ -189,12 +232,16 @@ func (s *Server) handleStreamingRequest(c *gin.Context, provider *typ.Provider, 
 		return
 	}
 
-	// Handle the streaming response
-	s.handleOpenAIStreamResponse(c, stream, req, responseModel, rule, provider)
+	// Create handle context and handle stream
+	hc := protocol.NewHandleContext(c, responseModel)
+	usage, err := stream.HandleOpenAIChatStream(hc, streamResp, req)
+
+	// Track usage from stream handler
+	s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, err)
 }
 
 // handleOpenAIStreamResponse processes the streaming response and sends it to the client
-func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.Stream[openai.ChatCompletionChunk], req *openai.ChatCompletionNewParams, responseModel string, rule *typ.Rule, provider *typ.Provider) {
+func (s *Server) handleOpenAIStreamResponse(c *gin.Context, streamResp *ssestream.Stream[openai.ChatCompletionChunk], req *openai.ChatCompletionNewParams, responseModel string) {
 	// Accumulate usage from stream chunks
 	var inputTokens, outputTokens int
 	var hasUsage bool
@@ -223,8 +270,8 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 			}
 		}
 		// Ensure stream is always closed
-		if stream != nil {
-			if err := stream.Close(); err != nil {
+		if streamResp != nil {
+			if err := streamResp.Close(); err != nil {
 				logrus.Errorf("Error closing stream: %v", err)
 			}
 		}
@@ -262,13 +309,13 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 		}
 
 		// Try to get next chunk
-		if !stream.Next() {
+		if !streamResp.Next() {
 			// Stream ended
 			return false
 		}
 
-		chatChunk := stream.Current()
-		obfuscationValue := generateObfuscationString() // Generate obfuscation value once per stream
+		chatChunk := streamResp.Current()
+		obfuscationValue := stream.GenerateObfuscationString() // Generate obfuscation value once per stream
 
 		// Store the first chunk ID for usage estimation
 		if firstChunkID == "" && chatChunk.ID != "" {
@@ -385,9 +432,9 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, stream *ssestream.St
 	})
 
 	// Check for stream errors
-	if err := stream.Err(); err != nil {
+	if err := streamResp.Err(); err != nil {
 		// Check if it was a client cancellation
-		if IsContextCanceled(err) || errors.Is(err, context.Canceled) {
+		if errors.Is(err, context.Canceled) {
 			logrus.Debug("OpenAI stream canceled by client")
 			// Estimate usage if we don't have it
 			if !hasUsage {
@@ -508,14 +555,14 @@ func (s *Server) ListModelsByScenario(c *gin.Context) {
 
 // handleResponsesForChatRequest handles chat completion requests by converting them to Responses API requests
 // This is used for models that prefer the Responses API over the Chat Completions API
-func (s *Server) handleResponsesForChatRequest(c *gin.Context, provider *typ.Provider, req *protocol.OpenAIChatCompletionRequest, responseModel, actualModel string, rule *typ.Rule, isStreaming bool) {
+func (s *Server) handleResponsesForChatRequest(c *gin.Context, provider *typ.Provider, req *protocol.OpenAIChatCompletionRequest, responseModel, actualModel string, isStreaming bool) {
 	// Convert chat completion request to responses request
 	params := s.convertChatCompletionToResponsesParams(req, actualModel)
 
 	if isStreaming {
-		s.handleResponsesStreamingRequest(c, provider, params, responseModel, actualModel, rule)
+		s.handleResponsesStreamingRequest(c, provider, params, responseModel, actualModel)
 	} else {
-		s.handleResponsesNonStreamingRequest(c, provider, params, responseModel, actualModel, rule)
+		s.handleResponsesNonStreamingRequest(c, provider, params, responseModel, actualModel)
 	}
 }
 

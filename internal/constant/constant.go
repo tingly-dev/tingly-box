@@ -7,6 +7,13 @@ import (
 )
 
 const (
+	// Default authentication tokens
+	DefaultUserToken         = "tingly-box-user-token"
+	DefaultModelToken        = "tingly-box-model-token"
+	DefaultVirtualModelToken = "tingly-virtual-model-token"
+)
+
+const (
 	// ConfigDirName is the main configuration directory name
 
 	// ModelsDirName is the subdirectory for provider model configurations

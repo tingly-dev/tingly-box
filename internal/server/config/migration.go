@@ -12,15 +12,16 @@ import (
 
 // Built-in rule UUID constants
 const (
-	RuleUUIDTingly           = "tingly"
-	RuleUUIDBuiltinOpenAI    = "built-in-openai"
-	RuleUUIDBuiltinAnthropic = "built-in-anthropic"
-	RuleUUIDBuiltinCC        = "built-in-cc"
-	RuleUUIDClaudeCode       = "claude-code"
-	RuleUUIDBuiltinCCHaiku   = "built-in-cc-haiku"
-	RuleUUIDBuiltinCCSonnet  = "built-in-cc-sonnet"
-	RuleUUIDBuiltinCCOpus    = "built-in-cc-opus"
-	RuleUUIDBuiltinCCDefault = "built-in-cc-default"
+	RuleUUIDTingly            = "tingly"
+	RuleUUIDBuiltinOpenAI     = "built-in-openai"
+	RuleUUIDBuiltinAnthropic  = "built-in-anthropic"
+	RuleUUIDBuiltinCC         = "built-in-cc"
+	RuleUUIDClaudeCode        = "claude-code"
+	RuleUUIDBuiltinCCHaiku    = "built-in-cc-haiku"
+	RuleUUIDBuiltinCCSonnet   = "built-in-cc-sonnet"
+	RuleUUIDBuiltinCCOpus     = "built-in-cc-opus"
+	RuleUUIDBuiltinCCDefault  = "built-in-cc-default"
+	RuleUUIDBuiltinCCSubagent = "built-in-cc-subagent"
 )
 
 func Migrate(c *Config) error {
@@ -30,6 +31,7 @@ func Migrate(c *Config) error {
 	migrate20260103(c)
 	migrate20260110(c)
 	migrate20260114(c)
+	migrate20260210(c)
 	return nil
 }
 
@@ -153,15 +155,16 @@ func migrate20260103(c *Config) {
 
 	// Map of default rule UUIDs to their scenarios
 	scenarioMap := map[string]typ.RuleScenario{
-		RuleUUIDTingly:           typ.ScenarioOpenAI,
-		RuleUUIDBuiltinOpenAI:    typ.ScenarioOpenAI,
-		RuleUUIDBuiltinAnthropic: typ.ScenarioAnthropic,
-		RuleUUIDBuiltinCC:        typ.ScenarioClaudeCode,
-		RuleUUIDClaudeCode:       typ.ScenarioClaudeCode,
-		RuleUUIDBuiltinCCHaiku:   typ.ScenarioClaudeCode,
-		RuleUUIDBuiltinCCSonnet:  typ.ScenarioClaudeCode,
-		RuleUUIDBuiltinCCOpus:    typ.ScenarioClaudeCode,
-		RuleUUIDBuiltinCCDefault: typ.ScenarioClaudeCode,
+		RuleUUIDTingly:            typ.ScenarioOpenAI,
+		RuleUUIDBuiltinOpenAI:     typ.ScenarioOpenAI,
+		RuleUUIDBuiltinAnthropic:  typ.ScenarioAnthropic,
+		RuleUUIDBuiltinCC:         typ.ScenarioClaudeCode,
+		RuleUUIDClaudeCode:        typ.ScenarioClaudeCode,
+		RuleUUIDBuiltinCCHaiku:    typ.ScenarioClaudeCode,
+		RuleUUIDBuiltinCCSonnet:   typ.ScenarioClaudeCode,
+		RuleUUIDBuiltinCCOpus:     typ.ScenarioClaudeCode,
+		RuleUUIDBuiltinCCDefault:  typ.ScenarioClaudeCode,
+		RuleUUIDBuiltinCCSubagent: typ.ScenarioClaudeCode,
 	}
 
 	for i := range c.Rules {
@@ -208,6 +211,7 @@ func migrate20260110(c *Config) {
 		RuleUUIDBuiltinCCSonnet,
 		RuleUUIDBuiltinCCOpus,
 		RuleUUIDBuiltinCCDefault,
+		RuleUUIDBuiltinCCSubagent,
 	}
 
 	defaultMap := map[string]typ.Rule{}
@@ -261,5 +265,59 @@ func migrate20260114(c *Config) {
 	if len(valid) != len(c.Rules) {
 		c.Rules = valid
 		c.Save()
+	}
+}
+
+// migrate20260210 ensures the subagent rule exists and mirrors the haiku model.
+func migrate20260210(c *Config) {
+	// Find required rules.
+	var haikuRule *typ.Rule
+	var subagentRule *typ.Rule
+	for i := range c.Rules {
+		rule := &c.Rules[i]
+		if rule.UUID == RuleUUIDBuiltinCCHaiku {
+			haikuRule = rule
+			continue
+		}
+		if rule.UUID == RuleUUIDBuiltinCCSubagent {
+			subagentRule = rule
+		}
+	}
+
+	// Without a haiku model, there's nothing to mirror.
+	if haikuRule == nil {
+		return
+	}
+
+	needsSave := false
+
+	// Ensure subagent rule exists (add default if missing).
+	if subagentRule == nil {
+		for _, defaultRule := range DefaultRules {
+			if defaultRule.UUID == RuleUUIDBuiltinCCSubagent {
+				c.Rules = append(c.Rules, defaultRule)
+				subagentRule = &c.Rules[len(c.Rules)-1]
+				needsSave = true
+				break
+			}
+		}
+		if subagentRule == nil {
+			if needsSave {
+				_ = c.Save()
+			}
+			return
+		}
+	}
+
+	// Keep subagent request model as-is; only mirror services.
+	// Mirror haiku's services if subagent has none.
+	if len(subagentRule.Services) == 0 && len(haikuRule.Services) > 0 {
+		subagentRule.Services = make([]*loadbalance.Service, len(haikuRule.Services))
+		copy(subagentRule.Services, haikuRule.Services)
+		needsSave = true
+	}
+
+	if needsSave {
+		_ = c.Save()
 	}
 }

@@ -7,13 +7,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
+	. "github.com/tingly-dev/tingly-box/internal/protocol/stream"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -37,7 +37,7 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 	}
 
 	// Parse request (minimal parsing for validation)
-	var req ResponseCreateRequest
+	var req protocol.ResponseCreateRequest
 	if err := json.Unmarshal(bodyBytes, &req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -60,7 +60,7 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 	}
 
 	// Check if input is provided (either string or array)
-	inputValue := GetInputValue(req.Input)
+	inputValue := protocol.GetInputValue(req.Input)
 	if inputValue == nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -141,16 +141,27 @@ func (s *Server) ResponsesCreate(c *gin.Context) {
 
 	// Handle streaming or non-streaming
 	if req.Stream {
-		s.handleResponsesStreamingRequest(c, provider, params, req.Model, actualModel, rule)
+		s.handleResponsesStreamingRequest(c, provider, params, req.Model, actualModel)
 	} else {
-		s.handleResponsesNonStreamingRequest(c, provider, params, req.Model, actualModel, rule)
+		s.handleResponsesNonStreamingRequest(c, provider, params, req.Model, actualModel)
 	}
 }
 
 // handleResponsesNonStreamingRequest handles non-streaming Responses API requests
-func (s *Server) handleResponsesNonStreamingRequest(c *gin.Context, provider *typ.Provider, params responses.ResponseNewParams, responseModel, actualModel string, rule *typ.Rule) {
+func (s *Server) handleResponsesNonStreamingRequest(c *gin.Context, provider *typ.Provider, params responses.ResponseNewParams, responseModel, actualModel string) {
 	// Forward request to provider
-	response, err := s.forwardResponsesRequest(provider, params)
+	var response *responses.Response
+	var err error
+
+	// Check if this is a ChatGPT backend API provider
+	if provider.APIBase == protocol.ChatGPTBackendAPIBase {
+		response, err = s.forwardChatGPTBackendRequest(provider, params)
+	} else {
+		wrapper := s.clientPool.GetOpenAIClient(provider, string(params.Model))
+		fc := NewForwardContext(nil, provider)
+		response, err = ForwardOpenAIResponses(fc, wrapper, params)
+	}
+
 	if err != nil {
 		// Track error with no usage
 		s.trackUsageFromContext(c, 0, 0, err)
@@ -196,16 +207,18 @@ func (s *Server) handleResponsesNonStreamingRequest(c *gin.Context, provider *ty
 }
 
 // handleResponsesStreamingRequest handles streaming Responses API requests
-func (s *Server) handleResponsesStreamingRequest(c *gin.Context, provider *typ.Provider, params responses.ResponseNewParams, responseModel, actualModel string, rule *typ.Rule) {
+func (s *Server) handleResponsesStreamingRequest(c *gin.Context, provider *typ.Provider, params responses.ResponseNewParams, responseModel, actualModel string) {
 	// Check if this is a ChatGPT backend API provider (Codex OAuth)
 	// These providers use a custom streaming handler
 	if provider.APIBase == protocol.ChatGPTBackendAPIBase {
-		s.handleChatGPTBackendStreamingRequest(c, provider, params, responseModel, actualModel, rule)
+		s.handleChatGPTBackendStreamingRequest(c, provider, params, responseModel, actualModel)
 		return
 	}
 
 	// Create streaming request with request context for proper cancellation
-	stream, _, err := s.forwardResponsesStreamRequest(c.Request.Context(), provider, params)
+	wrapper := s.clientPool.GetOpenAIClient(provider, params.Model)
+	fc := NewForwardContext(c.Request.Context(), provider)
+	stream, cancel, err := ForwardOpenAIResponsesStream(fc, wrapper, params)
 	if err != nil {
 		// Track error with no usage
 		s.trackUsageFromContext(c, 0, 0, err)
@@ -217,13 +230,18 @@ func (s *Server) handleResponsesStreamingRequest(c *gin.Context, provider *typ.P
 		})
 		return
 	}
+	defer cancel()
 
 	// Handle the streaming response
-	s.handleResponsesStreamResponse(c, stream, responseModel, actualModel, rule, provider)
+	hc := protocol.NewHandleContext(c, responseModel)
+	usage, err := HandleOpenAIResponsesStream(hc, stream, responseModel)
+
+	// Track usage from stream handler
+	s.trackUsageFromContext(c, usage.InputTokens, usage.OutputTokens, err)
 }
 
 // handleResponsesStreamResponse processes the streaming response and sends it to the client
-func (s *Server) handleResponsesStreamResponse(c *gin.Context, stream *ssestream.Stream[responses.ResponseStreamEventUnion], responseModel, actualModel string, rule *typ.Rule, provider *typ.Provider) {
+func (s *Server) handleResponsesStreamResponse(c *gin.Context, stream *ssestream.Stream[responses.ResponseStreamEventUnion], responseModel, actualModel string) {
 	// Accumulate usage from stream chunks
 	var inputTokens, outputTokens int64
 	var hasUsage bool
@@ -285,7 +303,6 @@ func (s *Server) handleResponsesStreamResponse(c *gin.Context, stream *ssestream
 		}
 
 		event := stream.Current()
-		event.Response.Model = responseModel
 
 		// Accumulate usage from completed events
 		if event.Response.Usage.InputTokens > 0 {
@@ -296,7 +313,8 @@ func (s *Server) handleResponsesStreamResponse(c *gin.Context, stream *ssestream
 			outputTokens = event.Response.Usage.OutputTokens
 		}
 
-		c.SSEvent("", event)
+		// Use the event type as the SSE event type (e.g., "response.created", "response.output_text.delta")
+		SSEventOpenAI(c, event.Type, event, responseModel)
 		flusher.Flush()
 		return true
 	})
@@ -304,7 +322,7 @@ func (s *Server) handleResponsesStreamResponse(c *gin.Context, stream *ssestream
 	// Check for stream errors
 	if err := stream.Err(); err != nil {
 		// Check if it was a client cancellation
-		if IsContextCanceled(err) || errors.Is(err, context.Canceled) {
+		if errors.Is(err, context.Canceled) {
 			logrus.Debug("Responses stream canceled by client")
 			if hasUsage {
 				s.trackUsageFromContext(c, int(inputTokens), int(outputTokens), err)
@@ -346,52 +364,66 @@ func (s *Server) handleResponsesStreamResponse(c *gin.Context, stream *ssestream
 	flusher.Flush()
 }
 
-// forwardResponsesRequest forwards a Responses API request to the provider
-func (s *Server) forwardResponsesRequest(provider *typ.Provider, params responses.ResponseNewParams) (*responses.Response, error) {
-	// Check if this is a ChatGPT backend API provider (Codex OAuth)
-	// ChatGPT backend API requires a different request format than standard OpenAI Responses API
-	if provider.APIBase == protocol.ChatGPTBackendAPIBase {
-		return s.forwardChatGPTBackendRequest(provider, params)
+// SSEventOpenAI sends an SSE event with the given data
+// If the data is a ResponseStreamEventUnion, it uses the raw JSON to avoid
+// serializing empty fields from the union type
+// If modelOverride is provided and the event contains a response object with a model field,
+// it will be overridden in the JSON output
+func SSEventOpenAI(c *gin.Context, t string, data any, modelOverride ...string) error {
+	var jsonBytes []byte
+
+	// For ResponseStreamEventUnion, use RawJSON() to avoid serializing all empty union fields
+	if event, ok := data.(responses.ResponseStreamEventUnion); ok {
+		rawJSON := event.RawJSON()
+		if rawJSON != "" {
+			jsonBytes = []byte(rawJSON)
+			// Apply model override if provided
+			if len(modelOverride) > 0 && modelOverride[0] != "" {
+				var parsed map[string]any
+				if err := json.Unmarshal(jsonBytes, &parsed); err == nil {
+					// Check if this event has a response field with a model
+					if response, ok := parsed["response"].(map[string]any); ok {
+						if model, ok := response["model"].(string); ok && model != "" {
+							response["model"] = modelOverride[0]
+							modified, err := json.Marshal(parsed)
+							if err == nil {
+								jsonBytes = modified
+							}
+						}
+					}
+				}
+			}
+		} else {
+			// Fallback to regular marshaling if RawJSON is empty
+			var err error
+			jsonBytes, err = json.Marshal(event)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		var err error
+		jsonBytes, err = json.Marshal(data)
+		if err != nil {
+			return err
+		}
 	}
 
-	wrapper := s.clientPool.GetOpenAIClient(provider, params.Model)
-	logrus.Infof("provider: %s (responses)", provider.Name)
-
-	// Make the request using wrapper method with provider timeout
-	timeout := time.Duration(provider.Timeout) * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	resp, err := wrapper.Client().Responses.New(ctx, params)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create response: %w", err)
-	}
-
-	return resp, nil
-}
-
-// forwardResponsesStreamRequest forwards a streaming Responses API request to the provider
-func (s *Server) forwardResponsesStreamRequest(ctx context.Context, provider *typ.Provider, params responses.ResponseNewParams) (*ssestream.Stream[responses.ResponseStreamEventUnion], context.CancelFunc, error) {
-	// Note: ChatGPT backend API providers are handled separately in the Anthropic beta handler
-
-	wrapper := s.clientPool.GetOpenAIClient(provider, params.Model)
-	logrus.Debugf("provider: %s (responses streaming)", provider.Name)
-
-	// Use request context with timeout for streaming
-	// The context will be canceled if client disconnects
-	timeout := time.Duration(provider.Timeout) * time.Second
-	streamCtx, cancel := context.WithTimeout(ctx, timeout)
-
-	stream := wrapper.Client().Responses.NewStreaming(streamCtx, params)
-
-	return stream, cancel, nil
+	c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", jsonBytes))
+	return nil
 }
 
 // convertToResponsesParams converts raw JSON to OpenAI SDK params format
 // This handles the model override and forwards the rest as-is
 func (s *Server) convertToResponsesParams(bodyBytes []byte, actualModel string) (responses.ResponseNewParams, error) {
+	// Preprocess to add type fields to input items (needed for union deserialization)
+	processedData, err := protocol.AddTypeFieldToInputItems(bodyBytes)
+	if err != nil {
+		return responses.ResponseNewParams{}, err
+	}
+
 	var raw map[string]any
-	if err := json.Unmarshal(bodyBytes, &raw); err != nil {
+	if err := json.Unmarshal(processedData, &raw); err != nil {
 		return responses.ResponseNewParams{}, err
 	}
 

@@ -55,8 +55,12 @@ func TestHandleOpenAIToAnthropicStreamResponse(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 
 	// the handler
-	err := HandleOpenAIToAnthropicStreamResponse(c, nil, stream, model)
+	usage, err := HandleOpenAIToAnthropicStreamResponse(c, nil, stream, model)
 	require.NoError(t, err)
+
+	// Verify usage stats
+	assert.Equal(t, 0, usage.InputTokens)
+	assert.Equal(t, 0, usage.OutputTokens)
 
 	// Verify the response
 	body := w.Body.String()
@@ -126,8 +130,8 @@ func TestSendAnthropicStreamEvent(t *testing.T) {
 	sendAnthropicStreamEvent(c, "message_start", eventData, w)
 
 	body := w.Body.String()
-	assert.Contains(t, body, "event: message_start")
-	assert.Contains(t, body, "data: ")
+	assert.Contains(t, body, "event:message_start")
+	assert.Contains(t, body, "data:")
 	assert.Contains(t, body, `"type":"message_start"`)
 }
 
@@ -169,8 +173,10 @@ func TestHandleOpenAIToAnthropicStreamResponseWithThinking(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 
 	// Run the handler
-	err := HandleOpenAIToAnthropicStreamResponse(c, nil, stream, model)
+	usage, err := HandleOpenAIToAnthropicStreamResponse(c, nil, stream, model)
 	require.NoError(t, err)
+
+	t.Logf("Usage stats: input=%d, output=%d", usage.InputTokens, usage.OutputTokens)
 
 	// Verify the response
 	body := w.Body.String()

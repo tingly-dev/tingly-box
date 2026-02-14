@@ -60,11 +60,10 @@ func ConvertGoogleToOpenAIRequest(model string, contents []*genai.Content, confi
 				break
 			}
 		}
-	}
-
-	// Convert tool config
-	if config != nil && config.ToolConfig != nil && config.ToolConfig.FunctionCallingConfig != nil {
-		openaiReq.ToolChoice = ConvertGoogleToolChoiceToOpenAI(config.ToolConfig.FunctionCallingConfig)
+		// Convert tool config
+		if config.ToolConfig != nil && config.ToolConfig.FunctionCallingConfig != nil {
+			openaiReq.ToolChoice = ConvertGoogleToolChoiceToOpenAI(config.ToolConfig.FunctionCallingConfig)
+		}
 	}
 
 	return openaiReq

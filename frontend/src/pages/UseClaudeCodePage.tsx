@@ -30,7 +30,7 @@ import { toggleButtonGroupStyle, toggleButtonStyle } from "@/styles/toggleStyles
 
 type ConfigMode = 'unified' | 'separate' | 'smart';
 
-const MODEL_VARIANTS = ['default', 'haiku', 'sonnet', 'opus'] as const;
+const MODEL_VARIANTS = ['default', 'haiku', 'sonnet', 'opus', 'subagent'] as const;
 
 // Configuration mode options
 const CONFIG_MODES: { value: ConfigMode; label: string; description: string; enabled: boolean }[] = [
@@ -211,9 +211,16 @@ const UseClaudeCodePage: React.FC = () => {
         return rule?.request_model || '';
     };
 
+    const getSubagentModel = (): string => {
+        return configMode === 'unified'
+            ? (rules[0]?.request_model || '')
+            : (getModelForVariant('subagent') || 'tingly/cc-subagent');
+    };
+
     // Generate settings.json JSON (from backend)
     const generateSettingsConfig = () => {
         const claudeCodeBaseUrl = getClaudeCodeBaseUrl();
+        const subagentModel = getSubagentModel();
 
         if (configMode === 'unified') {
             const model = rules[0]?.request_model;
@@ -223,6 +230,7 @@ const UseClaudeCodePage: React.FC = () => {
                     ANTHROPIC_DEFAULT_HAIKU_MODEL: model,
                     ANTHROPIC_DEFAULT_OPUS_MODEL: model,
                     ANTHROPIC_DEFAULT_SONNET_MODEL: model,
+                    CLAUDE_CODE_SUBAGENT_MODEL: subagentModel,
                     DISABLE_TELEMETRY: "1",
                     DISABLE_ERROR_REPORTING: "1",
                     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
@@ -238,6 +246,7 @@ const UseClaudeCodePage: React.FC = () => {
                     ANTHROPIC_DEFAULT_HAIKU_MODEL: getModelForVariant('haiku'),
                     ANTHROPIC_DEFAULT_OPUS_MODEL: getModelForVariant('opus'),
                     ANTHROPIC_DEFAULT_SONNET_MODEL: getModelForVariant('sonnet'),
+                    CLAUDE_CODE_SUBAGENT_MODEL: subagentModel,
                     DISABLE_TELEMETRY: "1",
                     DISABLE_ERROR_REPORTING: "1",
                     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
@@ -258,12 +267,14 @@ const UseClaudeCodePage: React.FC = () => {
                 ANTHROPIC_DEFAULT_HAIKU_MODEL: rules[0]?.request_model,
                 ANTHROPIC_DEFAULT_OPUS_MODEL: rules[0]?.request_model,
                 ANTHROPIC_DEFAULT_SONNET_MODEL: rules[0]?.request_model,
+                CLAUDE_CODE_SUBAGENT_MODEL: rules[0]?.request_model,
             }
             : {
                 ANTHROPIC_MODEL: getModelForVariant('default'),
                 ANTHROPIC_DEFAULT_HAIKU_MODEL: getModelForVariant('haiku'),
                 ANTHROPIC_DEFAULT_OPUS_MODEL: getModelForVariant('opus'),
                 ANTHROPIC_DEFAULT_SONNET_MODEL: getModelForVariant('sonnet'),
+                CLAUDE_CODE_SUBAGENT_MODEL: getSubagentModel(),
             };
 
         const nodeCode = `const fs = require("fs");
@@ -283,6 +294,7 @@ const envConfig = {
     ANTHROPIC_DEFAULT_HAIKU_MODEL: "${commonEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL}",
     ANTHROPIC_DEFAULT_OPUS_MODEL: "${commonEnv.ANTHROPIC_DEFAULT_OPUS_MODEL}",
     ANTHROPIC_DEFAULT_SONNET_MODEL: "${commonEnv.ANTHROPIC_DEFAULT_SONNET_MODEL}",
+    CLAUDE_CODE_SUBAGENT_MODEL: "${commonEnv.CLAUDE_CODE_SUBAGENT_MODEL}",
     DISABLE_TELEMETRY: "1",
     DISABLE_ERROR_REPORTING: "1",
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
@@ -315,12 +327,14 @@ ${nodeCode}
                 ANTHROPIC_DEFAULT_HAIKU_MODEL: rules[0]?.request_model,
                 ANTHROPIC_DEFAULT_OPUS_MODEL: rules[0]?.request_model,
                 ANTHROPIC_DEFAULT_SONNET_MODEL: rules[0]?.request_model,
+                CLAUDE_CODE_SUBAGENT_MODEL: rules[0]?.request_model,
             }
             : {
                 ANTHROPIC_MODEL: getModelForVariant('default'),
                 ANTHROPIC_DEFAULT_HAIKU_MODEL: getModelForVariant('haiku'),
                 ANTHROPIC_DEFAULT_OPUS_MODEL: getModelForVariant('opus'),
                 ANTHROPIC_DEFAULT_SONNET_MODEL: getModelForVariant('sonnet'),
+                CLAUDE_CODE_SUBAGENT_MODEL: getSubagentModel(),
             };
 
         const nodeCode = `const fs = require("fs");
@@ -340,6 +354,7 @@ const envConfig = {
     ANTHROPIC_DEFAULT_HAIKU_MODEL: "${commonEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL}",
     ANTHROPIC_DEFAULT_OPUS_MODEL: "${commonEnv.ANTHROPIC_DEFAULT_OPUS_MODEL}",
     ANTHROPIC_DEFAULT_SONNET_MODEL: "${commonEnv.ANTHROPIC_DEFAULT_SONNET_MODEL}",
+    CLAUDE_CODE_SUBAGENT_MODEL: "${commonEnv.CLAUDE_CODE_SUBAGENT_MODEL}",
     DISABLE_TELEMETRY: "1",
     DISABLE_ERROR_REPORTING: "1",
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",

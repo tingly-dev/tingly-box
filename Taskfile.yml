@@ -147,68 +147,47 @@ tasks:
         fi
         echo "Found: $(zig version)"
   
-  # remote-cc Service tasks
-  remote-cc:build:
-    summary: Build the remote-cc-service binary
-    cmds:
-      - |
-        cd cmd/remote-cc
-        go mod tidy
-        go build -o ../../bin/remote-cc-service .
-  
-  remote-cc:run:
-    summary: Run remote-cc-service with default configuration
+  # remote-coder Service tasks
+  remote-coder:run:
+    summary: Run remote-coder service via tingly-box rc
     env:
       RCC_PORT: "18080"
       RCC_SESSION_TIMEOUT: "30m"
     cmds:
       - |
-        export RCC_JWT_SECRET="$(python3 - <<'PY'
-        import json, os, sys
-        path = os.path.expanduser("~/.tingly-box/config.json")
-        if not os.path.exists(path):
-            print(f"missing config: {path}", file=sys.stderr)
-            sys.exit(1)
-        with open(path, "r", encoding="utf-8") as f:
-            cfg = json.load(f)
-        secret = cfg.get("jwt_secret", "")
-        if not secret:
-            print("jwt_secret missing in config.json", file=sys.stderr)
-            sys.exit(1)
-        print(secret)
-        PY
-        )"
-        cd cmd/remote-cc && RCC_PORT={{.RCC_PORT | default "18080"}} RCC_SESSION_TIMEOUT={{.RCC_SESSION_TIMEOUT | default "30m"}} go run .
+        go run ./cli/tingly-box rc
   
-  remote-cc:test:
-    summary: Run tests for remote-cc-service
+  remote-coder:test:
+    summary: Run tests for remote-coder service
     cmds:
       - |
-        go test ./cmd/remote-cc/... -v
+        go test ./internal/remote_coder/... -v
   
-  remote-cc:build:cross:
-    summary: Cross-compile remote-cc-service for all platforms
-    env:
-      VERSION: "dev"
+  remote-coder-token:build:
+    summary: Build the remote-coder-token binary
     cmds:
       - |
-        for os in linux darwin windows; do
-          for arch in amd64 arm64; do
-            echo "Building for $os/$arch..."
-            GOOS=$os GOARCH=$arch \
-            go build -ldflags="-X main.version=${VERSION}" \
-            -o ./bin/remote-cc-service-$os-$arch \
-            ./cmd/remote-cc
-          done
-        done
+        go build -o ./bin/remote-coder-token ./cmd/remote-coder
   
-  remote-cc-token:build:
-    summary: Build the remote-cc-token binary
-    cmds:
-      - |
-        go build -o ./bin/remote-cc-token ./cmd/remote-coder
-  
-  remote-cc-token:run:
+  remote-coder-token:run:
     summary: Generate an API token (run via SSH)
     cmds:
       - go run ./cmd/remote-coder
+
+  submodule:
+    summary: Show git HEAD and branch for each submodule in libs/
+    cmds:
+      - |
+        for dir in libs/*/; do
+          if [ -d "$dir" ]; then
+            name=$(basename "$dir")
+            cd "$dir"
+            head=$(git rev-parse HEAD 2>/dev/null || echo "N/A")
+            branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "N/A")
+            echo "$name:"
+            echo "  HEAD: $head"
+            echo "  Branch: $branch"
+            echo ""
+            cd - > /dev/null
+          fi
+        done
