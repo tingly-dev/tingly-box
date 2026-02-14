@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/tingly-dev/tingly-box/imbot/internal/core"
+	"github.com/tingly-dev/tingly-box/imbot/internal/platform/dingtalk"
 	"github.com/tingly-dev/tingly-box/imbot/internal/platform/discord"
 	"github.com/tingly-dev/tingly-box/imbot/internal/platform/feishu"
 	"github.com/tingly-dev/tingly-box/imbot/internal/platform/slack"
@@ -92,6 +93,11 @@ func (r *Registry) RegisterBuiltinPlatforms() {
 	// WebChat (mock for testing)
 	r.Register(core.PlatformWebChat, func(config *core.Config) (core.Bot, error) {
 		return NewMockBot(config)
+	})
+
+	// DingTalk
+	r.Register(core.PlatformDingTalk, func(config *core.Config) (core.Bot, error) {
+		return dingtalk.NewDingTalkBot(config)
 	})
 
 	// Add more platforms as they are implemented
