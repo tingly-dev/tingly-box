@@ -11,6 +11,7 @@ import (
 type AppLauncher interface {
 	StartGUI(appManager *command.AppManager, opts options.StartServerOptions) error
 	StartSlim(appManager *command.AppManager, opts options.StartServerOptions) error
+	StartTray(appManager *command.AppManager, opts options.StartServerOptions) error
 }
 
 // GUICommand returns the cobra command for starting full GUI mode

@@ -6,6 +6,7 @@ import (
 
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
 // TestResponseNewParamsInputUnion_String tests unmarshaling a string input
@@ -49,7 +50,7 @@ func TestResponseCreateRequest_UnmarshalJSON(t *testing.T) {
 		"stream": true
 	}`
 
-	var req ResponseCreateRequest
+	var req protocol.ResponseCreateRequest
 	if err := json.Unmarshal([]byte(jsonString), &req); err != nil {
 		t.Fatalf("Failed to deserialize into ResponseCreateRequest: %v", err)
 	}
@@ -81,7 +82,7 @@ func TestResponseCreateRequest_UnmarshalJSON_ArrayInput(t *testing.T) {
 		]
 	}`
 
-	var req ResponseCreateRequest
+	var req protocol.ResponseCreateRequest
 	if err := json.Unmarshal([]byte(jsonString), &req); err != nil {
 		t.Fatalf("Failed to deserialize into ResponseCreateRequest: %v", err)
 	}
@@ -104,7 +105,7 @@ func TestResponseCreateRequest_UnmarshalJSON_WithExtraFields(t *testing.T) {
 		"max_output_tokens": 1000
 	}`
 
-	var req ResponseCreateRequest
+	var req protocol.ResponseCreateRequest
 	if err := json.Unmarshal([]byte(jsonString), &req); err != nil {
 		t.Fatalf("Failed to deserialize into ResponseCreateRequest: %v", err)
 	}

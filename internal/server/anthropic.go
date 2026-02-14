@@ -1,15 +1,12 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
-	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
@@ -252,89 +249,4 @@ func (s *Server) anthropicListModelsWithScenario(c *gin.Context, scenario *typ.R
 		HasMore: false,
 		LastID:  lastID,
 	})
-}
-
-// forwardAnthropicRequestRaw forwards request from raw map using Anthropic SDK
-func (s *Server) forwardAnthropicRequestRaw(provider *typ.Provider, rawReq map[string]interface{}, model string) (*anthropic.Message, error) {
-	// Get or create Anthropic client wrapper from pool
-	wrapper := s.clientPool.GetAnthropicClient(provider, model)
-	logrus.Debugf("Anthropic API Token Length: %d", len(provider.Token))
-
-	// Extract and convert messages from raw request
-	messagesData, ok := rawReq["messages"].([]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid messages format")
-	}
-
-	messages := make([]anthropic.MessageParam, 0, len(messagesData))
-	for _, msgData := range messagesData {
-		msg, ok := msgData.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		role, ok := msg["role"].(string)
-		if !ok {
-			continue
-		}
-
-		// Handle content which can be string or array
-		var contentBlocks []anthropic.ContentBlockParamUnion
-		if contentData, exists := msg["content"]; exists {
-			if contentStr, ok := contentData.(string); ok {
-				// Simple string content
-				contentBlocks = append(contentBlocks, anthropic.NewTextBlock(contentStr))
-			} else if contentArray, ok := contentData.([]interface{}); ok {
-				// Array of content blocks
-				for _, blockData := range contentArray {
-					if block, ok := blockData.(map[string]interface{}); ok {
-						if blockType, ok := block["type"].(string); ok && blockType == "text" {
-							if text, ok := block["text"].(string); ok {
-								contentBlocks = append(contentBlocks, anthropic.NewTextBlock(text))
-							}
-						}
-					}
-				}
-			}
-		}
-
-		if role == "user" {
-			messages = append(messages, anthropic.NewUserMessage(contentBlocks...))
-		} else if role == "assistant" {
-			messages = append(messages, anthropic.NewAssistantMessage(contentBlocks...))
-		}
-	}
-
-	// Build request parameters
-	params := anthropic.MessageNewParams{
-		Model:    anthropic.Model(model),
-		Messages: messages,
-	}
-
-	// Set max_tokens if provided, otherwise use default
-	// and cap it at the model's maximum allowed value
-	if maxTokens, ok := rawReq["max_tokens"]; ok {
-		if maxTokensFloat, ok := maxTokens.(float64); ok {
-			params.MaxTokens = int64(maxTokensFloat)
-		}
-	} else {
-		// Set default max_tokens if not provided (Anthropic API requires this)
-		params.MaxTokens = int64(s.config.GetDefaultMaxTokens())
-	}
-	// Cap max_tokens at the model's maximum to prevent API errors
-	maxAllowed := s.templateManager.GetMaxTokensForModel(provider.Name, model)
-	if params.MaxTokens > int64(maxAllowed) {
-		params.MaxTokens = int64(maxAllowed)
-	}
-
-	// Make the request using Anthropic SDK with timeout (provider.Timeout is in seconds)
-	timeout := time.Duration(provider.Timeout) * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	message, err := wrapper.MessagesNew(ctx, params)
-	if err != nil {
-		return nil, err
-	}
-
-	return message, nil
 }

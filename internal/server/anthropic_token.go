@@ -14,6 +14,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -138,13 +139,13 @@ func (s *Server) anthropicCountTokensViaAPI(c *gin.Context, ctx context.Context,
 		var req anthropic.BetaMessageCountTokensParams
 		if err := c.ShouldBindJSON(&req); err != nil {
 			logrus.Debugf("Invalid JSON request received: %v", err)
-			SendInvalidRequestBodyError(c, err)
+			stream.SendInvalidRequestBodyError(c, err)
 			return
 		}
 		req.Model = anthropic.Model(model)
 		message, err := wrapper.(*client.AnthropicClient).BetaMessagesCountTokens(ctx, req)
 		if err != nil {
-			SendInvalidRequestBodyError(c, err)
+			stream.SendInvalidRequestBodyError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, message)
@@ -152,13 +153,13 @@ func (s *Server) anthropicCountTokensViaAPI(c *gin.Context, ctx context.Context,
 		var req anthropic.MessageCountTokensParams
 		if err := c.ShouldBindJSON(&req); err != nil {
 			logrus.Debugf("Invalid JSON request received: %v", err)
-			SendInvalidRequestBodyError(c, err)
+			stream.SendInvalidRequestBodyError(c, err)
 			return
 		}
 		req.Model = anthropic.Model(model)
 		message, err := wrapper.(*client.AnthropicClient).MessagesCountTokens(ctx, req)
 		if err != nil {
-			SendInvalidRequestBodyError(c, err)
+			stream.SendInvalidRequestBodyError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, message)
@@ -170,12 +171,12 @@ func (s *Server) anthropicCountTokensViaTiktoken(c *gin.Context, version anthrop
 	case anthropicCountTokensBeta:
 		var req anthropic.BetaMessageCountTokensParams
 		if err := c.ShouldBindJSON(&req); err != nil {
-			SendInvalidRequestBodyError(c, err)
+			stream.SendInvalidRequestBodyError(c, err)
 			return
 		}
 		count, err := token.CountBetaTokensViaTiktoken(&req)
 		if err != nil {
-			SendInvalidRequestBodyError(c, err)
+			stream.SendInvalidRequestBodyError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, anthropic.MessageTokensCount{
@@ -184,12 +185,12 @@ func (s *Server) anthropicCountTokensViaTiktoken(c *gin.Context, version anthrop
 	case anthropicCountTokensV1:
 		var req anthropic.MessageCountTokensParams
 		if err := c.ShouldBindJSON(&req); err != nil {
-			SendInvalidRequestBodyError(c, err)
+			stream.SendInvalidRequestBodyError(c, err)
 			return
 		}
 		count, err := token.CountTokensViaTiktoken(&req)
 		if err != nil {
-			SendInvalidRequestBodyError(c, err)
+			stream.SendInvalidRequestBodyError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, anthropic.MessageTokensCount{

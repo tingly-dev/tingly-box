@@ -1038,6 +1038,61 @@ export const api = {
         }
     },
 
+    // Get UI/session state for a specific remote-coder session
+    getRemoteCCSessionState: async (sessionId: string): Promise<any> => {
+        try {
+            const token = await getRemoteCCAuthToken();
+            const baseUrl = api.getRemoteCCBaseUrl();
+            const response = await fetch(`${baseUrl}/remote-coder/sessions/${sessionId}/state`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+            });
+
+            if (response.status === 401) {
+                return { success: false, error: 'Authentication required' };
+            }
+
+            if (response.status === 404) {
+                return { success: false, error: 'Session not found' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Update UI/session state for a specific remote-coder session
+    updateRemoteCCSessionState: async (sessionId: string, data: { project_path?: string; expanded_messages?: number[] }): Promise<any> => {
+        try {
+            const token = await getRemoteCCAuthToken();
+            const baseUrl = api.getRemoteCCBaseUrl();
+            const response = await fetch(`${baseUrl}/remote-coder/sessions/${sessionId}/state`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+                body: JSON.stringify(data),
+            });
+
+            if (response.status === 401) {
+                return { success: false, error: 'Authentication required' };
+            }
+
+            if (response.status === 404) {
+                return { success: false, error: 'Session not found' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
     // Send chat message to remote-coder
     sendRemoteCCChat: async (data: { session_id?: string; message: string; context?: Record<string, any> }): Promise<any> => {
         try {
@@ -1078,6 +1133,53 @@ export const api = {
                     'Content-Type': 'application/json',
                     ...(token && { 'Authorization': `Bearer ${token}` }),
                 },
+            });
+
+            if (response.status === 401) {
+                return { success: false, error: 'Authentication required' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Get remote-coder bot settings
+    getRemoteCCBotSettings: async (): Promise<any> => {
+        try {
+            const token = await getRemoteCCAuthToken();
+            const baseUrl = api.getRemoteCCBaseUrl();
+            const response = await fetch(`${baseUrl}/remote-coder/bot/settings`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+            });
+
+            if (response.status === 401) {
+                return { success: false, error: 'Authentication required' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Update remote-coder bot settings
+    updateRemoteCCBotSettings: async (data: { token: string; platform?: string; proxy_url?: string; chat_id?: string; bash_allowlist?: string[] }): Promise<any> => {
+        try {
+            const token = await getRemoteCCAuthToken();
+            const baseUrl = api.getRemoteCCBaseUrl();
+            const response = await fetch(`${baseUrl}/remote-coder/bot/settings`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+                body: JSON.stringify(data),
             });
 
             if (response.status === 401) {

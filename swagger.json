@@ -20,6 +20,30 @@
     "https"
   ],
   "paths": {
+    "/api/v1/auth/validate": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Validate authentication token",
+        "description": "Validate authentication token",
+        "operationId": "apiV1AuthValidateGet",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/H"
+            }
+          }
+        }
+      }
+    },
     "/api/v1/history": {
       "get": {
         "tags": [
@@ -27,6 +51,7 @@
         ],
         "summary": "Get request history",
         "description": "Get request history",
+        "operationId": "apiV1HistoryGet",
         "consumes": [
           "application/json"
         ],
@@ -50,6 +75,7 @@
         ],
         "summary": "Get config info about this application",
         "description": "Get config info about this application",
+        "operationId": "apiV1InfoConfigGet",
         "consumes": [
           "application/json"
         ],
@@ -71,6 +97,7 @@
         "tags": [
           "info"
         ],
+        "operationId": "apiV1InfoHealthGet",
         "consumes": [
           "application/json"
         ],
@@ -94,6 +121,7 @@
         ],
         "summary": "Get version info about this application",
         "description": "Get version info about this application",
+        "operationId": "apiV1InfoVersionGet",
         "consumes": [
           "application/json"
         ],
@@ -117,6 +145,7 @@
         ],
         "summary": "Check if a newer version is available on GitHub",
         "description": "Check if a newer version is available on GitHub",
+        "operationId": "apiV1InfoVersionCheckGet",
         "consumes": [
           "application/json"
         ],
@@ -140,6 +169,7 @@
         ],
         "summary": "Get logs with optional filtering",
         "description": "Get logs with optional filtering",
+        "operationId": "apiV1LogGet",
         "consumes": [
           "application/json"
         ],
@@ -161,6 +191,7 @@
         ],
         "summary": "Clear all logs",
         "description": "Clear all logs",
+        "operationId": "apiV1LogDelete",
         "consumes": [
           "application/json"
         ],
@@ -184,6 +215,7 @@
         ],
         "summary": "Get log statistics",
         "description": "Get log statistics",
+        "operationId": "apiV1LogStatsGet",
         "consumes": [
           "application/json"
         ],
@@ -207,6 +239,7 @@
         ],
         "summary": "Initiate OAuth authorization flow",
         "description": "Initiate OAuth authorization flow",
+        "operationId": "apiV1OauthAuthorizePost",
         "consumes": [
           "application/json"
         ],
@@ -241,6 +274,7 @@
         ],
         "summary": "Cancel an in-progress OAuth session and cleanup resources",
         "description": "Cancel an in-progress OAuth session and cleanup resources",
+        "operationId": "apiV1OauthCancelPost",
         "consumes": [
           "application/json"
         ],
@@ -275,6 +309,7 @@
         ],
         "summary": "Refresh OAuth token using refresh token",
         "description": "Refresh OAuth token using refresh token",
+        "operationId": "apiV1OauthRefreshPost",
         "consumes": [
           "application/json"
         ],
@@ -309,6 +344,7 @@
         ],
         "summary": "Get OAuth session status",
         "description": "Get OAuth session status",
+        "operationId": "apiV1OauthStatusGet",
         "consumes": [
           "application/json"
         ],
@@ -341,6 +377,7 @@
         ],
         "summary": "Get OAuth token for a user and provider",
         "description": "Get OAuth token for a user and provider",
+        "operationId": "apiV1OauthTokenGet",
         "consumes": [
           "application/json"
         ],
@@ -362,6 +399,7 @@
         ],
         "summary": "Revoke OAuth token for a user and provider",
         "description": "Revoke OAuth token for a user and provider",
+        "operationId": "apiV1OauthTokenDelete",
         "consumes": [
           "application/json"
         ],
@@ -385,6 +423,7 @@
         ],
         "summary": "List all OAuth tokens for a user",
         "description": "List all OAuth tokens for a user",
+        "operationId": "apiV1OauthTokensGet",
         "consumes": [
           "application/json"
         ],
@@ -408,6 +447,7 @@
         ],
         "summary": "Test a rule configuration by sending a sample request",
         "description": "Test a rule configuration by sending a sample request",
+        "operationId": "apiV1ProbePost",
         "consumes": [
           "application/json"
         ],
@@ -442,6 +482,7 @@
         ],
         "summary": "Test a model forwarding by sending a sample request",
         "description": "Test a model forwarding by sending a sample request",
+        "operationId": "apiV1ProbeModelPost",
         "consumes": [
           "application/json"
         ],
@@ -476,6 +517,7 @@
         ],
         "summary": "Probe model endpoints (chat and responses) concurrently",
         "description": "Probe model endpoints (chat and responses) concurrently",
+        "operationId": "apiV1ProbeModelCapabilityPost",
         "consumes": [
           "application/json"
         ],
@@ -510,6 +552,7 @@
         ],
         "summary": "Test api key for the provider",
         "description": "Test api key for the provider",
+        "operationId": "apiV1ProbeProviderPost",
         "consumes": [
           "application/json"
         ],
@@ -544,6 +587,7 @@
         ],
         "summary": "Get all provider models",
         "description": "Get all provider models",
+        "operationId": "apiV1Provider-modelsUuidGet",
         "consumes": [
           "application/json"
         ],
@@ -575,6 +619,7 @@
         ],
         "summary": "Fetch models for a specific provider",
         "description": "Fetch models for a specific provider",
+        "operationId": "apiV1Provider-modelsUuidPost",
         "consumes": [
           "application/json"
         ],
@@ -608,6 +653,7 @@
         ],
         "summary": "Create or update a rule configuration",
         "description": "Create or update a rule configuration",
+        "operationId": "apiV1RulePost",
         "consumes": [
           "application/json"
         ],
@@ -642,6 +688,7 @@
         ],
         "summary": "Get specific rule by UUID",
         "description": "Get specific rule by UUID",
+        "operationId": "apiV1RuleUuidGet",
         "consumes": [
           "application/json"
         ],
@@ -673,6 +720,7 @@
         ],
         "summary": "Create or update a rule configuration",
         "description": "Create or update a rule configuration",
+        "operationId": "apiV1RuleUuidPost",
         "consumes": [
           "application/json"
         ],
@@ -713,6 +761,7 @@
         ],
         "summary": "Delete a rule configuration",
         "description": "Delete a rule configuration",
+        "operationId": "apiV1RuleUuidDelete",
         "consumes": [
           "application/json"
         ],
@@ -746,6 +795,7 @@
         ],
         "summary": "Get all configured rules",
         "description": "Get all configured rules",
+        "operationId": "apiV1RulesGet",
         "consumes": [
           "application/json"
         ],
@@ -778,6 +828,7 @@
         ],
         "summary": "Get configuration for a specific scenario",
         "description": "Get configuration for a specific scenario",
+        "operationId": "apiV1ScenarioScenarioGet",
         "consumes": [
           "application/json"
         ],
@@ -808,6 +859,7 @@
         ],
         "summary": "Create or update scenario configuration",
         "description": "Create or update scenario configuration",
+        "operationId": "apiV1ScenarioScenarioPost",
         "consumes": [
           "application/json"
         ],
@@ -849,6 +901,7 @@
         ],
         "summary": "Get a specific flag value for a scenario",
         "description": "Get a specific flag value for a scenario",
+        "operationId": "apiV1ScenarioScenarioFlagFlagGet",
         "consumes": [
           "application/json"
         ],
@@ -886,6 +939,7 @@
         ],
         "summary": "Set a specific flag value for a scenario",
         "description": "Set a specific flag value for a scenario",
+        "operationId": "apiV1ScenarioScenarioFlagFlagPut",
         "consumes": [
           "application/json"
         ],
@@ -934,6 +988,7 @@
         ],
         "summary": "Get all scenario configurations",
         "description": "Get all scenario configurations",
+        "operationId": "apiV1ScenariosGet",
         "consumes": [
           "application/json"
         ],
@@ -957,6 +1012,7 @@
         ],
         "summary": "Restart the server",
         "description": "Restart the server",
+        "operationId": "apiV1ServerRestartPost",
         "consumes": [
           "application/json"
         ],
@@ -980,6 +1036,7 @@
         ],
         "summary": "Start the server",
         "description": "Start the server",
+        "operationId": "apiV1ServerStartPost",
         "consumes": [
           "application/json"
         ],
@@ -1003,6 +1060,7 @@
         ],
         "summary": "Stop the server gracefully",
         "description": "Stop the server gracefully",
+        "operationId": "apiV1ServerStopPost",
         "consumes": [
           "application/json"
         ],
@@ -1026,6 +1084,7 @@
         ],
         "summary": "Get server status and statistics",
         "description": "Get server status and statistics",
+        "operationId": "apiV1StatusGet",
         "consumes": [
           "application/json"
         ],
@@ -1049,6 +1108,7 @@
         ],
         "summary": "Get existing API token or generate new one",
         "description": "Get existing API token or generate new one",
+        "operationId": "apiV1TokenGet",
         "consumes": [
           "application/json"
         ],
@@ -1070,6 +1130,7 @@
         ],
         "summary": "Generate a new API token",
         "description": "Generate a new API token",
+        "operationId": "apiV1TokenPost",
         "consumes": [
           "application/json"
         ],
@@ -1104,6 +1165,7 @@
         ],
         "summary": "Returns individual usage records (for debugging/audit)",
         "description": "Returns individual usage records (for debugging/audit)",
+        "operationId": "apiV1UsageRecordsGet",
         "consumes": [
           "application/json"
         ],
@@ -1194,6 +1256,7 @@
         ],
         "summary": "Deletes usage records older than the specified number of days",
         "description": "Deletes usage records older than the specified number of days",
+        "operationId": "apiV1UsageRecordsDelete",
         "consumes": [
           "application/json"
         ],
@@ -1240,6 +1303,7 @@
         ],
         "summary": "Returns aggregated usage statistics with flexible grouping and filtering",
         "description": "Returns aggregated usage statistics with flexible grouping and filtering",
+        "operationId": "apiV1UsageStatsGet",
         "consumes": [
           "application/json"
         ],
@@ -1377,6 +1441,7 @@
         ],
         "summary": "Returns time-series data for usage with configurable intervals",
         "description": "Returns time-series data for usage with configurable intervals",
+        "operationId": "apiV1UsageTimeseriesGet",
         "consumes": [
           "application/json"
         ],
@@ -1457,6 +1522,7 @@
         ],
         "summary": "Get all provider templates",
         "description": "Get all provider templates",
+        "operationId": "apiV2Provider-templatesGet",
         "consumes": [
           "application/json"
         ],
@@ -1480,6 +1546,7 @@
         ],
         "summary": "Refresh provider templates from GitHub",
         "description": "Refresh provider templates from GitHub",
+        "operationId": "apiV2Provider-templatesRefreshPost",
         "consumes": [
           "application/json"
         ],
@@ -1503,6 +1570,7 @@
         ],
         "summary": "Get current provider template registry version",
         "description": "Get current provider template registry version",
+        "operationId": "apiV2Provider-templatesVersionGet",
         "consumes": [
           "application/json"
         ],
@@ -1526,6 +1594,7 @@
         ],
         "summary": "Get a specific provider template by ID",
         "description": "Get a specific provider template by ID",
+        "operationId": "apiV2Provider-templatesIdGet",
         "consumes": [
           "application/json"
         ],
@@ -1558,6 +1627,7 @@
         ],
         "summary": "Get all configured providers with masked tokens",
         "description": "Get all configured providers with masked tokens",
+        "operationId": "apiV2ProvidersGet",
         "consumes": [
           "application/json"
         ],
@@ -1579,6 +1649,7 @@
         ],
         "summary": "Create a new provider configuration",
         "description": "Create a new provider configuration",
+        "operationId": "apiV2ProvidersPost",
         "consumes": [
           "application/json"
         ],
@@ -1620,6 +1691,7 @@
         ],
         "summary": "Get specific provider details with masked token",
         "description": "Get specific provider details with masked token",
+        "operationId": "apiV2ProvidersUuidGet",
         "consumes": [
           "application/json"
         ],
@@ -1651,6 +1723,7 @@
         ],
         "summary": "Update existing provider configuration",
         "description": "Update existing provider configuration",
+        "operationId": "apiV2ProvidersUuidPut",
         "consumes": [
           "application/json"
         ],
@@ -1691,6 +1764,7 @@
         ],
         "summary": "Delete a provider configuration",
         "description": "Delete a provider configuration",
+        "operationId": "apiV2ProvidersUuidDelete",
         "consumes": [
           "application/json"
         ],
@@ -1724,6 +1798,7 @@
         ],
         "summary": "Toggle provider enabled/disabled status",
         "description": "Toggle provider enabled/disabled status",
+        "operationId": "apiV2ProvidersUuidTogglePost",
         "consumes": [
           "application/json"
         ],
@@ -1757,6 +1832,7 @@
         ],
         "summary": "Get skill file content",
         "description": "Get skill file content",
+        "operationId": "apiV2Skill-contentGet",
         "consumes": [
           "application/json"
         ],
@@ -1780,6 +1856,7 @@
         ],
         "summary": "Get all skill locations",
         "description": "Get all skill locations",
+        "operationId": "apiV2Skill-locationsGet",
         "consumes": [
           "application/json"
         ],
@@ -1801,6 +1878,7 @@
         ],
         "summary": "Add a new skill location",
         "description": "Add a new skill location",
+        "operationId": "apiV2Skill-locationsPost",
         "consumes": [
           "application/json"
         ],
@@ -1835,6 +1913,7 @@
         ],
         "summary": "Discover IDEs with skills in home directory",
         "description": "Discover IDEs with skills in home directory",
+        "operationId": "apiV2Skill-locationsDiscoverGet",
         "consumes": [
           "application/json"
         ],
@@ -1858,6 +1937,7 @@
         ],
         "summary": "Import discovered skill locations",
         "description": "Import discovered skill locations",
+        "operationId": "apiV2Skill-locationsImportPost",
         "consumes": [
           "application/json"
         ],
@@ -1892,6 +1972,7 @@
         ],
         "summary": "Scan all IDE locations and return discovered skills",
         "description": "Scan all IDE locations and return discovered skills",
+        "operationId": "apiV2Skill-locationsScanPost",
         "consumes": [
           "application/json"
         ],
@@ -1915,6 +1996,7 @@
         ],
         "summary": "Get a specific skill location",
         "description": "Get a specific skill location",
+        "operationId": "apiV2Skill-locationsIdGet",
         "consumes": [
           "application/json"
         ],
@@ -1945,6 +2027,7 @@
         ],
         "summary": "Remove a skill location",
         "description": "Remove a skill location",
+        "operationId": "apiV2Skill-locationsIdDelete",
         "consumes": [
           "application/json"
         ],
@@ -1977,6 +2060,7 @@
         ],
         "summary": "Refresh/scan a skill location for updated skills",
         "description": "Refresh/scan a skill location for updated skills",
+        "operationId": "apiV2Skill-locationsIdRefreshPost",
         "consumes": [
           "application/json"
         ],
@@ -2274,14 +2358,13 @@
     "CreateRuleRequest": {
       "type": "object",
       "properties": {
+        "CurrentServiceID": {
+          "type": "string",
+          "description": "Field CurrentServiceID"
+        },
         "active": {
           "type": "boolean",
           "description": "Field active"
-        },
-        "current_service_index": {
-          "type": "integer",
-          "format": "int64",
-          "description": "Field current_service_index"
         },
         "description": {
           "type": "string",
@@ -2333,7 +2416,7 @@
         "response_model",
         "description",
         "services",
-        "current_service_index",
+        "CurrentServiceID",
         "lb_tactic",
         "active",
         "smart_enabled"
@@ -2554,6 +2637,12 @@
       "required": [
         "mode"
       ]
+    },
+    "H": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object"
+      }
     },
     "HealthInfoResponse": {
       "type": "object",
@@ -3712,6 +3801,10 @@
           "type": "boolean",
           "description": "Field valid"
         },
+        "web_search_schema": {
+          "type": "string",
+          "description": "Field web_search_schema"
+        },
         "website": {
           "type": "string",
           "description": "Field website"
@@ -3798,14 +3891,13 @@
     "Rule": {
       "type": "object",
       "properties": {
+        "CurrentServiceID": {
+          "type": "string",
+          "description": "Field CurrentServiceID"
+        },
         "active": {
           "type": "boolean",
           "description": "Field active"
-        },
-        "current_service_index": {
-          "type": "integer",
-          "format": "int64",
-          "description": "Field current_service_index"
         },
         "description": {
           "type": "string",
@@ -3857,7 +3949,7 @@
         "response_model",
         "description",
         "services",
-        "current_service_index",
+        "CurrentServiceID",
         "lb_tactic",
         "active",
         "smart_enabled"
@@ -4813,14 +4905,13 @@
     "UpdateRuleRequest": {
       "type": "object",
       "properties": {
+        "CurrentServiceID": {
+          "type": "string",
+          "description": "Field CurrentServiceID"
+        },
         "active": {
           "type": "boolean",
           "description": "Field active"
-        },
-        "current_service_index": {
-          "type": "integer",
-          "format": "int64",
-          "description": "Field current_service_index"
         },
         "description": {
           "type": "string",
@@ -4872,7 +4963,7 @@
         "response_model",
         "description",
         "services",
-        "current_service_index",
+        "CurrentServiceID",
         "lb_tactic",
         "active",
         "smart_enabled"
@@ -5199,44 +5290,8 @@
   },
   "tags": [
     {
-      "name": "scenarios",
-      "description": "Operations related to scenarios"
-    },
-    {
-      "name": "history",
-      "description": "Operations related to history"
-    },
-    {
-      "name": "testing",
-      "description": "Operations related to testing"
-    },
-    {
-      "name": "usage",
-      "description": "Operations related to usage"
-    },
-    {
-      "name": "info",
-      "description": "Operations related to info"
-    },
-    {
       "name": "server",
       "description": "Operations related to server"
-    },
-    {
-      "name": "rules",
-      "description": "Operations related to rules"
-    },
-    {
-      "name": "models",
-      "description": "Operations related to models"
-    },
-    {
-      "name": "token",
-      "description": "Operations related to token"
-    },
-    {
-      "name": "providers",
-      "description": "Operations related to providers"
     },
     {
       "name": "skills",
@@ -5247,8 +5302,48 @@
       "description": "Operations related to oauth"
     },
     {
+      "name": "usage",
+      "description": "Operations related to usage"
+    },
+    {
       "name": "logs",
       "description": "Operations related to logs"
+    },
+    {
+      "name": "rules",
+      "description": "Operations related to rules"
+    },
+    {
+      "name": "scenarios",
+      "description": "Operations related to scenarios"
+    },
+    {
+      "name": "history",
+      "description": "Operations related to history"
+    },
+    {
+      "name": "models",
+      "description": "Operations related to models"
+    },
+    {
+      "name": "testing",
+      "description": "Operations related to testing"
+    },
+    {
+      "name": "token",
+      "description": "Operations related to token"
+    },
+    {
+      "name": "providers",
+      "description": "Operations related to providers"
+    },
+    {
+      "name": "auth",
+      "description": "Operations related to auth"
+    },
+    {
+      "name": "info",
+      "description": "Operations related to info"
     }
   ]
 }

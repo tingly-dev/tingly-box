@@ -67,11 +67,9 @@ func ConvertAnthropicV1ToResponsesRequest(anthropicReq *anthropic.MessageNewPara
 	// Convert tools
 	if len(anthropicReq.Tools) > 0 {
 		params.Tools = ConvertAnthropicV1ToolsToResponses(anthropicReq.Tools)
-	}
 
-	// Convert tool choice
-	if anthropicReq.ToolChoice.OfAuto != nil || anthropicReq.ToolChoice.OfTool != nil ||
-		anthropicReq.ToolChoice.OfAny != nil {
+		// Convert tool choice
+		// for some providers (like `vllm`), they require tool choice like `auto` in general usage
 		params.ToolChoice = ConvertAnthropicV1ToolChoiceToResponses(&anthropicReq.ToolChoice)
 	}
 
@@ -201,6 +199,20 @@ func convertV1AssistantMessageToResponsesInput(msg anthropic.MessageParam) []res
 		})
 	}
 
+	// If no items were created, create an empty assistant message
+	if len(items) == 0 {
+		messageItem := responses.EasyInputMessageParam{
+			Type: responses.EasyInputMessageTypeMessage,
+			Role: responses.EasyInputMessageRole("assistant"),
+			Content: responses.EasyInputMessageContentUnionParam{
+				OfString: param.NewOpt(""),
+			},
+		}
+		items = append(items, responses.ResponseInputItemUnionParam{
+			OfMessage: &messageItem,
+		})
+	}
+
 	return items
 }
 
@@ -241,28 +253,27 @@ func ConvertAnthropicV1ToolsToResponses(tools []anthropic.ToolUnionParam) []resp
 		}
 
 		// Convert Anthropic input schema to OpenAI function parameters
-		var parameters map[string]interface{}
-		if tool.InputSchema.Properties != nil || len(tool.InputSchema.Required) > 0 {
-			parameters = make(map[string]interface{})
-			parameters["type"] = "object"
+		// Always initialize parameters to avoid omitting the field (omitzero tag)
+		parameters := make(map[string]interface{})
+		parameters["type"] = "object"
 
-			if tool.InputSchema.Properties != nil {
-				parameters["properties"] = tool.InputSchema.Properties
-			}
+		if tool.InputSchema.Properties != nil {
+			parameters["properties"] = tool.InputSchema.Properties
+		} else {
+			// Initialize empty properties if none provided
+			parameters["properties"] = make(map[string]interface{})
+		}
 
-			if len(tool.InputSchema.Required) > 0 {
-				parameters["required"] = tool.InputSchema.Required
-			}
+		if len(tool.InputSchema.Required) > 0 {
+			parameters["required"] = tool.InputSchema.Required
 		}
 
 		// Create function tool
 		fn := &responses.FunctionToolParam{
-			Name:       tool.Name,
-			Parameters: parameters,
-		}
-
-		if tool.Description.Value != "" {
-			fn.Description = param.NewOpt(tool.Description.Value)
+			Name:        tool.Name,
+			Description: ParamOpt(tool.Description.Value),
+			Parameters:  parameters,
+			Type:        "function",
 		}
 
 		out = append(out, responses.ToolUnionParam{
@@ -275,17 +286,17 @@ func ConvertAnthropicV1ToolsToResponses(tools []anthropic.ToolUnionParam) []resp
 
 // ConvertAnthropicV1ToolChoiceToResponses converts Anthropic v1 tool_choice to Responses API format
 func ConvertAnthropicV1ToolChoiceToResponses(tc *anthropic.ToolChoiceUnionParam) responses.ResponseNewParamsToolChoiceUnion {
-	// Handle "auto" mode
+	// Handle "auto" mode (model decides whether to call tools)
 	if tc.OfAuto != nil {
 		return responses.ResponseNewParamsToolChoiceUnion{
 			OfToolChoiceMode: param.NewOpt(responses.ToolChoiceOptions("auto")),
 		}
 	}
 
-	// Handle "any" mode (required)
+	// Handle "any" mode (required - force model to call at least one tool)
 	if tc.OfAny != nil {
 		return responses.ResponseNewParamsToolChoiceUnion{
-			OfToolChoiceMode: param.NewOpt(responses.ToolChoiceOptions("auto")),
+			OfToolChoiceMode: param.NewOpt(responses.ToolChoiceOptions("required")),
 		}
 	}
 

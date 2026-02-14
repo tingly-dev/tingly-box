@@ -143,3 +143,14 @@ func (s *Server) updateServiceStats(rule *typ.Rule, provider *typ.Provider, mode
 		}
 	}
 }
+
+// TrackUsage implements the UsageTracker interface.
+// It extracts the gin.Context from the provided context and calls trackUsageFromContext.
+// The gin.Context should be stored in the context with the key "gin_context".
+func (s *Server) TrackUsage(ctx context.Context, inputTokens, outputTokens int, err error) {
+	// Try to get gin.Context from the context
+	// This is set when creating HandleContext
+	if c, ok := ctx.Value("gin_context").(*gin.Context); ok {
+		s.trackUsageFromContext(c, inputTokens, outputTokens, err)
+	}
+}

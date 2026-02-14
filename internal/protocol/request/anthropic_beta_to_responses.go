@@ -75,11 +75,9 @@ func ConvertAnthropicBetaToResponsesRequest(anthropicReq *anthropic.BetaMessageN
 	// Convert tools from Anthropic format to Responses API format
 	if len(anthropicReq.Tools) > 0 {
 		params.Tools = ConvertAnthropicBetaToolsToResponses(anthropicReq.Tools)
-	}
 
-	// Convert tool choice
-	if anthropicReq.ToolChoice.OfAuto != nil || anthropicReq.ToolChoice.OfTool != nil ||
-		anthropicReq.ToolChoice.OfAny != nil {
+		// Convert tool choice
+		// for some providers (like `vllm`), they require tool choice like `auto` in general usage
 		params.ToolChoice = ConvertAnthropicBetaToolChoiceToResponses(&anthropicReq.ToolChoice)
 	}
 
@@ -199,7 +197,7 @@ func convertBetaAssistantMessageToResponsesInput(msg anthropic.BetaMessageParam)
 		})
 	}
 
-	// If no items were created and we have no text, create an empty assistant message
+	// If no items were created, create an empty assistant message
 	if len(items) == 0 {
 		messageItem := responses.EasyInputMessageParam{
 			Type: responses.EasyInputMessageTypeMessage,
@@ -231,29 +229,31 @@ func ConvertAnthropicBetaToolsToResponses(tools []anthropic.BetaToolUnionParam) 
 		}
 
 		// Convert Anthropic input schema to Responses API function parameters
-		var parameters map[string]interface{}
-		if tool.InputSchema.Properties != nil || len(tool.InputSchema.Required) > 0 {
-			parameters = make(map[string]interface{})
-			parameters["type"] = "object"
+		// Always initialize parameters to avoid omitting the field (omitzero tag)
+		parameters := make(map[string]interface{})
+		parameters["type"] = "object"
 
-			if tool.InputSchema.Properties != nil {
-				parameters["properties"] = tool.InputSchema.Properties
-			}
+		if tool.InputSchema.Properties != nil {
+			parameters["properties"] = tool.InputSchema.Properties
+		} else {
+			// Initialize empty properties if none provided
+			parameters["properties"] = make(map[string]interface{})
+		}
 
-			if len(tool.InputSchema.Required) > 0 {
-				parameters["required"] = tool.InputSchema.Required
-			}
+		if len(tool.InputSchema.Required) > 0 {
+			parameters["required"] = tool.InputSchema.Required
 		}
 
 		// Create function tool
-		fn := responses.FunctionToolParam{
+		fn := &responses.FunctionToolParam{
 			Name:        tool.Name,
 			Description: ParamOpt(tool.Description.Value),
 			Parameters:  parameters,
+			Type:        "function",
 		}
 
 		out = append(out, responses.ToolUnionParam{
-			OfFunction: &fn,
+			OfFunction: fn,
 		})
 	}
 
@@ -262,26 +262,27 @@ func ConvertAnthropicBetaToolsToResponses(tools []anthropic.BetaToolUnionParam) 
 
 // ConvertAnthropicBetaToolChoiceToResponses converts Anthropic beta tool_choice to Responses API format
 func ConvertAnthropicBetaToolChoiceToResponses(tc *anthropic.BetaToolChoiceUnionParam) responses.ResponseNewParamsToolChoiceUnion {
+	// Handle "auto" mode (model decides whether to call tools)
 	if tc.OfAuto != nil {
 		return responses.ResponseNewParamsToolChoiceUnion{
 			OfToolChoiceMode: ParamOpt(responses.ToolChoiceOptions("auto")),
 		}
 	}
 
+	// Handle "any" mode (required - force model to call at least one tool)
+	if tc.OfAny != nil {
+		return responses.ResponseNewParamsToolChoiceUnion{
+			OfToolChoiceMode: ParamOpt(responses.ToolChoiceOptions("required")),
+		}
+	}
+
+	// Handle specific tool choice
 	if tc.OfTool != nil {
-		// Convert specific tool choice
 		toolParam := responses.ToolChoiceFunctionParam{
 			Name: tc.OfTool.Name,
 		}
 		return responses.ResponseNewParamsToolChoiceUnion{
 			OfFunctionTool: &toolParam,
-		}
-	}
-
-	// OfAny (Anthropic's "required") - map to auto as Responses API doesn't have direct equivalent
-	if tc.OfAny != nil {
-		return responses.ResponseNewParamsToolChoiceUnion{
-			OfToolChoiceMode: ParamOpt(responses.ToolChoiceOptions("auto")),
 		}
 	}
 

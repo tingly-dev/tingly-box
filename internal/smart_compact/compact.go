@@ -1,7 +1,7 @@
 // Package smart_compact provides smart context compression for Anthropic requests.
 //
 // The transformer removes thinking fields from non-current conversation rounds.
-// MVP focuses on Anthropic v1 and v1beta APIs.
+// MVP focuses on Anthropic v1 and beta APIs.
 package smart_compact
 
 import (

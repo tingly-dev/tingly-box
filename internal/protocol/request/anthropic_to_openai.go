@@ -8,8 +8,8 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/shared"
+	"github.com/tingly-dev/tingly-box/internal/protocol/transformer"
 
-	"github.com/tingly-dev/tingly-box/internal/protocol/request/transformer"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -188,11 +188,7 @@ func ConvertAnthropicToOpenAIRequest(anthropicReq *anthropic.MessageNewParams, c
 		} else {
 			openaiReq.Tools = ConvertAnthropicToolsToOpenAI(anthropicReq.Tools)
 		}
-	}
-
-	// Convert tool choice
-	if anthropicReq.ToolChoice.OfAuto != nil || anthropicReq.ToolChoice.OfTool != nil ||
-		anthropicReq.ToolChoice.OfAny != nil {
+		// Convert tool choice
 		openaiReq.ToolChoice = ConvertAnthropicToolChoiceToOpenAI(&anthropicReq.ToolChoice)
 	}
 
@@ -201,6 +197,8 @@ func ConvertAnthropicToOpenAIRequest(anthropicReq *anthropic.MessageNewParams, c
 		ReasoningEffort: "low", // Default to "low" for OpenAI-compatible APIs
 	}
 
+	// force to return usage
+	openaiReq.StreamOptions.IncludeUsage = param.Opt[bool]{Value: true}
 	return openaiReq, config
 }
 
@@ -436,11 +434,8 @@ func ConvertAnthropicBetaToOpenAIRequest(anthropicReq *anthropic.BetaMessageNewP
 		} else {
 			openaiReq.Tools = ConvertAnthropicBetaToolsToOpenAI(anthropicReq.Tools)
 		}
-	}
 
-	// Convert tool choice
-	if anthropicReq.ToolChoice.OfAuto != nil || anthropicReq.ToolChoice.OfTool != nil ||
-		anthropicReq.ToolChoice.OfAny != nil {
+		// Convert tool choice
 		openaiReq.ToolChoice = ConvertAnthropicBetaToolChoiceToOpenAI(&anthropicReq.ToolChoice)
 	}
 
@@ -449,6 +444,8 @@ func ConvertAnthropicBetaToOpenAIRequest(anthropicReq *anthropic.BetaMessageNewP
 		ReasoningEffort: "low", // Default to "low" for OpenAI-compatible APIs
 	}
 
+	// force to return usage
+	openaiReq.StreamOptions.IncludeUsage = param.Opt[bool]{Value: true}
 	return openaiReq, config
 }
 

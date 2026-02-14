@@ -442,8 +442,8 @@ func runDeviceCodeFlow(config *ExampleConfig, registry *oauth2.Registry, provide
 	}
 
 	fmt.Println("\n" + strings.Repeat("-", 80))
-	fmt.Println("\nDEVICE CODE FLOW INITIATED")
-	fmt.Println("\nPlease follow these steps to complete authentication:")
+	fmt.Println("DEVICE CODE FLOW INITIATED")
+	fmt.Println("Please follow these steps to complete authentication:")
 	fmt.Printf("1. Visit this URL in your browser:\n\n   %s\n\n", data.VerificationURI)
 	fmt.Printf("2. Enter the following code when prompted:\n\n   %s\n\n", strings.ToUpper(data.UserCode))
 

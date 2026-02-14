@@ -34,9 +34,9 @@ func main() {
 	launcher := NewAppLauncher()
 	rootCmd := appcommand.RootCommand(appManager, launcher)
 
-	// Default to "gui" subcommand if no args provided
+	// Default to "tray" subcommand if no args provided
 	if len(os.Args) == 1 {
-		rootCmd.SetArgs([]string{"gui"})
+		rootCmd.SetArgs([]string{"tray"})
 	}
 
 	// Execute the command

@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
@@ -185,6 +184,11 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 	SetTrackingContext(c, rule, provider, actualModel, responseModel, isStreaming)
 
 	apiStyle := provider.APIStyle
+	// === Check if provider has built-in web_search ===
+	hasBuiltInWebSearch := s.templateManager.ProviderHasBuiltInWebSearch(provider)
+
+	// === Tool Interceptor: Check if enabled and should be used ===
+	shouldIntercept, shouldStripTools, _ := s.resolveToolInterceptor(provider, hasBuiltInWebSearch)
 
 	switch apiStyle {
 	default:
@@ -197,14 +201,10 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 		return
 	case protocol.APIStyleAnthropic:
 		anthropicReq := request.ConvertOpenAIToAnthropicRequest(&req.ChatCompletionNewParams, int64(maxAllowed))
-
-		// 🔥 REQUIRED: forward tool_choice
-		if req.ToolChoice.OfAuto.Value != "" || req.ToolChoice.OfAllowedTools != nil || req.ToolChoice.OfFunctionToolChoice != nil || req.ToolChoice.OfCustomToolChoice != nil {
-			anthropicReq.ToolChoice = request.ConvertOpenAIToAnthropicToolChoice(&req.ToolChoice)
-		}
-
 		if isStreaming {
-			streamResp, cancel, err := s.forwardAnthropicStreamRequestV1(c.Request.Context(), provider, anthropicReq, scenario)
+			wrapper := s.clientPool.GetAnthropicClient(provider, string(anthropicReq.Model))
+			fc := NewForwardContext(c.Request.Context(), provider)
+			streamResp, cancel, err := ForwardAnthropicV1Stream(fc, wrapper, anthropicReq)
 			if err != nil {
 				// Track error with no usage
 				s.trackUsageFromContext(c, 0, 0, err)
@@ -239,7 +239,9 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 			}
 			return
 		} else {
-			anthropicResp, cancel, err := s.forwardAnthropicRequestV1(provider, anthropicReq, scenario)
+			wrapper := s.clientPool.GetAnthropicClient(provider, string(anthropicReq.Model))
+			fc := NewForwardContext(nil, provider)
+			anthropicResp, cancel, err := ForwardAnthropicV1(fc, wrapper, anthropicReq)
 			if err != nil {
 				// Track error with no usage
 				s.trackUsageFromContext(c, 0, 0, err)
@@ -260,8 +262,8 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 
 			// Use provider-aware conversion for provider-specific handling
 			openaiResp := nonstream.ConvertAnthropicToOpenAIResponseWithProvider(anthropicResp, responseModel, provider, actualModel)
-			if shouldRoundtripResponse(c, "anthropic") {
-				roundtripped, err := roundtripOpenAIMapViaAnthropic(openaiResp, responseModel, provider, actualModel)
+			if nonstream.ShouldRoundtripResponse(c, "anthropic") {
+				roundtripped, err := nonstream.RoundtripOpenAIMapViaAnthropic(openaiResp, responseModel, provider, actualModel)
 				if err != nil {
 					c.JSON(http.StatusInternalServerError, ErrorResponse{
 						Error: ErrorDetail{
@@ -280,14 +282,14 @@ func (s *Server) OpenAIChatCompletions(c *gin.Context) {
 		// Check if model prefers responses endpoint (for models like Codex)
 		if selectedService.PreferCompletions() {
 			// Convert chat request to responses request
-			s.handleResponsesForChatRequest(c, provider, &req, responseModel, actualModel, rule, isStreaming)
+			s.handleResponsesForChatRequest(c, provider, &req, responseModel, actualModel, isStreaming)
 			return
 		}
 
 		if isStreaming {
-			s.handleStreamingRequest(c, provider, &req.ChatCompletionNewParams, responseModel, rule)
+			s.handleOpenAIChatStreamingRequest(c, provider, &req.ChatCompletionNewParams, responseModel, shouldIntercept, shouldStripTools)
 		} else {
-			s.handleNonStreamingRequest(c, provider, &req.ChatCompletionNewParams, responseModel, rule)
+			s.handleNonStreamingRequest(c, provider, &req.ChatCompletionNewParams, responseModel, shouldIntercept, shouldStripTools)
 		}
 	}
 }

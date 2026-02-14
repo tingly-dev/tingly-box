@@ -26,13 +26,15 @@ import (
 
 // Config represents the global configuration
 type Config struct {
-	Rules            []typ.Rule           `yaml:"rules" json:"rules"`                           // List of request configurations
-	DefaultRequestID int                  `yaml:"default_request_id" json:"default_request_id"` // Index of the default Rule
-	UserToken        string               `yaml:"user_token" json:"user_token"`                 // User token for UI and control API authentication
-	ModelToken       string               `yaml:"model_token" json:"model_token"`               // Model token for OpenAI and Anthropic API authentication
-	EncryptProviders bool                 `yaml:"encrypt_providers" json:"encrypt_providers"`   // Whether to encrypt provider info (default false)
-	Scenarios        []typ.ScenarioConfig `yaml:"scenarios" json:"scenarios"`                   // Scenario-specific configurations
-	GUI              GUIConfig            `json:"gui"`                                          // GUI-specific settings
+	Rules             []typ.Rule           `yaml:"rules" json:"rules"`                             // List of request configurations
+	DefaultRequestID  int                  `yaml:"default_request_id" json:"default_request_id"`   // Index of the default Rule
+	UserToken         string               `yaml:"user_token" json:"user_token"`                   // User token for UI and control API authentication
+	ModelToken        string               `yaml:"model_token" json:"model_token"`                 // Model token for OpenAI and Anthropic API authentication
+	VirtualModelToken string               `yaml:"virtual_model_token" json:"virtual_model_token"` // Virtual model token for testing (independent from ModelToken)
+	EncryptProviders  bool                 `yaml:"encrypt_providers" json:"encrypt_providers"`     // Whether to encrypt provider info (default false)
+	Scenarios         []typ.ScenarioConfig `yaml:"scenarios" json:"scenarios"`                     // Scenario-specific configurations
+	GUI               GUIConfig            `json:"gui"`                                            // GUI-specific settings
+	RemoteCoder       RemoteCoderConfig    `json:"remote_coder"`                                   // Remote-coder service settings
 
 	// Merged fields from Config struct
 	ProvidersV1 map[string]*typ.Provider `json:"providers"`
@@ -45,6 +47,8 @@ type Config struct {
 	Verbose          bool `json:"verbose"`            // Verbose mode for detailed logging
 	Debug            bool `json:"-"`                  // Debug mode for Gin debug level logging
 	OpenBrowser      bool `yaml:"-" json:"-"`         // Auto-open browser in web UI mode (default: true)
+	// Tool interceptor (local web_search/web_fetch)
+	ToolInterceptor *typ.ToolInterceptorConfig `json:"tool_interceptor,omitempty"`
 
 	// Error log settings
 	ErrorLogFilterExpression string `json:"error_log_filter_expression"` // Expression for filtering error log entries (default: "StatusCode >= 400 && Path matches '^/api/'")
@@ -139,6 +143,9 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 	}
 
 	cfg.InsertDefaultRule()
+	if cfg.VirtualModelToken == "" {
+		cfg.VirtualModelToken = constant.DefaultVirtualModelToken
+	}
 	cfg.Save()
 
 	// Ensure tokens exist even for existing configs
@@ -148,13 +155,13 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 		updated = true
 	}
 	if cfg.UserToken == "" {
-		cfg.UserToken = "tingly-box-user-token"
+		cfg.UserToken = constant.DefaultUserToken
 		updated = true
 	}
 	if cfg.ModelToken == "" {
 		modelToken, err := auth.NewJWTManager(cfg.JWTSecret).GenerateToken("tingly-box")
 		if err != nil {
-			cfg.ModelToken = "tingly-box-model-token"
+			cfg.ModelToken = constant.DefaultModelToken
 		}
 		cfg.ModelToken = modelToken
 		updated = true
@@ -174,6 +181,9 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 	}
 	if cfg.ErrorLogFilterExpression == "" {
 		cfg.ErrorLogFilterExpression = "StatusCode >= 400 && Path matches '^/api/'"
+		updated = true
+	}
+	if cfg.applyRemoteCoderDefaults() {
 		updated = true
 	}
 	// Default OpenBrowser to true (runtime-only setting, not persisted)
@@ -629,6 +639,31 @@ func (c *Config) HasModelToken() bool {
 	return c.ModelToken != ""
 }
 
+// SetVirtualModelToken sets the virtual model token for testing
+func (c *Config) SetVirtualModelToken(token string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.VirtualModelToken = token
+	return c.Save()
+}
+
+// GetVirtualModelToken returns the virtual model token
+func (c *Config) GetVirtualModelToken() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.VirtualModelToken
+}
+
+// HasVirtualModelToken checks if a virtual model token is configured
+func (c *Config) HasVirtualModelToken() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.VirtualModelToken != ""
+}
+
 // Legacy compatibility methods for backward compatibility
 
 // SetToken sets the user token (for backward compatibility)
@@ -812,6 +847,14 @@ func (c *Config) GetDefaultMaxTokens() int {
 	defer c.mu.RUnlock()
 
 	return c.DefaultMaxTokens
+}
+
+// GetToolInterceptorConfig returns the global tool interceptor config
+func (c *Config) GetToolInterceptorConfig() *typ.ToolInterceptorConfig {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.ToolInterceptor
 }
 
 // SetDefaultMaxTokens updates the default max_tokens
@@ -1251,14 +1294,18 @@ func (c *Config) CreateDefaultConfig() error {
 	c.DefaultRequestID = 0
 	// Set default auth tokens if not already set
 	if c.UserToken == "" {
-		c.UserToken = "tingly-box-user-token"
+		c.UserToken = constant.DefaultUserToken
 	}
 	if c.ModelToken == "" {
 		modelToken, err := auth.NewJWTManager(c.JWTSecret).GenerateToken("tingly-box")
 		if err != nil {
-			c.ModelToken = "tingly-box-model-token"
+			c.ModelToken = constant.DefaultModelToken
 		}
 		c.ModelToken = "tingly-box-" + modelToken
+	}
+	// Set default virtual model token (independent from model token)
+	if c.VirtualModelToken == "" {
+		c.VirtualModelToken = constant.DefaultVirtualModelToken
 	}
 	// Initialize merged fields with defaults
 	c.ProvidersV1 = make(map[string]*typ.Provider)
@@ -1269,6 +1316,7 @@ func (c *Config) CreateDefaultConfig() error {
 	if c.ErrorLogFilterExpression == "" {
 		c.ErrorLogFilterExpression = "StatusCode >= 400 && Path matches '^/api/'"
 	}
+	c.applyRemoteCoderDefaults()
 	if err := c.Save(); err != nil {
 		return fmt.Errorf("failed to create default global cfg: %w", err)
 	}
@@ -1324,7 +1372,7 @@ func init() {
 			Scenario:      typ.ScenarioClaudeCode,
 			RequestModel:  "tingly/cc-haiku",
 			ResponseModel: "",
-			Description:   "Claude Code - Haiku model - small / cheap / for background and summary task",
+			Description:   "Claude Code - Haiku mode The model to use for haiku , or background functionality",
 			Services:      []*loadbalance.Service{},
 			LBTactic: typ.Tactic{
 				Type:   loadbalance.TacticRoundRobin,
@@ -1337,7 +1385,7 @@ func init() {
 			Scenario:      typ.ScenarioClaudeCode,
 			RequestModel:  "tingly/cc-sonnet",
 			ResponseModel: "",
-			Description:   "Claude Code - Sonnet model - medium / for general task",
+			Description:   "Claude Code - Sonnet model - model to use for sonnet , or for opusplan when Plan Mode is not active.",
 			Services:      []*loadbalance.Service{},
 			LBTactic: typ.Tactic{
 				Type:   loadbalance.TacticRoundRobin,
@@ -1350,7 +1398,7 @@ func init() {
 			Scenario:      typ.ScenarioClaudeCode,
 			RequestModel:  "tingly/cc-opus",
 			ResponseModel: "",
-			Description:   "Claude Code - Opus model - large / expensive / for high level task",
+			Description:   "Claude Code - Opus model - to use for opus , or for opusplan when Plan Mode is active.",
 			Services:      []*loadbalance.Service{},
 			LBTactic: typ.Tactic{
 				Type:   loadbalance.TacticRoundRobin,
@@ -1364,6 +1412,19 @@ func init() {
 			RequestModel:  "tingly/cc-default",
 			ResponseModel: "",
 			Description:   "Claude Code - Default model - for general task",
+			Services:      []*loadbalance.Service{},
+			LBTactic: typ.Tactic{
+				Type:   loadbalance.TacticRoundRobin,
+				Params: typ.DefaultRoundRobinParams(),
+			},
+			Active: true,
+		},
+		{
+			UUID:          "built-in-cc-subagent",
+			Scenario:      typ.ScenarioClaudeCode,
+			RequestModel:  "tingly/cc-subagent",
+			ResponseModel: "",
+			Description:   "Claude Code - Subagent model - model to use for subagents",
 			Services:      []*loadbalance.Service{},
 			LBTactic: typ.Tactic{
 				Type:   loadbalance.TacticRoundRobin,
