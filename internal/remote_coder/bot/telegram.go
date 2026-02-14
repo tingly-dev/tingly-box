@@ -18,7 +18,6 @@ import (
 )
 
 const (
-	telegramMessageLimit  = 4000
 	listSummaryLimit      = 160
 	telegramStartRetries  = 10
 	telegramStartDelay    = 5 * time.Second
@@ -153,6 +152,14 @@ func sleepWithContext(ctx context.Context, delay time.Duration) bool {
 	}
 }
 
+// getReplyTarget returns the reply target ID for the message.
+// Different platforms may use different IDs:
+// - Telegram: Recipient.ID (chat ID)
+// - DingTalk/Feishu: Recipient.ID (conversation ID)
+func getReplyTarget(msg imbot.Message) string {
+	return strings.TrimSpace(msg.Recipient.ID)
+}
+
 func handleTelegramMessage(
 	ctx context.Context,
 	manager *imbot.Manager,
@@ -162,12 +169,15 @@ func handleTelegramMessage(
 	summaryEngine *summarizer.Engine,
 	msg imbot.Message,
 ) {
-	bot := manager.GetBot(imbot.PlatformTelegram)
+	bot := manager.GetBot(msg.Platform)
 	if bot == nil {
 		return
 	}
 
-	chatID := strings.TrimSpace(msg.Recipient.ID)
+	// get recipient, different platform may require different source and id
+	// Telegram: Recipient.ID (chat ID)
+	// DingTalk/Feishu: Recipient.ID (conversation ID)
+	chatID := getReplyTarget(msg)
 	if chatID == "" {
 		return
 	}
@@ -729,10 +739,10 @@ func formatResponseWithMeta(projectPath, sessionID, userID, response string) str
 }
 
 func sendText(bot imbot.Bot, chatID string, text string) {
-	for _, chunk := range chunkText(text, telegramMessageLimit) {
+	for _, chunk := range chunkText(text, imbot.DefaultMessageLimit) {
 		_, err := bot.SendText(context.Background(), chatID, chunk)
 		if err != nil {
-			logrus.WithError(err).Warn("Failed to send telegram message")
+			logrus.WithError(err).Warn("Failed to send message")
 			return
 		}
 	}
