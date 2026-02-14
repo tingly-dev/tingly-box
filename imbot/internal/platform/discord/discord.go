@@ -12,6 +12,7 @@ import (
 // Bot implements the Discord bot
 type Bot struct {
 	*core.BaseBot
+	adapter *Adapter // Local adapter for message conversion
 	session *discordgo.Session
 	intents discordgo.Intent
 	ctx     context.Context
@@ -72,6 +73,9 @@ func NewDiscordBot(config *core.Config) (*Bot, error) {
 // Connect connects to Discord
 func (b *Bot) Connect(ctx context.Context) error {
 	b.ctx, b.cancel = context.WithCancel(ctx)
+
+	// Initialize adapter
+	b.adapter = NewAdapter(b.Config(), b.session)
 
 	// Register handlers
 	b.session.AddHandler(b.onMessageCreate)
@@ -240,94 +244,14 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		return
 	}
 
-	// Determine chat type
-	chatType := b.getChatType(s, m.Message)
-
-	// Create sender
-	sender := core.Sender{
-		ID:          m.Message.Author.ID,
-		Username:    m.Message.Author.Username,
-		DisplayName: m.Message.Author.GlobalName,
-		Raw:         make(map[string]interface{}),
-	}
-
-	if sender.DisplayName == "" {
-		sender.DisplayName = sender.Username
-	}
-
-	// Add discriminator if available
-	if m.Message.Author.Discriminator != "0000" {
-		sender.DisplayName += "#" + m.Message.Author.Discriminator
-	}
-
-	// Create recipient
-	channel, err := s.State.Channel(m.Message.ChannelID)
-	recipient := core.Recipient{
-		ID:   m.Message.ChannelID,
-		Type: string(chatType),
-	}
-
-	if err == nil && channel.Name != "" {
-		recipient.DisplayName = channel.Name
-	}
-
-	// Extract content
-	var content core.Content
-
-	if m.Message.Content != "" {
-		content = core.NewTextContent(m.Message.Content)
-	} else if len(m.Message.Embeds) > 0 {
-		content = b.handleEmbeds(m.Message.Embeds)
-	} else if m.Message.Attachments != nil && len(m.Message.Attachments) > 0 {
-		content = b.handleAttachments(m.Message.Attachments)
-	} else {
-		content = core.NewSystemContent("unknown", nil)
-	}
-
-	// Create message
-	message := core.Message{
-		ID:        m.Message.ID,
-		Platform:  core.PlatformDiscord,
-		Timestamp: m.Message.Timestamp.Unix(),
-		Sender:    sender,
-		Recipient: recipient,
-		Content:   content,
-		ChatType:  chatType,
-		Metadata:  make(map[string]interface{}),
-	}
-
-	// Add thread context if reply
-	if m.Message.Reference != nil {
-		ref := m.Message.Reference()
-		if ref != nil && ref.MessageID != "" {
-			message.ThreadContext = &core.ThreadContext{
-				ID:              ref.MessageID,
-				ParentMessageID: ref.MessageID,
-			}
-		}
-	}
-
-	b.EmitMessage(message)
-}
-
-// getChatType determines the chat type
-func (b *Bot) getChatType(s *discordgo.Session, m *discordgo.Message) core.ChatType {
-	channel, err := s.State.Channel(m.ChannelID)
+	// Use adapter to convert platform message to core message
+	coreMessage, err := b.adapter.AdaptMessage(b.ctx, m)
 	if err != nil {
-		return core.ChatTypeDirect
+		b.Logger().Error("Failed to adapt message: %v", err)
+		return
 	}
 
-	switch channel.Type {
-	case discordgo.ChannelTypeDM, discordgo.ChannelTypeGroupDM:
-		return core.ChatTypeDirect
-	case discordgo.ChannelTypeGuildCategory:
-		return core.ChatTypeChannel
-	default:
-		if channel.IsThread() {
-			return core.ChatTypeThread
-		}
-		return core.ChatTypeGroup
-	}
+	b.EmitMessage(*coreMessage)
 }
 
 // sendText sends a text message
@@ -408,65 +332,6 @@ func (b *Bot) sendMedia(ctx context.Context, target string, opts *core.SendMessa
 		MessageID: m.ID,
 		Timestamp: m.Timestamp.Unix(),
 	}, nil
-}
-
-// handleEmbeds handles Discord embeds
-func (b *Bot) handleEmbeds(embeds []*discordgo.MessageEmbed) core.Content {
-	if len(embeds) == 0 {
-		return core.NewSystemContent("embed", nil)
-	}
-
-	// Convert first embed to text
-	embed := embeds[0]
-	text := ""
-
-	if embed.Title != "" {
-		text += "**" + embed.Title + "**\n"
-	}
-
-	if embed.Description != "" {
-		text += embed.Description + "\n"
-	}
-
-	for _, field := range embed.Fields {
-		text += "\n**" + field.Name + "**\n" + field.Value + "\n"
-	}
-
-	return core.NewTextContent(text)
-}
-
-// handleAttachments handles Discord attachments
-func (b *Bot) handleAttachments(attachments []*discordgo.MessageAttachment) core.Content {
-	media := make([]core.MediaAttachment, len(attachments))
-
-	for i, att := range attachments {
-		mediaType := "document"
-		switch att.ContentType {
-		case "image/png", "image/jpeg", "image/gif":
-			mediaType = "image"
-		case "video/mp4", "video/webm":
-			mediaType = "video"
-		case "audio/mpeg", "audio/ogg":
-			mediaType = "audio"
-		}
-
-		media[i] = core.MediaAttachment{
-			Type:     mediaType,
-			URL:      att.URL,
-			Filename: att.Filename,
-			Size:     int64(att.Size),
-			Width:    att.Width,
-			Height:   att.Height,
-			Raw:      make(map[string]interface{}),
-		}
-	}
-
-	caption := ""
-	if len(media) == 1 {
-		caption = media[0].Filename
-	}
-
-	return core.NewMediaContent(media, caption)
 }
 
 // Helper functions

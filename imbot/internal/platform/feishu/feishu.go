@@ -23,6 +23,7 @@ const (
 // Bot implements the Feishu/Lark bot
 type Bot struct {
 	*core.BaseBot
+	adapter     *Adapter // Local adapter for message conversion
 	client      *http.Client
 	apiURL      string
 	appID       string
@@ -168,6 +169,9 @@ func NewFeishuBot(config *core.Config) (*Bot, error) {
 // Connect connects to Feishu/Lark
 func (b *Bot) Connect(ctx context.Context) error {
 	b.ctx, b.cancel = context.WithCancel(ctx)
+
+	// Initialize adapter for message conversion
+	b.adapter = NewAdapter(b.Config())
 
 	// Test authentication
 	if err := b.authenticate(); err != nil {
@@ -587,153 +591,15 @@ func (b *Bot) doRequest(ctx context.Context, method, url string, body interface{
 
 // HandleWebhook handles an incoming webhook event
 func (b *Bot) HandleWebhook(body []byte) error {
-	var event MessageEvent
-	if err := json.Unmarshal(body, &event); err != nil {
+	// Use adapter to convert webhook to core message
+	coreMessage, err := b.adapter.AdaptWebhook(b.ctx, body)
+	if err != nil {
+		b.Logger().Error("Failed to adapt webhook: %v", err)
 		return err
 	}
 
-	// Handle message event
-	if event.Header.EventType == "im.message.receive_v1" {
-		b.handleFeishuMessage(event)
-	}
-
+	b.EmitMessage(*coreMessage)
 	return nil
-}
-
-// handleFeishuMessage handles an incoming Feishu message
-func (b *Bot) handleFeishuMessage(event MessageEvent) {
-	detail := event.Event
-
-	// Determine chat type
-	chatType := b.getChatType(detail.ChatType)
-
-	// Create sender
-	sender := core.Sender{
-		ID:  detail.Sender.SenderID,
-		Raw: make(map[string]interface{}),
-	}
-
-	// Try to get sender info (in real implementation, you'd fetch user info)
-	sender.DisplayName = detail.Sender.SenderID
-
-	// Create recipient
-	recipient := core.Recipient{
-		ID:   detail.ChatID,
-		Type: string(chatType),
-	}
-
-	// Extract content
-	var content core.Content
-
-	switch detail.MsgType {
-	case "text":
-		if textContent, ok := detail.Content.(map[string]interface{}); ok {
-			if text, ok := textContent["text"].(string); ok {
-				content = core.NewTextContent(text)
-			}
-		}
-	case "image":
-		if imageContent, ok := detail.Content.(map[string]interface{}); ok {
-			if imageKey, ok := imageContent["image_key"].(string); ok {
-				content = core.NewMediaContent([]core.MediaAttachment{
-					{
-						Type: "image",
-						URL:  imageKey,
-						Raw:  make(map[string]interface{}),
-					},
-				}, "")
-			}
-		}
-	case "post":
-		// Rich post message
-		content = b.handlePostContent(detail.Content)
-	default:
-		content = core.NewSystemContent("unknown", nil)
-	}
-
-	// Create message
-	message := core.Message{
-		ID:        detail.MessageID,
-		Platform:  core.PlatformFeishu,
-		Timestamp: parseFeishuTimestamp(detail.CreateTime),
-		Sender:    sender,
-		Recipient: recipient,
-		Content:   content,
-		ChatType:  chatType,
-		Metadata:  make(map[string]interface{}),
-	}
-
-	b.EmitMessage(message)
-}
-
-// handlePostContent handles post content from Feishu
-func (b *Bot) handlePostContent(content interface{}) core.Content {
-	postMap, ok := content.(map[string]interface{})
-	if !ok {
-		return core.NewSystemContent("post", nil)
-	}
-
-	zhCn, ok := postMap["zh_cn"].(map[string]interface{})
-	if !ok {
-		return core.NewSystemContent("post", nil)
-	}
-
-	title := ""
-	if titleVal, ok := zhCn["title"].(string); ok {
-		title = titleVal
-	}
-
-	// Extract text from content elements
-	var textBuilder string
-	if contentArr, ok := zhCn["content"].([]interface{}); ok {
-		for _, row := range contentArr {
-			if rowArr, ok := row.([]interface{}); ok {
-				for _, elem := range rowArr {
-					if elemMap, ok := elem.(map[string]interface{}); ok {
-						if tag, ok := elemMap["tag"].(string); ok && tag == "text" {
-							if text, ok := elemMap["text"].(string); ok {
-								textBuilder += text + "\n"
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	if title != "" {
-		textBuilder = title + "\n" + textBuilder
-	}
-
-	return core.NewTextContent(textBuilder)
-}
-
-// getChatType determines the chat type from Feishu chat type
-func (b *Bot) getChatType(chatType string) core.ChatType {
-	switch chatType {
-	case "p2p":
-		return core.ChatTypeDirect
-	case "group":
-		return core.ChatTypeGroup
-	default:
-		return core.ChatTypeDirect
-	}
-}
-
-// parseFeishuTimestamp parses Feishu timestamp string to Unix timestamp
-func parseFeishuTimestamp(ts string) int64 {
-	// Feishu timestamps are in milliseconds
-	if ts == "" {
-		return 0
-	}
-
-	// Try to parse as int64 (milliseconds)
-	var ms int64
-	if _, err := fmt.Sscanf(ts, "%d", &ms); err == nil {
-		return ms / 1000
-	}
-
-	return 0
 }
 
 // GetWebhookURL returns the webhook URL for receiving events

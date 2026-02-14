@@ -20,6 +20,7 @@ const (
 // Bot implements DingTalk bot using official SDK
 type Bot struct {
 	*core.BaseBot
+	adapter    *Adapter // Local adapter for message conversion
 	cli        *client.StreamClient
 	ctx        context.Context
 	cancel     context.CancelFunc
@@ -61,6 +62,9 @@ func (b *Bot) Connect(ctx context.Context) error {
 	b.ctx, b.cancel = context.WithCancel(ctx)
 
 	b.Logger().Info("Connecting to DingTalk...")
+
+	// Initialize adapter
+	b.adapter = NewAdapter(b.Config())
 
 	// Get credentials from config
 	clientID := b.Config().Auth.ClientID
@@ -132,42 +136,6 @@ func (b *Bot) waitForReady() {
 
 // onChatBotMessage handles chat bot callback messages
 func (b *Bot) onChatBotMessage(ctx context.Context, data *chatbot.BotCallbackDataModel) ([]byte, error) {
-	message, err := b.parseChatBotMessage(data)
-	if err != nil {
-		b.Logger().Error("Failed to parse chat bot message: %v", err)
-		return []byte(""), nil
-	}
-
-	// Emit message to handlers
-	b.EmitMessage(*message)
-
-	// Return empty response (no reply)
-	return []byte(""), nil
-}
-
-// parseChatBotMessage converts SDK callback data to unified Message
-func (b *Bot) parseChatBotMessage(data *chatbot.BotCallbackDataModel) (*core.Message, error) {
-	sender := core.Sender{
-		ID:          data.SenderStaffId,
-		DisplayName: data.SenderNick,
-		Raw: map[string]interface{}{
-			"staffId":        data.SenderStaffId,
-			"conversationId": data.ConversationId,
-		},
-	}
-
-	recipient := core.Recipient{
-		ID:   data.ConversationId,
-		Type: getChatTypeString(data.ConversationType),
-	}
-
-	var content core.Content
-	if data.Text.Content != "" {
-		content = core.NewTextContent(data.Text.Content)
-	} else {
-		content = core.NewTextContent("")
-	}
-
 	// Store webhook URL for this conversation
 	b.mu.Lock()
 	if data.SessionWebhook != "" {
@@ -175,25 +143,18 @@ func (b *Bot) parseChatBotMessage(data *chatbot.BotCallbackDataModel) (*core.Mes
 	}
 	b.mu.Unlock()
 
-	message := &core.Message{
-		ID:        data.MsgId,
-		Platform:  core.PlatformDingTalk,
-		Timestamp: time.Now().Unix(),
-		Sender:    sender,
-		Recipient: recipient,
-		Content:   content,
-		ChatType:  getChatType(data.ConversationType),
-		Metadata: map[string]interface{}{
-			"conversationId":    data.ConversationId,
-			"conversationType":  data.ConversationType,
-			"conversationTitle": data.ConversationTitle,
-			"sessionWebhook":    data.SessionWebhook,
-			"msgtype":           data.Msgtype,
-			"senderId":          data.SenderId,
-		},
+	// Use adapter to convert platform message to core message
+	coreMessage, err := b.adapter.AdaptChatBotMessage(ctx, data)
+	if err != nil {
+		b.Logger().Error("Failed to adapt message: %v", err)
+		return []byte(""), nil
 	}
 
-	return message, nil
+	// Emit message to handlers
+	b.EmitMessage(*coreMessage)
+
+	// Return empty response (no reply)
+	return []byte(""), nil
 }
 
 // SendMessage sends a message
