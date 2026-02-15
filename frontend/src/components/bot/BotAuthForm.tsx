@@ -6,8 +6,9 @@ import {
     Box,
     InputAdornment,
     IconButton,
+    Link,
 } from '@mui/material';
-import { Visibility, VisibilityOff } from '@mui/icons-material';
+import { Visibility, VisibilityOff, OpenInNew } from '@mui/icons-material';
 import { type FieldSpec } from '@/types/bot.ts';
 
 interface BotAuthFormProps {
@@ -18,6 +19,18 @@ interface BotAuthFormProps {
     onChange: (key: string, value: string) => void;
     disabled?: boolean;
 }
+
+// OAuth platform help links
+const oauthHelpLinks: Record<string, { url: string; label: string }> = {
+    dingtalk: {
+        url: 'https://open.dingtalk.com/document/orgapp/obtain-the-appkey-and-appsecret-of-an-internal-app',
+        label: 'DingTalk Developer Docs',
+    },
+    feishu: {
+        url: 'https://open.feishu.cn/document/home/introduction-to-feishu-platform/',
+        label: 'Feishu Developer Docs',
+    },
+};
 
 export const BotAuthForm: React.FC<BotAuthFormProps> = ({
     platform,
@@ -43,11 +56,28 @@ export const BotAuthForm: React.FC<BotAuthFormProps> = ({
         );
     }
 
+    const helpLink = oauthHelpLinks[platform];
+
     return (
         <Stack spacing={2}>
-            <Typography variant="body2" color="text.secondary">
-                {authType === 'oauth' ? 'OAuth Credentials' : authType === 'token' ? 'Token Authentication' : 'Authentication'}
-            </Typography>
+            <Box>
+                {authType === 'oauth' && (
+                    <Typography variant="body2" color="text.secondary">
+                        Enter your App credentials from the developer console.
+                        {helpLink && (
+                            <Link
+                                href={helpLink.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                sx={{ ml: 1, display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
+                            >
+                                {helpLink.label}
+                                <OpenInNew fontSize="inherit" />
+                            </Link>
+                        )}
+                    </Typography>
+                )}
+            </Box>
             {fields.map((field) => {
                 const value = authData[field.key] || '';
                 const isVisible = visibleFields[field.key] || false;
