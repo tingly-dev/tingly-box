@@ -1145,7 +1145,7 @@ export const api = {
         }
     },
 
-    // Get remote-coder bot settings
+    // Get remote-coder bot settings (legacy - returns single bot)
     getRemoteCCBotSettings: async (): Promise<any> => {
         try {
             const token = await getRemoteCCAuthToken();
@@ -1168,8 +1168,168 @@ export const api = {
         }
     },
 
+    // Get all bot settings (V2 API - returns array)
+    getBotSettingsList: async (): Promise<any> => {
+        try {
+            const token = await getRemoteCCAuthToken();
+            const baseUrl = api.getRemoteCCBaseUrl();
+            const response = await fetch(`${baseUrl}/remote-coder/bot/settings/list`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+            });
+
+            if (response.status === 401) {
+                return { success: false, error: 'Authentication required' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Get a specific bot setting by UUID
+    getBotSetting: async (uuid: string): Promise<any> => {
+        try {
+            const token = await getRemoteCCAuthToken();
+            const baseUrl = api.getRemoteCCBaseUrl();
+            const response = await fetch(`${baseUrl}/remote-coder/bot/settings/${encodeURIComponent(uuid)}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+            });
+
+            if (response.status === 401) {
+                return { success: false, error: 'Authentication required' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Create a new bot setting
+    createBotSetting: async (data: {
+        name?: string;
+        platform?: string;
+        auth_type?: string;
+        auth?: Record<string, string>;
+        proxy_url?: string;
+        chat_id?: string;
+        bash_allowlist?: string[];
+        enabled?: boolean;
+        token?: string;
+    }): Promise<any> => {
+        try {
+            const token = await getRemoteCCAuthToken();
+            const baseUrl = api.getRemoteCCBaseUrl();
+            const response = await fetch(`${baseUrl}/remote-coder/bot/settings`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+                body: JSON.stringify(data),
+            });
+
+            if (response.status === 401) {
+                return { success: false, error: 'Authentication required' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Update a bot setting
+    updateBotSetting: async (uuid: string, data: {
+        name?: string;
+        platform?: string;
+        auth_type?: string;
+        auth?: Record<string, string>;
+        proxy_url?: string;
+        chat_id?: string;
+        bash_allowlist?: string[];
+        enabled?: boolean;
+    }): Promise<any> => {
+        try {
+            const token = await getRemoteCCAuthToken();
+            const baseUrl = api.getRemoteCCBaseUrl();
+            const response = await fetch(`${baseUrl}/remote-coder/bot/settings/${encodeURIComponent(uuid)}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+                body: JSON.stringify(data),
+            });
+
+            if (response.status === 401) {
+                return { success: false, error: 'Authentication required' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Delete a bot setting
+    deleteBotSetting: async (uuid: string): Promise<any> => {
+        try {
+            const token = await getRemoteCCAuthToken();
+            const baseUrl = api.getRemoteCCBaseUrl();
+            const response = await fetch(`${baseUrl}/remote-coder/bot/settings/${encodeURIComponent(uuid)}`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+            });
+
+            if (response.status === 401) {
+                return { success: false, error: 'Authentication required' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Toggle a bot setting's enabled status
+    toggleBotSetting: async (uuid: string): Promise<any> => {
+        try {
+            const token = await getRemoteCCAuthToken();
+            const baseUrl = api.getRemoteCCBaseUrl();
+            const response = await fetch(`${baseUrl}/remote-coder/bot/settings/${encodeURIComponent(uuid)}/toggle`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+            });
+
+            if (response.status === 401) {
+                return { success: false, error: 'Authentication required' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
     // Update remote-coder bot settings
     updateRemoteCCBotSettings: async (data: {
+        name?: string;
         platform?: string;
         auth_type?: string;
         auth?: Record<string, string>;

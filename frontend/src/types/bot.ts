@@ -18,13 +18,18 @@ export interface FieldSpec {
 }
 
 export interface BotSettings {
-	platform: string;
-	auth_type: string;
-	auth: Record<string, string>;
-	proxy_url?: string;
-	chat_id?: string;
-	bash_allowlist?: string[];
-	token?: string; // Legacy field for backward compatibility
+    uuid?: string;
+    name?: string;
+    platform: string;
+    auth_type: string;
+    auth: Record<string, string>;
+    proxy_url?: string;
+    chat_id?: string;
+    bash_allowlist?: string[];
+    enabled?: boolean;
+    token?: string; // Legacy field for backward compatibility
+    created_at?: string;
+    updated_at?: string;
 }
 
 export interface BotPlatformCategory {
