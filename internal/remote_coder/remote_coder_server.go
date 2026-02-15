@@ -193,15 +193,17 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	} else {
 		// Try legacy single settings for backward compatibility
 		if settings, err := botStore.GetSettings(); err == nil {
-			if strings.TrimSpace(settings.Token) != "" {
-				go func() {
-					if err := bot.RunTelegramBot(ctx, botStore, sessionMgr); err != nil {
-						logrus.WithError(err).Warn("Remote-coder Telegram bot stopped")
-					}
-				}()
-				logrus.Info("Remote-coder Telegram bot started (legacy mode)")
-			} else {
-				logrus.Info("Remote-coder Telegram bot not started: missing token")
+			if settings.Enabled {
+				if strings.TrimSpace(settings.Token) != "" {
+					go func() {
+						if err := bot.RunTelegramBot(ctx, botStore, sessionMgr); err != nil {
+							logrus.WithError(err).Warn("Remote-coder Telegram bot stopped")
+						}
+					}()
+					logrus.Info("Remote-coder Telegram bot started (legacy mode)")
+				} else {
+					logrus.Info("Remote-coder Telegram bot not started: missing token")
+				}
 			}
 		} else {
 			logrus.WithError(err).Warn("Remote-coder Telegram bot not started: failed to load settings")
