@@ -18,12 +18,28 @@ import (
 )
 
 const (
-	telegramMessageLimit  = 4000
 	listSummaryLimit      = 160
 	telegramStartRetries  = 10
 	telegramStartDelay    = 5 * time.Second
 	telegramStartMaxDelay = 5 * time.Minute
 )
+
+// Agent routing constants
+const (
+	agentClaudeCode = "claude_code"
+)
+
+// agentPatterns maps agent aliases to their internal identifier
+var agentPatterns = map[string]string{
+	"@claude": agentClaudeCode,
+	"@cc":     agentClaudeCode,
+}
+
+// agentCommands maps command aliases to their internal identifier
+var agentCommands = map[string]string{
+	"/claude": agentClaudeCode,
+	"/cc":     agentClaudeCode,
+}
 
 var defaultBashAllowlist = map[string]struct{}{
 	"cd":  {},
@@ -136,6 +152,14 @@ func sleepWithContext(ctx context.Context, delay time.Duration) bool {
 	}
 }
 
+// getReplyTarget returns the reply target ID for the message.
+// Different platforms may use different IDs:
+// - Telegram: Recipient.ID (chat ID)
+// - DingTalk/Feishu: Recipient.ID (conversation ID)
+func getReplyTarget(msg imbot.Message) string {
+	return strings.TrimSpace(msg.Recipient.ID)
+}
+
 func handleTelegramMessage(
 	ctx context.Context,
 	manager *imbot.Manager,
@@ -145,12 +169,15 @@ func handleTelegramMessage(
 	summaryEngine *summarizer.Engine,
 	msg imbot.Message,
 ) {
-	bot := manager.GetBot(imbot.PlatformTelegram)
+	bot := manager.GetBot(msg.Platform)
 	if bot == nil {
 		return
 	}
 
-	chatID := strings.TrimSpace(msg.Recipient.ID)
+	// get recipient, different platform may require different source and id
+	// Telegram: Recipient.ID (chat ID)
+	// DingTalk/Feishu: Recipient.ID (conversation ID)
+	chatID := getReplyTarget(msg)
 	if chatID == "" {
 		return
 	}
@@ -174,7 +201,103 @@ func handleTelegramMessage(
 	}
 
 	if strings.HasPrefix(text, "/") {
-		handleTelegramCommand(ctx, bot, store, sessionMgr, chatID, text)
+		// Check for agent commands (/cc, /claude) first
+		if agent, msgText, matched := parseAgentCommand(text); matched {
+			handleAgentMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agent, msgText, msg.Sender.ID)
+			return
+		}
+		handleTelegramCommand(ctx, bot, store, sessionMgr, chatID, text, msg.Sender.ID)
+		return
+	}
+
+	// Check for @agent mention pattern
+	if agent, msgText := parseAgentMention(text); agent != "" {
+		handleAgentMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agent, msgText, msg.Sender.ID)
+		return
+	}
+
+	// No agent mentioned - check if there's an active session to auto-route to cc
+	sessionID, ok, err := store.GetSessionForChat(chatID)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to load session mapping")
+	}
+	if ok && sessionID != "" {
+		// Has active session, auto-route to cc
+		handleAgentMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agentClaudeCode, text, msg.Sender.ID)
+		return
+	}
+
+	// No session - show guidance
+	sendText(bot, chatID, "No active session. Use /new <project_path> to create one, then just send messages directly.")
+}
+
+// parseAgentMention checks if text starts with @agent pattern and returns the agent and remaining message.
+func parseAgentMention(text string) (agent string, message string) {
+	text = strings.TrimSpace(text)
+	for pattern, agentID := range agentPatterns {
+		if strings.HasPrefix(text, pattern) {
+			remaining := strings.TrimSpace(strings.TrimPrefix(text, pattern))
+			return agentID, remaining
+		}
+	}
+	return "", ""
+}
+
+// parseAgentCommand checks if text is an agent command (e.g., /cc <message>) and returns the agent and message.
+func parseAgentCommand(text string) (agent string, message string, matched bool) {
+	fields := strings.Fields(text)
+	if len(fields) == 0 {
+		return "", "", false
+	}
+	cmd := strings.ToLower(fields[0])
+	if agentID, ok := agentCommands[cmd]; ok {
+		remaining := strings.TrimSpace(strings.TrimPrefix(text, fields[0]))
+		return agentID, remaining, true
+	}
+	return "", "", false
+}
+
+// handleAgentMessage routes message to the appropriate agent handler.
+func handleAgentMessage(
+	ctx context.Context,
+	bot imbot.Bot,
+	store *Store,
+	sessionMgr *session.Manager,
+	ccLauncher *launcher.ClaudeCodeLauncher,
+	summaryEngine *summarizer.Engine,
+	chatID string,
+	agent string,
+	text string,
+	senderID string,
+) {
+	logrus.WithFields(logrus.Fields{
+		"agent":    agent,
+		"chatID":   chatID,
+		"senderID": senderID,
+	}).Infof("Agent call: %s", text)
+
+	switch agent {
+	case agentClaudeCode:
+		handleClaudeCodeMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, text, senderID)
+	default:
+		sendText(bot, chatID, fmt.Sprintf("Unknown agent: %s", agent))
+	}
+}
+
+// handleClaudeCodeMessage executes a message through Claude Code.
+func handleClaudeCodeMessage(
+	ctx context.Context,
+	bot imbot.Bot,
+	store *Store,
+	sessionMgr *session.Manager,
+	ccLauncher *launcher.ClaudeCodeLauncher,
+	summaryEngine *summarizer.Engine,
+	chatID string,
+	text string,
+	senderID string,
+) {
+	if strings.TrimSpace(text) == "" {
+		sendText(bot, chatID, "Please provide a message for Claude Code. Usage: /cc <message> or @cc <message>")
 		return
 	}
 
@@ -235,7 +358,7 @@ func handleTelegramMessage(
 	if err != nil {
 		sessionMgr.SetFailed(sessionID, response)
 		logrus.WithError(err).Warn("Remote-coder execution failed")
-		sendText(bot, chatID, response)
+		sendText(bot, chatID, formatResponseWithMeta(projectPath, sessionID, senderID, response))
 		return
 	}
 
@@ -249,17 +372,36 @@ func handleTelegramMessage(
 		Timestamp: time.Now(),
 	})
 
-	sendText(bot, chatID, response)
+	sendText(bot, chatID, formatResponseWithMeta(projectPath, sessionID, senderID, response))
 }
 
-func handleTelegramCommand(ctx context.Context, bot imbot.Bot, store *Store, sessionMgr *session.Manager, chatID string, text string) {
+func handleTelegramCommand(ctx context.Context, bot imbot.Bot, store *Store, sessionMgr *session.Manager, chatID string, text string, senderID string) {
 	fields := strings.Fields(text)
 	if len(fields) == 0 {
 		return
 	}
 	cmd := strings.ToLower(fields[0])
 
+	// Check for agent commands (/claude, /cc)
+	if _, ok := agentCommands[cmd]; ok {
+		// Agent commands need special handling with launcher
+		// Fall through to switch for now, will be handled in default case
+	}
+
 	switch cmd {
+	case "/help", "/start":
+		helpText := fmt.Sprintf(`Your User ID: %s
+
+Available commands:
+/help - Show this help message
+/cc <message> - Send message to Claude Code
+/info - Show current session info
+/status - Show current task status
+/list - List all sessions
+/use <session_id> - Switch to a session
+/new <project_path> - Create a new session
+/bash <cmd> - Execute allowed bash commands (cd, ls, pwd)`, senderID)
+		sendText(bot, chatID, helpText)
 	case "/info":
 		sessionID, ok, err := store.GetSessionForChat(chatID)
 		if err != nil {
@@ -286,6 +428,60 @@ func handleTelegramCommand(ctx context.Context, bot imbot.Bot, store *Store, ses
 			summary = "(no assistant summary yet)"
 		}
 		sendText(bot, chatID, fmt.Sprintf("Session: %s\nProject Path: %s\nLast Summary: %s", sessionID, projectPath, summary))
+	case "/status":
+		sessionID, ok, err := store.GetSessionForChat(chatID)
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to load session mapping")
+		}
+		if !ok || sessionID == "" {
+			sendText(bot, chatID, "No session mapped. Use /new <project_path> to create one.")
+			return
+		}
+		sess, exists := sessionMgr.GetOrLoad(sessionID)
+		if !exists {
+			sendText(bot, chatID, "Session not found.")
+			return
+		}
+
+		// Build status message
+		var statusParts []string
+		statusParts = append(statusParts, fmt.Sprintf("Session: %s", sessionID))
+		statusParts = append(statusParts, fmt.Sprintf("Status: %s", sess.Status))
+
+		// Show running duration if running
+		if sess.Status == session.StatusRunning {
+			runningFor := time.Since(sess.LastActivity).Round(time.Second)
+			statusParts = append(statusParts, fmt.Sprintf("Running for: %s", runningFor))
+		}
+
+		// Show current request if any
+		if sess.Request != "" {
+			reqPreview := sess.Request
+			if len(reqPreview) > 100 {
+				reqPreview = reqPreview[:100] + "..."
+			}
+			statusParts = append(statusParts, fmt.Sprintf("Current task: %s", reqPreview))
+		}
+
+		// Show project path
+		if sess.Context != nil {
+			if v, ok := sess.Context["project_path"]; ok {
+				if pv, ok := v.(string); ok {
+					statusParts = append(statusParts, fmt.Sprintf("Project: %s", pv))
+				}
+			}
+		}
+
+		// Show error if failed
+		if sess.Status == session.StatusFailed && sess.Error != "" {
+			errPreview := sess.Error
+			if len(errPreview) > 100 {
+				errPreview = errPreview[:100] + "..."
+			}
+			statusParts = append(statusParts, fmt.Sprintf("Error: %s", errPreview))
+		}
+
+		sendText(bot, chatID, strings.Join(statusParts, "\n"))
 	case "/list":
 		sessions := sessionMgr.List()
 		if len(sessions) == 0 {
@@ -355,7 +551,7 @@ func handleTelegramCommand(ctx context.Context, bot imbot.Bot, store *Store, ses
 	case "/bash":
 		handleBashCommand(ctx, bot, store, sessionMgr, chatID, fields)
 	default:
-		sendText(bot, chatID, "Unknown command. Try /info, /list, /use <session_id>, /new <path>, /bash <cmd>.")
+		sendText(bot, chatID, "Unknown command. Use /help to see available commands.")
 	}
 }
 
@@ -460,7 +656,7 @@ func handleBashCommand(ctx context.Context, bot imbot.Bot, store *Store, session
 			}
 			baseDir = cwd
 		}
-		args := []string{}
+		var args []string
 		if len(fields) > 2 {
 			args = append(args, fields[2:]...)
 		}
@@ -519,11 +715,34 @@ func lastAssistantSummary(sessionMgr *session.Manager, sessionID string) string 
 	return ""
 }
 
+// formatResponseWithMeta adds project/session/user metadata to the response for better readability.
+func formatResponseWithMeta(projectPath, sessionID, userID, response string) string {
+	var meta strings.Builder
+	meta.WriteString("━━━━━━━━━━━━━━━━━━━━\n")
+	if projectPath != "" {
+		// Show only the last 2 directories for brevity
+		shortPath := projectPath
+		parts := strings.Split(projectPath, string(filepath.Separator))
+		if len(parts) > 2 {
+			shortPath = filepath.Join(parts[len(parts)-2], parts[len(parts)-1])
+		}
+		meta.WriteString(fmt.Sprintf("📁 %s\n", shortPath))
+	}
+	if sessionID != "" {
+		meta.WriteString(fmt.Sprintf("🔄 %s\n", sessionID))
+	}
+	if userID != "" {
+		meta.WriteString(fmt.Sprintf("👤 %s\n", userID))
+	}
+	meta.WriteString("━━━━━━━━━━━━━━━━━━━━\n\n")
+	return meta.String() + response
+}
+
 func sendText(bot imbot.Bot, chatID string, text string) {
-	for _, chunk := range chunkText(text, telegramMessageLimit) {
+	for _, chunk := range chunkText(text, imbot.DefaultMessageLimit) {
 		_, err := bot.SendText(context.Background(), chatID, chunk)
 		if err != nil {
-			logrus.WithError(err).Warn("Failed to send telegram message")
+			logrus.WithError(err).Warn("Failed to send message")
 			return
 		}
 	}
