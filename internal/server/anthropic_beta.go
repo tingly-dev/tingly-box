@@ -8,7 +8,9 @@ import (
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3/responses"
+	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/internal/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
@@ -313,6 +315,49 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req anthrop
 		}
 		if onError != nil {
 			hc.WithOnStreamError(onError)
+		}
+	}
+
+	// Add guardrails hook for Claude Code (Anthropic) if configured
+	if s.guardrailsEngine != nil {
+		_, _, _, requestModel, scenario, _, _ := GetTrackingContext(c)
+		enabled := s.config.GetScenarioFlag(typ.RuleScenario(scenario), "guardrails") ||
+			s.config.GetScenarioFlag(typ.ScenarioGlobal, "guardrails")
+		if enabled && scenario == string(typ.ScenarioClaudeCode) {
+			logrus.Debugf("Guardrails: attaching hook (scenario=%s model=%s)", scenario, actualModel)
+			baseInput := guardrails.Input{
+				Scenario:  scenario,
+				Model:     actualModel,
+				Direction: guardrails.DirectionResponse,
+				Content: guardrails.Content{
+					Messages: guardrailsMessagesFromAnthropicV1Beta(req.System, req.Messages),
+				},
+				Metadata: map[string]interface{}{
+					"provider":      provider.Name,
+					"request_model": requestModel,
+				},
+			}
+
+			onEvent, onComplete, onError := NewGuardrailsHooks(
+				s.guardrailsEngine,
+				baseInput,
+				WithGuardrailsContext(c.Request.Context()),
+				WithGuardrailsOnVerdict(func(result GuardrailsHookResult) {
+					c.Set("guardrails_result", result.Result)
+					if result.Err != nil {
+						c.Set("guardrails_error", result.Err.Error())
+					}
+				}),
+			)
+			if onEvent != nil {
+				hc.WithOnStreamEvent(onEvent)
+			}
+			if onComplete != nil {
+				hc.WithOnStreamComplete(onComplete)
+			}
+			if onError != nil {
+				hc.WithOnStreamError(onError)
+			}
 		}
 	}
 
