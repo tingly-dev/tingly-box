@@ -1169,7 +1169,15 @@ export const api = {
     },
 
     // Update remote-coder bot settings
-    updateRemoteCCBotSettings: async (data: { token: string; platform?: string; proxy_url?: string; chat_id?: string; bash_allowlist?: string[] }): Promise<any> => {
+    updateRemoteCCBotSettings: async (data: {
+        platform?: string;
+        auth_type?: string;
+        auth?: Record<string, string>;
+        proxy_url?: string;
+        chat_id?: string;
+        bash_allowlist?: string[];
+        token?: string; // Legacy field for backward compatibility
+    }): Promise<any> => {
         try {
             const token = await getRemoteCCAuthToken();
             const baseUrl = api.getRemoteCCBaseUrl();
@@ -1180,6 +1188,52 @@ export const api = {
                     ...(token && { 'Authorization': `Bearer ${token}` }),
                 },
                 body: JSON.stringify(data),
+            });
+
+            if (response.status === 401) {
+                return { success: false, error: 'Authentication required' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Get all supported bot platforms
+    getBotPlatforms: async (): Promise<any> => {
+        try {
+            const token = await getRemoteCCAuthToken();
+            const baseUrl = api.getRemoteCCBaseUrl();
+            const response = await fetch(`${baseUrl}/remote-coder/bot/platforms`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+            });
+
+            if (response.status === 401) {
+                return { success: false, error: 'Authentication required' };
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Get platform auth configuration
+    getBotPlatformConfig: async (platform: string): Promise<any> => {
+        try {
+            const token = await getRemoteCCAuthToken();
+            const baseUrl = api.getRemoteCCBaseUrl();
+            const response = await fetch(`${baseUrl}/remote-coder/bot/platform-config?platform=${encodeURIComponent(platform)}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
             });
 
             if (response.status === 401) {

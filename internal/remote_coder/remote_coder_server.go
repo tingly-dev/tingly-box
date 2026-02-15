@@ -152,6 +152,8 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	remoteCCAPI.POST("/sessions/clear", remoteCCHandler.ClearSessions)
 	remoteCCAPI.GET("/bot/settings", botSettingsHandler.GetSettings)
 	remoteCCAPI.PUT("/bot/settings", botSettingsHandler.UpdateSettings)
+	remoteCCAPI.GET("/bot/platforms", botSettingsHandler.GetPlatforms)
+	remoteCCAPI.GET("/bot/platform-config", botSettingsHandler.GetPlatformConfig)
 
 	if settings, err := botStore.GetSettings(); err == nil {
 		if strings.TrimSpace(settings.Token) != "" {

@@ -12,12 +12,15 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+// Settings represents bot configuration with platform-specific auth
 type Settings struct {
-	Token         string   `json:"token"`
-	Platform      string   `json:"platform"`
-	ProxyURL      string   `json:"proxy_url"`
-	ChatIDLock    string   `json:"chat_id"`
-	BashAllowlist []string `json:"bash_allowlist"`
+	Token         string            `json:"token,omitempty"`         // Legacy: for backward compatibility
+	Platform      string            `json:"platform"`               // Platform identifier
+	AuthType      string            `json:"auth_type"`              // Auth type: token, oauth, qr
+	Auth          map[string]string `json:"auth"`                   // Dynamic auth fields based on platform
+	ProxyURL      string            `json:"proxy_url,omitempty"`     // Optional proxy URL
+	ChatIDLock    string            `json:"chat_id,omitempty"`       // Optional chat ID lock
+	BashAllowlist []string          `json:"bash_allowlist,omitempty"` // Optional bash command allowlist
 }
 
 type Store struct {
@@ -89,40 +92,75 @@ func initSchema(db *sql.DB) error {
 	if err := ensureColumn(db, "remote_coder_bot_settings", "bash_allowlist", "TEXT"); err != nil {
 		return err
 	}
+	// New columns for platform-specific auth
+	if err := ensureColumn(db, "remote_coder_bot_settings", "auth_type", "TEXT"); err != nil {
+		return err
+	}
+	if err := ensureColumn(db, "remote_coder_bot_settings", "auth_config", "TEXT"); err != nil {
+		return err
+	}
 
 	return nil
 }
 
 func (s *Store) GetSettings() (Settings, error) {
-	settings := Settings{}
+	settings := Settings{
+		Auth: make(map[string]string),
+	}
 	if s == nil || s.db == nil {
 		return settings, nil
 	}
 
-	row := s.db.QueryRow(`SELECT telegram_token, platform, proxy_url, chat_id_lock, bash_allowlist FROM remote_coder_bot_settings WHERE id = 1`)
+	row := s.db.QueryRow(`SELECT telegram_token, platform, proxy_url, chat_id_lock, bash_allowlist, auth_type, auth_config FROM remote_coder_bot_settings WHERE id = 1`)
 	var token sql.NullString
 	var platform sql.NullString
 	var proxyURL sql.NullString
 	var chatIDLock sql.NullString
 	var bashAllowlist sql.NullString
-	if err := row.Scan(&token, &platform, &proxyURL, &chatIDLock, &bashAllowlist); err != nil {
+	var authType sql.NullString
+	var authConfig sql.NullString
+	if err := row.Scan(&token, &platform, &proxyURL, &chatIDLock, &bashAllowlist, &authType, &authConfig); err != nil {
 		if err != sql.ErrNoRows {
 			return settings, err
 		}
-	} else if token.Valid {
-		settings.Token = token.String
-	}
-	if platform.Valid {
-		settings.Platform = platform.String
-	}
-	if proxyURL.Valid {
-		settings.ProxyURL = proxyURL.String
-	}
-	if chatIDLock.Valid {
-		settings.ChatIDLock = chatIDLock.String
-	}
-	if bashAllowlist.Valid && bashAllowlist.String != "" {
-		_ = json.Unmarshal([]byte(bashAllowlist.String), &settings.BashAllowlist)
+	} else {
+		// Handle platform
+		if platform.Valid {
+			settings.Platform = platform.String
+		}
+
+		// Handle legacy token field - migrate to auth map if auth_config is empty
+		if token.Valid {
+			settings.Token = token.String
+			// For backward compatibility: if auth_config is empty, populate auth map from token
+			if !authConfig.Valid || authConfig.String == "" {
+				settings.AuthType = "token"
+				settings.Auth["token"] = token.String
+			}
+		}
+
+		// Handle proxy URL
+		if proxyURL.Valid {
+			settings.ProxyURL = proxyURL.String
+		}
+
+		// Handle chat ID lock
+		if chatIDLock.Valid {
+			settings.ChatIDLock = chatIDLock.String
+		}
+
+		// Handle bash allowlist
+		if bashAllowlist.Valid && bashAllowlist.String != "" {
+			_ = json.Unmarshal([]byte(bashAllowlist.String), &settings.BashAllowlist)
+		}
+
+		// Handle new auth fields
+		if authType.Valid {
+			settings.AuthType = authType.String
+		}
+		if authConfig.Valid && authConfig.String != "" {
+			_ = json.Unmarshal([]byte(authConfig.String), &settings.Auth)
+		}
 	}
 
 	return settings, nil
@@ -150,17 +188,32 @@ func (s *Store) SaveSettings(settings Settings) error {
 		}
 	}
 
+	authConfigJSON := ""
+	if len(settings.Auth) > 0 {
+		if b, err := json.Marshal(settings.Auth); err == nil {
+			authConfigJSON = string(b)
+		}
+	}
+
+	// For backward compatibility: also store token in legacy field if using token auth
+	legacyToken := settings.Token
+	if settings.AuthType == "token" && legacyToken == "" {
+		legacyToken = settings.Auth["token"]
+	}
+
 	_, err = tx.Exec(`
-		INSERT INTO remote_coder_bot_settings (id, telegram_token, platform, proxy_url, chat_id_lock, bash_allowlist, updated_at)
-		VALUES (1, ?, ?, ?, ?, ?, ?)
+		INSERT INTO remote_coder_bot_settings (id, telegram_token, platform, proxy_url, chat_id_lock, bash_allowlist, auth_type, auth_config, updated_at)
+		VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			telegram_token = excluded.telegram_token,
 			platform = excluded.platform,
 			proxy_url = excluded.proxy_url,
 			chat_id_lock = excluded.chat_id_lock,
 			bash_allowlist = excluded.bash_allowlist,
+			auth_type = excluded.auth_type,
+			auth_config = excluded.auth_config,
 			updated_at = excluded.updated_at
-	`, settings.Token, settings.Platform, settings.ProxyURL, settings.ChatIDLock, allowlistJSON, time.Now().UTC().Format(time.RFC3339))
+	`, legacyToken, settings.Platform, settings.ProxyURL, settings.ChatIDLock, allowlistJSON, settings.AuthType, authConfigJSON, time.Now().UTC().Format(time.RFC3339))
 	if err != nil {
 		return err
 	}
