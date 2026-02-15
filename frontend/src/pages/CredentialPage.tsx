@@ -1,27 +1,17 @@
-import { Add, ContentCopy, Edit, ExpandMore, Route, Visibility, VpnKey } from '@mui/icons-material';
+import { Add, Edit, ExpandMore, SmartToy, VpnKey } from '@mui/icons-material';
 import {
     Alert,
     Button,
     Chip,
     CircularProgress,
-    IconButton,
-    Modal,
     Menu,
     MenuItem,
-    Paper,
-    Select,
+    Modal,
     Snackbar,
     Stack,
     Tab,
     Tabs,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
     TextField,
-    Tooltip,
     Typography,
 } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
@@ -36,6 +26,10 @@ import OAuthTable from '@/components/OAuthTable.tsx';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
 import OAuthDialog from '@/components/OAuthDialog.tsx';
 import OAuthDetailDialog from '@/components/OAuthDetailDialog.tsx';
+import BotPlatformSelector from '@/components/bot/BotPlatformSelector';
+import BotAuthForm from '@/components/bot/BotAuthForm';
+import BotTable from '@/components/bot/BotTable';
+import { BotPlatformConfig, BotSettings } from '@/types/bot';
 
 type ProviderFormData = EnhancedProviderFormData;
 
@@ -82,22 +76,30 @@ const CredentialPage = () => {
     const [oauthDialogOpen, setOAuthDialogOpen] = useState(false);
     const [oauthDetailProvider, setOAuthDetailProvider] = useState<any | null>(null);
     const [oauthDetailDialogOpen, setOAuthDetailDialogOpen] = useState(false);
-    const [botToken, setBotToken] = useState('');
-    const [botTokenDraft, setBotTokenDraft] = useState('');
-    const [botPlatform, setBotPlatform] = useState('telegram');
+
+    // Bot settings state - V2 multi-bot support
+    const [bots, setBots] = useState<BotSettings[]>([]);
+
+    // Bot platforms config state
+    const [botPlatforms, setBotPlatforms] = useState<BotPlatformConfig[]>([]);
+    const [currentPlatformConfig, setCurrentPlatformConfig] = useState<BotPlatformConfig | null>(null);
+
+    // Bot form draft state for add/edit dialog
+    const [botDialogMode, setBotDialogMode] = useState<'add' | 'edit'>('add');
+    const [botEditUuid, setBotEditUuid] = useState<string | null>(null);
+    const [botNameDraft, setBotNameDraft] = useState('');
     const [botPlatformDraft, setBotPlatformDraft] = useState('telegram');
-    const [botProxyUrl, setBotProxyUrl] = useState('');
+    const [botAuthDraft, setBotAuthDraft] = useState<Record<string, string>>({});
     const [botProxyDraft, setBotProxyDraft] = useState('');
-    const [botChatId, setBotChatId] = useState('');
     const [botChatIdDraft, setBotChatIdDraft] = useState('');
-    const [botAllowlist, setBotAllowlist] = useState<string[]>([]);
     const [botAllowlistDraft, setBotAllowlistDraft] = useState('');
+
     const [botLoading, setBotLoading] = useState(false);
     const [botSaving, setBotSaving] = useState(false);
+    const [botPlatformsLoading, setBotPlatformsLoading] = useState(false);
     const [botNotice, setBotNotice] = useState<string | null>(null);
     const [botError, setBotError] = useState<string | null>(null);
     const [botTokenDialogOpen, setBotTokenDialogOpen] = useState(false);
-    const [botTokenModalOpen, setBotTokenModalOpen] = useState(false);
 
     // URL param handling for auto-opening dialogs
     useEffect(() => {
@@ -143,35 +145,38 @@ const CredentialPage = () => {
 
     useEffect(() => {
         loadProviders();
+        loadBotPlatforms();
     }, []);
+
+    // Load bot platforms configuration
+    const loadBotPlatforms = async () => {
+        try {
+            setBotPlatformsLoading(true);
+            const data = await api.getBotPlatforms();
+            if (data?.success && data?.platforms) {
+                setBotPlatforms(data.platforms);
+            }
+        } catch (err) {
+            console.error('Failed to load bot platforms:', err);
+        } finally {
+            setBotPlatformsLoading(false);
+        }
+    };
 
     useEffect(() => {
         const loadBotSettings = async () => {
             try {
                 setBotLoading(true);
-                const data = await api.getRemoteCCBotSettings();
-                if (data?.success === false) {
-                    setBotError(data.error || 'Failed to load bot token');
-                    return;
-                }
-                if (typeof data?.token === 'string') {
-                    setBotToken(data.token);
-                }
-                if (typeof data?.platform === 'string' && data.platform.trim()) {
-                    setBotPlatform(data.platform);
-                }
-                if (typeof data?.proxy_url === 'string') {
-                    setBotProxyUrl(data.proxy_url);
-                }
-                if (typeof data?.chat_id === 'string') {
-                    setBotChatId(data.chat_id);
-                }
-                if (Array.isArray(data?.bash_allowlist)) {
-                    setBotAllowlist(data.bash_allowlist);
+                // Try V2 API first
+                const data = await api.getBotSettingsList();
+                if (data?.success && Array.isArray(data.settings)) {
+                    setBots(data.settings);
+                } else if (data?.success === false) {
+                    setBotError(data.error || 'Failed to load bot settings');
                 }
             } catch (err) {
-                console.error('Failed to load bot token:', err);
-                setBotError('Failed to load bot token');
+                console.error('Failed to load bot settings:', err);
+                setBotError('Failed to load bot settings');
             } finally {
                 setBotLoading(false);
             }
@@ -180,14 +185,26 @@ const CredentialPage = () => {
         loadBotSettings();
     }, []);
 
-    const botTokenConfigured = botToken.trim().length > 0;
+    // Update current platform config when platform draft changes
+    useEffect(() => {
+        if (botPlatformDraft && botPlatforms.length > 0) {
+            const config = botPlatforms.find(p => p.platform === botPlatformDraft);
+            if (config) {
+                setCurrentPlatformConfig(config);
+            }
+        }
+    }, [botPlatformDraft, botPlatforms]);
 
-    const formatBotTokenDisplay = (token: string) => {
-        if (!token) return 'Not set';
-        if (token.length <= 12) return token;
-        const prefix = token.substring(0, 4);
-        const suffix = token.substring(token.length - 4);
-        return `${prefix}${'*'.repeat(4)}${suffix}`;
+    // Helper to reload bots
+    const reloadBots = async () => {
+        try {
+            const data = await api.getBotSettingsList();
+            if (data?.success && Array.isArray(data.settings)) {
+                setBots(data.settings);
+            }
+        } catch (err) {
+            console.error('Failed to reload bot settings:', err);
+        }
     };
 
     const showNotification = (message: string, severity: 'success' | 'error') => {
@@ -237,6 +254,44 @@ const CredentialPage = () => {
         setOAuthDialogOpen(true);
     };
 
+    const handleAddBot = () => {
+        handleAddMenuClose();
+        handleOpenBotTokenDialog();
+    };
+
+    // Bot handlers
+    const handleEditBot = (uuid: string) => {
+        handleOpenBotTokenDialog(uuid);
+    };
+
+    const handleToggleBot = async (uuid: string) => {
+        try {
+            const result = await api.toggleBotSetting(uuid);
+            if (result?.success) {
+                showNotification(result.enabled ? 'Bot enabled' : 'Bot disabled', 'success');
+                await reloadBots();
+            } else {
+                showNotification(`Failed to toggle bot: ${result?.error}`, 'error');
+            }
+        } catch (err) {
+            showNotification('Failed to toggle bot', 'error');
+        }
+    };
+
+    const handleDeleteBot = async (uuid: string) => {
+        try {
+            const result = await api.deleteBotSetting(uuid);
+            if (result?.success) {
+                showNotification('Bot deleted successfully', 'success');
+                await reloadBots();
+            } else {
+                showNotification(`Failed to delete bot: ${result?.error}`, 'error');
+            }
+        } catch (err) {
+            showNotification('Failed to delete bot', 'error');
+        }
+    };
+
     const loadProviders = async () => {
         setLoading(true);
         const result = await api.getProviders();
@@ -248,12 +303,44 @@ const CredentialPage = () => {
         setLoading(false);
     };
 
-    const handleOpenBotTokenDialog = () => {
-        setBotTokenDraft(botToken);
-        setBotPlatformDraft(botPlatform);
-        setBotProxyDraft(botProxyUrl);
-        setBotChatIdDraft(botChatId);
-        setBotAllowlistDraft(botAllowlist.join('\n'));
+    const handleOpenBotTokenDialog = (editUuid?: string) => {
+        setBotNotice(null);
+        setBotError(null);
+
+        if (editUuid) {
+            // Edit mode
+            const bot = bots.find(b => b.uuid === editUuid);
+            if (bot) {
+                setBotDialogMode('edit');
+                setBotEditUuid(editUuid);
+                setBotNameDraft(bot.name || '');
+                setBotPlatformDraft(bot.platform || 'telegram');
+                setBotAuthDraft(bot.auth ? { ...bot.auth } : {});
+                setBotProxyDraft(bot.proxy_url || '');
+                setBotChatIdDraft(bot.chat_id || '');
+                setBotAllowlistDraft((bot.bash_allowlist || []).join('\n'));
+                // Set platform config
+                const config = botPlatforms.find(p => p.platform === bot.platform);
+                if (config) {
+                    setCurrentPlatformConfig(config);
+                }
+            }
+        } else {
+            // Add mode
+            setBotDialogMode('add');
+            setBotEditUuid(null);
+            setBotNameDraft('');
+            setBotPlatformDraft('telegram');
+            setBotAuthDraft({});
+            setBotProxyDraft('');
+            setBotChatIdDraft('');
+            setBotAllowlistDraft('');
+            // Set default platform config
+            const config = botPlatforms.find(p => p.platform === 'telegram');
+            if (config) {
+                setCurrentPlatformConfig(config);
+            }
+        }
         setBotTokenDialogOpen(true);
     };
 
@@ -267,27 +354,55 @@ const CredentialPage = () => {
                 .split(/[\n,]+/)
                 .map((entry) => entry.trim())
                 .filter((entry) => entry.length > 0);
-            const result = await api.updateRemoteCCBotSettings({
-                token: botTokenDraft.trim(),
+
+            // Get platform config to validate required fields
+            const platformConfig = botPlatforms.find(p => p.platform === botPlatformDraft);
+            if (!platformConfig) {
+                setBotError(`Unknown platform: ${botPlatformDraft}`);
+                return;
+            }
+
+            // Validate required auth fields
+            const missingFields = platformConfig.fields
+                .filter(f => f.required && !botAuthDraft[f.key]?.trim())
+                .map(f => f.label);
+
+            if (missingFields.length > 0) {
+                setBotError(`Missing required fields: ${missingFields.join(', ')}`);
+                return;
+            }
+
+            const data = {
+                name: botNameDraft.trim(),
                 platform: botPlatformDraft,
+                auth_type: platformConfig.auth_type,
+                auth: botAuthDraft,
                 proxy_url: botProxyDraft.trim(),
                 chat_id: botChatIdDraft.trim(),
                 bash_allowlist: allowlist,
-            });
+                enabled: true,
+            };
+
+            let result;
+            if (botDialogMode === 'edit' && botEditUuid) {
+                result = await api.updateBotSetting(botEditUuid, data);
+            } else {
+                result = await api.createBotSetting(data);
+            }
+
             if (result?.success === false) {
-                setBotError(result.error || 'Failed to save bot token');
+                setBotError(result.error || 'Failed to save bot settings');
                 return;
             }
-            setBotToken(botTokenDraft.trim());
-            setBotPlatform(botPlatformDraft);
-            setBotProxyUrl(botProxyDraft.trim());
-            setBotChatId(botChatIdDraft.trim());
-            setBotAllowlist(allowlist);
-            setBotNotice('Bot token saved.');
+
+            // Reload bots
+            await reloadBots();
+
+            setBotNotice(`Bot ${botDialogMode === 'edit' ? 'updated' : 'created'} successfully.`);
             setBotTokenDialogOpen(false);
         } catch (err) {
-            console.error('Failed to save bot token:', err);
-            setBotError('Failed to save bot token');
+            console.error('Failed to save bot settings:', err);
+            setBotError('Failed to save bot settings');
         } finally {
             setBotSaving(false);
         }
@@ -444,11 +559,11 @@ const CredentialPage = () => {
             credentialCounts: {
                 apiKeys: apiKeys.length,
                 oauth: oauth.length,
-                botToken: botTokenConfigured ? 1 : 0,
-                total: providers.length + (botTokenConfigured ? 1 : 0),
+                bots: bots.length,
+                total: providers.length + bots.length,
             },
         };
-    }, [providers, botTokenConfigured]);
+    }, [providers, bots]);
 
     return (
         <PageLayout loading={loading}>
@@ -487,6 +602,10 @@ const CredentialPage = () => {
                             <MenuItem onClick={handleAddOAuth}>
                                 <VpnKey sx={{ mr: 1 }} fontSize="small" />
                                 Add OAuth Provider
+                            </MenuItem>
+                            <MenuItem onClick={handleAddBot}>
+                                <SmartToy sx={{ mr: 1 }} fontSize="small" />
+                                Add Bot
                             </MenuItem>
                         </Menu>
                     </Stack>
@@ -542,9 +661,9 @@ const CredentialPage = () => {
                         <Tab
                             label={
                                 <Stack direction="row" alignItems="center" spacing={1}>
-                                    <span>bot token</span>
+                                    <span>Bots</span>
                                     <Chip
-                                        label={credentialCounts.botToken}
+                                        label={credentialCounts.bots}
                                         size="small"
                                         color={activeTab === 'bot-token' ? 'primary' : 'default'}
                                         variant={activeTab === 'bot-token' ? 'filled' : 'outlined'}
@@ -614,107 +733,29 @@ const CredentialPage = () => {
                                     {botError}
                                 </Alert>
                             )}
-                            <Typography variant="h6" fontWeight={600}>
-                                tg token
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                                Telegram bot token used to proxy chats into remote-coder sessions.
-                            </Typography>
-                            {botTokenConfigured ? (
-                                <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
-                                    <Table>
-                                        <TableHead>
-                                    <TableRow>
-                                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Status</TableCell>
-                                        <TableCell sx={{ fontWeight: 600, minWidth: 140 }}>Name</TableCell>
-                                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Platform</TableCell>
-                                        <TableCell sx={{ fontWeight: 600, minWidth: 200 }}>Bot Token</TableCell>
-                                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Proxy</TableCell>
-                                        <TableCell sx={{ fontWeight: 600, minWidth: 140 }}>Chat ID</TableCell>
-                                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Actions</TableCell>
-                                    </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    <TableRow>
-                                                <TableCell>
-                                                    <Typography variant="body2" color="success.main">
-                                                        Configured
-                                                    </Typography>
-                                                </TableCell>
-                                                <TableCell>
-                                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                                tg token
-                                            </Typography>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Typography variant="body2">
-                                                {botPlatform}
-                                            </Typography>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Stack direction="row" alignItems="center" spacing={1}>
-                                                <Tooltip title="View Token">
-                                                    <IconButton size="small" onClick={() => setBotTokenModalOpen(true)} sx={{ p: 0.25 }}>
-                                                        <Visibility fontSize="small" />
-                                                    </IconButton>
-                                                </Tooltip>
-                                                <Typography
-                                                    variant="body2"
-                                                    sx={{
-                                                        fontFamily: 'monospace',
-                                                        wordBreak: 'break-all',
-                                                        flex: 1,
-                                                        minWidth: 0,
-                                                    }}
-                                                >
-                                                    {formatBotTokenDisplay(botToken)}
-                                                </Typography>
-                                            </Stack>
-                                        </TableCell>
-                                        <TableCell align="center">
-                                            {botProxyUrl ? (
-                                                <Tooltip title={botProxyUrl} arrow>
-                                                    <Route fontSize="small" sx={{ color: 'text.secondary' }} />
-                                                </Tooltip>
-                                            ) : (
-                                                <Typography variant="body2" color="text.secondary">
-                                                    -
-                                                </Typography>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                                                {botChatId || '-'}
-                                            </Typography>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Stack direction="row" spacing={0.5}>
-                                                <Tooltip title="Edit">
-                                                    <IconButton size="small" color="primary" onClick={handleOpenBotTokenDialog}>
-                                                        <Edit fontSize="small" />
-                                                            </IconButton>
-                                                        </Tooltip>
-                                                    </Stack>
-                                                </TableCell>
-                                            </TableRow>
-                                        </TableBody>
-                                    </Table>
-                                </TableContainer>
+                            {bots.length > 0 ? (
+                                <BotTable
+                                    bots={bots}
+                                    platforms={botPlatforms}
+                                    onEdit={handleEditBot}
+                                    onToggle={handleToggleBot}
+                                    onDelete={handleDeleteBot}
+                                />
                             ) : (
                                 <EmptyStateGuide
-                                    title="No Bot Token Configured"
-                                    description="Add a Telegram bot token to enable remote-coder chat proxying."
+                                    title="No Bots Configured"
+                                    description="Configure bots to enable remote-coder chat integration."
                                     showOAuthButton={false}
                                     showHeroIcon={false}
-                                    primaryButtonLabel="Add Bot Token"
-                                    onAddApiKeyClick={handleOpenBotTokenDialog}
+                                    primaryButtonLabel="Add Bot"
+                                    onAddApiKeyClick={() => handleOpenBotTokenDialog()}
                                 />
                             )}
                             {botLoading && (
                                 <Stack direction="row" spacing={1} alignItems="center">
                                     <CircularProgress size={16} />
                                     <Typography variant="body2" color="text.secondary">
-                                        Loading bot token...
+                                        Loading bot settings...
                                     </Typography>
                                 </Stack>
                             )}
@@ -722,60 +763,7 @@ const CredentialPage = () => {
                     )}
                 </UnifiedCard>
 
-            {/* Bot Token Modals */}
-            <Modal open={botTokenModalOpen} onClose={() => setBotTokenModalOpen(false)}>
-                <Stack
-                    sx={{
-                        position: 'absolute',
-                        top: '50%',
-                        left: '50%',
-                        transform: 'translate(-50%, -50%)',
-                        width: 600,
-                        maxWidth: '80vw',
-                        bgcolor: 'background.paper',
-                        boxShadow: 24,
-                        p: 4,
-                        borderRadius: 2,
-                        gap: 2,
-                    }}
-                >
-                    <Typography variant="h6">Bot Token - tg token</Typography>
-                    <Stack
-                        sx={{
-                            p: 2,
-                            bgcolor: 'action.hover',
-                            borderRadius: 1,
-                            fontFamily: 'monospace',
-                            fontSize: '0.875rem',
-                            wordBreak: 'break-all',
-                            border: '1px solid',
-                            borderColor: 'divider',
-                        }}
-                    >
-                        {botToken || 'Not set'}
-                    </Stack>
-                    <Stack direction="row" spacing={2} justifyContent="flex-end">
-                        <IconButton
-                            color="primary"
-                            disabled={!botToken}
-                            onClick={async () => {
-                                if (botToken) {
-                                    try {
-                                        await navigator.clipboard.writeText(botToken);
-                                    } catch (err) {
-                                        console.error('Failed to copy token:', err);
-                                    }
-                                }
-                            }}
-                            title={botToken ? 'Copy Token' : 'Token not set'}
-                        >
-                            <ContentCopy />
-                        </IconButton>
-                        <Button onClick={() => setBotTokenModalOpen(false)}>Close</Button>
-                    </Stack>
-                </Stack>
-            </Modal>
-
+            {/* Bot Add/Edit Dialog */}
             <Modal open={botTokenDialogOpen} onClose={() => setBotTokenDialogOpen(false)}>
                 <Stack
                     sx={{
@@ -785,6 +773,8 @@ const CredentialPage = () => {
                         transform: 'translate(-50%, -50%)',
                         width: 600,
                         maxWidth: '80vw',
+                        maxHeight: '80vh',
+                        overflowY: 'auto',
                         bgcolor: 'background.paper',
                         boxShadow: 24,
                         p: 4,
@@ -792,59 +782,94 @@ const CredentialPage = () => {
                         gap: 2,
                     }}
                 >
-                    <Typography variant="h6">{botTokenConfigured ? 'Edit Bot Token' : 'Add Bot Token'}</Typography>
-                    <Stack spacing={1}>
-                        <Typography variant="body2" color="text.secondary">
-                            Platform
-                        </Typography>
-                        <Select
+                    <Typography variant="h6">{botDialogMode === 'edit' ? 'Edit Bot Configuration' : 'Add Bot Configuration'}</Typography>
+                    <Stack spacing={2}>
+                        <TextField
+                            label="Name"
+                            placeholder="My Bot"
+                            value={botNameDraft}
+                            onChange={(e) => setBotNameDraft(e.target.value)}
+                            fullWidth
                             size="small"
-                            value={botPlatformDraft}
-                            onChange={(event) => setBotPlatformDraft(event.target.value)}
-                        >
-                            <MenuItem value="telegram">telegram</MenuItem>
-                        </Select>
+                            helperText="Optional: a friendly name for this bot configuration."
+                            disabled={botSaving}
+                        />
+
+                        <Stack spacing={1}>
+                            <Typography variant="body2" color="text.secondary">
+                                Platform
+                            </Typography>
+                            <BotPlatformSelector
+                                value={botPlatformDraft}
+                                onChange={(platform) => {
+                                    setBotPlatformDraft(platform);
+                                    // Clear auth draft when platform changes
+                                    setBotAuthDraft({});
+                                    // Update current platform config
+                                    const config = botPlatforms.find(p => p.platform === platform);
+                                    if (config) {
+                                        setCurrentPlatformConfig(config);
+                                    }
+                                }}
+                                platforms={botPlatforms}
+                                loading={botPlatformsLoading}
+                                disabled={botSaving}
+                            />
+                        </Stack>
+
+                        {currentPlatformConfig && (
+                            <BotAuthForm
+                                platform={botPlatformDraft}
+                                authType={currentPlatformConfig.auth_type}
+                                fields={currentPlatformConfig.fields}
+                                authData={botAuthDraft}
+                                onChange={(key, value) => setBotAuthDraft(prev => ({ ...prev, [key]: value }))}
+                                disabled={botSaving}
+                            />
+                        )}
+
+                        <TextField
+                            label="Proxy URL"
+                            placeholder="http://user:pass@host:port"
+                            value={botProxyDraft}
+                            onChange={(e) => setBotProxyDraft(e.target.value)}
+                            fullWidth
+                            size="small"
+                            helperText="Optional HTTP/HTTPS proxy for bot API requests."
+                            disabled={botSaving}
+                        />
+
+                        <TextField
+                            label="Chat ID Lock"
+                            placeholder="e.g. 123456789"
+                            value={botChatIdDraft}
+                            onChange={(e) => setBotChatIdDraft(e.target.value)}
+                            fullWidth
+                            size="small"
+                            helperText="Optional: when set, only this chat ID can use the bot."
+                            disabled={botSaving}
+                        />
+
+                        <TextField
+                            label="Bash Allowlist"
+                            placeholder="cd\nls\npwd"
+                            value={botAllowlistDraft}
+                            onChange={(e) => setBotAllowlistDraft(e.target.value)}
+                            fullWidth
+                            multiline
+                            minRows={3}
+                            size="small"
+                            helperText="Allowlisted /bash subcommands. Default: cd, ls, pwd."
+                            disabled={botSaving}
+                        />
                     </Stack>
-                    <TextField
-                        label="Telegram Bot Token"
-                        type="password"
-                        value={botTokenDraft}
-                        onChange={(e) => setBotTokenDraft(e.target.value)}
-                        fullWidth
-                        size="small"
-                        helperText="Stored in tingly.db in plain text."
-                    />
-                    <TextField
-                        label="Proxy URL"
-                        placeholder="http://user:pass@host:port"
-                        value={botProxyDraft}
-                        onChange={(e) => setBotProxyDraft(e.target.value)}
-                        fullWidth
-                        size="small"
-                        helperText="Optional HTTP/HTTPS proxy for Telegram API."
-                    />
-                    <TextField
-                        label="Chat ID Lock"
-                        placeholder="e.g. 123456789"
-                        value={botChatIdDraft}
-                        onChange={(e) => setBotChatIdDraft(e.target.value)}
-                        fullWidth
-                        size="small"
-                        helperText="Optional: when set, only this chat ID can use the bot."
-                    />
-                    <TextField
-                        label="Bash Allowlist"
-                        placeholder="cd\nls\npwd"
-                        value={botAllowlistDraft}
-                        onChange={(e) => setBotAllowlistDraft(e.target.value)}
-                        fullWidth
-                        multiline
-                        minRows={3}
-                        size="small"
-                        helperText="Allowlisted /bash subcommands. Default: cd, ls, pwd."
-                    />
+
                     <Stack direction="row" spacing={2} justifyContent="flex-end">
-                        <Button onClick={() => setBotTokenDialogOpen(false)} color="inherit">
+                        <Button
+                            onClick={() => setBotTokenDialogOpen(false)}
+                            color="inherit"
+                            disabled={botSaving}
+                        >
                             Cancel
                         </Button>
                         <Button
@@ -852,7 +877,7 @@ const CredentialPage = () => {
                             onClick={handleSaveBotToken}
                             disabled={botSaving || botLoading}
                         >
-                            {botSaving ? 'Saving...' : 'Save Bot Token'}
+                            {botSaving ? 'Saving...' : 'Save Configuration'}
                         </Button>
                     </Stack>
                 </Stack>
