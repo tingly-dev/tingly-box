@@ -150,24 +150,62 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	remoteCCAPI.GET("/sessions/:id/messages", remoteCCHandler.GetSessionMessages)
 	remoteCCAPI.POST("/chat", remoteCCHandler.Chat)
 	remoteCCAPI.POST("/sessions/clear", remoteCCHandler.ClearSessions)
-	remoteCCAPI.GET("/bot/settings", botSettingsHandler.GetSettings)
-	remoteCCAPI.PUT("/bot/settings", botSettingsHandler.UpdateSettings)
+
+	// Bot settings API - V2 multi-bot endpoints
+	remoteCCAPI.GET("/bot/settings", botSettingsHandler.GetSettings)       // Legacy: returns single, with ?list=true returns array
+	remoteCCAPI.GET("/bot/settings/list", botSettingsHandler.ListSettings) // V2: returns all bots
+	remoteCCAPI.GET("/bot/settings/:uuid", botSettingsHandler.GetSettingsByUUID)
+	remoteCCAPI.POST("/bot/settings", botSettingsHandler.CreateSettings)
+	remoteCCAPI.PUT("/bot/settings/:uuid", botSettingsHandler.UpdateSettings)
+	remoteCCAPI.DELETE("/bot/settings/:uuid", botSettingsHandler.DeleteSettings)
+	remoteCCAPI.POST("/bot/settings/:uuid/toggle", botSettingsHandler.ToggleSettings)
+
+	// Legacy endpoint for backward compatibility
+	remoteCCAPI.PUT("/bot/settings", botSettingsHandler.UpdateSettingsLegacy)
+
 	remoteCCAPI.GET("/bot/platforms", botSettingsHandler.GetPlatforms)
 	remoteCCAPI.GET("/bot/platform-config", botSettingsHandler.GetPlatformConfig)
 
-	if settings, err := botStore.GetSettings(); err == nil {
-		if strings.TrimSpace(settings.Token) != "" {
-			go func() {
-				if err := bot.RunTelegramBot(ctx, botStore, sessionMgr); err != nil {
-					logrus.WithError(err).Warn("Remote-coder Telegram bot stopped")
+	// Start enabled bots
+	enabledSettings, err := botStore.ListEnabledSettings()
+	if err != nil {
+		logrus.WithError(err).Warn("Remote-coder bot not started: failed to load settings")
+	} else if len(enabledSettings) > 0 {
+		for _, settings := range enabledSettings {
+			// For now, only support Telegram bots
+			if settings.Platform == "telegram" || settings.Platform == "" {
+				token := settings.Auth["token"]
+				if token == "" {
+					token = settings.Token // Legacy field
 				}
-			}()
-			logrus.Info("Remote-coder Telegram bot started")
-		} else {
-			logrus.Info("Remote-coder Telegram bot not started: missing token")
+				if token != "" {
+					go func(s bot.Settings) {
+						// Create a new store instance for each goroutine to avoid race conditions
+						// Each bot instance will share the same database connection
+						if err := bot.RunTelegramBot(ctx, botStore, sessionMgr); err != nil {
+							logrus.WithError(err).Warn("Remote-coder Telegram bot stopped")
+						}
+					}(settings)
+					logrus.Infof("Remote-coder Telegram bot started (name: %s)", settings.Name)
+				}
+			}
 		}
 	} else {
-		logrus.WithError(err).Warn("Remote-coder Telegram bot not started: failed to load settings")
+		// Try legacy single settings for backward compatibility
+		if settings, err := botStore.GetSettings(); err == nil {
+			if strings.TrimSpace(settings.Token) != "" {
+				go func() {
+					if err := bot.RunTelegramBot(ctx, botStore, sessionMgr); err != nil {
+						logrus.WithError(err).Warn("Remote-coder Telegram bot stopped")
+					}
+				}()
+				logrus.Info("Remote-coder Telegram bot started (legacy mode)")
+			} else {
+				logrus.Info("Remote-coder Telegram bot not started: missing token")
+			}
+		} else {
+			logrus.WithError(err).Warn("Remote-coder Telegram bot not started: failed to load settings")
+		}
 	}
 
 	srv := &http.Server{
