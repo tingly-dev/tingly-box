@@ -8,7 +8,7 @@ import {
     IconButton,
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
-import { FieldSpec } from '../../types/bot';
+import { type FieldSpec } from '@/types/bot.ts';
 
 interface BotAuthFormProps {
     platform: string;

@@ -2,41 +2,18 @@ import React from 'react';
 import {
     Select,
     MenuItem,
-    ListItemText,
-    ListItemIcon,
     Box,
     Typography,
-    ListSubheader,
-    Chip,
+    CircularProgress,
 } from '@mui/material';
-import { BotPlatformConfig, CategoryLabels } from '../../types/bot';
+import { BotPlatformConfig } from '../../types/bot';
 
 interface BotPlatformSelectorProps {
     value: string;
     onChange: (platform: string) => void;
     platforms: BotPlatformConfig[];
     disabled?: boolean;
-}
-
-// Platform icons (simple emoji for now, could be replaced with SVG icons)
-const platformIcons: Record<string, string> = {
-    telegram: '✈️',
-    slack: '💼',
-    discord: '🎮',
-    dingtalk: '🔔',
-    feishu: '🚀',
-    whatsapp: '📱',
-};
-
-// Group platforms by category
-function groupPlatformsByCategory(platforms: BotPlatformConfig[]): Map<string, BotPlatformConfig[]> {
-    const grouped = new Map<string, BotPlatformConfig[]>();
-    for (const platform of platforms) {
-        const existing = grouped.get(platform.category) || [];
-        existing.push(platform);
-        grouped.set(platform.category, existing);
-    }
-    return grouped;
+    loading?: boolean;
 }
 
 export const BotPlatformSelector: React.FC<BotPlatformSelectorProps> = ({
@@ -44,45 +21,46 @@ export const BotPlatformSelector: React.FC<BotPlatformSelectorProps> = ({
     onChange,
     platforms,
     disabled = false,
+    loading = false,
 }) => {
-    const groupedPlatforms = groupPlatformsByCategory(platforms);
+    // Show loading state
+    if (loading) {
+        return (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1 }}>
+                <CircularProgress size={16} />
+                <Typography variant="body2" color="text.secondary">
+                    Loading platforms...
+                </Typography>
+            </Box>
+        );
+    }
+
+    // Show empty state
+    if (platforms.length === 0) {
+        return (
+            <Box sx={{ p: 1 }}>
+                <Typography variant="body2" color="text.secondary">
+                    No platforms available. Make sure the remote-coder service is running.
+                </Typography>
+            </Box>
+        );
+    }
 
     return (
         <Select
             value={value}
-            onChange={(e) => onChange(e.target.value)}
+            onChange={(e) => onChange(e.target.value as string)}
             fullWidth
             size="small"
             disabled={disabled}
         >
-            {Array.from(groupedPlatforms.entries()).map(([category, categoryPlatforms]) => (
-                <React.Fragment key={category}>
-                    <ListSubheader
-                        sx={{
-                            bgcolor: 'background.paper',
-                            fontWeight: 600,
-                            fontSize: '0.75rem',
-                            color: 'text.secondary',
-                        }}
-                    >
-                        {CategoryLabels[category] || category}
-                    </ListSubheader>
-                    {categoryPlatforms.map((platform) => (
-                        <MenuItem key={platform.platform} value={platform.platform}>
-                            <ListItemIcon sx={{ minWidth: 36 }}>
-                                <Typography variant="body1">{platformIcons[platform.platform] || '🤖'}</Typography>
-                            </ListItemIcon>
-                            <ListItemText
-                                primary={platform.display_name}
-                                secondary={platform.auth_type}
-                                secondaryTypographyProps={{
-                                    variant: 'caption',
-                                    sx: { textTransform: 'capitalize' }
-                                }}
-                            />
-                        </MenuItem>
-                    ))}
-                </React.Fragment>
+            {platforms.map((platform) => (
+                <MenuItem key={platform.platform} value={platform.platform}>
+                    <Box sx={{ display: 'flex', width: '100%', gap: 2 }}>
+                        <Box sx={{ minWidth: 100 }}>{platform.display_name}</Box>
+                        <Box sx={{ color: 'text.secondary' }}>{platform.auth_type}</Box>
+                    </Box>
+                </MenuItem>
             ))}
         </Select>
     );
