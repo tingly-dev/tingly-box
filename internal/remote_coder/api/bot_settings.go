@@ -10,7 +10,8 @@ import (
 )
 
 type BotSettingsHandler struct {
-	store *bot.Store
+	store   *bot.Store
+	manager *bot.Manager
 }
 
 type BotSettingsPayload struct {
@@ -27,8 +28,8 @@ type BotSettingsPayload struct {
 	Token string `json:"token,omitempty"`
 }
 
-func NewBotSettingsHandler(store *bot.Store) *BotSettingsHandler {
-	return &BotSettingsHandler{store: store}
+func NewBotSettingsHandler(store *bot.Store, manager *bot.Manager) *BotSettingsHandler {
+	return &BotSettingsHandler{store: store, manager: manager}
 }
 
 // GetSettings returns all bot settings (V2 API - returns array)
@@ -279,6 +280,20 @@ func (h *BotSettingsHandler) ToggleSettings(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
+	}
+
+	// Start or stop the bot based on new status
+	if h.manager != nil {
+		if newStatus {
+			// Bot enabled - start it
+			if err := h.manager.Start(c.Request.Context(), uuid); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+				return
+			}
+		} else {
+			// Bot disabled - stop it
+			h.manager.Stop(uuid)
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{

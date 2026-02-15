@@ -142,7 +142,10 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	defer func() {
 		_ = botStore.Close()
 	}()
-	botSettingsHandler := api.NewBotSettingsHandler(botStore)
+
+	// Create bot manager for runtime lifecycle control
+	botManager := bot.NewManager(botStore, sessionMgr)
+	botSettingsHandler := api.NewBotSettingsHandler(botStore, botManager)
 	remoteCCAPI.GET("/sessions", remoteCCHandler.GetSessions)
 	remoteCCAPI.GET("/sessions/:id", remoteCCHandler.GetSession)
 	remoteCCAPI.GET("/sessions/:id/state", remoteCCHandler.GetSessionState)
@@ -166,46 +169,9 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	remoteCCAPI.GET("/bot/platforms", botSettingsHandler.GetPlatforms)
 	remoteCCAPI.GET("/bot/platform-config", botSettingsHandler.GetPlatformConfig)
 
-	// Start enabled bots
-	enabledSettings, err := botStore.ListEnabledSettings()
-	if err != nil {
-		logrus.WithError(err).Warn("Remote-coder bot not started: failed to load settings")
-	} else if len(enabledSettings) > 0 {
-		for _, settings := range enabledSettings {
-			// For now, only support Telegram bots
-			if settings.Platform == "telegram" || settings.Platform == "" {
-				token := settings.Auth["token"]
-				if token == "" {
-					token = settings.Token // Legacy field
-				}
-				if token != "" {
-					go func(s bot.Settings) {
-						// Create a new store instance for each goroutine to avoid race conditions
-						// Each bot instance will share the same database connection
-						if err := bot.RunTelegramBot(ctx, botStore, sessionMgr); err != nil {
-							logrus.WithError(err).Warn("Remote-coder Telegram bot stopped")
-						}
-					}(settings)
-					logrus.Infof("Remote-coder Telegram bot started (name: %s)", settings.Name)
-				}
-			}
-		}
-	} else {
-		// Try legacy single settings for backward compatibility
-		if settings, err := botStore.GetSettings(); err == nil {
-			if strings.TrimSpace(settings.Token) != "" {
-				go func() {
-					if err := bot.RunTelegramBot(ctx, botStore, sessionMgr); err != nil {
-						logrus.WithError(err).Warn("Remote-coder Telegram bot stopped")
-					}
-				}()
-				logrus.Info("Remote-coder Telegram bot started (legacy mode)")
-			} else {
-				logrus.Info("Remote-coder Telegram bot not started: missing token")
-			}
-		} else {
-			logrus.WithError(err).Warn("Remote-coder Telegram bot not started: failed to load settings")
-		}
+	// Start enabled bots using the manager
+	if err := botManager.StartEnabled(ctx); err != nil {
+		logrus.WithError(err).Warn("Failed to start some bots")
 	}
 
 	srv := &http.Server{
