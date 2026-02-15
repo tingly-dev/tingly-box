@@ -2,21 +2,21 @@ package bot
 
 // PlatformAuthConfig defines the authentication requirements for each platform
 type PlatformAuthConfig struct {
-	Platform    string      // Platform identifier
-	AuthType    string      // "token", "oauth", "qr", "basic"
-	DisplayName string      // Human-readable platform name
-	Category    string      // "im", "enterprise", "business"
-	Fields      []FieldSpec // Required/optional auth fields
+	Platform    string      `json:"platform"`     // Platform identifier
+	AuthType    string      `json:"auth_type"`    // "token", "oauth", "qr", "basic"
+	DisplayName string      `json:"display_name"` // Human-readable platform name
+	Category    string      `json:"category"`     // "im", "enterprise", "business"
+	Fields      []FieldSpec `json:"fields"`       // Required/optional auth fields
 }
 
 // FieldSpec defines a single auth field
 type FieldSpec struct {
-	Key         string // Field key in auth map
-	Label       string // Display label for the field
-	Placeholder string // Placeholder text
-	Required    bool   // Whether this field is required
-	Secret      bool   // Whether this field should be masked (password/token)
-	HelperText  string // Additional guidance for users
+	Key         string `json:"key"`         // Field key in auth map
+	Label       string `json:"label"`       // Display label for the field
+	Placeholder string `json:"placeholder"` // Placeholder text
+	Required    bool   `json:"required"`    // Whether this field is required
+	Secret      bool   `json:"secret"`      // Whether this field should be masked (password/token)
+	HelperText  string `json:"helperText"`  // Additional guidance for users
 }
 
 // PlatformConfigs maps platform identifiers to their auth configurations
@@ -175,7 +175,7 @@ func IsValidPlatform(platform string) bool {
 
 // CategoryLabels provides display labels for categories
 var CategoryLabels = map[string]string{
-	"im":        "IM Platforms",
+	"im":         "IM Platforms",
 	"enterprise": "Enterprise",
 	"business":   "Business",
 }
