@@ -14,6 +14,7 @@ type BotSettingsHandler struct {
 }
 
 type BotSettingsPayload struct {
+	Name          string            `json:"name,omitempty"`
 	Platform      string            `json:"platform"`
 	AuthType      string            `json:"auth_type"`
 	Auth          map[string]string `json:"auth"`
@@ -21,7 +22,7 @@ type BotSettingsPayload struct {
 	ChatID        string            `json:"chat_id,omitempty"`
 	BashAllowlist []string          `json:"bash_allowlist,omitempty"`
 	// Legacy field for backward compatibility
-	Token         string            `json:"token,omitempty"`
+	Token string `json:"token,omitempty"`
 }
 
 func NewBotSettingsHandler(store *bot.Store) *BotSettingsHandler {
@@ -42,6 +43,7 @@ func (h *BotSettingsHandler) GetSettings(c *gin.Context) {
 
 	response := gin.H{
 		"success":        true,
+		"name":           settings.Name,
 		"platform":       settings.Platform,
 		"auth_type":      settings.AuthType,
 		"auth":           settings.Auth,
@@ -93,6 +95,7 @@ func (h *BotSettingsHandler) UpdateSettings(c *gin.Context) {
 	}
 
 	if err := h.store.SaveSettings(bot.Settings{
+		Name:          strings.TrimSpace(payload.Name),
 		Platform:      platform,
 		AuthType:      authType,
 		Auth:          authMap,
@@ -120,11 +123,11 @@ func (h *BotSettingsHandler) GetPlatforms(c *gin.Context) {
 
 	for _, p := range platforms {
 		platformResponses = append(platformResponses, gin.H{
-			"platform":    p.Platform,
+			"platform":     p.Platform,
 			"display_name": p.DisplayName,
-			"auth_type":   p.AuthType,
-			"category":    p.Category,
-			"fields":      p.Fields,
+			"auth_type":    p.AuthType,
+			"category":     p.Category,
+			"fields":       p.Fields,
 		})
 	}
 
@@ -132,7 +135,7 @@ func (h *BotSettingsHandler) GetPlatforms(c *gin.Context) {
 		"success":   true,
 		"platforms": platformResponses,
 		"categories": gin.H{
-			"im":        bot.CategoryLabels["im"],
+			"im":         bot.CategoryLabels["im"],
 			"enterprise": bot.CategoryLabels["enterprise"],
 			"business":   bot.CategoryLabels["business"],
 		},

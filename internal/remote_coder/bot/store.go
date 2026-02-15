@@ -14,12 +14,13 @@ import (
 
 // Settings represents bot configuration with platform-specific auth
 type Settings struct {
-	Token         string            `json:"token,omitempty"`         // Legacy: for backward compatibility
-	Platform      string            `json:"platform"`               // Platform identifier
-	AuthType      string            `json:"auth_type"`              // Auth type: token, oauth, qr
-	Auth          map[string]string `json:"auth"`                   // Dynamic auth fields based on platform
-	ProxyURL      string            `json:"proxy_url,omitempty"`     // Optional proxy URL
-	ChatIDLock    string            `json:"chat_id,omitempty"`       // Optional chat ID lock
+	Name          string            `json:"name,omitempty"`           // User-defined name for the bot
+	Token         string            `json:"token,omitempty"`          // Legacy: for backward compatibility
+	Platform      string            `json:"platform"`                 // Platform identifier
+	AuthType      string            `json:"auth_type"`                // Auth type: token, oauth, qr
+	Auth          map[string]string `json:"auth"`                     // Dynamic auth fields based on platform
+	ProxyURL      string            `json:"proxy_url,omitempty"`      // Optional proxy URL
+	ChatIDLock    string            `json:"chat_id,omitempty"`        // Optional chat ID lock
 	BashAllowlist []string          `json:"bash_allowlist,omitempty"` // Optional bash command allowlist
 }
 
@@ -99,6 +100,10 @@ func initSchema(db *sql.DB) error {
 	if err := ensureColumn(db, "remote_coder_bot_settings", "auth_config", "TEXT"); err != nil {
 		return err
 	}
+	// Name column for user-defined bot name
+	if err := ensureColumn(db, "remote_coder_bot_settings", "name", "TEXT"); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -111,7 +116,7 @@ func (s *Store) GetSettings() (Settings, error) {
 		return settings, nil
 	}
 
-	row := s.db.QueryRow(`SELECT telegram_token, platform, proxy_url, chat_id_lock, bash_allowlist, auth_type, auth_config FROM remote_coder_bot_settings WHERE id = 1`)
+	row := s.db.QueryRow(`SELECT telegram_token, platform, proxy_url, chat_id_lock, bash_allowlist, auth_type, auth_config, name FROM remote_coder_bot_settings WHERE id = 1`)
 	var token sql.NullString
 	var platform sql.NullString
 	var proxyURL sql.NullString
@@ -119,11 +124,17 @@ func (s *Store) GetSettings() (Settings, error) {
 	var bashAllowlist sql.NullString
 	var authType sql.NullString
 	var authConfig sql.NullString
-	if err := row.Scan(&token, &platform, &proxyURL, &chatIDLock, &bashAllowlist, &authType, &authConfig); err != nil {
+	var name sql.NullString
+	if err := row.Scan(&token, &platform, &proxyURL, &chatIDLock, &bashAllowlist, &authType, &authConfig, &name); err != nil {
 		if err != sql.ErrNoRows {
 			return settings, err
 		}
 	} else {
+		// Handle name
+		if name.Valid {
+			settings.Name = name.String
+		}
+
 		// Handle platform
 		if platform.Valid {
 			settings.Platform = platform.String
@@ -202,8 +213,8 @@ func (s *Store) SaveSettings(settings Settings) error {
 	}
 
 	_, err = tx.Exec(`
-		INSERT INTO remote_coder_bot_settings (id, telegram_token, platform, proxy_url, chat_id_lock, bash_allowlist, auth_type, auth_config, updated_at)
-		VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO remote_coder_bot_settings (id, telegram_token, platform, proxy_url, chat_id_lock, bash_allowlist, auth_type, auth_config, name, updated_at)
+		VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			telegram_token = excluded.telegram_token,
 			platform = excluded.platform,
@@ -212,8 +223,9 @@ func (s *Store) SaveSettings(settings Settings) error {
 			bash_allowlist = excluded.bash_allowlist,
 			auth_type = excluded.auth_type,
 			auth_config = excluded.auth_config,
+			name = excluded.name,
 			updated_at = excluded.updated_at
-	`, legacyToken, settings.Platform, settings.ProxyURL, settings.ChatIDLock, allowlistJSON, settings.AuthType, authConfigJSON, time.Now().UTC().Format(time.RFC3339))
+	`, legacyToken, settings.Platform, settings.ProxyURL, settings.ChatIDLock, allowlistJSON, settings.AuthType, authConfigJSON, settings.Name, time.Now().UTC().Format(time.RFC3339))
 	if err != nil {
 		return err
 	}
