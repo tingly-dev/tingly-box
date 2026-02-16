@@ -454,7 +454,12 @@ func handleClaudeCodeMessage(
 	if err != nil {
 		sessionMgr.SetFailed(sessionID, response)
 		logrus.WithError(err).Warn("Remote-coder execution failed")
-		sendText(bot, chatID, formatResponseWithMeta(projectPath, sessionID, chatID, senderID, response))
+		sendText(bot, chatID, formatResponseWithMeta(ResponseMeta{
+			ProjectPath: projectPath,
+			SessionID:   sessionID,
+			ChatID:      chatID,
+			UserID:      senderID,
+		}, response))
 		return
 	}
 
@@ -468,7 +473,12 @@ func handleClaudeCodeMessage(
 		Timestamp: time.Now(),
 	})
 
-	sendText(bot, chatID, formatResponseWithMeta(projectPath, sessionID, chatID, senderID, response))
+	sendText(bot, chatID, formatResponseWithMeta(ResponseMeta{
+		ProjectPath: projectPath,
+		SessionID:   sessionID,
+		ChatID:      chatID,
+		UserID:      senderID,
+	}, response))
 }
 
 func handleTelegramCommand(ctx context.Context, bot imbot.Bot, store *Store, sessionMgr *session.Manager, chatID string, text string, senderID string, isDirectChat bool, isGroupChat bool) {
@@ -1081,31 +1091,39 @@ func lastAssistantSummary(sessionMgr *session.Manager, sessionID string) string 
 	return ""
 }
 
+// ResponseMeta contains metadata for response formatting
+type ResponseMeta struct {
+	ProjectPath string
+	SessionID   string
+	ChatID      string
+	UserID      string
+}
+
 // formatResponseWithMeta adds project/session/user metadata to the response for better readability.
-func formatResponseWithMeta(projectPath, sessionID, chatID, userID, response string) string {
-	var meta strings.Builder
-	meta.WriteString("━━━━━━━━━━━━━━━━━━━━\n")
-	if projectPath != "" {
+func formatResponseWithMeta(meta ResponseMeta, response string) string {
+	var buf strings.Builder
+	buf.WriteString("━━━━━━━━━━━━━━━━━━━━\n")
+	if meta.ProjectPath != "" {
 		// Show only the last 2 directories for brevity
-		shortPath := projectPath
-		parts := strings.Split(projectPath, string(filepath.Separator))
+		shortPath := meta.ProjectPath
+		parts := strings.Split(meta.ProjectPath, string(filepath.Separator))
 		if len(parts) > 2 {
 			shortPath = filepath.Join(parts[len(parts)-2], parts[len(parts)-1])
 		}
-		meta.WriteString(fmt.Sprintf("📁 %s\n", shortPath))
+		buf.WriteString(fmt.Sprintf("📁 %s\n", shortPath))
 	}
-	if chatID != "" {
-		meta.WriteString(fmt.Sprintf("💬 %s\n", chatID))
+	if meta.ChatID != "" {
+		buf.WriteString(fmt.Sprintf("💬 %s\n", meta.ChatID))
 	}
-	if userID != "" {
-		meta.WriteString(fmt.Sprintf("👤 %s\n", userID))
+	if meta.UserID != "" {
+		buf.WriteString(fmt.Sprintf("👤 %s\n", meta.UserID))
 	}
-	if sessionID != "" {
-		meta.WriteString(fmt.Sprintf("🔄 %s\n", sessionID))
+	if meta.SessionID != "" {
+		buf.WriteString(fmt.Sprintf("🔄 %s\n", meta.SessionID))
 	}
 
-	meta.WriteString("━━━━━━━━━━━━━━━━━━━━\n\n")
-	return meta.String() + response
+	buf.WriteString("━━━━━━━━━━━━━━━━━━━━\n\n")
+	return buf.String() + response
 }
 
 func sendText(bot imbot.Bot, chatID string, text string) {
