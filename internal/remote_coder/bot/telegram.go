@@ -222,7 +222,7 @@ func handleTelegramMessage(
 	if strings.HasPrefix(text, "/") {
 		// Check for agent commands (/cc, /claude) first
 		if agent, msgText, matched := parseAgentCommand(text); matched {
-			handleAgentMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agent, msgText, msg.Sender.ID)
+			handleAgentMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agent, msgText, msg.Sender.ID, msg.ID)
 			return
 		}
 		handleTelegramCommand(ctx, bot, store, sessionMgr, chatID, text, msg.Sender.ID, isDirectChat, isGroupChat)
@@ -231,7 +231,7 @@ func handleTelegramMessage(
 
 	// Check for @agent mention pattern
 	if agent, msgText := parseAgentMention(text); agent != "" {
-		handleAgentMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agent, msgText, msg.Sender.ID)
+		handleAgentMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agent, msgText, msg.Sender.ID, msg.ID)
 		return
 	}
 
@@ -239,7 +239,7 @@ func handleTelegramMessage(
 	if isGroupChat {
 		if projectPath, ok := getProjectPathForGroup(store, chatID, string(msg.Platform)); ok {
 			// Route to Claude Code with the bound project path
-			handleAgentMessageWithProject(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agentClaudeCode, text, msg.Sender.ID, projectPath)
+			handleAgentMessageWithProject(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agentClaudeCode, text, msg.Sender.ID, projectPath, msg.ID)
 			return
 		}
 		// No binding, show guidance
@@ -254,7 +254,7 @@ func handleTelegramMessage(
 	}
 	if ok && sessionID != "" {
 		// Has active session, auto-route to cc
-		handleAgentMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agentClaudeCode, text, msg.Sender.ID)
+		handleAgentMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agentClaudeCode, text, msg.Sender.ID, msg.ID)
 		return
 	}
 
@@ -300,8 +300,9 @@ func handleAgentMessage(
 	agent string,
 	text string,
 	senderID string,
+	replyTo string,
 ) {
-	handleAgentMessageWithProject(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agent, text, senderID, "")
+	handleAgentMessageWithProject(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agent, text, senderID, "", replyTo)
 }
 
 // handleAgentMessageWithProject routes message to the appropriate agent handler with a specific project path.
@@ -317,6 +318,7 @@ func handleAgentMessageWithProject(
 	text string,
 	senderID string,
 	projectPathOverride string,
+	replyTo string,
 ) {
 	logrus.WithFields(logrus.Fields{
 		"agent":    agent,
@@ -326,7 +328,7 @@ func handleAgentMessageWithProject(
 
 	switch agent {
 	case agentClaudeCode:
-		handleClaudeCodeMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, text, senderID, projectPathOverride)
+		handleClaudeCodeMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, text, senderID, projectPathOverride, replyTo)
 	default:
 		sendText(bot, chatID, fmt.Sprintf("Unknown agent: %s", agent))
 	}
@@ -373,6 +375,7 @@ func handleClaudeCodeMessage(
 	text string,
 	senderID string,
 	projectPathOverride string,
+	replyTo string,
 ) {
 	if strings.TrimSpace(text) == "" {
 		sendText(bot, chatID, "Please provide a message for Claude Code. Usage: /cc <message> or @cc <message>")
@@ -432,6 +435,14 @@ func handleClaudeCodeMessage(
 		return
 	}
 
+	// Build meta for messages
+	meta := ResponseMeta{
+		ProjectPath: projectPath,
+		SessionID:   sessionID,
+		ChatID:      chatID,
+		UserID:      senderID,
+	}
+
 	sessionMgr.AppendMessage(sessionID, session.Message{
 		Role:      "user",
 		Content:   text,
@@ -439,6 +450,9 @@ func handleClaudeCodeMessage(
 	})
 
 	sessionMgr.SetRunning(sessionID)
+
+	// Send status message to indicate processing started (with meta header and reply)
+	sendTextWithReply(bot, chatID, formatResponseWithMeta(meta, "⏳ Processing..."), replyTo)
 
 	// Use context.Background() to avoid cancellation when bot reconnects
 	// The 10-minute timeout is sufficient to prevent runaway executions
@@ -461,12 +475,7 @@ func handleClaudeCodeMessage(
 	if err != nil {
 		sessionMgr.SetFailed(sessionID, response)
 		logrus.WithError(err).Warn("Remote-coder execution failed")
-		sendText(bot, chatID, formatResponseWithMeta(ResponseMeta{
-			ProjectPath: projectPath,
-			SessionID:   sessionID,
-			ChatID:      chatID,
-			UserID:      senderID,
-		}, response))
+		sendTextWithReply(bot, chatID, formatResponseWithMeta(meta, response), replyTo)
 		return
 	}
 
@@ -480,12 +489,7 @@ func handleClaudeCodeMessage(
 		Timestamp: time.Now(),
 	})
 
-	sendText(bot, chatID, formatResponseWithMeta(ResponseMeta{
-		ProjectPath: projectPath,
-		SessionID:   sessionID,
-		ChatID:      chatID,
-		UserID:      senderID,
-	}, response))
+	sendTextWithReply(bot, chatID, formatResponseWithMeta(meta, response), replyTo)
 }
 
 func handleTelegramCommand(ctx context.Context, bot imbot.Bot, store *Store, sessionMgr *session.Manager, chatID string, text string, senderID string, isDirectChat bool, isGroupChat bool) {
@@ -1136,6 +1140,20 @@ func formatResponseWithMeta(meta ResponseMeta, response string) string {
 func sendText(bot imbot.Bot, chatID string, text string) {
 	for _, chunk := range chunkText(text, imbot.DefaultMessageLimit) {
 		_, err := bot.SendText(context.Background(), chatID, chunk)
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to send message")
+			return
+		}
+	}
+}
+
+// sendTextWithReply sends a text message as a reply to another message
+func sendTextWithReply(bot imbot.Bot, chatID string, text string, replyTo string) {
+	for _, chunk := range chunkText(text, imbot.DefaultMessageLimit) {
+		_, err := bot.SendMessage(context.Background(), chatID, &imbot.SendMessageOptions{
+			Text:    chunk,
+			ReplyTo: replyTo,
+		})
 		if err != nil {
 			logrus.WithError(err).Warn("Failed to send message")
 			return
