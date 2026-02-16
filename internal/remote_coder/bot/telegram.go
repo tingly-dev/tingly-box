@@ -229,6 +229,7 @@ func handleTelegramMessage(
 		// Check whitelist first
 		if !store.IsGroupWhitelisted(chatID) {
 			logrus.Debugf("Group %s is not whitelisted, ignoring message", chatID)
+			sendText(bot, chatID, fmt.Sprintf("This group is not enabled. Please DM the bot with `/join %s` to enable.", chatID))
 			return
 		}
 
