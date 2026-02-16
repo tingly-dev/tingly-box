@@ -236,7 +236,7 @@ func handleTelegramMessage(
 	}
 
 	// No session - show guidance
-	sendText(bot, chatID, "No active session. Use /new <project_path> to create one, then just send messages directly.")
+	sendText(bot, chatID, "No active session. Use /bind <project_path> to create one.")
 }
 
 // handleAgentMessage routes message to the appropriate agent handler.
@@ -361,7 +361,7 @@ func handleClaudeCodeMessage(
 	}
 
 	if !ok || sessionID == "" {
-		sendText(bot, chatID, "No session mapped. Use /new <project_path> or /use <session_id> first.")
+		sendText(bot, chatID, "No session mapped. Use /bind <project_path> or /use <session_id> first.")
 		return
 	}
 
@@ -382,7 +382,7 @@ func handleClaudeCodeMessage(
 		}
 	}
 	if projectPath == "" {
-		sendText(bot, chatID, "Project path is required. Use /new <project_path> or /bash cd <path>.")
+		sendText(bot, chatID, "Project path is required. Use /bind <project_path> first.")
 		return
 	}
 
@@ -465,7 +465,6 @@ Available commands:
 /status - Show current task status
 /list - List all sessions
 /use <session_id> - Switch to a session
-/new <project_path> - Create a new session
 /clear - Clear context and start fresh
 /bash <cmd> - Execute allowed bash commands (cd, ls, pwd)`, senderID)
 		} else {
@@ -503,7 +502,7 @@ Available commands:
 			logrus.WithError(err).Warn("Failed to load session mapping")
 		}
 		if !ok || sessionID == "" {
-			sendText(bot, chatID, "No session mapped. Send a message or use /new to create one.")
+			sendText(bot, chatID, "No session mapped. Use /bind <project_path> to create one.")
 			return
 		}
 		projectPath := ""
@@ -529,7 +528,7 @@ Available commands:
 			logrus.WithError(err).Warn("Failed to load session mapping")
 		}
 		if !ok || sessionID == "" {
-			sendText(bot, chatID, "No session mapped. Use /new <project_path> to create one.")
+			sendText(bot, chatID, "No session mapped. Use /bind <project_path> to create one.")
 			return
 		}
 		sess, exists := sessionMgr.GetOrLoad(sessionID)
@@ -625,24 +624,6 @@ Available commands:
 			return
 		}
 		sendText(bot, chatID, fmt.Sprintf("Switched to session %s.", targetID))
-	case "/new":
-		if len(fields) < 2 {
-			sendText(bot, chatID, "Usage: /new <project_path>")
-			return
-		}
-		projectPath := strings.TrimSpace(strings.Join(fields[1:], " "))
-		if projectPath == "" {
-			sendText(bot, chatID, "Usage: /new <project_path>")
-			return
-		}
-		sess := sessionMgr.Create()
-		sessionMgr.SetContext(sess.ID, "project_path", projectPath)
-		if err := store.SetSessionForChat(chatID, sess.ID); err != nil {
-			logrus.WithError(err).Warn("Failed to update session mapping")
-			sendText(bot, chatID, "Failed to create new session.")
-			return
-		}
-		sendText(bot, chatID, fmt.Sprintf("New session created: %s", sess.ID))
 	case "/bash":
 		handleBashCommand(ctx, bot, store, sessionMgr, chatID, fields)
 	case "/clear":
@@ -671,7 +652,7 @@ func handleClearCommand(bot imbot.Bot, store *Store, sessionMgr *session.Manager
 	}
 
 	if projectPath == "" {
-		sendText(bot, chatID, "No project path found. Use /new <project_path> to create a session first.")
+		sendText(bot, chatID, "No project path found. Use /bind <project_path> to create a session first.")
 		return
 	}
 
