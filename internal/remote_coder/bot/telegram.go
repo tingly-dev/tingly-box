@@ -459,7 +459,7 @@ func handleTelegramCommand(ctx context.Context, bot imbot.Bot, store *Store, ses
 Available commands:
 /help - Show this help message
 /join <group_id> - Add a group to whitelist
-/bind <path> - Bind a project and create group (some platform require to create group manually)
+/bind <path> - Bind a project and create session
 /project - Show current project info
 /projects - List your bound projects
 /status - Show current task status
@@ -488,7 +488,7 @@ Available commands:
 		}
 		handleJoinCommand(bot, store, chatID, fields, senderID)
 	case "/bind":
-		handleBindCommand(ctx, bot, store, chatID, fields, senderID, isDirectChat, isGroupChat)
+		handleBindCommand(ctx, bot, store, sessionMgr, chatID, fields, senderID, isDirectChat, isGroupChat)
 	case "/project":
 		handleProjectCommand(bot, store, chatID, string(imbot.PlatformTelegram))
 	case "/projects":
@@ -867,7 +867,7 @@ func handleJoinCommand(bot imbot.Bot, store *Store, chatID string, fields []stri
 }
 
 // handleBindCommand handles the /bind command for project binding
-func handleBindCommand(ctx context.Context, bot imbot.Bot, store *Store, chatID string, fields []string, senderID string, isDirectChat bool, isGroupChat bool) {
+func handleBindCommand(ctx context.Context, bot imbot.Bot, store *Store, sessionMgr *session.Manager, chatID string, fields []string, senderID string, isDirectChat bool, isGroupChat bool) {
 	if len(fields) < 2 {
 		sendText(bot, chatID, "Usage: /bind <project_path>")
 		return
@@ -913,7 +913,7 @@ func handleBindCommand(ctx context.Context, bot imbot.Bot, store *Store, chatID 
 	}
 
 	if isDirectChat {
-		// Direct chat: create project and instruct user to create group
+		// Direct chat: create project and session
 		// Check if project already exists
 		existingProject, err := projectStore.GetProjectByPath(expandedPath, botUUID)
 		if err != nil {
@@ -937,15 +937,17 @@ func handleBindCommand(ctx context.Context, bot imbot.Bot, store *Store, chatID 
 			}
 		}
 
-		// Instruct user to create a group
-		msg := fmt.Sprintf(`Project created: %s (ID: %s)
+		// Create session and bind to chat
+		sess := sessionMgr.Create()
+		sessionMgr.SetContext(sess.ID, "project_path", expandedPath)
 
-To complete binding:
-1. Create a new group and add this bot
-2. In the group, run: /bind %s
+		if err := store.SetSessionForChat(chatID, sess.ID); err != nil {
+			logrus.WithError(err).Warn("Failed to save session mapping")
+			sendText(bot, chatID, fmt.Sprintf("Project created but failed to create session: %v", err))
+			return
+		}
 
-This will bind the group to the project.`, project.Path, project.ID, project.Path)
-		sendText(bot, chatID, msg)
+		sendText(bot, chatID, fmt.Sprintf("Project bound: %s\nSession: %s\n\nYou can now send messages directly.", project.Path, sess.ID))
 
 	} else if isGroupChat {
 		// Group chat: create/update project and bind to this group
