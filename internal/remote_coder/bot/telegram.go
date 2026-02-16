@@ -29,18 +29,6 @@ const (
 	agentClaudeCode = "claude_code"
 )
 
-// agentPatterns maps agent aliases to their internal identifier
-var agentPatterns = map[string]string{
-	"@claude": agentClaudeCode,
-	"@cc":     agentClaudeCode,
-}
-
-// agentCommands maps command aliases to their internal identifier
-var agentCommands = map[string]string{
-	"/claude": agentClaudeCode,
-	"/cc":     agentClaudeCode,
-}
-
 var defaultBashAllowlist = map[string]struct{}{
 	"cd":  {},
 	"ls":  {},
@@ -220,18 +208,7 @@ func handleTelegramMessage(
 	}
 
 	if strings.HasPrefix(text, "/") {
-		// Check for agent commands (/cc, /claude) first
-		if agent, msgText, matched := parseAgentCommand(text); matched {
-			handleAgentMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agent, msgText, msg.Sender.ID, msg.ID)
-			return
-		}
 		handleTelegramCommand(ctx, bot, store, sessionMgr, chatID, text, msg.Sender.ID, isDirectChat, isGroupChat)
-		return
-	}
-
-	// Check for @agent mention pattern
-	if agent, msgText := parseAgentMention(text); agent != "" {
-		handleAgentMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agent, msgText, msg.Sender.ID, msg.ID)
 		return
 	}
 
@@ -260,32 +237,6 @@ func handleTelegramMessage(
 
 	// No session - show guidance
 	sendText(bot, chatID, "No active session. Use /new <project_path> to create one, then just send messages directly.")
-}
-
-// parseAgentMention checks if text starts with @agent pattern and returns the agent and remaining message.
-func parseAgentMention(text string) (agent string, message string) {
-	text = strings.TrimSpace(text)
-	for pattern, agentID := range agentPatterns {
-		if strings.HasPrefix(text, pattern) {
-			remaining := strings.TrimSpace(strings.TrimPrefix(text, pattern))
-			return agentID, remaining
-		}
-	}
-	return "", ""
-}
-
-// parseAgentCommand checks if text is an agent command (e.g., /cc <message>) and returns the agent and message.
-func parseAgentCommand(text string) (agent string, message string, matched bool) {
-	fields := strings.Fields(text)
-	if len(fields) == 0 {
-		return "", "", false
-	}
-	cmd := strings.ToLower(fields[0])
-	if agentID, ok := agentCommands[cmd]; ok {
-		remaining := strings.TrimSpace(strings.TrimPrefix(text, fields[0]))
-		return agentID, remaining, true
-	}
-	return "", "", false
 }
 
 // handleAgentMessage routes message to the appropriate agent handler.
@@ -378,7 +329,7 @@ func handleClaudeCodeMessage(
 	replyTo string,
 ) {
 	if strings.TrimSpace(text) == "" {
-		sendText(bot, chatID, "Please provide a message for Claude Code. Usage: /cc <message> or @cc <message>")
+		sendText(bot, chatID, "Please provide a message for Claude Code.")
 		return
 	}
 
@@ -499,12 +450,6 @@ func handleTelegramCommand(ctx context.Context, bot imbot.Bot, store *Store, ses
 	}
 	cmd := strings.ToLower(fields[0])
 
-	// Check for agent commands (/claude, /cc)
-	if _, ok := agentCommands[cmd]; ok {
-		// Agent commands need special handling with launcher
-		// Fall through to switch for now, will be handled in default case
-	}
-
 	switch cmd {
 	case "/help", "/start":
 		var helpText string
@@ -513,7 +458,6 @@ func handleTelegramCommand(ctx context.Context, bot imbot.Bot, store *Store, ses
 
 Available commands:
 /help - Show this help message
-/cc <message> - Send message to Claude Code
 /join <group_id> - Add a group to whitelist
 /bind <path> - Bind a project and create group (some platform require to create group manually)
 /project - Show current project info
