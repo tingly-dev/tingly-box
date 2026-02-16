@@ -651,6 +651,13 @@ func handleClearCommand(bot imbot.Bot, store *Store, sessionMgr *session.Manager
 		}
 	}
 
+	// For group chats, also check group binding if no project path from session
+	if projectPath == "" {
+		if path, found := getProjectPathForGroup(store, chatID, string(imbot.PlatformTelegram)); found {
+			projectPath = path
+		}
+	}
+
 	if projectPath == "" {
 		sendText(bot, chatID, "No project path found. Use /bind <project_path> to create a session first.")
 		return
