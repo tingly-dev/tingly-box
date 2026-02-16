@@ -11,6 +11,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/launcher"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
@@ -27,6 +28,17 @@ const (
 // Agent routing constants
 const (
 	agentClaudeCode = "claude_code"
+)
+
+// Callback action constants
+const (
+	callbackActionClear = "action:clear"
+	callbackActionBind  = "action:bind"
+	callbackBindNav     = "bind:nav"
+	callbackBindPrev    = "bind:prev"
+	callbackBindNext    = "bind:next"
+	callbackBindSelect  = "bind:select"
+	callbackBindCancel  = "bind:cancel"
 )
 
 var defaultBashAllowlist = map[string]struct{}{
@@ -87,6 +99,7 @@ func runTelegramBotOnce(ctx context.Context, store *Store, sessionMgr *session.M
 
 	claudeLauncher := launcher.NewClaudeCodeLauncher()
 	summaryEngine := summarizer.NewEngine()
+	directoryBrowser := NewDirectoryBrowser()
 
 	manager := imbot.NewManager(
 		imbot.WithAutoReconnect(true),
@@ -118,7 +131,7 @@ func runTelegramBotOnce(ctx context.Context, store *Store, sessionMgr *session.M
 		if platform != imbot.PlatformTelegram {
 			return
 		}
-		go handleTelegramMessage(ctx, manager, store, sessionMgr, claudeLauncher, summaryEngine, msg)
+		go handleTelegramMessage(ctx, manager, store, sessionMgr, claudeLauncher, summaryEngine, directoryBrowser, msg)
 	})
 
 	if err := manager.Start(ctx); err != nil {
@@ -155,6 +168,7 @@ func handleTelegramMessage(
 	sessionMgr *session.Manager,
 	ccLauncher *launcher.ClaudeCodeLauncher,
 	summaryEngine *summarizer.Engine,
+	directoryBrowser *DirectoryBrowser,
 	msg imbot.Message,
 ) {
 	bot := manager.GetBot(msg.Platform)
@@ -167,6 +181,12 @@ func handleTelegramMessage(
 	// DingTalk/Feishu: Recipient.ID (conversation ID)
 	chatID := getReplyTarget(msg)
 	if chatID == "" {
+		return
+	}
+
+	// Check if this is a callback query
+	if isCallback, _ := msg.Metadata["is_callback"].(bool); isCallback {
+		handleCallbackQuery(ctx, bot, store, sessionMgr, directoryBrowser, chatID, msg)
 		return
 	}
 
@@ -208,7 +228,13 @@ func handleTelegramMessage(
 	}
 
 	if strings.HasPrefix(text, "/") {
-		handleTelegramCommand(ctx, bot, store, sessionMgr, chatID, text, msg.Sender.ID, isDirectChat, isGroupChat)
+		handleTelegramCommand(ctx, bot, store, sessionMgr, directoryBrowser, chatID, text, msg.Sender.ID, isDirectChat, isGroupChat)
+		return
+	}
+
+	// Check if waiting for custom path input
+	if directoryBrowser.IsWaitingInput(chatID) {
+		handleCustomPathInput(ctx, bot, store, sessionMgr, directoryBrowser, chatID, text, msg.Sender.ID, isDirectChat, isGroupChat)
 		return
 	}
 
@@ -440,10 +466,11 @@ func handleClaudeCodeMessage(
 		Timestamp: time.Now(),
 	})
 
-	sendTextWithReply(bot, chatID, response, replyTo)
+	// Send response with action keyboard (Clear/Bind buttons)
+	sendTextWithActionKeyboard(bot, chatID, response, replyTo)
 }
 
-func handleTelegramCommand(ctx context.Context, bot imbot.Bot, store *Store, sessionMgr *session.Manager, chatID string, text string, senderID string, isDirectChat bool, isGroupChat bool) {
+func handleTelegramCommand(ctx context.Context, bot imbot.Bot, store *Store, sessionMgr *session.Manager, directoryBrowser *DirectoryBrowser, chatID string, text string, senderID string, isDirectChat bool, isGroupChat bool) {
 	fields := strings.Fields(text)
 	if len(fields) == 0 {
 		return
@@ -460,6 +487,7 @@ Available commands:
 /help - Show this help message
 /join <group_id> - Add a group to whitelist
 /bind <path> - Bind a project and create session
+/bind - Start interactive directory browser
 /project - Show current project info
 /projects - List your bound projects
 /status - Show current task status
@@ -473,6 +501,7 @@ Available commands:
 Available commands:
 /help - Show this help message
 /bind <path> - Bind a project to this group
+/bind - Start interactive directory browser
 /project - Show current project info
 /status - Show current task status
 /list - List all sessions
@@ -487,6 +516,11 @@ Available commands:
 		}
 		handleJoinCommand(bot, store, chatID, fields, senderID)
 	case "/bind":
+		if len(fields) < 2 {
+			// Start interactive directory browser
+			handleBindInteractive(ctx, bot, store, sessionMgr, directoryBrowser, chatID, senderID, isDirectChat, isGroupChat)
+			return
+		}
 		handleBindCommand(ctx, bot, store, sessionMgr, chatID, fields, senderID, isDirectChat, isGroupChat)
 	case "/project":
 		handleProjectCommand(bot, store, chatID, string(imbot.PlatformTelegram))
@@ -806,6 +840,421 @@ func normalizeAllowlistToMap(values []string) map[string]struct{} {
 		out[entry] = struct{}{}
 	}
 	return out
+}
+
+// handleCallbackQuery handles callback queries from inline keyboards
+func handleCallbackQuery(
+	ctx context.Context,
+	bot imbot.Bot,
+	store *Store,
+	sessionMgr *session.Manager,
+	directoryBrowser *DirectoryBrowser,
+	chatID string,
+	msg imbot.Message,
+) {
+	callbackData, _ := msg.Metadata["callback_data"].(string)
+	if callbackData == "" {
+		return
+	}
+
+	parts := imbot.ParseCallbackData(callbackData)
+	if len(parts) == 0 {
+		return
+	}
+
+	action := parts[0]
+
+	switch action {
+	case "action":
+		if len(parts) < 2 {
+			return
+		}
+		subAction := parts[1]
+		switch subAction {
+		case "clear":
+			handleClearCommand(bot, store, sessionMgr, chatID)
+		case "bind":
+			// Start interactive bind
+			handleBindInteractive(ctx, bot, store, sessionMgr, directoryBrowser, chatID, msg.Sender.ID, true, false)
+		}
+
+	case "bind":
+		if len(parts) < 2 {
+			return
+		}
+		subAction := parts[1]
+		switch subAction {
+		case "nav":
+			if len(parts) < 3 {
+				return
+			}
+			encodedPath := parts[2]
+			path := imbot.ParseDirPath(encodedPath)
+			if err := directoryBrowser.Navigate(chatID, path); err != nil {
+				logrus.WithError(err).Warn("Failed to navigate directory")
+				return
+			}
+			// Get message ID from metadata for editing
+			msgID, _ := msg.Metadata["message_id"].(string)
+			if msgID == "" {
+				msgID = msg.ID
+			}
+			_, _ = SendDirectoryBrowser(ctx, bot, directoryBrowser, chatID, msgID)
+
+		case "prev":
+			if err := directoryBrowser.PrevPage(chatID); err != nil {
+				logrus.WithError(err).Warn("Failed to go to previous page")
+				return
+			}
+			msgID, _ := msg.Metadata["message_id"].(string)
+			if msgID == "" {
+				msgID = msg.ID
+			}
+			_, _ = SendDirectoryBrowser(ctx, bot, directoryBrowser, chatID, msgID)
+
+		case "next":
+			if err := directoryBrowser.NextPage(chatID); err != nil {
+				logrus.WithError(err).Warn("Failed to go to next page")
+				return
+			}
+			msgID, _ := msg.Metadata["message_id"].(string)
+			if msgID == "" {
+				msgID = msg.ID
+			}
+			_, _ = SendDirectoryBrowser(ctx, bot, directoryBrowser, chatID, msgID)
+
+		case "select":
+			if len(parts) < 3 {
+				return
+			}
+			encodedPath := parts[2]
+			path := imbot.ParseDirPath(encodedPath)
+			// Complete the bind
+			completeBind(ctx, bot, store, sessionMgr, chatID, path, msg.Sender.ID, true, false)
+			directoryBrowser.Clear(chatID)
+
+		case "custom":
+			// Start custom path input mode
+			handleCustomPathPrompt(ctx, bot, directoryBrowser, chatID)
+
+		case "create":
+			// Create directory and bind
+			if len(parts) < 3 {
+				return
+			}
+			encodedPath := parts[2]
+			path := imbot.ParseDirPath(encodedPath)
+			// Create the directory
+			if err := os.MkdirAll(path, 0755); err != nil {
+				logrus.WithError(err).Error("Failed to create directory")
+				sendText(bot, chatID, fmt.Sprintf("Failed to create directory: %v", err))
+				return
+			}
+			// Complete the bind
+			completeBind(ctx, bot, store, sessionMgr, chatID, path, msg.Sender.ID, true, false)
+			directoryBrowser.Clear(chatID)
+
+		case "cancel":
+			directoryBrowser.Clear(chatID)
+			sendText(bot, chatID, "Bind cancelled.")
+		}
+	}
+}
+
+// handleBindInteractive starts an interactive directory browser for binding
+func handleBindInteractive(
+	ctx context.Context,
+	bot imbot.Bot,
+	store *Store,
+	sessionMgr *session.Manager,
+	directoryBrowser *DirectoryBrowser,
+	chatID string,
+	senderID string,
+	isDirectChat bool,
+	isGroupChat bool,
+) {
+	// Start from home directory
+	_, err := directoryBrowser.Start(chatID)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to start directory browser")
+		sendText(bot, chatID, fmt.Sprintf("Failed to start directory browser: %v", err))
+		return
+	}
+
+	logrus.Infof("Bind flow started for chat %s", chatID)
+
+	// Send directory browser
+	_, err = SendDirectoryBrowser(ctx, bot, directoryBrowser, chatID, "")
+	if err != nil {
+		logrus.WithError(err).Error("Failed to send directory browser")
+		sendText(bot, chatID, fmt.Sprintf("Failed to send directory browser: %v", err))
+		return
+	}
+}
+
+// handleCustomPathPrompt sends the custom path input prompt
+func handleCustomPathPrompt(
+	ctx context.Context,
+	bot imbot.Bot,
+	directoryBrowser *DirectoryBrowser,
+	chatID string,
+) {
+	// Ensure state exists
+	state := directoryBrowser.GetState(chatID)
+	if state == nil {
+		// Start a new bind flow if none exists
+		var err error
+		state, err = directoryBrowser.Start(chatID)
+		if err != nil {
+			sendText(bot, chatID, fmt.Sprintf("Failed to start bind flow: %v", err))
+			return
+		}
+	}
+
+	// Set waiting for input state
+	directoryBrowser.SetWaitingInput(chatID, true, "")
+
+	// Send prompt with cancel keyboard
+	kb := BuildCancelKeyboard()
+	tgKeyboard := convertActionKeyboardToTelegram(kb.Build())
+
+	result, err := bot.SendMessage(ctx, chatID, &imbot.SendMessageOptions{
+		Text:      BuildCustomPathPrompt(),
+		ParseMode: imbot.ParseModeMarkdown,
+		Metadata: map[string]interface{}{
+			"replyMarkup": tgKeyboard,
+		},
+	})
+	if err != nil {
+		logrus.WithError(err).Error("Failed to send custom path prompt")
+		return
+	}
+
+	// Store prompt message ID
+	directoryBrowser.SetWaitingInput(chatID, true, result.MessageID)
+}
+
+// handleCustomPathInput handles the user's custom path input
+func handleCustomPathInput(
+	ctx context.Context,
+	bot imbot.Bot,
+	store *Store,
+	sessionMgr *session.Manager,
+	directoryBrowser *DirectoryBrowser,
+	chatID string,
+	text string,
+	senderID string,
+	isDirectChat bool,
+	isGroupChat bool,
+) {
+	// Get current path from browser state
+	state := directoryBrowser.GetState(chatID)
+	currentPath := ""
+	if state != nil {
+		currentPath = state.CurrentPath
+	}
+
+	// Expand path relative to current directory
+	var expandedPath string
+	if filepath.IsAbs(text) || strings.HasPrefix(text, "~") {
+		// Absolute path or home-relative path
+		var err error
+		expandedPath, err = ExpandPath(text)
+		if err != nil {
+			sendText(bot, chatID, fmt.Sprintf("Invalid path: %v", err))
+			return
+		}
+	} else if currentPath != "" {
+		// Relative path - expand relative to current directory
+		expandedPath = filepath.Join(currentPath, text)
+	} else {
+		// No current path, use ExpandPath
+		var err error
+		expandedPath, err = ExpandPath(text)
+		if err != nil {
+			sendText(bot, chatID, fmt.Sprintf("Invalid path: %v", err))
+			return
+		}
+	}
+
+	// Clean the path
+	expandedPath = filepath.Clean(expandedPath)
+
+	// Check if path exists
+	info, err := os.Stat(expandedPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Path doesn't exist, ask for confirmation to create
+			handleCreateConfirm(ctx, bot, directoryBrowser, chatID, expandedPath)
+			return
+		}
+		sendText(bot, chatID, fmt.Sprintf("Cannot access path: %v", err))
+		return
+	}
+
+	if !info.IsDir() {
+		sendText(bot, chatID, "The path is not a directory. Please provide a directory path.")
+		return
+	}
+
+	// Path exists and is a directory, complete the bind
+	completeBind(ctx, bot, store, sessionMgr, chatID, expandedPath, senderID, isDirectChat, isGroupChat)
+	directoryBrowser.Clear(chatID)
+}
+
+// handleCreateConfirm sends a confirmation prompt for creating a directory
+func handleCreateConfirm(
+	ctx context.Context,
+	bot imbot.Bot,
+	directoryBrowser *DirectoryBrowser,
+	chatID string,
+	path string,
+) {
+	// Reset waiting input state (no longer waiting for text input)
+	directoryBrowser.SetWaitingInput(chatID, false, "")
+
+	kb, text := BuildCreateConfirmKeyboard(path)
+	tgKeyboard := convertActionKeyboardToTelegram(kb.Build())
+
+	_, err := bot.SendMessage(ctx, chatID, &imbot.SendMessageOptions{
+		Text:      text,
+		ParseMode: imbot.ParseModeMarkdown,
+		Metadata: map[string]interface{}{
+			"replyMarkup": tgKeyboard,
+		},
+	})
+	if err != nil {
+		logrus.WithError(err).Error("Failed to send create confirmation")
+	}
+}
+
+// completeBind completes the project binding process
+func completeBind(
+	ctx context.Context,
+	bot imbot.Bot,
+	store *Store,
+	sessionMgr *session.Manager,
+	chatID string,
+	projectPath string,
+	senderID string,
+	isDirectChat bool,
+	isGroupChat bool,
+) {
+	// Expand path (handles ~, etc.)
+	expandedPath, err := ExpandPath(projectPath)
+	if err != nil {
+		sendText(bot, chatID, fmt.Sprintf("Invalid path: %v", err))
+		return
+	}
+
+	// Only validate if the path should already exist
+	// For newly created paths, skip this check
+	if _, err := os.Stat(expandedPath); err == nil {
+		if err := ValidateProjectPath(expandedPath); err != nil {
+			sendText(bot, chatID, fmt.Sprintf("Path validation failed: %v", err))
+			return
+		}
+	}
+
+	platform := string(imbot.PlatformTelegram)
+	settings, _ := store.GetSettings()
+	botUUID := settings.UUID
+	if botUUID == "" {
+		botUUID = "default"
+	}
+
+	projectStore, err := NewProjectStore(store.DB())
+	if err != nil {
+		sendText(bot, chatID, "Failed to initialize project store")
+		logrus.WithError(err).Error("Failed to create project store")
+		return
+	}
+
+	bindingStore, err := NewBindingStore(store.DB())
+	if err != nil {
+		sendText(bot, chatID, "Failed to initialize binding store")
+		logrus.WithError(err).Error("Failed to create binding store")
+		return
+	}
+
+	if isDirectChat {
+		// Check if project already exists
+		existingProject, err := projectStore.GetProjectByPath(expandedPath, botUUID)
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to check existing project")
+		}
+
+		var project *Project
+		if existingProject != nil {
+			project = existingProject
+		} else {
+			// Create new project
+			project = &Project{
+				Path:     expandedPath,
+				OwnerID:  senderID,
+				Platform: platform,
+				BotUUID:  botUUID,
+			}
+			if err := projectStore.CreateProject(project); err != nil {
+				sendText(bot, chatID, fmt.Sprintf("Failed to create project: %v", err))
+				return
+			}
+		}
+
+		// Create session and bind to chat
+		sess := sessionMgr.Create()
+		sessionMgr.SetContext(sess.ID, "project_path", expandedPath)
+
+		if err := store.SetSessionForChat(chatID, sess.ID); err != nil {
+			logrus.WithError(err).Warn("Failed to save session mapping")
+			sendText(bot, chatID, fmt.Sprintf("Project created but failed to create session: %v", err))
+			return
+		}
+
+		logrus.Infof("Project bound: chat=%s path=%s session=%s", chatID, project.Path, sess.ID)
+		sendText(bot, chatID, fmt.Sprintf("✅ Project bound: %s\nSession: %s\n\nYou can now send messages directly.", project.Path, sess.ID))
+
+	} else if isGroupChat {
+		// Check if project already exists
+		existingProject, err := projectStore.GetProjectByPath(expandedPath, botUUID)
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to check existing project")
+		}
+
+		var project *Project
+		if existingProject != nil {
+			project = existingProject
+		} else {
+			// Create new project
+			project = &Project{
+				Path:     expandedPath,
+				OwnerID:  senderID,
+				Platform: platform,
+				BotUUID:  botUUID,
+			}
+			if err := projectStore.CreateProject(project); err != nil {
+				sendText(bot, chatID, fmt.Sprintf("Failed to create project: %v", err))
+				return
+			}
+		}
+
+		// Create or update group binding
+		binding := &GroupProjectBinding{
+			GroupID:   chatID,
+			Platform:  platform,
+			ProjectID: project.ID,
+			BotUUID:   botUUID,
+		}
+		if err := bindingStore.UpsertGroupBinding(binding); err != nil {
+			sendText(bot, chatID, fmt.Sprintf("Failed to bind group: %v", err))
+			return
+		}
+
+		logrus.Infof("Group bound: chat=%s path=%s project_id=%s", chatID, project.Path, project.ID)
+		sendText(bot, chatID, fmt.Sprintf("✅ Group bound to project: %s", project.Path))
+	} else {
+		sendText(bot, chatID, "This command only works in direct or group chats.")
+	}
 }
 
 // handleJoinCommand handles the /join command to add a group to whitelist
@@ -1165,4 +1614,56 @@ func chunkText(text string, limit int) []string {
 		remaining = remaining[limit:]
 	}
 	return chunks
+}
+
+// sendTextWithActionKeyboard sends a text message with Clear/Bind action buttons
+func sendTextWithActionKeyboard(bot imbot.Bot, chatID string, text string, replyTo string) {
+	// Build action keyboard
+	kb := BuildActionKeyboard()
+	tgKeyboard := convertActionKeyboardToTelegram(kb.Build())
+
+	// Send with keyboard on the last chunk
+	chunks := chunkText(text, imbot.DefaultMessageLimit)
+	for i, chunk := range chunks {
+		opts := &imbot.SendMessageOptions{
+			Text: chunk,
+		}
+		if replyTo != "" {
+			opts.ReplyTo = replyTo
+		}
+		// Only add keyboard to the last chunk
+		if i == len(chunks)-1 {
+			opts.Metadata = map[string]interface{}{
+				"replyMarkup": tgKeyboard,
+			}
+		}
+
+		_, err := bot.SendMessage(context.Background(), chatID, opts)
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to send message")
+			return
+		}
+	}
+}
+
+// convertActionKeyboardToTelegram converts imbot.InlineKeyboardMarkup to tgbotapi.InlineKeyboardMarkup
+func convertActionKeyboardToTelegram(kb imbot.InlineKeyboardMarkup) tgbotapi.InlineKeyboardMarkup {
+	var rows [][]tgbotapi.InlineKeyboardButton
+	for _, row := range kb.InlineKeyboard {
+		var buttons []tgbotapi.InlineKeyboardButton
+		for _, btn := range row {
+			tgBtn := tgbotapi.InlineKeyboardButton{
+				Text: btn.Text,
+			}
+			if btn.CallbackData != "" {
+				tgBtn.CallbackData = &btn.CallbackData
+			}
+			if btn.URL != "" {
+				tgBtn.URL = &btn.URL
+			}
+			buttons = append(buttons, tgBtn)
+		}
+		rows = append(rows, buttons)
+	}
+	return tgbotapi.InlineKeyboardMarkup{InlineKeyboard: rows}
 }

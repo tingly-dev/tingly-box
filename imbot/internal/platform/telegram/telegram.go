@@ -211,6 +211,44 @@ func (b *Bot) EditMessage(ctx context.Context, messageID string, text string) er
 	return nil
 }
 
+// EditMessageWithKeyboard edits a message with text and inline keyboard
+func (b *Bot) EditMessageWithKeyboard(ctx interface{}, chatID string, messageID string, text string, keyboard interface{}) error {
+	if err := b.EnsureReady(); err != nil {
+		return err
+	}
+
+	// Parse chat ID
+	chatIDInt, err := strconv.ParseInt(chatID, 10, 64)
+	if err != nil {
+		return core.NewInvalidTargetError(core.PlatformTelegram, chatID, "invalid chat ID")
+	}
+
+	// Parse message ID
+	msgIDInt, err := strconv.Atoi(messageID)
+	if err != nil {
+		return core.NewInvalidTargetError(core.PlatformTelegram, messageID, "invalid message ID")
+	}
+
+	// Create edit message config
+	editConfig := tgbotapi.NewEditMessageText(chatIDInt, msgIDInt, text)
+	editConfig.ParseMode = tgbotapi.ModeMarkdown
+
+	// Set keyboard if provided
+	if keyboard != nil {
+		if kb, ok := keyboard.(tgbotapi.InlineKeyboardMarkup); ok {
+			editConfig.ReplyMarkup = &kb
+		}
+	}
+
+	_, err = b.api.Send(editConfig)
+	if err != nil {
+		return core.WrapError(err, core.PlatformTelegram, core.ErrPlatformError)
+	}
+
+	b.UpdateLastActivity()
+	return nil
+}
+
 // DeleteMessage deletes a message
 func (b *Bot) DeleteMessage(ctx context.Context, messageID string) error {
 	if err := b.EnsureReady(); err != nil {
