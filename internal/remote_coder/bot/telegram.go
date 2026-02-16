@@ -400,7 +400,10 @@ func handleClaudeCodeMessage(
 		sessionMgr.Update(sessionID, func(s *session.Session) {
 			s.ExpiresAt = time.Time{} // Zero value means no expiration
 		})
-		_ = store.SetSessionForChat(chatID, sessionID)
+		if err := store.SetSessionForChat(chatID, sessionID); err != nil {
+			logrus.WithError(err).Warn("Failed to save session mapping")
+		}
+		ok = true // Mark as having a valid session
 	}
 
 	if !ok || sessionID == "" {
