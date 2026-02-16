@@ -507,29 +507,51 @@ func handleTelegramCommand(ctx context.Context, bot imbot.Bot, store *Store, ses
 
 	switch cmd {
 	case "/help", "/start":
-		helpText := fmt.Sprintf(`Your User ID: %s
+		var helpText string
+		if isDirectChat {
+			helpText = fmt.Sprintf(`Your User ID: %s
 
 Available commands:
 /help - Show this help message
 /cc <message> - Send message to Claude Code
-/join <invite_link> - Join a group and add to whitelist (direct chat only)
-/bind <path> - Bind a project (creates group in direct chat, rebinds in group)
+/join <group_id> - Add a group to whitelist
+/bind <path> - Bind a project and create group (some platform require to create group manually)
 /project - Show current project info
 /projects - List your bound projects
-/info - Show current session info
 /status - Show current task status
 /list - List all sessions
 /use <session_id> - Switch to a session
 /new <project_path> - Create a new session
+/clear - Clear context and start fresh
 /bash <cmd> - Execute allowed bash commands (cd, ls, pwd)`, senderID)
+		} else {
+			helpText = fmt.Sprintf(`Group Chat ID: %s
+
+Available commands:
+/help - Show this help message
+/bind <path> - Bind a project to this group
+/project - Show current project info
+/status - Show current task status
+/list - List all sessions
+/clear - Clear context and start fresh
+/bash <cmd> - Execute allowed bash commands (cd, ls, pwd)`, chatID)
+		}
 		sendText(bot, chatID, helpText)
 	case "/join":
-		handleJoinCommand(bot, store, chatID, fields, senderID, isDirectChat)
+		if !isDirectChat {
+			sendText(bot, chatID, "/join can only be used in direct chat.")
+			return
+		}
+		handleJoinCommand(bot, store, chatID, fields, senderID)
 	case "/bind":
 		handleBindCommand(ctx, bot, store, chatID, fields, senderID, isDirectChat, isGroupChat)
 	case "/project":
 		handleProjectCommand(bot, store, chatID, string(imbot.PlatformTelegram))
 	case "/projects":
+		if !isDirectChat {
+			sendText(bot, chatID, "/projects can only be used in direct chat.")
+			return
+		}
 		handleProjectsCommand(bot, store, chatID, senderID, string(imbot.PlatformTelegram))
 	case "/info":
 		sessionID, ok, err := store.GetSessionForChat(chatID)
@@ -679,9 +701,47 @@ Available commands:
 		sendText(bot, chatID, fmt.Sprintf("New session created: %s", sess.ID))
 	case "/bash":
 		handleBashCommand(ctx, bot, store, sessionMgr, chatID, fields)
+	case "/clear":
+		handleClearCommand(bot, store, sessionMgr, chatID)
 	default:
 		sendText(bot, chatID, "Unknown command. Use /help to see available commands.")
 	}
+}
+
+// handleClearCommand clears the current session context and creates a new one
+func handleClearCommand(bot imbot.Bot, store *Store, sessionMgr *session.Manager, chatID string) {
+	sessionID, ok, err := store.GetSessionForChat(chatID)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to load session mapping")
+	}
+
+	var projectPath string
+	if ok && sessionID != "" {
+		if sess, exists := sessionMgr.GetOrLoad(sessionID); exists && sess.Context != nil {
+			if v, ok := sess.Context["project_path"]; ok {
+				if pv, ok := v.(string); ok {
+					projectPath = pv
+				}
+			}
+		}
+	}
+
+	if projectPath == "" {
+		sendText(bot, chatID, "No project path found. Use /new <project_path> to create a session first.")
+		return
+	}
+
+	// Create new session with same project path
+	sess := sessionMgr.Create()
+	sessionMgr.SetContext(sess.ID, "project_path", projectPath)
+
+	if err := store.SetSessionForChat(chatID, sess.ID); err != nil {
+		logrus.WithError(err).Warn("Failed to update session mapping")
+		sendText(bot, chatID, "Failed to clear context.")
+		return
+	}
+
+	sendText(bot, chatID, fmt.Sprintf("Context cleared. New session: %s\nProject: %s", sess.ID, projectPath))
 }
 
 func handleBashCommand(ctx context.Context, bot imbot.Bot, store *Store, sessionMgr *session.Manager, chatID string, fields []string) {
@@ -817,12 +877,7 @@ func normalizeAllowlistToMap(values []string) map[string]struct{} {
 }
 
 // handleJoinCommand handles the /join command to add a group to whitelist
-func handleJoinCommand(bot imbot.Bot, store *Store, chatID string, fields []string, senderID string, isDirectChat bool) {
-	if !isDirectChat {
-		sendText(bot, chatID, "/join can only be used in direct chat.")
-		return
-	}
-
+func handleJoinCommand(bot imbot.Bot, store *Store, chatID string, fields []string, senderID string) {
 	if len(fields) < 2 {
 		sendText(bot, chatID, "Usage: /join <group_id|@username|invite_link>")
 		return
