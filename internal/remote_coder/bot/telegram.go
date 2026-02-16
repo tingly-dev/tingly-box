@@ -426,7 +426,7 @@ func handleClaudeCodeMessage(
 	if err != nil {
 		sessionMgr.SetFailed(sessionID, response)
 		logrus.WithError(err).Warn("Remote-coder execution failed")
-		sendTextWithReply(bot, chatID, formatResponseWithMeta(meta, response), replyTo)
+		sendTextWithReply(bot, chatID, response, replyTo)
 		return
 	}
 
@@ -440,7 +440,7 @@ func handleClaudeCodeMessage(
 		Timestamp: time.Now(),
 	})
 
-	sendTextWithReply(bot, chatID, formatResponseWithMeta(meta, response), replyTo)
+	sendTextWithReply(bot, chatID, response, replyTo)
 }
 
 func handleTelegramCommand(ctx context.Context, bot imbot.Bot, store *Store, sessionMgr *session.Manager, chatID string, text string, senderID string, isDirectChat bool, isGroupChat bool) {
@@ -1102,7 +1102,6 @@ type ResponseMeta struct {
 // formatResponseWithMeta adds project/session/user metadata to the response for better readability.
 func formatResponseWithMeta(meta ResponseMeta, response string) string {
 	var buf strings.Builder
-	buf.WriteString("━━━━━━━━━━━━━━━━━━━━\n")
 	if meta.ProjectPath != "" {
 		// Show only the last 2 directories for brevity
 		shortPath := meta.ProjectPath
