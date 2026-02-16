@@ -19,6 +19,12 @@ import (
 type GuardrailsHookResult struct {
 	Result guardrails.Result
 	Err    error
+	// BlockMessage is an optional message to inject when verdict is block.
+	BlockMessage string
+	// BlockIndex is the suggested content block index for Anthropic streams.
+	BlockIndex int
+	// BlockToolID is the associated tool_use id for tool_result injection.
+	BlockToolID string
 }
 
 // GuardrailsHookOption customizes guardrails hook behavior.
@@ -29,6 +35,7 @@ type guardrailsHook struct {
 	baseInput guardrails.Input
 	ctx       context.Context
 	onVerdict func(GuardrailsHookResult)
+	onBlock   func(GuardrailsHookResult)
 	acc       *guardrailsAccumulator
 	mu        sync.Mutex
 }
@@ -46,6 +53,13 @@ func WithGuardrailsContext(ctx context.Context) GuardrailsHookOption {
 func WithGuardrailsOnVerdict(cb func(GuardrailsHookResult)) GuardrailsHookOption {
 	return func(h *guardrailsHook) {
 		h.onVerdict = cb
+	}
+}
+
+// WithGuardrailsOnBlock registers a callback for early tool_use block decisions.
+func WithGuardrailsOnBlock(cb func(GuardrailsHookResult)) GuardrailsHookOption {
+	return func(h *guardrailsHook) {
+		h.onBlock = cb
 	}
 }
 
@@ -71,6 +85,10 @@ func NewGuardrailsHooks(engine guardrails.Guardrails, baseInput guardrails.Input
 		defer hook.mu.Unlock()
 
 		switch evt := event.(type) {
+		case *anthropic.MessageStreamEventUnion:
+			hook.acc.ingestAnthropicEvent(evt)
+		case *anthropic.BetaRawMessageStreamEventUnion:
+			hook.acc.ingestAnthropicBetaEvent(evt)
 		case *openai.ChatCompletionChunk:
 			hook.acc.ingestOpenAIChatChunk(evt)
 		case *responses.ResponseStreamEventUnion:
@@ -79,6 +97,29 @@ func NewGuardrailsHooks(engine guardrails.Guardrails, baseInput guardrails.Input
 			hook.acc.ingestMapEvent(evt)
 		default:
 			hook.acc.ingestAnyEvent(evt)
+		}
+
+		if hook.onBlock != nil {
+			if toolUse, ok := hook.acc.popCompletedToolUse(); ok {
+				input := hook.baseInput
+				input.Direction = guardrails.DirectionResponse
+				input.Content = guardrails.Content{
+					Messages: input.Content.Messages,
+					Command: &guardrails.Command{
+						Name:      toolUse.name,
+						Arguments: parseToolArgs(toolUse.args),
+					},
+				}
+				result, err := hook.engine.Evaluate(hook.ctx, input)
+				if err == nil && result.Verdict == guardrails.VerdictBlock {
+					hook.onBlock(GuardrailsHookResult{
+						Result:       result,
+						BlockMessage: guardrailsBlockMessage(result),
+						BlockIndex:   toolUse.index,
+						BlockToolID:  toolUse.id,
+					})
+				}
+			}
 		}
 		return nil
 	}
@@ -90,6 +131,8 @@ func NewGuardrailsHooks(engine guardrails.Guardrails, baseInput guardrails.Input
 		onVerdict := hook.onVerdict
 		scenario := input.Scenario
 		model := input.Model
+		blockIndex := hook.acc.nextBlockIndex()
+		blockToolID := hook.acc.lastToolID
 		hook.mu.Unlock()
 
 		logrus.Debugf("Guardrails: evaluating stream completion (scenario=%s model=%s)", scenario, model)
@@ -100,7 +143,17 @@ func NewGuardrailsHooks(engine guardrails.Guardrails, baseInput guardrails.Input
 			logrus.Debugf("Guardrails: evaluation done (scenario=%s model=%s verdict=%s)", scenario, model, result.Verdict)
 		}
 		if onVerdict != nil {
-			onVerdict(GuardrailsHookResult{Result: result, Err: err})
+			blockMsg := ""
+			if result.Verdict == guardrails.VerdictBlock {
+				blockMsg = guardrailsBlockMessage(result)
+			}
+			onVerdict(GuardrailsHookResult{
+				Result:       result,
+				Err:          err,
+				BlockMessage: blockMsg,
+				BlockIndex:   blockIndex,
+				BlockToolID:  blockToolID,
+			})
 		}
 	}
 
@@ -171,6 +224,18 @@ type guardrailsAccumulator struct {
 	commandName  string
 	commandArgs  strings.Builder
 	commandFound bool
+	lastIndex    int
+	hasIndex     bool
+	lastToolID   string
+	toolUses     map[int]*toolUseState
+	completed    []toolUseState
+}
+
+type toolUseState struct {
+	index int
+	id    string
+	name  string
+	args  string
 }
 
 func (a *guardrailsAccumulator) ingestOpenAIChatChunk(chunk *openai.ChatCompletionChunk) {
@@ -201,6 +266,38 @@ func (a *guardrailsAccumulator) ingestOpenAIChatChunk(chunk *openai.ChatCompleti
 			a.commandFound = true
 		}
 	}
+}
+
+func (a *guardrailsAccumulator) ingestAnthropicEvent(evt *anthropic.MessageStreamEventUnion) {
+	if evt == nil {
+		return
+	}
+	payload, err := json.Marshal(evt)
+	if err != nil {
+		return
+	}
+	var data map[string]interface{}
+	if err := json.Unmarshal(payload, &data); err != nil {
+		return
+	}
+	data["type"] = evt.Type
+	a.ingestEventMap(data)
+}
+
+func (a *guardrailsAccumulator) ingestAnthropicBetaEvent(evt *anthropic.BetaRawMessageStreamEventUnion) {
+	if evt == nil {
+		return
+	}
+	payload, err := json.Marshal(evt)
+	if err != nil {
+		return
+	}
+	var data map[string]interface{}
+	if err := json.Unmarshal(payload, &data); err != nil {
+		return
+	}
+	data["type"] = evt.Type
+	a.ingestEventMap(data)
 }
 
 func (a *guardrailsAccumulator) ingestOpenAIResponseEvent(evt *responses.ResponseStreamEventUnion) {
@@ -245,14 +342,17 @@ func (a *guardrailsAccumulator) ingestRawJSON(raw string) {
 
 func (a *guardrailsAccumulator) ingestEventMap(payload map[string]interface{}) {
 	eventType, _ := payload["type"].(string)
+	index := a.captureIndex(payload)
 
 	switch eventType {
 	case "content_block_delta":
 		delta, _ := payload["delta"].(map[string]interface{})
-		a.ingestDelta(delta)
+		a.ingestDelta(index, delta)
 	case "content_block_start":
 		block, _ := payload["content_block"].(map[string]interface{})
-		a.ingestContentBlock(block)
+		a.ingestContentBlock(index, block)
+	case "content_block_stop":
+		a.ingestContentBlockStop(index)
 	case "response.output_text.delta":
 		if delta, ok := payload["delta"].(string); ok {
 			a.textBuilder.WriteString(delta)
@@ -286,7 +386,7 @@ func (a *guardrailsAccumulator) ingestEventMap(payload map[string]interface{}) {
 	}
 }
 
-func (a *guardrailsAccumulator) ingestDelta(delta map[string]interface{}) {
+func (a *guardrailsAccumulator) ingestDelta(index int, delta map[string]interface{}) {
 	if delta == nil {
 		return
 	}
@@ -298,19 +398,23 @@ func (a *guardrailsAccumulator) ingestDelta(delta map[string]interface{}) {
 		}
 	case "input_json_delta":
 		if partial, ok := delta["partial_json"].(string); ok {
-			a.commandArgs.WriteString(partial)
-			a.commandFound = true
+			if state := a.getOrCreateToolUse(index); state != nil {
+				state.args += partial
+			}
 		}
 	}
 }
 
-func (a *guardrailsAccumulator) ingestContentBlock(block map[string]interface{}) {
+func (a *guardrailsAccumulator) ingestContentBlock(index int, block map[string]interface{}) {
 	if block == nil {
 		return
 	}
 	blockType, _ := block["type"].(string)
 	if blockType != "tool_use" && blockType != "function_call" {
 		return
+	}
+	if id, ok := block["id"].(string); ok && id != "" {
+		a.lastToolID = id
 	}
 	if name, ok := block["name"].(string); ok && name != "" {
 		a.commandName = name
@@ -319,10 +423,29 @@ func (a *guardrailsAccumulator) ingestContentBlock(block map[string]interface{})
 	if input, ok := block["input"].(map[string]interface{}); ok {
 		payload, err := json.Marshal(input)
 		if err == nil {
-			a.commandArgs.Write(payload)
-			a.commandFound = true
+			if state := a.getOrCreateToolUse(index); state != nil {
+				state.args = string(payload)
+			}
 		}
 	}
+
+	state := a.getOrCreateToolUse(index)
+	if state != nil {
+		state.id = a.lastToolID
+		state.name = a.commandName
+	}
+}
+
+func (a *guardrailsAccumulator) ingestContentBlockStop(index int) {
+	if a.toolUses == nil {
+		return
+	}
+	state, ok := a.toolUses[index]
+	if !ok {
+		return
+	}
+	a.completed = append(a.completed, *state)
+	delete(a.toolUses, index)
 }
 
 func (a *guardrailsAccumulator) ingestOutputItem(item map[string]interface{}) {
@@ -332,6 +455,9 @@ func (a *guardrailsAccumulator) ingestOutputItem(item map[string]interface{}) {
 	itemType, _ := item["type"].(string)
 	if itemType != "function_call" && itemType != "custom_tool_call" && itemType != "mcp_call" {
 		return
+	}
+	if id, ok := item["id"].(string); ok && id != "" {
+		a.lastToolID = id
 	}
 	if name, ok := item["name"].(string); ok && name != "" {
 		a.commandName = name
@@ -368,6 +494,75 @@ func (a *guardrailsAccumulator) content() guardrails.Content {
 
 	content.Command = cmd
 	return content
+}
+
+func (a *guardrailsAccumulator) captureIndex(payload map[string]interface{}) int {
+	if payload == nil {
+		return 0
+	}
+	if raw, ok := payload["index"]; ok {
+		switch v := raw.(type) {
+		case float64:
+			a.lastIndex = int(v)
+			a.hasIndex = true
+			return a.lastIndex
+		case int:
+			a.lastIndex = v
+			a.hasIndex = true
+			return a.lastIndex
+		case int64:
+			a.lastIndex = int(v)
+			a.hasIndex = true
+			return a.lastIndex
+		}
+	}
+	return 0
+}
+
+func (a *guardrailsAccumulator) nextBlockIndex() int {
+	if a.hasIndex {
+		return a.lastIndex + 1
+	}
+	return 0
+}
+
+func (a *guardrailsAccumulator) getOrCreateToolUse(index int) *toolUseState {
+	if a.toolUses == nil {
+		a.toolUses = make(map[int]*toolUseState)
+	}
+	if existing, ok := a.toolUses[index]; ok {
+		return existing
+	}
+	state := &toolUseState{index: index}
+	a.toolUses[index] = state
+	return state
+}
+
+func (a *guardrailsAccumulator) popCompletedToolUse() (toolUseState, bool) {
+	if len(a.completed) == 0 {
+		return toolUseState{}, false
+	}
+	state := a.completed[0]
+	a.completed = a.completed[1:]
+	return state, true
+}
+
+func guardrailsBlockMessage(result guardrails.Result) string {
+	if len(result.Reasons) > 0 && result.Reasons[0].Reason != "" {
+		return "Blocked by guardrails: " + result.Reasons[0].Reason
+	}
+	return "Blocked by guardrails"
+}
+
+func parseToolArgs(raw string) map[string]interface{} {
+	if raw == "" {
+		return nil
+	}
+	var parsed map[string]interface{}
+	if err := json.Unmarshal([]byte(raw), &parsed); err == nil {
+		return parsed
+	}
+	return map[string]interface{}{"_raw": raw}
 }
 
 func guardrailsMessagesFromAnthropicV1(system []anthropic.TextBlockParam, messages []anthropic.MessageParam) []guardrails.Message {

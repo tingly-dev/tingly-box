@@ -2,6 +2,7 @@ package stream
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -52,6 +53,44 @@ func SendFinishEvent(c *gin.Context) {
 	c.SSEvent("", string(finishJSON))
 }
 
+// SendGuardrailsTextStream sends a minimal Anthropic stream with a guardrails message.
+func SendGuardrailsTextStream(c *gin.Context, beta bool, model, message string) error {
+	flusher, ok := c.Writer.(http.Flusher)
+	if !ok {
+		return errors.New("streaming not supported")
+	}
+
+	messageStartEvent := map[string]interface{}{
+		"type": eventTypeMessageStart,
+		"message": map[string]interface{}{
+			"id":            "guardrails_blocked",
+			"type":          "message",
+			"role":          "assistant",
+			"content":       []interface{}{},
+			"model":         model,
+			"stop_reason":   nil,
+			"stop_sequence": nil,
+			"usage": map[string]interface{}{
+				"input_tokens":  0,
+				"output_tokens": 0,
+			},
+		},
+	}
+
+	if beta {
+		sendAnthropicBetaStreamEvent(c, eventTypeMessageStart, messageStartEvent, flusher)
+	} else {
+		sendAnthropicStreamEvent(c, eventTypeMessageStart, messageStartEvent, flusher)
+	}
+
+	if err := emitGuardrailsTextBlock(c, beta, 0, message, flusher); err != nil {
+		return err
+	}
+
+	SendFinishEvent(c)
+	return nil
+}
+
 // =============================================
 // HTTP Error Response Helpers
 // =============================================
@@ -95,4 +134,64 @@ func SendInternalError(c *gin.Context, errMsg string) {
 			Code:    "streaming_unsupported",
 		},
 	})
+}
+
+func injectGuardrailsBlock(c *gin.Context, beta bool) error {
+	val, exists := c.Get("guardrails_block_message")
+	if !exists {
+		return nil
+	}
+	message, ok := val.(string)
+	if !ok || message == "" {
+		return nil
+	}
+
+	index := 0
+	if raw, ok := c.Get("guardrails_block_index"); ok {
+		switch v := raw.(type) {
+		case int:
+			index = v
+		case int64:
+			index = int(v)
+		case float64:
+			index = int(v)
+		}
+	}
+	flusher, ok := c.Writer.(http.Flusher)
+	if !ok {
+		return errors.New("streaming not supported")
+	}
+
+	start := map[string]interface{}{
+		"type":  eventTypeContentBlockStart,
+		"index": index,
+		"content_block": map[string]interface{}{
+			"type": "text",
+			"text": "",
+		},
+	}
+	delta := map[string]interface{}{
+		"type":  eventTypeContentBlockDelta,
+		"index": index,
+		"delta": map[string]interface{}{
+			"type": "text_delta",
+			"text": message,
+		},
+	}
+	stop := map[string]interface{}{
+		"type":  eventTypeContentBlockStop,
+		"index": index,
+	}
+
+	if beta {
+		sendAnthropicBetaStreamEvent(c, eventTypeContentBlockStart, start, flusher)
+		sendAnthropicBetaStreamEvent(c, eventTypeContentBlockDelta, delta, flusher)
+		sendAnthropicBetaStreamEvent(c, eventTypeContentBlockStop, stop, flusher)
+		return nil
+	}
+
+	sendAnthropicStreamEvent(c, eventTypeContentBlockStart, start, flusher)
+	sendAnthropicStreamEvent(c, eventTypeContentBlockDelta, delta, flusher)
+	sendAnthropicStreamEvent(c, eventTypeContentBlockStop, stop, flusher)
+	return nil
 }

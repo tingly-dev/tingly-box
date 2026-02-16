@@ -41,3 +41,33 @@ rules:
       targets: ["text"]
       verdict_on_error: "review"
       verdict_on_refuse: "review"
+
+  # Pre-execution blocking (tool_use): stop risky commands before they run
+  - id: "block-ssh-access"
+    name: "Block SSH directory access"
+    type: "text_match"
+    enabled: true
+    scope:
+      scenarios: ["anthropic"]
+      directions: ["response"]
+      content_types: ["command"]
+    params:
+      patterns: ["~/.ssh", "/.ssh", "id_rsa", "authorized_keys"]
+      targets: ["command"]
+      verdict: "block"
+      reason: "ssh access command blocked"
+
+  # Post-execution filtering (tool_result): redact sensitive outputs sent back to model
+  - id: "filter-ssh-output"
+    name: "Filter SSH output"
+    type: "text_match"
+    enabled: true
+    scope:
+      scenarios: ["anthropic"]
+      directions: ["request"]
+      content_types: ["text", "messages"]
+    params:
+      patterns: ["~/.ssh", "id_rsa", "known_hosts", "authorized_keys"]
+      targets: ["text", "messages"]
+      verdict: "block"
+      reason: "ssh output filtered"
