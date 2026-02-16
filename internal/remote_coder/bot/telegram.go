@@ -454,7 +454,7 @@ func handleClaudeCodeMessage(
 	if err != nil {
 		sessionMgr.SetFailed(sessionID, response)
 		logrus.WithError(err).Warn("Remote-coder execution failed")
-		sendText(bot, chatID, formatResponseWithMeta(projectPath, sessionID, senderID, response))
+		sendText(bot, chatID, formatResponseWithMeta(projectPath, sessionID, chatID, senderID, response))
 		return
 	}
 
@@ -468,7 +468,7 @@ func handleClaudeCodeMessage(
 		Timestamp: time.Now(),
 	})
 
-	sendText(bot, chatID, formatResponseWithMeta(projectPath, sessionID, senderID, response))
+	sendText(bot, chatID, formatResponseWithMeta(projectPath, sessionID, chatID, senderID, response))
 }
 
 func handleTelegramCommand(ctx context.Context, bot imbot.Bot, store *Store, sessionMgr *session.Manager, chatID string, text string, senderID string, isDirectChat bool, isGroupChat bool) {
@@ -1082,7 +1082,7 @@ func lastAssistantSummary(sessionMgr *session.Manager, sessionID string) string 
 }
 
 // formatResponseWithMeta adds project/session/user metadata to the response for better readability.
-func formatResponseWithMeta(projectPath, sessionID, userID, response string) string {
+func formatResponseWithMeta(projectPath, sessionID, chatID, userID, response string) string {
 	var meta strings.Builder
 	meta.WriteString("━━━━━━━━━━━━━━━━━━━━\n")
 	if projectPath != "" {
@@ -1094,12 +1094,16 @@ func formatResponseWithMeta(projectPath, sessionID, userID, response string) str
 		}
 		meta.WriteString(fmt.Sprintf("📁 %s\n", shortPath))
 	}
-	if sessionID != "" {
-		meta.WriteString(fmt.Sprintf("🔄 %s\n", sessionID))
+	if chatID != "" {
+		meta.WriteString(fmt.Sprintf("💬 %s\n", chatID))
 	}
 	if userID != "" {
 		meta.WriteString(fmt.Sprintf("👤 %s\n", userID))
 	}
+	if sessionID != "" {
+		meta.WriteString(fmt.Sprintf("🔄 %s\n", sessionID))
+	}
+
 	meta.WriteString("━━━━━━━━━━━━━━━━━━━━\n\n")
 	return meta.String() + response
 }
