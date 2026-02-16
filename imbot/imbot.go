@@ -3,7 +3,23 @@ package imbot
 
 import (
 	"github.com/tingly-dev/tingly-box/imbot/internal/core"
+	"github.com/tingly-dev/tingly-box/imbot/internal/platform/telegram"
 )
+
+// TelegramBot is an interface for Telegram-specific bot operations
+type TelegramBot interface {
+	Bot
+	// ResolveChatID resolves a chat ID from invite link, username, or direct ID
+	ResolveChatID(input string) (string, error)
+}
+
+// AsTelegramBot attempts to cast a Bot to TelegramBot interface
+func AsTelegramBot(bot Bot) (TelegramBot, bool) {
+	if tgBot, ok := bot.(*telegram.Bot); ok {
+		return tgBot, true
+	}
+	return nil, false
+}
 
 // Re-export core types
 type (
