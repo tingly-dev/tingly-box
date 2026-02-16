@@ -127,6 +127,13 @@ func initSchema(db *sql.DB) error {
 			updated_at TEXT NOT NULL,
 			UNIQUE(group_id, platform)
 		);
+
+		CREATE TABLE IF NOT EXISTS remote_coder_group_whitelist (
+			group_id TEXT PRIMARY KEY,
+			platform TEXT NOT NULL,
+			added_by TEXT NOT NULL,
+			created_at TEXT NOT NULL
+		);
 	`)
 	if err != nil {
 		return err
@@ -750,4 +757,82 @@ func (s *Store) SetBashCwd(chatID, cwd string) error {
 			updated_at = excluded.updated_at
 	`, chatID, cwd, time.Now().UTC().Format(time.RFC3339))
 	return err
+}
+
+// ============== Group Whitelist Methods ==============
+
+// AddGroupToWhitelist adds a group ID to the whitelist
+func (s *Store) AddGroupToWhitelist(groupID, platform, addedBy string) error {
+	groupID = strings.TrimSpace(groupID)
+	platform = strings.TrimSpace(platform)
+	if groupID == "" || s == nil || s.db == nil {
+		return nil
+	}
+	_, err := s.db.Exec(`
+		INSERT INTO remote_coder_group_whitelist (group_id, platform, added_by, created_at)
+		VALUES (?, ?, ?, ?)
+		ON CONFLICT(group_id) DO UPDATE SET
+			platform = excluded.platform,
+			added_by = excluded.added_by
+	`, groupID, platform, addedBy, time.Now().UTC().Format(time.RFC3339))
+	return err
+}
+
+// RemoveGroupFromWhitelist removes a group ID from the whitelist
+func (s *Store) RemoveGroupFromWhitelist(groupID string) error {
+	groupID = strings.TrimSpace(groupID)
+	if groupID == "" || s == nil || s.db == nil {
+		return nil
+	}
+	_, err := s.db.Exec(`DELETE FROM remote_coder_group_whitelist WHERE group_id = ?`, groupID)
+	return err
+}
+
+// IsGroupWhitelisted checks if a group ID is in the whitelist
+func (s *Store) IsGroupWhitelisted(groupID string) bool {
+	groupID = strings.TrimSpace(groupID)
+	if groupID == "" || s == nil || s.db == nil {
+		return false
+	}
+	row := s.db.QueryRow(`SELECT 1 FROM remote_coder_group_whitelist WHERE group_id = ?`, groupID)
+	var exists int
+	err := row.Scan(&exists)
+	return err == nil
+}
+
+// ListWhitelistedGroups returns all whitelisted groups
+func (s *Store) ListWhitelistedGroups() ([]struct {
+	GroupID   string
+	Platform  string
+	AddedBy   string
+	CreatedAt string
+}, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	rows, err := s.db.Query(`SELECT group_id, platform, added_by, created_at FROM remote_coder_group_whitelist ORDER BY created_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []struct {
+		GroupID   string
+		Platform  string
+		AddedBy   string
+		CreatedAt string
+	}
+	for rows.Next() {
+		var r struct {
+			GroupID   string
+			Platform  string
+			AddedBy   string
+			CreatedAt string
+		}
+		if err := rows.Scan(&r.GroupID, &r.Platform, &r.AddedBy, &r.CreatedAt); err != nil {
+			return nil, err
+		}
+		results = append(results, r)
+	}
+	return results, rows.Err()
 }

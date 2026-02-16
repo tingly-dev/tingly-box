@@ -182,14 +182,6 @@ func handleTelegramMessage(
 		return
 	}
 
-	settings, err := store.GetSettings()
-	if err != nil {
-		logrus.WithError(err).Warn("Failed to load bot settings")
-	}
-	if settings.ChatIDLock != "" && chatID != settings.ChatIDLock {
-		return
-	}
-
 	if !msg.IsTextContent() {
 		sendText(bot, chatID, "Only text messages are supported.")
 		return
@@ -203,6 +195,16 @@ func handleTelegramMessage(
 	// Determine if message is from direct chat or group
 	isDirectChat := msg.IsDirectMessage()
 	isGroupChat := msg.IsGroupMessage()
+
+	if isDirectChat {
+		settings, err := store.GetSettings()
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to load bot settings")
+		}
+		if settings.ChatIDLock != "" && chatID != settings.ChatIDLock {
+			return
+		}
+	}
 
 	if strings.HasPrefix(text, "/") {
 		// Check for agent commands (/cc, /claude) first
@@ -220,8 +222,16 @@ func handleTelegramMessage(
 		return
 	}
 
-	// In group chat, check for project binding and auto-route
+	// In group chat, check for whitelist and project binding
 	if isGroupChat {
+		logrus.Infof("Group chat ID: %s", chatID)
+
+		// Check whitelist first
+		if !store.IsGroupWhitelisted(chatID) {
+			logrus.Debugf("Group %s is not whitelisted, ignoring message", chatID)
+			return
+		}
+
 		if projectPath, ok := getProjectPathForGroup(store, chatID, string(msg.Platform)); ok {
 			// Route to Claude Code with the bound project path
 			handleAgentMessageWithProject(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agentClaudeCode, text, msg.Sender.ID, projectPath)
@@ -368,23 +378,36 @@ func handleClaudeCodeMessage(
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to load session mapping")
 	}
-	if !ok || sessionID == "" {
-		sendText(bot, chatID, "No session mapped. Use /new <project_path> or /use <session_id> first.")
-		return
-	}
 
 	var sess *session.Session
-	if ok {
+	if ok && sessionID != "" {
 		if s, exists := sessionMgr.GetOrLoad(sessionID); exists {
 			sess = s
 		}
 	}
 
-	if sess == nil || sess.Status == session.StatusExpired || sess.Status == session.StatusClosed || sess.ExpiresAt.Before(time.Now()) {
+	// Auto-create session for group chats with project override (persistent, no expiration)
+	if (sess == nil || sess.Status == session.StatusExpired || sess.Status == session.StatusClosed) && projectPathOverride != "" {
 		sess = sessionMgr.Create()
 		sessionID = sess.ID
+		sessionMgr.SetContext(sessionID, "project_path", projectPathOverride)
+		// Clear expiration for group sessions - they should be persistent
+		sessionMgr.Update(sessionID, func(s *session.Session) {
+			s.ExpiresAt = time.Time{} // Zero value means no expiration
+		})
 		_ = store.SetSessionForChat(chatID, sessionID)
-		sessionMgr.SetRequest(sessionID, text)
+	}
+
+	if !ok || sessionID == "" {
+		sendText(bot, chatID, "No session mapped. Use /new <project_path> or /use <session_id> first.")
+		return
+	}
+
+	// Refresh session activity for group chats to keep them alive
+	if projectPathOverride != "" && sess != nil {
+		sessionMgr.Update(sessionID, func(s *session.Session) {
+			s.LastActivity = time.Now()
+		})
 	}
 
 	// Use override project path if provided, otherwise get from session context
@@ -409,7 +432,9 @@ func handleClaudeCodeMessage(
 
 	sessionMgr.SetRunning(sessionID)
 
-	execCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	// Use context.Background() to avoid cancellation when bot reconnects
+	// The 10-minute timeout is sufficient to prevent runaway executions
+	execCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
 	result, err := ccLauncher.Execute(execCtx, text, launcher.ExecuteOptions{
@@ -465,6 +490,7 @@ func handleTelegramCommand(ctx context.Context, bot imbot.Bot, store *Store, ses
 Available commands:
 /help - Show this help message
 /cc <message> - Send message to Claude Code
+/join <invite_link> - Join a group and add to whitelist (direct chat only)
 /bind <path> - Bind a project (creates group in direct chat, rebinds in group)
 /project - Show current project info
 /projects - List your bound projects
@@ -475,6 +501,8 @@ Available commands:
 /new <project_path> - Create a new session
 /bash <cmd> - Execute allowed bash commands (cd, ls, pwd)`, senderID)
 		sendText(bot, chatID, helpText)
+	case "/join":
+		handleJoinCommand(bot, store, chatID, fields, senderID, isDirectChat)
 	case "/bind":
 		handleBindCommand(ctx, bot, store, chatID, fields, senderID, isDirectChat, isGroupChat)
 	case "/project":
@@ -764,6 +792,57 @@ func normalizeAllowlistToMap(values []string) map[string]struct{} {
 		out[entry] = struct{}{}
 	}
 	return out
+}
+
+// handleJoinCommand handles the /join command to add a group to whitelist
+func handleJoinCommand(bot imbot.Bot, store *Store, chatID string, fields []string, senderID string, isDirectChat bool) {
+	if !isDirectChat {
+		sendText(bot, chatID, "/join can only be used in direct chat.")
+		return
+	}
+
+	if len(fields) < 2 {
+		sendText(bot, chatID, "Usage: /join <group_id|@username|invite_link>")
+		return
+	}
+
+	input := strings.TrimSpace(strings.Join(fields[1:], " "))
+	if input == "" {
+		sendText(bot, chatID, "Usage: /join <group_id|@username|invite_link>")
+		return
+	}
+
+	// Try to cast bot to TelegramBot interface
+	tgBot, ok := imbot.AsTelegramBot(bot)
+	if !ok {
+		sendText(bot, chatID, "Join command is only supported for Telegram bot.")
+		return
+	}
+
+	// Resolve the chat ID
+	groupID, err := tgBot.ResolveChatID(input)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to resolve chat ID")
+		sendText(bot, chatID, fmt.Sprintf("Failed to resolve chat ID: %v\n\nNote: Bot must already be a member of the group to add it to whitelist.", err))
+		return
+	}
+
+	// Check if already whitelisted
+	if store.IsGroupWhitelisted(groupID) {
+		sendText(bot, chatID, fmt.Sprintf("Group %s is already in whitelist.", groupID))
+		return
+	}
+
+	// Add group to whitelist
+	platform := string(imbot.PlatformTelegram)
+	if err := store.AddGroupToWhitelist(groupID, platform, senderID); err != nil {
+		logrus.WithError(err).Error("Failed to add group to whitelist")
+		sendText(bot, chatID, fmt.Sprintf("Failed to add group to whitelist: %v", err))
+		return
+	}
+
+	sendText(bot, chatID, fmt.Sprintf("Successfully added group to whitelist.\nGroup ID: %s", groupID))
+	logrus.Infof("Group %s added to whitelist by %s", groupID, senderID)
 }
 
 // handleBindCommand handles the /bind command for project binding
