@@ -200,19 +200,35 @@ func handleTelegramMessage(
 		return
 	}
 
+	// Determine if message is from direct chat or group
+	isDirectChat := msg.IsDirectMessage()
+	isGroupChat := msg.IsGroupMessage()
+
 	if strings.HasPrefix(text, "/") {
 		// Check for agent commands (/cc, /claude) first
 		if agent, msgText, matched := parseAgentCommand(text); matched {
 			handleAgentMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agent, msgText, msg.Sender.ID)
 			return
 		}
-		handleTelegramCommand(ctx, bot, store, sessionMgr, chatID, text, msg.Sender.ID)
+		handleTelegramCommand(ctx, bot, store, sessionMgr, chatID, text, msg.Sender.ID, isDirectChat, isGroupChat)
 		return
 	}
 
 	// Check for @agent mention pattern
 	if agent, msgText := parseAgentMention(text); agent != "" {
 		handleAgentMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agent, msgText, msg.Sender.ID)
+		return
+	}
+
+	// In group chat, check for project binding and auto-route
+	if isGroupChat {
+		if projectPath, ok := getProjectPathForGroup(store, chatID, string(msg.Platform)); ok {
+			// Route to Claude Code with the bound project path
+			handleAgentMessageWithProject(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agentClaudeCode, text, msg.Sender.ID, projectPath)
+			return
+		}
+		// No binding, show guidance
+		sendText(bot, chatID, "No project bound to this group. Use /bind <path> to bind a project.")
 		return
 	}
 
@@ -270,6 +286,23 @@ func handleAgentMessage(
 	text string,
 	senderID string,
 ) {
+	handleAgentMessageWithProject(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agent, text, senderID, "")
+}
+
+// handleAgentMessageWithProject routes message to the appropriate agent handler with a specific project path.
+func handleAgentMessageWithProject(
+	ctx context.Context,
+	bot imbot.Bot,
+	store *Store,
+	sessionMgr *session.Manager,
+	ccLauncher *launcher.ClaudeCodeLauncher,
+	summaryEngine *summarizer.Engine,
+	chatID string,
+	agent string,
+	text string,
+	senderID string,
+	projectPathOverride string,
+) {
 	logrus.WithFields(logrus.Fields{
 		"agent":    agent,
 		"chatID":   chatID,
@@ -278,10 +311,39 @@ func handleAgentMessage(
 
 	switch agent {
 	case agentClaudeCode:
-		handleClaudeCodeMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, text, senderID)
+		handleClaudeCodeMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, text, senderID, projectPathOverride)
 	default:
 		sendText(bot, chatID, fmt.Sprintf("Unknown agent: %s", agent))
 	}
+}
+
+// getProjectPathForGroup retrieves the project path bound to a group chat.
+func getProjectPathForGroup(store *Store, chatID string, platform string) (string, bool) {
+	if store == nil || store.DB() == nil {
+		return "", false
+	}
+
+	bindingStore, err := NewBindingStore(store.DB())
+	if err != nil {
+		return "", false
+	}
+
+	binding, err := bindingStore.GetGroupBinding(chatID, platform)
+	if err != nil || binding == nil {
+		return "", false
+	}
+
+	projectStore, err := NewProjectStore(store.DB())
+	if err != nil {
+		return "", false
+	}
+
+	project, err := projectStore.GetProject(binding.ProjectID)
+	if err != nil || project == nil {
+		return "", false
+	}
+
+	return project.Path, true
 }
 
 // handleClaudeCodeMessage executes a message through Claude Code.
@@ -295,6 +357,7 @@ func handleClaudeCodeMessage(
 	chatID string,
 	text string,
 	senderID string,
+	projectPathOverride string,
 ) {
 	if strings.TrimSpace(text) == "" {
 		sendText(bot, chatID, "Please provide a message for Claude Code. Usage: /cc <message> or @cc <message>")
@@ -323,8 +386,10 @@ func handleClaudeCodeMessage(
 		_ = store.SetSessionForChat(chatID, sessionID)
 		sessionMgr.SetRequest(sessionID, text)
 	}
-	projectPath := ""
-	if sess != nil && sess.Context != nil {
+
+	// Use override project path if provided, otherwise get from session context
+	projectPath := projectPathOverride
+	if projectPath == "" && sess != nil && sess.Context != nil {
 		if v, ok := sess.Context["project_path"]; ok {
 			if pv, ok := v.(string); ok {
 				projectPath = strings.TrimSpace(pv)
@@ -350,9 +415,14 @@ func handleClaudeCodeMessage(
 	result, err := ccLauncher.Execute(execCtx, text, launcher.ExecuteOptions{
 		ProjectPath: projectPath,
 	})
-	response := result.Output
-	if err != nil && result.Error != "" {
-		response = result.Error
+	response := ""
+	if result != nil {
+		response = result.Output
+		if err != nil && result.Error != "" {
+			response = result.Error
+		}
+	} else if err != nil {
+		response = fmt.Sprintf("Execution failed: %v", err)
 	}
 
 	if err != nil {
@@ -375,7 +445,7 @@ func handleClaudeCodeMessage(
 	sendText(bot, chatID, formatResponseWithMeta(projectPath, sessionID, senderID, response))
 }
 
-func handleTelegramCommand(ctx context.Context, bot imbot.Bot, store *Store, sessionMgr *session.Manager, chatID string, text string, senderID string) {
+func handleTelegramCommand(ctx context.Context, bot imbot.Bot, store *Store, sessionMgr *session.Manager, chatID string, text string, senderID string, isDirectChat bool, isGroupChat bool) {
 	fields := strings.Fields(text)
 	if len(fields) == 0 {
 		return
@@ -395,6 +465,9 @@ func handleTelegramCommand(ctx context.Context, bot imbot.Bot, store *Store, ses
 Available commands:
 /help - Show this help message
 /cc <message> - Send message to Claude Code
+/bind <path> - Bind a project (creates group in direct chat, rebinds in group)
+/project - Show current project info
+/projects - List your bound projects
 /info - Show current session info
 /status - Show current task status
 /list - List all sessions
@@ -402,6 +475,12 @@ Available commands:
 /new <project_path> - Create a new session
 /bash <cmd> - Execute allowed bash commands (cd, ls, pwd)`, senderID)
 		sendText(bot, chatID, helpText)
+	case "/bind":
+		handleBindCommand(ctx, bot, store, chatID, fields, senderID, isDirectChat, isGroupChat)
+	case "/project":
+		handleProjectCommand(bot, store, chatID, string(imbot.PlatformTelegram))
+	case "/projects":
+		handleProjectsCommand(bot, store, chatID, senderID, string(imbot.PlatformTelegram))
 	case "/info":
 		sessionID, ok, err := store.GetSessionForChat(chatID)
 		if err != nil {
@@ -685,6 +764,213 @@ func normalizeAllowlistToMap(values []string) map[string]struct{} {
 		out[entry] = struct{}{}
 	}
 	return out
+}
+
+// handleBindCommand handles the /bind command for project binding
+func handleBindCommand(ctx context.Context, bot imbot.Bot, store *Store, chatID string, fields []string, senderID string, isDirectChat bool, isGroupChat bool) {
+	if len(fields) < 2 {
+		sendText(bot, chatID, "Usage: /bind <project_path>")
+		return
+	}
+
+	projectPath := strings.TrimSpace(strings.Join(fields[1:], " "))
+	if projectPath == "" {
+		sendText(bot, chatID, "Usage: /bind <project_path>")
+		return
+	}
+
+	// Expand and validate path
+	expandedPath, err := ExpandPath(projectPath)
+	if err != nil {
+		sendText(bot, chatID, fmt.Sprintf("Invalid path: %v", err))
+		return
+	}
+
+	if err := ValidateProjectPath(expandedPath); err != nil {
+		sendText(bot, chatID, fmt.Sprintf("Path validation failed: %v", err))
+		return
+	}
+
+	platform := string(imbot.PlatformTelegram)
+	settings, _ := store.GetSettings()
+	botUUID := settings.UUID
+	if botUUID == "" {
+		botUUID = "default"
+	}
+
+	projectStore, err := NewProjectStore(store.DB())
+	if err != nil {
+		sendText(bot, chatID, "Failed to initialize project store")
+		logrus.WithError(err).Error("Failed to create project store")
+		return
+	}
+
+	bindingStore, err := NewBindingStore(store.DB())
+	if err != nil {
+		sendText(bot, chatID, "Failed to initialize binding store")
+		logrus.WithError(err).Error("Failed to create binding store")
+		return
+	}
+
+	if isDirectChat {
+		// Direct chat: create project and instruct user to create group
+		// Check if project already exists
+		existingProject, err := projectStore.GetProjectByPath(expandedPath, botUUID)
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to check existing project")
+		}
+
+		var project *Project
+		if existingProject != nil {
+			project = existingProject
+		} else {
+			// Create new project
+			project = &Project{
+				Path:     expandedPath,
+				OwnerID:  senderID,
+				Platform: platform,
+				BotUUID:  botUUID,
+			}
+			if err := projectStore.CreateProject(project); err != nil {
+				sendText(bot, chatID, fmt.Sprintf("Failed to create project: %v", err))
+				return
+			}
+		}
+
+		// Instruct user to create a group
+		msg := fmt.Sprintf(`Project created: %s (ID: %s)
+
+To complete binding:
+1. Create a new group and add this bot
+2. In the group, run: /bind %s
+
+This will bind the group to the project.`, project.Path, project.ID, project.Path)
+		sendText(bot, chatID, msg)
+
+	} else if isGroupChat {
+		// Group chat: create/update project and bind to this group
+		// Check if project already exists
+		existingProject, err := projectStore.GetProjectByPath(expandedPath, botUUID)
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to check existing project")
+		}
+
+		var project *Project
+		if existingProject != nil {
+			project = existingProject
+		} else {
+			// Create new project
+			project = &Project{
+				Path:     expandedPath,
+				OwnerID:  senderID,
+				Platform: platform,
+				BotUUID:  botUUID,
+			}
+			if err := projectStore.CreateProject(project); err != nil {
+				sendText(bot, chatID, fmt.Sprintf("Failed to create project: %v", err))
+				return
+			}
+		}
+
+		// Create or update group binding
+		binding := &GroupProjectBinding{
+			GroupID:   chatID,
+			Platform:  platform,
+			ProjectID: project.ID,
+			BotUUID:   botUUID,
+		}
+		if err := bindingStore.UpsertGroupBinding(binding); err != nil {
+			sendText(bot, chatID, fmt.Sprintf("Failed to bind group: %v", err))
+			return
+		}
+
+		sendText(bot, chatID, fmt.Sprintf("Group bound to project: %s", project.Path))
+	} else {
+		sendText(bot, chatID, "This command only works in direct or group chats.")
+	}
+}
+
+// handleProjectCommand handles the /project command to show current project info
+func handleProjectCommand(bot imbot.Bot, store *Store, chatID string, platform string) {
+	if store == nil || store.DB() == nil {
+		sendText(bot, chatID, "Store not available")
+		return
+	}
+
+	bindingStore, err := NewBindingStore(store.DB())
+	if err != nil {
+		sendText(bot, chatID, "Failed to initialize binding store")
+		return
+	}
+
+	projectStore, err := NewProjectStore(store.DB())
+	if err != nil {
+		sendText(bot, chatID, "Failed to initialize project store")
+		return
+	}
+
+	// Get group binding
+	binding, err := bindingStore.GetGroupBinding(chatID, platform)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to get group binding")
+	}
+	if binding == nil {
+		sendText(bot, chatID, "No project bound to this chat. Use /bind <path> to bind a project.")
+		return
+	}
+
+	// Get project details
+	project, err := projectStore.GetProject(binding.ProjectID)
+	if err != nil || project == nil {
+		sendText(bot, chatID, "Project not found. The binding may be invalid.")
+		return
+	}
+
+	msg := fmt.Sprintf(`Project: %s
+Path: %s
+Owner: %s
+Created: %s`, project.Name, project.Path, project.OwnerID, project.CreatedAt.Format("2006-01-02 15:04"))
+	sendText(bot, chatID, msg)
+}
+
+// handleProjectsCommand handles the /projects command to list all user's projects
+func handleProjectsCommand(bot imbot.Bot, store *Store, chatID string, senderID string, platform string) {
+	if store == nil || store.DB() == nil {
+		sendText(bot, chatID, "Store not available")
+		return
+	}
+
+	bindingStore, err := NewBindingStore(store.DB())
+	if err != nil {
+		sendText(bot, chatID, "Failed to initialize binding store")
+		return
+	}
+
+	// Get all projects with bindings for this user
+	results, err := bindingStore.ListGroupBindingsByOwner(senderID, platform)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to list projects")
+		sendText(bot, chatID, "Failed to list projects")
+		return
+	}
+
+	if len(results) == 0 {
+		sendText(bot, chatID, "No projects found. Use /bind <path> to create a project.")
+		return
+	}
+
+	var lines []string
+	lines = append(lines, fmt.Sprintf("Your projects (%d):", len(results)))
+	for _, result := range results {
+		project := result.Project
+		bindingInfo := ""
+		if result.Binding != nil {
+			bindingInfo = " [group bound]"
+		}
+		lines = append(lines, fmt.Sprintf("- %s%s", project.Path, bindingInfo))
+	}
+
+	sendText(bot, chatID, strings.Join(lines, "\n"))
 }
 
 func lastAssistantSummary(sessionMgr *session.Manager, sessionID string) string {

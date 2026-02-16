@@ -58,6 +58,14 @@ func (s *Store) Close() error {
 	return s.db.Close()
 }
 
+// DB returns the underlying database connection
+func (s *Store) DB() *sql.DB {
+	if s == nil {
+		return nil
+	}
+	return s.db
+}
+
 func initSchema(db *sql.DB) error {
 	// Create legacy table (kept for backward compatibility and migration)
 	_, err := db.Exec(`
@@ -96,6 +104,29 @@ func initSchema(db *sql.DB) error {
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		);
+
+		CREATE TABLE IF NOT EXISTS remote_coder_projects (
+			id TEXT PRIMARY KEY,
+			path TEXT NOT NULL,
+			name TEXT,
+			owner_id TEXT NOT NULL,
+			platform TEXT NOT NULL,
+			bot_uuid TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			UNIQUE(path, bot_uuid)
+		);
+
+		CREATE TABLE IF NOT EXISTS remote_coder_group_bindings (
+			id TEXT PRIMARY KEY,
+			group_id TEXT NOT NULL,
+			platform TEXT NOT NULL,
+			project_id TEXT NOT NULL,
+			bot_uuid TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			UNIQUE(group_id, platform)
+		);
 	`)
 	if err != nil {
 		return err
@@ -130,6 +161,26 @@ func initSchema(db *sql.DB) error {
 		return err
 	}
 
+	// Create indexes for new tables
+	if err := createProjectIndexes(db); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func createProjectIndexes(db *sql.DB) error {
+	indexes := []string{
+		`CREATE INDEX IF NOT EXISTS idx_projects_path ON remote_coder_projects(path)`,
+		`CREATE INDEX IF NOT EXISTS idx_projects_owner ON remote_coder_projects(owner_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_group_bindings_group ON remote_coder_group_bindings(group_id, platform)`,
+	}
+
+	for _, idx := range indexes {
+		if _, err := db.Exec(idx); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
