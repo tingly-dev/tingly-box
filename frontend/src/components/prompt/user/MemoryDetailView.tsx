@@ -715,11 +715,11 @@ const SessionDetailView: React.FC<SessionDetailViewProps> = ({ session, sessionI
               <Box
                 sx={{
                   display: 'flex',
-                  justifyContent: 'flex-end',
+                  justifyContent: 'flex-start',
                   mb: 1.5,
                 }}
               >
-                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', maxWidth: '85%' }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', maxWidth: '100%' }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
                     <Typography variant="caption" sx={{ fontWeight: 600, color: 'primary.main', fontSize: '0.7rem' }}>
                       You
@@ -751,7 +751,7 @@ const SessionDetailView: React.FC<SessionDetailViewProps> = ({ session, sessionI
                       bgcolor: 'grey.50',
                       border: '1px solid',
                       borderColor: 'divider',
-                      borderRadius: '12px 12px 0 12px',
+                      borderRadius: '12px',
                       maxWidth: '100%',
                       cursor: 'pointer',
                       transition: 'filter 0.2s',
@@ -801,7 +801,7 @@ const SessionDetailView: React.FC<SessionDetailViewProps> = ({ session, sessionI
                     justifyContent: 'flex-start',
                   }}
                 >
-                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', maxWidth: '85%' }}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', maxWidth: '100%' }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
                       {/* AI Avatar */}
                       <Avatar
@@ -841,7 +841,7 @@ const SessionDetailView: React.FC<SessionDetailViewProps> = ({ session, sessionI
                         bgcolor: 'grey.50',
                         border: '1px solid',
                         borderColor: 'divider',
-                        borderRadius: '0 12px 12px 12px',
+                        borderRadius: '12px',
                         maxWidth: '100%',
                         cursor: 'pointer',
                         transition: 'filter 0.2s',
