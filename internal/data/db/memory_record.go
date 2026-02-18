@@ -75,6 +75,7 @@ type MemorySessionRecord struct {
 	Model             string    `json:"model"`
 	AccountID         string    `json:"account_id"`   // User ID from metadata
 	AccountName       string    `json:"account_name"` // Display name for account
+	Title             string    `json:"title"`        // First user input as session title
 	CreatedAt         time.Time `json:"created_at"`
 	TotalRounds       int       `json:"total_rounds"`
 	TotalTokens       int       `json:"total_tokens"`

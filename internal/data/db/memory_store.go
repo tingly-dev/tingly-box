@@ -562,6 +562,7 @@ func (ps *MemoryStore) GetSessionsByDate(startDate, endDate string, limit int) (
 			Model:             record.Model,
 			AccountID:         accountID,
 			AccountName:       accountName,
+			Title:             record.UserInput,
 			CreatedAt:         record.CreatedAt,
 			TotalRounds:       int(sessionStats.RoundCount),
 			TotalTokens:       int(sessionStats.TotalTokens),

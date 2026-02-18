@@ -372,6 +372,7 @@ type MemorySessionItem struct {
 	Model             string `json:"model"`
 	AccountID         string `json:"account_id"`
 	AccountName       string `json:"account_name"`
+	Title             string `json:"title"` // First user input as session title
 	CreatedAt         string `json:"created_at"`
 	TotalRounds       int    `json:"total_rounds"`
 	TotalTokens       int    `json:"total_tokens"`
@@ -935,6 +936,7 @@ func (api *MemoryAPI) GetSessions(c *gin.Context) {
 			Model:             s.Model,
 			AccountID:         s.AccountID,
 			AccountName:       s.AccountName,
+			Title:             s.Title,
 			CreatedAt:         s.CreatedAt.Format("2006-01-02T15:04:05Z"),
 			TotalRounds:       s.TotalRounds,
 			TotalTokens:       s.TotalTokens,
