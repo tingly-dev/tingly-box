@@ -15,13 +15,10 @@ import (
 	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
-	"github.com/sirupsen/logrus"
-
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
-	"github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
 // OpenAIClient wraps the OpenAI SDK client
@@ -49,26 +46,9 @@ func defaultNewOpenAIClient(provider *typ.Provider) (*OpenAIClient, error) {
 		}
 	}
 
-	// Create HTTP client with proper hook configuration
-	var httpClient *http.Client
-	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
-		// Use CreateHTTPClientForProvider which applies OAuth hooks and uses shared transport
-		httpClient = CreateHTTPClientForProvider(provider)
-		providerType := oauth.ProviderType(provider.OAuthDetail.ProviderType)
-		if providerType == oauth.ProviderCodex {
-			logrus.Infof("[Codex] Using hook-based transport for ChatGPT backend API path rewriting")
-		} else {
-			logrus.Infof("Using shared transport for OAuth provider type: %s", providerType)
-		}
-	} else {
-		// For non-OAuth providers, use simple proxy client
-		if provider.ProxyURL != "" {
-			httpClient = CreateHTTPClientWithProxy(provider.ProxyURL)
-			logrus.Infof("Using proxy for OpenAI client: %s", provider.ProxyURL)
-		} else {
-			httpClient = http.DefaultClient
-		}
-	}
+	// Create HTTP client - CreateHTTPClientForProvider handles all cases:
+	// proxy, TLS fingerprint (based on provider type), and OAuth hooks
+	httpClient := CreateHTTPClientForProvider(provider)
 
 	options = append(options, option.WithHTTPClient(httpClient))
 

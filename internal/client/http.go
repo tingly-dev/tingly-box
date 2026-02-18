@@ -6,27 +6,16 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/net/proxy"
-
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
 // HookFunc is a function that can modify the request before it's sent
 type HookFunc func(req *http.Request) error
-
-// oauthHookFunctions defines custom hooks for OAuth providers based on provider type
-// Each hook handles custom headers, query params, and any special request modifications
-var oauthHookFunctions = map[oauth.ProviderType]HookFunc{
-	oauth.ProviderClaudeCode:  claudeCodeHook,
-	oauth.ProviderAntigravity: antigravityHook,
-	oauth.ProviderCodex:       codexHook,
-}
 
 func antigravityHook(req *http.Request) error {
 	key := req.Header.Get("X-Goog-Api-Key")
@@ -436,58 +425,8 @@ func (t *antigravityRoundTripper) RoundTrip(req *http.Request) (*http.Response, 
 	return resp, nil
 }
 
-// GetOAuthHook returns the hook function for the given provider type
-func GetOAuthHook(providerType oauth.ProviderType) HookFunc {
-	hook, ok := oauthHookFunctions[providerType]
-	if !ok {
-		return nil
-	}
-	return hook
-}
-
-// CreateHTTPClientWithProxy creates an HTTP client with proxy support
-func CreateHTTPClientWithProxy(proxyURL string) *http.Client {
-	if proxyURL == "" {
-		return http.DefaultClient
-	}
-
-	// Parse the proxy URL
-	parsedURL, err := url.Parse(proxyURL)
-	if err != nil {
-		logrus.Errorf("Failed to parse proxy URL %s: %v, using default client", proxyURL, err)
-		return http.DefaultClient
-	}
-
-	// Create transport with proxy
-	transport := &http.Transport{}
-
-	switch parsedURL.Scheme {
-	case "http", "https":
-		transport.Proxy = http.ProxyURL(parsedURL)
-	case "socks5":
-		dialer, err := proxy.SOCKS5("tcp", parsedURL.Host, nil, proxy.Direct)
-		if err != nil {
-			logrus.Errorf("Failed to create SOCKS5 proxy dialer: %v, using default client", err)
-			return http.DefaultClient
-		}
-		dialContext, ok := dialer.(proxy.ContextDialer)
-		if ok {
-			transport.DialContext = dialContext.DialContext
-		} else {
-			return http.DefaultClient
-		}
-	default:
-		logrus.Errorf("Unsupported proxy scheme %s, supported schemes are http, https, socks5", parsedURL.Scheme)
-		return http.DefaultClient
-	}
-
-	return &http.Client{
-		Transport: transport,
-	}
-}
-
 // CreateHTTPClientForProvider creates an HTTP client configured for the given provider
-// It handles proxy and OAuth hooks if applicable
+// It handles proxy, TLS fingerprint, and OAuth hooks if applicable
 //
 // Returns a configured http.Client
 func CreateHTTPClientForProvider(provider *typ.Provider) *http.Client {
@@ -496,51 +435,69 @@ func CreateHTTPClientForProvider(provider *typ.Provider) *http.Client {
 		providerType = oauth.ProviderType(provider.OAuthDetail.ProviderType)
 	}
 
-	// Get shared transport from transport pool
-	transport := GetGlobalTransportPool().GetTransport(provider.APIBase, provider.ProxyURL, providerType)
+	// Determine TLS fingerprint based on provider type
+	// For OAuth providers: use provider-specific fingerprint
+	// For non-OAuth providers: use Chrome as a reasonable default
+	tlsFingerprint := getTLSFingerprintForProviderType(providerType)
+	if tlsFingerprint == TLSFingerprintDefault && provider.ProxyURL != "" {
+		// Non-OAuth providers with proxy: use Chrome fingerprint for browser-like behavior
+		tlsFingerprint = TLSFingerprintChrome
+	}
+
+	// Get shared transport from transport pool (with proxy and TLS fingerprint support)
+	transport := GetGlobalTransportPool().GetTransport(provider.APIBase, provider.ProxyURL, providerType, tlsFingerprint)
 
 	client := &http.Client{
 		Transport: transport,
 	}
 
 	if provider.AuthType == typ.AuthTypeOAuth {
-		// For Antigravity, create a specialized RoundTripper with provider-specific config
-		if providerType == oauth.ProviderAntigravity && provider.OAuthDetail != nil {
+		switch oauth.ProviderType(provider.OAuthDetail.ProviderType) {
+		case oauth.ProviderAntigravity:
 			project, model := "", ""
 			if provider.OAuthDetail.ExtraFields != nil {
 				if p, ok := provider.OAuthDetail.ExtraFields["project_id"].(string); ok {
 					project = p
 				}
 			}
-			// Create a separate transport with proxy for Antigravity
-			var antigravityTransport http.RoundTripper = transport
-			if provider.ProxyURL != "" {
-				// Use CreateHTTPClientWithProxy to create a transport with proxy
-				proxyClient := CreateHTTPClientWithProxy(provider.ProxyURL)
-				if proxyClient.Transport != nil {
-					antigravityTransport = proxyClient.Transport
-				}
-			}
 
-			// Use antigravityRoundTripper for both request wrapping and response unwrapping
+			// Use the transport from pool which already has proxy and TLS fingerprint support
 			client.Transport = &antigravityRoundTripper{
-				RoundTripper: antigravityTransport,
+				RoundTripper: transport,
 				project:      project,
 				model:        model,
 				proxyURL:     provider.ProxyURL,
 			}
-			logrus.Infof("Created Antigravity RoundTripper with project=%s, model=%s, proxy=%s", project, model, provider.ProxyURL)
-		} else {
-			// For other OAuth providers, use the hook-based approach
-			hook := GetOAuthHook(providerType)
-			if hook != nil {
-				client.Transport = &requestModifier{
-					RoundTripper: transport,
-					hooks:        []HookFunc{hook},
-				}
+			logrus.Infof("[Antigravity] Created RoundTripper with project=%s, model=%s, proxy=%s", project, model, provider.ProxyURL)
+		case oauth.ProviderClaudeCode:
+			logrus.Infof("[Claude Code] Using hook-based transport")
+			client.Transport = &requestModifier{
+				RoundTripper: transport,
+				hooks:        []HookFunc{claudeCodeHook},
 			}
+		case oauth.ProviderCodex:
+			logrus.Infof("[Codex] Using hook-based transport for ChatGPT backend API path rewriting")
+			client.Transport = &requestModifier{
+				RoundTripper: transport,
+				hooks:        []HookFunc{codexHook},
+			}
+		default:
+			logrus.Infof("No special process for OAuth provider type: %s", providerType)
 		}
 	}
-
 	return client
+}
+
+// getTLSFingerprintForProviderType returns the appropriate TLS fingerprint for the given OAuth provider type
+func getTLSFingerprintForProviderType(providerType oauth.ProviderType) TLSFingerprint {
+	switch providerType {
+	case oauth.ProviderAntigravity:
+		return TLSFingerprintAntigravity
+	case oauth.ProviderClaudeCode:
+		return TLSFingerprintClaudeCode
+	case oauth.ProviderCodex:
+		return TLSFingerprintCodex
+	default:
+		return TLSFingerprintDefault
+	}
 }
