@@ -570,6 +570,10 @@ func (m *Manager) GetToken(ctx context.Context, userID string, providerType Prov
 			refreshed, err := m.refreshToken(ctx, providerType, token.RefreshToken, options)
 			if err == nil {
 				refreshed.Provider = providerType
+				// Preserve old refresh token if new one is not returned
+				if refreshed.RefreshToken == "" {
+					refreshed.RefreshToken = token.RefreshToken
+				}
 				if err := m.config.TokenStorage.SaveToken(userID, providerType, refreshed); err == nil {
 					return refreshed, nil
 				}
@@ -687,6 +691,12 @@ func (m *Manager) RefreshToken(ctx context.Context, userID string, providerType 
 	}
 
 	token.Provider = providerType
+
+	// Preserve old refresh token if new one is not returned
+	// Some OAuth providers don't return a new refresh token on each refresh
+	if token.RefreshToken == "" {
+		token.RefreshToken = refreshToken
+	}
 
 	// Save the refreshed token
 	if err := m.config.TokenStorage.SaveToken(userID, providerType, token); err != nil {
