@@ -10,6 +10,7 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/internal/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
@@ -67,6 +68,8 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 	} else if shouldStripTools {
 		req.MessageNewParams.Tools = toolinterceptor.StripSearchFetchToolsAnthropic(req.MessageNewParams.Tools)
 	}
+
+	s.applyGuardrailsToToolResultV1(c, &req.MessageNewParams, actualModel, provider)
 
 	// Check provider's API style to decide which path to take
 	apiStyle := provider.APIStyle
@@ -333,8 +336,70 @@ func (s *Server) handleAnthropicStreamResponseV1(c *gin.Context, req anthropic.M
 		}
 	}
 
+	s.attachGuardrailsHooksAnthropicV1(c, hc, req, actualModel, provider)
+
 	usageStat, err := stream.HandleAnthropicV1Stream(hc, req, streamResp)
 	s.trackUsageFromContext(c, usageStat.InputTokens, usageStat.OutputTokens, err)
+}
+
+func (s *Server) attachGuardrailsHooksAnthropicV1(c *gin.Context, hc *protocol.HandleContext, req anthropic.MessageNewParams, actualModel string, provider *typ.Provider) {
+	if s.guardrailsEngine == nil {
+		return
+	}
+	_, _, _, requestModel, scenario, _, _ := GetTrackingContext(c)
+	enabled := s.config.GetScenarioFlag(typ.RuleScenario(scenario), "guardrails") ||
+		s.config.GetScenarioFlag(typ.ScenarioGlobal, "guardrails")
+	if !enabled || scenario != string(typ.ScenarioClaudeCode) {
+		return
+	}
+
+	logrus.Debugf("Guardrails: attaching hook (scenario=%s model=%s)", scenario, actualModel)
+	baseInput := guardrails.Input{
+		Scenario:  scenario,
+		Model:     actualModel,
+		Direction: guardrails.DirectionResponse,
+		Content: guardrails.Content{
+			Messages: guardrailsMessagesFromAnthropicV1(req.System, req.Messages),
+		},
+		Metadata: map[string]interface{}{
+			"provider":      provider.Name,
+			"request_model": requestModel,
+		},
+	}
+
+	onEvent, onComplete, onError := NewGuardrailsHooks(
+		s.guardrailsEngine,
+		baseInput,
+		WithGuardrailsContext(c.Request.Context()),
+		WithGuardrailsOnBlock(func(result GuardrailsHookResult) {
+			if result.BlockToolID == "" || result.BlockMessage == "" {
+				return
+			}
+			stream.RegisterGuardrailsBlock(c, result.BlockToolID, result.BlockIndex, result.BlockMessage)
+		}),
+		WithGuardrailsOnVerdict(func(result GuardrailsHookResult) {
+			c.Set("guardrails_result", result.Result)
+			if result.BlockMessage != "" {
+				c.Set("guardrails_block_message", result.BlockMessage)
+				c.Set("guardrails_block_index", result.BlockIndex)
+				if result.BlockToolID != "" {
+					c.Set("guardrails_block_tool_id", result.BlockToolID)
+				}
+			}
+			if result.Err != nil {
+				c.Set("guardrails_error", result.Err.Error())
+			}
+		}),
+	)
+	if onEvent != nil {
+		hc.WithOnStreamEvent(onEvent)
+	}
+	if onComplete != nil {
+		hc.WithOnStreamComplete(onComplete)
+	}
+	if onError != nil {
+		hc.WithOnStreamError(onError)
+	}
 }
 
 // handleAnthropicV1ViaResponsesAPINonStreaming handles non-streaming Responses API request for v1

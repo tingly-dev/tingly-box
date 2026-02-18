@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -19,6 +20,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/data"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
+	"github.com/tingly-dev/tingly-box/internal/guardrails"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/obs/otel"
 	remote_coder "github.com/tingly-dev/tingly-box/internal/remote_coder"
@@ -83,6 +85,9 @@ type Server struct {
 	// tool interceptor for local tool execution
 	toolInterceptor *toolinterceptor.Interceptor
 
+	// guardrails engine (optional)
+	guardrailsEngine guardrails.Guardrails
+
 	// recording sinks
 	recordSink *obs.Sink
 
@@ -117,6 +122,81 @@ type Server struct {
 	experimentalFeatures map[string]bool
 
 	version string
+}
+
+func (s *Server) initGuardrailsEngine() {
+	if s.guardrailsEngine != nil || s.config == nil {
+		return
+	}
+
+	if !s.guardrailsEnabled() {
+		return
+	}
+
+	cfgPath, err := findGuardrailsConfig(s.config.ConfigDir)
+	if err != nil {
+		logrus.WithError(err).Warn("Guardrails config not found; guardrails disabled")
+		return
+	}
+
+	cfg, err := guardrails.LoadConfig(cfgPath)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to load guardrails config")
+		return
+	}
+
+	engine, err := guardrails.BuildEngine(cfg, guardrails.Dependencies{})
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to build guardrails engine")
+		return
+	}
+
+	s.guardrailsEngine = engine
+	logrus.Infof("Guardrails enabled with config: %s", cfgPath)
+}
+
+func (s *Server) guardrailsEnabled() bool {
+	if s.config == nil {
+		return false
+	}
+	return s.config.GetScenarioFlag(typ.ScenarioGlobal, "guardrails") ||
+		s.config.GetScenarioFlag(typ.ScenarioClaudeCode, "guardrails")
+}
+
+func (s *Server) syncGuardrailsFromConfig() {
+	if s.config == nil {
+		return
+	}
+
+	if !s.guardrailsEnabled() {
+		s.guardrailsEngine = nil
+		logrus.Debug("Guardrails disabled via config")
+		return
+	}
+
+	if s.guardrailsEngine == nil {
+		s.initGuardrailsEngine()
+	}
+}
+
+func findGuardrailsConfig(configDir string) (string, error) {
+	if configDir == "" {
+		return "", fmt.Errorf("config dir is empty")
+	}
+
+	candidates := []string{
+		filepath.Join(configDir, "guardrails.yaml"),
+		filepath.Join(configDir, "guardrails.yml"),
+		filepath.Join(configDir, "guardrails.json"),
+	}
+
+	for _, path := range candidates {
+		if _, err := os.Stat(path); err == nil {
+			return path, nil
+		}
+	}
+
+	return "", fmt.Errorf("no guardrails config in %s", configDir)
 }
 
 // ServerOption defines a functional option for Server configuration
@@ -198,6 +278,13 @@ func WithRecordMode(mode obs.RecordMode) ServerOption {
 func WithRecordDir(dir string) ServerOption {
 	return func(s *Server) {
 		s.recordDir = dir
+	}
+}
+
+// WithGuardrails sets a guardrails engine for stream evaluation.
+func WithGuardrails(engine guardrails.Guardrails) ServerOption {
+	return func(s *Server) {
+		s.guardrailsEngine = engine
 	}
 }
 
@@ -332,6 +419,9 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.clientPool = client.NewClientPool() // Initialize client pool
 	server.errorMW = errorMW
 	server.scenarioRecordSinks = make(map[typ.RuleScenario]*obs.Sink)
+
+	// Auto-load guardrails if enabled and not injected explicitly.
+	server.initGuardrailsEngine()
 
 	// Initialize record sink if recording is enabled
 	switch server.recordMode {
@@ -495,6 +585,9 @@ func (s *Server) setupConfigWatcher() {
 				}
 			}
 		}
+
+		// Re-sync guardrails based on updated config flags.
+		s.syncGuardrailsFromConfig()
 	})
 }
 
