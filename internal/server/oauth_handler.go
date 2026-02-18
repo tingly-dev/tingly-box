@@ -1141,13 +1141,8 @@ func (s *Server) createProviderFromToken(token *oauth2.Token, providerType oauth
 	// Store account_id from token metadata for ChatGPT API
 	// This is required for ChatGPT backend API calls (ChatGPT-Account-ID header)
 	if token.Metadata != nil {
-		if accountID, ok := token.Metadata["account_id"].(string); ok && accountID != "" {
-			provider.OAuthDetail.ExtraFields["account_id"] = accountID
-			log.Printf("[OAuth] Stored account_id for %s provider: %s", providerType, accountID)
-		}
-		// Store any other metadata that might be useful
-		if email, ok := token.Metadata["email"].(string); ok && email != "" {
-			provider.OAuthDetail.ExtraFields["email"] = email
+		for k, v := range token.Metadata {
+			provider.OAuthDetail.ExtraFields[k] = v
 		}
 	}
 

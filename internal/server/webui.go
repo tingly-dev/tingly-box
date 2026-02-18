@@ -149,8 +149,26 @@ func (s *Server) HandleProbeModel(c *gin.Context) {
 		prober = s.clientPool.GetOpenAIClient(provider, model)
 	case protocol.APIStyleAnthropic:
 		prober = s.clientPool.GetAnthropicClient(provider, model)
+	case protocol.APIStyleGoogle:
+		prober = s.clientPool.GetGoogleClient(provider, model)
 	default:
-		prober = s.clientPool.GetOpenAIClient(provider, model)
+		errorMessage := "unknown api style"
+		c.JSON(http.StatusNotFound, ProbeResponse{
+			Success: false,
+			Error: &ErrorDetail{
+				Message: fmt.Sprintf("Probe failed: %s", errorMessage),
+				Type:    "error",
+				Code:    "PROBE_FAILED",
+			},
+			Data: &ProbeResponseData{
+				Request:     mockRequest,
+				Response:    ProbeResponseDetail{Content: "", Model: model, Provider: provider.Name, FinishReason: "error", Error: errorMessage},
+				Usage:       ProbeUsage{},
+				CurlCommand: curlCommand,
+			},
+		})
+		c.Abort()
+		return
 	}
 
 	// Call the probe method
