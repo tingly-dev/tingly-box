@@ -2,8 +2,11 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"iter"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"google.golang.org/genai"
@@ -142,5 +145,134 @@ func (c *GoogleClient) ListModels(ctx context.Context) ([]string, error) {
 	return nil, &ErrModelsEndpointNotSupported{
 		Provider: c.provider.Name,
 		Reason:   "Google genai SDK does not support listing models via API",
+	}
+}
+
+// ProbeChatEndpoint tests the chat endpoint with a minimal request
+func (c *GoogleClient) ProbeChatEndpoint(ctx context.Context, model string) ProbeResult {
+	startTime := time.Now()
+
+	// Create minimal content for probe
+	contents := []*genai.Content{
+		{
+			Role: "user",
+			Parts: []*genai.Part{
+				{Text: "hi"},
+			},
+		},
+	}
+
+	// Configure generation with minimal tokens
+	config := &genai.GenerateContentConfig{
+		MaxOutputTokens: 10,
+	}
+
+	// Make request
+	resp, err := c.client.Models.GenerateContent(ctx, model, contents, config)
+	latencyMs := time.Since(startTime).Milliseconds()
+
+	if err != nil {
+		return ProbeResult{
+			Success:      false,
+			ErrorMessage: err.Error(),
+			LatencyMs:    latencyMs,
+		}
+	}
+
+	// Extract response data
+	responseContent := ""
+	promptTokens := 0
+	completionTokens := 0
+	totalTokens := 0
+
+	if resp != nil && len(resp.Candidates) > 0 {
+		candidate := resp.Candidates[0]
+		if candidate.Content != nil {
+			for _, part := range candidate.Content.Parts {
+				if part.Text != "" {
+					responseContent += part.Text
+				}
+			}
+		}
+		if resp.UsageMetadata != nil {
+			promptTokens = int(resp.UsageMetadata.PromptTokenCount)
+			completionTokens = int(resp.UsageMetadata.CandidatesTokenCount)
+			totalTokens = int(resp.UsageMetadata.TotalTokenCount)
+		}
+	}
+
+	if responseContent == "" {
+		responseContent = "<response content is empty, but request success>"
+	}
+
+	return ProbeResult{
+		Success:          true,
+		Message:          "Chat endpoint is accessible",
+		Content:          responseContent,
+		LatencyMs:        latencyMs,
+		PromptTokens:     promptTokens,
+		CompletionTokens: completionTokens,
+		TotalTokens:      totalTokens,
+	}
+}
+
+// ProbeModelsEndpoint tests the models list endpoint
+func (c *GoogleClient) ProbeModelsEndpoint(ctx context.Context) ProbeResult {
+	// Google genai SDK doesn't provide a models list endpoint
+	// Return an error result indicating this is not supported
+	return ProbeResult{
+		Success:      false,
+		ErrorMessage: "Google genai SDK does not support listing models via API",
+		LatencyMs:    0,
+	}
+}
+
+// ProbeOptionsEndpoint tests basic connectivity with an OPTIONS request
+func (c *GoogleClient) ProbeOptionsEndpoint(ctx context.Context) ProbeResult {
+	startTime := time.Now()
+
+	// Use the API base URL for OPTIONS request
+	optionsURL := c.provider.APIBase
+	if !strings.HasSuffix(optionsURL, "/") {
+		optionsURL += "/"
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "OPTIONS", optionsURL, nil)
+	if err != nil {
+		return ProbeResult{
+			Success:      false,
+			ErrorMessage: fmt.Sprintf("Failed to create OPTIONS request: %v", err),
+		}
+	}
+
+	// Set authentication header
+	req.Header.Set("x-goog-api-key", c.provider.GetAccessToken())
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	latencyMs := time.Since(startTime).Milliseconds()
+
+	if err != nil {
+		return ProbeResult{
+			Success:      false,
+			ErrorMessage: fmt.Sprintf("OPTIONS request failed: %v", err),
+			LatencyMs:    latencyMs,
+		}
+	}
+	defer resp.Body.Close()
+
+	// Consider any 2xx status as success for OPTIONS
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return ProbeResult{
+			Success:   true,
+			Message:   "OPTIONS request successful",
+			LatencyMs: latencyMs,
+		}
+	}
+
+	return ProbeResult{
+		Success:      false,
+		ErrorMessage: fmt.Sprintf("OPTIONS request failed with status: %d", resp.StatusCode),
+		LatencyMs:    latencyMs,
 	}
 }
