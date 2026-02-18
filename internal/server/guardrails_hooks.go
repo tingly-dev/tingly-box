@@ -15,7 +15,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 )
 
-// GuardrailsHookResult holds the final evaluation result.
+// GuardrailsHookResult holds the final evaluation result and optional block metadata.
 type GuardrailsHookResult struct {
 	Result guardrails.Result
 	Err    error
@@ -65,6 +65,7 @@ func WithGuardrailsOnBlock(cb func(GuardrailsHookResult)) GuardrailsHookOption {
 
 // NewGuardrailsHooks creates stream hooks that evaluate guardrails on completion.
 // baseInput can include scenario/model/tags/metadata and initial content/messages.
+// WithGuardrailsOnBlock enables early tool_use blocking during the stream.
 func NewGuardrailsHooks(engine guardrails.Guardrails, baseInput guardrails.Input, opts ...GuardrailsHookOption) (onStreamEvent func(event interface{}) error, onStreamComplete func(), onStreamError func(err error)) {
 	if engine == nil {
 		return nil, nil, nil
@@ -114,7 +115,7 @@ func NewGuardrailsHooks(engine guardrails.Guardrails, baseInput guardrails.Input
 				if err == nil && result.Verdict == guardrails.VerdictBlock {
 					hook.onBlock(GuardrailsHookResult{
 						Result:       result,
-						BlockMessage: guardrailsBlockMessage(result),
+						BlockMessage: guardrailsBlockMessageForCommand(result, toolUse.name, parseToolArgs(toolUse.args)),
 						BlockIndex:   toolUse.index,
 						BlockToolID:  toolUse.id,
 					})
@@ -145,7 +146,7 @@ func NewGuardrailsHooks(engine guardrails.Guardrails, baseInput guardrails.Input
 		if onVerdict != nil {
 			blockMsg := ""
 			if result.Verdict == guardrails.VerdictBlock {
-				blockMsg = guardrailsBlockMessage(result)
+				blockMsg = guardrailsBlockMessageWithSnippet(result, input.Content.Preview(120))
 			}
 			onVerdict(GuardrailsHookResult{
 				Result:       result,
@@ -547,11 +548,57 @@ func (a *guardrailsAccumulator) popCompletedToolUse() (toolUseState, bool) {
 	return state, true
 }
 
-func guardrailsBlockMessage(result guardrails.Result) string {
-	if len(result.Reasons) > 0 && result.Reasons[0].Reason != "" {
-		return "Blocked by guardrails: " + result.Reasons[0].Reason
+// guardrailsBlockMessageWithSnippet formats a block message for text responses.
+func guardrailsBlockMessageWithSnippet(result guardrails.Result, snippet string) string {
+	prefix := "Blocked by guardrails. Content: text."
+	suffix := ""
+	if snippet != "" {
+		suffix = " Snippet: \"" + snippet + "\""
 	}
-	return "Blocked by guardrails"
+	if len(result.Reasons) > 0 && result.Reasons[0].Reason != "" {
+		return prefix + " Reason: " + result.Reasons[0].Reason + "." + suffix
+	}
+	if suffix != "" {
+		return prefix + suffix
+	}
+	return prefix
+}
+
+// guardrailsBlockMessageForToolResult formats a block message for tool_result filtering.
+func guardrailsBlockMessageForToolResult(result guardrails.Result) string {
+	if len(result.Reasons) > 0 && result.Reasons[0].Reason != "" {
+		return "Blocked by guardrails. Content: tool_result. Output redacted. Reason: " + result.Reasons[0].Reason
+	}
+	return "Blocked by guardrails. Content: tool_result. Output redacted."
+}
+
+// guardrailsBlockMessageForCommand formats a block message for tool_use command blocking.
+func guardrailsBlockMessageForCommand(result guardrails.Result, name string, args map[string]interface{}) string {
+	command := formatGuardrailsCommand(name, args)
+	if len(result.Reasons) > 0 && result.Reasons[0].Reason != "" {
+		return "Blocked by guardrails. Content: command. Command: " + command + ". Reason: " + result.Reasons[0].Reason
+	}
+	return "Blocked by guardrails. Content: command. Command: " + command + "."
+}
+
+// formatGuardrailsCommand renders a short command summary for block messages.
+func formatGuardrailsCommand(name string, args map[string]interface{}) string {
+	if name == "" {
+		return "<unknown>"
+	}
+	if len(args) == 0 {
+		return name + " {}"
+	}
+	raw, err := json.Marshal(args)
+	if err != nil {
+		return name + " {\"error\":\"marshal\"}"
+	}
+	const maxLen = 300
+	payload := string(raw)
+	if len(payload) > maxLen {
+		payload = payload[:maxLen] + "..."
+	}
+	return name + " " + payload
 }
 
 func parseToolArgs(raw string) map[string]interface{} {

@@ -69,6 +69,21 @@ type Content struct {
 	Messages []Message `json:"messages,omitempty" yaml:"messages,omitempty"`
 }
 
+// Preview returns a short snippet for logging or UI messages.
+func (c Content) Preview(limit int) string {
+	if limit <= 0 {
+		limit = 120
+	}
+	text := c.CombinedText()
+	if text == "" {
+		return ""
+	}
+	if len(text) > limit {
+		return text[:limit] + "..."
+	}
+	return text
+}
+
 // CombinedText returns a single string representation of the content.
 func (c Content) CombinedText() string {
 	return c.CombinedTextFor(nil)

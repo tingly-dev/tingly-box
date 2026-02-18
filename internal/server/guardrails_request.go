@@ -12,6 +12,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// applyGuardrailsToToolResultV1 evaluates tool_result content and replaces it when blocked.
 func (s *Server) applyGuardrailsToToolResultV1(c *gin.Context, req *anthropic.MessageNewParams, actualModel string, provider *typ.Provider) {
 	if s.guardrailsEngine == nil {
 		return
@@ -28,6 +29,9 @@ func (s *Server) applyGuardrailsToToolResultV1(c *gin.Context, req *anthropic.Me
 	if toolResultText == "" {
 		return
 	}
+	if strings.HasPrefix(toolResultText, guardrailsBlockPrefix) {
+		return
+	}
 
 	input := guardrails.Input{
 		Scenario:  scenario,
@@ -35,7 +39,7 @@ func (s *Server) applyGuardrailsToToolResultV1(c *gin.Context, req *anthropic.Me
 		Direction: guardrails.DirectionRequest,
 		Content: guardrails.Content{
 			Text:     toolResultText,
-			Messages: guardrailsMessagesFromAnthropicV1(req.System, req.Messages),
+			Messages: filterGuardrailsMessages(guardrailsMessagesFromAnthropicV1(req.System, req.Messages)),
 		},
 		Metadata: map[string]interface{}{
 			"provider":      provider.Name,
@@ -48,13 +52,16 @@ func (s *Server) applyGuardrailsToToolResultV1(c *gin.Context, req *anthropic.Me
 		return
 	}
 	if result.Verdict == guardrails.VerdictBlock {
-		message := guardrailsBlockMessage(result)
+		message := guardrailsBlockMessageForToolResult(result)
 		replaceToolResultContentV1(req.Messages, message)
+		c.Set("guardrails_block_message", message)
+		c.Set("guardrails_block_index", 0)
 		logrus.Debugf("Guardrails: tool_result replaced (v1) len=%d", len(message))
 		return
 	}
 }
 
+// applyGuardrailsToToolResultV1Beta evaluates tool_result content and replaces it when blocked.
 func (s *Server) applyGuardrailsToToolResultV1Beta(c *gin.Context, req *anthropic.BetaMessageNewParams, actualModel string, provider *typ.Provider) {
 	if s.guardrailsEngine == nil {
 		return
@@ -71,6 +78,9 @@ func (s *Server) applyGuardrailsToToolResultV1Beta(c *gin.Context, req *anthropi
 	if toolResultText == "" {
 		return
 	}
+	if strings.HasPrefix(toolResultText, guardrailsBlockPrefix) {
+		return
+	}
 
 	input := guardrails.Input{
 		Scenario:  scenario,
@@ -78,7 +88,7 @@ func (s *Server) applyGuardrailsToToolResultV1Beta(c *gin.Context, req *anthropi
 		Direction: guardrails.DirectionRequest,
 		Content: guardrails.Content{
 			Text:     toolResultText,
-			Messages: guardrailsMessagesFromAnthropicV1Beta(req.System, req.Messages),
+			Messages: filterGuardrailsMessages(guardrailsMessagesFromAnthropicV1Beta(req.System, req.Messages)),
 		},
 		Metadata: map[string]interface{}{
 			"provider":      provider.Name,
@@ -91,63 +101,106 @@ func (s *Server) applyGuardrailsToToolResultV1Beta(c *gin.Context, req *anthropi
 		return
 	}
 	if result.Verdict == guardrails.VerdictBlock {
-		message := guardrailsBlockMessage(result)
+		message := guardrailsBlockMessageForToolResult(result)
 		replaceToolResultContentV1Beta(req.Messages, message)
+		c.Set("guardrails_block_message", message)
+		c.Set("guardrails_block_index", 0)
 		logrus.Debugf("Guardrails: tool_result replaced (v1beta) len=%d", len(message))
 		return
 	}
 }
 
+// extractToolResultTextV1 returns the most recent tool_result content from messages.
 func extractToolResultTextV1(messages []anthropic.MessageParam) (string, int, int) {
+	for i := len(messages) - 1; i >= 0; i-- {
+		msg := messages[i]
+		text, blocks, parts := extractToolResultTextV1FromMessage(msg)
+		if blocks > 0 {
+			return text, blocks, parts
+		}
+	}
+	return "", 0, 0
+}
+
+// extractToolResultTextV1FromMessage extracts tool_result content from a single message.
+func extractToolResultTextV1FromMessage(msg anthropic.MessageParam) (string, int, int) {
 	var b strings.Builder
 	var blocks int
 	var parts int
-	for _, msg := range messages {
-		for _, block := range msg.Content {
-			if block.OfToolResult == nil {
+	for _, block := range msg.Content {
+		if block.OfToolResult == nil {
+			continue
+		}
+		blocks++
+		for _, content := range block.OfToolResult.Content {
+			parts++
+			if content.OfText != nil {
+				b.WriteString(content.OfText.Text)
 				continue
 			}
-			blocks++
-			for _, content := range block.OfToolResult.Content {
-				parts++
-				if content.OfText != nil {
-					b.WriteString(content.OfText.Text)
-					continue
-				}
-				if raw, err := json.Marshal(content); err == nil {
-					b.WriteString(string(raw))
-				}
+			if raw, err := json.Marshal(content); err == nil {
+				b.WriteString(string(raw))
 			}
 		}
 	}
 	return b.String(), blocks, parts
 }
 
+// extractToolResultTextV1Beta returns the most recent tool_result content from messages.
 func extractToolResultTextV1Beta(messages []anthropic.BetaMessageParam) (string, int, int) {
+	for i := len(messages) - 1; i >= 0; i-- {
+		msg := messages[i]
+		text, blocks, parts := extractToolResultTextV1BetaFromMessage(msg)
+		if blocks > 0 {
+			return text, blocks, parts
+		}
+	}
+	return "", 0, 0
+}
+
+// extractToolResultTextV1BetaFromMessage extracts tool_result content from a single message.
+func extractToolResultTextV1BetaFromMessage(msg anthropic.BetaMessageParam) (string, int, int) {
 	var b strings.Builder
 	var blocks int
 	var parts int
-	for _, msg := range messages {
-		for _, block := range msg.Content {
-			if block.OfToolResult == nil {
+	for _, block := range msg.Content {
+		if block.OfToolResult == nil {
+			continue
+		}
+		blocks++
+		for _, content := range block.OfToolResult.Content {
+			parts++
+			if content.OfText != nil {
+				b.WriteString(content.OfText.Text)
 				continue
 			}
-			blocks++
-			for _, content := range block.OfToolResult.Content {
-				parts++
-				if content.OfText != nil {
-					b.WriteString(content.OfText.Text)
-					continue
-				}
-				if raw, err := json.Marshal(content); err == nil {
-					b.WriteString(string(raw))
-				}
+			if raw, err := json.Marshal(content); err == nil {
+				b.WriteString(string(raw))
 			}
 		}
 	}
 	return b.String(), blocks, parts
 }
 
+// guardrailsBlockPrefix marks tool_result content already replaced by guardrails.
+const guardrailsBlockPrefix = "[Tingly-box] Blocked by guardrails."
+
+// filterGuardrailsMessages removes guardrails-generated messages to avoid feedback loops.
+func filterGuardrailsMessages(messages []guardrails.Message) []guardrails.Message {
+	if len(messages) == 0 {
+		return messages
+	}
+	filtered := make([]guardrails.Message, 0, len(messages))
+	for _, msg := range messages {
+		if strings.HasPrefix(msg.Content, guardrailsBlockPrefix) {
+			continue
+		}
+		filtered = append(filtered, msg)
+	}
+	return filtered
+}
+
+// replaceToolResultContentV1 overwrites tool_result blocks with a guardrails warning.
 func replaceToolResultContentV1(messages []anthropic.MessageParam, message string) {
 	for i := range messages {
 		msg := &messages[i]
@@ -168,6 +221,7 @@ func replaceToolResultContentV1(messages []anthropic.MessageParam, message strin
 	}
 }
 
+// replaceToolResultContentV1Beta overwrites tool_result blocks with a guardrails warning.
 func replaceToolResultContentV1Beta(messages []anthropic.BetaMessageParam, message string) {
 	for i := range messages {
 		msg := &messages[i]
