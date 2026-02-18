@@ -10,6 +10,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // TestGoogleGenerateContent tests calling Google genai API directly to generate content.
@@ -23,13 +24,19 @@ func TestGoogleGenerateContent(t *testing.T) {
 		t.Skip("Skipping test: GOOGLE_API_KEY and GOOGLE_MODEL must be set")
 	}
 
+	// Create HTTP client using CreateHTTPClientForProvider
+	testProvider := &typ.Provider{
+		ProxyURL: os.Getenv("HTTPS_PROXY"),
+	}
+	httpClient := client.CreateHTTPClientForProvider(testProvider)
+
 	// Create Google client
 	ctx := context.Background()
-	client, err := genai.NewClient(
+	genaiClient, err := genai.NewClient(
 		ctx,
 		&genai.ClientConfig{
 			APIKey:     apiKey,
-			HTTPClient: client.CreateHTTPClientWithProxy(os.Getenv("HTTPS_PROXY")),
+			HTTPClient: httpClient,
 			HTTPOptions: genai.HTTPOptions{
 				BaseURL:    os.Getenv("GOOGLE_API_URL"),
 				APIVersion: os.Getenv("GOOGLE_API_VERSION"),
@@ -72,7 +79,7 @@ func TestGoogleGenerateContent(t *testing.T) {
 	// Note: The actual API call method signature depends on SDK version
 	// This test focuses on request preparation
 	// To make actual API call, uncomment and adjust based on SDK:
-	resp, err := client.Models.GenerateContent(ctx, model, contents, config)
+	resp, err := genaiClient.Models.GenerateContent(ctx, model, contents, config)
 	if err != nil {
 		t.Fatalf("Failed to generate content: %v", err)
 	}
