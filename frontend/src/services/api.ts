@@ -8,6 +8,7 @@ import {
     HistoryApi,
     InfoApi,
     LogsApi,
+    MemoryApi,
     ModelsApi,
     OauthApi,
     ProbeProviderRequestApiStyleEnum,
@@ -34,6 +35,7 @@ const DEFAULT_BASE_PATH = getDisplayOrigin().replace(/\/+$/, "");
 // Type definition for API instances
 interface ApiInstances {
     historyApi: HistoryApi;
+    memoryApi: MemoryApi;
     modelsApi: ModelsApi;
     providersApi: ProvidersApi;
     rulesApi: RulesApi;
@@ -131,6 +133,7 @@ const createApiInstances = async () => {
 
     return {
         historyApi: new HistoryApi(config),
+        memoryApi: new MemoryApi(config),
         modelsApi: new ModelsApi(config),
         providersApi: new ProvidersApi(config),
         rulesApi: new RulesApi(config),
@@ -1157,29 +1160,19 @@ export const api = {
         offset?: number;
     } = {}): Promise<any> => {
         try {
-            const token = getUserAuthToken();
-            const queryParams = new URLSearchParams();
-            if (params.scenario) queryParams.set('scenario', params.scenario);
-            if (params.protocol) queryParams.set('protocol', params.protocol);
-            if (params.limit) queryParams.set('limit', params.limit.toString());
-            if (params.offset) queryParams.set('offset', params.offset.toString());
-
-            const response = await fetch(`${await getApiBaseUrl()}/api/v1/memory/rounds?${queryParams}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
-                },
-            });
-
-            if (response.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.memoryApi.apiV1MemoryRoundsGet(
+                params.scenario,
+                params.protocol,
+                params.limit,
+                params.offset,
+            );
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
-
-            return await response.json();
-        } catch (error: any) {
             return { success: false, error: error.message };
         }
     },
@@ -1190,27 +1183,17 @@ export const api = {
         limit?: number;
     } = {}): Promise<any> => {
         try {
-            const token = getUserAuthToken();
-            const queryParams = new URLSearchParams();
-            if (params.scenario) queryParams.set('scenario', params.scenario);
-            if (params.limit) queryParams.set('limit', params.limit.toString());
-
-            const response = await fetch(`${await getApiBaseUrl()}/api/v1/memory/user-inputs?${queryParams}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
-                },
-            });
-
-            if (response.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.memoryApi.apiV1MemoryUserInputsGet(
+                params.scenario,
+                params.limit,
+            );
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
-
-            return await response.json();
-        } catch (error: any) {
             return { success: false, error: error.message };
         }
     },
@@ -1222,92 +1205,60 @@ export const api = {
         limit?: number;
     }): Promise<any> => {
         try {
-            const token = getUserAuthToken();
-            const queryParams = new URLSearchParams();
-            queryParams.set('q', params.query);
-            if (params.scenario) queryParams.set('scenario', params.scenario);
-            if (params.limit) queryParams.set('limit', params.limit.toString());
-
-            const response = await fetch(`${await getApiBaseUrl()}/api/v1/memory/search?${queryParams}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
-                },
-            });
-
-            if (response.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.memoryApi.apiV1MemorySearchGet(
+                params.query,
+                params.scenario,
+                params.limit,
+            );
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
-
-            return await response.json();
-        } catch (error: any) {
             return { success: false, error: error.message };
         }
     },
 
     // Get lightweight list for user page (optimized - minimal fields)
-    // Backend endpoint: /api/v1/memory/user-inputs/list
     getMemoryUserInputsList: async (params: {
         scenario?: string;
         protocol?: string;
-        start_date?: string;  // ISO date string
-        end_date?: string;    // ISO date string
+        start_date?: string;
+        end_date?: string;
         limit?: number;
     } = {}): Promise<any> => {
         try {
-            const token = getUserAuthToken();
-            const queryParams = new URLSearchParams();
-            if (params.scenario) queryParams.set('scenario', params.scenario);
-            if (params.protocol) queryParams.set('protocol', params.protocol);
-            if (params.start_date) queryParams.set('start_date', params.start_date);
-            if (params.end_date) queryParams.set('end_date', params.end_date);
-            if (params.limit) queryParams.set('limit', params.limit.toString());
-
-            const response = await fetch(`${await getApiBaseUrl()}/api/v1/memory/user-inputs/list?${queryParams}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
-                },
-            });
-
-            if (response.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.memoryApi.apiV1MemoryUserInputsListGet(
+                params.scenario,
+                params.protocol,
+                params.start_date,
+                params.end_date,
+                params.limit,
+            );
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
-
-            return await response.json();
-        } catch (error: any) {
             return { success: false, error: error.message };
         }
     },
 
     // Get full details for a specific memory round
-    // Backend endpoint: /api/v1/memory/rounds/:id
     getMemoryRoundDetail: async (id: number): Promise<any> => {
         try {
-            const token = getUserAuthToken();
-
-            const response = await fetch(`${await getApiBaseUrl()}/api/v1/memory/rounds/${id}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
-                },
-            });
-
-            if (response.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.memoryApi.apiV1MemoryRoundsIdGet(String(id));
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
-
-            return await response.json();
-        } catch (error: any) {
             return { success: false, error: error.message };
         }
     },
@@ -1319,28 +1270,18 @@ export const api = {
         limit?: number;
     }): Promise<any> => {
         try {
-            const token = getUserAuthToken();
-            const queryParams = new URLSearchParams();
-            if (params.project_id) queryParams.set('project_id', params.project_id);
-            if (params.session_id) queryParams.set('session_id', params.session_id);
-            if (params.limit) queryParams.set('limit', params.limit.toString());
-
-            const response = await fetch(`${await getApiBaseUrl()}/api/v1/memory/by-project-session?${queryParams}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
-                },
-            });
-
-            if (response.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.memoryApi.apiV1MemoryByProjectSessionGet(
+                params.project_id,
+                params.session_id,
+                params.limit,
+            );
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
-
-            return await response.json();
-        } catch (error: any) {
             return { success: false, error: error.message };
         }
     },
@@ -1352,28 +1293,18 @@ export const api = {
         limit?: number;
     }): Promise<any> => {
         try {
-            const token = getUserAuthToken();
-            const queryParams = new URLSearchParams();
-            queryParams.set('key', params.key);
-            queryParams.set('value', params.value);
-            if (params.limit) queryParams.set('limit', params.limit.toString());
-
-            const response = await fetch(`${await getApiBaseUrl()}/api/v1/memory/by-metadata?${queryParams}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
-                },
-            });
-
-            if (response.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.memoryApi.apiV1MemoryByMetadataGet(
+                params.key,
+                params.value,
+                params.limit,
+            );
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
-
-            return await response.json();
-        } catch (error: any) {
             return { success: false, error: error.message };
         }
     },
@@ -1381,87 +1312,57 @@ export const api = {
     // Delete old memory records
     deleteOldMemoryRecords: async (days: number): Promise<any> => {
         try {
-            const token = getUserAuthToken();
-            const response = await fetch(`${await getApiBaseUrl()}/api/v1/memory/old-records?days=${days}`, {
-                method: 'DELETE',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
-                },
-            });
-
-            if (response.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.memoryApi.apiV1MemoryOldRecordsDelete(days);
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
-
-            return await response.json();
-        } catch (error: any) {
             return { success: false, error: error.message };
         }
     },
 
     // Get sessions grouped by date and account (deduplicated)
-    // Backend endpoint: /api/v1/memory/sessions
     getMemorySessions: async (params: {
-        start_date?: string;  // ISO date string
-        end_date?: string;    // ISO date string
+        start_date?: string;
+        end_date?: string;
         limit?: number;
     } = {}): Promise<any> => {
         try {
-            const token = getUserAuthToken();
-            const queryParams = new URLSearchParams();
-            if (params.start_date) queryParams.set('start_date', params.start_date);
-            if (params.end_date) queryParams.set('end_date', params.end_date);
-            if (params.limit) queryParams.set('limit', params.limit.toString());
-
-            const response = await fetch(`${await getApiBaseUrl()}/api/v1/memory/sessions?${queryParams}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
-                },
-            });
-
-            if (response.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.memoryApi.apiV1MemorySessionsGet(
+                params.start_date,
+                params.end_date,
+                params.limit,
+            );
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
-
-            return await response.json();
-        } catch (error: any) {
             return { success: false, error: error.message };
         }
     },
 
     // Get rounds for a specific session
-    // Backend endpoint: /api/v1/memory/sessions/:id/rounds
     getMemorySessionRounds: async (sessionId: string, params: {
         limit?: number;
     } = {}): Promise<any> => {
         try {
-            const token = getUserAuthToken();
-            const queryParams = new URLSearchParams();
-            if (params.limit) queryParams.set('limit', params.limit.toString());
-
-            const response = await fetch(`${await getApiBaseUrl()}/api/v1/memory/sessions/${sessionId}/rounds?${queryParams}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
-                },
-            });
-
-            if (response.status === 401) {
-                localStorage.removeItem('user_auth_token');
-                window.location.href = '/login';
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.memoryApi.apiV1MemorySessionsIdRoundsGet(
+                sessionId,
+                params.limit,
+            );
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                handleAuthFailure();
                 return { success: false, error: 'Authentication required' };
             }
-
-            return await response.json();
-        } catch (error: any) {
             return { success: false, error: error.message };
         }
     },
