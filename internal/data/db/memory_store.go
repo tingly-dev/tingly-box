@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -554,7 +555,7 @@ func (ps *MemoryStore) GetSessionsByDate(startDate, endDate string, limit int) (
 		sessionStats := statsMap[record.SessionID]
 
 		result[i] = MemorySessionRecord{
-			ID:                record.ID,
+			ID:                strconv.FormatUint(uint64(record.ID), 10),
 			SessionID:         record.SessionID,
 			Scenario:          record.Scenario,
 			ProviderName:      record.ProviderName,
@@ -563,6 +564,7 @@ func (ps *MemoryStore) GetSessionsByDate(startDate, endDate string, limit int) (
 			AccountID:         accountID,
 			AccountName:       accountName,
 			Title:             record.UserInput,
+			WorkingDir:        record.WorkingDir,
 			CreatedAt:         record.CreatedAt,
 			TotalRounds:       int(sessionStats.RoundCount),
 			TotalTokens:       int(sessionStats.TotalTokens),

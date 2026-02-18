@@ -719,6 +719,9 @@ func (sr *ScenarioRecorder) recordPromptRounds(provider *typ.Provider, model str
 		sessionID = GenerateSessionID()
 	}
 
+	// Extract working directory from system prompt
+	workingDir := sr.extractWorkingDirFromRequest()
+
 	// Convert metadata to JSON string
 	metadataJSON := ""
 	if len(metadata) > 0 {
@@ -784,8 +787,9 @@ func (sr *ScenarioRecorder) recordPromptRounds(provider *typ.Provider, model str
 			Protocol:  sr.protocol,
 			RequestID: requestID,
 
-			ProjectID: projectID,
-			SessionID: sessionID,
+			ProjectID:  projectID,
+			SessionID:  sessionID,
+			WorkingDir: workingDir,
 
 			Metadata: metadataJSON,
 
@@ -1113,5 +1117,79 @@ func (sr *ScenarioRecorder) extractRoundResultFromResponse() string {
 		return result
 	}
 
+	return ""
+}
+
+// extractWorkingDirFromRequest extracts working directory from system prompt
+func (sr *ScenarioRecorder) extractWorkingDirFromRequest() string {
+	if sr == nil {
+		return ""
+	}
+
+	// Extract system prompt based on request type
+	var systemPrompt string
+	switch req := sr.parsedRequest.(type) {
+	case *protocol.AnthropicBetaMessagesRequest:
+		systemPrompt = sr.extractSystemPromptFromBeta(req.System)
+	case *protocol.AnthropicMessagesRequest:
+		systemPrompt = sr.extractSystemPromptFromV1(req.System)
+	default:
+		// Try to extract from bodyBytes
+		systemPrompt = sr.extractSystemPromptFromBody()
+	}
+
+	if systemPrompt == "" {
+		return ""
+	}
+
+	return TryParseWorkingDir(systemPrompt)
+}
+
+// extractSystemPromptFromBeta extracts system prompt from beta request system blocks
+func (sr *ScenarioRecorder) extractSystemPromptFromBeta(blocks []anthropic.BetaTextBlockParam) string {
+	var result string
+	for _, block := range blocks {
+		result += block.Text + "\n"
+	}
+	return result
+}
+
+// extractSystemPromptFromV1 extracts system prompt from v1 request system blocks
+func (sr *ScenarioRecorder) extractSystemPromptFromV1(blocks []anthropic.TextBlockParam) string {
+	var result string
+	for _, block := range blocks {
+		result += block.Text + "\n"
+	}
+	return result
+}
+
+// extractSystemPromptFromBody extracts system prompt from raw body bytes (fallback)
+func (sr *ScenarioRecorder) extractSystemPromptFromBody() string {
+	if len(sr.bodyBytes) == 0 {
+		return ""
+	}
+
+	var body struct {
+		System interface{} `json:"system"`
+	}
+	if err := json.Unmarshal(sr.bodyBytes, &body); err != nil {
+		return ""
+	}
+
+	// Handle different system prompt formats
+	switch s := body.System.(type) {
+	case string:
+		return s
+	case []interface{}:
+		var result string
+		for _, block := range s {
+			if blockMap, ok := block.(map[string]interface{}); ok {
+				if text, ok := blockMap["text"].(string); ok {
+					result += text + "\n"
+				}
+			}
+		}
+		return result
+	}
 	return ""
 }

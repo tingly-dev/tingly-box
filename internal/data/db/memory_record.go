@@ -58,6 +58,9 @@ type MemoryRoundRecord struct {
 	// Flags
 	IsStreaming  bool `gorm:"column:is_streaming;type:integer"`
 	ToolUseCount int  `gorm:"column:tool_use_count;default:0"` // Number of tool use interactions in this round
+
+	// Project context
+	WorkingDir string `gorm:"column:working_dir;index:idx_prompt_rounds_working_dir"` // Working directory extracted from system prompt
 }
 
 // TableName specifies the table name for GORM
@@ -67,7 +70,7 @@ func (MemoryRoundRecord) TableName() string {
 
 // MemorySessionRecord represents a unique session with aggregated stats
 type MemorySessionRecord struct {
-	ID                uint      `json:"id"`
+	ID                string    `json:"id"`
 	SessionID         string    `json:"session_id"`
 	Scenario          string    `json:"scenario"`
 	ProviderName      string    `json:"provider_name"`
@@ -76,6 +79,7 @@ type MemorySessionRecord struct {
 	AccountID         string    `json:"account_id"`   // User ID from metadata
 	AccountName       string    `json:"account_name"` // Display name for account
 	Title             string    `json:"title"`        // First user input as session title
+	WorkingDir        string    `json:"working_dir"`  // Working directory from system prompt
 	CreatedAt         time.Time `json:"created_at"`
 	TotalRounds       int       `json:"total_rounds"`
 	TotalTokens       int       `json:"total_tokens"`

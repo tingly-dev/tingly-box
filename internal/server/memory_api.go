@@ -373,6 +373,7 @@ type MemorySessionItem struct {
 	AccountID         string `json:"account_id"`
 	AccountName       string `json:"account_name"`
 	Title             string `json:"title"` // First user input as session title
+	WorkingDir        string `json:"working_dir"`
 	CreatedAt         string `json:"created_at"`
 	TotalRounds       int    `json:"total_rounds"`
 	TotalTokens       int    `json:"total_tokens"`
@@ -398,6 +399,7 @@ type MemoryRoundItem struct {
 	RequestID          string            `json:"request_id,omitempty"`
 	ProjectID          string            `json:"project_id,omitempty"`
 	SessionID          string            `json:"session_id,omitempty"`
+	WorkingDir         string            `json:"working_dir,omitempty"`
 	Metadata           map[string]string `json:"metadata,omitempty"`
 	RoundIndex         int               `json:"round_index"`
 	UserInput          string            `json:"user_input"`
@@ -858,6 +860,7 @@ func convertToMemoryRoundItem(r db.MemoryRoundRecord) MemoryRoundItem {
 		RequestID:    r.RequestID,
 		ProjectID:    r.ProjectID,
 		SessionID:    r.SessionID,
+		WorkingDir:   r.WorkingDir,
 		Metadata:     metadata,
 		RoundIndex:   r.RoundIndex,
 		UserInput:    r.UserInput,
@@ -928,7 +931,7 @@ func (api *MemoryAPI) GetSessions(c *gin.Context) {
 	items := make([]MemorySessionItem, len(sessions))
 	for i, s := range sessions {
 		items[i] = MemorySessionItem{
-			ID:                strconv.FormatUint(uint64(s.ID), 10),
+			ID:                s.ID,
 			SessionID:         s.SessionID,
 			Scenario:          s.Scenario,
 			ProviderName:      s.ProviderName,
@@ -937,6 +940,7 @@ func (api *MemoryAPI) GetSessions(c *gin.Context) {
 			AccountID:         s.AccountID,
 			AccountName:       s.AccountName,
 			Title:             s.Title,
+			WorkingDir:        s.WorkingDir,
 			CreatedAt:         s.CreatedAt.Format("2006-01-02T15:04:05Z"),
 			TotalRounds:       s.TotalRounds,
 			TotalTokens:       s.TotalTokens,
