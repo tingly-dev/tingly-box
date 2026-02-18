@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	oauth2 "github.com/tingly-dev/tingly-box/pkg/oauth"
@@ -13,7 +14,7 @@ import (
 
 // tokenManager defines the interface for token refresh operations
 type tokenManager interface {
-	RefreshToken(ctx context.Context, userID string, providerType oauth2.ProviderType, refreshToken string) (*oauth2.Token, error)
+	RefreshToken(ctx context.Context, userID string, providerType oauth2.ProviderType, refreshToken string, opts ...oauth2.Option) (*oauth2.Token, error)
 }
 
 // OAuthRefresher handles periodic OAuth token refresh
@@ -142,7 +143,7 @@ func (tr *OAuthRefresher) CheckAndRefreshTokens() {
 func (tr *OAuthRefresher) refreshProviderToken(provider *typ.Provider) {
 	providerType, err := oauth2.ParseProviderType(provider.OAuthDetail.ProviderType)
 	if err != nil {
-		fmt.Printf("[OAuthRefresher] Invalid provider type for %s: %v\n", provider.Name, err)
+		logrus.Errorf("[OAuthRefresher] Invalid provider type for %s: %v\n", provider.Name, err)
 		return
 	}
 
@@ -151,6 +152,7 @@ func (tr *OAuthRefresher) refreshProviderToken(provider *typ.Provider) {
 		provider.OAuthDetail.UserID,
 		providerType,
 		provider.OAuthDetail.RefreshToken,
+		oauth2.WithProxyString(provider.ProxyURL),
 	)
 
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -103,9 +104,17 @@ func (h *Handler) Authorize(c *gin.Context) {
 }
 
 // Callback handles the OAuth callback from the provider
-// GET /oauth/callback?code=xxx&state=xxx
+// GET /oauth/callback?code=xxx&state=xxx&proxy_url=xxx
 func (h *Handler) Callback(c *gin.Context) {
-	token, err := h.manager.HandleCallback(c.Request.Context(), c.Request)
+	// Optional proxy URL from query parameter
+	var opts []oauth.Option
+	if proxyURL := c.Query("proxy_url"); proxyURL != "" {
+		if u, err := url.Parse(proxyURL); err == nil {
+			opts = append(opts, oauth.WithProxyURL(u))
+		}
+	}
+
+	token, err := h.manager.HandleCallback(c.Request.Context(), c.Request, opts...)
 	if err != nil {
 		c.HTML(http.StatusBadRequest, "oauth_error.html", gin.H{
 			"error": err.Error(),
@@ -137,7 +146,7 @@ func (h *Handler) Callback(c *gin.Context) {
 }
 
 // GetToken returns the OAuth token for a user and provider
-// GET /oauth/token?provider=anthropic&user_id=xxx
+// GET /oauth/token?provider=anthropic&user_id=xxx&proxy_url=xxx
 func (h *Handler) GetToken(c *gin.Context) {
 	providerType := oauth.ProviderType(c.Query("provider"))
 	if providerType == "" {
@@ -152,7 +161,15 @@ func (h *Handler) GetToken(c *gin.Context) {
 		userID = DefaultUserID
 	}
 
-	token, err := h.manager.GetToken(c.Request.Context(), userID, providerType)
+	// Optional proxy URL from query parameter
+	var opts []oauth.Option
+	if proxyURL := c.Query("proxy_url"); proxyURL != "" {
+		if u, err := url.Parse(proxyURL); err == nil {
+			opts = append(opts, oauth.WithProxyURL(u))
+		}
+	}
+
+	token, err := h.manager.GetToken(c.Request.Context(), userID, providerType, opts...)
 	if err != nil {
 		if err == oauth.ErrTokenNotFound {
 			c.JSON(http.StatusNotFound, gin.H{

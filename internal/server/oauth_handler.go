@@ -978,7 +978,7 @@ func (s *Server) RefreshOAuthToken(c *gin.Context) {
 	}
 
 	// Refresh the token
-	token, err := s.oauthManager.RefreshToken(c.Request.Context(), provider.OAuthDetail.UserID, providerType, provider.OAuthDetail.RefreshToken)
+	token, err := s.oauthManager.RefreshToken(c.Request.Context(), provider.OAuthDetail.UserID, providerType, provider.OAuthDetail.RefreshToken, oauth2.WithProxyString(provider.ProxyURL))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, OAuthErrorResponse{
 			Success: false,
