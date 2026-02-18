@@ -17,25 +17,6 @@ import (
 	"github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
-// isAntigravityProvider checks if the provider is using Antigravity's API
-func isAntigravityProvider(provider *typ.Provider) bool {
-	return provider.OAuthDetail != nil &&
-		provider.OAuthDetail.ProviderType == string(oauth.ProviderAntigravity)
-}
-
-// getAntigravityExtraFields retrieves Antigravity-specific fields from OAuth extra fields
-func getAntigravityExtraFields(provider *typ.Provider) (project, model string) {
-	if provider.OAuthDetail != nil && provider.OAuthDetail.ExtraFields != nil {
-		if v, ok := provider.OAuthDetail.ExtraFields["project"].(string); ok {
-			project = v
-		}
-		if v, ok := provider.OAuthDetail.ExtraFields["model"].(string); ok {
-			model = v
-		}
-	}
-	return
-}
-
 // GoogleClient wraps the Google genai SDK client
 type GoogleClient struct {
 	client     *genai.Client
@@ -164,7 +145,7 @@ func (c *GoogleClient) ProbeChatEndpoint(ctx context.Context, model string) Prob
 
 	// Configure generation with minimal tokens
 	config := &genai.GenerateContentConfig{
-		MaxOutputTokens: 10,
+		MaxOutputTokens: 1000,
 	}
 
 	// Make request

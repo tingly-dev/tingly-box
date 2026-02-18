@@ -315,10 +315,13 @@ func (t *antigravityRoundTripper) RoundTrip(req *http.Request) (*http.Response, 
 	// Rewrite URL path from standard Google format to Antigravity format
 	originalPath := req.URL.Path
 	newPath := originalPath
+	model := ""
 
 	if strings.Contains(newPath, ":generateContent") || strings.Contains(newPath, ":streamGenerateContent") {
 		parts := strings.Split(newPath, ":")
 		if len(parts) >= 2 {
+			subparts := strings.Split(parts[0], "/")
+			model = subparts[len(subparts)-1]
 			operation := parts[1]
 			newPath = fmt.Sprintf("/v1internal:%s", operation)
 		}
@@ -330,7 +333,7 @@ func (t *antigravityRoundTripper) RoundTrip(req *http.Request) (*http.Response, 
 	}
 
 	// Read and wrap request body
-	if req.Body != nil && t.project != "" && t.model != "" {
+	if req.Body != nil && t.project != "" && model != "" {
 		body, err := io.ReadAll(req.Body)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read request body: %w", err)
@@ -353,7 +356,7 @@ func (t *antigravityRoundTripper) RoundTrip(req *http.Request) (*http.Response, 
 				"project":     t.project,
 				"requestId":   fmt.Sprintf("agent-%s", uuid.New().String()),
 				"request":     cleanBody,
-				"model":       t.model,
+				"model":       model,
 				"userAgent":   "antigravity",
 				"requestType": "agent",
 			}
@@ -505,11 +508,8 @@ func CreateHTTPClientForProvider(provider *typ.Provider) *http.Client {
 		if providerType == oauth.ProviderAntigravity && provider.OAuthDetail != nil {
 			project, model := "", ""
 			if provider.OAuthDetail.ExtraFields != nil {
-				if p, ok := provider.OAuthDetail.ExtraFields["project"].(string); ok {
+				if p, ok := provider.OAuthDetail.ExtraFields["project_id"].(string); ok {
 					project = p
-				}
-				if m, ok := provider.OAuthDetail.ExtraFields["model"].(string); ok {
-					model = m
 				}
 			}
 			// Create a separate transport with proxy for Antigravity
