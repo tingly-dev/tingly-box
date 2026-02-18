@@ -2,6 +2,7 @@ package client
 
 import (
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/hex"
 	"net/http"
 	"net/url"
@@ -34,9 +35,9 @@ func GetGlobalTransportPool() *TransportPool {
 }
 
 // GetTransport returns or creates a shared HTTP transport for the given configuration
-// The transport key is based on: apiBaseURL + proxyURL + oauthType
-func (tp *TransportPool) GetTransport(apiBase, proxyURL string, oauthType oauth.ProviderType) *http.Transport {
-	key := tp.generateTransportKey(apiBase, proxyURL, oauthType)
+// The transport key is based on: apiBaseURL + proxyURL + oauthType + tlsFingerprint
+func (tp *TransportPool) GetTransport(apiBase, proxyURL string, oauthType oauth.ProviderType, tlsFingerprint TLSFingerprint) *http.Transport {
+	key := tp.generateTransportKey(apiBase, proxyURL, oauthType, tlsFingerprint)
 
 	// Try to get existing transport with read lock first
 	tp.mutex.RLock()
@@ -58,25 +59,26 @@ func (tp *TransportPool) GetTransport(apiBase, proxyURL string, oauthType oauth.
 	}
 
 	// Create new transport
-	logrus.Infof("Creating new transport for API: %s, Proxy: %s, OAuth: %s", apiBase, proxyURL, oauthType)
-	transport := tp.createTransport(proxyURL)
+	logrus.Infof("Creating new transport for API: %s, Proxy: %s, OAuth: %s, TLS: %s", apiBase, proxyURL, oauthType, tlsFingerprint)
+	transport := tp.createTransport(proxyURL, tlsFingerprint)
 	tp.transports[key] = transport
 
 	return transport
 }
 
 // generateTransportKey creates a unique key for transport caching
-// The key is based on apiBaseURL + proxyURL + oauthType to ensure:
+// The key is based on apiBaseURL + proxyURL + oauthType + tlsFingerprint to ensure:
 // - Same API endpoint with same proxy = shared transport
 // - Different API endpoints = separate transports
 // - Same endpoint with different proxies = separate transports
 // - Different OAuth hooks = separate transports (since hooks modify requests)
-func (tp *TransportPool) generateTransportKey(apiBase, proxyURL string, oauthType oauth.ProviderType) string {
+// - Different TLS fingerprints = separate transports
+func (tp *TransportPool) generateTransportKey(apiBase, proxyURL string, oauthType oauth.ProviderType, tlsFingerprint TLSFingerprint) string {
 	// Normalize API base URL
 	apiBase = strings.TrimRight(apiBase, "/")
 
 	// Build key string
-	keyStr := apiBase + "|" + proxyURL + "|" + string(oauthType)
+	keyStr := apiBase + "|" + proxyURL + "|" + string(oauthType) + "|" + string(tlsFingerprint)
 
 	// Hash the key to create a fixed-length identifier
 	h := sha256.New()
@@ -84,44 +86,54 @@ func (tp *TransportPool) generateTransportKey(apiBase, proxyURL string, oauthTyp
 	return hex.EncodeToString(h.Sum(nil))[:16]
 }
 
-// createTransport creates a new HTTP transport with proxy support
-func (tp *TransportPool) createTransport(proxyURL string) *http.Transport {
+// createTransport creates a new HTTP transport with proxy and TLS fingerprint support
+func (tp *TransportPool) createTransport(proxyURL string, tlsFingerprint TLSFingerprint) *http.Transport {
+	// Start with a clone of default transport
+	var transport *http.Transport
+
 	if proxyURL == "" {
-		// Return a copy of default transport to avoid mutation issues
-		return http.DefaultTransport.(*http.Transport).Clone()
-	}
-
-	// Parse the proxy URL
-	parsedURL, err := url.Parse(proxyURL)
-	if err != nil {
-		logrus.Errorf("Failed to parse proxy URL %s: %v, using default transport", proxyURL, err)
-		return http.DefaultTransport.(*http.Transport).Clone()
-	}
-
-	// Create transport with proxy
-	transport := &http.Transport{
-		// Use same defaults as http.DefaultTransport
-		Proxy: http.ProxyFromEnvironment,
-	}
-
-	switch parsedURL.Scheme {
-	case "http", "https":
-		transport.Proxy = http.ProxyURL(parsedURL)
-	case "socks5":
-		dialer, err := proxy.SOCKS5("tcp", parsedURL.Host, nil, proxy.Direct)
+		transport = http.DefaultTransport.(*http.Transport).Clone()
+	} else {
+		// Parse the proxy URL
+		parsedURL, err := url.Parse(proxyURL)
 		if err != nil {
-			logrus.Errorf("Failed to create SOCKS5 proxy dialer: %v, using default transport", err)
-			return http.DefaultTransport.(*http.Transport).Clone()
-		}
-		dialContext, ok := dialer.(proxy.ContextDialer)
-		if ok {
-			transport.DialContext = dialContext.DialContext
+			logrus.Errorf("Failed to parse proxy URL %s: %v, using default transport", proxyURL, err)
+			transport = http.DefaultTransport.(*http.Transport).Clone()
 		} else {
-			return http.DefaultTransport.(*http.Transport).Clone()
+			// Create transport with proxy
+			transport = &http.Transport{
+				// Use same defaults as http.DefaultTransport
+				Proxy: http.ProxyFromEnvironment,
+			}
+
+			switch parsedURL.Scheme {
+			case "http", "https":
+				transport.Proxy = http.ProxyURL(parsedURL)
+			case "socks5":
+				dialer, err := proxy.SOCKS5("tcp", parsedURL.Host, nil, proxy.Direct)
+				if err != nil {
+					logrus.Errorf("Failed to create SOCKS5 proxy dialer: %v, using default transport", err)
+					transport = http.DefaultTransport.(*http.Transport).Clone()
+				} else {
+					dialContext, ok := dialer.(proxy.ContextDialer)
+					if ok {
+						transport.DialContext = dialContext.DialContext
+					} else {
+						transport = http.DefaultTransport.(*http.Transport).Clone()
+					}
+				}
+			default:
+				logrus.Errorf("Unsupported proxy scheme %s, supported schemes are http, https, socks5", parsedURL.Scheme)
+				transport = http.DefaultTransport.(*http.Transport).Clone()
+			}
 		}
-	default:
-		logrus.Errorf("Unsupported proxy scheme %s, supported schemes are http, https, socks5", parsedURL.Scheme)
-		return http.DefaultTransport.(*http.Transport).Clone()
+	}
+
+	// Apply TLS fingerprint spoofing if configured
+	if NeedsUTLS(tlsFingerprint) {
+		logrus.Infof("Applying TLS fingerprint spoofing: %s", tlsFingerprint)
+		tlsDialer := NewTLSDialer(tlsFingerprint, &tls.Config{})
+		transport.DialTLSContext = tlsDialer.DialTLSContext
 	}
 
 	return transport
