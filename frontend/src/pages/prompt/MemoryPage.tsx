@@ -1,113 +1,98 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
   Typography,
   Paper,
   Stack,
-  Chip,
-  IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  TextField,
-  Popover,
   CircularProgress,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
 import {
+  Refresh,
   Description,
   FolderOpen,
-  Search as SearchIcon,
-  Refresh,
-  Event,
 } from '@mui/icons-material';
 import PageLayout from '@/components/PageLayout';
 import {
-  RecordingCalendar,
-  SessionList,
-  MemoryDetailView,
-} from '@/components/prompt';
+  MemorySearchBar,
+  FilterPanel,
+  SearchResultsList,
+} from '@/components/prompt/memory';
+import { MemoryDetailView } from '@/components/prompt';
 import type {
   PromptRoundListItem,
   MemorySessionItem,
 } from '@/types/prompt';
 import api from '@/services/api';
 
-// Available scenarios for filtering
-const SCENARIOS = [
-  { value: '', label: 'All Scenarios' },
-  { value: 'anthropic', label: 'Anthropic' },
-  { value: 'claude_code', label: 'Claude Code' },
-  { value: 'opencode', label: 'OpenCode' },
-  { value: 'openai', label: 'OpenAI' },
-];
-
-// Available protocols for filtering
-const PROTOCOLS: { value: string | undefined; label: string }[] = [
-  { value: undefined, label: 'All Protocols' },
-  { value: 'anthropic', label: 'Anthropic' },
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'google', label: 'Google' },
-];
-
-  const MemoryPage = () => {
+const MemoryPage = () => {
+  // Loading states
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [loadingRounds, setLoadingRounds] = useState(false);
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('memory_recent_searches');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Filter state
+  const [filters, setFilters] = useState({
+    scenario: '',
+    protocol: undefined as string | undefined,
+    dateRange: {
+      mode: 'range' as 'all' | 'range' | 'date',
+      rangeDays: 30,
+    },
+  });
 
   // Session list state
   const [sessionList, setSessionList] = useState<MemorySessionItem[]>([]);
-  const [filteredSessionList, setFilteredSessionList] = useState<MemorySessionItem[]>([]);
 
-  // Session detail state
+  // Rounds cache (session_id -> rounds)
+  const [roundsBySession, setRoundsBySession] = useState<Map<string, PromptRoundListItem[]>>(new Map());
+
+  // Selected session state
   const [selectedSessionId, setSelectedSessionId] = useState<string>('');
   const [selectedSessionItem, setSelectedSessionItem] = useState<MemorySessionItem | null>(null);
   const [sessionRounds, setSessionRounds] = useState<PromptRoundListItem[]>([]);
-  const [loadingRounds, setLoadingRounds] = useState(false);
-
-  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
-  const [calendarDate, setCalendarDate] = useState<Date>(() => new Date());
-  const [rangeMode, setRangeMode] = useState<number | null>(null);
-  const [calendarAnchorEl, setCalendarAnchorEl] = useState<HTMLElement | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [scenarioFilter, setScenarioFilter] = useState<string>('');
-  const [protocolFilter, setProtocolFilter] = useState<string | undefined>();
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [memoryToDelete, setMemoryToDelete] = useState<PromptRoundListItem | null>(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Fetch session list from API
   const fetchSessionList = useCallback(async () => {
     setLoading(true);
     try {
-      // Calculate date range for API call
       let startDate: Date | undefined;
       let endDate: Date | undefined;
 
-      if (rangeMode !== null) {
+      if (filters.dateRange.mode === 'range' && filters.dateRange.rangeDays !== undefined) {
         endDate = new Date();
         startDate = new Date();
-        startDate.setDate(startDate.getDate() - rangeMode);
+        startDate.setDate(startDate.getDate() - filters.dateRange.rangeDays);
         startDate.setHours(0, 0, 0, 0);
-      } else {
-        // Clone the date to avoid mutating the state
-        startDate = new Date(selectedDate.getTime());
+      } else if (filters.dateRange.mode === 'date' && filters.dateRange.selectedDate) {
+        startDate = new Date(filters.dateRange.selectedDate);
         startDate.setHours(0, 0, 0, 0);
-        endDate = new Date(selectedDate.getTime());
+        endDate = new Date(filters.dateRange.selectedDate);
         endDate.setHours(23, 59, 59, 999);
       }
 
       const result = await api.getMemorySessions({
         start_date: startDate ? startDate.toISOString() : undefined,
         end_date: endDate ? endDate.toISOString() : undefined,
-        limit: 100,
+        limit: 200,
       });
 
       if (result.success && result.data) {
         setSessionList(result.data.sessions || []);
+        // Pre-fetch rounds for search
+        await prefetchRoundsForSearch(result.data.sessions || []);
       } else {
         console.error('Failed to fetch session list:', result.error);
         setSessionList([]);
@@ -119,7 +104,24 @@ const PROTOCOLS: { value: string | undefined; label: string }[] = [
       setLoading(false);
       setIsRefreshing(false);
     }
-  }, [selectedDate, rangeMode]);
+  }, [filters.dateRange]);
+
+  // Pre-fetch rounds for all sessions (for client-side search)
+  const prefetchRoundsForSearch = async (sessions: MemorySessionItem[]) => {
+    const newRoundsMap = new Map<string, PromptRoundListItem[]>();
+    const promises = sessions.slice(0, 50).map(async (session) => {
+      try {
+        const result = await api.getMemorySessionRounds(session.session_id, { limit: 100 });
+        if (result.success && result.data) {
+          newRoundsMap.set(session.session_id, result.data);
+        }
+      } catch (e) {
+        // Silent fail for prefetch
+      }
+    });
+    await Promise.all(promises);
+    setRoundsBySession(newRoundsMap);
+  };
 
   // Fetch rounds for a specific session
   const fetchSessionRounds = useCallback(async (sessionId: string) => {
@@ -129,6 +131,12 @@ const PROTOCOLS: { value: string | undefined; label: string }[] = [
 
       if (result.success && result.data) {
         setSessionRounds(result.data);
+        // Update cache
+        setRoundsBySession((prev) => {
+          const next = new Map(prev);
+          next.set(sessionId, result.data);
+          return next;
+        });
       } else {
         console.error('Failed to fetch session rounds:', result.error);
         setSessionRounds([]);
@@ -141,239 +149,101 @@ const PROTOCOLS: { value: string | undefined; label: string }[] = [
     }
   }, []);
 
-  // Initial fetch and refetch when date changes
+  // Initial fetch and refetch when filters change
   useEffect(() => {
     fetchSessionList();
     // Clear selected session when list changes
     setSelectedSessionItem(null);
     setSelectedSessionId('');
     setSessionRounds([]);
-  }, [selectedDate, rangeMode]); // Fetch on date/range changes
+  }, [filters.dateRange]);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
     fetchSessionList();
   };
 
-  // Filter sessions based on search query and scenario/protocol filters
-  useEffect(() => {
+  // Handle search
+  const handleSearch = useCallback((query: string) => {
+    setSearchQuery(query);
+    // Save to recent searches
+    if (query.trim()) {
+      setRecentSearches((prev) => {
+        const next = [query, ...prev.filter((s) => s !== query)].slice(0, 10);
+        localStorage.setItem('memory_recent_searches', JSON.stringify(next));
+        return next;
+      });
+    }
+  }, []);
+
+  // Clear recent searches
+  const handleClearRecent = useCallback(() => {
+    setRecentSearches([]);
+    localStorage.removeItem('memory_recent_searches');
+  }, []);
+
+  // Handle session selection
+  const handleSelectSession = useCallback((session: MemorySessionItem) => {
+    setSelectedSessionId(session.id);
+    setSelectedSessionItem(session);
+    fetchSessionRounds(session.session_id);
+  }, [fetchSessionRounds]);
+
+  // Filter sessions by scenario/protocol
+  const filteredSessions = useMemo(() => {
     let filtered = sessionList;
 
-    // Apply scenario filter
-    if (scenarioFilter) {
-      filtered = filtered.filter((s) => s.scenario === scenarioFilter);
+    if (filters.scenario) {
+      filtered = filtered.filter((s) => s.scenario === filters.scenario);
     }
 
-    // Apply protocol filter
-    if (protocolFilter) {
-      filtered = filtered.filter((s) => s.protocol === protocolFilter);
+    if (filters.protocol) {
+      filtered = filtered.filter((s) => s.protocol === filters.protocol);
     }
 
-    // Apply search query - search in account_name and provider_name
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter((s) =>
-        s.account_name.toLowerCase().includes(query) ||
-        s.provider_name.toLowerCase().includes(query) ||
-        s.model.toLowerCase().includes(query)
-      );
-    }
-
-    setFilteredSessionList(filtered);
-  }, [sessionList, searchQuery, scenarioFilter, protocolFilter]);
-
-  // Calculate memory counts per date for calendar (based on session count)
-  const memoryCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    sessionList.forEach((item) => {
-      const date = new Date(item.created_at);
-      const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-      counts.set(dateKey, (counts.get(dateKey) || 0) + 1);
-    });
-    return counts;
-  }, [sessionList]);
-
-  const handleSelectSession = (sessionItem: MemorySessionItem) => {
-    setSelectedSessionId(sessionItem.id);
-    setSelectedSessionItem(sessionItem);
-    // Fetch rounds for this session
-    fetchSessionRounds(sessionItem.session_id);
-  };
-
-  const handleDeleteConfirm = async () => {
-    if (!memoryToDelete) return;
-    // Note: Individual delete is not implemented in API yet
-    // For now, just remove from local state
-    setSessionRounds(sessionRounds.filter((m) => m.id !== memoryToDelete.id));
-    setDeleteDialogOpen(false);
-    setMemoryToDelete(null);
-  };
-
-  const handleDeleteCancel = () => {
-    setDeleteDialogOpen(false);
-    setMemoryToDelete(null);
-  };
-
-  // Get date label for header
-  const getDateLabel = () => {
-    if (rangeMode !== null) {
-      return `Last ${rangeMode} days`;
-    }
-    return selectedDate.toLocaleDateString();
-  };
+    return filtered;
+  }, [sessionList, filters.scenario, filters.protocol]);
 
   return (
     <PageLayout loading={loading}>
       <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-        {/* Header */}
-        {/* Unified Header Card with Search and Filters */}
+        {/* Search Header */}
         <Paper sx={{ p: 2, mb: 2 }}>
-          {/* Top Row: Title + Actions */}
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Stack spacing={1.5}>
+            {/* Title Row */}
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <Typography variant="h5" sx={{ fontWeight: 600 }}>
                 Project Memory
               </Typography>
-              {/* Active Filters */}
-              {(scenarioFilter || protocolFilter || rangeMode !== null) && (
-                <Box sx={{ display: 'flex', gap: 0.5 }}>
-                  {rangeMode !== null && (
-                    <Chip
-                      label={`Last ${rangeMode} days`}
-                      onDelete={() => setRangeMode(null)}
-                      size="small"
-                      color="info"
-                      variant="outlined"
-                    />
-                  )}
-                  {scenarioFilter && (
-                    <Chip
-                      label={SCENARIOS.find((s) => s.value === scenarioFilter)?.label || scenarioFilter}
-                      onDelete={() => setScenarioFilter('')}
-                      size="small"
-                      color="primary"
-                      variant="outlined"
-                    />
-                  )}
-                  {protocolFilter && (
-                    <Chip
-                      label={protocolFilter}
-                      onDelete={() => setProtocolFilter(undefined)}
-                      size="small"
-                      color="secondary"
-                      variant="outlined"
-                    />
-                  )}
-                </Box>
-              )}
+              <Tooltip title="Refresh">
+                <IconButton
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  size="small"
+                >
+                  <Refresh sx={{ ...(isRefreshing && { animation: 'spin 1s linear infinite' }) }} />
+                </IconButton>
+              </Tooltip>
             </Box>
 
-            {/* Actions */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              {/* Date Picker Button */}
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<Event />}
-                onClick={(e) => setCalendarAnchorEl(e.currentTarget)}
-                sx={{ textTransform: 'none', minWidth: 'auto' }}
-              >
-                {rangeMode !== null
-                  ? `Last ${rangeMode} days`
-                  : selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-              </Button>
-              <IconButton
-                onClick={handleRefresh}
-                disabled={isRefreshing}
-                size="small"
-              >
-                <Refresh sx={{ ...(isRefreshing && { animation: 'spin 1s linear infinite' }) }} />
-              </IconButton>
-            </Box>
-          </Box>
-
-          {/* Bottom Row: Search + Filters */}
-          <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
-            {/* Search Input */}
-            <TextField
-              placeholder="Search in memories..."
+            {/* Search Bar */}
+            <MemorySearchBar
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              slotProps={{
-                input: {
-                  startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary', fontSize: 18 }} />,
-                },
-              }}
-              sx={{ minWidth: 200, flex: 1, maxWidth: 320 }}
-              size="small"
+              onChange={setSearchQuery}
+              onSearch={handleSearch}
+              isLoading={loading}
+              placeholder="Search in memories... (press / to focus)"
+              recentSearches={recentSearches}
+              onClearRecent={handleClearRecent}
             />
 
-            {/* Scenario Filter */}
-            <FormControl size="small" sx={{ minWidth: 130 }}>
-              <InputLabel>Scenario</InputLabel>
-              <Select
-                value={scenarioFilter}
-                label="Scenario"
-                onChange={(e) => setScenarioFilter(e.target.value)}
-              >
-                {SCENARIOS.map((scenario) => (
-                  <MenuItem key={scenario.value} value={scenario.value}>
-                    {scenario.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-
-            {/* Protocol Filter */}
-            <FormControl size="small" sx={{ minWidth: 130 }}>
-              <InputLabel>Protocol</InputLabel>
-              <Select
-                value={protocolFilter || ''}
-                label="Protocol"
-                onChange={(e) => setProtocolFilter(e.target.value || undefined)}
-              >
-                {PROTOCOLS.map((protocol) => (
-                  <MenuItem key={protocol.value || 'all'} value={protocol.value || ''}>
-                    {protocol.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Box>
+            {/* Filters */}
+            <FilterPanel
+              values={filters}
+              onChange={setFilters}
+            />
+          </Stack>
         </Paper>
-
-        {/* Calendar Popover */}
-        <Popover
-          open={Boolean(calendarAnchorEl)}
-          anchorEl={calendarAnchorEl}
-          onClose={() => setCalendarAnchorEl(null)}
-          anchorOrigin={{
-            vertical: 'bottom',
-            horizontal: 'right',
-          }}
-          transformOrigin={{
-            vertical: 'top',
-            horizontal: 'right',
-          }}
-        >
-          <Box sx={{ p: 2 }}>
-            <RecordingCalendar
-              currentDate={calendarDate}
-              selectedDate={selectedDate}
-              recordingCounts={memoryCounts}
-              rangeMode={rangeMode}
-              onDateSelect={(date) => {
-                setSelectedDate(date);
-                setCalendarAnchorEl(null);
-              }}
-              onMonthChange={setCalendarDate}
-              onRangeChange={(days) => {
-                setRangeMode(days);
-                setCalendarAnchorEl(null);
-              }}
-            />
-          </Box>
-        </Popover>
 
         {/* Global styles for spin animation */}
         <style>{`
@@ -385,10 +255,10 @@ const PROTOCOLS: { value: string | undefined; label: string }[] = [
 
         {/* Two-Column Layout */}
         <Stack direction="row" spacing={1} sx={{ height: 'calc(100vh - 220px)' }}>
-          {/* Column 1: Sessions List */}
+          {/* Column 1: Search Results */}
           <Paper
             sx={{
-              width: 400,
+              width: 420,
               display: 'flex',
               flexDirection: 'column',
               border: 1,
@@ -397,53 +267,16 @@ const PROTOCOLS: { value: string | undefined; label: string }[] = [
               overflow: 'hidden',
             }}
           >
-            <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                {getDateLabel()} ({filteredSessionList.length} sessions)
-              </Typography>
-            </Box>
             <Box sx={{ flex: 1, overflow: 'auto' }}>
-              {loading ? (
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    height: '100%',
-                    p: 3,
-                    textAlign: 'center',
-                  }}
-                >
-                  <CircularProgress size={32} sx={{ mb: 2 }} />
-                  <Typography variant="body2" color="text.secondary">
-                    Loading sessions...
-                  </Typography>
-                </Box>
-              ) : filteredSessionList.length === 0 ? (
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    height: '100%',
-                    p: 3,
-                    textAlign: 'center',
-                  }}
-                >
-                  <FolderOpen sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
-                  <Typography variant="body2" color="text.secondary">
-                    {sessionList.length === 0 ? 'No memories found' : 'No memories match your filters'}
-                  </Typography>
-                </Box>
-              ) : (
-                <SessionList
-                  sessions={filteredSessionList}
-                  selectedSessionId={selectedSessionId}
-                  onSelectSession={handleSelectSession}
-                />
-              )}
+              <SearchResultsList
+                searchQuery={searchQuery}
+                sessions={filteredSessions}
+                roundsBySession={roundsBySession}
+                selectedSessionId={selectedSessionId}
+                onSelectSession={handleSelectSession}
+                isLoading={loading}
+                loadingSessionId={loadingRounds ? selectedSessionItem?.session_id : undefined}
+              />
             </Box>
           </Paper>
 
@@ -474,7 +307,9 @@ const PROTOCOLS: { value: string | undefined; label: string }[] = [
                 >
                   <Description sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
                   <Typography variant="body2" color="text.secondary">
-                    Select a session to view the conversation
+                    {searchQuery
+                      ? 'Select a search result to view the conversation'
+                      : 'Search or select a session to view the conversation'}
                   </Typography>
                 </Box>
               ) : loadingRounds ? (
@@ -486,7 +321,6 @@ const PROTOCOLS: { value: string | undefined; label: string }[] = [
                     justifyContent: 'center',
                     height: '100%',
                     p: 3,
-                    textAlign: 'center',
                   }}
                 >
                   <CircularProgress size={32} sx={{ mb: 2 }} />
@@ -509,39 +343,6 @@ const PROTOCOLS: { value: string | undefined; label: string }[] = [
           </Paper>
         </Stack>
       </Box>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onClose={handleDeleteCancel}>
-        <DialogTitle>Delete Memory</DialogTitle>
-        <DialogContent>
-          <Typography variant="body1">
-            Are you sure you want to delete this memory? This action cannot be undone.
-          </Typography>
-          {memoryToDelete && (
-            <Paper variant="outlined" sx={{ mt: 2, p: 1.5, bgcolor: 'background.default' }}>
-              <Typography
-                variant="body2"
-                sx={{
-                  whiteSpace: 'pre-wrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  display: '-webkit-box',
-                  WebkitLineClamp: 3,
-                  WebkitBoxOrient: 'vertical',
-                }}
-              >
-                {memoryToDelete.user_input}
-              </Typography>
-            </Paper>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleDeleteCancel}>Cancel</Button>
-          <Button onClick={handleDeleteConfirm} color="error" variant="contained">
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
     </PageLayout>
   );
 };

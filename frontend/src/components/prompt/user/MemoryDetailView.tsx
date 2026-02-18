@@ -590,14 +590,14 @@ const SessionDetailView: React.FC<SessionDetailViewProps> = ({ session, sessionI
           overflow: 'hidden',
         }}
       >
-        {/* Outline Sidebar */}
+        {/* Outline Sidebar - temporarily hidden */}
         <Paper
           variant="outlined"
           sx={{
             width: 200,
             flexShrink: 0,
             overflow: 'hidden',
-            display: 'flex',
+            display: 'none', // TODO: re-enable when needed
             flexDirection: 'column',
             borderColor: 'divider',
           }}
