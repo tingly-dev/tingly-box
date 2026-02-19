@@ -528,6 +528,69 @@ func rulesStep(ctx context.Context, s QuickstartState) (QuickstartState, compone
 		{"built-in-opencode", "opencode", "OpenCode scenario"},
 	}
 
+	// Build multi-select items
+	type ruleValue struct {
+		uuid        string
+		description string
+	}
+	var items []components.MultiSelectItem[ruleValue]
+	initial := make(map[any]bool)
+
+	for _, r := range rulesToConfigure {
+		rule := cfg.GetRuleByUUID(r.uuid)
+		if rule == nil {
+			continue // Skip rules not found
+		}
+
+		// Check if rule is already configured
+		alreadyConfigured := isRuleConfigured(rule, cfg)
+		desc := r.description
+		if alreadyConfigured {
+			desc += " (already configured)"
+		}
+
+		items = append(items, components.MultiSelectItem[ruleValue]{
+			Title:       r.description,
+			Description: desc,
+			Value:       ruleValue{uuid: r.uuid, description: r.description},
+			Selected:    !alreadyConfigured, // Default: select unconfigured rules
+		})
+
+		// Mark initially selected (unconfigured rules)
+		if !alreadyConfigured {
+			initial[r.uuid] = true
+		}
+	}
+
+	if len(items) == 0 {
+		fmt.Println("No rules available to configure.")
+		return s, components.StepContinue, nil
+	}
+
+	// Show multi-select
+	result, err := components.MultiSelect("Select rules to configure:", items, components.MultiSelectOptions{
+		Initial:   initial,
+		CanGoBack: true,
+		PageSize:  10,
+	})
+	if err != nil {
+		return s, components.StepCancel, err
+	}
+
+	switch result.Action {
+	case tui.ActionBack:
+		return s, components.StepBack, nil
+	case tui.ActionCancel:
+		return s, components.StepCancel, nil
+	}
+
+	selectedRules := result.Value
+	if len(selectedRules) == 0 {
+		fmt.Println("No rules selected.")
+		return s, components.StepContinue, nil
+	}
+
+	// Configure selected rules
 	service := &loadbalance.Service{
 		Provider: s.Provider.UUID,
 		Model:    s.Model,
@@ -535,39 +598,28 @@ func rulesStep(ctx context.Context, s QuickstartState) (QuickstartState, compone
 		Active:   true,
 	}
 
-	fmt.Println("Configuring rules for:")
+	fmt.Println("\nConfiguring selected rules:")
 	configuredCount := 0
-	skippedCount := 0
-	for _, r := range rulesToConfigure {
-		rule := cfg.GetRuleByUUID(r.uuid)
+	for _, rv := range selectedRules {
+		rule := cfg.GetRuleByUUID(rv.uuid)
 		if rule == nil {
-			fmt.Printf("  ⚠ %s: rule not found (skipped)\n", r.description)
-			continue
-		}
-
-		if isRuleConfigured(rule, cfg) {
-			fmt.Printf("  ○ %s: already configured (skipped)\n", r.description)
-			skippedCount++
+			fmt.Printf("  ⚠ %s: rule not found\n", rv.description)
 			continue
 		}
 
 		rule.Services = []*loadbalance.Service{service}
 		rule.Active = true
 
-		if err := cfg.UpdateRule(r.uuid, *rule); err != nil {
-			fmt.Printf("  ✗ %s: %v\n", r.description, err)
+		if err := cfg.UpdateRule(rv.uuid, *rule); err != nil {
+			fmt.Printf("  ✗ %s: %v\n", rv.description, err)
 			continue
 		}
 
-		fmt.Printf("  ✓ %s\n", r.description)
+		fmt.Printf("  ✓ %s\n", rv.description)
 		configuredCount++
 	}
 
-	if skippedCount > 0 {
-		fmt.Printf("\n%d routing rules configured, %d skipped (already configured).\n", configuredCount, skippedCount)
-	} else {
-		fmt.Printf("\n%d routing rules configured.\n", configuredCount)
-	}
+	fmt.Printf("\n%d routing rules configured.\n", configuredCount)
 
 	return s, components.StepContinue, nil
 }
@@ -589,7 +641,7 @@ func completeStep(ctx context.Context, s QuickstartState) (QuickstartState, comp
 	fmt.Println("╰──────────────────────────────────────────────────────────────────╯")
 
 	result, err := components.Confirm("Start the server now?", components.ConfirmOptions{
-		DefaultYes: true,
+		DefaultYes: false,
 		CanGoBack:  true,
 	})
 	if err != nil {

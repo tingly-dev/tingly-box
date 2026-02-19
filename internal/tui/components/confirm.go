@@ -58,7 +58,7 @@ func (m *ConfirmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
-		case key.Matches(msg, key.NewBinding(key.WithKeys("y", "Y", "enter"))):
+		case key.Matches(msg, key.NewBinding(key.WithKeys("y", "Y"))):
 			m.Result = tui.Result[bool]{
 				Value:  true,
 				Action: tui.ActionConfirm,
@@ -69,6 +69,15 @@ func (m *ConfirmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, key.NewBinding(key.WithKeys("n", "N"))):
 			m.Result = tui.Result[bool]{
 				Value:  false,
+				Action: tui.ActionConfirm,
+			}
+			m.quitting = true
+			return m, tea.Quit
+
+		case key.Matches(msg, key.NewBinding(key.WithKeys("enter"))):
+			// Enter uses the default value
+			m.Result = tui.Result[bool]{
+				Value:  m.opts.DefaultYes,
 				Action: tui.ActionConfirm,
 			}
 			m.quitting = true
@@ -128,7 +137,7 @@ func (m *ConfirmModel) View() string {
 	}
 
 	// Help
-	helpText := "y/Enter: Yes  n: No"
+	helpText := "y: Yes  n: No  Enter: Default"
 	if m.opts.CanGoBack {
 		helpText += "  Esc: Back"
 	}
