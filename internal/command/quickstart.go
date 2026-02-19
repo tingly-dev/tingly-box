@@ -458,11 +458,19 @@ func quickstartConfigureRules(appManager *AppManager, provider *typ.Provider, mo
 	}
 
 	fmt.Println("Configuring rules for:")
-	successCount := 0
+	configuredCount := 0
+	skippedCount := 0
 	for _, r := range rulesToConfigure {
 		rule := cfg.GetRuleByUUID(r.uuid)
 		if rule == nil {
 			fmt.Printf("  ⚠ %s: rule not found (skipped)\n", r.description)
+			continue
+		}
+
+		// Check if rule is already configured with valid services
+		if isRuleConfigured(rule, cfg) {
+			fmt.Printf("  ○ %s: already configured (skipped)\n", r.description)
+			skippedCount++
 			continue
 		}
 
@@ -475,11 +483,47 @@ func quickstartConfigureRules(appManager *AppManager, provider *typ.Provider, mo
 		}
 
 		fmt.Printf("  ✓ %s\n", r.description)
-		successCount++
+		configuredCount++
 	}
 
-	fmt.Printf("\n%d routing rules configured.\n", successCount)
+	if skippedCount > 0 {
+		fmt.Printf("\n%d routing rules configured, %d skipped (already configured).\n", configuredCount, skippedCount)
+	} else {
+		fmt.Printf("\n%d routing rules configured.\n", configuredCount)
+	}
 	return nil
+}
+
+// isRuleConfigured checks if a rule already has valid services configured
+func isRuleConfigured(rule *typ.Rule, cfg *serverconfig.Config) bool {
+	if rule == nil {
+		return false
+	}
+	if !rule.Active {
+		return false
+	}
+	if len(rule.Services) == 0 {
+		return false
+	}
+
+	// Check if at least one service has a valid provider and model
+	for _, svc := range rule.Services {
+		if svc == nil {
+			continue
+		}
+		if !svc.Active {
+			continue
+		}
+		if svc.Provider == "" || svc.Model == "" {
+			continue
+		}
+		// Verify the provider exists
+		if provider, err := cfg.GetProviderByUUID(svc.Provider); err == nil && provider != nil {
+			return true
+		}
+	}
+
+	return false
 }
 
 func printComplete(appManager *AppManager, provider *typ.Provider, model string) {
