@@ -82,29 +82,23 @@ func quickstartAddProvider(reader *bufio.Reader, appManager *AppManager) (*typ.P
 	fmt.Println("Step 2: Add your AI provider")
 	fmt.Println()
 
-	// Check if providers already exist
-	existingProviders := appManager.ListProviders()
-	if len(existingProviders) > 0 {
-		fmt.Printf("Found %d existing provider(s):\n", len(existingProviders))
-		for i, p := range existingProviders {
-			fmt.Printf("  %d. %s\n", i+1, p.Name)
-		}
-		fmt.Println()
-		useExisting, err := promptForConfirmation(reader, "Use existing provider? (Y/n): ")
-		if err != nil {
-			return nil, err
-		}
-		if useExisting {
-			return quickstartSelectExistingProvider(reader, existingProviders)
-		}
-	}
-
-	// Step 2.1: First select API style
+	// Step 2.1: Select API style first
 	apiStyle, err := quickstartSelectAPIStyle(reader)
 	if err != nil {
 		return nil, err
 	}
 
+	// Step 2.2: Select provider based on API style
+	provider, err := quickstartSelectProvider(reader, appManager, apiStyle)
+	if err != nil {
+		return nil, err
+	}
+
+	// Step 2.3: Input provider details
+	return quickstartInputProviderDetails(reader, appManager, provider, apiStyle)
+}
+
+func quickstartSelectProvider(reader *bufio.Reader, appManager *AppManager, apiStyle protocol.APIStyle) (*data.ProviderTemplate, error) {
 	// Get template manager for provider suggestions
 	cfg := appManager.AppConfig().GetGlobalConfig()
 	var tm *data.TemplateManager
@@ -133,13 +127,13 @@ func quickstartAddProvider(reader *bufio.Reader, appManager *AppManager) (*typ.P
 			continue
 		}
 		// Filter by selected API style
-		if apiStyle == protocol.APIStyleOpenAI && t.BaseURLOpenAI == "" {
-			continue
+		if apiStyle == protocol.APIStyleOpenAI && t.BaseURLOpenAI != "" {
+			availableTemplates = append(availableTemplates, t)
+
 		}
-		if apiStyle == protocol.APIStyleAnthropic && t.BaseURLAnthropic == "" && t.BaseURLOpenAI == "" {
-			continue
+		if apiStyle == protocol.APIStyleAnthropic && t.BaseURLAnthropic != "" {
+			availableTemplates = append(availableTemplates, t)
 		}
-		availableTemplates = append(availableTemplates, t)
 	}
 
 	// Sort templates by name
@@ -149,10 +143,6 @@ func quickstartAddProvider(reader *bufio.Reader, appManager *AppManager) (*typ.P
 
 	fmt.Printf("\nSelect provider (%s style):\n", apiStyle)
 	for i, t := range availableTemplates {
-		if i >= 10 {
-			fmt.Printf("  ... and %d more\n", len(availableTemplates)-10)
-			break
-		}
 		fmt.Printf("  %d. %s\n", i+1, t.Name)
 	}
 	fmt.Printf("  0. Custom (enter details manually)\n")
@@ -166,9 +156,9 @@ func quickstartAddProvider(reader *bufio.Reader, appManager *AppManager) (*typ.P
 		choice = "1"
 	}
 
-	// Handle custom provider
+	// Handle custom provider - return nil to indicate custom
 	if choice == "0" {
-		return quickstartAddCustomProviderWithStyle(reader, appManager, apiStyle)
+		return nil, nil
 	}
 
 	// Parse selection
@@ -177,19 +167,27 @@ func quickstartAddProvider(reader *bufio.Reader, appManager *AppManager) (*typ.P
 		// Try to match by name
 		for _, t := range availableTemplates {
 			if strings.EqualFold(t.Name, choice) || strings.EqualFold(t.ID, choice) {
-				return quickstartAddFromTemplate(reader, appManager, t, apiStyle)
+				return t, nil
 			}
 		}
 		return nil, fmt.Errorf("invalid selection: %s", choice)
 	}
 
-	return quickstartAddFromTemplate(reader, appManager, availableTemplates[idx-1], apiStyle)
+	return availableTemplates[idx-1], nil
+}
+
+func quickstartInputProviderDetails(reader *bufio.Reader, appManager *AppManager, tmpl *data.ProviderTemplate, apiStyle protocol.APIStyle) (*typ.Provider, error) {
+	// If tmpl is nil, use custom provider flow
+	if tmpl == nil {
+		return quickstartAddCustomProviderWithStyle(reader, appManager, apiStyle)
+	}
+	return quickstartAddFromTemplate(reader, appManager, tmpl, apiStyle)
 }
 
 func quickstartSelectAPIStyle(reader *bufio.Reader) (protocol.APIStyle, error) {
 	fmt.Println("Select API style:")
 	fmt.Println("  1. OpenAI compatible (most common)")
-	fmt.Println("  2. Anthropic native")
+	fmt.Println("  2. Anthropic compatible")
 	fmt.Println()
 
 	choice, err := promptForInput(reader, "Enter choice (1): ", false)
@@ -497,7 +495,7 @@ func printComplete(appManager *AppManager, provider *typ.Provider, model string)
 	fmt.Printf("│  Provider:  %-51s│\n", provider.Name)
 	fmt.Printf("│  Model:     %-51s│\n", model)
 	fmt.Printf("│  Server:    http://localhost:%-34d│\n", port)
-	fmt.Printf("│  API:       http://localhost:%d/v1%-27s│\n", port, "")
+	fmt.Printf("│  API:       http://localhost:%d/tingly/openai/%-27s│\n", port, "")
 	fmt.Println("╰──────────────────────────────────────────────────────────────────╯")
 }
 
