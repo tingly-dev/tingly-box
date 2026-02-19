@@ -2,8 +2,27 @@
 package imbot
 
 import (
+	"github.com/tingly-dev/tingly-box/imbot/internal/builder"
 	"github.com/tingly-dev/tingly-box/imbot/internal/core"
+	"github.com/tingly-dev/tingly-box/imbot/internal/platform/telegram"
 )
+
+// TelegramBot is an interface for Telegram-specific bot operations
+type TelegramBot interface {
+	Bot
+	// ResolveChatID resolves a chat ID from invite link, username, or direct ID
+	ResolveChatID(input string) (string, error)
+	// EditMessageWithKeyboard edits a message text and keyboard
+	EditMessageWithKeyboard(ctx interface{}, chatID string, messageID string, text string, keyboard interface{}) error
+}
+
+// AsTelegramBot attempts to cast a Bot to TelegramBot interface
+func AsTelegramBot(bot Bot) (TelegramBot, bool) {
+	if tgBot, ok := bot.(*telegram.Bot); ok {
+		return tgBot, true
+	}
+	return nil, false
+}
 
 // Re-export core types
 type (
@@ -49,6 +68,11 @@ type (
 	ThreadContext     = core.ThreadContext
 	Entity            = core.Entity
 	ConnectionDetails = core.ConnectionDetails
+
+	// Keyboard types
+	InlineKeyboardButton = builder.InlineKeyboardButton
+	InlineKeyboardMarkup = builder.InlineKeyboardMarkup
+	KeyboardBuilder      = builder.KeyboardBuilder
 )
 
 // Re-export core constants
@@ -196,4 +220,41 @@ func GetPlatformName(platform string) string {
 // IsValidPlatform checks if a platform string is valid
 func IsValidPlatform(platform string) bool {
 	return core.IsValidPlatform(platform)
+}
+
+// Keyboard builder helpers
+
+// NewKeyboardBuilder creates a new keyboard builder
+func NewKeyboardBuilder() *builder.KeyboardBuilder {
+	return builder.NewKeyboardBuilder()
+}
+
+// CallbackButton creates a callback button
+func CallbackButton(text, callbackData string) builder.InlineKeyboardButton {
+	return builder.CallbackButton(text, callbackData)
+}
+
+// FormatCallbackData formats action and data into a callback string
+func FormatCallbackData(action string, data ...string) string {
+	return builder.FormatCallbackData(action, data...)
+}
+
+// ParseCallbackData parses a callback data string into parts
+func ParseCallbackData(data string) []string {
+	return builder.ParseCallbackData(data)
+}
+
+// FormatDirPath formats a directory path for callback data (handles colons in paths)
+func FormatDirPath(path string) string {
+	return builder.FormatDirPath(path)
+}
+
+// ParseDirPath parses a directory path from callback data
+func ParseDirPath(encoded string) string {
+	return builder.ParseDirPath(encoded)
+}
+
+// FormatDirButton formats a directory name for a button
+func FormatDirButton(name string, maxLen int) string {
+	return builder.FormatDirButton(name, maxLen)
 }
