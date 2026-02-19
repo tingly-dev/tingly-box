@@ -82,6 +82,42 @@ func quickstartAddProvider(reader *bufio.Reader, appManager *AppManager) (*typ.P
 	fmt.Println("Step 2: Add your AI provider")
 	fmt.Println()
 
+	// Check if there are existing providers
+	existingProviders := appManager.ListProviders()
+	if len(existingProviders) > 0 {
+		fmt.Printf("Found %d existing credential(s):\n", len(existingProviders))
+		for i, p := range existingProviders {
+			fmt.Printf("  %d. %s (%s)\n", i+1, p.Name, p.APIStyle)
+		}
+		fmt.Println()
+		fmt.Println("  0. Add new credential")
+		fmt.Println()
+
+		choice, err := promptForInput(reader, "Select credential (0 to add new): ", false)
+		if err != nil {
+			return nil, err
+		}
+
+		if choice == "" || choice == "0" {
+			// Add new credential - continue to flow below
+		} else {
+			// Use existing credential
+			if idx, err := strconv.Atoi(choice); err == nil && idx >= 1 && idx <= len(existingProviders) {
+				provider := existingProviders[idx-1]
+				fmt.Printf("\nUsing existing credential '%s'.\n", provider.Name)
+				return provider, nil
+			}
+			// Try to match by name
+			for _, p := range existingProviders {
+				if strings.EqualFold(p.Name, choice) {
+					fmt.Printf("\nUsing existing credential '%s'.\n", p.Name)
+					return p, nil
+				}
+			}
+			fmt.Println("Invalid selection. Creating new credential...")
+		}
+	}
+
 	// Step 2.1: Select API style first
 	apiStyle, err := quickstartSelectAPIStyle(reader)
 	if err != nil {
@@ -201,40 +237,6 @@ func quickstartSelectAPIStyle(reader *bufio.Reader) (protocol.APIStyle, error) {
 		return protocol.APIStyleAnthropic, nil
 	}
 	return protocol.APIStyleOpenAI, nil
-}
-
-func quickstartSelectExistingProvider(reader *bufio.Reader, providers []*typ.Provider) (*typ.Provider, error) {
-	sort.Slice(providers, func(i, j int) bool {
-		return strings.ToLower(providers[i].Name) < strings.ToLower(providers[j].Name)
-	})
-
-	fmt.Println("\nSelect provider:")
-	for i, p := range providers {
-		fmt.Printf("  %d. %s\n", i+1, p.Name)
-	}
-
-	for {
-		input, err := promptForInput(reader, "Enter choice (1): ", false)
-		if err != nil {
-			return nil, err
-		}
-		if input == "" {
-			input = "1"
-		}
-
-		if idx, err := strconv.Atoi(input); err == nil && idx >= 1 && idx <= len(providers) {
-			return providers[idx-1], nil
-		}
-
-		// Try to match by name
-		for _, p := range providers {
-			if strings.EqualFold(p.Name, input) {
-				return p, nil
-			}
-		}
-
-		fmt.Println("Invalid selection. Please try again.")
-	}
 }
 
 func quickstartAddFromTemplate(reader *bufio.Reader, appManager *AppManager, tmpl *data.ProviderTemplate, apiStyle protocol.APIStyle) (*typ.Provider, error) {
