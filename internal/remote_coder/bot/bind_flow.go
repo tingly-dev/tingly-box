@@ -31,8 +31,9 @@ type BindFlowState struct {
 	PageSize     int
 	MessageID    string // Message ID to edit
 	ExpiresAt    time.Time
-	WaitingInput bool   // Waiting for custom path input
-	PromptMsgID  string // Prompt message ID for cleanup
+	WaitingInput bool     // Waiting for custom path input
+	PromptMsgID  string   // Prompt message ID for cleanup
+	Dirs         []string // Current directory list (for navigation by index)
 }
 
 // DirectoryBrowser manages directory navigation for bind flow
@@ -126,6 +127,41 @@ func (b *DirectoryBrowser) Navigate(chatID string, path string) error {
 	return nil
 }
 
+// NavigateByIndex navigates to a subdirectory by index (stored in state.Dirs)
+func (b *DirectoryBrowser) NavigateByIndex(chatID string, index int) error {
+	b.mu.RLock()
+	state, ok := b.states[chatID]
+	b.mu.RUnlock()
+
+	if !ok {
+		return fmt.Errorf("no active bind flow")
+	}
+
+	if index < 0 || index >= len(state.Dirs) {
+		return fmt.Errorf("invalid directory index: %d", index)
+	}
+
+	return b.Navigate(chatID, state.Dirs[index])
+}
+
+// NavigateUp navigates to the parent directory
+func (b *DirectoryBrowser) NavigateUp(chatID string) error {
+	b.mu.RLock()
+	state, ok := b.states[chatID]
+	b.mu.RUnlock()
+
+	if !ok {
+		return fmt.Errorf("no active bind flow")
+	}
+
+	if !hasParent(state.CurrentPath) {
+		return fmt.Errorf("already at root directory")
+	}
+
+	parentPath := filepath.Dir(state.CurrentPath)
+	return b.Navigate(chatID, parentPath)
+}
+
 // NextPage moves to the next page of directories
 func (b *DirectoryBrowser) NextPage(chatID string) error {
 	b.mu.Lock()
@@ -217,6 +253,8 @@ func (b *DirectoryBrowser) BuildKeyboard(chatID string) (*BindFlowState, *imbot.
 		return nil, nil, "", err
 	}
 
+	// Store dirs for navigation by index
+	state.Dirs = dirs
 	state.TotalDirs = len(dirs)
 
 	// Calculate pagination
@@ -234,12 +272,11 @@ func (b *DirectoryBrowser) BuildKeyboard(chatID string) (*BindFlowState, *imbot.
 	// Build keyboard
 	kb := imbot.NewKeyboardBuilder()
 
-	// Directory buttons
+	// Directory buttons (use index instead of path to avoid 64-byte limit)
 	for i := startIdx; i < endIdx; i++ {
-		dirPath := dirs[i]
-		dirName := filepath.Base(dirPath)
+		dirName := filepath.Base(dirs[i])
 		buttonText := imbot.FormatDirButton(dirName, 20)
-		callbackData := imbot.FormatCallbackData("bind", "nav", imbot.FormatDirPath(dirPath))
+		callbackData := imbot.FormatCallbackData("bind", "dir", fmt.Sprintf("%d", i))
 		kb.AddRow(imbot.CallbackButton(buttonText, callbackData))
 	}
 
@@ -248,8 +285,7 @@ func (b *DirectoryBrowser) BuildKeyboard(chatID string) (*BindFlowState, *imbot.
 
 	// Parent directory button
 	if hasParent(state.CurrentPath) {
-		parentPath := filepath.Dir(state.CurrentPath)
-		navButtons = append(navButtons, imbot.CallbackButton("📁 ..", imbot.FormatCallbackData("bind", "nav", imbot.FormatDirPath(parentPath))))
+		navButtons = append(navButtons, imbot.CallbackButton("📁 ..", imbot.FormatCallbackData("bind", "up")))
 	}
 
 	// Pagination buttons
@@ -266,7 +302,7 @@ func (b *DirectoryBrowser) BuildKeyboard(chatID string) (*BindFlowState, *imbot.
 
 	// Select current directory button and custom path button
 	kb.AddRow(
-		imbot.CallbackButton("✓ Select This", imbot.FormatCallbackData("bind", "select", imbot.FormatDirPath(state.CurrentPath))),
+		imbot.CallbackButton("✓ Select This", imbot.FormatCallbackData("bind", "select")),
 		imbot.CallbackButton("✏️ Custom", imbot.FormatCallbackData("bind", "custom")),
 	)
 
@@ -435,4 +471,61 @@ func convertToTelegramKeyboard(kb imbot.InlineKeyboardMarkup) tgbotapi.InlineKey
 		rows = append(rows, buttons)
 	}
 	return tgbotapi.InlineKeyboardMarkup{InlineKeyboard: rows}
+}
+
+// ValidateProjectPath checks if the path exists and is accessible
+func ValidateProjectPath(path string) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return fmt.Errorf("path cannot be empty")
+	}
+
+	// Expand ~ to home directory
+	if strings.HasPrefix(path, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("cannot get home directory: %w", err)
+		}
+		path = filepath.Join(home, path[2:])
+	}
+
+	// Check if path exists
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("path does not exist: %s", path)
+		}
+		return fmt.Errorf("cannot access path: %w", err)
+	}
+
+	if !info.IsDir() {
+		return fmt.Errorf("path is not a directory: %s", path)
+	}
+
+	return nil
+}
+
+// ExpandPath expands ~ to home directory and returns absolute path
+func ExpandPath(path string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", fmt.Errorf("path cannot be empty")
+	}
+
+	// Expand ~ to home directory
+	if strings.HasPrefix(path, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("cannot get home directory: %w", err)
+		}
+		path = filepath.Join(home, path[2:])
+	}
+
+	// Get absolute path
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("cannot get absolute path: %w", err)
+	}
+
+	return absPath, nil
 }

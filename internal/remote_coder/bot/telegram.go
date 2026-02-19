@@ -340,31 +340,11 @@ func handleAgentMessageWithProject(
 
 // getProjectPathForGroup retrieves the project path bound to a group chat.
 func getProjectPathForGroup(store *Store, chatID string, platform string) (string, bool) {
-	if store == nil || store.DB() == nil {
+	if store == nil || store.ChatStore() == nil {
 		return "", false
 	}
-
-	bindingStore, err := NewBindingStore(store.DB())
-	if err != nil {
-		return "", false
-	}
-
-	binding, err := bindingStore.GetGroupBinding(chatID, platform)
-	if err != nil || binding == nil {
-		return "", false
-	}
-
-	projectStore, err := NewProjectStore(store.DB())
-	if err != nil {
-		return "", false
-	}
-
-	project, err := projectStore.GetProject(binding.ProjectID)
-	if err != nil || project == nil {
-		return "", false
-	}
-
-	return project.Path, true
+	path, ok, _ := store.ChatStore().GetProjectPath(chatID)
+	return path, ok
 }
 
 // handleClaudeCodeMessage executes a message through Claude Code.
@@ -663,53 +643,41 @@ func handleBotStatusCommand(bot imbot.Bot, store *Store, sessionMgr *session.Man
 
 // handleBotProjectCommand handles /bot project - shows current project and list with keyboard
 func handleBotProjectCommand(ctx context.Context, bot imbot.Bot, store *Store, sessionMgr *session.Manager, chatID string, senderID string, isDirectChat bool, isGroupChat bool) {
-	if store == nil || store.DB() == nil {
+	if store == nil || store.ChatStore() == nil {
 		sendText(bot, chatID, "Store not available")
 		return
 	}
 
-	bindingStore, err := NewBindingStore(store.DB())
-	if err != nil {
-		sendText(bot, chatID, "Failed to initialize binding store")
-		return
-	}
-
-	projectStore, err := NewProjectStore(store.DB())
-	if err != nil {
-		sendText(bot, chatID, "Failed to initialize project store")
-		return
-	}
-
+	chatStore := store.ChatStore()
 	platform := string(imbot.PlatformTelegram)
 
-	// Get current binding for this chat
-	currentBinding, err := bindingStore.GetGroupBinding(chatID, platform)
-	var currentProject *Project
-	if currentBinding != nil {
-		currentProject, _ = projectStore.GetProject(currentBinding.ProjectID)
-	}
+	// Get current project path for this chat
+	currentPath, _, _ := chatStore.GetProjectPath(chatID)
 
 	// Build message text
 	var buf strings.Builder
-	if currentProject != nil {
-		buf.WriteString(fmt.Sprintf("Current Project:\n📁 %s\n\n", currentProject.Path))
+	if currentPath != "" {
+		buf.WriteString(fmt.Sprintf("Current Project:\n📁 %s\n\n", currentPath))
 	} else {
 		buf.WriteString("No project bound to this chat.\n\n")
 	}
 
-	// Get all projects for user (direct chat shows all, group shows all)
-	var projects []*Project
+	// Get all projects for user
+	var projectPaths []string
 	if isDirectChat {
-		// Get projects owned by user or through group bindings
-		results, err := bindingStore.ListGroupBindingsByOwner(senderID, platform)
+		chats, err := chatStore.ListChatsByOwner(senderID, platform)
 		if err == nil {
-			for _, result := range results {
-				projects = append(projects, result.Project)
+			seen := make(map[string]bool)
+			for _, chat := range chats {
+				if chat.ProjectPath != "" && !seen[chat.ProjectPath] {
+					projectPaths = append(projectPaths, chat.ProjectPath)
+					seen[chat.ProjectPath] = true
+				}
 			}
 		}
 	}
 
-	if len(projects) > 0 {
+	if len(projectPaths) > 0 {
 		buf.WriteString("Your Projects:\n")
 	} else {
 		buf.WriteString("No projects found.")
@@ -717,14 +685,14 @@ func handleBotProjectCommand(ctx context.Context, bot imbot.Bot, store *Store, s
 
 	// Build keyboard with projects
 	var rows [][]imbot.InlineKeyboardButton
-	for _, project := range projects {
+	for _, path := range projectPaths {
 		marker := ""
-		if currentProject != nil && project.ID == currentProject.ID {
+		if path == currentPath {
 			marker = " ✓"
 		}
 		btn := imbot.InlineKeyboardButton{
-			Text:         fmt.Sprintf("📁 %s%s", filepath.Base(project.Path), marker),
-			CallbackData: imbot.FormatCallbackData("project", "switch", project.ID),
+			Text:         fmt.Sprintf("📁 %s%s", filepath.Base(path), marker),
+			CallbackData: imbot.FormatCallbackData("project", "switch", path),
 		}
 		rows = append(rows, []imbot.InlineKeyboardButton{btn})
 	}
@@ -738,7 +706,7 @@ func handleBotProjectCommand(ctx context.Context, bot imbot.Bot, store *Store, s
 	keyboard := imbot.InlineKeyboardMarkup{InlineKeyboard: rows}
 	tgKeyboard := convertActionKeyboardToTelegram(keyboard)
 
-	_, err = bot.SendMessage(ctx, chatID, &imbot.SendMessageOptions{
+	_, err := bot.SendMessage(ctx, chatID, &imbot.SendMessageOptions{
 		Text:      buf.String(),
 		ParseMode: imbot.ParseModeMarkdown,
 		Metadata: map[string]interface{}{
@@ -751,27 +719,21 @@ func handleBotProjectCommand(ctx context.Context, bot imbot.Bot, store *Store, s
 }
 
 // handleProjectSwitch handles switching to a different project
-func handleProjectSwitch(ctx context.Context, bot imbot.Bot, store *Store, sessionMgr *session.Manager, chatID string, projectID string, senderID string) {
-	if store == nil || store.DB() == nil {
+func handleProjectSwitch(ctx context.Context, bot imbot.Bot, store *Store, sessionMgr *session.Manager, chatID string, projectPath string, senderID string) {
+	if store == nil || store.ChatStore() == nil {
 		sendText(bot, chatID, "Store not available")
 		return
 	}
 
-	projectStore, err := NewProjectStore(store.DB())
-	if err != nil {
-		sendText(bot, chatID, "Failed to get project")
-		return
-	}
-
-	project, err := projectStore.GetProject(projectID)
-	if err != nil || project == nil {
-		sendText(bot, chatID, "Project not found")
+	// Bind the project to this chat
+	if err := store.ChatStore().BindProject(chatID, string(imbot.PlatformTelegram), projectPath, senderID); err != nil {
+		sendText(bot, chatID, "Failed to switch project")
 		return
 	}
 
 	// Create new session with the selected project
 	sess := sessionMgr.Create()
-	sessionMgr.SetContext(sess.ID, "project_path", project.Path)
+	sessionMgr.SetContext(sess.ID, "project_path", projectPath)
 
 	if err := store.SetSessionForChat(chatID, sess.ID); err != nil {
 		logrus.WithError(err).Warn("Failed to update session mapping")
@@ -779,8 +741,8 @@ func handleProjectSwitch(ctx context.Context, bot imbot.Bot, store *Store, sessi
 		return
 	}
 
-	logrus.Infof("Project switched: chat=%s path=%s session=%s", chatID, project.Path, sess.ID)
-	sendText(bot, chatID, fmt.Sprintf("✅ Switched to: %s\nSession: %s", project.Path, sess.ID))
+	logrus.Infof("Project switched: chat=%s path=%s session=%s", chatID, projectPath, sess.ID)
+	sendText(bot, chatID, fmt.Sprintf("✅ Switched to: %s\nSession: %s", projectPath, sess.ID))
 }
 
 // handleClearCommand clears the current session context and creates a new one
@@ -1011,17 +973,34 @@ func handleCallbackQuery(
 		}
 		subAction := parts[1]
 		switch subAction {
-		case "nav":
+		case "dir":
+			// Navigate to directory by index
 			if len(parts) < 3 {
 				return
 			}
-			encodedPath := parts[2]
-			path := imbot.ParseDirPath(encodedPath)
-			if err := directoryBrowser.Navigate(chatID, path); err != nil {
+			indexStr := parts[2]
+			var index int
+			if _, err := fmt.Sscanf(indexStr, "%d", &index); err != nil {
+				logrus.WithError(err).Warn("Failed to parse directory index")
+				return
+			}
+			if err := directoryBrowser.NavigateByIndex(chatID, index); err != nil {
 				logrus.WithError(err).Warn("Failed to navigate directory")
 				return
 			}
 			// Get message ID from metadata for editing
+			msgID, _ := msg.Metadata["message_id"].(string)
+			if msgID == "" {
+				msgID = msg.ID
+			}
+			_, _ = SendDirectoryBrowser(ctx, bot, directoryBrowser, chatID, msgID)
+
+		case "up":
+			// Navigate to parent directory
+			if err := directoryBrowser.NavigateUp(chatID); err != nil {
+				logrus.WithError(err).Warn("Failed to navigate up")
+				return
+			}
 			msgID, _ := msg.Metadata["message_id"].(string)
 			if msgID == "" {
 				msgID = msg.ID
@@ -1051,13 +1030,14 @@ func handleCallbackQuery(
 			_, _ = SendDirectoryBrowser(ctx, bot, directoryBrowser, chatID, msgID)
 
 		case "select":
-			if len(parts) < 3 {
+			// Select current directory (path is in state)
+			currentPath := directoryBrowser.GetCurrentPath(chatID)
+			if currentPath == "" {
+				logrus.Warn("No current path in bind flow")
 				return
 			}
-			encodedPath := parts[2]
-			path := imbot.ParseDirPath(encodedPath)
 			// Complete the bind
-			completeBind(ctx, bot, store, sessionMgr, chatID, path, msg.Sender.ID, true, false)
+			completeBind(ctx, bot, store, sessionMgr, chatID, currentPath, msg.Sender.ID, true, false)
 			directoryBrowser.Clear(chatID)
 
 		case "custom":
@@ -1065,7 +1045,7 @@ func handleCallbackQuery(
 			handleCustomPathPrompt(ctx, bot, directoryBrowser, chatID)
 
 		case "create":
-			// Create directory and bind
+			// Create directory and bind (path from custom input, encoded)
 			if len(parts) < 3 {
 				return
 			}
@@ -1284,103 +1264,29 @@ func completeBind(
 	}
 
 	platform := string(imbot.PlatformTelegram)
-	settings, _ := store.GetSettings()
-	botUUID := settings.UUID
-	if botUUID == "" {
-		botUUID = "default"
-	}
 
-	projectStore, err := NewProjectStore(store.DB())
-	if err != nil {
-		sendText(bot, chatID, "Failed to initialize project store")
-		logrus.WithError(err).Error("Failed to create project store")
+	// Bind project to chat using ChatStore
+	if err := store.ChatStore().BindProject(chatID, platform, expandedPath, senderID); err != nil {
+		sendText(bot, chatID, fmt.Sprintf("Failed to bind project: %v", err))
 		return
 	}
 
-	bindingStore, err := NewBindingStore(store.DB())
-	if err != nil {
-		sendText(bot, chatID, "Failed to initialize binding store")
-		logrus.WithError(err).Error("Failed to create binding store")
+	// Create session and bind to chat
+	sess := sessionMgr.Create()
+	sessionMgr.SetContext(sess.ID, "project_path", expandedPath)
+
+	if err := store.SetSessionForChat(chatID, sess.ID); err != nil {
+		logrus.WithError(err).Warn("Failed to save session mapping")
+		sendText(bot, chatID, fmt.Sprintf("Project bound but failed to create session: %v", err))
 		return
 	}
+
+	logrus.Infof("Project bound: chat=%s path=%s session=%s", chatID, expandedPath, sess.ID)
 
 	if isDirectChat {
-		// Check if project already exists
-		existingProject, err := projectStore.GetProjectByPath(expandedPath, botUUID)
-		if err != nil {
-			logrus.WithError(err).Warn("Failed to check existing project")
-		}
-
-		var project *Project
-		if existingProject != nil {
-			project = existingProject
-		} else {
-			// Create new project
-			project = &Project{
-				Path:     expandedPath,
-				OwnerID:  senderID,
-				Platform: platform,
-				BotUUID:  botUUID,
-			}
-			if err := projectStore.CreateProject(project); err != nil {
-				sendText(bot, chatID, fmt.Sprintf("Failed to create project: %v", err))
-				return
-			}
-		}
-
-		// Create session and bind to chat
-		sess := sessionMgr.Create()
-		sessionMgr.SetContext(sess.ID, "project_path", expandedPath)
-
-		if err := store.SetSessionForChat(chatID, sess.ID); err != nil {
-			logrus.WithError(err).Warn("Failed to save session mapping")
-			sendText(bot, chatID, fmt.Sprintf("Project created but failed to create session: %v", err))
-			return
-		}
-
-		logrus.Infof("Project bound: chat=%s path=%s session=%s", chatID, project.Path, sess.ID)
-		sendText(bot, chatID, fmt.Sprintf("✅ Project bound: %s\nSession: %s\n\nYou can now send messages directly.", project.Path, sess.ID))
-
-	} else if isGroupChat {
-		// Check if project already exists
-		existingProject, err := projectStore.GetProjectByPath(expandedPath, botUUID)
-		if err != nil {
-			logrus.WithError(err).Warn("Failed to check existing project")
-		}
-
-		var project *Project
-		if existingProject != nil {
-			project = existingProject
-		} else {
-			// Create new project
-			project = &Project{
-				Path:     expandedPath,
-				OwnerID:  senderID,
-				Platform: platform,
-				BotUUID:  botUUID,
-			}
-			if err := projectStore.CreateProject(project); err != nil {
-				sendText(bot, chatID, fmt.Sprintf("Failed to create project: %v", err))
-				return
-			}
-		}
-
-		// Create or update group binding
-		binding := &GroupProjectBinding{
-			GroupID:   chatID,
-			Platform:  platform,
-			ProjectID: project.ID,
-			BotUUID:   botUUID,
-		}
-		if err := bindingStore.UpsertGroupBinding(binding); err != nil {
-			sendText(bot, chatID, fmt.Sprintf("Failed to bind group: %v", err))
-			return
-		}
-
-		logrus.Infof("Group bound: chat=%s path=%s project_id=%s", chatID, project.Path, project.ID)
-		sendText(bot, chatID, fmt.Sprintf("✅ Group bound to project: %s", project.Path))
+		sendText(bot, chatID, fmt.Sprintf("✅ Project bound: %s\nSession: %s\n\nYou can now send messages directly.", expandedPath, sess.ID))
 	} else {
-		sendText(bot, chatID, "This command only works in direct or group chats.")
+		sendText(bot, chatID, fmt.Sprintf("✅ Group bound to project: %s", expandedPath))
 	}
 }
 
