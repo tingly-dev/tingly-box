@@ -11,6 +11,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server"
+	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -51,6 +52,16 @@ func (am *AppManager) SaveConfig() error {
 	return am.appConfig.Save()
 }
 
+// GetGlobalConfig returns the global configuration manager.
+func (am *AppManager) GetGlobalConfig() *serverconfig.Config {
+	return am.appConfig.GetGlobalConfig()
+}
+
+// FetchAndSaveProviderModels fetches models from a provider and saves them.
+func (am *AppManager) FetchAndSaveProviderModels(providerUUID string) error {
+	return am.appConfig.FetchAndSaveProviderModels(providerUUID)
+}
+
 // ============
 // Server Management
 // ============
@@ -61,9 +72,23 @@ func (am *AppManager) SetupServer(port int, opts ...server.ServerOption) error {
 	return am.serverManager.Setup(port)
 }
 
+// SetupServerWithPort initializes the server manager with just a port (no options).
+// This is a convenience method for the TUI wizard.
+func (am *AppManager) SetupServerWithPort(port int) error {
+	return am.SetupServer(port)
+}
+
 // GetServerManager returns the server manager instance.
 func (am *AppManager) GetServerManager() *ServerManager {
 	return am.serverManager
+}
+
+// StartServer starts the server if it has been set up.
+func (am *AppManager) StartServer() error {
+	if am.serverManager == nil {
+		return fmt.Errorf("server manager not initialized - call SetupServer first")
+	}
+	return am.serverManager.Start()
 }
 
 // ============
