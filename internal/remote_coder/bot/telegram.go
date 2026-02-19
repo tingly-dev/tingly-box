@@ -240,10 +240,18 @@ func handleTelegramMessage(
 	}
 
 	if strings.HasPrefix(text, "/") {
-		// Check if it's a /bot command
-		if isBotCommand(text) {
-			handleBotCommand(ctx, bot, store, sessionMgr, directoryBrowser, chatID, text, msg.Sender.ID, isDirectChat, isGroupChat)
-			return
+		// Get the command (first word)
+		fields := strings.Fields(text)
+		if len(fields) > 0 {
+			cmd := strings.ToLower(fields[0])
+			switch cmd {
+			case "/bot":
+				handleBotCommand(ctx, bot, store, sessionMgr, directoryBrowser, chatID, text, msg.Sender.ID, isDirectChat, isGroupChat)
+				return
+			case "/clear":
+				handleClearCommand(bot, store, sessionMgr, chatID)
+				return
+			}
 		}
 		// All other slash commands go to Claude Code
 		sessionID, ok, err := store.GetSessionForChat(chatID)
@@ -475,16 +483,6 @@ func handleClaudeCodeMessage(
 
 	// Send response with action keyboard (Clear/Bind buttons)
 	sendTextWithActionKeyboard(bot, chatID, response, replyTo)
-}
-
-// isBotCommand checks if the text is a /bot command
-func isBotCommand(text string) bool {
-	fields := strings.Fields(text)
-	if len(fields) == 0 {
-		return false
-	}
-	cmd := strings.ToLower(fields[0])
-	return cmd == "/bot"
 }
 
 // handleBotCommand handles /bot <subcommand> commands
