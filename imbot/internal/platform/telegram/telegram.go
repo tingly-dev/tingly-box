@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -210,6 +211,44 @@ func (b *Bot) EditMessage(ctx context.Context, messageID string, text string) er
 	return nil
 }
 
+// EditMessageWithKeyboard edits a message with text and inline keyboard
+func (b *Bot) EditMessageWithKeyboard(ctx interface{}, chatID string, messageID string, text string, keyboard interface{}) error {
+	if err := b.EnsureReady(); err != nil {
+		return err
+	}
+
+	// Parse chat ID
+	chatIDInt, err := strconv.ParseInt(chatID, 10, 64)
+	if err != nil {
+		return core.NewInvalidTargetError(core.PlatformTelegram, chatID, "invalid chat ID")
+	}
+
+	// Parse message ID
+	msgIDInt, err := strconv.Atoi(messageID)
+	if err != nil {
+		return core.NewInvalidTargetError(core.PlatformTelegram, messageID, "invalid message ID")
+	}
+
+	// Create edit message config
+	editConfig := tgbotapi.NewEditMessageText(chatIDInt, msgIDInt, text)
+	editConfig.ParseMode = tgbotapi.ModeMarkdown
+
+	// Set keyboard if provided
+	if keyboard != nil {
+		if kb, ok := keyboard.(tgbotapi.InlineKeyboardMarkup); ok {
+			editConfig.ReplyMarkup = &kb
+		}
+	}
+
+	_, err = b.api.Send(editConfig)
+	if err != nil {
+		return core.WrapError(err, core.PlatformTelegram, core.ErrPlatformError)
+	}
+
+	b.UpdateLastActivity()
+	return nil
+}
+
 // DeleteMessage deletes a message
 func (b *Bot) DeleteMessage(ctx context.Context, messageID string) error {
 	if err := b.EnsureReady(); err != nil {
@@ -390,4 +429,99 @@ func (b *Bot) sendMedia(ctx context.Context, chatID int64, opts *core.SendMessag
 		MessageID: strconv.Itoa(sentMsg.MessageID),
 		Timestamp: int64(sentMsg.Date),
 	}, nil
+}
+
+// ResolveChatID resolves a chat ID from invite link, username, or direct ID
+// Returns the chat ID if successful
+func (b *Bot) ResolveChatID(input string) (string, error) {
+	if err := b.EnsureReady(); err != nil {
+		return "", err
+	}
+
+	input = strings.TrimSpace(input)
+
+	// Try to parse as direct chat ID (numeric)
+	if chatID, err := strconv.ParseInt(input, 10, 64); err == nil {
+		return strconv.FormatInt(chatID, 10), nil
+	}
+
+	// Handle @username format
+	if strings.HasPrefix(input, "@") {
+		username := input[1:]
+		chatConfig := tgbotapi.ChatInfoConfig{
+			ChatConfig: tgbotapi.ChatConfig{
+				SuperGroupUsername: username,
+			},
+		}
+		chat, err := b.api.GetChat(chatConfig)
+		if err != nil {
+			return "", fmt.Errorf("failed to get chat by username @%s: %w", username, err)
+		}
+		return strconv.FormatInt(chat.ID, 10), nil
+	}
+
+	// Handle invite links: https://t.me/+hash or https://t.me/joinchat/hash
+	// Note: Bot must already be a member of the chat to get its info
+	if strings.Contains(input, "t.me/") {
+		// Extract the chat identifier from the link
+		// For public groups: https://t.me/groupname
+		// For private groups: https://t.me/+hash or https://t.me/joinchat/hash
+
+		// Try to extract username from public link
+		if !strings.Contains(input, "+") && !strings.Contains(input, "joinchat") {
+			// Public link format: https://t.me/username
+			parts := strings.Split(input, "t.me/")
+			if len(parts) == 2 {
+				username := strings.TrimSuffix(parts[1], "/")
+				chatConfig := tgbotapi.ChatInfoConfig{
+					ChatConfig: tgbotapi.ChatConfig{
+						SuperGroupUsername: username,
+					},
+				}
+				chat, err := b.api.GetChat(chatConfig)
+				if err != nil {
+					return "", fmt.Errorf("failed to get chat from link %s: %w", input, err)
+				}
+				return strconv.FormatInt(chat.ID, 10), nil
+			}
+		}
+
+		// For private invite links, we need to use the raw API
+		// Try to extract the hash and use joinChat API (if bot has permission)
+		inviteHash := ""
+		if strings.Contains(input, "+") {
+			parts := strings.Split(input, "+")
+			if len(parts) == 2 {
+				inviteHash = strings.TrimSuffix(parts[1], "/")
+			}
+		} else if strings.Contains(input, "joinchat/") {
+			parts := strings.Split(input, "joinchat/")
+			if len(parts) == 2 {
+				inviteHash = strings.TrimSuffix(parts[1], "/")
+			}
+		}
+
+		if inviteHash != "" {
+			// Use MakeRequest to call joinChat API
+			params := tgbotapi.Params{}
+			params.AddNonEmpty("chat_id", inviteHash)
+			resp, err := b.api.MakeRequest("joinChat", params)
+			if err != nil {
+				return "", fmt.Errorf("failed to join chat via invite link: %w (bot may not have permission)", err)
+			}
+
+			// Parse the response to get chat ID
+			var chat struct {
+				ID int64 `json:"id"`
+			}
+			if err := json.Unmarshal(resp.Result, &chat); err != nil {
+				return "", fmt.Errorf("failed to parse join response: %w", err)
+			}
+			return strconv.FormatInt(chat.ID, 10), nil
+		}
+
+		return "", fmt.Errorf("could not parse invite link: %s", input)
+	}
+
+	return "", fmt.Errorf("invalid input format: %s (expected chat ID, @username, or invite link)", input)
 }

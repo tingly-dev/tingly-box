@@ -96,8 +96,8 @@ type MediaHandler[RawT any] struct {
 }
 
 func (h *MediaHandler[RawT]) CanHandle(raw RawT) bool {
-	_, _, _ = h.extractor(raw)
-	return true // Media handler can always attempt to extract
+	_, _, ok := h.extractor(raw)
+	return ok // Only handle if extractor returns true
 }
 
 func (h *MediaHandler[RawT]) Handle(ctx context.Context, raw RawT) (core.Content, error) {
