@@ -179,31 +179,4 @@ type Agent interface {
 
 	// GetDefaultFormat returns the current default format
 	GetDefaultFormat() OutputFormat
-
-	// SetPermissionHandler sets the permission handler
-	SetPermissionHandler(handler PermissionHandler)
-
-	// GetPermissionHandler returns the current permission handler
-	GetPermissionHandler() PermissionHandler
-}
-
-// PermissionHandler handles permission requests from agents
-type PermissionHandler interface {
-	// CanUseTool checks if a tool can be used
-	CanUseTool(ctx context.Context, req PermissionRequest) (PermissionResult, error)
-
-	// SetMode sets the permission mode for a session/chat
-	SetMode(scopeID string, mode PermissionMode) error
-
-	// GetMode gets the current permission mode
-	GetMode(scopeID string) (PermissionMode, error)
-
-	// SubmitDecision submits a permission decision (for manual mode)
-	SubmitDecision(requestID string, approved bool, reason string) error
-
-	// GetPendingRequests returns all pending permission requests
-	GetPendingRequests() []PermissionRequest
-
-	// RecordDecision records a permission decision for learning
-	RecordDecision(req PermissionRequest, response PermissionResponse) error
 }

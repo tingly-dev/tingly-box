@@ -183,7 +183,13 @@ func (l *Launcher) ExecuteWithTimeout(
 
 		// Collect all events
 		for event := range parser.Events() {
-			result.Events = append(result.Events, agentboot.Event(event))
+			// Convert events.Event to agentboot.Event
+			result.Events = append(result.Events, agentboot.Event{
+				Type:      event.Type,
+				Data:      event.Data,
+				Timestamp: event.Timestamp,
+				Raw:       event.Raw,
+			})
 
 			// Extract metadata
 			switch event.Type {

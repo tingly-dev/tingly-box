@@ -11,6 +11,23 @@ type RemoteCoderConfig struct {
 	RateLimitMax         int    `json:"rate_limit_max"`
 	RateLimitWindow      string `json:"rate_limit_window"`
 	RateLimitBlock       string `json:"rate_limit_block"`
+
+	// AgentBoot Settings
+	DefaultAgent        string `json:"default_agent"`         // "claude"
+	DefaultOutputFormat string `json:"default_output_format"` // "text" or "stream-json"
+	EnableStreamJSON    bool   `json:"enable_stream_json"`
+	StreamBufferSize    int    `json:"stream_buffer_size"`
+	ClaudePath          string `json:"claude_path"`
+	SkipPermissions     bool   `json:"skip_permissions"`
+
+	// Permission Settings
+	PermissionMode    string `json:"permission_mode"`    // "auto", "manual", "skip"
+	PermissionTimeout string `json:"permission_timeout"`
+	EnableWhitelist   bool   `json:"enable_whitelist"`
+	Whitelist         string `json:"whitelist"`  // Comma-separated
+	Blacklist         string `json:"blacklist"`  // Comma-separated
+	RememberDecisions bool   `json:"remember_decisions"`
+	DecisionDuration  string `json:"decision_duration"`
 }
 
 func (c *Config) applyRemoteCoderDefaults() bool {
@@ -45,5 +62,34 @@ func (c *Config) applyRemoteCoderDefaults() bool {
 		c.RemoteCoder.RateLimitBlock = "5m"
 		updated = true
 	}
+
+	// AgentBoot defaults
+	if c.RemoteCoder.DefaultAgent == "" {
+		c.RemoteCoder.DefaultAgent = "claude"
+		updated = true
+	}
+	if c.RemoteCoder.DefaultOutputFormat == "" {
+		c.RemoteCoder.DefaultOutputFormat = "text"
+		updated = true
+	}
+	if c.RemoteCoder.StreamBufferSize == 0 {
+		c.RemoteCoder.StreamBufferSize = 100
+		updated = true
+	}
+
+	// Permission defaults
+	if c.RemoteCoder.PermissionMode == "" {
+		c.RemoteCoder.PermissionMode = "auto"
+		updated = true
+	}
+	if c.RemoteCoder.PermissionTimeout == "" {
+		c.RemoteCoder.PermissionTimeout = "5m"
+		updated = true
+	}
+	if c.RemoteCoder.DecisionDuration == "" {
+		c.RemoteCoder.DecisionDuration = "24h"
+		updated = true
+	}
+
 	return updated
 }
