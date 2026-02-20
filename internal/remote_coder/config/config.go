@@ -515,11 +515,11 @@ func (cfg *Config) GetAgentBootConfig() agentboot.Config {
 func (cfg *Config) GetPermissionConfig() permission.Config {
 	return permission.Config{
 		DefaultMode:       agentboot.PermissionMode(cfg.PermissionMode),
-		Timeout:           int(cfg.PermissionTimeout.Seconds()),
+		Timeout:           cfg.PermissionTimeout,
 		EnableWhitelist:   cfg.EnableWhitelist,
 		Whitelist:         cfg.Whitelist,
 		Blacklist:         cfg.Blacklist,
 		RememberDecisions: cfg.RememberDecisions,
-		DecisionDuration:  int(cfg.DecisionDuration.Seconds()),
+		DecisionDuration:  cfg.DecisionDuration,
 	}
 }

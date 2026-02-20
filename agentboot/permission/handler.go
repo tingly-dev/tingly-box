@@ -2,6 +2,8 @@ package permission
 
 import (
 	"context"
+	"time"
+
 	"github.com/tingly-dev/tingly-box/agentboot"
 )
 
@@ -29,10 +31,10 @@ type Handler interface {
 // Config holds permission handler configuration
 type Config struct {
 	DefaultMode       agentboot.PermissionMode `json:"default_mode"`
-	Timeout           int                     `json:"timeout"` // in seconds
-	EnableWhitelist   bool                    `json:"enable_whitelist"`
-	Whitelist         []string                `json:"whitelist"`
-	Blacklist         []string                `json:"blacklist"`
-	RememberDecisions bool                    `json:"remember_decisions"`
-	DecisionDuration  int                     `json:"decision_duration"` // in seconds
+	Timeout           time.Duration            `json:"timeout"`
+	EnableWhitelist   bool                     `json:"enable_whitelist"`
+	Whitelist         []string                 `json:"whitelist"`
+	Blacklist         []string                 `json:"blacklist"`
+	RememberDecisions bool                     `json:"remember_decisions"`
+	DecisionDuration  time.Duration            `json:"decision_duration"`
 }

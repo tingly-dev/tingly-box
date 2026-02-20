@@ -37,10 +37,10 @@ func NewDefaultHandler(config Config) *DefaultHandler {
 		config.DefaultMode = agentboot.PermissionModeAuto
 	}
 	if config.Timeout == 0 {
-		config.Timeout = 300 // 5 minutes default
+		config.Timeout = 5 * time.Minute // 5 minutes default
 	}
 	if config.DecisionDuration == 0 {
-		config.DecisionDuration = 86400 // 24 hours default
+		config.DecisionDuration = 24 * time.Hour // 24 hours default
 	}
 
 	return &DefaultHandler{
@@ -104,7 +104,7 @@ func (h *DefaultHandler) handleManualPermission(ctx context.Context, req agentbo
 	h.pendingRequests[req.RequestID] = &pendingRequest{
 		request:   req,
 		createdAt: time.Now(),
-		timeout:   time.Duration(h.config.Timeout) * time.Second,
+		timeout:   h.config.Timeout,
 	}
 	h.decisionChannels[req.RequestID] = responseChan
 	h.mu.Unlock()
@@ -131,7 +131,7 @@ func (h *DefaultHandler) handleManualPermission(ctx context.Context, req agentbo
 			Reason:   response.Reason,
 		}, nil
 
-	case <-time.After(time.Duration(h.config.Timeout) * time.Second):
+	case <-time.After(h.config.Timeout):
 		// Timeout
 		h.mu.Lock()
 		delete(h.pendingRequests, req.RequestID)
@@ -273,7 +273,7 @@ func (h *DefaultHandler) cacheDecision(req agentboot.PermissionRequest, response
 			Approved: response.Approved,
 			Reason:   response.Reason,
 		},
-		expiresAt: time.Now().Add(time.Duration(h.config.DecisionDuration) * time.Second),
+		expiresAt: time.Now().Add(h.config.DecisionDuration),
 	}
 }
 
