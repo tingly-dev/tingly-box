@@ -17,7 +17,7 @@ type Config struct {
 
 // AuthConfig represents authentication configuration
 type AuthConfig struct {
-	Type string `json:"type" yaml:"type"` // "token", "qr", "oauth", "basic", "serviceAccount"
+	Type string `json:"type" yaml:"type"` // "token", "qr", "oauth", "basic", "serviceAccount", "none"
 
 	// Token auth
 	Token string `json:"token,omitempty" yaml:"token,omitempty"`
@@ -78,6 +78,9 @@ func (c *Config) Validate() error {
 // Validate validates the auth configuration
 func (a *AuthConfig) Validate() error {
 	switch a.Type {
+	case "none":
+		// No authentication required (e.g., for WebChat server mode)
+		return nil
 	case "token":
 		if a.Token == "" {
 			return fmt.Errorf("token is required for token auth")

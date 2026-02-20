@@ -10,6 +10,7 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot/internal/platform/feishu"
 	"github.com/tingly-dev/tingly-box/imbot/internal/platform/slack"
 	"github.com/tingly-dev/tingly-box/imbot/internal/platform/telegram"
+	"github.com/tingly-dev/tingly-box/imbot/internal/platform/webchat"
 	"github.com/tingly-dev/tingly-box/imbot/internal/platform/whatsapp"
 )
 
@@ -90,14 +91,14 @@ func (r *Registry) RegisterBuiltinPlatforms() {
 		return whatsapp.NewWhatsAppBot(config)
 	})
 
-	// WebChat (mock for testing)
-	r.Register(core.PlatformWebChat, func(config *core.Config) (core.Bot, error) {
-		return NewMockBot(config)
-	})
-
 	// DingTalk
 	r.Register(core.PlatformDingTalk, func(config *core.Config) (core.Bot, error) {
 		return dingtalk.NewDingTalkBot(config)
+	})
+
+	// WebChat
+	r.Register(core.PlatformWebChat, func(config *core.Config) (core.Bot, error) {
+		return webchat.NewWebChatBot(config)
 	})
 
 	// Add more platforms as they are implemented
@@ -266,11 +267,4 @@ func (m *MockBot) GetMessages() []core.Message {
 // ClearMessages clears all received messages
 func (m *MockBot) ClearMessages() {
 	m.messages = make([]core.Message, 0)
-}
-
-// Register mock platform for testing
-func init() {
-	Register(core.PlatformWebChat, func(config *core.Config) (core.Bot, error) {
-		return NewMockBot(config)
-	})
 }
