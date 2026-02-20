@@ -12,8 +12,9 @@ import (
 	"github.com/sirupsen/logrus"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/tingly-dev/tingly-box/agentboot"
+	"github.com/tingly-dev/tingly-box/agentboot/permission"
 	"github.com/tingly-dev/tingly-box/imbot"
-	"github.com/tingly-dev/tingly-box/internal/remote_coder/launcher"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/summarizer"
 )
@@ -60,13 +61,13 @@ var defaultBashAllowlist = map[string]struct{}{
 }
 
 // RunTelegramBot starts a Telegram bot that proxies messages to remote-coder sessions.
-func RunTelegramBot(ctx context.Context, store *Store, sessionMgr *session.Manager) error {
+func RunTelegramBot(ctx context.Context, store *Store, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot, permHandler permission.Handler) error {
 	delay := telegramStartDelay
 	for attempt := 1; attempt <= telegramStartRetries; attempt++ {
 		if ctx.Err() != nil {
 			return nil
 		}
-		if err := runTelegramBotOnce(ctx, store, sessionMgr); err != nil {
+		if err := runTelegramBotOnce(ctx, store, sessionMgr, agentBoot, permHandler); err != nil {
 			if attempt == telegramStartRetries {
 				return err
 			}
@@ -85,7 +86,7 @@ func RunTelegramBot(ctx context.Context, store *Store, sessionMgr *session.Manag
 	return nil
 }
 
-func runTelegramBotOnce(ctx context.Context, store *Store, sessionMgr *session.Manager) error {
+func runTelegramBotOnce(ctx context.Context, store *Store, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot, permHandler permission.Handler) error {
 	if store == nil {
 		return fmt.Errorf("bot store is nil")
 	}
@@ -109,7 +110,6 @@ func runTelegramBotOnce(ctx context.Context, store *Store, sessionMgr *session.M
 		return fmt.Errorf("session manager is nil")
 	}
 
-	claudeLauncher := launcher.NewClaudeCodeLauncher()
 	summaryEngine := summarizer.NewEngine()
 	directoryBrowser := NewDirectoryBrowser()
 
@@ -143,7 +143,7 @@ func runTelegramBotOnce(ctx context.Context, store *Store, sessionMgr *session.M
 		if platform != imbot.PlatformTelegram {
 			return
 		}
-		go handleTelegramMessage(ctx, manager, store, sessionMgr, claudeLauncher, summaryEngine, directoryBrowser, msg)
+		go handleTelegramMessage(ctx, manager, store, sessionMgr, agentBoot, permHandler, summaryEngine, directoryBrowser, msg)
 	})
 
 	if err := manager.Start(ctx); err != nil {
@@ -178,7 +178,8 @@ func handleTelegramMessage(
 	manager *imbot.Manager,
 	store *Store,
 	sessionMgr *session.Manager,
-	ccLauncher *launcher.ClaudeCodeLauncher,
+	agentBoot *agentboot.AgentBoot,
+	permHandler permission.Handler,
 	summaryEngine *summarizer.Engine,
 	directoryBrowser *DirectoryBrowser,
 	msg imbot.Message,
@@ -259,7 +260,7 @@ func handleTelegramMessage(
 			logrus.WithError(err).Warn("Failed to load session mapping")
 		}
 		if ok && sessionID != "" {
-			handleAgentMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agentClaudeCode, text, msg.Sender.ID, msg.ID)
+			handleAgentMessage(ctx, bot, store, sessionMgr, agentBoot, permHandler, summaryEngine, chatID, agentClaudeCode, text, msg.Sender.ID, msg.ID)
 			return
 		}
 		// No session - show guidance
@@ -277,7 +278,7 @@ func handleTelegramMessage(
 	if isGroupChat {
 		if projectPath, ok := getProjectPathForGroup(store, chatID, string(msg.Platform)); ok {
 			// Route to Claude Code with the bound project path
-			handleAgentMessageWithProject(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agentClaudeCode, text, msg.Sender.ID, projectPath, msg.ID)
+			handleAgentMessageWithProject(ctx, bot, store, sessionMgr, agentBoot, permHandler, summaryEngine, chatID, agentClaudeCode, text, msg.Sender.ID, projectPath, msg.ID)
 			return
 		}
 		// No binding, show guidance
@@ -292,7 +293,7 @@ func handleTelegramMessage(
 	}
 	if ok && sessionID != "" {
 		// Has active session, auto-route to cc
-		handleAgentMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agentClaudeCode, text, msg.Sender.ID, msg.ID)
+		handleAgentMessage(ctx, bot, store, sessionMgr, agentBoot, permHandler, summaryEngine, chatID, agentClaudeCode, text, msg.Sender.ID, msg.ID)
 		return
 	}
 
@@ -306,7 +307,8 @@ func handleAgentMessage(
 	bot imbot.Bot,
 	store *Store,
 	sessionMgr *session.Manager,
-	ccLauncher *launcher.ClaudeCodeLauncher,
+	agentBoot *agentboot.AgentBoot,
+	permHandler permission.Handler,
 	summaryEngine *summarizer.Engine,
 	chatID string,
 	agent string,
@@ -314,7 +316,7 @@ func handleAgentMessage(
 	senderID string,
 	replyTo string,
 ) {
-	handleAgentMessageWithProject(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agent, text, senderID, "", replyTo)
+	handleAgentMessageWithProject(ctx, bot, store, sessionMgr, agentBoot, permHandler, summaryEngine, chatID, agent, text, senderID, "", replyTo)
 }
 
 // handleAgentMessageWithProject routes message to the appropriate agent handler with a specific project path.
@@ -323,7 +325,8 @@ func handleAgentMessageWithProject(
 	bot imbot.Bot,
 	store *Store,
 	sessionMgr *session.Manager,
-	ccLauncher *launcher.ClaudeCodeLauncher,
+	agentBoot *agentboot.AgentBoot,
+	permHandler permission.Handler,
 	summaryEngine *summarizer.Engine,
 	chatID string,
 	agent string,
@@ -340,7 +343,7 @@ func handleAgentMessageWithProject(
 
 	switch agent {
 	case agentClaudeCode:
-		handleClaudeCodeMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, text, senderID, projectPathOverride, replyTo)
+		handleClaudeCodeMessage(ctx, bot, store, sessionMgr, agentBoot, permHandler, summaryEngine, chatID, text, senderID, projectPathOverride, replyTo)
 	default:
 		sendText(bot, chatID, fmt.Sprintf("Unknown agent: %s", agent))
 	}
@@ -361,7 +364,8 @@ func handleClaudeCodeMessage(
 	bot imbot.Bot,
 	store *Store,
 	sessionMgr *session.Manager,
-	ccLauncher *launcher.ClaudeCodeLauncher,
+	agentBoot *agentboot.AgentBoot,
+	permHandler permission.Handler,
 	summaryEngine *summarizer.Engine,
 	chatID string,
 	text string,
@@ -451,12 +455,19 @@ func handleClaudeCodeMessage(
 	execCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
-	result, err := ccLauncher.Execute(execCtx, text, launcher.ExecuteOptions{
+	agent, err := agentBoot.GetDefaultAgent()
+	if err != nil {
+		sessionMgr.SetFailed(sessionID, "agent not available: "+err.Error())
+		sendTextWithReply(bot, chatID, "Agent not available", replyTo)
+		return
+	}
+
+	result, err := agent.Execute(execCtx, text, agentboot.ExecutionOptions{
 		ProjectPath: projectPath,
 	})
 	response := ""
 	if result != nil {
-		response = result.Output
+		response = result.TextOutput()
 		if err != nil && result.Error != "" {
 			response = result.Error
 		}

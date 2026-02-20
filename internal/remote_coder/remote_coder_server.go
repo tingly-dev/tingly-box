@@ -13,11 +13,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/agentboot"
+	"github.com/tingly-dev/tingly-box/agentboot/claude"
+	"github.com/tingly-dev/tingly-box/agentboot/permission"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/api"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/audit"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/bot"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/config"
-	"github.com/tingly-dev/tingly-box/internal/remote_coder/launcher"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/middleware"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/summarizer"
@@ -63,13 +65,28 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		MessageRetention: cfg.MessageRetention,
 	}, store)
 
-	claudeLauncher := launcher.NewClaudeCodeLauncher()
-	if path := strings.TrimSpace(os.Getenv("RCC_CLAUDE_PATH")); path != "" {
-		claudeLauncher.SetCLIPath(path)
+	// Create AgentBoot instance
+	agentBootConfig := cfg.GetAgentBootConfig()
+	agentBoot := agentboot.New(agentBootConfig)
+
+	// Create permission handler
+	permHandler := permission.NewDefaultHandler(cfg.GetPermissionConfig())
+
+	// Create and register Claude agent
+	claudeAgent := claude.NewAgent(agentBootConfig)
+	claudeAgent.SetPermissionHandler(permHandler)
+	if cfg.ClaudePath != "" {
+		claudeAgent.SetCLIPath(cfg.ClaudePath)
 	}
-	if v := strings.ToLower(strings.TrimSpace(os.Getenv("RCC_SKIP_PERMISSIONS"))); v == "1" || v == "true" || v == "yes" {
-		claudeLauncher.SetSkipPermissions(true)
+	if cfg.SkipPermissions {
+		claudeAgent.SetSkipPermissions(true)
 	}
+	agentBoot.RegisterAgent(agentboot.AgentTypeClaude, claudeAgent)
+
+	// Store global instances for bot platform integration
+	globalAgentBoot = agentBoot
+	globalPermissionHandler = permHandler
+
 	summaryEngine := summarizer.NewEngine()
 
 	auditLogger := audit.NewLogger(audit.Config{
@@ -113,7 +130,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	remoteCCLegacyAPI.Use(authRateLimit)
 	remoteCCLegacyAPI.Use(config.AuthMiddleware(cfg))
 
-	apiHandler := api.NewHandler(sessionMgr, claudeLauncher, summaryEngine, auditLogger)
+	apiHandler := api.NewHandler(sessionMgr, agentBoot, summaryEngine, auditLogger)
 	remoteCCLegacyAPI.POST("/handshake", apiHandler.Handshake)
 	remoteCCLegacyAPI.POST("/execute", apiHandler.Execute)
 	remoteCCLegacyAPI.GET("/status/:session_id", apiHandler.Status)
@@ -134,7 +151,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	remoteCCAPI := router.Group("/remote-coder")
 	remoteCCAPI.Use(config.AuthMiddleware(cfg))
 
-	remoteCCHandler := api.NewRemoteCCHandler(sessionMgr, claudeLauncher, summaryEngine, auditLogger, cfg)
+	remoteCCHandler := api.NewRemoteCCHandler(sessionMgr, agentBoot, summaryEngine, auditLogger, cfg, permHandler)
 	botStore, err := bot.NewStore(cfg.DBPath)
 	if err != nil {
 		return fmt.Errorf("failed to initialize bot store: %w", err)
@@ -144,7 +161,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	}()
 
 	// Create bot manager for runtime lifecycle control
-	botManager := bot.NewManager(botStore, sessionMgr)
+	botManager := bot.NewManager(botStore, sessionMgr, agentBoot, permHandler)
 	botSettingsHandler := api.NewBotSettingsHandler(botStore, botManager)
 	remoteCCAPI.GET("/sessions", remoteCCHandler.GetSessions)
 	remoteCCAPI.GET("/sessions/:id", remoteCCHandler.GetSession)
@@ -210,3 +227,19 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	logrus.Info("Remote-coder stopped")
 	return nil
 }
+
+// GetAgentBoot returns the AgentBoot instance (for bot platform integration)
+func GetAgentBoot() *agentboot.AgentBoot {
+	return globalAgentBoot
+}
+
+// GetPermissionHandler returns the permission handler (for bot platform integration)
+func GetPermissionHandler() permission.Handler {
+	return globalPermissionHandler
+}
+
+// Global instances for bot platform integration
+var (
+	globalAgentBoot       *agentboot.AgentBoot
+	globalPermissionHandler permission.Handler
+)
