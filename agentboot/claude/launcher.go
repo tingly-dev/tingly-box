@@ -146,12 +146,14 @@ func (l *Launcher) ExecuteWithTimeout(
 	}
 
 	// Start the command
-	if stdin != nil {
-		if err := cmd.Start(); err != nil {
+	if err := cmd.Start(); err != nil {
+		if stdin != nil {
 			stdin.Close()
-			return nil, fmt.Errorf("failed to start command: %w", err)
 		}
+		return nil, fmt.Errorf("failed to start command: %w", err)
+	}
 
+	if stdin != nil {
 		// Start permission handler goroutine (reading from stderr for control messages)
 		go l.handleControlMessages(context.Background(), stdin, &stderr)
 
