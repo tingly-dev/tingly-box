@@ -148,7 +148,7 @@ func (l *Launcher) ExecuteWithHandler(
 		return fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
 	defer stdoutReader.Close()
-	defer stdoutWriter.Close()
+	// Note: stdoutWriter is closed by goroutine after cmd.Wait() completes
 
 	cmd.Stdout = stdoutWriter
 	cmd.Stderr = &stderr
@@ -173,37 +173,57 @@ func (l *Launcher) ExecuteWithHandler(
 		stdin.Close()
 	}
 
-	// Parse and stream events - use a shared accumulator
+	// Start parser in background
 	parser := events.NewParser()
 	accumulator := NewMessageAccumulator()
 	go parser.Parse(stdoutReader)
 
-	// Close stdout writer when parsing is done
-	defer stdoutWriter.Close()
+	// Main event loop: process events until completion or context cancelled
+	for {
+		select {
+		case <-ctx.Done():
+			// Context cancelled: kill command and cleanup
+			_ = cmd.Process.Kill()
+			_ = stdoutWriter.Close() // Signal EOF to parser
+			// Drain parser events until channel closes
+			for range parser.Events() {
+			}
+			// Wait for command to complete and check error
+			if err := cmd.Wait(); err != nil {
+				return l.handleExecutionError(err, stderr.String(), handler)
+			}
+			return ctx.Err()
 
-	// Process events until parser closes
-	for event := range parser.Events() {
-		messages, hasResult, resultSuccess := accumulator.AddEvent(event)
+		case event, ok := <-parser.Events():
+			if !ok {
+				// Parser finished (EOF reached)
+				// Now wait for command to complete
+				if err := cmd.Wait(); err != nil {
+					return l.handleExecutionError(err, stderr.String(), handler)
+				}
+				return nil
+			}
 
-		for _, msg := range messages {
-			if hErr := handler.OnMessage(msg); hErr != nil {
-				handler.OnError(hErr)
+			messages, hasResult, resultSuccess := accumulator.AddEvent(event)
+
+			for _, msg := range messages {
+				if hErr := handler.OnMessage(msg); hErr != nil {
+					handler.OnError(hErr)
+				}
+			}
+
+			if hasResult {
+				handler.OnComplete(&ResultCompletion{
+					Success: resultSuccess,
+				})
+				// Got final result, terminate command early
+				_ = cmd.Process.Kill()
+				_ = stdoutWriter.Close()
+				_ = cmd.Wait() // Ignore error since we're terminating
+				return nil
 			}
 		}
-
-		if hasResult {
-			handler.OnComplete(&ResultCompletion{
-				Success: resultSuccess,
-			})
-		}
 	}
-
-	// Wait for command to complete and check exit code
-	if err := cmd.Wait(); err != nil {
-		return l.handleExecutionError(err, stderr.String(), handler)
-	}
-
-	return nil
 }
 
 // ExecuteStream executes Claude and returns a stream handler
