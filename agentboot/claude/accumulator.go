@@ -91,6 +91,13 @@ func (a *MessageAccumulator) AddEvent(event events.Event) ([]Message, bool, bool
 			hasResult = true
 			resultSuccess = msg.IsSuccess()
 		}
+
+	case MessageTypeStreamEvent:
+		msg := a.parseStreamEventMessage(event)
+		if msg != nil {
+			a.messages = append(a.messages, msg)
+			newMessages = append(newMessages, msg)
+		}
 	}
 
 	return newMessages, hasResult, resultSuccess
@@ -387,6 +394,50 @@ func (a *MessageAccumulator) parseResultMessage(event events.Event) *ResultMessa
 				})
 			}
 		}
+	}
+
+	return msg
+}
+
+// parseStreamEventMessage parses a stream_event message from an event
+func (a *MessageAccumulator) parseStreamEventMessage(event events.Event) *StreamEventMessage {
+	data := event.Data
+
+	msg := &StreamEventMessage{
+		Type:      event.Type,
+		SessionID: getString(data, "session_id"),
+		Timestamp: event.Timestamp,
+	}
+
+	// Parse event data
+	if eventMap, ok := data["event"].(map[string]interface{}); ok {
+		event := StreamEvent{
+			Type:  getString(eventMap, "type"),
+			Index: getInt(eventMap, "index"),
+		}
+
+		// Parse delta based on type
+		if deltaMap, ok := eventMap["delta"].(map[string]interface{}); ok {
+			deltaType := getString(deltaMap, "type")
+
+			switch deltaType {
+			case "text_delta":
+				event.Delta = &TextDelta{
+					Type: deltaType,
+					Text: getString(deltaMap, "text"),
+				}
+			case "input_json_delta":
+				event.Delta = &InputJSONDelta{
+					Type:        deltaType,
+					PartialJSON: getString(deltaMap, "partial_json"),
+				}
+			default:
+				// Keep as raw map for unknown delta types
+				event.Delta = deltaMap
+			}
+		}
+
+		msg.Event = event
 	}
 
 	return msg

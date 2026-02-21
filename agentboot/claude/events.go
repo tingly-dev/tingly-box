@@ -2,11 +2,12 @@ package claude
 
 // Claude-specific event types (matching SDK stream types)
 const (
-	EventTypeUser      = "user"
-	EventTypeAssistant = "assistant"
-	EventTypeSystem    = "system"
-	EventTypeResult    = "result"
-	EventTypeControl   = "control_"
+	EventTypeUser        = "user"
+	EventTypeAssistant   = "assistant"
+	EventTypeSystem      = "system"
+	EventTypeResult      = "result"
+	EventTypeControl     = "control_"
+	EventTypeStreamEvent = "stream_event"
 )
 
 // Control subtypes

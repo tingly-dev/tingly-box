@@ -1,0 +1,4 @@
+[TOOL_USE] {{.ToolUseID}} ({{.Name}})
+{{- if .Input}}
+Input: {{range $key, $value := .Input}}{{$key}}={{$value}} {{end}}
+{{- end}}

@@ -7,12 +7,13 @@ import (
 
 // MessageType constants for Claude Code stream JSON
 const (
-	MessageTypeSystem     = "system"
-	MessageTypeAssistant  = "assistant"
-	MessageTypeUser       = "user"
-	MessageTypeToolUse    = "tool_use"
-	MessageTypeToolResult = "tool_result"
-	MessageTypeResult     = "result"
+	MessageTypeSystem      = "system"
+	MessageTypeAssistant   = "assistant"
+	MessageTypeUser        = "user"
+	MessageTypeToolUse     = "tool_use"
+	MessageTypeToolResult  = "tool_result"
+	MessageTypeResult      = "result"
+	MessageTypeStreamEvent = "stream_event"
 )
 
 // Message is the interface for all Claude message types
@@ -348,4 +349,59 @@ func (m *ResultMessage) GetRawData() map[string]interface{} {
 // IsSuccess returns true if the result indicates success
 func (m *ResultMessage) IsSuccess() bool {
 	return m.SubType == "success" || !m.IsError
+}
+
+// StreamEventMessage represents real-time streaming delta events
+type StreamEventMessage struct {
+	Type      string      `json:"type"`
+	Event     StreamEvent `json:"event"`
+	SessionID string      `json:"session_id,omitempty"`
+	Timestamp time.Time   `json:"timestamp,omitempty"`
+}
+
+// GetType implements Message
+func (m *StreamEventMessage) GetType() string {
+	return m.Type
+}
+
+// GetTimestamp implements Message
+func (m *StreamEventMessage) GetTimestamp() time.Time {
+	if !m.Timestamp.IsZero() {
+		return m.Timestamp
+	}
+	return time.Now()
+}
+
+// GetRawData implements Message
+func (m *StreamEventMessage) GetRawData() map[string]interface{} {
+	data, _ := json.Marshal(m)
+	var result map[string]interface{}
+	_ = json.Unmarshal(data, &result)
+	return result
+}
+
+// StreamEvent represents a streaming event
+type StreamEvent struct {
+	Type  string      `json:"type"` // content_block_delta, content_block_start, etc.
+	Index int         `json:"index,omitempty"`
+	Delta interface{} `json:"delta,omitempty"` // TextDelta, InputJSONDelta, etc.
+}
+
+// TextDelta represents incremental text content
+type TextDelta struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+// InputJSONDelta represents incremental tool input JSON
+type InputJSONDelta struct {
+	Type        string `json:"type"`
+	PartialJSON string `json:"partial_json"`
+}
+
+// MessageDelta represents message-level updates
+type MessageDelta struct {
+	Type       string     `json:"type"`
+	StopReason string     `json:"stop_reason,omitempty"`
+	Usage      *UsageInfo `json:"usage,omitempty"`
 }
