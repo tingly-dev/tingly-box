@@ -305,7 +305,7 @@ const envConfig = {
 let existingSettings = {};
 if (fs.existsSync(settingsPath)) {
     const content = fs.readFileSync(settingsPath, "utf-8");
-    existingSettings = JSON.parse(content);
+    try { existingSettings = JSON.parse(content); } catch (e) {}
 }
 
 const newSettings = { ...existingSettings, env: envConfig };
@@ -313,9 +313,9 @@ fs.writeFileSync(settingsPath, JSON.stringify(newSettings, null, 2));
 console.log("Settings written to", settingsPath);`;
 
         return `# PowerShell - Run in PowerShell
-node -e @"
+@"
 ${nodeCode}
-"@`;
+"@ | node`;
     };
 
     const generateSettingsScriptUnix = () => {
@@ -365,7 +365,7 @@ const envConfig = {
 let existingSettings = {};
 if (fs.existsSync(settingsPath)) {
     const content = fs.readFileSync(settingsPath, "utf-8");
-    existingSettings = JSON.parse(content);
+    try { existingSettings = JSON.parse(content); } catch (e) {}
 }
 
 const newSettings = { ...existingSettings, env: envConfig };
@@ -397,7 +397,7 @@ const onboardingConfig = {
 let existingConfig = {};
 if (fs.existsSync(claudeJsonPath)) {
     const content = fs.readFileSync(claudeJsonPath, "utf-8");
-    existingConfig = JSON.parse(content);
+    try { existingConfig = JSON.parse(content); } catch (e) {}
 }
 
 const newConfig = { ...existingConfig, ...onboardingConfig };
@@ -405,9 +405,9 @@ fs.writeFileSync(claudeJsonPath, JSON.stringify(newConfig, null, 2));
 console.log("Onboarding config written to", claudeJsonPath);`;
 
         return `# PowerShell - Run in PowerShell
-node -e @"
+@"
 ${nodeCode}
-"@`;
+"@ | node`;
     };
 
     const generateScriptUnix = () => {
@@ -425,7 +425,7 @@ const onboardingConfig = {
 let existingConfig = {};
 if (fs.existsSync(claudeJsonPath)) {
     const content = fs.readFileSync(claudeJsonPath, "utf-8");
-    existingConfig = JSON.parse(content);
+    try { existingConfig = JSON.parse(content); } catch (e) {}
 }
 
 const newConfig = { ...existingConfig, ...onboardingConfig };
