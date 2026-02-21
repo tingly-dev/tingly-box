@@ -10,8 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
-	"github.com/tingly-dev/tingly-box/agentboot"
-	"github.com/tingly-dev/tingly-box/agentboot/permission"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/middleware"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
@@ -19,6 +17,7 @@ import (
 )
 
 // Config holds the configuration for remote-coder service
+// Remote-coder specific configuration only - AgentBoot config is loaded directly by agentboot
 type Config struct {
 	Port             int           // HTTP server port
 	JWTSecret        string        // JWT secret for token validation
@@ -30,23 +29,6 @@ type Config struct {
 	RateLimitWindow  time.Duration // Time window for rate limiting
 	RateLimitBlock   time.Duration // Block duration after exceeding limit
 	jwtManager       *auth.JWTManager
-
-	// AgentBoot Settings
-	DefaultAgent        string                         `json:"default_agent" env:"RCC_DEFAULT_AGENT"`         // "claude"
-	DefaultOutputFormat string                         `json:"default_output_format" env:"RCC_OUTPUT_FORMAT"`  // "text" or "stream-json"
-	EnableStreamJSON    bool                           `json:"enable_stream_json" env:"RCC_ENABLE_STREAM_JSON"`
-	StreamBufferSize     int                            `json:"stream_buffer_size" env:"RCC_STREAM_BUFFER_SIZE"`
-	ClaudePath           string                         `json:"claude_path" env:"RCC_CLAUDE_PATH"`
-	SkipPermissions      bool                           `json:"skip_permissions" env:"RCC_SKIP_PERMISSIONS"`
-
-	// Permission Settings
-	PermissionMode       string        `json:"permission_mode" env:"RCC_PERMISSION_MODE"`
-	PermissionTimeout    time.Duration `json:"permission_timeout" env:"RCC_PERMISSION_TIMEOUT"`
-	EnableWhitelist      bool          `json:"enable_whitelist" env:"RCC_ENABLE_WHITELIST"`
-	Whitelist            []string      `json:"whitelist" env:"RCC_WHITELIST"`
-	Blacklist            []string      `json:"blacklist" env:"RCC_BLACKLIST"`
-	RememberDecisions    bool          `json:"remember_decisions" env:"RCC_REMEMBER_DECISIONS"`
-	DecisionDuration     time.Duration `json:"decision_duration" env:"RCC_DECISION_DURATION"`
 }
 
 // Options allows overrides when building remote-coder configuration.
@@ -255,125 +237,6 @@ func LoadFromAppConfig(appCfg *serverconfig.Config, opts Options) (*Config, erro
 
 	jwtManager := auth.NewJWTManager(jwtSecret)
 
-	// Load AgentBoot configuration
-	defaultAgent := remoteCfg.DefaultAgent
-	if defaultAgent == "" {
-		defaultAgent = "claude"
-	}
-	if env := os.Getenv("RCC_DEFAULT_AGENT"); env != "" {
-		defaultAgent = env
-	}
-
-	defaultOutputFormat := remoteCfg.DefaultOutputFormat
-	if defaultOutputFormat == "" {
-		defaultOutputFormat = "text"
-	}
-	if env := os.Getenv("RCC_DEFAULT_OUTPUT_FORMAT"); env != "" {
-		defaultOutputFormat = env
-	}
-
-	enableStreamJSON := remoteCfg.EnableStreamJSON
-	if !enableStreamJSON {
-		enableStreamJSON = true // Default to true
-	}
-	if env := os.Getenv("RCC_ENABLE_STREAM_JSON"); env != "" {
-		enableStreamJSON = env == "true" || env == "1"
-	}
-
-	streamBufferSize := remoteCfg.StreamBufferSize
-	if streamBufferSize == 0 {
-		streamBufferSize = 100
-	}
-	if env := os.Getenv("RCC_STREAM_BUFFER_SIZE"); env != "" {
-		if parsed, err := strconv.Atoi(env); err == nil && parsed > 0 {
-			streamBufferSize = parsed
-		}
-	}
-
-	claudePath := strings.TrimSpace(remoteCfg.ClaudePath)
-	if env := os.Getenv("RCC_CLAUDE_PATH"); env != "" {
-		claudePath = strings.TrimSpace(env)
-	}
-
-	skipPermissions := remoteCfg.SkipPermissions
-	if env := os.Getenv("RCC_SKIP_PERMISSIONS"); env != "" {
-		skipPermissions = env == "true" || env == "1" || strings.ToLower(env) == "yes"
-	}
-
-	// Load permission configuration
-	permissionMode := remoteCfg.PermissionMode
-	if permissionMode == "" {
-		permissionMode = "auto"
-	}
-	if env := os.Getenv("RCC_PERMISSION_MODE"); env != "" {
-		permissionMode = env
-	}
-
-	permissionTimeout := 5 * time.Minute
-	if remoteCfg.PermissionTimeout != "" {
-		if parsed, err := time.ParseDuration(remoteCfg.PermissionTimeout); err == nil {
-			permissionTimeout = parsed
-		}
-	}
-	if env := os.Getenv("RCC_PERMISSION_TIMEOUT"); env != "" {
-		if parsed, err := time.ParseDuration(env); err == nil {
-			permissionTimeout = parsed
-		}
-	}
-
-	enableWhitelist := remoteCfg.EnableWhitelist
-	if env := os.Getenv("RCC_ENABLE_WHITELIST"); env != "" {
-		enableWhitelist = env == "true" || env == "1"
-	}
-
-	var whitelist []string
-	if w := strings.TrimSpace(remoteCfg.Whitelist); w != "" {
-		whitelist = strings.Split(w, ",")
-		for i, tool := range whitelist {
-			whitelist[i] = strings.TrimSpace(tool)
-		}
-	}
-	if env := os.Getenv("RCC_WHITELIST"); env != "" {
-		whitelist = strings.Split(env, ",")
-		for i, tool := range whitelist {
-			whitelist[i] = strings.TrimSpace(tool)
-		}
-	}
-
-	var blacklist []string
-	if b := strings.TrimSpace(remoteCfg.Blacklist); b != "" {
-		blacklist = strings.Split(b, ",")
-		for i, tool := range blacklist {
-			blacklist[i] = strings.TrimSpace(tool)
-		}
-	}
-	if env := os.Getenv("RCC_BLACKLIST"); env != "" {
-		blacklist = strings.Split(env, ",")
-		for i, tool := range blacklist {
-			blacklist[i] = strings.TrimSpace(tool)
-		}
-	}
-
-	rememberDecisions := remoteCfg.RememberDecisions
-	if !rememberDecisions {
-		rememberDecisions = true // Default to true
-	}
-	if env := os.Getenv("RCC_REMEMBER_DECISIONS"); env != "" {
-		rememberDecisions = env == "true" || env == "1"
-	}
-
-	decisionDuration := 24 * time.Hour
-	if remoteCfg.DecisionDuration != "" {
-		if parsed, err := time.ParseDuration(remoteCfg.DecisionDuration); err == nil {
-			decisionDuration = parsed
-		}
-	}
-	if env := os.Getenv("RCC_DECISION_DURATION"); env != "" {
-		if parsed, err := time.ParseDuration(env); err == nil {
-			decisionDuration = parsed
-		}
-	}
-
 	cfg := &Config{
 		Port:             port,
 		JWTSecret:        jwtSecret,
@@ -385,23 +248,6 @@ func LoadFromAppConfig(appCfg *serverconfig.Config, opts Options) (*Config, erro
 		RateLimitWindow:  rateLimitWindow,
 		RateLimitBlock:   rateLimitBlock,
 		jwtManager:       jwtManager,
-
-		// AgentBoot settings
-		DefaultAgent:        defaultAgent,
-		DefaultOutputFormat: defaultOutputFormat,
-		EnableStreamJSON:    enableStreamJSON,
-		StreamBufferSize:    streamBufferSize,
-		ClaudePath:          claudePath,
-		SkipPermissions:     skipPermissions,
-
-		// Permission settings
-		PermissionMode:    permissionMode,
-		PermissionTimeout: permissionTimeout,
-		EnableWhitelist:   enableWhitelist,
-		Whitelist:         whitelist,
-		Blacklist:         blacklist,
-		RememberDecisions: rememberDecisions,
-		DecisionDuration:  decisionDuration,
 	}
 
 	logrus.Infof("Remote-coder config: port=%d, session_timeout=%v, db_path=%s, message_retention=%v, rate_limit_max=%d, rate_limit_window=%v, rate_limit_block=%v",
@@ -499,27 +345,4 @@ func (cfg *Config) GenerateToken(clientID string, expiryHours int) (string, erro
 // ValidateToken validates an API token and returns the claims
 func (cfg *Config) ValidateToken(tokenString string) (*auth.Claims, error) {
 	return cfg.jwtManager.ValidateAPIKey(tokenString)
-}
-
-// GetAgentBootConfig returns the AgentBoot configuration
-func (cfg *Config) GetAgentBootConfig() agentboot.Config {
-	return agentboot.Config{
-		DefaultAgent:     agentboot.AgentType(cfg.DefaultAgent),
-		DefaultFormat:    agentboot.OutputFormat(cfg.DefaultOutputFormat),
-		EnableStreamJSON: cfg.EnableStreamJSON,
-		StreamBufferSize: cfg.StreamBufferSize,
-	}
-}
-
-// GetPermissionConfig returns the permission handler configuration
-func (cfg *Config) GetPermissionConfig() permission.Config {
-	return permission.Config{
-		DefaultMode:       agentboot.PermissionMode(cfg.PermissionMode),
-		Timeout:           cfg.PermissionTimeout,
-		EnableWhitelist:   cfg.EnableWhitelist,
-		Whitelist:         cfg.Whitelist,
-		Blacklist:         cfg.Blacklist,
-		RememberDecisions: cfg.RememberDecisions,
-		DecisionDuration:  cfg.DecisionDuration,
-	}
 }

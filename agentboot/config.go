@@ -10,10 +10,10 @@ import (
 // LoadConfigFromEnv loads configuration from environment variables
 func LoadConfigFromEnv() Config {
 	config := Config{
-		DefaultAgent:      AgentTypeClaude,
-		DefaultFormat:     OutputFormatText,
-		EnableStreamJSON:  true,
-		StreamBufferSize:  100,
+		DefaultAgent:     AgentTypeClaude,
+		DefaultFormat:    OutputFormatText,
+		EnableStreamJSON: true,
+		StreamBufferSize: 100,
 	}
 
 	// Load default agent
@@ -42,7 +42,7 @@ func LoadConfigFromEnv() Config {
 	return config
 }
 
-// ParsePermissionConfig parses permission-related configuration from environment
+// ParsePermissionConfig parses permission-related configuration from environment variables
 func ParsePermissionConfig() PermissionConfig {
 	config := PermissionConfig{
 		DefaultMode:       PermissionModeAuto,
@@ -53,30 +53,38 @@ func ParsePermissionConfig() PermissionConfig {
 	}
 
 	// Load permission mode
-	if mode := os.Getenv("RCC_PERMISSION_MODE"); mode != "" {
+	if mode := os.Getenv("AGENTBOOT_PERMISSION_MODE"); mode != "" {
 		if parsedMode, ok := ParsePermissionMode(mode); ok {
 			config.DefaultMode = parsedMode
 		}
 	}
 
 	// Load timeout
-	if timeout := os.Getenv("RCC_PERMISSION_TIMEOUT"); timeout != "" {
+	if timeout := os.Getenv("AGENTBOOT_PERMISSION_TIMEOUT"); timeout != "" {
 		if duration, err := time.ParseDuration(timeout); err == nil {
 			config.Timeout = duration
 		}
 	}
 
 	// Load whitelist
-	config.EnableWhitelist = os.Getenv("RCC_ENABLE_WHITELIST") == "true" || os.Getenv("RCC_ENABLE_WHITELIST") == "1"
-	if whitelist := os.Getenv("RCC_WHITELIST"); whitelist != "" {
+	if whitelist := os.Getenv("AGENTBOOT_PERMISSION_WHITELIST"); whitelist != "" {
+		config.EnableWhitelist = true
 		config.Whitelist = strings.Split(whitelist, ",")
 		for i, tool := range config.Whitelist {
 			config.Whitelist[i] = strings.TrimSpace(tool)
 		}
+	} else if os.Getenv("AGENTBOOT_ENABLE_WHITELIST") == "true" || os.Getenv("AGENTBOOT_ENABLE_WHITELIST") == "1" {
+		config.EnableWhitelist = true
+		if whitelist := os.Getenv("AGENTBOOT_WHITELIST"); whitelist != "" {
+			config.Whitelist = strings.Split(whitelist, ",")
+			for i, tool := range config.Whitelist {
+				config.Whitelist[i] = strings.TrimSpace(tool)
+			}
+		}
 	}
 
 	// Load blacklist
-	if blacklist := os.Getenv("RCC_BLACKLIST"); blacklist != "" {
+	if blacklist := os.Getenv("AGENTBOOT_PERMISSION_BLACKLIST"); blacklist != "" {
 		config.Blacklist = strings.Split(blacklist, ",")
 		for i, tool := range config.Blacklist {
 			config.Blacklist[i] = strings.TrimSpace(tool)
@@ -84,27 +92,16 @@ func ParsePermissionConfig() PermissionConfig {
 	}
 
 	// Load remember decisions
-	if remember := os.Getenv("RCC_REMEMBER_DECISIONS"); remember != "" {
+	if remember := os.Getenv("AGENTBOOT_PERMISSION_REMEMBER_DECISIONS"); remember != "" {
 		config.RememberDecisions = remember == "true" || remember == "1"
 	}
 
 	// Load decision duration
-	if duration := os.Getenv("RCC_DECISION_DURATION"); duration != "" {
+	if duration := os.Getenv("AGENTBOOT_PERMISSION_DECISION_DURATION"); duration != "" {
 		if d, err := time.ParseDuration(duration); err == nil {
 			config.DecisionDuration = d
 		}
 	}
 
 	return config
-}
-
-// PermissionConfig holds permission handler configuration
-type PermissionConfig struct {
-	DefaultMode       PermissionMode `json:"default_mode"`
-	Timeout           time.Duration  `json:"timeout"`
-	EnableWhitelist   bool            `json:"enable_whitelist"`
-	Whitelist         []string        `json:"whitelist"`
-	Blacklist         []string        `json:"blacklist"`
-	RememberDecisions bool            `json:"remember_decisions"`
-	DecisionDuration  time.Duration  `json:"decision_duration"`
 }

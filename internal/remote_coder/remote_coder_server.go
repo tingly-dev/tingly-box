@@ -64,22 +64,16 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		MessageRetention: cfg.MessageRetention,
 	}, store)
 
-	// Create AgentBoot instance
-	agentBootConfig := cfg.GetAgentBootConfig()
+	// Create AgentBoot instance from environment config
+	agentBootConfig := agentboot.LoadConfigFromEnv()
 	agentBoot := agentboot.New(agentBootConfig)
 
-	// Create permission handler
-	permHandler := permission.NewDefaultHandler(cfg.GetPermissionConfig())
+	// Create permission handler from environment config
+	permHandler := permission.NewHandlerFromEnv()
 
 	// Create and register Claude agent
 	claudeAgent := claude.NewAgent(agentBootConfig)
 	claudeAgent.SetPermissionHandler(permHandler)
-	if cfg.ClaudePath != "" {
-		claudeAgent.SetCLIPath(cfg.ClaudePath)
-	}
-	if cfg.SkipPermissions {
-		claudeAgent.SetSkipPermissions(true)
-	}
 	agentBoot.RegisterAgent(agentboot.AgentTypeClaude, claudeAgent)
 
 	// Store global instances for bot platform integration
@@ -239,6 +233,6 @@ func GetPermissionHandler() permission.Handler {
 
 // Global instances for bot platform integration
 var (
-	globalAgentBoot       *agentboot.AgentBoot
+	globalAgentBoot         *agentboot.AgentBoot
 	globalPermissionHandler permission.Handler
 )

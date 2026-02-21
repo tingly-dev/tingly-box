@@ -31,7 +31,7 @@ func TestManagerStartStop(t *testing.T) {
 
 	// Create agentBoot and permission handler for test
 	agentBoot := agentboot.New(agentboot.Config{})
-	permHandler := permission.NewDefaultHandler(permission.Config{})
+	permHandler := permission.NewDefaultHandler(agentboot.PermissionConfig{})
 
 	// Create manager
 	manager := NewManager(store, sessionMgr, agentBoot, permHandler)
@@ -81,7 +81,7 @@ func TestManagerStartEnabledBots(t *testing.T) {
 
 	// Create agentBoot and permission handler for test
 	agentBoot := agentboot.New(agentboot.Config{})
-	permHandler := permission.NewDefaultHandler(permission.Config{})
+	permHandler := permission.NewDefaultHandler(agentboot.PermissionConfig{})
 
 	// Create manager
 	manager := NewManager(store, sessionMgr, agentBoot, permHandler)
@@ -120,7 +120,7 @@ func TestManagerStopAll(t *testing.T) {
 
 	// Create agentBoot and permission handler for test
 	agentBoot := agentboot.New(agentboot.Config{})
-	permHandler := permission.NewDefaultHandler(permission.Config{})
+	permHandler := permission.NewDefaultHandler(agentboot.PermissionConfig{})
 
 	manager := NewManager(store, sessionMgr, agentBoot, permHandler)
 

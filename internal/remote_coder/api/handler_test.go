@@ -11,8 +11,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/audit"
-	"github.com/tingly-dev/tingly-box/internal/remote_coder/launcher"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/summarizer"
 )
@@ -24,13 +24,13 @@ func init() {
 
 func setupTestHandler() *Handler {
 	sessionMgr := session.NewManager(session.Config{Timeout: 30 * time.Minute}, nil)
-	claudeLauncher := launcher.NewClaudeCodeLauncher()
+	agentBoot := agentboot.New(agentboot.Config{})
 	summaryEngine := summarizer.NewEngine()
 	auditLogger := audit.NewLogger(audit.Config{
 		Console:    false,
 		MaxEntries: 100,
 	})
-	return NewHandler(sessionMgr, claudeLauncher, summaryEngine, auditLogger)
+	return NewHandler(sessionMgr, agentBoot, summaryEngine, auditLogger)
 }
 
 func TestHandler_Handshake_Success(t *testing.T) {

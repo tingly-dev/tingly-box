@@ -12,12 +12,12 @@ import (
 
 // DefaultHandler implements the Handler interface
 type DefaultHandler struct {
-	mu                sync.RWMutex
-	config            Config
-	modePerScope       map[string]agentboot.PermissionMode // scope -> mode
-	pendingRequests   map[string]*pendingRequest
-	decisions         map[string]*cachedDecision
-	decisionChannels  map[string]chan agentboot.PermissionResponse
+	mu               sync.RWMutex
+	config           agentboot.PermissionConfig
+	modePerScope     map[string]agentboot.PermissionMode // scope -> mode
+	pendingRequests  map[string]*pendingRequest
+	decisions        map[string]*cachedDecision
+	decisionChannels map[string]chan agentboot.PermissionResponse
 }
 
 type pendingRequest struct {
@@ -31,8 +31,8 @@ type cachedDecision struct {
 	expiresAt time.Time
 }
 
-// NewDefaultHandler creates a new permission handler
-func NewDefaultHandler(config Config) *DefaultHandler {
+// newDefaultHandler creates a new permission handler (internal)
+func newDefaultHandler(config agentboot.PermissionConfig) *DefaultHandler {
 	if config.DefaultMode == "" {
 		config.DefaultMode = agentboot.PermissionModeAuto
 	}
@@ -44,11 +44,11 @@ func NewDefaultHandler(config Config) *DefaultHandler {
 	}
 
 	return &DefaultHandler{
-		config:            config,
-		modePerScope:      make(map[string]agentboot.PermissionMode),
-		pendingRequests:   make(map[string]*pendingRequest),
-		decisions:         make(map[string]*cachedDecision),
-		decisionChannels:  make(map[string]chan agentboot.PermissionResponse),
+		config:           config,
+		modePerScope:     make(map[string]agentboot.PermissionMode),
+		pendingRequests:  make(map[string]*pendingRequest),
+		decisions:        make(map[string]*cachedDecision),
+		decisionChannels: make(map[string]chan agentboot.PermissionResponse),
 	}
 }
 

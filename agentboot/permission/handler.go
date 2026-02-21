@@ -2,7 +2,6 @@ package permission
 
 import (
 	"context"
-	"time"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 )
@@ -28,13 +27,12 @@ type Handler interface {
 	RecordDecision(req agentboot.PermissionRequest, response agentboot.PermissionResponse) error
 }
 
-// Config holds permission handler configuration
-type Config struct {
-	DefaultMode       agentboot.PermissionMode `json:"default_mode"`
-	Timeout           time.Duration            `json:"timeout"`
-	EnableWhitelist   bool                     `json:"enable_whitelist"`
-	Whitelist         []string                 `json:"whitelist"`
-	Blacklist         []string                 `json:"blacklist"`
-	RememberDecisions bool                     `json:"remember_decisions"`
-	DecisionDuration  time.Duration            `json:"decision_duration"`
+// NewDefaultHandler creates a new permission handler from agentboot.PermissionConfig
+func NewDefaultHandler(config agentboot.PermissionConfig) Handler {
+	return newDefaultHandler(config)
+}
+
+// NewHandlerFromEnv creates a new permission handler from environment variables
+func NewHandlerFromEnv() Handler {
+	return NewDefaultHandler(agentboot.ParsePermissionConfig())
 }

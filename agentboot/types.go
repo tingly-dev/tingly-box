@@ -252,6 +252,17 @@ type PermissionResult struct {
 	Reason   string `json:"reason,omitempty"`
 }
 
+// PermissionConfig holds permission handler configuration
+type PermissionConfig struct {
+	DefaultMode       PermissionMode `json:"default_mode"`
+	Timeout           time.Duration  `json:"timeout"`
+	EnableWhitelist   bool           `json:"enable_whitelist"`
+	Whitelist         []string       `json:"whitelist"`
+	Blacklist         []string       `json:"blacklist"`
+	RememberDecisions bool           `json:"remember_decisions"`
+	DecisionDuration  time.Duration  `json:"decision_duration"`
+}
+
 // Event represents a generic agent event
 type Event struct {
 	Type      string                 `json:"type"`
