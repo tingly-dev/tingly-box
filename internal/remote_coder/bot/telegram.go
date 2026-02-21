@@ -2,6 +2,7 @@ package bot
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -464,12 +465,22 @@ func handleClaudeCodeMessage(
 		return
 	}
 
+	// Determine if we should resume: session has existing messages (excluding the one we just appended)
+	// Note: We just appended the current user message, so check if there were messages before that
+	shouldResume := false
+	if msgs, ok := sessionMgr.GetMessages(sessionID); ok && len(msgs) > 1 {
+		// More than 1 message means this is a continuation (current user message + at least one previous message)
+		shouldResume = true
+	}
+
 	// Create a streaming message handler that sends formatted messages to the bot
 	streamHandler := newStreamingMessageHandler(bot, chatID, replyTo)
 
 	result, err := agent.Execute(execCtx, text, agentboot.ExecutionOptions{
 		ProjectPath: projectPath,
 		Handler:     streamHandler,
+		SessionID:   sessionID,
+		Resume:      shouldResume,
 	})
 
 	response := streamHandler.GetOutput()
@@ -1544,6 +1555,9 @@ func (h *streamingMessageHandler) OnMessage(msg interface{}) error {
 
 	// Format using the formatter
 	formatted := h.formatter.Format(claudeMsg)
+	d, _ := json.Marshal(claudeMsg.GetRawData())
+	logrus.Infof("[telegram] %s", d)
+	logrus.Infof("[telegram] %s", formatted)
 	if strings.TrimSpace(formatted) != "" {
 		h.sendMessage(formatted)
 	}

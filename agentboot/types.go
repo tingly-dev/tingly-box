@@ -87,6 +87,12 @@ type ExecutionOptions struct {
 	// Handler is an optional message handler for real-time processing
 	// If provided, messages will be streamed to the handler during execution
 	Handler MessageHandler
+	// SessionID is the session ID to use or resume
+	// If Resume is true, --resume <session_id> is used to continue an existing session
+	// If Resume is false, --session-id <session_id> is used to create a new session with specific ID
+	SessionID string
+	// Resume indicates whether to resume an existing session (true) or create a new one (false)
+	Resume bool
 }
 
 // Result represents the result of an agent execution

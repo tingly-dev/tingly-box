@@ -158,7 +158,7 @@ func (l *Launcher) ExecuteWithHandler(
 	}
 
 	// Build command args
-	args, err := l.buildCommandArgs(format, prompt)
+	args, err := l.buildCommandArgs(format, prompt, opts)
 	if err != nil {
 		return err
 	}
@@ -287,7 +287,7 @@ func (l *Launcher) ExecuteStream(
 	}
 
 	// Build command args
-	args, err := l.buildCommandArgs(format, prompt)
+	args, err := l.buildCommandArgs(format, prompt, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -357,17 +357,25 @@ func (l *Launcher) ExecuteStream(
 }
 
 // buildCommandArgs constructs CLI arguments based on format and prompt
-func (l *Launcher) buildCommandArgs(format agentboot.OutputFormat, prompt string) ([]string, error) {
+func (l *Launcher) buildCommandArgs(format agentboot.OutputFormat, prompt string, opts agentboot.ExecutionOptions) ([]string, error) {
 	var args []string
+
+	// Add --resume flag if resuming an existing session
+	if opts.SessionID != "" && opts.Resume {
+		args = append(args, "--resume", opts.SessionID)
+	} else if opts.SessionID != "" && !opts.Resume {
+		// Use --session-id for new sessions with specific ID
+		args = append(args, "--session-id", opts.SessionID)
+	}
 
 	switch format {
 	case agentboot.OutputFormatStreamJSON:
-		args = []string{"--output-format", "stream-json", "--verbose"}
+		args = append(args, "--output-format", "stream-json", "--verbose")
 		if prompt != "" {
 			args = append(args, "--print", prompt)
 		}
 	case agentboot.OutputFormatText:
-		args = []string{"--print", "--output-format", "text"}
+		args = append(args, "--print", "--output-format", "text")
 		if prompt != "" {
 			args = append(args, prompt)
 		}
