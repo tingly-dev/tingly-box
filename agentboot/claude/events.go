@@ -1,16 +1,24 @@
 package claude
 
-// Claude-specific event types
+// Claude-specific event types (matching SDK stream types)
 const (
-	EventTypeTextDelta      = "text_delta"
-	EventTypeToolCallStart  = "tool_call_start"
-	EventTypeToolCallEnd    = "tool_call_end"
-	EventTypePermissionReq  = "permission_request"
-	EventTypeStatus         = "status"
-	EventTypeThinking       = "thinking"
-	EventTypeError          = "error"
-	EventTypeControlRequest = "control_request"
-	EventTypeControlResp    = "control_response"
+	EventTypeUser      = "user"
+	EventTypeAssistant = "assistant"
+	EventTypeSystem    = "system"
+	EventTypeResult    = "result"
+	EventTypeControl   = "control_"
+)
+
+// Control subtypes
+const (
+	ControlSubtypeRequest  = "request"
+	ControlSubtypeResponse = "response"
+)
+
+// Result subtypes
+const (
+	ResultSubtypeSuccess = "success"
+	ResultSubtypeError   = "error"
 )
 
 // ToolCallInfo represents a tool call

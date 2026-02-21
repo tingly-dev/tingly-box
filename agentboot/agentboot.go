@@ -7,10 +7,10 @@ import (
 
 // Config holds the AgentBoot configuration
 type Config struct {
-	DefaultAgent      AgentType     `json:"default_agent"`
-	DefaultFormat     OutputFormat  `json:"default_format"`
-	EnableStreamJSON  bool          `json:"enable_stream_json"`
-	StreamBufferSize  int           `json:"stream_buffer_size"`
+	DefaultAgent     AgentType    `json:"default_agent"`
+	DefaultFormat    OutputFormat `json:"default_format"`
+	EnableStreamJSON bool         `json:"enable_stream_json"`
+	StreamBufferSize int          `json:"stream_buffer_size"`
 }
 
 // AgentBoot manages agent instances
@@ -26,7 +26,7 @@ func New(config Config) *AgentBoot {
 		config.DefaultAgent = AgentTypeClaude
 	}
 	if config.DefaultFormat == "" {
-		config.DefaultFormat = OutputFormatText
+		config.DefaultFormat = OutputFormatStreamJSON
 	}
 	if config.StreamBufferSize == 0 {
 		config.StreamBufferSize = 100

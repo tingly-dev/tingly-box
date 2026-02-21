@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -79,6 +80,41 @@ func (l *Launcher) ExecuteWithTimeout(
 		}, exec.ErrNotFound
 	}
 
+	// Use streaming execution internally
+	collector := NewResultCollector()
+	if err := l.ExecuteWithHandler(ctx, prompt, timeout, opts, collector); err != nil {
+		return collector.Result(), err
+	}
+
+	result := collector.Result()
+	result.Duration = time.Since(start)
+
+	if result.Error != "" {
+		return result, errors.New(result.Error)
+	}
+
+	return result, nil
+}
+
+// ExecuteWithHandler executes Claude and streams events to a message handler
+func (l *Launcher) ExecuteWithHandler(
+	ctx context.Context,
+	prompt string,
+	timeout time.Duration,
+	opts agentboot.ExecutionOptions,
+	handler MessageHandler,
+) error {
+	// Create context with timeout
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+
+	if !l.IsAvailable() {
+		return exec.ErrNotFound
+	}
+
 	// Determine output format
 	format := opts.OutputFormat
 	if format == "" {
@@ -87,58 +123,140 @@ func (l *Launcher) ExecuteWithTimeout(
 		l.mu.RUnlock()
 	}
 	if format == "" {
-		format = agentboot.OutputFormatText
+		format = agentboot.OutputFormatStreamJSON
 	}
 
 	// Build command args
-	var args []string
-	switch format {
-	case agentboot.OutputFormatStreamJSON:
-		args = []string{"--output-format", "stream-json", "--verbose"}
-		if prompt != "" {
-			args = append(args, "--print", prompt)
-		}
-	case agentboot.OutputFormatText:
-		args = []string{"--print", "--output-format", "text"}
-		if prompt != "" {
-			args = append(args, prompt)
-		}
-	default:
-		return &agentboot.Result{
-			Error:  fmt.Sprintf("invalid output format: %s", format),
-			Format: format,
-		}, fmt.Errorf("invalid format")
+	args, err := l.buildCommandArgs(format, prompt)
+	if err != nil {
+		return err
 	}
 
-	if l.skipPerms && !isRoot() {
-		args = append(args, "--dangerously-skip-permissions")
+	// Create command
+	cmd, err := l.buildCommand(ctx, args, opts)
+	if err != nil {
+		return err
 	}
 
-	cmd := exec.CommandContext(ctx, l.cliPath, args...)
-	if strings.TrimSpace(opts.ProjectPath) != "" {
-		if stat, err := os.Stat(opts.ProjectPath); err == nil && stat.IsDir() {
-			cmd.Dir = opts.ProjectPath
-		} else if err != nil {
-			return &agentboot.Result{
-				Error:  "invalid project path: " + err.Error(),
-				Format: format,
-			}, err
-		} else {
-			return &agentboot.Result{
-				Error:  "invalid project path: not a directory",
-				Format: format,
-			}, os.ErrInvalid
+	// Setup pipes
+	var stderr bytes.Buffer
+	var stdin io.WriteCloser
+
+	// Create stdout pipe for real-time reading
+	stdoutReader, stdoutWriter, err := os.Pipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stdout pipe: %w", err)
+	}
+	defer stdoutReader.Close()
+	defer stdoutWriter.Close()
+
+	cmd.Stdout = stdoutWriter
+	cmd.Stderr = &stderr
+
+	if format == agentboot.OutputFormatStreamJSON && l.permissionHandler != nil {
+		stdin, err = cmd.StdinPipe()
+		if err != nil {
+			return fmt.Errorf("failed to create stdin pipe: %w", err)
 		}
 	}
 
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		if stdin != nil {
+			stdin.Close()
+		}
+		return fmt.Errorf("failed to start command: %w", err)
+	}
+
+	if stdin != nil {
+		go l.handleControlMessages(ctx, stdin, &stderr)
+		stdin.Close()
+	}
+
+	// Parse and stream events - use a shared accumulator
+	parser := events.NewParser()
+	accumulator := NewMessageAccumulator()
+	go parser.Parse(stdoutReader)
+
+	// Close stdout writer when parsing is done
+	defer stdoutWriter.Close()
+
+	// Process events until parser closes
+	for event := range parser.Events() {
+		messages, hasResult, resultSuccess := accumulator.AddEvent(event)
+
+		for _, msg := range messages {
+			if hErr := handler.OnMessage(msg); hErr != nil {
+				handler.OnError(hErr)
+			}
+		}
+
+		if hasResult {
+			handler.OnComplete(&ResultCompletion{
+				Success: resultSuccess,
+			})
+		}
+	}
+
+	// Wait for command to complete and check exit code
+	if err := cmd.Wait(); err != nil {
+		return l.handleExecutionError(err, stderr.String(), handler)
+	}
+
+	return nil
+}
+
+// ExecuteStream executes Claude and returns a stream handler
+func (l *Launcher) ExecuteStream(
+	ctx context.Context,
+	prompt string,
+	timeout time.Duration,
+	opts agentboot.ExecutionOptions,
+) (*StreamHandler, error) {
+	// Create context with timeout
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		_ = cancel // Will be done when stream handler closes
+	}
+
+	if !l.IsAvailable() {
+		return nil, exec.ErrNotFound
+	}
+
+	// Determine output format
+	format := opts.OutputFormat
+	if format == "" {
+		l.mu.RLock()
+		format = l.defaultFormat
+		l.mu.RUnlock()
+	}
+	if format == "" {
+		format = agentboot.OutputFormatStreamJSON
+	}
+
+	// Build command args
+	args, err := l.buildCommandArgs(format, prompt)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create command
+	cmd, err := l.buildCommand(ctx, args, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create stream handler
+	streamHandler := NewStreamHandler(100)
+
+	// Setup pipes
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	// For stream-json with permission handling, we need stdin
 	var stdin io.WriteCloser
 	if format == agentboot.OutputFormatStreamJSON && l.permissionHandler != nil {
-		var err error
 		stdin, err = cmd.StdinPipe()
 		if err != nil {
 			return nil, fmt.Errorf("failed to create stdin pipe: %w", err)
@@ -154,84 +272,126 @@ func (l *Launcher) ExecuteWithTimeout(
 	}
 
 	if stdin != nil {
-		// Start permission handler goroutine (reading from stderr for control messages)
-		go l.handleControlMessages(context.Background(), stdin, &stderr)
+		go l.handleControlMessages(ctx, stdin, &stderr)
+		_ = stdin.Close()
+	}
 
-		// Close stdin since we're not sending any initial input
-		stdin.Close()
+	// Create a pipe for real-time output streaming
+	stdoutReader, stdoutWriter, err := os.Pipe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
+	}
+	cmd.Stdout = stdoutWriter
+
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		stdoutReader.Close()
+		stdoutWriter.Close()
+		if stdin != nil {
+			stdin.Close()
+		}
+		return nil, fmt.Errorf("failed to start command: %w", err)
+	}
+
+	// Start parsing in background - read from pipe in real-time
+	go l.streamOutput(cmd, events.NewParser(), stdoutReader, streamHandler)
+
+	// Close writer after command starts (reader will get EOF)
+	go func() {
+		cmd.Wait()
+		stdoutWriter.Close()
+	}()
+
+	return streamHandler, nil
+}
+
+// buildCommandArgs constructs CLI arguments based on format and prompt
+func (l *Launcher) buildCommandArgs(format agentboot.OutputFormat, prompt string) ([]string, error) {
+	var args []string
+
+	switch format {
+	case agentboot.OutputFormatStreamJSON:
+		args = []string{"--output-format", "stream-json", "--verbose"}
+		if prompt != "" {
+			args = append(args, "--print", prompt)
+		}
+	case agentboot.OutputFormatText:
+		args = []string{"--print", "--output-format", "text"}
+		if prompt != "" {
+			args = append(args, prompt)
+		}
+	default:
+		return nil, fmt.Errorf("invalid output format: %s", format)
+	}
+
+	l.mu.RLock()
+	skipPerms := l.skipPerms
+	l.mu.RUnlock()
+
+	if skipPerms && !isRoot() {
+		args = append(args, "--dangerously-skip-permissions")
+	}
+
+	return args, nil
+}
+
+// buildCommand creates the exec.Cmd with proper working directory
+func (l *Launcher) buildCommand(ctx context.Context, args []string, opts agentboot.ExecutionOptions) (*exec.Cmd, error) {
+	l.mu.RLock()
+	cliPath := l.cliPath
+	l.mu.RUnlock()
+
+	cmd := exec.CommandContext(ctx, cliPath, args...)
+
+	if strings.TrimSpace(opts.ProjectPath) != "" {
+		if stat, err := os.Stat(opts.ProjectPath); err == nil && stat.IsDir() {
+			cmd.Dir = opts.ProjectPath
+		} else if err != nil {
+			return nil, fmt.Errorf("invalid project path: %w", err)
+		} else {
+			return nil, os.ErrInvalid
+		}
+	}
+
+	return cmd, nil
+}
+
+// streamOutput parses output and sends to stream handler
+func (l *Launcher) streamOutput(cmd *exec.Cmd, p *events.Parser, stdout io.Reader, handler *StreamHandler) {
+	defer handler.Close()
+
+	// Parse stdout in real-time
+	if err := p.Parse(stdout); err != nil {
+		handler.errorChan <- err
+		return
 	}
 
 	// Wait for command to complete
-	err := cmd.Wait()
-	duration := time.Since(start)
+	cmd.Wait()
+}
 
-	stderrOutput := strings.TrimSpace(stderr.String())
+// handleExecutionError processes execution errors
+func (l *Launcher) handleExecutionError(err error, stderr string, handler MessageHandler) error {
+	var errMsg string
 
-	result := &agentboot.Result{
-		Duration: duration,
-		Format:   format,
-		Metadata: make(map[string]interface{}),
-	}
-
-	// Process output based on format
-	if format == agentboot.OutputFormatStreamJSON {
-		// Parse stream-json events
-		parser := events.NewParser()
-		if err := parser.Parse(bytes.NewReader(stdout.Bytes())); err != nil {
-			result.Error = fmt.Sprintf("parse error: %v", err)
-			result.ExitCode = 1
-			return result, err
+	// Check for timeout error
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		errMsg = "execution timed out"
+	} else if exitErr, ok := err.(*exec.ExitError); ok {
+		errMsg = strings.TrimSpace(stderr)
+		if errMsg == "" {
+			errMsg = exitErr.Error()
 		}
-
-		// Collect all events
-		for event := range parser.Events() {
-			// Convert events.Event to agentboot.Event
-			result.Events = append(result.Events, agentboot.Event{
-				Type:      event.Type,
-				Data:      event.Data,
-				Timestamp: event.Timestamp,
-				Raw:       event.Raw,
-			})
-
-			// Extract metadata
-			switch event.Type {
-			case "status":
-				result.Metadata["status"] = event.Data["status"]
-			case "thinking":
-				result.Metadata["thinking"] = event.Data
-			case "token_count":
-				result.Metadata["tokens"] = event.Data
-			}
-		}
-
-		// Extract text output
-		result.Output = result.TextOutput()
 	} else {
-		// Text format - use raw output
-		result.Output = strings.TrimSpace(stdout.String())
+		errMsg = err.Error()
 	}
 
-	// Handle errors
-	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			result.Error = "execution timed out"
-		} else if exitErr, ok := err.(*exec.ExitError); ok {
-			result.ExitCode = exitErr.ExitCode()
-			result.Error = stderrOutput
-			if result.Error == "" {
-				result.Error = exitErr.Error()
-			}
-		} else {
-			result.Error = err.Error()
-		}
-		logrus.Errorf("Claude Code execution failed: %v", err)
-		return result, err
-	}
+	handler.OnComplete(&ResultCompletion{
+		Success: false,
+		Error:   errMsg,
+	})
 
-	result.ExitCode = 0
-	logrus.Infof("Claude Code execution completed in %v (format: %s)", duration, format)
-
-	return result, nil
+	return fmt.Errorf("claude execution failed: %w", err)
 }
 
 // IsAvailable checks if Claude Code CLI is available
@@ -312,14 +472,19 @@ func (l *Launcher) handleControlMessages(ctx context.Context, stdin io.WriteClos
 				return
 			}
 
-			if event.Type == EventTypeControlRequest {
+			// Check if this is a control request event (e.g., "control_request")
+			if strings.HasPrefix(event.Type, EventTypeControl) {
 				if controlData, ok := event.Data["request"].(map[string]interface{}); ok {
 					if subtype, _ := controlData["subtype"].(string); subtype == "can_use_tool" {
 						req := l.parsePermissionRequest(controlData)
 
 						// Get permission decision
-						if l.permissionHandler != nil {
-							result, err := l.permissionHandler.CanUseTool(ctx, req)
+						l.mu.RLock()
+						handler := l.permissionHandler
+						l.mu.RUnlock()
+
+						if handler != nil {
+							result, err := handler.CanUseTool(ctx, req)
 							if err != nil {
 								logrus.Errorf("Permission handler error: %v", err)
 								result = agentboot.PermissionResult{Approved: false}
@@ -356,14 +521,14 @@ func (l *Launcher) sendPermissionResponse(stdin io.WriteCloser, requestID string
 
 	if result.Approved {
 		response["response"] = map[string]interface{}{
-			"subtype":   "success",
+			"subtype":    "success",
 			"request_id": requestID,
 		}
 	} else {
 		response["response"] = map[string]interface{}{
-			"subtype":   "error",
+			"subtype":    "error",
 			"request_id": requestID,
-			"error":     result.Reason,
+			"error":      result.Reason,
 		}
 	}
 
@@ -375,23 +540,4 @@ func (l *Launcher) sendPermissionResponse(stdin io.WriteCloser, requestID string
 func isRoot() bool {
 	uid := os.Getuid()
 	return uid == 0
-}
-
-// Helper functions for type-safe map access
-func getString(m map[string]interface{}, key string) string {
-	if val, ok := m[key]; ok {
-		if str, ok := val.(string); ok {
-			return str
-		}
-	}
-	return ""
-}
-
-func getMap(m map[string]interface{}, key string) map[string]interface{} {
-	if val, ok := m[key]; ok {
-		if m, ok := val.(map[string]interface{}); ok {
-			return m
-		}
-	}
-	return nil
 }
