@@ -1572,9 +1572,24 @@ func (h *streamingMessageHandler) OnError(err error) {
 	h.sendMessage(fmt.Sprintf("[ERROR] %v", err))
 }
 
-// OnComplete implements agentboot.MessageHandler
+// OnComplete implements agentboot.MessageHandler - sends action keyboard when complete
 func (h *streamingMessageHandler) OnComplete(result *agentboot.CompletionResult) {
-	// Completion is handled by the caller
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	// Build action keyboard
+	kb := BuildActionKeyboard()
+	tgKeyboard := convertActionKeyboardToTelegram(kb.Build())
+
+	_, err := h.bot.SendMessage(context.Background(), h.chatID, &imbot.SendMessageOptions{
+		Text: "/bot tips",
+		Metadata: map[string]interface{}{
+			"replyMarkup": tgKeyboard,
+		},
+	})
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to send action keyboard")
+	}
 }
 
 // GetOutput returns the accumulated output (for compatibility, returns empty as we stream immediately)
