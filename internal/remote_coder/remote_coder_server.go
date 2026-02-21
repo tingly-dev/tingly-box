@@ -64,12 +64,12 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		MessageRetention: cfg.MessageRetention,
 	}, store)
 
-	// Create AgentBoot instance from environment config
-	agentBootConfig := agentboot.LoadConfigFromEnv()
+	// Create AgentBoot instance with default config
+	agentBootConfig := agentboot.DefaultConfig()
 	agentBoot := agentboot.New(agentBootConfig)
 
-	// Create permission handler from environment config
-	permHandler := permission.NewHandlerFromEnv()
+	// Create permission handler with default config
+	permHandler := permission.NewDefaultHandler(agentboot.DefaultPermissionConfig())
 
 	// Create and register Claude agent
 	claudeAgent := claude.NewAgent(agentBootConfig)

@@ -27,12 +27,7 @@ type Handler interface {
 	RecordDecision(req agentboot.PermissionRequest, response agentboot.PermissionResponse) error
 }
 
-// NewDefaultHandler creates a new permission handler from agentboot.PermissionConfig
+// NewDefaultHandler creates a new permission handler with the given config
 func NewDefaultHandler(config agentboot.PermissionConfig) Handler {
 	return newDefaultHandler(config)
-}
-
-// NewHandlerFromEnv creates a new permission handler from environment variables
-func NewHandlerFromEnv() Handler {
-	return NewDefaultHandler(agentboot.ParsePermissionConfig())
 }
