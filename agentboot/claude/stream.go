@@ -410,9 +410,7 @@ func (r *ResultCollector) OnMessage(msg Message) error {
 	case *AssistantMessage:
 		// Extract text from assistant messages
 		for _, block := range m.Message.Content {
-			if textBlock, ok := block.(*TextBlock); ok {
-				r.result.Output += textBlock.Text
-			}
+			r.result.Output += block.Text
 		}
 		r.result.Format = agentboot.OutputFormatStreamJSON
 	case *ResultMessage:
@@ -513,9 +511,7 @@ func (r *ResultCollector) BuildTextOutput() string {
 		switch m := msg.(type) {
 		case *AssistantMessage:
 			for _, block := range m.Message.Content {
-				if textBlock, ok := block.(*TextBlock); ok {
-					output.WriteString(textBlock.Text)
-				}
+				output.WriteString(block.Text)
 			}
 		case *ResultMessage:
 			if m.Result != "" {

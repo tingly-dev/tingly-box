@@ -43,60 +43,49 @@ func (a *MessageAccumulator) AddEvent(event events.Event) ([]Message, bool, bool
 
 	switch event.Type {
 	case MessageTypeText:
-		msg := &ResultMessage{
-			Type:      event.Type,
-			Result:    getString(event.Data, "text"),
-			Timestamp: event.Timestamp,
+		var msg ResultMessage
+		if err := unmarshalEvent(event, &msg); err == nil {
+			msg.Type = event.Type
+			msg.Timestamp = event.Timestamp
+			a.messages = append(a.messages, &msg)
+			newMessages = append(newMessages, &msg)
+			hasResult = true
+			resultSuccess = true
 		}
-		a.messages = append(a.messages, msg)
-		newMessages = append(newMessages, msg)
-		hasResult = true
-		resultSuccess = true
 
 	case MessageTypeSystem:
-		msg := a.parseSystemMessage(event)
-		if msg != nil {
+		if msg := a.parseSystemMessage(event); msg != nil {
 			a.messages = append(a.messages, msg)
 			newMessages = append(newMessages, msg)
 		}
 
 	case MessageTypeAssistant:
-		msg := a.parseAssistantMessage(event)
-		if msg != nil {
+		if msg := a.parseAssistantMessage(event); msg != nil {
 			a.messages = append(a.messages, msg)
 			newMessages = append(newMessages, msg)
-
-			// Extract tool uses to track for results
-			a.trackToolUses(msg)
 		}
 
 	case MessageTypeUser:
-		msg := a.parseUserMessage(event)
-		if msg != nil {
+		if msg := a.parseUserMessage(event); msg != nil {
 			a.messages = append(a.messages, msg)
 			newMessages = append(newMessages, msg)
 		}
 
 	case MessageTypeToolUse:
-		msg := a.parseToolUseMessage(event)
-		if msg != nil {
+		if msg := a.parseToolUseMessage(event); msg != nil {
 			a.messages = append(a.messages, msg)
 			newMessages = append(newMessages, msg)
 		}
 
 	case MessageTypeToolResult:
-		msg := a.parseToolResultMessage(event)
-		if msg != nil {
+		if msg := a.parseToolResultMessage(event); msg != nil {
 			a.messages = append(a.messages, msg)
 			newMessages = append(newMessages, msg)
-
-			// Mark pending tool use as complete
 			a.completePendingToolUse(msg)
 		}
 
 	case MessageTypeResult:
-		msg := a.parseResultMessage(event)
-		if msg != nil {
+		if msg := a.parseResultMessage(event); msg != nil {
 			a.messages = append(a.messages, msg)
 			newMessages = append(newMessages, msg)
 			hasResult = true
@@ -104,27 +93,13 @@ func (a *MessageAccumulator) AddEvent(event events.Event) ([]Message, bool, bool
 		}
 
 	case MessageTypeStreamEvent:
-		msg := a.parseStreamEventMessage(event)
-		if msg != nil {
+		if msg := a.parseStreamEventMessage(event); msg != nil {
 			a.messages = append(a.messages, msg)
 			newMessages = append(newMessages, msg)
 		}
 	}
 
 	return newMessages, hasResult, resultSuccess
-}
-
-// trackToolUses extracts tool_use blocks from assistant message for tracking
-func (a *MessageAccumulator) trackToolUses(msg *AssistantMessage) {
-	for _, block := range msg.Message.Content {
-		if toolUse, ok := block.(*ToolUseBlock); ok {
-			a.pendingToolUses[toolUse.ID] = &PendingToolUse{
-				ToolUseID: toolUse.ID,
-				ToolUse:   toolUse,
-				Complete:  false,
-			}
-		}
-	}
 }
 
 // completePendingToolUse marks a tool use as complete when its result arrives
@@ -204,252 +179,88 @@ func (a *MessageAccumulator) Reset() {
 	a.sessionID = ""
 }
 
+// unmarshalEvent unmarshals event raw JSON into a target struct
+func unmarshalEvent(event events.Event, target interface{}) error {
+	return json.Unmarshal([]byte(event.Raw), target)
+}
+
 // parseSystemMessage parses a system message from an event
 func (a *MessageAccumulator) parseSystemMessage(event events.Event) *SystemMessage {
-	data := event.Data
-
-	sessionID, _ := data["session_id"].(string)
-	if sessionID != "" {
-		a.sessionID = sessionID
+	var msg SystemMessage
+	if err := unmarshalEvent(event, &msg); err != nil {
+		return nil
 	}
-
-	return &SystemMessage{
-		Type:      event.Type,
-		SubType:   getString(data, "subtype"),
-		SessionID: sessionID,
-		Timestamp: event.Timestamp,
+	if msg.SessionID != "" {
+		a.sessionID = msg.SessionID
 	}
+	return &msg
 }
 
 // parseAssistantMessage parses an assistant message from an event
 func (a *MessageAccumulator) parseAssistantMessage(event events.Event) *AssistantMessage {
-	data := event.Data
-
-	msgData, ok := data["message"].(map[string]interface{})
-	if !ok {
+	// Unmarshal raw JSON into the struct
+	var msg AssistantMessage
+	if err := json.Unmarshal([]byte(event.Raw), &msg); err != nil {
 		return nil
 	}
 
-	message := MessageData{
-		Model:      getString(msgData, "model"),
-		ID:         getString(msgData, "id"),
-		Type:       getString(msgData, "type"),
-		Role:       getString(msgData, "role"),
-		StopReason: getString(msgData, "stop_reason"),
+	// Handle session_id
+	if msg.SessionID != "" && a.sessionID == "" {
+		a.sessionID = msg.SessionID
 	}
 
-	// Parse content blocks
-	if contentArr, ok := msgData["content"].([]interface{}); ok {
-		for _, item := range contentArr {
-			if itemMap, ok := item.(map[string]interface{}); ok {
-				blockType := getString(itemMap, "type")
-				var block ContentBlock
-
-				switch blockType {
-				case "text":
-					block = &TextBlock{
-						Type: blockType,
-						Text: getString(itemMap, "text"),
-					}
-				case "tool_use":
-					block = &ToolUseBlock{
-						Type:  blockType,
-						ID:    getString(itemMap, "id"),
-						Name:  getString(itemMap, "name"),
-						Input: getMap(itemMap, "input"),
-					}
-				case "thinking":
-					block = &ThinkingBlock{
-						Type:     blockType,
-						Thinking: getString(itemMap, "thinking"),
-					}
-				case "tool_result":
-					block = &ToolResultContentBlock{
-						Type:      blockType,
-						ToolUseID: getString(itemMap, "tool_use_id"),
-						Content:   getString(itemMap, "content"),
-						IsError:   getBool(itemMap, "is_error"),
-					}
-				default:
-					// Keep as raw map for unknown types
-					block = &UnknownBlock{Data: itemMap}
-				}
-
-				message.Content = append(message.Content, block)
-			}
-		}
+	// Set timestamp from event if not in JSON
+	if msg.Timestamp.IsZero() {
+		msg.Timestamp = event.Timestamp
 	}
 
-	// Parse usage if present
-	if usageMap, ok := msgData["usage"].(map[string]interface{}); ok {
-		message.Usage = UsageInfo{
-			InputTokens:              getInt(usageMap, "input_tokens"),
-			CacheCreationInputTokens: getInt(usageMap, "cache_creation_input_tokens"),
-			CacheReadInputTokens:     getInt(usageMap, "cache_read_input_tokens"),
-			OutputTokens:             getInt(usageMap, "output_tokens"),
-		}
-	}
-
-	sessionID, _ := data["session_id"].(string)
-	if sessionID != "" && a.sessionID == "" {
-		a.sessionID = sessionID
-	}
-
-	return &AssistantMessage{
-		Type:            event.Type,
-		Message:         message,
-		ParentToolUseID: getStringPtr(data, "parent_tool_use_id"),
-		SessionID:       sessionID,
-		UUID:            getString(data, "uuid"),
-		Timestamp:       event.Timestamp,
-	}
+	return &msg
 }
 
 // parseUserMessage parses a user message from an event
 func (a *MessageAccumulator) parseUserMessage(event events.Event) *UserMessage {
-	data := event.Data
-
-	message, _ := data["message"].(string)
-
-	return &UserMessage{
-		Type:            event.Type,
-		Message:         message,
-		ParentToolUseID: getStringPtr(data, "parent_tool_use_id"),
-		SessionID:       getString(data, "session_id"),
-		Timestamp:       event.Timestamp,
+	var msg UserMessage
+	if err := unmarshalEvent(event, &msg); err != nil {
+		return nil
 	}
+	if msg.SessionID != "" && a.sessionID == "" {
+		a.sessionID = msg.SessionID
+	}
+	return &msg
 }
 
 // parseToolUseMessage parses a tool_use message from an event
 func (a *MessageAccumulator) parseToolUseMessage(event events.Event) *ToolUseMessage {
-	data := event.Data
-
-	return &ToolUseMessage{
-		Type:      event.Type,
-		Name:      getString(data, "name"),
-		Input:     getMap(data, "input"),
-		ToolUseID: getString(data, "tool_use_id"),
-		SessionID: getString(data, "session_id"),
-		Timestamp: event.Timestamp,
+	var msg ToolUseMessage
+	if err := unmarshalEvent(event, &msg); err != nil {
+		return nil
 	}
+	return &msg
 }
 
 // parseToolResultMessage parses a tool_result message from an event
 func (a *MessageAccumulator) parseToolResultMessage(event events.Event) *ToolResultMessage {
-	data := event.Data
-
-	msg := &ToolResultMessage{
-		Type:      event.Type,
-		ToolUseID: getString(data, "tool_use_id"),
-		IsError:   getBool(data, "is_error"),
-		SessionID: getString(data, "session_id"),
-		Timestamp: event.Timestamp,
+	var msg ToolResultMessage
+	if err := unmarshalEvent(event, &msg); err != nil {
+		return nil
 	}
-
-	// Output can be either a string or content blocks
-	if output, ok := data["output"].(string); ok {
-		msg.Output = output
-	}
-
-	// Check for structured content
-	if contentArr, ok := data["content"].([]interface{}); ok {
-		// Parse content blocks
-		contentBytes, _ := json.Marshal(contentArr)
-		var blocks []json.RawMessage
-		_ = json.Unmarshal(contentBytes, &blocks)
-
-		for _, blockBytes := range blocks {
-			if block, err := UnmarshalContentBlock(blockBytes); err == nil {
-				msg.Content = append(msg.Content, block)
-			}
-		}
-	}
-
-	return msg
+	return &msg
 }
 
 // parseResultMessage parses a result message from an event
 func (a *MessageAccumulator) parseResultMessage(event events.Event) *ResultMessage {
-	data := event.Data
-
-	msg := &ResultMessage{
-		Type:          event.Type,
-		SubType:       getString(data, "subtype"),
-		Result:        getString(data, "result"),
-		TotalCostUSD:  getFloat(data, "total_cost_usd"),
-		IsError:       getBool(data, "is_error"),
-		DurationMS:    getInt64(data, "duration_ms"),
-		DurationAPIMS: getInt64(data, "duration_api_ms"),
-		NumTurns:      getInt(data, "num_turns"),
-		SessionID:     getString(data, "session_id"),
-		Timestamp:     event.Timestamp,
+	var msg ResultMessage
+	if err := unmarshalEvent(event, &msg); err != nil {
+		return nil
 	}
-
-	// Parse usage if present
-	if usageMap, ok := data["usage"].(map[string]interface{}); ok {
-		msg.Usage = UsageInfo{
-			InputTokens:              getInt(usageMap, "input_tokens"),
-			CacheCreationInputTokens: getInt(usageMap, "cache_creation_input_tokens"),
-			CacheReadInputTokens:     getInt(usageMap, "cache_read_input_tokens"),
-			OutputTokens:             getInt(usageMap, "output_tokens"),
-		}
-	}
-
-	// Parse permission denials if present
-	if denialsArr, ok := data["permission_denials"].([]interface{}); ok {
-		for _, d := range denialsArr {
-			if denialMap, ok := d.(map[string]interface{}); ok {
-				msg.PermissionDenials = append(msg.PermissionDenials, PermissionDenial{
-					RequestID: getString(denialMap, "request_id"),
-					Reason:    getString(denialMap, "reason"),
-				})
-			}
-		}
-	}
-
-	return msg
+	return &msg
 }
 
 // parseStreamEventMessage parses a stream_event message from an event
 func (a *MessageAccumulator) parseStreamEventMessage(event events.Event) *StreamEventMessage {
-	data := event.Data
-
-	msg := &StreamEventMessage{
-		Type:      event.Type,
-		SessionID: getString(data, "session_id"),
-		Timestamp: event.Timestamp,
+	var msg StreamEventMessage
+	if err := unmarshalEvent(event, &msg); err != nil {
+		return nil
 	}
-
-	// Parse event data
-	if eventMap, ok := data["event"].(map[string]interface{}); ok {
-		event := StreamEvent{
-			Type:  getString(eventMap, "type"),
-			Index: getInt(eventMap, "index"),
-		}
-
-		// Parse delta based on type
-		if deltaMap, ok := eventMap["delta"].(map[string]interface{}); ok {
-			deltaType := getString(deltaMap, "type")
-
-			switch deltaType {
-			case "text_delta":
-				event.Delta = &TextDelta{
-					Type: deltaType,
-					Text: getString(deltaMap, "text"),
-				}
-			case "input_json_delta":
-				event.Delta = &InputJSONDelta{
-					Type:        deltaType,
-					PartialJSON: getString(deltaMap, "partial_json"),
-				}
-			default:
-				// Keep as raw map for unknown delta types
-				event.Delta = deltaMap
-			}
-		}
-
-		msg.Event = event
-	}
-
-	return msg
+	return &msg
 }

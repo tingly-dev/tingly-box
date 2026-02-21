@@ -14,6 +14,8 @@ import (
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/events"
+
+	"github.com/anthropics/anthropic-sdk-go"
 )
 
 // TestLauncherTextFormat tests Claude Code execution in text format
@@ -301,9 +303,11 @@ func TestMessageAccumulator(t *testing.T) {
 	accumulator := NewMessageAccumulator()
 
 	// Test system message
+	systemEventJSON := `{"type":"system","subtype":"init","session_id":"test-session-123","timestamp":"2024-01-01T12:00:00Z"}`
 	systemEvent := events.Event{
 		Type:      MessageTypeSystem,
 		Data:      map[string]interface{}{"subtype": "init", "session_id": "test-session-123"},
+		Raw:       systemEventJSON,
 		Timestamp: time.Now(),
 	}
 	messages, _, _ := accumulator.AddEvent(systemEvent)
@@ -312,26 +316,10 @@ func TestMessageAccumulator(t *testing.T) {
 	assert.Equal(t, "test-session-123", accumulator.GetSessionID())
 
 	// Test assistant message with text content
+	assistantEventJSON := `{"type":"assistant","message":{"model":"claude-sonnet-4-6","id":"msg-123","type":"message","role":"assistant","content":[{"type":"text","text":"Hello, world!"}],"stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":5}},"session_id":"test-session-123","uuid":"msg-uuid-456","timestamp":"2024-01-01T12:00:00Z"}`
 	assistantEvent := events.Event{
-		Type: MessageTypeAssistant,
-		Data: map[string]interface{}{
-			"message": map[string]interface{}{
-				"model": "claude-sonnet-4-6",
-				"id":    "msg-123",
-				"type":  "message",
-				"role":  "assistant",
-				"content": []interface{}{
-					map[string]interface{}{"type": "text", "text": "Hello, world!"},
-				},
-				"stop_reason": "end_turn",
-				"usage": map[string]interface{}{
-					"input_tokens":  10,
-					"output_tokens": 5,
-				},
-			},
-			"session_id": "test-session-123",
-			"uuid":       "msg-uuid-456",
-		},
+		Type:      MessageTypeAssistant,
+		Raw:       assistantEventJSON,
 		Timestamp: time.Now(),
 	}
 	messages, _, _ = accumulator.AddEvent(assistantEvent)
@@ -344,15 +332,10 @@ func TestMessageAccumulator(t *testing.T) {
 	assert.Len(t, assistantMsg.Message.Content, 1)
 
 	// Test result message
+	resultEventJSON := `{"type":"result","subtype":"success","result":"Done!","total_cost_usd":0.001,"duration_ms":1000,"session_id":"test-session-123","timestamp":"2024-01-01T12:00:00Z"}`
 	resultEvent := events.Event{
-		Type: MessageTypeResult,
-		Data: map[string]interface{}{
-			"subtype":        "success",
-			"result":         "Done!",
-			"total_cost_usd": 0.001,
-			"duration_ms":    1000,
-			"session_id":     "test-session-123",
-		},
+		Type:      MessageTypeResult,
+		Raw:       resultEventJSON,
 		Timestamp: time.Now(),
 	}
 	messages, hasResult, resultSuccess := accumulator.AddEvent(resultEvent)
@@ -473,9 +456,9 @@ func TestResultCollector(t *testing.T) {
 	// Test OnMessage with assistant message
 	assistantMsg := &AssistantMessage{
 		Type: MessageTypeAssistant,
-		Message: MessageData{
-			Content: []ContentBlock{
-				&TextBlock{Type: "text", Text: "Hello from assistant"},
+		Message: anthropic.Message{
+			Content: []anthropic.ContentBlockUnion{
+				{Type: "text", Text: "Hello from assistant"},
 			},
 		},
 	}
@@ -517,9 +500,9 @@ func TestMultiHandler(t *testing.T) {
 
 	msg := &AssistantMessage{
 		Type: MessageTypeAssistant,
-		Message: MessageData{
-			Content: []ContentBlock{
-				&TextBlock{Type: "text", Text: "Test"},
+		Message: anthropic.Message{
+			Content: []anthropic.ContentBlockUnion{
+				{Type: "text", Text: "Test"},
 			},
 		},
 	}
@@ -554,9 +537,9 @@ func TestCallbackHandler(t *testing.T) {
 
 	msg := &AssistantMessage{
 		Type: MessageTypeAssistant,
-		Message: MessageData{
-			Content: []ContentBlock{
-				&TextBlock{Type: "text", Text: "Test"},
+		Message: anthropic.Message{
+			Content: []anthropic.ContentBlockUnion{
+				{Type: "text", Text: "Test"},
 			},
 		},
 	}
@@ -618,16 +601,13 @@ func TestMessageTypes(t *testing.T) {
 		Type:      MessageTypeAssistant,
 		SessionID: "session-123",
 		UUID:      "uuid-456",
-		Message: MessageData{
-			Model: "claude-sonnet-4-6",
-			Role:  "assistant",
-			Content: []ContentBlock{
-				&TextBlock{Type: "text", Text: "Hello"},
+		Message: anthropic.Message{
+			Content: []anthropic.ContentBlockUnion{
+				{Type: "text", Text: "Hello"},
 			},
 		},
 	}
 	assert.Equal(t, MessageTypeAssistant, assistantMsg.GetType())
-	assert.Equal(t, "assistant", assistantMsg.Message.Role)
 
 	// Test ContentBlock types
 	textBlock := &TextBlock{Type: "text", Text: "Hello"}
@@ -663,9 +643,9 @@ func TestListenerFunc(t *testing.T) {
 
 	msg := &AssistantMessage{
 		Type: MessageTypeAssistant,
-		Message: MessageData{
-			Content: []ContentBlock{
-				&TextBlock{Type: "text", Text: "Test"},
+		Message: anthropic.Message{
+			Content: []anthropic.ContentBlockUnion{
+				{Type: "text", Text: "Test"},
 			},
 		},
 	}
@@ -685,9 +665,9 @@ func TestMessageHandlerFunc(t *testing.T) {
 
 	msg := &AssistantMessage{
 		Type: MessageTypeAssistant,
-		Message: MessageData{
-			Content: []ContentBlock{
-				&TextBlock{Type: "text", Text: "Test"},
+		Message: anthropic.Message{
+			Content: []anthropic.ContentBlockUnion{
+				{Type: "text", Text: "Test"},
 			},
 		},
 	}
@@ -739,8 +719,8 @@ func (h *TestMessageHandler) OnComplete(result *ResultCompletion) {
 func extractTextFromAssistant(msg *AssistantMessage) string {
 	var text strings.Builder
 	for _, block := range msg.Message.Content {
-		if textBlock, ok := block.(*TextBlock); ok {
-			text.WriteString(textBlock.Text)
+		if block.Type == "text" {
+			text.WriteString(block.Text)
 		}
 	}
 	return text.String()

@@ -3,6 +3,8 @@ package claude
 import (
 	"encoding/json"
 	"time"
+
+	"github.com/anthropics/anthropic-sdk-go"
 )
 
 // MessageType constants for Claude Code stream JSON
@@ -52,12 +54,12 @@ func (m *SystemMessage) GetRawData() map[string]interface{} {
 
 // AssistantMessage represents assistant messages with content blocks
 type AssistantMessage struct {
-	Type            string      `json:"type"`
-	Message         MessageData `json:"message"`
-	ParentToolUseID *string     `json:"parent_tool_use_id,omitempty"`
-	SessionID       string      `json:"session_id"`
-	UUID            string      `json:"uuid"`
-	Timestamp       time.Time   `json:"timestamp,omitempty"`
+	Type            string            `json:"type"`
+	Message         anthropic.Message `json:"message"`
+	ParentToolUseID *string           `json:"parent_tool_use_id,omitempty"`
+	SessionID       string            `json:"session_id"`
+	UUID            string            `json:"uuid"`
+	Timestamp       time.Time         `json:"timestamp,omitempty"`
 }
 
 // GetType implements Message
@@ -79,18 +81,6 @@ func (m *AssistantMessage) GetRawData() map[string]interface{} {
 	var result map[string]interface{}
 	_ = json.Unmarshal(data, &result)
 	return result
-}
-
-// MessageData matches Claude's message structure from the API
-type MessageData struct {
-	Model        string         `json:"model"`
-	ID           string         `json:"id"`
-	Type         string         `json:"type"`
-	Role         string         `json:"role"`
-	Content      []ContentBlock `json:"content"`
-	StopReason   string         `json:"stop_reason,omitempty"`
-	StopSequence *string        `json:"stop_sequence,omitempty"`
-	Usage        UsageInfo      `json:"usage,omitempty"`
 }
 
 // UsageInfo contains token usage statistics

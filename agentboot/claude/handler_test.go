@@ -3,6 +3,8 @@ package claude
 import (
 	"testing"
 	"time"
+
+	"github.com/anthropics/anthropic-sdk-go"
 )
 
 func TestDefaultMessageHandler_OnMessage(t *testing.T) {
@@ -51,10 +53,9 @@ func TestDefaultMessageHandler_MultipleMessages(t *testing.T) {
 		},
 		&AssistantMessage{
 			Type: MessageTypeAssistant,
-			Message: MessageData{
-				ID: "msg-1",
-				Content: []ContentBlock{
-					&TextBlock{Type: "text", Text: "Hi there!"},
+			Message: anthropic.Message{
+				Content: []anthropic.ContentBlockUnion{
+					{Type: "text", Text: "Hi there!"},
 				},
 			},
 		},
