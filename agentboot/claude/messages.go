@@ -7,6 +7,7 @@ import (
 
 // MessageType constants for Claude Code stream JSON
 const (
+	MessageTypeText        = "text"
 	MessageTypeSystem      = "system"
 	MessageTypeAssistant   = "assistant"
 	MessageTypeUser        = "user"

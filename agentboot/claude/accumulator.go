@@ -42,6 +42,17 @@ func (a *MessageAccumulator) AddEvent(event events.Event) ([]Message, bool, bool
 	var resultSuccess bool
 
 	switch event.Type {
+	case MessageTypeText:
+		msg := &ResultMessage{
+			Type:      event.Type,
+			Result:    getString(event.Data, "text"),
+			Timestamp: event.Timestamp,
+		}
+		a.messages = append(a.messages, msg)
+		newMessages = append(newMessages, msg)
+		hasResult = true
+		resultSuccess = true
+
 	case MessageTypeSystem:
 		msg := a.parseSystemMessage(event)
 		if msg != nil {

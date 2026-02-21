@@ -20,6 +20,27 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot/permission"
 )
 
+// handlerWrapper wraps agentboot.MessageHandler to claude.MessageHandler
+type handlerWrapper struct {
+	handler agentboot.MessageHandler
+}
+
+func (w *handlerWrapper) OnMessage(msg Message) error {
+	return w.handler.OnMessage(msg)
+}
+
+func (w *handlerWrapper) OnError(err error) {
+	w.handler.OnError(err)
+}
+
+func (w *handlerWrapper) OnComplete(result *ResultCompletion) {
+	w.handler.OnComplete(&agentboot.CompletionResult{
+		Success:   result.Success,
+		SessionID: result.SessionID,
+		Error:     result.Error,
+	})
+}
+
 // Launcher handles Claude Code CLI execution
 type Launcher struct {
 	mu                sync.RWMutex
@@ -33,7 +54,7 @@ type Launcher struct {
 // NewLauncher creates a new Claude launcher
 func NewLauncher(config Config) *Launcher {
 	return &Launcher{
-		defaultFormat:     agentboot.OutputFormatText,
+		defaultFormat:     agentboot.OutputFormatStreamJSON,
 		cliPath:           "claude",
 		skipPerms:         false,
 		config:            config,
@@ -61,6 +82,16 @@ func (l *Launcher) Execute(ctx context.Context, prompt string, opts agentboot.Ex
 	if timeout == 0 {
 		timeout = 5 * time.Minute
 	}
+	logrus.Infof("launching claude code...: %s", prompt)
+	// If handler is provided in options, use ExecuteWithHandler directly
+	if opts.Handler != nil {
+		// Wrap the agentboot.Handler to claude.MessageHandler
+		wrappedHandler := &handlerWrapper{handler: opts.Handler}
+		err := l.ExecuteWithHandler(ctx, prompt, timeout, opts, wrappedHandler)
+		// The handler should have collected the result
+		return nil, err
+	}
+
 	return l.ExecuteWithTimeout(ctx, prompt, timeout, opts)
 }
 

@@ -7,12 +7,14 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/tingly-dev/tingly-box/agentboot"
+	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/agentboot/permission"
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
@@ -462,23 +464,28 @@ func handleClaudeCodeMessage(
 		return
 	}
 
+	// Create a streaming message handler that sends formatted messages to the bot
+	streamHandler := newStreamingMessageHandler(bot, chatID, replyTo)
+
 	result, err := agent.Execute(execCtx, text, agentboot.ExecutionOptions{
 		ProjectPath: projectPath,
+		Handler:     streamHandler,
 	})
-	response := ""
-	if result != nil {
-		response = result.TextOutput()
-		if err != nil && result.Error != "" {
-			response = result.Error
+
+	response := streamHandler.GetOutput()
+	if response == "" {
+		if result != nil {
+			response = result.TextOutput()
 		}
-	} else if err != nil {
-		response = fmt.Sprintf("Execution failed: %v", err)
+		if err != nil && response == "" {
+			response = fmt.Sprintf("Execution failed: %v", err)
+		}
 	}
 
 	if err != nil {
 		sessionMgr.SetFailed(sessionID, response)
 		logrus.WithError(err).Warn("Remote-coder execution failed")
-		sendTextWithReply(bot, chatID, response, replyTo)
+		// Error already sent via handler, just return
 		return
 	}
 
@@ -492,7 +499,7 @@ func handleClaudeCodeMessage(
 		Timestamp: time.Now(),
 	})
 
-	// Send response with action keyboard (Clear/Bind buttons)
+	// Send final response with action keyboard (Clear/Bind buttons)
 	sendTextWithActionKeyboard(bot, chatID, response, replyTo)
 }
 
@@ -1499,4 +1506,77 @@ func convertActionKeyboardToTelegram(kb imbot.InlineKeyboardMarkup) tgbotapi.Inl
 		rows = append(rows, buttons)
 	}
 	return tgbotapi.InlineKeyboardMarkup{InlineKeyboard: rows}
+}
+
+// streamingMessageHandler implements agentboot.MessageHandler for real-time message streaming
+type streamingMessageHandler struct {
+	bot       imbot.Bot
+	chatID    string
+	replyTo   string
+	mu        sync.Mutex
+	formatter *claude.TextFormatter
+}
+
+// newStreamingMessageHandler creates a new streaming message handler
+func newStreamingMessageHandler(bot imbot.Bot, chatID, replyTo string) *streamingMessageHandler {
+	return &streamingMessageHandler{
+		bot:       bot,
+		chatID:    chatID,
+		replyTo:   replyTo,
+		formatter: claude.NewTextFormatter(),
+	}
+}
+
+// OnMessage implements agentboot.MessageHandler
+func (h *streamingMessageHandler) OnMessage(msg interface{}) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	// Convert to claude.Message if possible
+	var claudeMsg claude.Message
+	switch m := msg.(type) {
+	case claude.Message:
+		claudeMsg = m
+	default:
+		// Skip non-claude messages
+		return nil
+	}
+
+	// Format using the formatter
+	formatted := h.formatter.Format(claudeMsg)
+	if strings.TrimSpace(formatted) != "" {
+		h.sendMessage(formatted)
+	}
+
+	return nil
+}
+
+// OnError implements agentboot.MessageHandler
+func (h *streamingMessageHandler) OnError(err error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.sendMessage(fmt.Sprintf("[ERROR] %v", err))
+}
+
+// OnComplete implements agentboot.MessageHandler
+func (h *streamingMessageHandler) OnComplete(result *agentboot.CompletionResult) {
+	// Completion is handled by the caller
+}
+
+// GetOutput returns the accumulated output (for compatibility, returns empty as we stream immediately)
+func (h *streamingMessageHandler) GetOutput() string {
+	return ""
+}
+
+// sendMessage sends a message to the bot
+func (h *streamingMessageHandler) sendMessage(text string) {
+	for _, chunk := range chunkText(text, imbot.DefaultMessageLimit) {
+		_, err := h.bot.SendMessage(context.Background(), h.chatID, &imbot.SendMessageOptions{
+			Text:    chunk,
+			ReplyTo: h.replyTo,
+		})
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to send streaming message")
+		}
+	}
 }

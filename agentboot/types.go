@@ -62,12 +62,31 @@ func ParsePermissionMode(s string) (PermissionMode, bool) {
 	}
 }
 
+// MessageHandler is the interface for real-time message processing
+// This interface is defined here to avoid circular dependencies
+type MessageHandler interface {
+	OnMessage(msg interface{}) error
+	OnError(err error)
+	OnComplete(result *CompletionResult)
+}
+
+// CompletionResult contains the final result information
+type CompletionResult struct {
+	Success    bool
+	DurationMS int64
+	SessionID  string
+	Error      string
+}
+
 // ExecutionOptions controls agent execution
 type ExecutionOptions struct {
 	ProjectPath  string
 	OutputFormat OutputFormat
 	Timeout      time.Duration
 	Env          []string
+	// Handler is an optional message handler for real-time processing
+	// If provided, messages will be streamed to the handler during execution
+	Handler MessageHandler
 }
 
 // Result represents the result of an agent execution
