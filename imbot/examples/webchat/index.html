@@ -79,6 +79,15 @@
             box-shadow: 0 1px 2px rgba(0,0,0,0.1);
         }
 
+        .message.system {
+            align-self: center;
+            background: #f3f4f6;
+            color: #6b7280;
+            font-size: 0.875rem;
+            padding: 0.5rem 1rem;
+            border-radius: 1rem;
+        }
+
         .message .sender {
             font-size: 0.75rem;
             opacity: 0.7;
@@ -302,6 +311,103 @@
         .hidden {
             display: none !important;
         }
+
+        /* Session selection modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 0.75rem;
+            padding: 2rem;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+
+        .modal h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: #1f2937;
+        }
+
+        .modal p {
+            color: #6b7280;
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .modal-button {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            background: white;
+            color: #1f2937;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .modal-button:hover {
+            background: #f9fafb;
+            border-color: #d1d5db;
+        }
+
+        .modal-button.primary {
+            background: #2563eb;
+            color: white;
+            border-color: #2563eb;
+        }
+
+        .modal-button.primary:hover {
+            background: #1d4ed8;
+        }
+
+        .modal-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .session-info {
+            font-size: 0.875rem;
+            color: #6b7280;
+            margin-top: 0.5rem;
+            text-align: center;
+        }
+
+        .loading-history {
+            text-align: center;
+            color: #6b7280;
+            padding: 1rem;
+            font-size: 0.875rem;
+        }
+
+        .loading-history::after {
+            content: '...';
+            animation: dots 1.5s steps(4, end) infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60%, 100% { content: '...'; }
+        }
     </style>
 </head>
 <body>
@@ -323,6 +429,19 @@
             <button id="sendButton" disabled>Send</button>
         </div>
         <div class="keyboard" id="keyboard"></div>
+    </div>
+
+    <!-- Session selection modal -->
+    <div class="modal-overlay hidden" id="sessionModal">
+        <div class="modal">
+            <h2>💬 Session</h2>
+            <p>Would you like to start a new session or resume your previous conversation?</p>
+            <div class="modal-buttons">
+                <button class="modal-button" id="newSessionBtn">New Session</button>
+                <button class="modal-button primary" id="resumeSessionBtn">Resume Session</button>
+            </div>
+            <div class="session-info" id="sessionInfo"></div>
+        </div>
     </div>
 
     <script>
@@ -369,10 +488,13 @@
             return parts.join('');
         }
 
-        const wsUrl = `ws://${window.location.host}/ws`;
+        const wsUrlBase = `ws://${window.location.host}/ws`;
+        const STORAGE_KEY = 'webchat_session_id';
+
         let ws = null;
-        let senderId = 'user_' + Math.random().toString(36).substr(2, 9);
-        let senderName = 'User ' + senderId.substr(-4);
+        let sessionId = null;
+        let senderId = null;
+        let senderName = null;
 
         const messagesDiv = document.getElementById('messages');
         const messageInput = document.getElementById('messageInput');
@@ -380,18 +502,74 @@
         const statusDiv = document.getElementById('status');
         const connectingDiv = document.getElementById('connecting');
         const keyboardDiv = document.getElementById('keyboard');
+        const sessionModal = document.getElementById('sessionModal');
+        const sessionInfo = document.getElementById('sessionInfo');
+        const newSessionBtn = document.getElementById('newSessionBtn');
+        const resumeSessionBtn = document.getElementById('resumeSessionBtn');
+
+        // Check for existing session
+        const savedSessionId = localStorage.getItem(STORAGE_KEY);
+
+        function showSessionModal() {
+            if (savedSessionId) {
+                sessionInfo.textContent = 'Previous session found: ' + savedSessionId.substring(0, 16) + '...';
+            } else {
+                sessionInfo.textContent = 'No previous session found';
+                resumeSessionBtn.disabled = true;
+                resumeSessionBtn.style.opacity = '0.5';
+            }
+            sessionModal.classList.remove('hidden');
+        }
+
+        function hideSessionModal() {
+            sessionModal.classList.add('hidden');
+        }
+
+        function createNewSession() {
+            sessionId = null;
+            hideSessionModal();
+            localStorage.removeItem(STORAGE_KEY);
+            connect();
+        }
+
+        function resumeSession() {
+            sessionId = savedSessionId;
+            hideSessionModal();
+            connect();
+        }
+
+        newSessionBtn.addEventListener('click', createNewSession);
+        resumeSessionBtn.addEventListener('click', resumeSession);
 
         function connect() {
+            let wsUrl = wsUrlBase;
+            if (sessionId) {
+                wsUrl += '?session_id=' + sessionId;
+            }
+
+            statusDiv.textContent = 'Connecting...';
+            statusDiv.style.color = '#6b7280';
+            connectingDiv.classList.remove('hidden');
+            messagesDiv.classList.add('hidden');
+
             ws = new WebSocket(wsUrl);
+            senderId = senderId || 'user_' + Math.random().toString(36).substr(2, 9);
+            senderName = senderName || 'User ' + senderId.substr(-4);
 
             ws.onopen = () => {
                 statusDiv.textContent = '✅ Connected';
                 statusDiv.style.color = '#10b981';
-                connectingDiv.classList.add('hidden');
-                messagesDiv.classList.remove('hidden');
                 messageInput.disabled = false;
                 sendButton.disabled = false;
                 messageInput.focus();
+
+                // Show loading history message if resuming
+                if (sessionId) {
+                    addSystemMessage('Loading conversation history...');
+                } else {
+                    connectingDiv.classList.add('hidden');
+                    messagesDiv.classList.remove('hidden');
+                }
             };
 
             ws.onclose = () => {
@@ -400,8 +578,7 @@
                 messageInput.disabled = true;
                 sendButton.disabled = true;
                 keyboardDiv.innerHTML = '';
-                // Try to reconnect after 3 seconds
-                setTimeout(connect, 3000);
+                setTimeout(() => showSessionModal(), 1000);
             };
 
             ws.onerror = (error) => {
@@ -411,6 +588,13 @@
 
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
+
+                // First message from bot after connect, hide connecting indicator
+                if (connectingDiv.classList.contains('hidden') === false) {
+                    connectingDiv.classList.add('hidden');
+                    messagesDiv.classList.remove('hidden');
+                }
+
                 addMessage(data, 'bot');
 
                 // Show keyboard if present
@@ -443,6 +627,14 @@
             messageDiv.appendChild(contentDiv);
             messageDiv.appendChild(timeDiv);
 
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function addSystemMessage(text) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message system';
+            messageDiv.textContent = text;
             messagesDiv.appendChild(messageDiv);
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
@@ -492,8 +684,14 @@
             }
         });
 
-        // Start connection
-        connect();
+        // Auto-show session modal on page load
+        window.addEventListener('load', () => {
+            if (savedSessionId) {
+                showSessionModal();
+            } else {
+                createNewSession();
+            }
+        });
     </script>
 </body>
 </html>

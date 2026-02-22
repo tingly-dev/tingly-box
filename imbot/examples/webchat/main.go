@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	_ "github.com/gin-gonic/gin" // For custom route setup (routeSetupFunc option)
 	"github.com/tingly-dev/tingly-box/imbot"
 )
 
@@ -32,7 +33,24 @@ func main() {
 			Type: "none", // No authentication for MVP
 		},
 		Options: map[string]any{
-			"addr": addr,
+			"addr":         addr,
+			"dbPath":       "data/webchat/webchat.db", // SQLite database path
+			"historyLimit": 50,                        // Messages to send on reconnect
+			"cacheSize":    100,                       // In-memory cache per session
+
+			// --- CUSTOM OPTIONS ---
+			// To use custom frontend, uncomment and set htmlPath:
+			// "htmlPath": "./my-frontend/dist",
+
+			// To register custom gin routes, use routeSetupFunc:
+			// "routeSetupFunc": imbot.RouteSetupFunc(func(engine *gin.Engine) {
+			//     // Custom API endpoints
+			//     engine.GET("/api/custom/info", func(c *gin.Context) {
+			//         c.JSON(200, gin.H{"app": "My Bot", "version": "1.0"})
+			//     })
+			//     // Serve static assets
+			//     engine.Static("/assets", "./assets")
+			// }),
 		},
 		Logging: &imbot.LoggingConfig{
 			Level:      "info",

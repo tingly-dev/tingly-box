@@ -2,6 +2,7 @@
 package imbot
 
 import (
+	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/imbot/internal/builder"
 	"github.com/tingly-dev/tingly-box/imbot/internal/core"
 	"github.com/tingly-dev/tingly-box/imbot/internal/platform/telegram"
@@ -23,6 +24,10 @@ func AsTelegramBot(bot Bot) (TelegramBot, bool) {
 	}
 	return nil, false
 }
+
+// RouteSetupFunc is a callback for registering custom gin routes for WebChat platform.
+// It's called after default routes are set up.
+type RouteSetupFunc func(engine *gin.Engine)
 
 // Re-export core types
 type (

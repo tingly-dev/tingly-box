@@ -58,7 +58,21 @@ func (b *Bot) Connect(ctx context.Context) error {
 	b.Logger().Info("WebChat storage initialized: %s (cache: %d msgs/session)", dbPath, cacheSize)
 
 	// Create and configure server
-	b.server = NewGinServer(addr, b)
+	var ginServerOpts []GinServerOption
+
+	// Custom HTML path option
+	if htmlPath := b.Config().GetOptionString("htmlPath", ""); htmlPath != "" {
+		ginServerOpts = append(ginServerOpts, WithHTMLPath(htmlPath))
+	}
+
+	// Custom route setup function option
+	if routeSetupVal, ok := b.Config().GetOption("routeSetupFunc"); ok {
+		if routeSetupFn, ok := routeSetupVal.(RouteSetupFunc); ok && routeSetupFn != nil {
+			ginServerOpts = append(ginServerOpts, WithRouteSetupFunc(routeSetupFn))
+		}
+	}
+
+	b.server = NewGinServer(addr, b, ginServerOpts...)
 	b.server.SetupRoutes()
 
 	// Start server

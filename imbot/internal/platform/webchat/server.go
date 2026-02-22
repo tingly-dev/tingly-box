@@ -4,6 +4,8 @@ import (
 	"context"
 	"embed"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,32 +25,89 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+// RouteSetupFunc is a callback for registering custom gin routes.
+// It's called after default routes are set up.
+type RouteSetupFunc func(*gin.Engine)
+
 // GinServer wraps Gin HTTP server for WebChat
 type GinServer struct {
-	bot    *Bot
-	addr   string
-	engine *gin.Engine
-	server *http.Server
-	mu     sync.RWMutex
+	bot           *Bot
+	addr          string
+	engine        *gin.Engine
+	server        *http.Server
+	mu            sync.RWMutex
+	customHTMLDir string         // Custom HTML directory path
+	routeSetup    RouteSetupFunc // Custom route setup callback
+}
+
+// GinServerOption configures a GinServer
+type GinServerOption func(*GinServer)
+
+// WithHTMLPath sets a custom directory to serve HTML files from.
+// If set, the root path "/" will serve files from this directory instead of the embedded index.html.
+func WithHTMLPath(path string) GinServerOption {
+	return func(s *GinServer) {
+		s.customHTMLDir = path
+	}
+}
+
+// WithRouteSetupFunc sets a callback for registering custom gin routes.
+// The callback is invoked after default routes are set up.
+func WithRouteSetupFunc(fn RouteSetupFunc) GinServerOption {
+	return func(s *GinServer) {
+		s.routeSetup = fn
+	}
 }
 
 // NewGinServer creates a new Gin server
-func NewGinServer(addr string, bot *Bot) *GinServer {
+func NewGinServer(addr string, bot *Bot, opts ...GinServerOption) *GinServer {
 	gin.SetMode(gin.ReleaseMode)
 	engine := gin.New()
 	engine.Use(gin.Recovery(), gin.Logger())
 
-	return &GinServer{
+	s := &GinServer{
 		bot:    bot,
 		addr:   addr,
 		engine: engine,
 	}
+
+	for _, opt := range opts {
+		opt(s)
+	}
+
+	return s
 }
 
 // SetupRoutes sets up the Gin routes
 func (s *GinServer) SetupRoutes() {
-	// Serve the demo HTML page at root
-	s.engine.GET("/", s.handleIndex)
+	// Serve the HTML page at root
+	if s.customHTMLDir != "" {
+		// Serve custom HTML files from directory
+		// Use FileServer with a wrapper to handle SPA fallback
+		fileServer := http.FileServer(http.Dir(s.customHTMLDir))
+		s.engine.GET("/", func(c *gin.Context) {
+			// Try to serve index.html for root
+			indexPath := s.customHTMLDir + "/index.html"
+			if _, err := os.Stat(indexPath); err == nil {
+				c.File(indexPath)
+			} else {
+				// Fallback to file server behavior
+				fileServer.ServeHTTP(c.Writer, c.Request)
+			}
+		})
+		// Serve static files from the custom directory
+		s.engine.NoRoute(func(c *gin.Context) {
+			// For SPA routing, serve index.html for non-API routes
+			if !strings.HasPrefix(c.Request.URL.Path, "/api") && !strings.HasPrefix(c.Request.URL.Path, "/ws") {
+				c.File(s.customHTMLDir + "/index.html")
+				return
+			}
+			c.Status(404)
+		})
+	} else {
+		// Serve embedded demo HTML page
+		s.engine.GET("/", s.handleIndex)
+	}
 
 	// WebSocket endpoint
 	s.engine.GET("/ws", s.handleWebSocket)
@@ -61,8 +120,10 @@ func (s *GinServer) SetupRoutes() {
 		api.GET("/sessions/:id", s.getSession)
 	}
 
-	// Static files for assets (if needed in future)
-	// s.engine.Static("/static", "./static")
+	// Call custom route setup if provided
+	if s.routeSetup != nil {
+		s.routeSetup(s.engine)
+	}
 }
 
 // handleIndex serves the demo HTML page

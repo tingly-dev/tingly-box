@@ -188,6 +188,12 @@ func (c *Config) GetOptionInt(key string, defaultValue int) int {
 	return defaultValue
 }
 
+// GetOption returns a raw option value
+func (c *Config) GetOption(key string) (interface{}, bool) {
+	val, ok := c.Options[key]
+	return val, ok
+}
+
 // Clone creates a deep copy of the config
 func (c *Config) Clone() *Config {
 	clone := *c
