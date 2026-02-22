@@ -5,9 +5,10 @@ import {
     Typography,
     Chip,
 } from '@mui/material';
-import { Psychology, Cloud } from '@mui/icons-material';
+import { Psychology, Cloud, Security } from '@mui/icons-material';
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
+import { useFeatureFlags } from '@/contexts/FeatureFlagsContext';
 
 const SKILL_FEATURES = [
     { key: 'skill_ide', label: 'IDE Skills', description: 'Enable IDE Skills feature for managing code snippets and skills from IDEs' },
@@ -16,7 +17,9 @@ const SKILL_FEATURES = [
 const GlobalExperimentalFeatures: React.FC = () => {
     const [features, setFeatures] = useState<Record<string, boolean>>({});
     const [remoteCoderEnabled, setRemoteCoderEnabled] = useState(false);
+    const [guardrailsEnabled, setGuardrailsEnabled] = useState(false);
     const [loading, setLoading] = useState(true);
+    const { refresh } = useFeatureFlags();
 
     const loadFeatures = async () => {
         try {
@@ -34,6 +37,10 @@ const GlobalExperimentalFeatures: React.FC = () => {
             // Load Remote Coder flag
             const remoteCoderResult = await api.getScenarioFlag('_global', 'enable_remote_coder');
             setRemoteCoderEnabled(remoteCoderResult?.data?.value || false);
+
+            // Load Guardrails flag
+            const guardrailsResult = await api.getScenarioFlag('_global', 'guardrails');
+            setGuardrailsEnabled(guardrailsResult?.data?.value || false);
         } catch (error) {
             console.error('Failed to load global experimental features:', error);
         } finally {
@@ -49,6 +56,7 @@ const GlobalExperimentalFeatures: React.FC = () => {
                 console.log('setScenarioFlag result:', result);
                 if (result.success) {
                     setFeatures(prev => ({ ...prev, [featureKey]: newValue }));
+                    refresh();
                 } else {
                     console.error('Failed to set global feature:', result);
                     loadFeatures();
@@ -66,6 +74,7 @@ const GlobalExperimentalFeatures: React.FC = () => {
             .then((result) => {
                 if (result.success) {
                     setRemoteCoderEnabled(newValue);
+                    refresh();
                 } else {
                     console.error('Failed to set Remote Coder:', result);
                     loadFeatures();
@@ -73,6 +82,24 @@ const GlobalExperimentalFeatures: React.FC = () => {
             })
             .catch((err) => {
                 console.error('Failed to set Remote Coder:', err);
+                loadFeatures();
+            });
+    };
+
+    const toggleGuardrails = () => {
+        const newValue = !guardrailsEnabled;
+        api.setScenarioFlag('_global', 'guardrails', newValue)
+            .then((result) => {
+                if (result.success) {
+                    setGuardrailsEnabled(newValue);
+                    refresh();
+                } else {
+                    console.error('Failed to set Guardrails:', result);
+                    loadFeatures();
+                }
+            })
+            .catch((err) => {
+                console.error('Failed to set Guardrails:', err);
                 loadFeatures();
             });
     };
@@ -151,6 +178,35 @@ const GlobalExperimentalFeatures: React.FC = () => {
                     </Tooltip>
                 </Box>
             </Box>
+
+            {/* Guardrails Section */}
+            <Box sx={{ display: 'flex', alignItems: 'center', py: 2, gap: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
+                    <Security sx={{ fontSize: '1rem', color: 'text.secondary' }} />
+                    <Typography variant="subtitle2" sx={{ color: 'text.secondary' }}>
+                        Guardrails
+                    </Typography>
+                </Box>
+
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
+                    <Tooltip title={"Enable Guardrails - block risky tool calls and filter sensitive outputs" + (guardrailsEnabled ? ' (enabled)' : ' (disabled) - Click to enable')} arrow>
+                        <Chip
+                            label={`Guardrails · ${guardrailsEnabled ? 'On' : 'Off'}`}
+                            onClick={toggleGuardrails}
+                            size="small"
+                            sx={chipStyle(guardrailsEnabled)}
+                        />
+                    </Tooltip>
+                </Box>
+            </Box>
+
+            {guardrailsEnabled && (
+                <Alert severity="info" sx={{ mt: 1 }}>
+                    <Typography variant="body2">
+                        Guardrails is enabled. A "Guardrails" page is available in the sidebar for rule management.
+                    </Typography>
+                </Alert>
+            )}
 
             {/* Tip message at the bottom when Remote Coder is enabled */}
             {remoteCoderEnabled && (

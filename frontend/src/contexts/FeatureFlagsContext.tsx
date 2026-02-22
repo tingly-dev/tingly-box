@@ -6,6 +6,7 @@ interface FeatureFlagsContextType {
     skillUser: boolean;
     skillIde: boolean;
     enableRemoteCoder: boolean;
+    enableGuardrails: boolean;
     loading: boolean;
     refresh: () => void;
 }
@@ -29,18 +30,21 @@ export const FeatureFlagsProvider: React.FC<FeatureFlagsProviderProps> = ({ chil
     const [skillUser, setSkillUser] = useState(false);
     const [skillIde, setSkillIde] = useState(false);
     const [enableRemoteCoder, setEnableRemoteCoder] = useState(false);
+    const [enableGuardrails, setEnableGuardrails] = useState(false);
     const [loading, setLoading] = useState(true);
 
     const loadFlags = async () => {
         try {
-            const [skillUserResult, skillIdeResult, remoteCoderResult] = await Promise.all([
+            const [skillUserResult, skillIdeResult, remoteCoderResult, guardrailsResult] = await Promise.all([
                 api.getScenarioFlag('_global', 'skill_user'),
                 api.getScenarioFlag('_global', 'skill_ide'),
                 api.getScenarioFlag('_global', 'enable_remote_coder'),
+                api.getScenarioFlag('_global', 'guardrails'),
             ]);
             setSkillUser(skillUserResult?.data?.value || false);
             setSkillIde(skillIdeResult?.data?.value || false);
             setEnableRemoteCoder(remoteCoderResult?.data?.value || false);
+            setEnableGuardrails(guardrailsResult?.data?.value || false);
         } catch (error) {
             // Silently fail - flags will default to false
             // Don't log to console to avoid noise during initial auth
@@ -62,7 +66,7 @@ export const FeatureFlagsProvider: React.FC<FeatureFlagsProviderProps> = ({ chil
     };
 
     return (
-        <FeatureFlagsContext.Provider value={{ skillUser, skillIde, enableRemoteCoder, loading, refresh }}>
+        <FeatureFlagsContext.Provider value={{ skillUser, skillIde, enableRemoteCoder, enableGuardrails, loading, refresh }}>
             {children}
         </FeatureFlagsContext.Provider>
     );

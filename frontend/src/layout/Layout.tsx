@@ -15,6 +15,7 @@ import {
     NewReleases,
     ErrorOutline,
     LaptopMac,
+    Security,
 } from '@mui/icons-material';
 import LockIcon from '@mui/icons-material/Lock';
 import {
@@ -67,11 +68,11 @@ const Layout = ({ children }: LayoutProps) => {
     const location = useLocation();
     const { hasUpdate, currentVersion, showUpdateDialog } = useAppVersion();
     const { isHealthy, showDisconnectDialog } = useHealth();
-    const { skillUser, skillIde, enableRemoteCoder } = useFeatureFlags();
+    const { skillUser, skillIde, enableRemoteCoder, enableGuardrails } = useFeatureFlags();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [homeMenuOpen, setHomeMenuOpen] = useState(true);
     const [promptMenuOpen, setPromptMenuOpen] = useState(true);
-    const [systemMenuOpen, setSystemMenuOpen] = useState(false);
+    const [systemMenuOpen, setSystemMenuOpen] = useState(true);
     const [remoteCoderMenuOpen, setRemoteCoderMenuOpen] = useState(true);
     const [easterEggAnchorEl, setEasterEggAnchorEl] = useState<HTMLElement | null>(null);
 
@@ -203,6 +204,19 @@ const Layout = ({ children }: LayoutProps) => {
                     path: '/remote-coder/sessions',
                     label: 'Sessions',
                     icon: <RemoteIcon sx={{ fontSize: 20 }} />,
+                },
+            ],
+        }] : []),
+        ...(enableGuardrails ? [{
+            key: 'guardrails' as const,
+            label: 'Guardrails',
+            icon: <Security sx={{ fontSize: 20 }} />,
+            standalone: true,
+            items: [
+                {
+                    path: '/guardrails',
+                    label: 'Guardrails',
+                    icon: <Security sx={{ fontSize: 20 }} />,
                 },
             ],
         }] : []),

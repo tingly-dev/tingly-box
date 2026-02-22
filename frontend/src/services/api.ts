@@ -555,6 +555,38 @@ export const api = {
         });
     },
 
+    // Guardrails API
+    getGuardrailsConfig: async (): Promise<any> => {
+        return fetchUIAPI('/guardrails/config');
+    },
+
+    updateGuardrailsConfig: async (content: string): Promise<any> => {
+        return fetchUIAPI('/guardrails/config', {
+            method: 'PUT',
+            body: JSON.stringify({ content }),
+        });
+    },
+
+    reloadGuardrailsConfig: async (): Promise<any> => {
+        return fetchUIAPI('/guardrails/reload', {
+            method: 'POST',
+        });
+    },
+
+    updateGuardrailsRule: async (id: string, payload: any): Promise<any> => {
+        return fetchUIAPI(`/guardrails/rule/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+        });
+    },
+
+    createGuardrailsRule: async (payload: any): Promise<any> => {
+        return fetchUIAPI('/guardrails/rule', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+    },
+
     probeModel: async (uuid: string, model: string): Promise<ProbeResponse> => {
         try {
             const apiInstances = await getApiInstances();
