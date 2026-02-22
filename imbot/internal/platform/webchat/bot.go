@@ -14,6 +14,8 @@ type Bot struct {
 	*core.BaseBot
 	server   *GinServer
 	sessions map[string]*Session
+	store    MessageStore  // SQLite message storage
+	cache    *MessageCache // In-memory message cache
 	mu       sync.RWMutex
 	ctx      context.Context
 	cancel   context.CancelFunc
@@ -40,8 +42,20 @@ func NewWebChatBot(config *core.Config) (*Bot, error) {
 func (b *Bot) Connect(ctx context.Context) error {
 	b.ctx, b.cancel = context.WithCancel(ctx)
 
-	// Get address from config
+	// Get configuration options
 	addr := b.Config().GetOptionString("addr", ":8080")
+	dbPath := b.Config().GetOptionString("dbPath", "data/webchat/webchat.db")
+	cacheSize := b.Config().GetOptionInt("cacheSize", 100)
+
+	// Initialize SQLite store
+	store, err := NewSQLiteStore(dbPath)
+	if err != nil {
+		return fmt.Errorf("failed to initialize message store: %w", err)
+	}
+	b.store = store
+	b.cache = NewMessageCache(cacheSize)
+
+	b.Logger().Info("WebChat storage initialized: %s (cache: %d msgs/session)", dbPath, cacheSize)
 
 	// Create and configure server
 	b.server = NewGinServer(addr, b)
@@ -49,6 +63,8 @@ func (b *Bot) Connect(ctx context.Context) error {
 
 	// Start server
 	if err := b.server.Start(b.ctx); err != nil {
+		// Clean up store on error
+		b.store.Close()
 		return err
 	}
 
@@ -73,6 +89,16 @@ func (b *Bot) Disconnect(ctx context.Context) error {
 		if err := b.server.Shutdown(ctx); err != nil {
 			b.Logger().Error("Error shutting down server: %v", err)
 		}
+	}
+
+	if b.store != nil {
+		if err := b.store.Close(); err != nil {
+			b.Logger().Error("Error closing store: %v", err)
+		}
+	}
+
+	if b.cache != nil {
+		b.cache.Clear()
 	}
 
 	b.wg.Wait()
@@ -248,6 +274,40 @@ func (b *Bot) SessionCount() int {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	return len(b.sessions)
+}
+
+// GetHistory retrieves message history for a session
+// First checks cache, then falls back to SQLite store
+func (b *Bot) GetHistory(sessionID string, limit int) ([]*core.Message, error) {
+	// Check cache first
+	if b.cache != nil {
+		if cached := b.cache.Get(sessionID, limit); cached != nil {
+			b.Logger().Debug("History from cache: %s (%d messages)", sessionID, len(cached))
+			return cached, nil
+		}
+	}
+
+	// Fall back to SQLite store
+	if b.store != nil {
+		messages, err := b.store.GetMessages(sessionID, limit, 0)
+		if err != nil {
+			return nil, err
+		}
+		b.Logger().Debug("History from store: %s (%d messages)", sessionID, len(messages))
+		return messages, nil
+	}
+
+	return nil, nil
+}
+
+// Store returns the message store
+func (b *Bot) Store() MessageStore {
+	return b.store
+}
+
+// Cache returns the message cache
+func (b *Bot) Cache() *MessageCache {
+	return b.cache
 }
 
 // Close closes the bot

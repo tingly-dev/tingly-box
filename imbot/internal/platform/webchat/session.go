@@ -121,7 +121,40 @@ func (s *Session) WriteLoop() {
 }
 
 // Send queues a message to be sent to the client
+// Also persists the message to storage asynchronously and updates cache
 func (s *Session) Send(msg *core.Message) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.closed {
+		return core.NewBotError(core.ErrConnectionFailed, "session closed", false)
+	}
+
+	// Persist to SQLite asynchronously (non-blocking)
+	go func() {
+		if s.bot.store != nil {
+			if err := s.bot.store.SaveMessage(msg); err != nil {
+				s.bot.Logger().Error("Failed to save message: %v", err)
+			}
+		}
+	}()
+
+	// Update in-memory cache
+	if s.bot.cache != nil {
+		s.bot.cache.Add(s.ID, msg)
+	}
+
+	// Queue for WebSocket send
+	select {
+	case s.send <- msg:
+		return nil
+	default:
+		return core.NewBotError(core.ErrPlatformError, "send buffer full", false)
+	}
+}
+
+// queueMessage queues a message without persisting (for history replay)
+func (s *Session) queueMessage(msg *core.Message) error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -135,6 +168,25 @@ func (s *Session) Send(msg *core.Message) error {
 	default:
 		return core.NewBotError(core.ErrPlatformError, "send buffer full", false)
 	}
+}
+
+// SendHistory sends recent message history to the client
+func (s *Session) SendHistory(limit int) error {
+	messages, err := s.bot.GetHistory(s.ID, limit)
+	if err != nil {
+		s.bot.Logger().Error("Failed to get history: %v", err)
+		return err
+	}
+
+	// Send in reverse order (oldest first) for proper display
+	for i := len(messages) - 1; i >= 0; i-- {
+		if err := s.queueMessage(messages[i]); err != nil {
+			return err
+		}
+	}
+
+	s.bot.Logger().Debug("Sent %d messages from history to session %s", len(messages), s.ID)
+	return nil
 }
 
 // Close closes the session

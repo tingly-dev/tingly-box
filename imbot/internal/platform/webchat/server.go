@@ -2,6 +2,7 @@ package webchat
 
 import (
 	"context"
+	"embed"
 	"net/http"
 	"sync"
 	"time"
@@ -10,91 +11,8 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// webchatIndexHTML is the embedded HTML for the web chat interface
-const webchatIndexHTML = `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebChat Bot Demo</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; height: 100vh; display: flex; flex-direction: column; }
-        .header { background: #2563eb; color: white; padding: 1rem 2rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .header h1 { font-size: 1.25rem; font-weight: 600; }
-        .header .status { font-size: 0.875rem; opacity: 0.9; margin-top: 0.25rem; }
-        .chat-container { flex: 1; max-width: 800px; width: 100%; margin: 0 auto; padding: 1rem; overflow-y: auto; }
-        .messages { display: flex; flex-direction: column; gap: 0.75rem; }
-        .message { max-width: 70%; padding: 0.75rem 1rem; border-radius: 1rem; word-wrap: break-word; }
-        .message.user { align-self: flex-end; background: #2563eb; color: white; border-bottom-right-radius: 0.25rem; }
-        .message.bot { align-self: flex-start; background: white; color: #1f2937; border-bottom-left-radius: 0.25rem; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
-        .message .sender { font-size: 0.75rem; opacity: 0.7; margin-bottom: 0.25rem; }
-        .message .time { font-size: 0.625rem; opacity: 0.5; margin-top: 0.25rem; }
-        .input-container { background: white; padding: 1rem; border-top: 1px solid #e5e7eb; }
-        .input-wrapper { max-width: 800px; margin: 0 auto; display: flex; gap: 0.5rem; }
-        .input-wrapper input { flex: 1; padding: 0.75rem 1rem; border: 1px solid #e5e7eb; border-radius: 2rem; font-size: 1rem; outline: none; transition: border-color 0.2s; }
-        .input-wrapper input:focus { border-color: #2563eb; }
-        .input-wrapper button { padding: 0.75rem 1.5rem; background: #2563eb; color: white; border: none; border-radius: 2rem; font-size: 1rem; font-weight: 600; cursor: pointer; transition: background 0.2s; }
-        .input-wrapper button:hover { background: #1d4ed8; }
-        .input-wrapper button:disabled { background: #9ca3af; cursor: not-allowed; }
-        .keyboard { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
-        .keyboard-button { padding: 0.5rem 1rem; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 0.5rem; cursor: pointer; font-size: 0.875rem; transition: all 0.2s; }
-        .keyboard-button:hover { background: #e5e7eb; }
-        .connecting { display: flex; align-items: center; justify-content: center; padding: 2rem; color: #6b7280; }
-        .connecting span { animation: pulse 1.5s ease-in-out infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-        .hidden { display: none !important; }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>🤖 WebChat Bot Demo</h1>
-        <div class="status" id="status">Connecting...</div>
-    </div>
-    <div class="chat-container">
-        <div class="connecting" id="connecting"><span>Connecting to WebSocket...</span></div>
-        <div class="messages hidden" id="messages"></div>
-    </div>
-    <div class="input-container">
-        <div class="input-wrapper">
-            <input type="text" id="messageInput" placeholder="Type a message..." disabled>
-            <button id="sendButton" disabled>Send</button>
-        </div>
-        <div class="keyboard" id="keyboard"></div>
-    </div>
-    <script>
-        const wsUrl = 'ws://' + window.location.host + '/ws';
-        let ws = null, senderId = 'user_' + Math.random().toString(36).substr(2, 9), senderName = 'User ' + senderId.substr(-4);
-        const messagesDiv = document.getElementById('messages'), messageInput = document.getElementById('messageInput'), sendButton = document.getElementById('sendButton'), statusDiv = document.getElementById('status'), connectingDiv = document.getElementById('connecting'), keyboardDiv = document.getElementById('keyboard');
-        function connect() {
-            ws = new WebSocket(wsUrl);
-            ws.onopen = () => { statusDiv.textContent = '✅ Connected'; statusDiv.style.color = '#10b981'; connectingDiv.classList.add('hidden'); messagesDiv.classList.remove('hidden'); messageInput.disabled = false; sendButton.disabled = false; messageInput.focus(); };
-            ws.onclose = () => { statusDiv.textContent = '❌ Disconnected'; statusDiv.style.color = '#ef4444'; messageInput.disabled = true; sendButton.disabled = true; keyboardDiv.innerHTML = ''; setTimeout(connect, 3000); };
-            ws.onerror = (error) => { console.error('WebSocket error:', error); statusDiv.textContent = '❌ Connection error'; };
-            ws.onmessage = (event) => { const data = JSON.parse(event.data); addMessage(data, 'bot'); if (data.metadata && data.metadata.replyMarkup) showKeyboard(data.metadata.replyMarkup); };
-        }
-        function addMessage(data, type) {
-            const messageDiv = document.createElement('div'); messageDiv.className = 'message ' + type;
-            const senderDiv = document.createElement('div'); senderDiv.className = 'sender'; senderDiv.textContent = data.senderName || (type === 'user' ? senderName : 'Bot');
-            const textDiv = document.createElement('div'); textDiv.textContent = data.text || '';
-            const timeDiv = document.createElement('div'); timeDiv.className = 'time'; const timestamp = data.timestamp ? new Date(data.timestamp * 1000) : new Date(); timeDiv.textContent = timestamp.toLocaleTimeString();
-            messageDiv.appendChild(senderDiv); messageDiv.appendChild(textDiv); messageDiv.appendChild(timeDiv); messagesDiv.appendChild(messageDiv); messagesDiv.scrollTop = messagesDiv.scrollHeight;
-        }
-        function showKeyboard(keyboard) {
-            keyboardDiv.innerHTML = ''; if (!keyboard.inline_keyboard) return;
-            keyboard.inline_keyboard.forEach(row => { row.forEach(button => { const btn = document.createElement('button'); btn.className = 'keyboard-button'; btn.textContent = button.text; btn.onclick = () => { sendMessage(button.callback_data); }; keyboardDiv.appendChild(btn); }); });
-        }
-        function sendMessage(text) {
-            const message = { id: 'msg_' + Date.now(), senderId: senderId, senderName: senderName, text: text, timestamp: Math.floor(Date.now() / 1000) };
-            ws.send(JSON.stringify(message)); addMessage(message, 'user'); keyboardDiv.innerHTML = '';
-        }
-        sendButton.addEventListener('click', () => { const text = messageInput.value.trim(); if (text) { sendMessage(text); messageInput.value = ''; } });
-        messageInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendButton.click(); });
-        connect();
-    </script>
-</body>
-</html>
-`
+//go:embed index.html
+var indexHTML embed.FS
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
@@ -150,11 +68,49 @@ func (s *GinServer) SetupRoutes() {
 // handleIndex serves the demo HTML page
 func (s *GinServer) handleIndex(c *gin.Context) {
 	c.Header("Content-Type", "text/html; charset=utf-8")
-	c.String(200, webchatIndexHTML)
+
+	content, err := indexHTML.ReadFile("index.html")
+	if err != nil {
+		c.String(500, "Failed to load page")
+		return
+	}
+
+	c.Data(200, "text/html; charset=utf-8", content)
 }
 
 // handleWebSocket handles WebSocket upgrade and session creation
+// Supports session resume via ?session_id= query parameter
 func (s *GinServer) handleWebSocket(c *gin.Context) {
+	// Check for session resume from query parameter
+	requestedSessionID := c.Query("session_id")
+
+	// Get client info
+	clientIP := c.ClientIP()
+	userAgent := c.GetHeader("User-Agent")
+
+	var sessionID, senderID, senderName string
+
+	// If session_id provided, try to resume from database
+	if requestedSessionID != "" && s.bot.Store() != nil {
+		if sessionInfo, err := s.bot.Store().GetSession(requestedSessionID); err == nil && sessionInfo != nil {
+			sessionID = sessionInfo.ID
+			senderID = sessionInfo.SenderID
+			senderName = sessionInfo.SenderName
+			s.bot.Logger().Info("Resuming session: %s for user %s", sessionID, senderID)
+		}
+	}
+
+	// Generate new session if resume failed or not requested
+	if sessionID == "" {
+		sessionID = generateSessionID()
+	}
+	if senderID == "" {
+		senderID = generateUserID()
+	}
+	if senderName == "" {
+		senderName = "User"
+	}
+
 	// Upgrade to WebSocket
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
@@ -163,27 +119,44 @@ func (s *GinServer) handleWebSocket(c *gin.Context) {
 		return
 	}
 
-	// Get client info
-	clientIP := c.ClientIP()
-	userAgent := c.GetHeader("User-Agent")
-
 	// Create session
-	sessionID := generateSessionID()
-	session := NewSession(sessionID, conn, s.bot)
-	session.clientInfo = &WebSocketClientInfo{
+	clientInfo := &WebSocketClientInfo{
 		UserAgent:   userAgent,
 		IPAddress:   clientIP,
 		ConnectTime: time.Now().Unix(),
 	}
 
+	session := NewSession(sessionID, conn, s.bot)
+	session.SetSenderInfo(senderID, senderName)
+	session.clientInfo = clientInfo
+
+	// Save/update session in database
+	if s.bot.Store() != nil {
+		if err := s.bot.Store().CreateOrUpdateSession(sessionID, senderID, senderName, clientInfo); err != nil {
+			s.bot.Logger().Error("Failed to save session: %v", err)
+		}
+	}
+
 	// Add session to bot
 	s.bot.AddSession(session)
 
-	s.bot.Logger().Info("New WebSocket session: %s from %s", sessionID, clientIP)
+	isResume := requestedSessionID != "" && sessionID == requestedSessionID
+	s.bot.Logger().Info("WebSocket session: %s from %s (resume: %v)", sessionID, clientIP, isResume)
 
 	// Start read and write loops
 	go session.WriteLoop()
 	go session.ReadLoop()
+
+	// Send history after connection established (in a goroutine to not block)
+	go func() {
+		time.Sleep(100 * time.Millisecond) // Brief delay to ensure connection is ready
+		historyLimit := s.bot.Config().GetOptionInt("historyLimit", 50)
+		if historyLimit > 0 {
+			if err := session.SendHistory(historyLimit); err != nil {
+				s.bot.Logger().Error("Failed to send history: %v", err)
+			}
+		}
+	}()
 }
 
 // healthCheck returns server health status

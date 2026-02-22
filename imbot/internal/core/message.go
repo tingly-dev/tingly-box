@@ -1,5 +1,7 @@
 package core
 
+import "encoding/json"
+
 // Content represents the message content interface
 type Content interface {
 	ContentType() string
@@ -34,6 +36,15 @@ func NewTextContent(text string, entities ...Entity) *TextContent {
 	}
 }
 
+// NewTextContentFromString creates a TextContent from a JSON string
+func NewTextContentFromString(data string) (*TextContent, error) {
+	var tc TextContent
+	if err := json.Unmarshal([]byte(data), &tc); err != nil {
+		return nil, err
+	}
+	return &tc, nil
+}
+
 // GetText returns the text from content if it's TextContent
 func (m *Message) GetText() string {
 	if tc, ok := m.Content.(*TextContent); ok {
@@ -62,6 +73,15 @@ func NewMediaContent(media []MediaAttachment, caption string) *MediaContent {
 		Media:   media,
 		Caption: caption,
 	}
+}
+
+// NewMediaContentFromString creates a MediaContent from a JSON string
+func NewMediaContentFromString(data string) (*MediaContent, error) {
+	var mc MediaContent
+	if err := json.Unmarshal([]byte(data), &mc); err != nil {
+		return nil, err
+	}
+	return &mc, nil
 }
 
 // GetMedia returns the media from content if it's MediaContent
