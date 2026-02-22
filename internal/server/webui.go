@@ -597,6 +597,28 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithResponseModel(ScenarioFlagResponse{}),
 	)
 
+	// Guardrails Management
+	apiV1.GET("/guardrails/config", s.GetGuardrailsConfig,
+		swagger.WithDescription("Get guardrails config content and parsed config"),
+		swagger.WithTags("guardrails"),
+	)
+	apiV1.PUT("/guardrails/config", s.UpdateGuardrailsConfig,
+		swagger.WithDescription("Update guardrails config and reload engine"),
+		swagger.WithTags("guardrails"),
+	)
+	apiV1.PUT("/guardrails/rule/:id", s.UpdateGuardrailsRule,
+		swagger.WithDescription("Update a guardrails rule and reload engine"),
+		swagger.WithTags("guardrails"),
+	)
+	apiV1.POST("/guardrails/rule", s.CreateGuardrailsRule,
+		swagger.WithDescription("Create a new guardrails rule and reload engine"),
+		swagger.WithTags("guardrails"),
+	)
+	apiV1.POST("/guardrails/reload", s.ReloadGuardrailsConfig,
+		swagger.WithDescription("Reload guardrails config from disk"),
+		swagger.WithTags("guardrails"),
+	)
+
 	// History
 	apiV1.GET("/history", s.GetHistory,
 		swagger.WithDescription("Get request history"),

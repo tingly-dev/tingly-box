@@ -24,6 +24,7 @@ const UseOpenCodePage = lazy(() => import('./pages/UseOpenCodePage'));
 const UseXcodePage = lazy(() => import('./pages/UseXcodePage'));
 const CredentialPage = lazy(() => import('./pages/CredentialPage'));
 const System = lazy(() => import('./pages/System'));
+const GuardrailsPage = lazy(() => import('./pages/GuardrailsPage'));
 const DashboardPage = lazy(() => import('./pages/./DashboardPage'));
 const ModelTestPage = lazy(() => import('./pages/ModelTestPage'));
 
@@ -284,6 +285,7 @@ function AppContent() {
                                         <Route path="/oauth" element={<Navigate to="/credentials" replace/>}/>
                                         {/* Other routes */}
                                         <Route path="/system" element={<System/>}/>
+                                        <Route path="/guardrails" element={<GuardrailsPage/>}/>
                                         <Route path="/logs" element={<Navigate to="/system" replace/>}/>
                                         <Route path="/dashboard" element={<DashboardPage/>}/>
                                         <Route path="/model-test/:providerUuid" element={<ModelTestPage/>}/>
