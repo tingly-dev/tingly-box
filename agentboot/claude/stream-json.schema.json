@@ -1,0 +1,240 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://tingly-box.dev/schemas/claude-stream-json.json",
+  "title": "Claude Code Stream JSON Message",
+  "description": "Schema for Claude Code streaming JSON messages used in agentboot",
+  "oneOf": [
+    { "$ref": "#/$defs/SystemMessage" },
+    { "$ref": "#/$defs/AssistantMessage" },
+    { "$ref": "#/$defs/UserMessage" },
+    { "$ref": "#/$defs/ToolUseMessage" },
+    { "$ref": "#/$defs/ToolResultMessage" },
+    { "$ref": "#/$defs/ResultMessage" },
+    { "$ref": "#/$defs/StreamEventMessage" }
+  ],
+  "$defs": {
+    "SystemMessage": {
+      "type": "object",
+      "properties": {
+        "type": { "const": "system" },
+        "subtype": {
+          "type": "string",
+          "enum": ["init", "shutdown", "error"]
+        },
+        "session_id": { "type": "string", "format": "uuid" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["type", "session_id", "timestamp"]
+    },
+    "AssistantMessage": {
+      "type": "object",
+      "properties": {
+        "type": { "const": "assistant" },
+        "message": {
+          "$ref": "#/$defs/MessageData"
+        },
+        "parent_tool_use_id": { "type": "string" },
+        "session_id": { "type": "string", "format": "uuid" },
+        "uuid": { "type": "string", "format": "uuid" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["type", "message", "session_id", "uuid", "timestamp"]
+    },
+    "MessageData": {
+      "type": "object",
+      "properties": {
+        "model": { "type": "string" },
+        "id": { "type": "string" },
+        "type": { "const": "message" },
+        "role": { "const": "assistant" },
+        "content": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ContentBlock" }
+        },
+        "stop_reason": {
+          "type": "string",
+          "enum": ["end_turn", "max_tokens", "stop_sequence", "tool_use"]
+        },
+        "stop_sequence": { "type": "string" },
+        "usage": { "$ref": "#/$defs/UsageInfo" }
+      },
+      "required": ["model", "id", "type", "role", "content"]
+    },
+    "ContentBlock": {
+      "oneOf": [
+        { "$ref": "#/$defs/TextBlock" },
+        { "$ref": "#/$defs/ToolUseBlock" },
+        { "$ref": "#/$defs/ThinkingBlock" },
+        { "$ref": "#/$defs/ToolResultContentBlock" }
+      ]
+    },
+    "TextBlock": {
+      "type": "object",
+      "properties": {
+        "type": { "const": "text" },
+        "text": { "type": "string" }
+      },
+      "required": ["type", "text"]
+    },
+    "ToolUseBlock": {
+      "type": "object",
+      "properties": {
+        "type": { "const": "tool_use" },
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "input": { "type": "object" }
+      },
+      "required": ["type", "id", "name", "input"]
+    },
+    "ThinkingBlock": {
+      "type": "object",
+      "properties": {
+        "type": { "const": "thinking" },
+        "thinking": { "type": "string" }
+      },
+      "required": ["type", "thinking"]
+    },
+    "ToolResultContentBlock": {
+      "type": "object",
+      "properties": {
+        "type": { "const": "tool_result" },
+        "tool_use_id": { "type": "string" },
+        "content": { "type": "string" },
+        "is_error": { "type": "boolean" }
+      },
+      "required": ["type", "tool_use_id"]
+    },
+    "UserMessage": {
+      "type": "object",
+      "properties": {
+        "type": { "const": "user" },
+        "message": { "type": "string" },
+        "parent_tool_use_id": { "type": "string" },
+        "session_id": { "type": "string", "format": "uuid" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["type"]
+    },
+    "ToolUseMessage": {
+      "type": "object",
+      "properties": {
+        "type": { "const": "tool_use" },
+        "name": { "type": "string" },
+        "input": { "type": "object" },
+        "tool_use_id": { "type": "string" },
+        "session_id": { "type": "string", "format": "uuid" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["type", "name", "input", "tool_use_id"]
+    },
+    "ToolResultMessage": {
+      "type": "object",
+      "properties": {
+        "type": { "const": "tool_result" },
+        "output": { "type": "string" },
+        "content": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ContentBlock" }
+        },
+        "tool_use_id": { "type": "string" },
+        "is_error": { "type": "boolean" },
+        "session_id": { "type": "string", "format": "uuid" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["type", "tool_use_id"]
+    },
+    "ResultMessage": {
+      "type": "object",
+      "properties": {
+        "type": { "const": "result" },
+        "subtype": {
+          "type": "string",
+          "enum": ["success", "error"]
+        },
+        "result": { "type": "string" },
+        "total_cost_usd": { "type": "number" },
+        "is_error": { "type": "boolean" },
+        "duration_ms": { "type": "integer" },
+        "duration_api_ms": { "type": "integer" },
+        "num_turns": { "type": "integer" },
+        "usage": { "$ref": "#/$defs/UsageInfo" },
+        "session_id": { "type": "string", "format": "uuid" },
+        "permission_denials": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/PermissionDenial" }
+        },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["type"]
+    },
+    "UsageInfo": {
+      "type": "object",
+      "properties": {
+        "input_tokens": { "type": "integer" },
+        "cache_creation_input_tokens": { "type": "integer" },
+        "cache_read_input_tokens": { "type": "integer" },
+        "output_tokens": { "type": "integer" }
+      },
+      "required": ["input_tokens", "output_tokens"]
+    },
+    "PermissionDenial": {
+      "type": "object",
+      "properties": {
+        "request_id": { "type": "string" },
+        "reason": { "type": "string" }
+      },
+      "required": ["request_id", "reason"]
+    },
+    "StreamEventMessage": {
+      "type": "object",
+      "properties": {
+        "type": { "const": "stream_event" },
+        "event": { "$ref": "#/$defs/StreamEvent" },
+        "session_id": { "type": "string", "format": "uuid" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["type", "event"]
+    },
+    "StreamEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "content_block_start",
+            "content_block_delta",
+            "content_block_stop",
+            "message_delta",
+            "message_start",
+            "message_stop",
+            "error"
+          ]
+        },
+        "index": { "type": "integer" },
+        "delta": {
+          "oneOf": [
+            { "$ref": "#/$defs/TextDelta" },
+            { "$ref": "#/$defs/InputJSONDelta" }
+          ]
+        }
+      },
+      "required": ["type"]
+    },
+    "TextDelta": {
+      "type": "object",
+      "properties": {
+        "type": { "const": "text_delta" },
+        "text": { "type": "string" }
+      },
+      "required": ["type", "text"]
+    },
+    "InputJSONDelta": {
+      "type": "object",
+      "properties": {
+        "type": { "const": "input_json_delta" },
+        "partial_json": { "type": "string" }
+      },
+      "required": ["type", "partial_json"]
+    }
+  }
+}

@@ -8,8 +8,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/audit"
-	"github.com/tingly-dev/tingly-box/internal/remote_coder/launcher"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/summarizer"
 )
@@ -17,16 +17,16 @@ import (
 // Handler handles API requests
 type Handler struct {
 	sessionMgr  *session.Manager
-	claude      *launcher.ClaudeCodeLauncher
+	agentBoot   *agentboot.AgentBoot
 	summarizer  *summarizer.Engine
 	auditLogger *audit.Logger
 }
 
 // NewHandler creates a new API handler
-func NewHandler(sessionMgr *session.Manager, claude *launcher.ClaudeCodeLauncher, summary *summarizer.Engine, auditLogger *audit.Logger) *Handler {
+func NewHandler(sessionMgr *session.Manager, ab *agentboot.AgentBoot, summary *summarizer.Engine, auditLogger *audit.Logger) *Handler {
 	return &Handler{
 		sessionMgr:  sessionMgr,
-		claude:      claude,
+		agentBoot:   ab,
 		summarizer:  summary,
 		auditLogger: auditLogger,
 	}
@@ -212,7 +212,23 @@ func (h *Handler) Execute(c *gin.Context) {
 	h.sessionMgr.SetRunning(req.SessionID)
 
 	// Execute Claude Code
-	result, err := h.claude.Execute(c.Request.Context(), req.Request, launcher.ExecuteOptions{})
+	agent, err := h.agentBoot.GetDefaultAgent()
+	if err != nil {
+		h.sessionMgr.SetFailed(req.SessionID, "agent not available: "+err.Error())
+		h.auditLogger.LogRequest("execute", userID, clientIP, req.SessionID, requestID, false, time.Since(start), map[string]interface{}{
+			"error": err.Error(),
+		})
+
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": gin.H{
+				"message": "Agent not available",
+				"type":    "service_unavailable",
+			},
+		})
+		return
+	}
+
+	result, err := agent.Execute(c.Request.Context(), req.Request, agentboot.ExecutionOptions{})
 
 	response := ExecuteResponse{
 		SessionID: req.SessionID,

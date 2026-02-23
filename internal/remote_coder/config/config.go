@@ -17,6 +17,7 @@ import (
 )
 
 // Config holds the configuration for remote-coder service
+// Remote-coder specific configuration only - AgentBoot config is loaded directly by agentboot
 type Config struct {
 	Port             int           // HTTP server port
 	JWTSecret        string        // JWT secret for token validation

@@ -6,6 +6,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/agentboot"
+	"github.com/tingly-dev/tingly-box/agentboot/permission"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
 )
 
@@ -20,14 +22,18 @@ type Manager struct {
 	running    map[string]*runningBot // uuid -> runningBot
 	store      *Store
 	sessionMgr *session.Manager
+	agentBoot  *agentboot.AgentBoot
+	permHandler permission.Handler
 }
 
 // NewManager creates a new bot manager
-func NewManager(store *Store, sessionMgr *session.Manager) *Manager {
+func NewManager(store *Store, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot, permHandler permission.Handler) *Manager {
 	return &Manager{
-		running:    make(map[string]*runningBot),
-		store:      store,
-		sessionMgr: sessionMgr,
+		running:     make(map[string]*runningBot),
+		store:       store,
+		sessionMgr:  sessionMgr,
+		agentBoot:   agentBoot,
+		permHandler: permHandler,
 	}
 }
 
@@ -71,7 +77,7 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 				return
 			}
 
-			if err := RunTelegramBot(ctx, m.store, m.sessionMgr); err != nil {
+			if err := RunTelegramBot(ctx, m.store, m.sessionMgr, m.agentBoot, m.permHandler); err != nil {
 				logrus.WithError(err).WithField("uuid", uuid).Warn("Bot stopped with error")
 			}
 		default:
