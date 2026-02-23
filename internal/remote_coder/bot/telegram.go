@@ -2,18 +2,22 @@ package bot
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/tingly-dev/tingly-box/agentboot"
+	"github.com/tingly-dev/tingly-box/agentboot/claude"
+	"github.com/tingly-dev/tingly-box/agentboot/permission"
 	"github.com/tingly-dev/tingly-box/imbot"
-	"github.com/tingly-dev/tingly-box/internal/remote_coder/launcher"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/summarizer"
 )
@@ -60,13 +64,13 @@ var defaultBashAllowlist = map[string]struct{}{
 }
 
 // RunTelegramBot starts a Telegram bot that proxies messages to remote-coder sessions.
-func RunTelegramBot(ctx context.Context, store *Store, sessionMgr *session.Manager) error {
+func RunTelegramBot(ctx context.Context, store *Store, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot, permHandler permission.Handler) error {
 	delay := telegramStartDelay
 	for attempt := 1; attempt <= telegramStartRetries; attempt++ {
 		if ctx.Err() != nil {
 			return nil
 		}
-		if err := runTelegramBotOnce(ctx, store, sessionMgr); err != nil {
+		if err := runTelegramBotOnce(ctx, store, sessionMgr, agentBoot, permHandler); err != nil {
 			if attempt == telegramStartRetries {
 				return err
 			}
@@ -85,7 +89,7 @@ func RunTelegramBot(ctx context.Context, store *Store, sessionMgr *session.Manag
 	return nil
 }
 
-func runTelegramBotOnce(ctx context.Context, store *Store, sessionMgr *session.Manager) error {
+func runTelegramBotOnce(ctx context.Context, store *Store, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot, permHandler permission.Handler) error {
 	if store == nil {
 		return fmt.Errorf("bot store is nil")
 	}
@@ -109,7 +113,6 @@ func runTelegramBotOnce(ctx context.Context, store *Store, sessionMgr *session.M
 		return fmt.Errorf("session manager is nil")
 	}
 
-	claudeLauncher := launcher.NewClaudeCodeLauncher()
 	summaryEngine := summarizer.NewEngine()
 	directoryBrowser := NewDirectoryBrowser()
 
@@ -143,7 +146,7 @@ func runTelegramBotOnce(ctx context.Context, store *Store, sessionMgr *session.M
 		if platform != imbot.PlatformTelegram {
 			return
 		}
-		go handleTelegramMessage(ctx, manager, store, sessionMgr, claudeLauncher, summaryEngine, directoryBrowser, msg)
+		go handleTelegramMessage(ctx, manager, store, sessionMgr, agentBoot, permHandler, summaryEngine, directoryBrowser, msg)
 	})
 
 	if err := manager.Start(ctx); err != nil {
@@ -178,7 +181,8 @@ func handleTelegramMessage(
 	manager *imbot.Manager,
 	store *Store,
 	sessionMgr *session.Manager,
-	ccLauncher *launcher.ClaudeCodeLauncher,
+	agentBoot *agentboot.AgentBoot,
+	permHandler permission.Handler,
 	summaryEngine *summarizer.Engine,
 	directoryBrowser *DirectoryBrowser,
 	msg imbot.Message,
@@ -259,7 +263,7 @@ func handleTelegramMessage(
 			logrus.WithError(err).Warn("Failed to load session mapping")
 		}
 		if ok && sessionID != "" {
-			handleAgentMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agentClaudeCode, text, msg.Sender.ID, msg.ID)
+			handleAgentMessage(ctx, bot, store, sessionMgr, agentBoot, permHandler, summaryEngine, chatID, agentClaudeCode, text, msg.Sender.ID, msg.ID)
 			return
 		}
 		// No session - show guidance
@@ -277,7 +281,7 @@ func handleTelegramMessage(
 	if isGroupChat {
 		if projectPath, ok := getProjectPathForGroup(store, chatID, string(msg.Platform)); ok {
 			// Route to Claude Code with the bound project path
-			handleAgentMessageWithProject(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agentClaudeCode, text, msg.Sender.ID, projectPath, msg.ID)
+			handleAgentMessageWithProject(ctx, bot, store, sessionMgr, agentBoot, permHandler, summaryEngine, chatID, agentClaudeCode, text, msg.Sender.ID, projectPath, msg.ID)
 			return
 		}
 		// No binding, show guidance
@@ -292,7 +296,7 @@ func handleTelegramMessage(
 	}
 	if ok && sessionID != "" {
 		// Has active session, auto-route to cc
-		handleAgentMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agentClaudeCode, text, msg.Sender.ID, msg.ID)
+		handleAgentMessage(ctx, bot, store, sessionMgr, agentBoot, permHandler, summaryEngine, chatID, agentClaudeCode, text, msg.Sender.ID, msg.ID)
 		return
 	}
 
@@ -306,7 +310,8 @@ func handleAgentMessage(
 	bot imbot.Bot,
 	store *Store,
 	sessionMgr *session.Manager,
-	ccLauncher *launcher.ClaudeCodeLauncher,
+	agentBoot *agentboot.AgentBoot,
+	permHandler permission.Handler,
 	summaryEngine *summarizer.Engine,
 	chatID string,
 	agent string,
@@ -314,7 +319,7 @@ func handleAgentMessage(
 	senderID string,
 	replyTo string,
 ) {
-	handleAgentMessageWithProject(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, agent, text, senderID, "", replyTo)
+	handleAgentMessageWithProject(ctx, bot, store, sessionMgr, agentBoot, permHandler, summaryEngine, chatID, agent, text, senderID, "", replyTo)
 }
 
 // handleAgentMessageWithProject routes message to the appropriate agent handler with a specific project path.
@@ -323,7 +328,8 @@ func handleAgentMessageWithProject(
 	bot imbot.Bot,
 	store *Store,
 	sessionMgr *session.Manager,
-	ccLauncher *launcher.ClaudeCodeLauncher,
+	agentBoot *agentboot.AgentBoot,
+	permHandler permission.Handler,
 	summaryEngine *summarizer.Engine,
 	chatID string,
 	agent string,
@@ -340,7 +346,7 @@ func handleAgentMessageWithProject(
 
 	switch agent {
 	case agentClaudeCode:
-		handleClaudeCodeMessage(ctx, bot, store, sessionMgr, ccLauncher, summaryEngine, chatID, text, senderID, projectPathOverride, replyTo)
+		handleClaudeCodeMessage(ctx, bot, store, sessionMgr, agentBoot, permHandler, summaryEngine, chatID, text, senderID, projectPathOverride, replyTo)
 	default:
 		sendText(bot, chatID, fmt.Sprintf("Unknown agent: %s", agent))
 	}
@@ -361,7 +367,8 @@ func handleClaudeCodeMessage(
 	bot imbot.Bot,
 	store *Store,
 	sessionMgr *session.Manager,
-	ccLauncher *launcher.ClaudeCodeLauncher,
+	agentBoot *agentboot.AgentBoot,
+	permHandler permission.Handler,
 	summaryEngine *summarizer.Engine,
 	chatID string,
 	text string,
@@ -451,23 +458,45 @@ func handleClaudeCodeMessage(
 	execCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
-	result, err := ccLauncher.Execute(execCtx, text, launcher.ExecuteOptions{
+	agent, err := agentBoot.GetDefaultAgent()
+	if err != nil {
+		sessionMgr.SetFailed(sessionID, "agent not available: "+err.Error())
+		sendTextWithReply(bot, chatID, "Agent not available", replyTo)
+		return
+	}
+
+	// Determine if we should resume: session has existing messages (excluding the one we just appended)
+	// Note: We just appended the current user message, so check if there were messages before that
+	shouldResume := false
+	if msgs, ok := sessionMgr.GetMessages(sessionID); ok && len(msgs) > 1 {
+		// More than 1 message means this is a continuation (current user message + at least one previous message)
+		shouldResume = true
+	}
+
+	// Create a streaming message handler that sends formatted messages to the bot
+	streamHandler := newStreamingMessageHandler(bot, chatID, replyTo)
+
+	result, err := agent.Execute(execCtx, text, agentboot.ExecutionOptions{
 		ProjectPath: projectPath,
+		Handler:     streamHandler,
+		SessionID:   sessionID,
+		Resume:      shouldResume,
 	})
-	response := ""
-	if result != nil {
-		response = result.Output
-		if err != nil && result.Error != "" {
-			response = result.Error
+
+	response := streamHandler.GetOutput()
+	if response == "" {
+		if result != nil {
+			response = result.TextOutput()
 		}
-	} else if err != nil {
-		response = fmt.Sprintf("Execution failed: %v", err)
+		if err != nil && response == "" {
+			response = fmt.Sprintf("Execution failed: %v", err)
+		}
 	}
 
 	if err != nil {
 		sessionMgr.SetFailed(sessionID, response)
 		logrus.WithError(err).Warn("Remote-coder execution failed")
-		sendTextWithReply(bot, chatID, response, replyTo)
+		// Error already sent via handler, just return
 		return
 	}
 
@@ -481,7 +510,7 @@ func handleClaudeCodeMessage(
 		Timestamp: time.Now(),
 	})
 
-	// Send response with action keyboard (Clear/Bind buttons)
+	// Send final response with action keyboard (Clear/Bind buttons)
 	sendTextWithActionKeyboard(bot, chatID, response, replyTo)
 }
 
@@ -1488,4 +1517,95 @@ func convertActionKeyboardToTelegram(kb imbot.InlineKeyboardMarkup) tgbotapi.Inl
 		rows = append(rows, buttons)
 	}
 	return tgbotapi.InlineKeyboardMarkup{InlineKeyboard: rows}
+}
+
+// streamingMessageHandler implements agentboot.MessageHandler for real-time message streaming
+type streamingMessageHandler struct {
+	bot       imbot.Bot
+	chatID    string
+	replyTo   string
+	mu        sync.Mutex
+	formatter *claude.TextFormatter
+}
+
+// newStreamingMessageHandler creates a new streaming message handler
+func newStreamingMessageHandler(bot imbot.Bot, chatID, replyTo string) *streamingMessageHandler {
+	return &streamingMessageHandler{
+		bot:       bot,
+		chatID:    chatID,
+		replyTo:   replyTo,
+		formatter: claude.NewTextFormatter(),
+	}
+}
+
+// OnMessage implements agentboot.MessageHandler
+func (h *streamingMessageHandler) OnMessage(msg interface{}) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	// Convert to claude.Message if possible
+	var claudeMsg claude.Message
+	switch m := msg.(type) {
+	case claude.Message:
+		claudeMsg = m
+	default:
+		// Skip non-claude messages
+		return nil
+	}
+
+	// Format using the formatter
+	formatted := h.formatter.Format(claudeMsg)
+	d, _ := json.Marshal(claudeMsg.GetRawData())
+	logrus.Infof("[telegram] %s", d)
+	logrus.Infof("[telegram] %s", formatted)
+	if strings.TrimSpace(formatted) != "" {
+		h.sendMessage(formatted)
+	}
+
+	return nil
+}
+
+// OnError implements agentboot.MessageHandler
+func (h *streamingMessageHandler) OnError(err error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.sendMessage(fmt.Sprintf("[ERROR] %v", err))
+}
+
+// OnComplete implements agentboot.MessageHandler - sends action keyboard when complete
+func (h *streamingMessageHandler) OnComplete(result *agentboot.CompletionResult) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	// Build action keyboard
+	kb := BuildActionKeyboard()
+	tgKeyboard := convertActionKeyboardToTelegram(kb.Build())
+
+	_, err := h.bot.SendMessage(context.Background(), h.chatID, &imbot.SendMessageOptions{
+		Text: "/bot tips",
+		Metadata: map[string]interface{}{
+			"replyMarkup": tgKeyboard,
+		},
+	})
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to send action keyboard")
+	}
+}
+
+// GetOutput returns the accumulated output (for compatibility, returns empty as we stream immediately)
+func (h *streamingMessageHandler) GetOutput() string {
+	return ""
+}
+
+// sendMessage sends a message to the bot
+func (h *streamingMessageHandler) sendMessage(text string) {
+	for _, chunk := range chunkText(text, imbot.DefaultMessageLimit) {
+		_, err := h.bot.SendMessage(context.Background(), h.chatID, &imbot.SendMessageOptions{
+			Text:    chunk,
+			ReplyTo: h.replyTo,
+		})
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to send streaming message")
+		}
+	}
 }

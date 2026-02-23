@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/tingly-dev/tingly-box/agentboot"
+	"github.com/tingly-dev/tingly-box/agentboot/permission"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
 )
 
@@ -27,8 +29,12 @@ func TestManagerStartStop(t *testing.T) {
 		MessageRetention: 24 * time.Hour,
 	}, msgStore)
 
+	// Create agentBoot and permission handler for test
+	agentBoot := agentboot.New(agentboot.Config{})
+	permHandler := permission.NewDefaultHandler(agentboot.PermissionConfig{})
+
 	// Create manager
-	manager := NewManager(store, sessionMgr)
+	manager := NewManager(store, sessionMgr, agentBoot, permHandler)
 
 	// Test: IsRunning returns false for non-existent bot
 	require.False(t, manager.IsRunning("non-existent-uuid"))
@@ -73,8 +79,12 @@ func TestManagerStartEnabledBots(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	// Create agentBoot and permission handler for test
+	agentBoot := agentboot.New(agentboot.Config{})
+	permHandler := permission.NewDefaultHandler(agentboot.PermissionConfig{})
+
 	// Create manager
-	manager := NewManager(store, sessionMgr)
+	manager := NewManager(store, sessionMgr, agentBoot, permHandler)
 
 	// Start enabled bots - should not fail
 	ctx := context.Background()
@@ -108,7 +118,11 @@ func TestManagerStopAll(t *testing.T) {
 		MessageRetention: 24 * time.Hour,
 	}, msgStore)
 
-	manager := NewManager(store, sessionMgr)
+	// Create agentBoot and permission handler for test
+	agentBoot := agentboot.New(agentboot.Config{})
+	permHandler := permission.NewDefaultHandler(agentboot.PermissionConfig{})
+
+	manager := NewManager(store, sessionMgr, agentBoot, permHandler)
 
 	// StopAll should be safe even with no running bots
 	manager.StopAll()

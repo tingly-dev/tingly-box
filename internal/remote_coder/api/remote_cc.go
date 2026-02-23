@@ -10,30 +10,33 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/agentboot"
+	"github.com/tingly-dev/tingly-box/agentboot/permission"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/audit"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/config"
-	"github.com/tingly-dev/tingly-box/internal/remote_coder/launcher"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/summarizer"
 )
 
 // RemoteCCHandler handles remote Claude Code requests
 type RemoteCCHandler struct {
-	sessionMgr     *session.Manager
-	claudeLauncher *launcher.ClaudeCodeLauncher
-	summaryEngine  *summarizer.Engine
-	auditLogger    *audit.Logger
-	config         *config.Config
+	sessionMgr      *session.Manager
+	agentBoot       *agentboot.AgentBoot
+	summaryEngine   *summarizer.Engine
+	auditLogger     *audit.Logger
+	config          *config.Config
+	permHandler     permission.Handler
 }
 
 // NewRemoteCCHandler creates a new remote-coder handler
-func NewRemoteCCHandler(sessionMgr *session.Manager, claudeLauncher *launcher.ClaudeCodeLauncher, summaryEngine *summarizer.Engine, auditLogger *audit.Logger, cfg *config.Config) *RemoteCCHandler {
+func NewRemoteCCHandler(sessionMgr *session.Manager, ab *agentboot.AgentBoot, summaryEngine *summarizer.Engine, auditLogger *audit.Logger, cfg *config.Config, permHandler permission.Handler) *RemoteCCHandler {
 	return &RemoteCCHandler{
-		sessionMgr:     sessionMgr,
-		claudeLauncher: claudeLauncher,
-		summaryEngine:  summaryEngine,
-		auditLogger:    auditLogger,
-		config:         cfg,
+		sessionMgr:    sessionMgr,
+		agentBoot:    ab,
+		summaryEngine: summaryEngine,
+		auditLogger:  auditLogger,
+		config:       cfg,
+		permHandler:  permHandler,
 	}
 }
 
@@ -311,15 +314,27 @@ func (h *RemoteCCHandler) Chat(c *gin.Context) {
 	if projectPath != "" {
 		h.sessionMgr.SetContext(sessionID, "project_path", projectPath)
 	}
-	result, err := h.claudeLauncher.Execute(ctx, req.Message, launcher.ExecuteOptions{
+	agent, err := h.agentBoot.GetDefaultAgent()
+	if err != nil {
+		h.sessionMgr.SetFailed(sessionID, "agent not available: "+err.Error())
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": gin.H{
+				"message": "Agent not available",
+				"type":    "service_unavailable",
+			},
+		})
+		return
+	}
+
+	result, execErr := agent.Execute(ctx, req.Message, agentboot.ExecutionOptions{
 		ProjectPath: projectPath,
 	})
-	response := result.Output
-	if err != nil && result.Error != "" {
+	response := result.TextOutput()
+	if execErr != nil && result.Error != "" {
 		response = result.Error
 	}
 
-	if err != nil {
+	if execErr != nil {
 		h.sessionMgr.SetFailed(sessionID, result.Error)
 
 		logrus.Errorf("Claude Code execution failed: %v", result.Error)

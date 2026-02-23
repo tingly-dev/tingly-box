@@ -1,0 +1,5 @@
+[STREAM]{{if .Event.Type}} {{.Event.Type}}{{end}}
+{{- if .Event.Delta}}
+{{- if eq .Event.Delta.Type "text_delta"}} +{{.Event.Delta.Text}}
+{{- else if eq .Event.Delta.Type "input_json_delta"}} +JSON: {{.Event.Delta.PartialJSON}}
+{{- end}}{{end}}

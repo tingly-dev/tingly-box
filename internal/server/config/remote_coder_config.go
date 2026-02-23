@@ -3,6 +3,8 @@ package config
 import "github.com/tingly-dev/tingly-box/internal/constant"
 
 // RemoteCoderConfig holds configuration for the remote-coder service.
+// AgentBoot and Permission configuration are loaded from environment variables
+// via agentboot.LoadConfigFromEnv() and agentboot.ParsePermissionConfig().
 type RemoteCoderConfig struct {
 	Port                 int    `json:"port"`
 	DBPath               string `json:"db_path"`
@@ -45,5 +47,6 @@ func (c *Config) applyRemoteCoderDefaults() bool {
 		c.RemoteCoder.RateLimitBlock = "5m"
 		updated = true
 	}
+
 	return updated
 }
