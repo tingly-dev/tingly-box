@@ -8,6 +8,7 @@ import {
 import { Psychology, Cloud } from '@mui/icons-material';
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
+import { useFeatureFlags } from '@/contexts/FeatureFlagsContext';
 
 const SKILL_FEATURES = [
     { key: 'skill_ide', label: 'IDE Skills', description: 'Enable IDE Skills feature for managing code snippets and skills from IDEs' },
@@ -17,6 +18,7 @@ const GlobalExperimentalFeatures: React.FC = () => {
     const [features, setFeatures] = useState<Record<string, boolean>>({});
     const [remoteCoderEnabled, setRemoteCoderEnabled] = useState(false);
     const [loading, setLoading] = useState(true);
+    const { refresh } = useFeatureFlags();
 
     const loadFeatures = async () => {
         try {
@@ -49,6 +51,7 @@ const GlobalExperimentalFeatures: React.FC = () => {
                 console.log('setScenarioFlag result:', result);
                 if (result.success) {
                     setFeatures(prev => ({ ...prev, [featureKey]: newValue }));
+                    refresh()
                 } else {
                     console.error('Failed to set global feature:', result);
                     loadFeatures();
@@ -66,6 +69,7 @@ const GlobalExperimentalFeatures: React.FC = () => {
             .then((result) => {
                 if (result.success) {
                     setRemoteCoderEnabled(newValue);
+                    refresh();
                 } else {
                     console.error('Failed to set Remote Coder:', result);
                     loadFeatures();
