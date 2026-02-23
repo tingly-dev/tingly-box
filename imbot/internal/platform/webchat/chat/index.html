@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebChat Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .header .status {
+            font-size: 0.875rem;
+            opacity: 0.9;
+            margin-top: 0.25rem;
+        }
+
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            max-width: 800px;
+            width: 100%;
+            margin: 0 auto;
+            background: white;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+        }
+
+        .message {
+            margin-bottom: 1rem;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .message.user {
+            align-items: flex-end;
+        }
+
+        .message.bot {
+            align-items: flex-start;
+        }
+
+        .message-bubble {
+            max-width: 70%;
+            padding: 0.75rem 1rem;
+            border-radius: 1rem;
+            word-wrap: break-word;
+        }
+
+        .message.user .message-bubble {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-bottom-right-radius: 0.25rem;
+        }
+
+        .message.bot .message-bubble {
+            background: #f0f0f0;
+            color: #333;
+            border-bottom-left-radius: 0.25rem;
+        }
+
+        .message-sender {
+            font-size: 0.75rem;
+            opacity: 0.7;
+            margin-bottom: 0.25rem;
+        }
+
+        .message-time {
+            font-size: 0.625rem;
+            opacity: 0.5;
+            margin-top: 0.25rem;
+        }
+
+        .input-container {
+            display: flex;
+            padding: 1rem;
+            border-top: 1px solid #e0e0e0;
+            background: white;
+        }
+
+        .input-container input {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            border: 1px solid #e0e0e0;
+            border-radius: 2rem;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .input-container input:focus {
+            border-color: #667eea;
+        }
+
+        .input-container button {
+            margin-left: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 2rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.2s;
+        }
+
+        .input-container button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .input-container button:active {
+            transform: translateY(0);
+        }
+
+        .input-container button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .connecting {
+            text-align: center;
+            padding: 2rem;
+            color: #999;
+        }
+
+        .connecting::after {
+            content: '...';
+            animation: dots 1.5s steps(4, end) infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60%, 100% { content: '...'; }
+        }
+
+        .status-connected {
+            color: #4caf50;
+        }
+
+        .status-disconnected {
+            color: #f44336;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🌐 WebChat Demo</h1>
+        <div class="status" id="status">
+            <span class="status-disconnected">● Disconnected</span>
+        </div>
+    </div>
+
+    <div class="chat-container">
+        <div class="messages" id="messages">
+            <div class="connecting">Connecting</div>
+        </div>
+
+        <div class="input-container">
+            <input type="text" id="messageInput" placeholder="Type a message..." disabled>
+            <button id="sendButton" disabled>Send</button>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const RELAY_ADDR = '{{.RelayAddr}}' || 'localhost:8080';
+        const WS_URL = `ws://${RELAY_ADDR}/ws`;
+
+        console.log('[Chat] Config:', { RELAY_ADDR, WS_URL });
+
+        // State
+        let ws = null;
+        let senderId = localStorage.getItem('webchat_senderId') || generateId();
+        let senderName = localStorage.getItem('webchat_senderName') || 'User';
+        let sessionId = null;
+        let isConnected = false;
+
+        // Save sender info
+        localStorage.setItem('webchat_senderId', senderId);
+        localStorage.setItem('webchat_senderName', senderName);
+
+        // DOM elements
+        const messagesEl = document.getElementById('messages');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        const statusEl = document.getElementById('status');
+
+        // Generate a random ID
+        function generateId() {
+            return 'id_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        // Format timestamp
+        function formatTime(timestamp) {
+            const date = new Date(timestamp * 1000);
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        // Update status display
+        function updateStatus(connected) {
+            console.log('[Chat] Status:', connected ? 'Connected' : 'Disconnected');
+            isConnected = connected;
+            if (connected) {
+                statusEl.innerHTML = '<span class="status-connected">● Connected</span>';
+                messageInput.disabled = false;
+                sendButton.disabled = false;
+                messageInput.focus();
+            } else {
+                statusEl.innerHTML = '<span class="status-disconnected">● Disconnected</span>';
+                messageInput.disabled = true;
+                sendButton.disabled = true;
+            }
+        }
+
+        // Add a message to the chat
+        function addMessage(msg) {
+            console.log('[Chat] Received message:', msg);
+            const isUser = msg.senderId === senderId;
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user' : 'bot'}`;
+
+            const bubbleDiv = document.createElement('div');
+            bubbleDiv.className = 'message-bubble';
+            bubbleDiv.textContent = msg.text || (msg.media?.length ? '[Media]' : '');
+
+            const senderDiv = document.createElement('div');
+            senderDiv.className = 'message-sender';
+            senderDiv.textContent = msg.senderName || (isUser ? 'You' : 'Bot');
+
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'message-time';
+            timeDiv.textContent = formatTime(msg.timestamp || Date.now() / 1000);
+
+            if (!isUser) {
+                messageDiv.appendChild(senderDiv);
+            }
+            messageDiv.appendChild(bubbleDiv);
+            messageDiv.appendChild(timeDiv);
+
+            messagesEl.appendChild(messageDiv);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        // Connect to WebSocket
+        function connect() {
+            const url = sessionId ? `${WS_URL}?session_id=${sessionId}` : WS_URL;
+            console.log('[Chat] Connecting to:', url);
+
+            try {
+                ws = new WebSocket(url);
+
+                ws.onopen = () => {
+                    console.log('[Chat] WebSocket opened');
+                    updateStatus(true);
+                };
+
+                ws.onmessage = (event) => {
+                    console.log('[Chat] WebSocket message:', event.data);
+                    try {
+                        const msg = JSON.parse(event.data);
+                        if (msg.text || msg.media) {
+                            addMessage(msg);
+                        }
+                    } catch (e) {
+                        console.error('[Chat] Failed to parse message:', e);
+                    }
+                };
+
+                ws.onclose = (event) => {
+                    console.log('[Chat] WebSocket closed:', event.code, event.reason);
+                    updateStatus(false);
+                    // Reconnect after 3 seconds
+                    setTimeout(connect, 3000);
+                };
+
+                ws.onerror = (error) => {
+                    console.error('[Chat] WebSocket error:', error);
+                };
+            } catch (e) {
+                console.error('[Chat] Failed to create WebSocket:', e);
+                updateStatus(false);
+                setTimeout(connect, 3000);
+            }
+        }
+
+        // Send a message
+        function sendMessage() {
+            const text = messageInput.value.trim();
+            if (!text) return;
+            if (!isConnected || !ws || ws.readyState !== WebSocket.OPEN) {
+                console.error('[Chat] Cannot send: not connected');
+                return;
+            }
+
+            const msg = {
+                id: generateId(),
+                timestamp: Math.floor(Date.now() / 1000),
+                senderId: senderId,
+                senderName: senderName,
+                text: text
+            };
+
+            console.log('[Chat] Sending message:', msg);
+            ws.send(JSON.stringify(msg));
+            messageInput.value = '';
+
+            // Immediately show the message in chat (client-side echo)
+            addMessage(msg);
+        }
+
+        // Event listeners
+        sendButton.addEventListener('click', sendMessage);
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        // Start connection
+        console.log('[Chat] Starting connection...');
+        connect();
+    </script>
+</body>
+</html>
