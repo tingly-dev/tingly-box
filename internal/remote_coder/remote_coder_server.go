@@ -154,8 +154,10 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	}()
 
 	// Create bot manager for runtime lifecycle control
+	// Note: Bot credentials are now managed by the main service via internal/data/db
+	// The bot manager here is only for runtime lifecycle (start/stop bots)
 	botManager := bot.NewManager(botStore, sessionMgr, agentBoot, permHandler)
-	botSettingsHandler := api.NewBotSettingsHandler(botStore, botManager)
+
 	remoteCCAPI.GET("/sessions", remoteCCHandler.GetSessions)
 	remoteCCAPI.GET("/sessions/:id", remoteCCHandler.GetSession)
 	remoteCCAPI.GET("/sessions/:id/state", remoteCCHandler.GetSessionState)
@@ -163,21 +165,6 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	remoteCCAPI.GET("/sessions/:id/messages", remoteCCHandler.GetSessionMessages)
 	remoteCCAPI.POST("/chat", remoteCCHandler.Chat)
 	remoteCCAPI.POST("/sessions/clear", remoteCCHandler.ClearSessions)
-
-	// Bot settings API - V2 multi-bot endpoints
-	remoteCCAPI.GET("/bot/settings", botSettingsHandler.GetSettings)       // Legacy: returns single, with ?list=true returns array
-	remoteCCAPI.GET("/bot/settings/list", botSettingsHandler.ListSettings) // V2: returns all bots
-	remoteCCAPI.GET("/bot/settings/:uuid", botSettingsHandler.GetSettingsByUUID)
-	remoteCCAPI.POST("/bot/settings", botSettingsHandler.CreateSettings)
-	remoteCCAPI.PUT("/bot/settings/:uuid", botSettingsHandler.UpdateSettings)
-	remoteCCAPI.DELETE("/bot/settings/:uuid", botSettingsHandler.DeleteSettings)
-	remoteCCAPI.POST("/bot/settings/:uuid/toggle", botSettingsHandler.ToggleSettings)
-
-	// Legacy endpoint for backward compatibility
-	remoteCCAPI.PUT("/bot/settings", botSettingsHandler.UpdateSettingsLegacy)
-
-	remoteCCAPI.GET("/bot/platforms", botSettingsHandler.GetPlatforms)
-	remoteCCAPI.GET("/bot/platform-config", botSettingsHandler.GetPlatformConfig)
 
 	// Start enabled bots using the manager
 	if err := botManager.StartEnabled(ctx); err != nil {
