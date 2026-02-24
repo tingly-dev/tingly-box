@@ -32,6 +32,7 @@ type Manager struct {
 	mu          sync.RWMutex
 	running     map[string]*runningBot // uuid -> runningBot
 	store       SettingsStore
+	dbPath      string // Database path for chat store
 	sessionMgr  *session.Manager
 	agentBoot   *agentboot.AgentBoot
 	permHandler permission.Handler
@@ -46,6 +47,13 @@ func NewManager(store SettingsStore, sessionMgr *session.Manager, agentBoot *age
 		agentBoot:   agentBoot,
 		permHandler: permHandler,
 	}
+}
+
+// SetDBPath sets the database path for chat store operations
+func (m *Manager) SetDBPath(dbPath string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.dbPath = dbPath
 }
 
 // Start starts a bot by UUID
@@ -109,8 +117,11 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 		// Use the original settings type to determine which function to call
 		switch s := settingsCopy.(type) {
 		case db.Settings:
-			// Use new standard database store
-			if err := runTelegramBotWithSettings(ctx, s, m.sessionMgr, m.agentBoot, m.permHandler); err != nil {
+			// Use new standard database store - need to get dbPath from manager
+			m.mu.RLock()
+			dbPath := m.dbPath
+			m.mu.RUnlock()
+			if err := runTelegramBotWithSettings(ctx, s, dbPath, m.sessionMgr, m.agentBoot, m.permHandler); err != nil {
 				logrus.WithError(err).WithField("uuid", uuid).Warn("Bot stopped with error")
 			}
 		case Settings:

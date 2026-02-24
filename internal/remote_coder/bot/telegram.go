@@ -1613,12 +1613,10 @@ func (h *streamingMessageHandler) sendMessage(text string) {
 
 // runTelegramBotWithSettings starts a Telegram bot using db.Settings instead of bot.Store
 // This is used when ImBot credentials are stored in the standard database
-func runTelegramBotWithSettings(ctx context.Context, settings db.Settings, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot, permHandler permission.Handler) error {
+func runTelegramBotWithSettings(ctx context.Context, settings db.Settings, dbPath string, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot, permHandler permission.Handler) error {
 	// Create a temporary bot.Store for chat state management
 	// We need this for session mapping, whitelist, project bindings, etc.
-	// Use the main database path for chat state
-	chatStoreDBPath := "" // Will be set by the caller using the main config
-	store, err := NewStoreForChatOnly(chatStoreDBPath)
+	store, err := NewStoreForChatOnly(dbPath)
 	if err != nil {
 		return fmt.Errorf("failed to create chat store: %w", err)
 	}
