@@ -116,9 +116,23 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 		token = authToken // Legacy field
 	}
 
-	if token == "" {
-		logrus.WithField("uuid", uuid).Warn("Bot has no token, not starting")
-		return fmt.Errorf("bot has no token")
+	// Validate auth credentials based on platform
+	hasValidAuth := false
+	switch platform {
+	case "dingtalk", "feishu":
+		// OAuth platforms require clientId and clientSecret
+		hasValidAuth = auth["clientId"] != "" && auth["clientSecret"] != ""
+	case "whatsapp":
+		// WhatsApp requires token, phoneNumberId is optional
+		hasValidAuth = token != ""
+	default:
+		// Token-based platforms (telegram, discord, slack, etc.)
+		hasValidAuth = token != ""
+	}
+
+	if !hasValidAuth {
+		logrus.WithField("uuid", uuid).WithField("platform", platform).Warn("Bot has no valid auth credentials, not starting")
+		return fmt.Errorf("bot has no valid auth credentials for platform: %s", platform)
 	}
 
 	// Create cancellable context for this bot
@@ -134,16 +148,16 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 			m.mu.RLock()
 			dbPath := m.dbPath
 			m.mu.RUnlock()
-			if err := runTelegramBotWithSettings(ctx, s, dbPath, m.sessionMgr, m.agentBoot, m.permHandler); err != nil {
+			if err := runBotWithSettings(ctx, s, dbPath, m.sessionMgr, m.agentBoot, m.permHandler); err != nil {
 				logrus.WithError(err).WithField("uuid", uuid).Warn("Bot stopped with error")
 			}
 		case Settings:
-			// For legacy Settings, we need to create a store to use RunTelegramBot
+			// For legacy Settings, we need to create a store to use RunBot
 			// Create a temporary in-memory store with just this settings
 			tempStore := &Store{
 				// We'll need to set up a minimal store for chat state management
 			}
-			if err := RunTelegramBotWithSettingsOnly(ctx, s, tempStore, m.sessionMgr, m.agentBoot, m.permHandler); err != nil {
+			if err := RunBotWithSettingsOnly(ctx, s, tempStore, m.sessionMgr, m.agentBoot, m.permHandler); err != nil {
 				logrus.WithError(err).WithField("uuid", uuid).Warn("Bot stopped with error")
 			}
 		}
