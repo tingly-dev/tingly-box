@@ -156,7 +156,7 @@ func TestDeepSeekRequestConversion(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			openaiReq, _ := ConvertAnthropicToOpenAIRequest(&tt.anthropicReq, false)
+			openaiReq, _ := ConvertAnthropicToOpenAIRequest(&tt.anthropicReq, false, false)
 
 			// Check all assistant messages have x_thinking
 			// (reasoning_content is added by applyDeepSeekTransform at a higher level)
