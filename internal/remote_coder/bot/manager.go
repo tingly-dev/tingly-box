@@ -22,6 +22,17 @@ type SettingsStore interface {
 	ListEnabledSettingsInterface() (interface{}, error)
 }
 
+// BotLifecycle defines the interface for controlling bot lifecycle
+// This allows the API layer to control bot startup/shutdown without direct dependency on the Manager type
+type BotLifecycle interface {
+	// Start starts a bot by UUID
+	Start(ctx context.Context, uuid string) error
+	// Stop stops a bot by UUID
+	Stop(uuid string)
+	// IsRunning checks if a bot is running
+	IsRunning(uuid string) bool
+}
+
 // runningBot tracks a running bot instance
 type runningBot struct {
 	cancel context.CancelFunc

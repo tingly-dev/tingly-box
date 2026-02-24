@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/data/db"
+	"github.com/tingly-dev/tingly-box/internal/remote_coder"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/bot"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/pkg/swagger"
@@ -15,15 +17,17 @@ import (
 
 // ImBotSettingsAPI provides REST endpoints for ImBot settings management
 type ImBotSettingsAPI struct {
-	config *config.Config
-	store  *db.ImBotSettingsStore
+	config     *config.Config
+	store      *db.ImBotSettingsStore
+	botManager bot.BotLifecycle
 }
 
 // NewImBotSettingsAPI creates a new ImBot settings API
 func NewImBotSettingsAPI(cfg *config.Config) *ImBotSettingsAPI {
 	return &ImBotSettingsAPI{
-		config: cfg,
-		store:  cfg.GetImBotSettingsStore(),
+		config:     cfg,
+		store:      cfg.GetImBotSettingsStore(),
+		botManager: remote_coder.GetBotManager(),
 	}
 }
 
@@ -234,6 +238,14 @@ func (api *ImBotSettingsAPI) CreateSettings(c *gin.Context) {
 
 	logrus.WithField("uuid", created.UUID).WithField("platform", created.Platform).Info("ImBot settings created")
 
+	// Start the bot if enabled
+	if created.Enabled && api.botManager != nil {
+		ctx := context.Background()
+		if err := api.botManager.Start(ctx, created.UUID); err != nil {
+			logrus.WithError(err).WithField("uuid", created.UUID).Warn("Failed to start bot after creation")
+		}
+	}
+
 	response := ImBotSettingsResponse{
 		Success:  true,
 		Settings: created,
@@ -252,6 +264,19 @@ func (api *ImBotSettingsAPI) UpdateSettings(c *gin.Context) {
 	uuid := c.Param("uuid")
 	if uuid == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "UUID is required"})
+		return
+	}
+
+	// Get current settings to check if enabled status is changing
+	currentSettings, err := api.store.GetSettingsByUUID(uuid)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Check if settings exist
+	if currentSettings.UUID == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "ImBot settings not found"})
 		return
 	}
 
@@ -294,8 +319,10 @@ func (api *ImBotSettingsAPI) UpdateSettings(c *gin.Context) {
 		BashAllowlist: normalizeAllowlist(req.BashAllowlist),
 	}
 
+	newEnabled := currentSettings.Enabled
 	if req.Enabled != nil {
-		settings.Enabled = *req.Enabled
+		newEnabled = *req.Enabled
+		settings.Enabled = newEnabled
 	}
 
 	if err := api.store.UpdateSettings(uuid, settings); err != nil {
@@ -304,6 +331,20 @@ func (api *ImBotSettingsAPI) UpdateSettings(c *gin.Context) {
 	}
 
 	logrus.WithField("uuid", uuid).Info("ImBot settings updated")
+
+	// Handle bot lifecycle if enabled status changed
+	if api.botManager != nil && currentSettings.Enabled != newEnabled {
+		ctx := context.Background()
+		if newEnabled {
+			// Enable -> start the bot
+			if err := api.botManager.Start(ctx, uuid); err != nil {
+				logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to start bot after update")
+			}
+		} else {
+			// Disable -> stop the bot
+			api.botManager.Stop(uuid)
+		}
+	}
 
 	// Fetch updated settings
 	updated, err := api.store.GetSettingsByUUID(uuid)
@@ -331,6 +372,11 @@ func (api *ImBotSettingsAPI) DeleteSettings(c *gin.Context) {
 	if uuid == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "UUID is required"})
 		return
+	}
+
+	// Stop the bot if it's running
+	if api.botManager != nil {
+		api.botManager.Stop(uuid)
 	}
 
 	if err := api.store.DeleteSettings(uuid); err != nil {
@@ -369,8 +415,19 @@ func (api *ImBotSettingsAPI) ToggleSettings(c *gin.Context) {
 
 	logrus.WithField("uuid", uuid).WithField("enabled", newStatus).Info("ImBot settings toggled")
 
-	// Note: Bot lifecycle management (start/stop) is handled by the remote_coder module
-	// The remote_coder manager will need to be notified of the toggle event
+	// Notify bot manager to start or stop the bot
+	if api.botManager != nil {
+		ctx := context.Background()
+		if newStatus {
+			// Start the bot
+			if err := api.botManager.Start(ctx, uuid); err != nil {
+				logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to start bot after toggle")
+			}
+		} else {
+			// Stop the bot
+			api.botManager.Stop(uuid)
+		}
+	}
 
 	response := ImBotSettingsToggleResponse{
 		Success: true,

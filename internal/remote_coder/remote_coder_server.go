@@ -168,6 +168,9 @@ func Run(ctx context.Context, cfg *config.Config, imbotStore *db.ImBotSettingsSt
 		logrus.Info("Using local bot store")
 	}
 
+	// Store bot manager globally for API integration
+	globalBotManager = botManager
+
 	remoteCCAPI.GET("/sessions", remoteCCHandler.GetSessions)
 	remoteCCAPI.GET("/sessions/:id", remoteCCHandler.GetSession)
 	remoteCCAPI.GET("/sessions/:id/state", remoteCCHandler.GetSessionState)
@@ -228,8 +231,14 @@ func GetPermissionHandler() permission.Handler {
 	return globalPermissionHandler
 }
 
+// GetBotManager returns the bot manager instance (for API integration)
+func GetBotManager() bot.BotLifecycle {
+	return globalBotManager
+}
+
 // Global instances for bot platform integration
 var (
 	globalAgentBoot         *agentboot.AgentBoot
 	globalPermissionHandler permission.Handler
+	globalBotManager        bot.BotLifecycle
 )
