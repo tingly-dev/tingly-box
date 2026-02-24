@@ -140,7 +140,7 @@ func TestParseTacticType(t *testing.T) {
 		{"round_robin", TacticRoundRobin},
 		{"token_based", TacticTokenBased},
 		{"hybrid", TacticHybrid},
-		{"random", loadbalance.TacticRandom},
+		{"random", TacticRandom},
 		{"invalid", TacticRoundRobin}, // Default fallback
 		{"", TacticRoundRobin},        // Empty string fallback
 	}
@@ -153,12 +153,12 @@ func TestParseTacticType(t *testing.T) {
 }
 
 func TestTacticType_String(t *testing.T) {
-	tests := map[loadbalance.TacticType]string{
-		loadbalance.TacticRoundRobin: "round_robin",
-		loadbalance.TacticTokenBased: "token_based",
-		loadbalance.TacticHybrid:     "hybrid",
-		loadbalance.TacticRandom:     "random",
-		loadbalance.TacticType(999):  "unknown", // Invalid type
+	tests := map[TacticType]string{
+		TacticRoundRobin: "round_robin",
+		TacticTokenBased: "token_based",
+		TacticHybrid:     "hybrid",
+		TacticRandom:     "random",
+		TacticType(999):  "unknown", // Invalid type
 	}
 
 	for tacticType, expected := range tests {
