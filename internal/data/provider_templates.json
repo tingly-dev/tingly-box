@@ -694,6 +694,27 @@
         "kimi-k2.5": 32768
       },
       "supports_models_endpoint": false
+    },
+    "kimi-code": {
+      "id": "kimi-code",
+      "name": "Kimi Code",
+      "status": "active",
+      "valid": true,
+      "website": "https://www.kimi.com/code",
+      "description": "Kimi Code API service for coding scenarios with powerful model performance and tool integration",
+      "type": "official",
+      "api_doc": "https://www.kimi.com/code",
+      "model_doc": "https://www.kimi.com/code",
+      "pricing_doc": "https://www.kimi.com/code",
+      "base_url_openai": "https://api.kimi.com/coding/v1",
+      "base_url_anthropic": "https://api.kimi.com/coding/",
+      "models": [
+        "kimi-for-coding"
+      ],
+      "model_limits": {
+        "kimi-for-coding": 32768
+      },
+      "supports_models_endpoint": false
     }
   },
   "version": "1.3.0",
