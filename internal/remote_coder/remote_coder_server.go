@@ -15,6 +15,7 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/agentboot/permission"
+	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/api"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/audit"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/bot"
@@ -43,7 +44,9 @@ func CORSMiddleware() gin.HandlerFunc {
 }
 
 // Run starts the remote-coder service and blocks until shutdown.
-func Run(ctx context.Context, cfg *config.Config) error {
+// imbotStore is the optional ImBot settings store from the main service.
+// If provided, it will be used to load bot credentials instead of the local store.
+func Run(ctx context.Context, cfg *config.Config, imbotStore *db.ImBotSettingsStore) error {
 	if cfg == nil {
 		return fmt.Errorf("remote-coder config is nil")
 	}
@@ -145,17 +148,29 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	remoteCCAPI.Use(config.AuthMiddleware(cfg))
 
 	remoteCCHandler := api.NewRemoteCCHandler(sessionMgr, agentBoot, summaryEngine, auditLogger, cfg, permHandler)
-	botStore, err := bot.NewStore(cfg.DBPath)
-	if err != nil {
-		return fmt.Errorf("failed to initialize bot store: %w", err)
-	}
-	defer func() {
-		_ = botStore.Close()
-	}()
 
 	// Create bot manager for runtime lifecycle control
-	botManager := bot.NewManager(botStore, sessionMgr, agentBoot, permHandler)
-	botSettingsHandler := api.NewBotSettingsHandler(botStore, botManager)
+	// Use ImBotSettingsStore if provided (from main service), otherwise use local store
+	var botManager *bot.Manager
+	if imbotStore != nil {
+		botManager = bot.NewManager(imbotStore, sessionMgr, agentBoot, permHandler)
+		botManager.SetDBPath(cfg.DBPath) // Set db path for chat store
+		logrus.Info("Using ImBot settings store from main service")
+	} else {
+		botStore, err := bot.NewStore(cfg.DBPath)
+		if err != nil {
+			return fmt.Errorf("failed to initialize bot store: %w", err)
+		}
+		defer func() {
+			_ = botStore.Close()
+		}()
+		botManager = bot.NewManager(botStore, sessionMgr, agentBoot, permHandler)
+		logrus.Info("Using local bot store")
+	}
+
+	// Store bot manager globally for API integration
+	globalBotManager = botManager
+
 	remoteCCAPI.GET("/sessions", remoteCCHandler.GetSessions)
 	remoteCCAPI.GET("/sessions/:id", remoteCCHandler.GetSession)
 	remoteCCAPI.GET("/sessions/:id/state", remoteCCHandler.GetSessionState)
@@ -163,21 +178,6 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	remoteCCAPI.GET("/sessions/:id/messages", remoteCCHandler.GetSessionMessages)
 	remoteCCAPI.POST("/chat", remoteCCHandler.Chat)
 	remoteCCAPI.POST("/sessions/clear", remoteCCHandler.ClearSessions)
-
-	// Bot settings API - V2 multi-bot endpoints
-	remoteCCAPI.GET("/bot/settings", botSettingsHandler.GetSettings)       // Legacy: returns single, with ?list=true returns array
-	remoteCCAPI.GET("/bot/settings/list", botSettingsHandler.ListSettings) // V2: returns all bots
-	remoteCCAPI.GET("/bot/settings/:uuid", botSettingsHandler.GetSettingsByUUID)
-	remoteCCAPI.POST("/bot/settings", botSettingsHandler.CreateSettings)
-	remoteCCAPI.PUT("/bot/settings/:uuid", botSettingsHandler.UpdateSettings)
-	remoteCCAPI.DELETE("/bot/settings/:uuid", botSettingsHandler.DeleteSettings)
-	remoteCCAPI.POST("/bot/settings/:uuid/toggle", botSettingsHandler.ToggleSettings)
-
-	// Legacy endpoint for backward compatibility
-	remoteCCAPI.PUT("/bot/settings", botSettingsHandler.UpdateSettingsLegacy)
-
-	remoteCCAPI.GET("/bot/platforms", botSettingsHandler.GetPlatforms)
-	remoteCCAPI.GET("/bot/platform-config", botSettingsHandler.GetPlatformConfig)
 
 	// Start enabled bots using the manager
 	if err := botManager.StartEnabled(ctx); err != nil {
@@ -231,8 +231,14 @@ func GetPermissionHandler() permission.Handler {
 	return globalPermissionHandler
 }
 
+// GetBotManager returns the bot manager instance (for API integration)
+func GetBotManager() bot.BotLifecycle {
+	return globalBotManager
+}
+
 // Global instances for bot platform integration
 var (
 	globalAgentBoot         *agentboot.AgentBoot
 	globalPermissionHandler permission.Handler
+	globalBotManager        bot.BotLifecycle
 )

@@ -806,7 +806,9 @@ func (s *Server) Start(port int) error {
 				logrus.WithError(err).Warn("Remote-coder not started: invalid config")
 				return
 			}
-			if err := remote_coder.Run(ctx, rcCfg); err != nil {
+			// Pass the ImBotSettingsStore from main config to remote_coder
+			imbotStore := s.config.GetImBotSettingsStore()
+			if err := remote_coder.Run(ctx, rcCfg, imbotStore); err != nil {
 				logrus.WithError(err).Warn("Remote-coder stopped")
 			}
 		}()
