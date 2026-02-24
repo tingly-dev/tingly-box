@@ -17,17 +17,15 @@ import (
 
 // ImBotSettingsAPI provides REST endpoints for ImBot settings management
 type ImBotSettingsAPI struct {
-	config     *config.Config
-	store      *db.ImBotSettingsStore
-	botManager bot.BotLifecycle
+	config *config.Config
+	store  *db.ImBotSettingsStore
 }
 
 // NewImBotSettingsAPI creates a new ImBot settings API
 func NewImBotSettingsAPI(cfg *config.Config) *ImBotSettingsAPI {
 	return &ImBotSettingsAPI{
-		config:     cfg,
-		store:      cfg.GetImBotSettingsStore(),
-		botManager: remote_coder.GetBotManager(),
+		config: cfg,
+		store:  cfg.GetImBotSettingsStore(),
 	}
 }
 
@@ -239,10 +237,12 @@ func (api *ImBotSettingsAPI) CreateSettings(c *gin.Context) {
 	logrus.WithField("uuid", created.UUID).WithField("platform", created.Platform).Info("ImBot settings created")
 
 	// Start the bot if enabled
-	if created.Enabled && api.botManager != nil {
-		ctx := context.Background()
-		if err := api.botManager.Start(ctx, created.UUID); err != nil {
-			logrus.WithError(err).WithField("uuid", created.UUID).Warn("Failed to start bot after creation")
+	if created.Enabled {
+		if botManager := remote_coder.GetBotManager(); botManager != nil {
+			ctx := context.Background()
+			if err := botManager.Start(ctx, created.UUID); err != nil {
+				logrus.WithError(err).WithField("uuid", created.UUID).Warn("Failed to start bot after creation")
+			}
 		}
 	}
 
@@ -333,16 +333,18 @@ func (api *ImBotSettingsAPI) UpdateSettings(c *gin.Context) {
 	logrus.WithField("uuid", uuid).Info("ImBot settings updated")
 
 	// Handle bot lifecycle if enabled status changed
-	if api.botManager != nil && currentSettings.Enabled != newEnabled {
-		ctx := context.Background()
-		if newEnabled {
-			// Enable -> start the bot
-			if err := api.botManager.Start(ctx, uuid); err != nil {
-				logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to start bot after update")
+	if currentSettings.Enabled != newEnabled {
+		if botManager := remote_coder.GetBotManager(); botManager != nil {
+			ctx := context.Background()
+			if newEnabled {
+				// Enable -> start the bot
+				if err := botManager.Start(ctx, uuid); err != nil {
+					logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to start bot after update")
+				}
+			} else {
+				// Disable -> stop the bot
+				botManager.Stop(uuid)
 			}
-		} else {
-			// Disable -> stop the bot
-			api.botManager.Stop(uuid)
 		}
 	}
 
@@ -375,8 +377,8 @@ func (api *ImBotSettingsAPI) DeleteSettings(c *gin.Context) {
 	}
 
 	// Stop the bot if it's running
-	if api.botManager != nil {
-		api.botManager.Stop(uuid)
+	if botManager := remote_coder.GetBotManager(); botManager != nil {
+		botManager.Stop(uuid)
 	}
 
 	if err := api.store.DeleteSettings(uuid); err != nil {
@@ -416,16 +418,16 @@ func (api *ImBotSettingsAPI) ToggleSettings(c *gin.Context) {
 	logrus.WithField("uuid", uuid).WithField("enabled", newStatus).Info("ImBot settings toggled")
 
 	// Notify bot manager to start or stop the bot
-	if api.botManager != nil {
+	if botManager := remote_coder.GetBotManager(); botManager != nil {
 		ctx := context.Background()
 		if newStatus {
 			// Start the bot
-			if err := api.botManager.Start(ctx, uuid); err != nil {
+			if err := botManager.Start(ctx, uuid); err != nil {
 				logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to start bot after toggle")
 			}
 		} else {
 			// Stop the bot
-			api.botManager.Stop(uuid)
+			botManager.Stop(uuid)
 		}
 	}
 
