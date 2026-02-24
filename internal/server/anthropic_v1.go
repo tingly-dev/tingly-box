@@ -242,7 +242,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 		// Use OpenAI conversion path (default behavior)
 		if isStreaming {
 			// Convert Anthropic request to OpenAI format for streaming
-			openaiReq := request.ConvertAnthropicToOpenAIRequestWithProvider(&req.MessageNewParams, true, provider, actualModel)
+			openaiReq := request.ConvertAnthropicToOpenAIRequestWithProvider(&req.MessageNewParams, true, provider, actualModel, isStreaming)
 
 			// Create streaming request with request context for proper cancellation
 			wrapper := s.clientPool.GetOpenAIClient(provider, string(openaiReq.Model))
@@ -273,7 +273,7 @@ func (s *Server) anthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 		} else {
 			// Handle non-streaming request
 			// Convert Anthropic request to OpenAI format with provider transforms
-			openaiReq := request.ConvertAnthropicToOpenAIRequestWithProvider(&req.MessageNewParams, true, provider, actualModel)
+			openaiReq := request.ConvertAnthropicToOpenAIRequestWithProvider(&req.MessageNewParams, true, provider, actualModel, isStreaming)
 			wrapper := s.clientPool.GetOpenAIClient(provider, string(openaiReq.Model))
 			fc := NewForwardContext(nil, provider)
 			response, err := ForwardOpenAIChat(fc, wrapper, openaiReq)

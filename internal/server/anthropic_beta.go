@@ -212,7 +212,8 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			}
 		} else {
 			// Use Chat Completions path (fallback)
-			openaiReq := request.ConvertAnthropicBetaToOpenAIRequestWithProvider(&req.BetaMessageNewParams, true, provider, actualModel)
+			// Note: isStreaming is determined after conversion, so we need to re-evaluate
+			openaiReq := request.ConvertAnthropicBetaToOpenAIRequestWithProvider(&req.BetaMessageNewParams, true, provider, actualModel, isStreaming)
 
 			// Set the rule and provider in context so middleware can use the same rule
 			if rule != nil {
@@ -225,6 +226,8 @@ func (s *Server) anthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 
 			// Use OpenAI Chat Completions path
 			if isStreaming {
+				// Re-convert with streaming enabled since we're now in streaming mode
+				openaiReq = request.ConvertAnthropicBetaToOpenAIRequestWithProvider(&req.BetaMessageNewParams, true, provider, actualModel, isStreaming)
 				// Set up stream recorder
 				streamRec := newStreamRecorder(recorder)
 				if streamRec != nil {
