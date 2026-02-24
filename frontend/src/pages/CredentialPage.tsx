@@ -152,7 +152,7 @@ const CredentialPage = () => {
     const loadBotPlatforms = async () => {
         try {
             setBotPlatformsLoading(true);
-            const data = await api.getBotPlatforms();
+            const data = await api.getImBotPlatforms();
             if (data?.success && data?.platforms) {
                 setBotPlatforms(data.platforms);
             }
@@ -167,8 +167,7 @@ const CredentialPage = () => {
         const loadBotSettings = async () => {
             try {
                 setBotLoading(true);
-                // Try V2 API first
-                const data = await api.getBotSettingsList();
+                const data = await api.getImBotSettingsList();
                 if (data?.success && Array.isArray(data.settings)) {
                     setBots(data.settings);
                 } else if (data?.success === false) {
@@ -198,7 +197,7 @@ const CredentialPage = () => {
     // Helper to reload bots
     const reloadBots = async () => {
         try {
-            const data = await api.getBotSettingsList();
+            const data = await api.getImBotSettingsList();
             if (data?.success && Array.isArray(data.settings)) {
                 setBots(data.settings);
             }
@@ -266,7 +265,7 @@ const CredentialPage = () => {
 
     const handleToggleBot = async (uuid: string) => {
         try {
-            const result = await api.toggleBotSetting(uuid);
+            const result = await api.toggleImBotSetting(uuid);
             if (result?.success) {
                 showNotification(result.enabled ? 'Bot enabled' : 'Bot disabled', 'success');
                 await reloadBots();
@@ -280,7 +279,7 @@ const CredentialPage = () => {
 
     const handleDeleteBot = async (uuid: string) => {
         try {
-            const result = await api.deleteBotSetting(uuid);
+            const result = await api.deleteImBotSetting(uuid);
             if (result?.success) {
                 showNotification('Bot deleted successfully', 'success');
                 await reloadBots();
@@ -385,9 +384,9 @@ const CredentialPage = () => {
 
             let result;
             if (botDialogMode === 'edit' && botEditUuid) {
-                result = await api.updateBotSetting(botEditUuid, data);
+                result = await api.updateImBotSetting(botEditUuid, data);
             } else {
-                result = await api.createBotSetting(data);
+                result = await api.createImBotSetting(data);
             }
 
             if (result?.success === false) {

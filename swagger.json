@@ -68,6 +68,305 @@
         }
       }
     },
+    "/api/v1/imbot-platform-config": {
+      "get": {
+        "tags": [
+          "imbot-settings"
+        ],
+        "summary": "Returns auth configuration for a specific platform",
+        "description": "Returns auth configuration for a specific platform",
+        "operationId": "apiV1Imbot-platform-configGet",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "platform",
+            "in": "query",
+            "description": "Platform identifier (telegram, discord, slack, feishu, dingtalk, whatsapp)",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ImBotPlatformConfigResponse"
+            }
+          },
+          "400": {
+            "description": "Platform parameter is required",
+            "schema": {
+              "type": "object"
+            }
+          },
+          "404": {
+            "description": "Unknown platform",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imbot-platforms": {
+      "get": {
+        "tags": [
+          "imbot-settings"
+        ],
+        "summary": "Returns all supported ImBot platforms with their configurations",
+        "description": "Returns all supported ImBot platforms with their configurations",
+        "operationId": "apiV1Imbot-platformsGet",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ImBotPlatformsResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imbot-settings": {
+      "get": {
+        "tags": [
+          "imbot-settings"
+        ],
+        "summary": "Returns all ImBot configurations",
+        "description": "Returns all ImBot configurations",
+        "operationId": "apiV1Imbot-settingsGet",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ImBotSettingsListResponse"
+            }
+          },
+          "503": {
+            "description": "ImBot settings store not available",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "imbot-settings"
+        ],
+        "summary": "Creates a new ImBot configuration",
+        "description": "Creates a new ImBot configuration",
+        "operationId": "apiV1Imbot-settingsPost",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "request",
+            "in": "body",
+            "description": "Request body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ImBotSettingsCreateRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ImBotSettingsResponse"
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imbot-settings/{uuid}": {
+      "get": {
+        "tags": [
+          "imbot-settings"
+        ],
+        "summary": "Returns a single ImBot configuration by UUID",
+        "description": "Returns a single ImBot configuration by UUID",
+        "operationId": "apiV1Imbot-settingsUuidGet",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "description": "ImBot configuration UUID",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ImBotSettingsResponse"
+            }
+          },
+          "404": {
+            "description": "ImBot settings not found",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "imbot-settings"
+        ],
+        "summary": "Updates an existing ImBot configuration",
+        "description": "Updates an existing ImBot configuration",
+        "operationId": "apiV1Imbot-settingsUuidPut",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "description": "ImBot configuration UUID",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "request",
+            "in": "body",
+            "description": "Request body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ImBotSettingsUpdateRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ImBotSettingsResponse"
+            }
+          },
+          "404": {
+            "description": "ImBot settings not found",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "imbot-settings"
+        ],
+        "summary": "Deletes an ImBot configuration",
+        "description": "Deletes an ImBot configuration",
+        "operationId": "apiV1Imbot-settingsUuidDelete",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "description": "ImBot configuration UUID",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/DeleteResponse"
+            }
+          },
+          "404": {
+            "description": "ImBot settings not found",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imbot-settings/{uuid}/toggle": {
+      "post": {
+        "tags": [
+          "imbot-settings"
+        ],
+        "summary": "Toggles the enabled status of an ImBot configuration",
+        "description": "Toggles the enabled status of an ImBot configuration",
+        "operationId": "apiV1Imbot-settingsUuidTogglePost",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "description": "ImBot configuration UUID",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "schema": {
+              "$ref": "#/definitions/ImBotSettingsToggleResponse"
+            }
+          },
+          "404": {
+            "description": "ImBot settings not found",
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
     "/api/v1/info/config": {
       "get": {
         "tags": [
@@ -2482,6 +2781,23 @@
         "message"
       ]
     },
+    "DeleteResponse": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string",
+          "description": "Field message"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success"
+        }
+      },
+      "required": [
+        "success",
+        "message"
+      ]
+    },
     "DeleteRuleResponse": {
       "type": "object",
       "properties": {
@@ -2604,6 +2920,43 @@
         "type"
       ]
     },
+    "FieldSpec": {
+      "type": "object",
+      "properties": {
+        "helperText": {
+          "type": "string",
+          "description": "Field helperText"
+        },
+        "key": {
+          "type": "string",
+          "description": "Field key"
+        },
+        "label": {
+          "type": "string",
+          "description": "Field label"
+        },
+        "placeholder": {
+          "type": "string",
+          "description": "Field placeholder"
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Field required"
+        },
+        "secret": {
+          "type": "boolean",
+          "description": "Field secret"
+        }
+      },
+      "required": [
+        "key",
+        "label",
+        "placeholder",
+        "required",
+        "secret",
+        "helperText"
+      ]
+    },
     "GenerateTokenRequest": {
       "type": "object",
       "properties": {
@@ -2686,6 +3039,209 @@
         "success",
         "data"
       ]
+    },
+    "ImBotPlatformConfigResponse": {
+      "type": "object",
+      "properties": {
+        "platform": {
+          "description": "Field platform",
+          "$ref": "#/definitions/PlatformConfig"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success"
+        }
+      },
+      "required": [
+        "success",
+        "platform"
+      ]
+    },
+    "ImBotPlatformsResponse": {
+      "type": "object",
+      "properties": {
+        "categories": {
+          "type": "object",
+          "description": "Field categories",
+          "additionalProperties": {
+            "type": "object"
+          }
+        },
+        "platforms": {
+          "type": "array",
+          "description": "Field platforms",
+          "items": {
+            "$ref": "#/definitions/PlatformConfig"
+          }
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success"
+        }
+      },
+      "required": [
+        "success",
+        "platforms",
+        "categories"
+      ]
+    },
+    "ImBotSettingsCreateRequest": {
+      "type": "object",
+      "properties": {
+        "auth": {
+          "type": "object",
+          "description": "Field auth",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "auth_type": {
+          "type": "string",
+          "description": "Field auth_type"
+        },
+        "bash_allowlist": {
+          "type": "array",
+          "description": "Field bash_allowlist",
+          "items": {
+            "type": "string"
+          }
+        },
+        "chat_id": {
+          "type": "string",
+          "description": "Field chat_id"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Field enabled"
+        },
+        "name": {
+          "type": "string",
+          "description": "Field name"
+        },
+        "platform": {
+          "type": "string",
+          "description": "Field platform"
+        },
+        "proxy_url": {
+          "type": "string",
+          "description": "Field proxy_url"
+        },
+        "token": {
+          "type": "string",
+          "description": "Field token"
+        },
+        "uuid": {
+          "type": "string",
+          "description": "Field uuid"
+        }
+      },
+      "required": [
+        "platform",
+        "auth_type",
+        "auth",
+        "enabled"
+      ]
+    },
+    "ImBotSettingsListResponse": {
+      "type": "object",
+      "properties": {
+        "settings": {
+          "type": "array",
+          "description": "Field settings",
+          "items": {
+            "$ref": "#/definitions/Settings"
+          }
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success"
+        }
+      },
+      "required": [
+        "success",
+        "settings"
+      ]
+    },
+    "ImBotSettingsResponse": {
+      "type": "object",
+      "properties": {
+        "settings": {
+          "description": "Field settings",
+          "$ref": "#/definitions/Settings"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success"
+        }
+      },
+      "required": [
+        "success",
+        "settings"
+      ]
+    },
+    "ImBotSettingsToggleResponse": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Field enabled"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Field success"
+        }
+      },
+      "required": [
+        "success",
+        "enabled"
+      ]
+    },
+    "ImBotSettingsUpdateRequest": {
+      "type": "object",
+      "properties": {
+        "auth": {
+          "type": "object",
+          "description": "Field auth",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "auth_type": {
+          "type": "string",
+          "description": "Field auth_type"
+        },
+        "bash_allowlist": {
+          "type": "array",
+          "description": "Field bash_allowlist",
+          "items": {
+            "type": "string"
+          }
+        },
+        "chat_id": {
+          "type": "string",
+          "description": "Field chat_id"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Field enabled"
+        },
+        "name": {
+          "type": "string",
+          "description": "Field name"
+        },
+        "platform": {
+          "type": "string",
+          "description": "Field platform"
+        },
+        "proxy_url": {
+          "type": "string",
+          "description": "Field proxy_url"
+        },
+        "token": {
+          "type": "string",
+          "description": "Field token"
+        }
+      }
     },
     "ImportSkillLocationsRequest": {
       "type": "object",
@@ -3290,6 +3846,41 @@
         "data"
       ]
     },
+    "PlatformConfig": {
+      "type": "object",
+      "properties": {
+        "auth_type": {
+          "type": "string",
+          "description": "Field auth_type"
+        },
+        "category": {
+          "type": "string",
+          "description": "Field category"
+        },
+        "display_name": {
+          "type": "string",
+          "description": "Field display_name"
+        },
+        "fields": {
+          "type": "array",
+          "description": "Field fields",
+          "items": {
+            "$ref": "#/definitions/FieldSpec"
+          }
+        },
+        "platform": {
+          "type": "string",
+          "description": "Field platform"
+        }
+      },
+      "required": [
+        "platform",
+        "display_name",
+        "auth_type",
+        "category",
+        "fields"
+      ]
+    },
     "ProbeProviderRequest": {
       "type": "object",
       "properties": {
@@ -3716,6 +4307,10 @@
     "ProviderTemplate": {
       "type": "object",
       "properties": {
+        "alias": {
+          "type": "string",
+          "description": "Field alias"
+        },
         "api_doc": {
           "type": "string",
           "description": "Field api_doc"
@@ -4332,6 +4927,73 @@
         "window_input_tokens",
         "window_output_tokens",
         "time_window"
+      ]
+    },
+    "Settings": {
+      "type": "object",
+      "properties": {
+        "auth": {
+          "type": "object",
+          "description": "Field auth",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "auth_type": {
+          "type": "string",
+          "description": "Field auth_type"
+        },
+        "bash_allowlist": {
+          "type": "array",
+          "description": "Field bash_allowlist",
+          "items": {
+            "type": "string"
+          }
+        },
+        "chat_id": {
+          "type": "string",
+          "description": "Field chat_id"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Field created_at"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Field enabled"
+        },
+        "name": {
+          "type": "string",
+          "description": "Field name"
+        },
+        "platform": {
+          "type": "string",
+          "description": "Field platform"
+        },
+        "proxy_url": {
+          "type": "string",
+          "description": "Field proxy_url"
+        },
+        "token": {
+          "type": "string",
+          "description": "Field token"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Field updated_at"
+        },
+        "uuid": {
+          "type": "string",
+          "description": "Field uuid"
+        }
+      },
+      "required": [
+        "platform",
+        "auth_type",
+        "auth",
+        "enabled"
       ]
     },
     "Skill": {
@@ -5290,36 +5952,16 @@
   },
   "tags": [
     {
-      "name": "server",
-      "description": "Operations related to server"
-    },
-    {
-      "name": "skills",
-      "description": "Operations related to skills"
-    },
-    {
-      "name": "oauth",
-      "description": "Operations related to oauth"
-    },
-    {
-      "name": "usage",
-      "description": "Operations related to usage"
-    },
-    {
       "name": "logs",
       "description": "Operations related to logs"
-    },
-    {
-      "name": "rules",
-      "description": "Operations related to rules"
     },
     {
       "name": "scenarios",
       "description": "Operations related to scenarios"
     },
     {
-      "name": "history",
-      "description": "Operations related to history"
+      "name": "server",
+      "description": "Operations related to server"
     },
     {
       "name": "models",
@@ -5330,12 +5972,16 @@
       "description": "Operations related to testing"
     },
     {
-      "name": "token",
-      "description": "Operations related to token"
-    },
-    {
       "name": "providers",
       "description": "Operations related to providers"
+    },
+    {
+      "name": "oauth",
+      "description": "Operations related to oauth"
+    },
+    {
+      "name": "usage",
+      "description": "Operations related to usage"
     },
     {
       "name": "auth",
@@ -5344,6 +5990,26 @@
     {
       "name": "info",
       "description": "Operations related to info"
+    },
+    {
+      "name": "token",
+      "description": "Operations related to token"
+    },
+    {
+      "name": "skills",
+      "description": "Operations related to skills"
+    },
+    {
+      "name": "rules",
+      "description": "Operations related to rules"
+    },
+    {
+      "name": "history",
+      "description": "Operations related to history"
+    },
+    {
+      "name": "imbot-settings",
+      "description": "Operations related to imbot-settings"
     }
   ]
 }

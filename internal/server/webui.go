@@ -66,6 +66,9 @@ func (s *Server) UseUIEndpoints() {
 	// Usage API routes
 	s.RegisterUsageRoutes(manager)
 
+	// ImBot settings API routes
+	s.RegisterImBotSettingsRoutes(manager)
+
 	// Config apply API routes
 	s.RegisterConfigApplyRoutes(manager)
 

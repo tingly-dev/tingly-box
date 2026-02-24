@@ -18,6 +18,7 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/agentboot/permission"
 	"github.com/tingly-dev/tingly-box/imbot"
+	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/summarizer"
 )
@@ -63,18 +64,18 @@ var defaultBashAllowlist = map[string]struct{}{
 	"pwd": {},
 }
 
-// RunTelegramBot starts a Telegram bot that proxies messages to remote-coder sessions.
-func RunTelegramBot(ctx context.Context, store *Store, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot, permHandler permission.Handler) error {
+// RunBot starts a multi-platform bot that proxies messages to remote-coder sessions.
+func RunBot(ctx context.Context, store *Store, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot, permHandler permission.Handler) error {
 	delay := telegramStartDelay
 	for attempt := 1; attempt <= telegramStartRetries; attempt++ {
 		if ctx.Err() != nil {
 			return nil
 		}
-		if err := runTelegramBotOnce(ctx, store, sessionMgr, agentBoot, permHandler); err != nil {
+		if err := runBotOnce(ctx, store, sessionMgr, agentBoot, permHandler); err != nil {
 			if attempt == telegramStartRetries {
 				return err
 			}
-			logrus.WithError(err).Warnf("Remote-coder Telegram bot failed to start; retrying in %s (%d/%d)", delay, attempt, telegramStartRetries)
+			logrus.WithError(err).Warnf("Remote-coder bot failed to start; retrying in %s (%d/%d)", delay, attempt, telegramStartRetries)
 			if !sleepWithContext(ctx, delay) {
 				return nil
 			}
@@ -89,7 +90,7 @@ func RunTelegramBot(ctx context.Context, store *Store, sessionMgr *session.Manag
 	return nil
 }
 
-func runTelegramBotOnce(ctx context.Context, store *Store, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot, permHandler permission.Handler) error {
+func runBotOnce(ctx context.Context, store *Store, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot, permHandler permission.Handler) error {
 	if store == nil {
 		return fmt.Errorf("bot store is nil")
 	}
@@ -99,7 +100,7 @@ func runTelegramBotOnce(ctx context.Context, store *Store, sessionMgr *session.M
 		return fmt.Errorf("failed to load bot settings: %w", err)
 	}
 	if strings.TrimSpace(settings.Token) == "" {
-		return fmt.Errorf("telegram bot token is not configured")
+		return fmt.Errorf("bot token is not configured")
 	}
 	platform := strings.TrimSpace(settings.Platform)
 	if platform == "" {
@@ -130,7 +131,7 @@ func runTelegramBotOnce(ctx context.Context, store *Store, sessionMgr *session.M
 	}
 
 	err = manager.AddBot(&imbot.Config{
-		Platform: imbot.PlatformTelegram,
+		Platform: imbot.Platform(platform),
 		Enabled:  true,
 		Auth: imbot.AuthConfig{
 			Type:  "token",
@@ -139,14 +140,12 @@ func runTelegramBotOnce(ctx context.Context, store *Store, sessionMgr *session.M
 		Options: options,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to start telegram bot: %w", err)
+		return fmt.Errorf("failed to start %s bot: %w", platform, err)
 	}
 
+	// Register unified message handler with platform parameter
 	manager.OnMessage(func(msg imbot.Message, platform imbot.Platform) {
-		if platform != imbot.PlatformTelegram {
-			return
-		}
-		go handleTelegramMessage(ctx, manager, store, sessionMgr, agentBoot, permHandler, summaryEngine, directoryBrowser, msg)
+		handleBotMessage(ctx, manager, store, sessionMgr, agentBoot, permHandler, summaryEngine, directoryBrowser, msg, platform)
 	})
 
 	if err := manager.Start(ctx); err != nil {
@@ -155,6 +154,119 @@ func runTelegramBotOnce(ctx context.Context, store *Store, sessionMgr *session.M
 
 	<-ctx.Done()
 	return nil
+}
+
+// runBotWithSettings starts a bot using db.Settings instead of bot.Store
+func runBotWithSettings(ctx context.Context, settings db.Settings, dbPath string, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot, permHandler permission.Handler) error {
+	// Create a temporary bot.Store for chat state management
+	store, err := NewStoreForChatOnly(dbPath)
+	if err != nil {
+		return fmt.Errorf("failed to create chat store: %w", err)
+	}
+	defer store.Close()
+
+	// Convert db.Settings to the legacy Settings format
+	botSettings := Settings{
+		UUID:          settings.UUID,
+		Name:          settings.Name,
+		Token:         settings.Auth["token"],
+		Platform:      settings.Platform,
+		AuthType:      settings.AuthType,
+		Auth:          settings.Auth,
+		ProxyURL:      settings.ProxyURL,
+		ChatIDLock:    settings.ChatIDLock,
+		BashAllowlist: settings.BashAllowlist,
+		Enabled:       settings.Enabled,
+	}
+
+	if err := store.SaveSettings(botSettings); err != nil {
+		return fmt.Errorf("failed to set bot settings: %w", err)
+	}
+
+	// Create platform-specific auth config
+	authConfig := buildAuthConfig(settings)
+	platform := imbot.Platform(settings.Platform)
+
+	if sessionMgr == nil {
+		return fmt.Errorf("session manager is nil")
+	}
+
+	summaryEngine := summarizer.NewEngine()
+	directoryBrowser := NewDirectoryBrowser()
+
+	manager := imbot.NewManager(
+		imbot.WithAutoReconnect(true),
+		imbot.WithMaxReconnectAttempts(5),
+		imbot.WithReconnectDelay(3000),
+	)
+
+	options := map[string]interface{}{
+		"updateTimeout": 30,
+	}
+	if settings.ProxyURL != "" {
+		options["proxy"] = settings.ProxyURL
+	}
+
+	err = manager.AddBot(&imbot.Config{
+		Platform: platform,
+		Enabled:  true,
+		Auth:     authConfig,
+		Options:  options,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to start %s bot: %w", settings.Platform, err)
+	}
+
+	// Register unified message handler with platform parameter
+	manager.OnMessage(func(msg imbot.Message, platform imbot.Platform) {
+		handleBotMessage(ctx, manager, store, sessionMgr, agentBoot, permHandler, summaryEngine, directoryBrowser, msg, platform)
+	})
+
+	if err := manager.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start bot manager: %w", err)
+	}
+
+	<-ctx.Done()
+	return nil
+}
+
+// buildAuthConfig creates auth config based on platform
+func buildAuthConfig(settings db.Settings) imbot.AuthConfig {
+	platform := settings.Platform
+	auth := settings.Auth
+
+	switch platform {
+	case "telegram", "discord", "slack":
+		return imbot.AuthConfig{
+			Type:  "token",
+			Token: auth["token"],
+		}
+	case "dingtalk", "feishu":
+		return imbot.AuthConfig{
+			Type:         "oauth",
+			ClientID:     auth["clientId"],
+			ClientSecret: auth["clientSecret"],
+		}
+	case "whatsapp":
+		return imbot.AuthConfig{
+			Type:      "token",
+			Token:     auth["token"],
+			AccountID: auth["phoneNumberId"],
+		}
+	default:
+		return imbot.AuthConfig{
+			Type:  "token",
+			Token: auth["token"],
+		}
+	}
+}
+
+// RunBotWithSettingsOnly runs a bot using only the settings
+func RunBotWithSettingsOnly(ctx context.Context, settings Settings, store *Store, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot, permHandler permission.Handler) error {
+	if err := store.SaveSettings(settings); err != nil {
+		return fmt.Errorf("failed to save bot settings: %w", err)
+	}
+	return runBotOnce(ctx, store, sessionMgr, agentBoot, permHandler)
 }
 
 func sleepWithContext(ctx context.Context, delay time.Duration) bool {
@@ -172,11 +284,13 @@ func sleepWithContext(ctx context.Context, delay time.Duration) bool {
 // Different platforms may use different IDs:
 // - Telegram: Recipient.ID (chat ID)
 // - DingTalk/Feishu: Recipient.ID (conversation ID)
+// - Discord: Recipient.ID (channel ID)
 func getReplyTarget(msg imbot.Message) string {
 	return strings.TrimSpace(msg.Recipient.ID)
 }
 
-func handleTelegramMessage(
+// handleBotMessage handles messages from any platform with platform parameter
+func handleBotMessage(
 	ctx context.Context,
 	manager *imbot.Manager,
 	store *Store,
@@ -186,15 +300,14 @@ func handleTelegramMessage(
 	summaryEngine *summarizer.Engine,
 	directoryBrowser *DirectoryBrowser,
 	msg imbot.Message,
+	platform imbot.Platform,
 ) {
-	bot := manager.GetBot(msg.Platform)
+	bot := manager.GetBot(platform)
 	if bot == nil {
 		return
 	}
 
 	// get recipient, different platform may require different source and id
-	// Telegram: Recipient.ID (chat ID)
-	// DingTalk/Feishu: Recipient.ID (conversation ID)
 	chatID := getReplyTarget(msg)
 	if chatID == "" {
 		return
@@ -466,12 +579,17 @@ func handleClaudeCodeMessage(
 	}
 
 	// Determine if we should resume: session has existing messages (excluding the one we just appended)
-	// Note: We just appended the current user message, so check if there were messages before that
 	shouldResume := false
 	if msgs, ok := sessionMgr.GetMessages(sessionID); ok && len(msgs) > 1 {
-		// More than 1 message means this is a continuation (current user message + at least one previous message)
 		shouldResume = true
 	}
+
+	logrus.WithFields(logrus.Fields{
+		"chatID":       chatID,
+		"sessionID":    sessionID,
+		"projectPath":  projectPath,
+		"shouldResume": shouldResume,
+	}).Info("Starting agent execution")
 
 	// Create a streaming message handler that sends formatted messages to the bot
 	streamHandler := newStreamingMessageHandler(bot, chatID, replyTo)
@@ -482,6 +600,13 @@ func handleClaudeCodeMessage(
 		SessionID:   sessionID,
 		Resume:      shouldResume,
 	})
+
+	logrus.WithFields(logrus.Fields{
+		"chatID":    chatID,
+		"sessionID": sessionID,
+		"hasError":  err != nil,
+		"hasResult": result != nil,
+	}).Info("Agent execution completed")
 
 	response := streamHandler.GetOutput()
 	if response == "" {
@@ -495,8 +620,17 @@ func handleClaudeCodeMessage(
 
 	if err != nil {
 		sessionMgr.SetFailed(sessionID, response)
-		logrus.WithError(err).Warn("Remote-coder execution failed")
-		// Error already sent via handler, just return
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"chatID":    chatID,
+			"sessionID": sessionID,
+			"response":  response,
+		}).Warn("Remote-coder execution failed")
+
+		// Send error message to user
+		if response == "" {
+			response = fmt.Sprintf("Execution failed: %v", err)
+		}
+		sendTextWithReply(bot, chatID, response, replyTo)
 		return
 	}
 
@@ -1543,23 +1677,47 @@ func (h *streamingMessageHandler) OnMessage(msg interface{}) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
+	logrus.WithFields(logrus.Fields{
+		"msgType": fmt.Sprintf("%T", msg),
+		"chatID":  h.chatID,
+	}).Debug("Received message from agent")
+
 	// Convert to claude.Message if possible
 	var claudeMsg claude.Message
 	switch m := msg.(type) {
+	case *claude.AssistantMessage:
+		meaningful := false
+		for _, c := range m.Message.Content {
+			logrus.Info(c.Content)
+			if strings.TrimSpace(c.Text) != "" {
+				meaningful = true
+			}
+		}
+		if !meaningful {
+			logrus.Debugf("ignoring non-meaningful message from assistant")
+			return nil
+		} else {
+			claudeMsg = m
+			logrus.Infof("assistant message from agent")
+		}
 	case claude.Message:
 		claudeMsg = m
 	default:
 		// Skip non-claude messages
+		logrus.WithField("msgType", fmt.Sprintf("%T", msg)).Debug("Skipping non-claude message")
 		return nil
 	}
 
 	// Format using the formatter
 	formatted := h.formatter.Format(claudeMsg)
 	d, _ := json.Marshal(claudeMsg.GetRawData())
-	logrus.Infof("[telegram] %s", d)
-	logrus.Infof("[telegram] %s", formatted)
+	logrus.Infof("[bot] Raw: %s", d)
+	logrus.Infof("[bot] Formatted: %s", formatted)
+
 	if strings.TrimSpace(formatted) != "" {
 		h.sendMessage(formatted)
+	} else {
+		logrus.WithField("msgType", claudeMsg.GetType()).Debug("Skipping empty formatted message")
 	}
 
 	return nil
@@ -1605,7 +1763,30 @@ func (h *streamingMessageHandler) sendMessage(text string) {
 			ReplyTo: h.replyTo,
 		})
 		if err != nil {
-			logrus.WithError(err).Warn("Failed to send streaming message")
+			logrus.WithFields(logrus.Fields{
+				"chatID":  h.chatID,
+				"replyTo": h.replyTo,
+				"error":   err,
+				"chunk":   chunk[:minInt(100, len(chunk))],
+			}).Error("Failed to send streaming message")
+			continue
 		}
+		logrus.WithField("chatID", h.chatID).WithField("chunkLen", len(chunk)).Debug("Sent streaming message chunk")
 	}
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// NewStoreForChatOnly creates a minimal bot.Store for chat state management only
+func NewStoreForChatOnly(dbPath string) (*Store, error) {
+	store, err := NewStore(dbPath)
+	if err != nil {
+		return nil, err
+	}
+	return store, nil
 }

@@ -30,6 +30,7 @@ type RouteConfig struct {
 	QueryParams       []QueryParamConfig // Query parameters
 	QueryModel        interface{}        // Query model for swagger documentation
 	QueryModelName    string             // Optional explicit name for anonymous query struct
+	PathParams        []PathParamConfig  // Path parameters (overrides auto-detected)
 }
 
 // ErrorResponseConfig defines error response configuration for swagger
@@ -49,6 +50,14 @@ type QueryParamConfig struct {
 	Enum        []interface{}
 	Minimum     *int
 	Maximum     *int
+}
+
+// PathParamConfig defines configuration for a single path parameter
+type PathParamConfig struct {
+	Name        string
+	Type        string
+	Format      string
+	Description string
 }
 
 // RouteGroup manages a group of related routes
@@ -377,6 +386,24 @@ func WithResponseModelName(name string) func(*RouteConfig) {
 func WithQueryModelName(name string) func(*RouteConfig) {
 	return func(rc *RouteConfig) {
 		rc.QueryModelName = name
+	}
+}
+
+// WithPathParam adds a path parameter with explicit configuration (overrides auto-detection)
+func WithPathParam(name, paramType, description string) func(*RouteConfig) {
+	return func(rc *RouteConfig) {
+		rc.PathParams = append(rc.PathParams, PathParamConfig{
+			Name:        name,
+			Type:        paramType,
+			Description: description,
+		})
+	}
+}
+
+// WithPathParamConfig adds a path parameter with full configuration
+func WithPathParamConfig(config PathParamConfig) func(*RouteConfig) {
+	return func(rc *RouteConfig) {
+		rc.PathParams = append(rc.PathParams, config)
 	}
 }
 

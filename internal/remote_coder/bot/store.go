@@ -811,6 +811,19 @@ func ensureColumn(db *sql.DB, tableName, columnName, columnType string) error {
 	return err
 }
 
+// ============== SettingsStore interface implementation ==============
+// These methods implement the bot.SettingsStore interface for use with the Manager
+
+// GetSettingsByUUIDInterface returns settings as interface{} for SettingsStore interface
+func (s *Store) GetSettingsByUUIDInterface(uuid string) (interface{}, error) {
+	return s.GetSettingsByUUID(uuid)
+}
+
+// ListEnabledSettingsInterface returns settings as interface{} for SettingsStore interface
+func (s *Store) ListEnabledSettingsInterface() (interface{}, error) {
+	return s.ListEnabledSettings()
+}
+
 func (s *Store) GetSessionForChat(chatID string) (string, bool, error) {
 	if s == nil || s.chatStore == nil {
 		return "", false, nil

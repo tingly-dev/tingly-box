@@ -103,7 +103,9 @@ func RemoteCoderCommand(appManager *AppManager) *cobra.Command {
 				return err
 			}
 
-			return remote_coder.Run(context.Background(), cfg)
+			// For standalone remote-coder command, pass nil for ImBotSettingsStore
+			// This will use the local bot store with the old table name
+			return remote_coder.Run(context.Background(), cfg, nil)
 		},
 	}
 
