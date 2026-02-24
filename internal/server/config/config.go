@@ -56,11 +56,12 @@ type Config struct {
 	ConfigFile string `yaml:"-" json:"-"` // Not serialized to YAML (exported to preserve field)
 	ConfigDir  string `yaml:"-" json:"-"`
 
-	modelManager    *data.ModelListManager
-	statsStore      *db.StatsStore
-	usageStore      *db.UsageStore
-	ruleStateStore  *db.RuleStateStore // Persists current_service_index to SQLite
-	templateManager *data.TemplateManager
+	modelManager       *data.ModelListManager
+	statsStore         *db.StatsStore
+	usageStore         *db.UsageStore
+	ruleStateStore     *db.RuleStateStore     // Persists current_service_index to SQLite
+	imbotSettingsStore *db.ImBotSettingsStore // Persists ImBot credentials
+	templateManager    *data.TemplateManager
 
 	mu sync.RWMutex
 }
@@ -126,6 +127,13 @@ func NewConfigWithDir(configDir string) (*Config, error) {
 		return nil, fmt.Errorf("failed to initialize rule state store: %w", err)
 	}
 	cfg.ruleStateStore = ruleStateStore
+
+	// Initialize ImBot settings store
+	imbotSettingsStore, err := db.NewImBotSettingsStore(configDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize imbot settings store: %w", err)
+	}
+	cfg.imbotSettingsStore = imbotSettingsStore
 
 	// Load existing cfg if exists
 	if err := cfg.load(); err != nil {
@@ -629,6 +637,14 @@ func (c *Config) GetUsageStore() *db.UsageStore {
 	defer c.mu.RUnlock()
 
 	return c.usageStore
+}
+
+// GetImBotSettingsStore returns the ImBot settings store (may be nil in tests).
+func (c *Config) GetImBotSettingsStore() *db.ImBotSettingsStore {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.imbotSettingsStore
 }
 
 // HasModelToken checks if a model token is configured

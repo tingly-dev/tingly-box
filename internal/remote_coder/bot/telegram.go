@@ -18,6 +18,7 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/agentboot/permission"
 	"github.com/tingly-dev/tingly-box/imbot"
+	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/session"
 	"github.com/tingly-dev/tingly-box/internal/remote_coder/summarizer"
 )
@@ -1608,4 +1609,60 @@ func (h *streamingMessageHandler) sendMessage(text string) {
 			logrus.WithError(err).Warn("Failed to send streaming message")
 		}
 	}
+}
+
+// runTelegramBotWithSettings starts a Telegram bot using db.Settings instead of bot.Store
+// This is used when ImBot credentials are stored in the standard database
+func runTelegramBotWithSettings(ctx context.Context, settings db.Settings, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot, permHandler permission.Handler) error {
+	// Create a temporary bot.Store for chat state management
+	// We need this for session mapping, whitelist, project bindings, etc.
+	// Use the main database path for chat state
+	chatStoreDBPath := "" // Will be set by the caller using the main config
+	store, err := NewStoreForChatOnly(chatStoreDBPath)
+	if err != nil {
+		return fmt.Errorf("failed to create chat store: %w", err)
+	}
+	defer store.Close()
+
+	// Convert db.Settings to the legacy Settings format for the bot
+	botSettings := Settings{
+		UUID:          settings.UUID,
+		Name:          settings.Name,
+		Token:         settings.Auth["token"], // Extract token from auth map
+		Platform:      settings.Platform,
+		AuthType:      settings.AuthType,
+		Auth:          settings.Auth,
+		ProxyURL:      settings.ProxyURL,
+		ChatIDLock:    settings.ChatIDLock,
+		BashAllowlist: settings.BashAllowlist,
+		Enabled:       settings.Enabled,
+	}
+
+	// Set the settings in the store
+	if err := store.SaveSettings(botSettings); err != nil {
+		return fmt.Errorf("failed to set bot settings: %w", err)
+	}
+
+	return runTelegramBotOnce(ctx, store, sessionMgr, agentBoot, permHandler)
+}
+
+// NewStoreForChatOnly creates a minimal bot.Store for chat state management only
+// This is used when ImBot credentials come from the standard database
+func NewStoreForChatOnly(dbPath string) (*Store, error) {
+	store, err := NewStore(dbPath)
+	if err != nil {
+		return nil, err
+	}
+	return store, nil
+}
+
+// RunTelegramBotWithSettingsOnly runs a Telegram bot using only the settings (not a full store)
+// This is used when the bot.Settings come from the standard database but we still need
+// to create a minimal store for chat state management
+func RunTelegramBotWithSettingsOnly(ctx context.Context, settings Settings, store *Store, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot, permHandler permission.Handler) error {
+	// Create a temporary store with the settings
+	if err := store.SaveSettings(settings); err != nil {
+		return fmt.Errorf("failed to save bot settings: %w", err)
+	}
+	return runTelegramBotOnce(ctx, store, sessionMgr, agentBoot, permHandler)
 }
