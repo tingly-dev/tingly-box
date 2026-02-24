@@ -31,6 +31,8 @@ type BotLifecycle interface {
 	Stop(uuid string)
 	// IsRunning checks if a bot is running
 	IsRunning(uuid string) bool
+	// Sync ensures running bots match the enabled settings
+	Sync(ctx context.Context) error
 }
 
 // runningBot tracks a running bot instance
@@ -219,6 +221,67 @@ func (m *Manager) StopAll() {
 		rb.cancel()
 	}
 	m.running = make(map[string]*runningBot)
+}
+
+// Sync ensures the running bots match the enabled settings in the store.
+// It starts bots that are enabled but not running, and stops bots that are running but disabled.
+func (m *Manager) Sync(ctx context.Context) error {
+	settingsAny, err := m.store.ListEnabledSettingsInterface()
+	if err != nil {
+		return err
+	}
+
+	// Get the set of enabled UUIDs
+	enabledUUIDs := make(map[string]bool)
+	switch s := settingsAny.(type) {
+	case []db.Settings:
+		for _, setting := range s {
+			if setting.UUID != "" {
+				enabledUUIDs[setting.UUID] = true
+			}
+		}
+	case []Settings:
+		for _, setting := range s {
+			if setting.UUID != "" {
+				enabledUUIDs[setting.UUID] = true
+			}
+		}
+	default:
+		return fmt.Errorf("unknown settings list type")
+	}
+
+	// Start bots that are enabled but not running
+	for uuid := range enabledUUIDs {
+		if !m.IsRunning(uuid) {
+			if err := m.Start(ctx, uuid); err != nil {
+				logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to start bot during sync")
+			}
+		}
+	}
+
+	// Stop bots that are running but not enabled
+	m.mu.Lock()
+	for uuid := range m.running {
+		if !enabledUUIDs[uuid] {
+			logrus.WithField("uuid", uuid).Info("Stopping disabled bot during sync")
+			// Need to get cancel func before releasing lock
+			if rb, exists := m.running[uuid]; exists {
+				// Release lock before calling cancel to avoid deadlock
+				m.mu.Unlock()
+				rb.cancel()
+				m.mu.Lock()
+			}
+		}
+	}
+	m.mu.Unlock()
+
+	return nil
+}
+
+// StartEnabledStopDisabled is a convenience method that ensures running bots match enabled settings.
+// It's an alias for Sync() with clearer naming for specific use cases.
+func (m *Manager) StartEnabledStopDisabled(ctx context.Context) error {
+	return m.Sync(ctx)
 }
 
 // removeRunning removes a bot from the running map (must be called with lock held or from within locked method)
