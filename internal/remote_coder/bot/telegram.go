@@ -1685,6 +1685,21 @@ func (h *streamingMessageHandler) OnMessage(msg interface{}) error {
 	// Convert to claude.Message if possible
 	var claudeMsg claude.Message
 	switch m := msg.(type) {
+	case *claude.AssistantMessage:
+		meaningful := false
+		for _, c := range m.Message.Content {
+			logrus.Info(c.Content)
+			if strings.TrimSpace(c.Text) != "" {
+				meaningful = true
+			}
+		}
+		if !meaningful {
+			logrus.Debugf("ignoring non-meaningful message from assistant")
+			return nil
+		} else {
+			claudeMsg = m
+			logrus.Infof("assistant message from agent")
+		}
 	case claude.Message:
 		claudeMsg = m
 	default:
