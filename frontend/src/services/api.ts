@@ -6,6 +6,7 @@ import TinglyService from "@/bindings";
 import {
     Configuration,
     HistoryApi,
+    ImbotSettingsApi,
     InfoApi,
     LogsApi,
     ModelsApi,
@@ -45,6 +46,7 @@ interface ApiInstances {
     oauthApi: OauthApi;
     logsApi: LogsApi;
     usageApi: UsageApi;
+    imbotSettingsApi: ImbotSettingsApi;
 }
 
 
@@ -142,6 +144,7 @@ const createApiInstances = async () => {
         oauthApi: new OauthApi(config),
         logsApi: new LogsApi(config),
         usageApi: new UsageApi(config),
+        imbotSettingsApi: new ImbotSettingsApi(config),
     };
 };
 
@@ -927,7 +930,150 @@ export const api = {
     },
 
     // ============================================
-    // Remote Coder API
+    // ImBot Settings API (Migrated to standard API)
+    // ============================================
+
+    // Get all ImBot settings
+    getImBotSettingsList: async (): Promise<any> => {
+        try {
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.imbotSettingsApi.apiV1ImbotSettingsGet();
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                handleAuthFailure();
+                return { success: false, error: 'Authentication required' };
+            }
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Get a specific ImBot setting by UUID
+    getImBotSetting: async (uuid: string): Promise<any> => {
+        try {
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.imbotSettingsApi.apiV1ImbotSettingsUuidGet(uuid);
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                handleAuthFailure();
+                return { success: false, error: 'Authentication required' };
+            }
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Create a new ImBot setting
+    createImBotSetting: async (data: {
+        name?: string;
+        platform?: string;
+        auth_type?: string;
+        auth?: Record<string, string>;
+        proxy_url?: string;
+        chat_id?: string;
+        bash_allowlist?: string[];
+        enabled?: boolean;
+        token?: string;
+    }): Promise<any> => {
+        try {
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.imbotSettingsApi.apiV1ImbotSettingsPost(data as any);
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                handleAuthFailure();
+                return { success: false, error: 'Authentication required' };
+            }
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Update an ImBot setting
+    updateImBotSetting: async (uuid: string, data: {
+        name?: string;
+        platform?: string;
+        auth_type?: string;
+        auth?: Record<string, string>;
+        proxy_url?: string;
+        chat_id?: string;
+        bash_allowlist?: string[];
+        enabled?: boolean;
+    }): Promise<any> => {
+        try {
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.imbotSettingsApi.apiV1ImbotSettingsUuidPut(uuid, data as any);
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                handleAuthFailure();
+                return { success: false, error: 'Authentication required' };
+            }
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Delete an ImBot setting
+    deleteImBotSetting: async (uuid: string): Promise<any> => {
+        try {
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.imbotSettingsApi.apiV1ImbotSettingsUuidDelete(uuid);
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                handleAuthFailure();
+                return { success: false, error: 'Authentication required' };
+            }
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Toggle an ImBot setting's enabled status
+    toggleImBotSetting: async (uuid: string): Promise<any> => {
+        try {
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.imbotSettingsApi.apiV1ImbotSettingsUuidTogglePost(uuid);
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                handleAuthFailure();
+                return { success: false, error: 'Authentication required' };
+            }
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Get all supported ImBot platforms
+    getImBotPlatforms: async (): Promise<any> => {
+        try {
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.imbotSettingsApi.apiV1ImbotPlatformsGet();
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                handleAuthFailure();
+                return { success: false, error: 'Authentication required' };
+            }
+            return { success: false, error: error.message };
+        }
+    },
+
+    // Get platform auth configuration
+    getImBotPlatformConfig: async (platform: string): Promise<any> => {
+        try {
+            const apiInstances = await getApiInstances();
+            const response = await apiInstances.imbotSettingsApi.apiV1ImbotPlatformConfigGet(platform);
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 401) {
+                handleAuthFailure();
+                return { success: false, error: 'Authentication required' };
+            }
+            return { success: false, error: error.message };
+        }
+    },
+
+    // ============================================
+    // Remote Coder API (Session management only)
     // ============================================
 
     // Get the base URL for remote-coder service
@@ -1129,267 +1275,6 @@ export const api = {
             const baseUrl = api.getRemoteCCBaseUrl();
             const response = await fetch(`${baseUrl}/remote-coder/sessions/clear`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
-                },
-            });
-
-            if (response.status === 401) {
-                return { success: false, error: 'Authentication required' };
-            }
-
-            return await response.json();
-        } catch (error: any) {
-            return { success: false, error: error.message };
-        }
-    },
-
-    // Get remote-coder bot settings (legacy - returns single bot)
-    getRemoteCCBotSettings: async (): Promise<any> => {
-        try {
-            const token = await getRemoteCCAuthToken();
-            const baseUrl = api.getRemoteCCBaseUrl();
-            const response = await fetch(`${baseUrl}/remote-coder/bot/settings`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
-                },
-            });
-
-            if (response.status === 401) {
-                return { success: false, error: 'Authentication required' };
-            }
-
-            return await response.json();
-        } catch (error: any) {
-            return { success: false, error: error.message };
-        }
-    },
-
-    // Get all bot settings (V2 API - returns array)
-    getBotSettingsList: async (): Promise<any> => {
-        try {
-            const token = await getRemoteCCAuthToken();
-            const baseUrl = api.getRemoteCCBaseUrl();
-            const response = await fetch(`${baseUrl}/remote-coder/bot/settings/list`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
-                },
-            });
-
-            if (response.status === 401) {
-                return { success: false, error: 'Authentication required' };
-            }
-
-            return await response.json();
-        } catch (error: any) {
-            return { success: false, error: error.message };
-        }
-    },
-
-    // Get a specific bot setting by UUID
-    getBotSetting: async (uuid: string): Promise<any> => {
-        try {
-            const token = await getRemoteCCAuthToken();
-            const baseUrl = api.getRemoteCCBaseUrl();
-            const response = await fetch(`${baseUrl}/remote-coder/bot/settings/${encodeURIComponent(uuid)}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
-                },
-            });
-
-            if (response.status === 401) {
-                return { success: false, error: 'Authentication required' };
-            }
-
-            return await response.json();
-        } catch (error: any) {
-            return { success: false, error: error.message };
-        }
-    },
-
-    // Create a new bot setting
-    createBotSetting: async (data: {
-        name?: string;
-        platform?: string;
-        auth_type?: string;
-        auth?: Record<string, string>;
-        proxy_url?: string;
-        chat_id?: string;
-        bash_allowlist?: string[];
-        enabled?: boolean;
-        token?: string;
-    }): Promise<any> => {
-        try {
-            const token = await getRemoteCCAuthToken();
-            const baseUrl = api.getRemoteCCBaseUrl();
-            const response = await fetch(`${baseUrl}/remote-coder/bot/settings`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
-                },
-                body: JSON.stringify(data),
-            });
-
-            if (response.status === 401) {
-                return { success: false, error: 'Authentication required' };
-            }
-
-            return await response.json();
-        } catch (error: any) {
-            return { success: false, error: error.message };
-        }
-    },
-
-    // Update a bot setting
-    updateBotSetting: async (uuid: string, data: {
-        name?: string;
-        platform?: string;
-        auth_type?: string;
-        auth?: Record<string, string>;
-        proxy_url?: string;
-        chat_id?: string;
-        bash_allowlist?: string[];
-        enabled?: boolean;
-    }): Promise<any> => {
-        try {
-            const token = await getRemoteCCAuthToken();
-            const baseUrl = api.getRemoteCCBaseUrl();
-            const response = await fetch(`${baseUrl}/remote-coder/bot/settings/${encodeURIComponent(uuid)}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
-                },
-                body: JSON.stringify(data),
-            });
-
-            if (response.status === 401) {
-                return { success: false, error: 'Authentication required' };
-            }
-
-            return await response.json();
-        } catch (error: any) {
-            return { success: false, error: error.message };
-        }
-    },
-
-    // Delete a bot setting
-    deleteBotSetting: async (uuid: string): Promise<any> => {
-        try {
-            const token = await getRemoteCCAuthToken();
-            const baseUrl = api.getRemoteCCBaseUrl();
-            const response = await fetch(`${baseUrl}/remote-coder/bot/settings/${encodeURIComponent(uuid)}`, {
-                method: 'DELETE',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
-                },
-            });
-
-            if (response.status === 401) {
-                return { success: false, error: 'Authentication required' };
-            }
-
-            return await response.json();
-        } catch (error: any) {
-            return { success: false, error: error.message };
-        }
-    },
-
-    // Toggle a bot setting's enabled status
-    toggleBotSetting: async (uuid: string): Promise<any> => {
-        try {
-            const token = await getRemoteCCAuthToken();
-            const baseUrl = api.getRemoteCCBaseUrl();
-            const response = await fetch(`${baseUrl}/remote-coder/bot/settings/${encodeURIComponent(uuid)}/toggle`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
-                },
-            });
-
-            if (response.status === 401) {
-                return { success: false, error: 'Authentication required' };
-            }
-
-            return await response.json();
-        } catch (error: any) {
-            return { success: false, error: error.message };
-        }
-    },
-
-    // Update remote-coder bot settings
-    updateRemoteCCBotSettings: async (data: {
-        name?: string;
-        platform?: string;
-        auth_type?: string;
-        auth?: Record<string, string>;
-        proxy_url?: string;
-        chat_id?: string;
-        bash_allowlist?: string[];
-        token?: string; // Legacy field for backward compatibility
-    }): Promise<any> => {
-        try {
-            const token = await getRemoteCCAuthToken();
-            const baseUrl = api.getRemoteCCBaseUrl();
-            const response = await fetch(`${baseUrl}/remote-coder/bot/settings`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
-                },
-                body: JSON.stringify(data),
-            });
-
-            if (response.status === 401) {
-                return { success: false, error: 'Authentication required' };
-            }
-
-            return await response.json();
-        } catch (error: any) {
-            return { success: false, error: error.message };
-        }
-    },
-
-    // Get all supported bot platforms
-    getBotPlatforms: async (): Promise<any> => {
-        try {
-            const token = await getRemoteCCAuthToken();
-            const baseUrl = api.getRemoteCCBaseUrl();
-            const response = await fetch(`${baseUrl}/remote-coder/bot/platforms`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
-                },
-            });
-
-            if (response.status === 401) {
-                return { success: false, error: 'Authentication required' };
-            }
-
-            return await response.json();
-        } catch (error: any) {
-            return { success: false, error: error.message };
-        }
-    },
-
-    // Get platform auth configuration
-    getBotPlatformConfig: async (platform: string): Promise<any> => {
-        try {
-            const token = await getRemoteCCAuthToken();
-            const baseUrl = api.getRemoteCCBaseUrl();
-            const response = await fetch(`${baseUrl}/remote-coder/bot/platform-config?platform=${encodeURIComponent(platform)}`, {
-                method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
                     ...(token && { 'Authorization': `Bearer ${token}` }),
