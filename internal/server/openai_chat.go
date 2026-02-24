@@ -36,9 +36,6 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 		req = toolinterceptor.StripSearchFetchToolsOpenAI(originalReq)
 	}
 
-	// force to return usage
-	req.StreamOptions.IncludeUsage = param.Opt[bool]{Value: true}
-
 	// Forward request to provider
 	wrapper := s.clientPool.GetOpenAIClient(provider, string(req.Model))
 	fc := NewForwardContext(nil, provider)
